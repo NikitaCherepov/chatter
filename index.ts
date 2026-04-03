@@ -2,7 +2,7 @@ import { Telegraf } from 'telegraf';
 import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
-import { search } from 'duck-duck-scrape';
+import { search, SafeSearchType } from 'duck-duck-scrape';
 
 dotenv.config();
 
@@ -68,7 +68,7 @@ const safeReply = async (ctx: any, text: string) => {
 };
 
 const runWebSearch = async (query: string) => {
-    const searchResults = await search(query, { safeSearch: 'off' as any });
+    const searchResults = await search(query, { safeSearch: SafeSearchType.OFF });
     const topResults = searchResults.results.slice(0, 4);
 
     if (!topResults.length) {
