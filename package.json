@@ -1,0 +1,25 @@
+{
+  "name": "chatter-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx index.ts",
+    "start": "pm2 start index.ts --interpreter tsx --name chatter",
+    "restart": "pm2 restart chatter --update-env",
+    "stop": "pm2 stop chatter",
+    "logs": "pm2 logs chatter"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "duck-duck-scrape": "latest",
+    "dotenv": "^16.4.5",
+    "openai": "^4.0.0",
+    "telegraf": "^4.16.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "latest",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "tsx": "^4.7.0"
+  }
+}
