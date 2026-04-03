@@ -1,8 +1,8 @@
-import { Telegraf } from 'telegraf';
+﻿import { Telegraf } from 'telegraf';
 import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
-import { search, SafeSearchType } from 'duck-duck-scrape';
+import { tavily } from '@tavily/core';
 
 dotenv.config();
 
@@ -11,6 +11,7 @@ const ai = new OpenAI({
     apiKey: process.env.TIMEWEB_API_KEY,
     baseURL: process.env.TIMEWEB_BASE_URL,
 });
+const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 // Инициализация базы данных
 const db = new Database('chatter.db');
@@ -22,7 +23,7 @@ db.exec(`
 `);
 
 const sessions = new Map<number, any[]>();
-const SYSTEM_PROMPT = `Ты — Chatter, дружелюбный ИИ-помощник...`; // Твой промпт
+const SYSTEM_PROMPT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст.`; // Твой промпт
 const TOOL_HINT_PROMPT = `${SYSTEM_PROMPT}
 
 Если вопрос требует актуальной или проверяемой информации из интернета, вызови инструмент search_web.
@@ -58,31 +59,47 @@ const trimHistory = (history: any[]) => {
 };
 
 const safeReply = async (ctx: any, text: string) => {
+    const tgFormattedText = text
+        // 1. Бывает, что ИИ генерит заголовок сразу с жирным шрифтом (### **Текст**) — чистим двойное форматирование
+        .replace(/^#+\s+\*\*(.*?)\*\*/gm, '🔹 *$1*')
+        // 2. Обычные заголовки (### Текст) -> делаем жирными с иконкой
+        .replace(/^#+\s+(.*)/gm, '🔹 *$1*')
+        // 3. Звездочки-списки
+        .replace(/^\*\s/gm, '• ')
+        // 4. Обычный жирный шрифт
+        .replace(/\*\*(.*?)\*\*/g, '*$1*');
+
     try {
-        await ctx.reply(text, { parse_mode: 'Markdown' });
+        await ctx.reply(tgFormattedText, { parse_mode: 'Markdown' });
     } catch (err) {
-        // Если Телега подавилась кривой разметкой от нейросети, шлём как обычный текст
         console.warn('Ошибка разметки, отправляю чистый текст');
         await ctx.reply(text);
     }
 };
 
 const runWebSearch = async (query: string) => {
-    const searchResults = await search(query, { safeSearch: SafeSearchType.OFF });
-    const topResults = searchResults.results.slice(0, 4);
+    try {
+        const response = await tvly.search(query, {
+            searchDepth: 'basic',
+            maxResults: 3,
+            includeAnswer: true
+        });
 
-    if (!topResults.length) {
-        return `По запросу "${query}" ничего не найдено.`;
+        if (!response.results.length) {
+            return `По запросу "${query}" ничего не найдено.`;
+        }
+
+        let resultText = response.answer ? `Сводка: ${response.answer}\n\n` : '';
+
+        resultText += response.results.map((item, index) => {
+            return `${index + 1}. ${item.title}\n${item.content}\nИсточник: ${item.url}`;
+        }).join('\n\n');
+
+        return resultText;
+    } catch (err) {
+        console.error('Ошибка Tavily API:', err);
+        return 'Ошибка инструмента: поисковый сервис временно недоступен.';
     }
-
-    return topResults
-        .map((item, index) => {
-            const title = item.title || 'Без названия';
-            const description = item.description || 'Описание отсутствует';
-            const url = item.url || 'URL отсутствует';
-            return `${index + 1}. ${title}\n${description}\nИсточник: ${url}`;
-        })
-        .join('\n\n');
 };
 
 // Вспомогательные функции для БД
@@ -191,6 +208,7 @@ bot.on('text', async (ctx) => {
             const toolMessages: any[] = [];
 
             for (const toolCall of message.tool_calls) {
+                if (toolCall.type !== 'function') continue;
                 if (toolCall.function.name !== 'search_web') continue;
 
                 handledSearch = true;
