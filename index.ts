@@ -161,6 +161,7 @@ const runWebSearch = async (query: string) => {
 const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as { id: number, name: string, role: string } | undefined;
 const addUser = (id: number, name: string, role: string) => db.prepare('INSERT OR REPLACE INTO users (id, name, role) VALUES (?, ?, ?)').run(id, name, role);
 const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
+const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
 const getAllUsers = () => db.prepare('SELECT * FROM users').all() as { id: number, name: string, role: string }[];
 const getUserHistory = (userId: number) => {
     const rows = db.prepare(`
@@ -218,6 +219,7 @@ bot.use(async (ctx, next) => {
 bot.telegram.setMyCommands([
     { command: 'clear', description: 'Очистить память диалога' },
     { command: 'add', description: 'Добавить юзера (только админ)' },
+    { command: 'remove', description: 'Удалить юзера (только админ)' },
     { command: 'rename', description: 'Переименовать юзера (только админ)' },
     { command: 'users', description: 'Список юзеров (только админ)' }
 ]);
@@ -234,6 +236,24 @@ bot.command('add', (ctx) => {
 
     addUser(newUserId, newUserName, 'user');
     ctx.reply(`Пользователь ${newUserName} (ID: ${newUserId}) успешно добавлен в базу.`);
+});
+
+// Команда удаления пользователя (только для админов)
+bot.command('remove', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const targetUserId = Number.parseInt(parts[1], 10);
+
+    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Укажи правильный ID: /remove 123456789');
+    if (ADMIN_IDS.has(targetUserId)) return ctx.reply('Нельзя удалить пользователя из ADMIN_IDS. Сначала убери его из .env и перезапусти бота.');
+
+    const targetUser = getUser(targetUserId);
+    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
+
+    removeUser(targetUserId);
+    clearUserHistory(targetUserId);
+    ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) удалён из базы.`);
 });
 
 // Команда смены имени пользователя (только для админов)
