@@ -19,10 +19,20 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
         role TEXT NOT NULL
-    )
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_username_id
+    ON chat_messages(username, id);
 `);
 
-const sessions = new Map<number, any[]>();
 const SYSTEM_PROMPT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст.`; // Твой промпт
 const TOOL_HINT_PROMPT = `${SYSTEM_PROMPT}
 
@@ -52,11 +62,8 @@ const tools = [
     }
 ] as const;
 
-const trimHistory = (history: any[]) => {
-    while (history.length > MAX_HISTORY_ITEMS) {
-        history.shift();
-    }
-};
+type ChatRole = 'user' | 'assistant';
+type ChatMessage = { role: ChatRole; content: string };
 
 const safeReply = async (ctx: any, text: string) => {
     const tgFormattedText = text
@@ -106,6 +113,32 @@ const runWebSearch = async (query: string) => {
 const getUser = (username: string) => db.prepare('SELECT * FROM users WHERE username = ?').get(username) as { username: string, role: string } | undefined;
 const addUser = (username: string, role: string) => db.prepare('INSERT OR REPLACE INTO users (username, role) VALUES (?, ?)').run(username, role);
 const getAllUsers = () => db.prepare('SELECT * FROM users').all() as { username: string, role: string }[];
+const getUserHistory = (username: string) => {
+    const rows = db.prepare(`
+        SELECT role, content
+        FROM chat_messages
+        WHERE username = ?
+        ORDER BY id DESC
+        LIMIT ?
+    `).all(username, MAX_HISTORY_ITEMS) as ChatMessage[];
+
+    return rows.reverse();
+};
+const addHistoryMessage = (username: string, role: ChatRole, content: string) => db
+    .prepare('INSERT INTO chat_messages (username, role, content) VALUES (?, ?, ?)')
+    .run(username, role, content);
+const trimUserHistory = (username: string) => db.prepare(`
+    DELETE FROM chat_messages
+    WHERE username = ?
+      AND id NOT IN (
+        SELECT id
+        FROM chat_messages
+        WHERE username = ?
+        ORDER BY id DESC
+        LIMIT ?
+      )
+`).run(username, username, MAX_HISTORY_ITEMS);
+const clearUserHistory = (username: string) => db.prepare('DELETE FROM chat_messages WHERE username = ?').run(username);
 
 // Middleware для авторизации
 bot.use(async (ctx, next) => {
@@ -171,17 +204,19 @@ bot.command('users', (ctx) => {
 });
 
 bot.command('clear', (ctx) => {
-    sessions.set(ctx.from.id, []);
+    const username = ctx.from?.username;
+    if (!username) return ctx.reply('Нужен @username.');
+
+    clearUserHistory(username);
     ctx.reply('Память очищена.');
 });
 
 bot.on('text', async (ctx) => {
-    const userId = ctx.from.id;
-    const userText = ctx.message.text;
+    const username = ctx.from?.username;
+    if (!username) return ctx.reply('Нужен @username.');
 
-    // Инициализация истории
-    if (!sessions.has(userId)) sessions.set(userId, []);
-    const history = sessions.get(userId)!;
+    const userText = ctx.message.text;
+    const history = getUserHistory(username);
 
     try {
         await ctx.sendChatAction('typing');
@@ -229,7 +264,7 @@ bot.on('text', async (ctx) => {
                     try {
                         toolContent = await runWebSearch(query);
                     } catch (err) {
-                        console.error('Ошибка поиска в DuckDuckGo:', err);
+                        console.error('Ошибка поиска в Tavily:', err);
                         toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
                     }
                 }
@@ -253,18 +288,18 @@ bot.on('text', async (ctx) => {
                 });
 
                 const finalAnswer = finalResponse.choices[0].message.content || FALLBACK_ANSWER;
-                history.push({ role: 'user', content: userText });
-                history.push({ role: 'assistant', content: finalAnswer });
-                trimHistory(history);
+                addHistoryMessage(username, 'user', userText);
+                addHistoryMessage(username, 'assistant', finalAnswer);
+                trimUserHistory(username);
                 await safeReply(ctx, finalAnswer);
                 return;
             }
         }
 
         const answer = message.content || FALLBACK_ANSWER;
-        history.push({ role: 'user', content: userText });
-        history.push({ role: 'assistant', content: answer });
-        trimHistory(history);
+        addHistoryMessage(username, 'user', userText);
+        addHistoryMessage(username, 'assistant', answer);
+        trimUserHistory(username);
         await safeReply(ctx, answer);
     } catch (e) {
         console.error(e);
