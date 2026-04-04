@@ -148,7 +148,7 @@ const SMART_HOME_TOOL_INSTRUCTIONS = `
 Если пользователь явно просит управлять устройством умного дома (включить/выключить/сменить цвет), вызови инструмент control_smart_home.`;
 const SCHEDULE_TOOL_INSTRUCTIONS = `
 
-Если пользователь просит напомнить позже, выполнить действие по времени или отложить команду, вызови инструмент schedule_task.`;
+Если пользователь просит напомнить позже, выполнить действие по времени, отложить команду или сделать поиск в интернете по расписанию, вызови инструмент schedule_task.`;
 const TIMEZONE_TOOL_INSTRUCTIONS = `
 
 Если пользователь сообщает город/страну, просит установить часовой пояс или пишет "я из ...", вызови инструмент set_user_timezone.`;
@@ -359,12 +359,12 @@ const tools = [
                     },
                     task_type: {
                         type: 'string',
-                        enum: ['message', 'smart_home'],
-                        description: 'message - напоминание, smart_home - команда умного дома.'
+                        enum: ['message', 'smart_home', 'web_search'],
+                        description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете.'
                     },
                     payload: {
                         type: 'string',
-                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома.'
+                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос.'
                     }
                 },
                 required: ['execute_at', 'task_type', 'payload']
@@ -465,7 +465,7 @@ type UserRecord = {
     total_message_length: number;
 };
 type TaskStatus = 'pending' | 'done' | 'error';
-type TaskType = 'message' | 'smart_home';
+type TaskType = 'message' | 'smart_home' | 'web_search';
 type TaskRecord = {
     id: number;
     user_id: number;
@@ -843,6 +843,54 @@ const safeSendToUser = async (chatId: number, text: string) => {
         await bot.telegram.sendMessage(chatId, text, { parse_mode: 'Markdown' });
     } catch (err) {
         await bot.telegram.sendMessage(chatId, text);
+    }
+};
+
+const runScheduledWebSearchTask = async (task: TaskRecord) => {
+    const query = task.payload.trim();
+    if (!query) {
+        return 'Не получилось выполнить поиск: пустой запрос в задаче.';
+    }
+
+    const webResult = await runWebSearch(query);
+    const userRecord = getUser(task.user_id);
+
+    if (!userRecord) {
+        return `Запрос: ${query}\n\n${webResult}`;
+    }
+
+    const userName = userRecord.name || userRecord.tg_username || 'Пользователь';
+    const activePrompt = resolvePromptForUser(userRecord);
+    const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
+    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName)}${buildTimeContext(timezoneOffset)}`;
+
+    try {
+        const aiResponse = await ai.chat.completions.create({
+            model: MODEL_NAME,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                    role: 'user',
+                    content: `Сработала отложенная задача веб-поиска.
+Запрос пользователя: "${query}".
+
+Результаты поиска:
+${webResult}
+
+Сформулируй итог для пользователя на русском языке: кратко и по делу, 3-6 пунктов, затем блок "Источники:" с ссылками, если они есть. Если данные неполные или есть ошибки, сообщи это честно.`
+                }
+            ]
+        });
+
+        const finalText = aiResponse.choices[0]?.message?.content?.trim();
+        if (!finalText) {
+            return `Запрос: ${query}\n\n${webResult}`;
+        }
+
+        return finalText;
+    } catch (err) {
+        console.error('Ошибка генерации ответа для запланированного web_search:', err);
+        return `Запрос: ${query}\n\n${webResult}`;
     }
 };
 
@@ -2698,7 +2746,7 @@ bot.on('text', async (ctx) => {
                         if (!Number.isFinite(executeAt) || executeAt <= 0) {
                             throw new Error('Некорректный execute_at');
                         }
-                        if (taskType !== 'message' && taskType !== 'smart_home') {
+                        if (taskType !== 'message' && taskType !== 'smart_home' && taskType !== 'web_search') {
                             throw new Error('Некорректный task_type');
                         }
                         if (!payload.trim()) {
@@ -2851,6 +2899,9 @@ setInterval(async () => {
                 await bot.telegram.sendMessage(task.user_id, `🤖 *Автоматизация сработала:*\n${result}`, {
                     parse_mode: 'Markdown'
                 });
+            } else if (task.task_type === 'web_search') {
+                const result = await runScheduledWebSearchTask(task);
+                await safeSendToUser(task.user_id, `🔎 *Запланированный поиск выполнен:*\n\n${result}`);
             }
 
             updateTaskStatus(task.id, 'done');
