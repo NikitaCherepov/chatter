@@ -15,22 +15,54 @@ const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 // Инициализация базы данных
 const db = new Database('chatter.db');
+
+const usersTableInfo = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'users'
+`).get() as { name: string } | undefined;
+
+if (usersTableInfo) {
+    const columns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
+    const hasIdColumn = columns.some(c => c.name === 'id');
+    if (!hasIdColumn) {
+        const legacyUsersTable = `users_legacy_${Date.now()}`;
+        db.exec(`ALTER TABLE users RENAME TO ${legacyUsersTable}`);
+    }
+}
+
+const chatMessagesTableInfo = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'chat_messages'
+`).get() as { name: string } | undefined;
+
+if (chatMessagesTableInfo) {
+    const columns = db.prepare(`PRAGMA table_info(chat_messages)`).all() as { name: string }[];
+    const hasUserIdColumn = columns.some(c => c.name === 'user_id');
+    if (!hasUserIdColumn) {
+        const legacyMessagesTable = `chat_messages_legacy_${Date.now()}`;
+        db.exec(`ALTER TABLE chat_messages RENAME TO ${legacyMessagesTable}`);
+    }
+}
+
 db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY,
+        name TEXT,
         role TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS chat_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
         role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
         content TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_username_id
-    ON chat_messages(username, id);
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id_id
+    ON chat_messages(user_id, id);
 `);
 
 const SYSTEM_PROMPT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст.`; // Твой промпт
@@ -41,6 +73,22 @@ const TOOL_HINT_PROMPT = `${SYSTEM_PROMPT}
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const MAX_HISTORY_ITEMS = 20;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
+const ADMIN_IDS = (() => {
+    const ids = new Set<number>();
+
+    for (const raw of (process.env.ADMIN_IDS ?? '').split(',')) {
+        const value = Number.parseInt(raw.trim(), 10);
+        if (!Number.isNaN(value) && value > 0) ids.add(value);
+    }
+
+    for (const [key, value] of Object.entries(process.env)) {
+        if (!key.startsWith('ADMIN_ID_')) continue;
+        const id = Number.parseInt((value ?? '').trim(), 10);
+        if (!Number.isNaN(id) && id > 0) ids.add(id);
+    }
+
+    return ids;
+})();
 
 const tools = [
     {
@@ -110,88 +158,100 @@ const runWebSearch = async (query: string) => {
 };
 
 // Вспомогательные функции для БД
-const getUser = (username: string) => db.prepare('SELECT * FROM users WHERE username = ?').get(username) as { username: string, role: string } | undefined;
-const addUser = (username: string, role: string) => db.prepare('INSERT OR REPLACE INTO users (username, role) VALUES (?, ?)').run(username, role);
-const getAllUsers = () => db.prepare('SELECT * FROM users').all() as { username: string, role: string }[];
-const getUserHistory = (username: string) => {
+const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as { id: number, name: string, role: string } | undefined;
+const addUser = (id: number, name: string, role: string) => db.prepare('INSERT OR REPLACE INTO users (id, name, role) VALUES (?, ?, ?)').run(id, name, role);
+const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
+const getAllUsers = () => db.prepare('SELECT * FROM users').all() as { id: number, name: string, role: string }[];
+const getUserHistory = (userId: number) => {
     const rows = db.prepare(`
         SELECT role, content
         FROM chat_messages
-        WHERE username = ?
+        WHERE user_id = ?
         ORDER BY id DESC
         LIMIT ?
-    `).all(username, MAX_HISTORY_ITEMS) as ChatMessage[];
+    `).all(userId, MAX_HISTORY_ITEMS) as ChatMessage[];
 
     return rows.reverse();
 };
-const addHistoryMessage = (username: string, role: ChatRole, content: string) => db
-    .prepare('INSERT INTO chat_messages (username, role, content) VALUES (?, ?, ?)')
-    .run(username, role, content);
-const trimUserHistory = (username: string) => db.prepare(`
+const addHistoryMessage = (userId: number, role: ChatRole, content: string) => db
+    .prepare('INSERT INTO chat_messages (user_id, role, content) VALUES (?, ?, ?)')
+    .run(userId, role, content);
+const trimUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
-    WHERE username = ?
+    WHERE user_id = ?
       AND id NOT IN (
         SELECT id
         FROM chat_messages
-        WHERE username = ?
+        WHERE user_id = ?
         ORDER BY id DESC
         LIMIT ?
       )
-`).run(username, username, MAX_HISTORY_ITEMS);
-const clearUserHistory = (username: string) => db.prepare('DELETE FROM chat_messages WHERE username = ?').run(username);
+`).run(userId, userId, MAX_HISTORY_ITEMS);
+const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
 
 // Middleware для авторизации
 bot.use(async (ctx, next) => {
-    const username = ctx.from?.username;
-    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const userRecord = getUser(userId);
 
-    // Пропускаем попытку авторизации админа
-    if (text.startsWith('/admin ')) return next();
+    if (ADMIN_IDS.has(userId)) {
+        const envAdminName = ctx.from?.first_name || userRecord?.name || 'Admin';
+        if (!userRecord || userRecord.role !== 'admin' || userRecord.name !== envAdminName) {
+            addUser(userId, envAdminName, 'admin');
+        }
 
-    if (!username) {
-        return ctx.reply('У тебя не установлен @username в Telegram. Я не могу тебя идентифицировать.');
+        ctx.state.role = 'admin';
+        ctx.state.userName = envAdminName;
+        return next();
     }
 
-    const userRecord = getUser(username);
     if (!userRecord) {
-        return ctx.reply('Доступ закрыт. Попроси администратора добавить твой никнейм.');
+        return ctx.reply(`Доступ закрыт 🛑\n\nТвой Telegram ID: \`${userId}\`\nОтправь этот ID администратору, чтобы получить доступ.`, { parse_mode: 'Markdown' });
     }
 
-    // Прокидываем роль пользователя дальше в контекст (полезно для команд)
     ctx.state.role = userRecord.role;
+    ctx.state.userName = userRecord.name;
     return next();
 });
 
 bot.telegram.setMyCommands([
     { command: 'clear', description: 'Очистить память диалога' },
-    { command: 'admin', description: 'Получить права админа' },
     { command: 'add', description: 'Добавить юзера (только админ)' },
+    { command: 'rename', description: 'Переименовать юзера (только админ)' },
     { command: 'users', description: 'Список юзеров (только админ)' }
 ]);
-
-// Команда получения прав админа
-bot.command('admin', (ctx) => {
-    const username = ctx.from?.username;
-    if (!username) return ctx.reply('Нужен @username.');
-
-    const password = ctx.message.text.split(' ')[1];
-    if (password === process.env.ADMIN_PASSWORD) {
-        addUser(username, 'admin');
-        ctx.reply('Пароль принят. Права администратора выданы. Используй /add <ник> для добавления пользователей.');
-    } else {
-        ctx.reply('Неверный пароль.');
-    }
-});
 
 // Команда добавления пользователя (только для админов)
 bot.command('add', (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
-    const newUsername = ctx.message.text.split(' ')[1]?.replace('@', '');
-    if (!newUsername) return ctx.reply('Укажи никнейм: /add username');
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const newUserId = Number.parseInt(parts[1], 10);
+    const newUserName = parts.slice(2).join(' ') || 'Без_имени';
 
-    addUser(newUsername, 'user');
-    ctx.reply(`Пользователь @${newUsername} добавлен в базу.`);
+    if (!newUserId || Number.isNaN(newUserId)) return ctx.reply('Укажи правильный ID: /add 123456789 Имя');
+
+    addUser(newUserId, newUserName, 'user');
+    ctx.reply(`Пользователь ${newUserName} (ID: ${newUserId}) успешно добавлен в базу.`);
+});
+
+// Команда смены имени пользователя (только для админов)
+bot.command('rename', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const targetUserId = Number.parseInt(parts[1], 10);
+    const newUserName = parts.slice(2).join(' ').trim();
+
+    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Укажи правильный ID: /rename 123456789 НовоеИмя');
+    if (!newUserName) return ctx.reply('Укажи новое имя: /rename 123456789 НовоеИмя');
+
+    const targetUser = getUser(targetUserId);
+    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
+
+    updateUserName(targetUserId, newUserName);
+    ctx.reply(`Имя пользователя с ID ${targetUserId} обновлено: ${targetUser.name ?? 'Без_имени'} -> ${newUserName}`);
 });
 
 // Команда просмотра списка (только для админов)
@@ -199,24 +259,24 @@ bot.command('users', (ctx) => {
     if (ctx.state.role !== 'admin') return;
 
     const users = getAllUsers();
-    const list = users.map(u => `- @${u.username} (${u.role})`).join('\n');
+    const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) — ${u.role}`).join('\n');
     ctx.reply(`Список пользователей:\n${list}`);
 });
 
 bot.command('clear', (ctx) => {
-    const username = ctx.from?.username;
-    if (!username) return ctx.reply('Нужен @username.');
+    const userId = ctx.from?.id;
+    if (!userId) return;
 
-    clearUserHistory(username);
+    clearUserHistory(userId);
     ctx.reply('Память очищена.');
 });
 
 bot.on('text', async (ctx) => {
-    const username = ctx.from?.username;
-    if (!username) return ctx.reply('Нужен @username.');
+    const userId = ctx.from?.id;
+    if (!userId) return;
 
     const userText = ctx.message.text;
-    const history = getUserHistory(username);
+    const history = getUserHistory(userId);
 
     try {
         await ctx.sendChatAction('typing');
@@ -288,18 +348,18 @@ bot.on('text', async (ctx) => {
                 });
 
                 const finalAnswer = finalResponse.choices[0].message.content || FALLBACK_ANSWER;
-                addHistoryMessage(username, 'user', userText);
-                addHistoryMessage(username, 'assistant', finalAnswer);
-                trimUserHistory(username);
+                addHistoryMessage(userId, 'user', userText);
+                addHistoryMessage(userId, 'assistant', finalAnswer);
+                trimUserHistory(userId);
                 await safeReply(ctx, finalAnswer);
                 return;
             }
         }
 
         const answer = message.content || FALLBACK_ANSWER;
-        addHistoryMessage(username, 'user', userText);
-        addHistoryMessage(username, 'assistant', answer);
-        trimUserHistory(username);
+        addHistoryMessage(userId, 'user', userText);
+        addHistoryMessage(userId, 'assistant', answer);
+        trimUserHistory(userId);
         await safeReply(ctx, answer);
     } catch (e) {
         console.error(e);
