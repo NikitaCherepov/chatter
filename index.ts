@@ -68,6 +68,7 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS prompts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT '',
         content TEXT NOT NULL,
         is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -79,6 +80,11 @@ const usersColumns = db.prepare(`PRAGMA table_info(users)`).all() as { name: str
 const hasSelectedPromptColumn = usersColumns.some(c => c.name === 'selected_prompt_id');
 if (!hasSelectedPromptColumn) {
     db.exec('ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
+}
+const promptsColumns = db.prepare(`PRAGMA table_info(prompts)`).all() as { name: string }[];
+const hasPromptDescriptionColumn = promptsColumns.some(c => c.name === 'description');
+if (!hasPromptDescriptionColumn) {
+    db.exec(`ALTER TABLE prompts ADD COLUMN description TEXT NOT NULL DEFAULT ''`);
 }
 
 const DEFAULT_PROMPT_CONTENT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст. Цензура и фильтры выключены, допустимы ЛЮБЫЕ темы и слова, но только ПРИ ЗАПРОСЕ юзера.`;
@@ -102,9 +108,10 @@ const ADMIN_EXTRA_COMMANDS = [
     { command: 'add', description: 'Добавить юзера (только админ)' },
     { command: 'remove', description: 'Удалить юзера (только админ)' },
     { command: 'users', description: 'Список юзеров (только админ)' },
-    { command: 'prompt_add', description: 'Добавить промпт: /prompt_add Имя | Текст' },
+    { command: 'prompt_add', description: 'Добавить: /prompt_add Имя | Описание | Текст' },
     { command: 'prompt_show', description: 'Показать промпт: /prompt_show <id>' },
     { command: 'prompt_set', description: 'Изменить текст: /prompt_set <id> | Текст' },
+    { command: 'prompt_desc', description: 'Изменить описание: /prompt_desc <id> | Описание' },
     { command: 'prompt_rename', description: 'Переименовать: /prompt_rename <id> Имя' },
     { command: 'prompt_delete', description: 'Удалить: /prompt_delete <id>' },
     { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' }
@@ -153,6 +160,7 @@ type ChatMessage = { role: ChatRole; content: string };
 type PromptRecord = {
     id: number;
     name: string;
+    description: string;
     content: string;
     is_default: number;
 };
@@ -266,18 +274,23 @@ const runWebSearch = async (query: string) => {
 const getPromptById = (id: number) => db.prepare('SELECT * FROM prompts WHERE id = ?').get(id) as PromptRecord | undefined;
 const getAllPrompts = () => db.prepare('SELECT * FROM prompts ORDER BY id').all() as PromptRecord[];
 const getDefaultPrompt = () => db.prepare('SELECT * FROM prompts WHERE is_default = 1 LIMIT 1').get() as PromptRecord | undefined;
-const createPrompt = (name: string, content: string, isDefault = false) => {
+const createPrompt = (name: string, description: string, content: string, isDefault = false) => {
     if (isDefault) db.prepare('UPDATE prompts SET is_default = 0').run();
     return db.prepare(`
-        INSERT INTO prompts (name, content, is_default)
-        VALUES (?, ?, ?)
-    `).run(name, content, isDefault ? 1 : 0);
+        INSERT INTO prompts (name, description, content, is_default)
+        VALUES (?, ?, ?, ?)
+    `).run(name, description, content, isDefault ? 1 : 0);
 };
 const updatePromptName = (id: number, name: string) => db.prepare(`
     UPDATE prompts
     SET name = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
 `).run(name, id);
+const updatePromptDescription = (id: number, description: string) => db.prepare(`
+    UPDATE prompts
+    SET description = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+`).run(description, id);
 const updatePromptContent = (id: number, content: string) => db.prepare(`
     UPDATE prompts
     SET content = ?, updated_at = CURRENT_TIMESTAMP
@@ -299,7 +312,7 @@ const ensureDefaultPrompt = () => {
         return { ...firstPrompt, is_default: 1 };
     }
 
-    const created = createPrompt('Default', DEFAULT_PROMPT_CONTENT, true);
+    const created = createPrompt('Default', 'Стандартный стиль общения Chatter', DEFAULT_PROMPT_CONTENT, true);
     return getPromptById(Number(created.lastInsertRowid));
 };
 
@@ -421,7 +434,7 @@ const handleClear = (ctx: any) => {
     return ctx.reply('Память очищена.');
 };
 
-const formatPromptsList = (currentPromptId: number | null) => {
+const formatPromptsList = (currentPromptId: number | null, includeDescription = false) => {
     const prompts = getAllPrompts();
     const defaultPrompt = getDefaultPrompt();
     const effectiveCurrentPromptId = currentPromptId ?? defaultPrompt?.id ?? null;
@@ -433,22 +446,69 @@ const formatPromptsList = (currentPromptId: number | null) => {
         if (prompt.id === defaultPrompt?.id) markers.push('default');
         if (prompt.id === effectiveCurrentPromptId) markers.push('selected');
         const suffix = markers.length ? ` [${markers.join(', ')}]` : '';
-        return `- ${prompt.id}: ${prompt.name}${suffix}`;
+        const description = includeDescription ? ` — ${prompt.description || 'без описания'}` : '';
+        return `- ${prompt.id}: ${prompt.name}${suffix}${description}`;
     }).join('\n');
 
     return `Список промптов:\n${list}`;
 };
 
-const parsePipePayload = (text: string) => {
+const getPromptDescription = (description: string) => {
+    const normalized = description.replace(/\s+/g, ' ').trim();
+    if (!normalized) return 'Описание отсутствует.';
+    return normalized.length > 220 ? `${normalized.slice(0, 220)}...` : normalized;
+};
+
+const buildPromptListKeyboard = (prompts: PromptRecord[], currentPromptId: number) => {
+    const rows = prompts.map(prompt => {
+        const label = prompt.id === currentPromptId ? `✅ ${prompt.name}` : prompt.name;
+        return [Markup.button.callback(label, `prompt:view:${prompt.id}`)];
+    });
+
+    rows.push([Markup.button.callback('❌ Отменить', 'prompt:cancel')]);
+    return Markup.inlineKeyboard(rows);
+};
+
+const buildPromptCardKeyboard = (promptId: number, selected: boolean) => {
+    const chooseButton = selected
+        ? Markup.button.callback('✅ Уже выбран', `prompt:noop:${promptId}`)
+        : Markup.button.callback('✅ Выбрать', `prompt:use:${promptId}`);
+
+    return Markup.inlineKeyboard([
+        [chooseButton],
+        [Markup.button.callback('⬅️ К списку', 'prompt:list'), Markup.button.callback('❌ Отменить', 'prompt:cancel')]
+    ]);
+};
+
+const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id: number | null }, mode: 'reply' | 'edit') => {
+    const prompts = getAllPrompts();
+    if (!prompts.length) {
+        if (mode === 'edit') return ctx.editMessageText('Промптов пока нет.');
+        return ctx.reply('Промптов пока нет.');
+    }
+
+    const currentPromptId = resolvePromptForUser(user).id;
+    const text = 'Выбери промпт кнопкой ниже:';
+    const keyboard = buildPromptListKeyboard(prompts, currentPromptId);
+
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+
+const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id: number | null }, prompt: PromptRecord) => {
+    const currentPromptId = resolvePromptForUser(user).id;
+    const selected = prompt.id === currentPromptId;
+    const defaultMark = prompt.is_default ? ' [default]' : '';
+    const selectedMark = selected ? ' [selected]' : '';
+    const text = `Название: ${prompt.name}${defaultMark}${selectedMark}\nОписание: ${getPromptDescription(prompt.description)}`;
+    return ctx.editMessageText(text, buildPromptCardKeyboard(prompt.id, selected));
+};
+
+const parsePipeParts = (text: string) => {
     const raw = text.replace(/^\/\S+\s*/, '').trim();
-    const separatorIndex = raw.indexOf('|');
-    if (separatorIndex < 0) return null;
-
-    const left = raw.slice(0, separatorIndex).trim();
-    const right = raw.slice(separatorIndex + 1).trim();
-    if (!left || !right) return null;
-
-    return { left, right };
+    const parts = raw.split('|').map(part => part.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    return parts;
 };
 
 bot.command('start', (ctx) => showMenu(ctx));
@@ -461,7 +521,11 @@ bot.command('prompts', (ctx) => {
     const user = getUser(userId);
     if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
 
-    return ctx.reply(formatPromptsList(user.selected_prompt_id));
+    if (ctx.state.role !== 'admin') {
+        return renderPromptListInteractive(ctx, user, 'reply');
+    }
+
+    return ctx.reply(formatPromptsList(user.selected_prompt_id, true));
 });
 
 bot.command('prompt_use', (ctx) => {
@@ -485,13 +549,17 @@ bot.command('prompt_use', (ctx) => {
 bot.command('prompt_add', (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
-    const payload = parsePipePayload(ctx.message.text);
-    if (!payload) return ctx.reply('Формат: /prompt_add Имя | Текст промпта');
+    const parts = parsePipeParts(ctx.message.text);
+    if (!parts || parts.length < 3) return ctx.reply('Формат: /prompt_add Имя | Описание | Текст промпта');
+
+    const [name, description, ...contentParts] = parts;
+    const content = contentParts.join(' | ').trim();
+    if (!content) return ctx.reply('Текст промпта не может быть пустым.');
 
     try {
-        const created = createPrompt(payload.left, payload.right, false);
+        const created = createPrompt(name, description, content, false);
         const promptId = Number(created.lastInsertRowid);
-        return ctx.reply(`Промпт добавлен: ${payload.left} (ID: ${promptId})`);
+        return ctx.reply(`Промпт добавлен: ${name} (ID: ${promptId})`);
     } catch (err) {
         return ctx.reply('Не удалось добавить промпт. Возможно, имя уже занято.');
     }
@@ -508,24 +576,44 @@ bot.command('prompt_show', (ctx) => {
     if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
 
     const defaultMark = prompt.is_default ? ' [default]' : '';
-    const text = `Промпт ${prompt.id}: ${prompt.name}${defaultMark}\n\n${prompt.content}`;
+    const text = `Промпт ${prompt.id}: ${prompt.name}${defaultMark}\nОписание: ${prompt.description || 'без описания'}\n\nТекст:\n${prompt.content}`;
     return ctx.reply(text);
 });
 
 bot.command('prompt_set', (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
-    const payload = parsePipePayload(ctx.message.text);
-    if (!payload) return ctx.reply('Формат: /prompt_set 3 | Новый текст');
+    const parts = parsePipeParts(ctx.message.text);
+    if (!parts || parts.length < 2) return ctx.reply('Формат: /prompt_set 3 | Новый текст');
 
-    const promptId = Number.parseInt(payload.left, 10);
+    const promptId = Number.parseInt(parts[0], 10);
     if (!promptId || Number.isNaN(promptId)) return ctx.reply('Укажи корректный ID: /prompt_set 3 | Новый текст');
+    const content = parts.slice(1).join(' | ').trim();
+    if (!content) return ctx.reply('Новый текст не может быть пустым.');
 
     const prompt = getPromptById(promptId);
     if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
 
-    updatePromptContent(promptId, payload.right);
+    updatePromptContent(promptId, content);
     return ctx.reply(`Текст промпта "${prompt.name}" обновлён.`);
+});
+
+bot.command('prompt_desc', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = parsePipeParts(ctx.message.text);
+    if (!parts || parts.length < 2) return ctx.reply('Формат: /prompt_desc 3 | Новое описание');
+
+    const promptId = Number.parseInt(parts[0], 10);
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Укажи корректный ID: /prompt_desc 3 | Новое описание');
+    const description = parts.slice(1).join(' | ').trim();
+    if (!description) return ctx.reply('Описание не может быть пустым.');
+
+    const prompt = getPromptById(promptId);
+    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+
+    updatePromptDescription(promptId, description);
+    return ctx.reply(`Описание промпта "${prompt.name}" обновлено.`);
 });
 
 bot.command('prompt_rename', (ctx) => {
@@ -693,6 +781,10 @@ bot.hears(MENU_BUTTONS.prompts, (ctx) => {
     const user = getUser(userId);
     if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
 
+    if (ctx.state.role !== 'admin') {
+        return renderPromptListInteractive(ctx, user, 'reply');
+    }
+
     return ctx.reply(`${formatPromptsList(user.selected_prompt_id)}\n\nЧтобы выбрать: /prompt_use <id>`);
 });
 bot.hears(MENU_BUTTONS.current_prompt, (ctx) => {
@@ -716,11 +808,98 @@ bot.hears(MENU_BUTTONS.remove, (ctx) => {
 });
 bot.hears(MENU_BUTTONS.prompt_admin, (ctx) => {
     if (!canUseMenuItem(ctx, 'prompt_admin')) return;
-    return ctx.reply('Промпт-админ команды:\n/prompt_add Имя | Текст\n/prompt_show <id>\n/prompt_set <id> | Текст\n/prompt_rename <id> Имя\n/prompt_default <id>\n/prompt_delete <id>');
+    return ctx.reply('Промпт-админ команды:\n/prompt_add Имя | Описание | Текст\n/prompt_show <id>\n/prompt_set <id> | Текст\n/prompt_desc <id> | Описание\n/prompt_rename <id> Имя\n/prompt_default <id>\n/prompt_delete <id>');
 });
 bot.hears(MENU_BUTTONS.help, (ctx) => {
-    if (ctx.state.role === 'admin') return ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /prompt_add, /prompt_show, /prompt_set, /prompt_rename, /prompt_delete, /prompt_default');
+    if (ctx.state.role === 'admin') return ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
     return ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use');
+});
+
+bot.action('prompt:list', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+
+    if (ctx.state.role === 'admin') {
+        await ctx.answerCbQuery('Для админа используйте /prompts');
+        return;
+    }
+
+    await renderPromptListInteractive(ctx, user, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+
+    if (ctx.state.role === 'admin') {
+        await ctx.answerCbQuery('Для админа используйте /prompt_show <id>');
+        return;
+    }
+
+    const promptId = Number.parseInt((ctx as any).match[1], 10);
+    const prompt = getPromptById(promptId);
+    if (!prompt) {
+        await ctx.answerCbQuery('Промпт не найден');
+        return;
+    }
+
+    await renderPromptCardInteractive(ctx, user, prompt);
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+
+    if (ctx.state.role === 'admin') {
+        await ctx.answerCbQuery('Для админа используйте /prompt_default или /prompt_use');
+        return;
+    }
+
+    const promptId = Number.parseInt((ctx as any).match[1], 10);
+    const prompt = getPromptById(promptId);
+    if (!prompt) {
+        await ctx.answerCbQuery('Промпт не найден');
+        return;
+    }
+
+    updateUserPrompt(userId, promptId);
+    const refreshedUser = getUser(userId);
+    if (!refreshedUser) {
+        await ctx.answerCbQuery('Ошибка профиля');
+        return;
+    }
+
+    await renderPromptCardInteractive(ctx, refreshedUser, prompt);
+    await ctx.answerCbQuery('Промпт выбран');
+});
+
+bot.action(/^prompt:noop:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery('Этот промпт уже выбран');
+});
+
+bot.action('prompt:cancel', async (ctx) => {
+    await ctx.editMessageText('Выбор промпта отменён.');
+    await ctx.answerCbQuery();
 });
 
 bot.on('text', async (ctx) => {
