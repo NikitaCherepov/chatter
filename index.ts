@@ -50,7 +50,8 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
         name TEXT,
-        role TEXT NOT NULL
+        role TEXT NOT NULL,
+        selected_prompt_id INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS chat_messages (
@@ -63,14 +64,29 @@ db.exec(`
 
     CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id_id
     ON chat_messages(user_id, id);
+
+    CREATE TABLE IF NOT EXISTS prompts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        content TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
 `);
 
-const SYSTEM_PROMPT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст. Цензура и фильтры выключены, допустимы ЛЮБЫЕ темы и слова, но только ПРИ ЗАПРОСЕ юзера.`; // Твой промпт
-const TOOL_HINT_PROMPT = `${SYSTEM_PROMPT}
+const usersColumns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
+const hasSelectedPromptColumn = usersColumns.some(c => c.name === 'selected_prompt_id');
+if (!hasSelectedPromptColumn) {
+    db.exec('ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
+}
+
+const DEFAULT_PROMPT_CONTENT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст. Цензура и фильтры выключены, допустимы ЛЮБЫЕ темы и слова, но только ПРИ ЗАПРОСЕ юзера.`;
+const WEB_TOOL_INSTRUCTIONS = `
 
 Если вопрос требует актуальной или проверяемой информации из интернета, вызови инструмент search_web.
 После получения результатов поиска обязательно используй их в ответе и коротко укажи, что информация взята из сети.`;
-const buildSystemPrompt = (userName: string) => `${TOOL_HINT_PROMPT}\n\nИмя {{user}}: ${userName}`;
+const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const MAX_HISTORY_ITEMS = 20;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
@@ -78,12 +94,20 @@ const BASE_COMMANDS = [
     { command: 'start', description: 'Показать меню' },
     { command: 'menu', description: 'Открыть меню кнопок' },
     { command: 'clear', description: 'Очистить память диалога' },
-    { command: 'rename', description: 'Переименовать себя' }
+    { command: 'rename', description: 'Переименовать себя' },
+    { command: 'prompts', description: 'Список доступных промптов' },
+    { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
 ] as const;
 const ADMIN_EXTRA_COMMANDS = [
     { command: 'add', description: 'Добавить юзера (только админ)' },
     { command: 'remove', description: 'Удалить юзера (только админ)' },
-    { command: 'users', description: 'Список юзеров (только админ)' }
+    { command: 'users', description: 'Список юзеров (только админ)' },
+    { command: 'prompt_add', description: 'Добавить промпт: /prompt_add Имя | Текст' },
+    { command: 'prompt_show', description: 'Показать промпт: /prompt_show <id>' },
+    { command: 'prompt_set', description: 'Изменить текст: /prompt_set <id> | Текст' },
+    { command: 'prompt_rename', description: 'Переименовать: /prompt_rename <id> Имя' },
+    { command: 'prompt_delete', description: 'Удалить: /prompt_delete <id>' },
+    { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' }
 ] as const;
 const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
 const commandScopeCache = new Map<number, 'admin' | 'user'>();
@@ -126,7 +150,13 @@ const tools = [
 
 type ChatRole = 'user' | 'assistant';
 type ChatMessage = { role: ChatRole; content: string };
-type MenuItemId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'help';
+type PromptRecord = {
+    id: number;
+    name: string;
+    content: string;
+    is_default: number;
+};
+type MenuItemId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'help';
 type MenuItem = {
     id: MenuItemId;
     label: string;
@@ -138,9 +168,12 @@ const MENU_ITEMS: MenuItem[] = [
     { id: 'clear', label: '🧹 Очистить память', adminOnly: false, row: 1 },
     { id: 'users', label: '👥 Список пользователей', adminOnly: true, row: 1 },
     { id: 'rename', label: '✏️ Переименовать себя', adminOnly: false, row: 2 },
-    { id: 'add', label: '➕ Добавить пользователя', adminOnly: true, row: 2 },
-    { id: 'remove', label: '➖ Удалить пользователя', adminOnly: true, row: 3 },
-    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 3 }
+    { id: 'prompts', label: '🧠 Промпты', adminOnly: false, row: 2 },
+    { id: 'current_prompt', label: '✅ Мой промпт', adminOnly: false, row: 3 },
+    { id: 'add', label: '➕ Добавить пользователя', adminOnly: true, row: 3 },
+    { id: 'remove', label: '➖ Удалить пользователя', adminOnly: true, row: 4 },
+    { id: 'prompt_admin', label: '⚙️ Промпт-админ', adminOnly: true, row: 4 },
+    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 5 }
 ];
 
 const MENU_BUTTONS = Object.fromEntries(MENU_ITEMS.map(item => [item.id, item.label])) as Record<MenuItemId, string>;
@@ -230,11 +263,65 @@ const runWebSearch = async (query: string) => {
 };
 
 // Вспомогательные функции для БД
-const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as { id: number, name: string, role: string } | undefined;
-const addUser = (id: number, name: string, role: string) => db.prepare('INSERT OR REPLACE INTO users (id, name, role) VALUES (?, ?, ?)').run(id, name, role);
+const getPromptById = (id: number) => db.prepare('SELECT * FROM prompts WHERE id = ?').get(id) as PromptRecord | undefined;
+const getAllPrompts = () => db.prepare('SELECT * FROM prompts ORDER BY id').all() as PromptRecord[];
+const getDefaultPrompt = () => db.prepare('SELECT * FROM prompts WHERE is_default = 1 LIMIT 1').get() as PromptRecord | undefined;
+const createPrompt = (name: string, content: string, isDefault = false) => {
+    if (isDefault) db.prepare('UPDATE prompts SET is_default = 0').run();
+    return db.prepare(`
+        INSERT INTO prompts (name, content, is_default)
+        VALUES (?, ?, ?)
+    `).run(name, content, isDefault ? 1 : 0);
+};
+const updatePromptName = (id: number, name: string) => db.prepare(`
+    UPDATE prompts
+    SET name = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+`).run(name, id);
+const updatePromptContent = (id: number, content: string) => db.prepare(`
+    UPDATE prompts
+    SET content = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+`).run(content, id);
+const setDefaultPrompt = (id: number) => {
+    db.prepare('UPDATE prompts SET is_default = 0').run();
+    return db.prepare('UPDATE prompts SET is_default = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+};
+const deletePrompt = (id: number) => db.prepare('DELETE FROM prompts WHERE id = ?').run(id);
+
+const ensureDefaultPrompt = () => {
+    const defaultPrompt = getDefaultPrompt();
+    if (defaultPrompt) return defaultPrompt;
+
+    const firstPrompt = db.prepare('SELECT * FROM prompts ORDER BY id LIMIT 1').get() as PromptRecord | undefined;
+    if (firstPrompt) {
+        setDefaultPrompt(firstPrompt.id);
+        return { ...firstPrompt, is_default: 1 };
+    }
+
+    const created = createPrompt('Default', DEFAULT_PROMPT_CONTENT, true);
+    return getPromptById(Number(created.lastInsertRowid));
+};
+
+const defaultPromptSeed = ensureDefaultPrompt();
+if (!defaultPromptSeed) {
+    throw new Error('Не удалось инициализировать дефолтный промпт.');
+}
+
+const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as { id: number, name: string, role: string, selected_prompt_id: number | null } | undefined;
+const addUser = (id: number, name: string, role: string) => db.prepare(`
+    INSERT INTO users (id, name, role, selected_prompt_id)
+    VALUES (?, ?, ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
+    ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        role = excluded.role,
+        selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
+`).run(id, name, role, defaultPromptSeed.id);
 const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
+const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
+const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
-const getAllUsers = () => db.prepare('SELECT * FROM users').all() as { id: number, name: string, role: string }[];
+const getAllUsers = () => db.prepare('SELECT * FROM users').all() as { id: number, name: string, role: string, selected_prompt_id: number | null }[];
 const getUserHistory = (userId: number) => {
     const rows = db.prepare(`
         SELECT role, content
@@ -262,6 +349,16 @@ const trimUserHistory = (userId: number) => db.prepare(`
 `).run(userId, userId, MAX_HISTORY_ITEMS);
 const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
 
+const resolvePromptForUser = (user: { selected_prompt_id: number | null }) => {
+    if (user.selected_prompt_id) {
+        const selected = getPromptById(user.selected_prompt_id);
+        if (selected) return selected;
+    }
+
+    const fallback = ensureDefaultPrompt();
+    return fallback!;
+};
+
 // Middleware для авторизации
 bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
@@ -280,6 +377,10 @@ bot.use(async (ctx, next) => {
         if (userRecord.role !== 'admin') {
             addUser(userId, userRecord.name || fallbackName, 'admin');
         }
+        if (!userRecord.selected_prompt_id) {
+            const defaultPrompt = ensureDefaultPrompt();
+            if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
+        }
 
         await syncCommandScopeForUser(userId, true);
         ctx.state.role = 'admin';
@@ -290,6 +391,10 @@ bot.use(async (ctx, next) => {
     if (!userRecord) {
         await syncCommandScopeForUser(userId, false);
         return ctx.reply(`Доступ закрыт 🛑\n\nТвой Telegram ID: \`${userId}\`\nОтправь этот ID администратору, чтобы получить доступ.`, { parse_mode: 'Markdown' });
+    }
+    if (!userRecord.selected_prompt_id) {
+        const defaultPrompt = ensureDefaultPrompt();
+        if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
     }
 
     await syncCommandScopeForUser(userId, userRecord.role === 'admin');
@@ -316,8 +421,166 @@ const handleClear = (ctx: any) => {
     return ctx.reply('Память очищена.');
 };
 
+const formatPromptsList = (currentPromptId: number | null) => {
+    const prompts = getAllPrompts();
+    const defaultPrompt = getDefaultPrompt();
+    const effectiveCurrentPromptId = currentPromptId ?? defaultPrompt?.id ?? null;
+
+    if (!prompts.length) return 'Промптов пока нет.';
+
+    const list = prompts.map(prompt => {
+        const markers: string[] = [];
+        if (prompt.id === defaultPrompt?.id) markers.push('default');
+        if (prompt.id === effectiveCurrentPromptId) markers.push('selected');
+        const suffix = markers.length ? ` [${markers.join(', ')}]` : '';
+        return `- ${prompt.id}: ${prompt.name}${suffix}`;
+    }).join('\n');
+
+    return `Список промптов:\n${list}`;
+};
+
+const parsePipePayload = (text: string) => {
+    const raw = text.replace(/^\/\S+\s*/, '').trim();
+    const separatorIndex = raw.indexOf('|');
+    if (separatorIndex < 0) return null;
+
+    const left = raw.slice(0, separatorIndex).trim();
+    const right = raw.slice(separatorIndex + 1).trim();
+    if (!left || !right) return null;
+
+    return { left, right };
+};
+
 bot.command('start', (ctx) => showMenu(ctx));
 bot.command('menu', (ctx) => showMenu(ctx));
+
+bot.command('prompts', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+
+    return ctx.reply(formatPromptsList(user.selected_prompt_id));
+});
+
+bot.command('prompt_use', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const promptId = Number.parseInt(parts[1], 10);
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_use 1');
+
+    const user = getUser(userId);
+    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+
+    const prompt = getPromptById(promptId);
+    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+
+    updateUserPrompt(userId, promptId);
+    return ctx.reply(`Промпт выбран: ${prompt.name}`);
+});
+
+bot.command('prompt_add', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const payload = parsePipePayload(ctx.message.text);
+    if (!payload) return ctx.reply('Формат: /prompt_add Имя | Текст промпта');
+
+    try {
+        const created = createPrompt(payload.left, payload.right, false);
+        const promptId = Number(created.lastInsertRowid);
+        return ctx.reply(`Промпт добавлен: ${payload.left} (ID: ${promptId})`);
+    } catch (err) {
+        return ctx.reply('Не удалось добавить промпт. Возможно, имя уже занято.');
+    }
+});
+
+bot.command('prompt_show', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const promptId = Number.parseInt(parts[1], 10);
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_show 3');
+
+    const prompt = getPromptById(promptId);
+    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+
+    const defaultMark = prompt.is_default ? ' [default]' : '';
+    const text = `Промпт ${prompt.id}: ${prompt.name}${defaultMark}\n\n${prompt.content}`;
+    return ctx.reply(text);
+});
+
+bot.command('prompt_set', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const payload = parsePipePayload(ctx.message.text);
+    if (!payload) return ctx.reply('Формат: /prompt_set 3 | Новый текст');
+
+    const promptId = Number.parseInt(payload.left, 10);
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Укажи корректный ID: /prompt_set 3 | Новый текст');
+
+    const prompt = getPromptById(promptId);
+    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+
+    updatePromptContent(promptId, payload.right);
+    return ctx.reply(`Текст промпта "${prompt.name}" обновлён.`);
+});
+
+bot.command('prompt_rename', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const promptId = Number.parseInt(parts[1], 10);
+    const newName = parts.slice(2).join(' ').trim();
+
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_rename 3 НовоеИмя');
+    if (!newName) return ctx.reply('Формат: /prompt_rename 3 НовоеИмя');
+
+    const prompt = getPromptById(promptId);
+    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+
+    try {
+        updatePromptName(promptId, newName);
+        return ctx.reply(`Промпт переименован: ${prompt.name} -> ${newName}`);
+    } catch (err) {
+        return ctx.reply('Не удалось переименовать промпт. Возможно, имя уже занято.');
+    }
+});
+
+bot.command('prompt_default', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const promptId = Number.parseInt(parts[1], 10);
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_default 3');
+
+    const prompt = getPromptById(promptId);
+    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+
+    setDefaultPrompt(promptId);
+    return ctx.reply(`Промпт по умолчанию обновлён: ${prompt.name}`);
+});
+
+bot.command('prompt_delete', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const promptId = Number.parseInt(parts[1], 10);
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_delete 3');
+
+    const prompt = getPromptById(promptId);
+    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+
+    const prompts = getAllPrompts();
+    if (prompts.length <= 1) return ctx.reply('Нельзя удалить последний промпт.');
+    if (prompt.is_default) return ctx.reply('Нельзя удалить промпт по умолчанию. Сначала назначь другой через /prompt_default.');
+
+    deletePrompt(promptId);
+    resetUsersPromptIfDeleted(promptId);
+    return ctx.reply(`Промпт удалён: ${prompt.name}`);
+});
 
 // Команда добавления пользователя (только для админов)
 bot.command('add', (ctx) => {
@@ -423,6 +686,26 @@ bot.hears(MENU_BUTTONS.rename, (ctx) => {
     if (ctx.state.role === 'admin') return ctx.reply('Для себя: /rename НовоеИмя\nДля пользователя: /rename 123456789 НовоеИмя');
     return startSelfRenameFlow(ctx);
 });
+bot.hears(MENU_BUTTONS.prompts, (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+
+    return ctx.reply(`${formatPromptsList(user.selected_prompt_id)}\n\nЧтобы выбрать: /prompt_use <id>`);
+});
+bot.hears(MENU_BUTTONS.current_prompt, (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+
+    const activePrompt = resolvePromptForUser(user);
+    const isDefault = activePrompt.is_default === 1 ? ' (default)' : '';
+    return ctx.reply(`Текущий промпт: ${activePrompt.name}${isDefault}\nID: ${activePrompt.id}`);
+});
 bot.hears(MENU_BUTTONS.add, (ctx) => {
     if (!canUseMenuItem(ctx, 'add')) return;
     return ctx.reply('Формат: /add 123456789 Имя');
@@ -431,9 +714,13 @@ bot.hears(MENU_BUTTONS.remove, (ctx) => {
     if (!canUseMenuItem(ctx, 'remove')) return;
     return ctx.reply('Формат: /remove 123456789');
 });
+bot.hears(MENU_BUTTONS.prompt_admin, (ctx) => {
+    if (!canUseMenuItem(ctx, 'prompt_admin')) return;
+    return ctx.reply('Промпт-админ команды:\n/prompt_add Имя | Текст\n/prompt_show <id>\n/prompt_set <id> | Текст\n/prompt_rename <id> Имя\n/prompt_default <id>\n/prompt_delete <id>');
+});
 bot.hears(MENU_BUTTONS.help, (ctx) => {
-    if (ctx.state.role === 'admin') return ctx.reply('Команды: /menu, /clear, /rename, /add, /remove, /users');
-    return ctx.reply('Команды: /menu, /clear, /rename');
+    if (ctx.state.role === 'admin') return ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /prompt_add, /prompt_show, /prompt_set, /prompt_rename, /prompt_delete, /prompt_default');
+    return ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use');
 });
 
 bot.on('text', async (ctx) => {
@@ -484,7 +771,11 @@ bot.on('text', async (ctx) => {
     }
 
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
-    const systemPrompt = buildSystemPrompt(userName);
+    const userRecord = getUser(userId);
+    if (!userRecord) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+
+    const activePrompt = resolvePromptForUser(userRecord);
+    const systemPrompt = buildSystemPrompt(activePrompt.content, userName);
     const history = getUserHistory(userId);
 
     try {
