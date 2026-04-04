@@ -638,7 +638,7 @@ const tools = [
                     },
                     body: {
                         type: 'string',
-                        description: 'Текст письма.'
+                        description: 'Текст письма. Можно передавать HTML-разметку (<b>, <h1>, <ul>, <a> и т.д.) для красивого письма.'
                     }
                 },
                 required: ['to', 'subject', 'body']
@@ -2044,7 +2044,8 @@ const runEmailSend = async (userId: number, to: string, subject: string, body: s
             from: user.imap_user,
             to: recipient,
             subject: mailSubject,
-            text: mailBody
+            text: mailBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+            html: mailBody
         });
         return `✅ Письмо успешно отправлено на ${recipient}`;
     } catch (err) {
