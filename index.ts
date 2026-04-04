@@ -56,6 +56,8 @@ db.exec(`
         selected_prompt_id INTEGER,
         timezone_offset INTEGER DEFAULT 5,
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
+        daily_message_count INTEGER NOT NULL DEFAULT 0,
+        total_message_length INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -113,6 +115,8 @@ ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT')
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
 ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER DEFAULT 5');
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
 
 if (hasUserColumn('created_at')) {
     db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
@@ -120,6 +124,12 @@ if (hasUserColumn('created_at')) {
 if (hasUserColumn('status')) {
     db.exec(`UPDATE users SET status = 'approved' WHERE status IS NULL OR status = ''`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`);
+}
+if (hasUserColumn('daily_message_count')) {
+    db.exec(`UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL`);
+}
+if (hasUserColumn('total_message_length')) {
+    db.exec(`UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL`);
 }
 
 const promptsColumns = db.prepare(`PRAGMA table_info(prompts)`).all() as { name: string }[];
@@ -421,6 +431,8 @@ type UserRecord = {
     selected_prompt_id: number | null;
     timezone_offset: number | null;
     timezone_confirmed: number;
+    daily_message_count: number;
+    total_message_length: number;
 };
 type TaskStatus = 'pending' | 'done' | 'error';
 type TaskType = 'message' | 'smart_home';
@@ -785,6 +797,24 @@ const formatTaskForDisplay = (task: TaskRecord) => {
     return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when} UTC\nДанные: ${payloadPreview}`;
 };
 
+const scheduleDailyCounterReset = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(24, 0, 0, 0);
+    const delay = Math.max(1000, next.getTime() - now.getTime());
+
+    setTimeout(() => {
+        try {
+            resetDailyMessageCounters();
+            console.log('Счётчики сообщений за день обнулены.');
+        } catch (err) {
+            console.error('Ошибка ежедневного сброса счётчиков:', err);
+        } finally {
+            scheduleDailyCounterReset();
+        }
+    }, delay);
+};
+
 const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
     if (!canUserControlSmartHome(userId)) {
         return 'Ошибка доступа: у тебя нет прав на управление умным домом.';
@@ -968,13 +998,23 @@ const updateUserTimezone = (id: number, timezoneOffset: number) => db.prepare(`
     SET timezone_offset = ?, timezone_confirmed = 1
     WHERE id = ?
 `).run(timezoneOffset, id);
+const incrementUserMessageStats = (id: number, messageLength: number) => db.prepare(`
+    UPDATE users
+    SET daily_message_count = COALESCE(daily_message_count, 0) + 1,
+        total_message_length = COALESCE(total_message_length, 0) + ?
+    WHERE id = ?
+`).run(Math.max(0, messageLength), id);
+const resetDailyMessageCounters = () => db.prepare(`
+    UPDATE users
+    SET daily_message_count = 0
+`).run();
 const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id
+    SELECT id, name, role, status, tg_username, selected_prompt_id, timezone_offset, timezone_confirmed, daily_message_count, total_message_length
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
@@ -1335,8 +1375,9 @@ const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: n
 const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number) => {
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
+        const usageTag = `msg:${row.daily_message_count ?? 0}`;
         return [Markup.button.callback(
-            `${statusTag} ${getUserDisplayName(row)} (#${row.id})`,
+            `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${usageTag}`,
             `usr:view:${row.id}:${page}`
         )];
     });
@@ -1417,6 +1458,8 @@ Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
 Роль: ${user.role}
 Статус: ${user.status}
 Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
+Сообщений сегодня: ${user.daily_message_count ?? 0}
+Всего символов отправлено: ${user.total_message_length ?? 0}
 ${ban ? `Бан: ${ban.reason}` : ''}`.trim();
     const keyboard = buildAdminUserCardKeyboard(user, page);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
@@ -2640,6 +2683,7 @@ bot.on('text', async (ctx) => {
                 });
 
                 const finalAnswer = finalResponse.choices[0].message.content || FALLBACK_ANSWER;
+                incrementUserMessageStats(userId, userText.length);
                 addHistoryMessage(userId, 'user', userText);
                 addHistoryMessage(userId, 'assistant', finalAnswer);
                 trimUserHistory(userId);
@@ -2649,6 +2693,7 @@ bot.on('text', async (ctx) => {
         }
 
         const answer = message.content || FALLBACK_ANSWER;
+        incrementUserMessageStats(userId, userText.length);
         addHistoryMessage(userId, 'user', userText);
         addHistoryMessage(userId, 'assistant', answer);
         trimUserHistory(userId);
@@ -2684,6 +2729,8 @@ setInterval(async () => {
         }
     }
 }, 30000);
+
+scheduleDailyCounterReset();
 
 bot.launch();
 console.log('Chatter запущен с базой данных!');
