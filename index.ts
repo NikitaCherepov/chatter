@@ -55,6 +55,7 @@ db.exec(`
         tg_username TEXT,
         selected_prompt_id INTEGER,
         custom_prompt_content TEXT,
+        core_memory TEXT DEFAULT '',
         timezone_offset INTEGER DEFAULT 5,
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
@@ -128,6 +129,7 @@ const ensureTaskColumn = (columnName: string, alterSql: string) => {
 
 ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
 ensureUserColumn('custom_prompt_content', 'ALTER TABLE users ADD COLUMN custom_prompt_content TEXT');
+ensureUserColumn('core_memory', `ALTER TABLE users ADD COLUMN core_memory TEXT DEFAULT ''`);
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
@@ -177,6 +179,9 @@ if (hasUserColumn('daily_web_search_count')) {
 if (hasUserColumn('total_web_search_count')) {
     db.exec(`UPDATE users SET total_web_search_count = 0 WHERE total_web_search_count IS NULL`);
 }
+if (hasUserColumn('core_memory')) {
+    db.exec(`UPDATE users SET core_memory = '' WHERE core_memory IS NULL`);
+}
 if (hasTaskColumn('recurrence_type')) {
     db.exec(`UPDATE tasks SET recurrence_type = 'once' WHERE recurrence_type IS NULL OR recurrence_type = ''`);
 }
@@ -202,13 +207,21 @@ const SCHEDULE_TOOL_INSTRUCTIONS = `
 const TASK_DELETE_TOOL_INSTRUCTIONS = `
 
 Если пользователь просит удалить/отменить конкретную задачу или напоминание, вызови инструмент delete_my_task. Удаляй только по точному ID задачи.`;
+const MEMORY_TOOL_INSTRUCTIONS = `
+
+Если пользователь сообщил КРИТИЧЕСКИ важный долгосрочный факт о себе, вызови инструмент update_core_memory.
+Считай важными: возраст, профессию/смену работы, рождение детей, семейное положение, переезд/город, устойчивые долгосрочные предпочтения.
+НЕ считай важными: повседневные события, разовые рабочие мелочи, "не успел на автобус", "сегодня сделал функцию", "написал трек".
+Если пользователь явно говорит "запомни" — уточни факт при необходимости и затем вызови update_core_memory.
+Не сообщай о внутреннем обновлении памяти, если пользователь прямо не просил подтвердить запоминание.
+USE ONLY FOR CRITICAL LIFE EVENTS. DO NOT USE FOR DAILY ROUTINE.`;
 const TIMEZONE_TOOL_INSTRUCTIONS = `
 
 Если пользователь сообщает город/страну, просит установить часовой пояс или пишет "я из ...", вызови инструмент set_user_timezone.`;
 const RANDOM_TOOL_INSTRUCTIONS = `
 
 Если пользователь просит подкинуть монетку, бросить кубик или сделать случайный бросок, вызови инструмент random_roll.`;
-const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
+const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
     const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
@@ -222,6 +235,7 @@ const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const CUSTOM_PROMPT_ID = -1;
 const MAX_CUSTOM_PROMPT_LENGTH = 800;
+const MAX_CORE_MEMORY_LENGTH = 400;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
@@ -517,6 +531,27 @@ const tools = [
     {
         type: 'function',
         function: {
+            name: 'update_core_memory',
+            description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важной биографии/статуса/долгосрочных предпочтений. Не используй для рутины.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    new_fact: {
+                        type: 'string',
+                        description: 'Новый важный факт о пользователе, кратко и конкретно.'
+                    },
+                    explicit_request: {
+                        type: 'boolean',
+                        description: 'true, если пользователь явно попросил "запомни".'
+                    }
+                },
+                required: ['new_fact']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'random_roll',
             description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Для кубиков поддерживает обычный режим, преимущество и помеху.',
             parameters: {
@@ -554,6 +589,7 @@ type UserRecord = {
     tg_username: string | null;
     selected_prompt_id: number | null;
     custom_prompt_content: string | null;
+    core_memory: string | null;
     timezone_offset: number | null;
     timezone_confirmed: number;
     daily_message_count: number;
@@ -807,6 +843,10 @@ type ScheduleTaskArgs = {
 type DeleteTaskArgs = {
     task_id?: number;
 };
+type UpdateCoreMemoryArgs = {
+    new_fact?: string;
+    explicit_request?: boolean;
+};
 
 const clampTimezoneOffset = (offset: number) => {
     if (!Number.isFinite(offset)) return null;
@@ -964,6 +1004,82 @@ const safeSendToUser = async (chatId: number, text: string) => {
     }
 };
 
+const runCoreMemoryMerge = async (userId: number, newFact: string, explicitRequest: boolean) => {
+    const user = getUser(userId);
+    if (!user) {
+        return 'Ошибка памяти: пользователь не найден.';
+    }
+
+    const fact = newFact.trim();
+    if (!fact) {
+        return 'Ошибка памяти: пустой факт.';
+    }
+
+    const currentMemory = (user.core_memory || '').trim();
+    const mergePrompt = `Ты — безжалостный редактор памяти ИИ-ассистента.
+Твоя задача: обновить профиль пользователя, интегрировав в него новый факт.
+
+ТЕКУЩАЯ ПАМЯТЬ:
+${currentMemory || '(пусто)'}
+
+НОВЫЙ ФАКТ:
+${fact}
+
+КОНТЕКСТ:
+- Явный запрос "запомни": ${explicitRequest ? 'да' : 'нет'}.
+- Если факт явно незначительный и explicitRequest=нет — можешь оставить память без изменений.
+
+ПРАВИЛА:
+1. ЖЕСТКИЙ ЛИМИТ: ровно ${MAX_CORE_MEMORY_LENGTH} символов максимум. Если превышаешь — удаляй самую старую и наименее важную информацию (оставляй ядро: кто он, где живет, кем работает, близкие люди).
+2. СТИЛЬ: телеграфный. Никаких полных предложений. Используй списки, сокращения, теги.
+3. Дедупликация: если новый факт конфликтует со старым (например, сменил город/работу) — удаляй старый.
+4. В ответе выдай ТОЛЬКО новый текст памяти, без комментариев и JSON.`;
+
+    let mergedMemory = currentMemory;
+    let action: 'updated' | 'unchanged' = 'unchanged';
+    let reason = 'без комментария';
+
+    try {
+        const mergeResponse = await ai.chat.completions.create({
+            model: MODEL_NAME,
+            messages: [
+                { role: 'system', content: 'Ты аккуратный модуль памяти. Верни только готовый текст памяти.' },
+                { role: 'user', content: mergePrompt }
+            ]
+        });
+        const mergeTokens = extractTotalTokens(mergeResponse);
+        if (mergeTokens > 0) {
+            incrementUserTokenUsage(userId, mergeTokens);
+        }
+
+        const raw = mergeResponse.choices[0]?.message?.content?.trim() || '';
+        mergedMemory = raw || currentMemory;
+        if (mergedMemory.length > MAX_CORE_MEMORY_LENGTH) {
+            mergedMemory = mergedMemory.slice(0, MAX_CORE_MEMORY_LENGTH).trim();
+        }
+        action = mergedMemory === currentMemory ? 'unchanged' : 'updated';
+        reason = 'merge-модель';
+    } catch (err) {
+        console.warn('Ошибка merge core_memory, применяю fallback:', err);
+        const fallbackCandidate = currentMemory
+            ? `${currentMemory}\n- ${fact}`
+            : `- ${fact}`;
+        mergedMemory = fallbackCandidate.slice(0, MAX_CORE_MEMORY_LENGTH).trim();
+        action = mergedMemory === currentMemory ? 'unchanged' : 'updated';
+        reason = 'fallback-слияние';
+    }
+
+    if (mergedMemory !== currentMemory) {
+        updateUserCoreMemory(userId, mergedMemory);
+    }
+
+    return `Память: ${action}.
+Причина: ${reason}.
+Текущая длина памяти: ${mergedMemory.length}/${MAX_CORE_MEMORY_LENGTH}.
+Текущая память:
+${mergedMemory || '(пусто)'}`;
+};
+
 const runScheduledWebSearchTask = async (task: TaskRecord) => {
     const query = task.payload.trim();
     if (!query) {
@@ -981,7 +1097,7 @@ const runScheduledWebSearchTask = async (task: TaskRecord) => {
     const userName = userRecord.name || userRecord.tg_username || 'Пользователь';
     const activePrompt = resolvePromptForUser(userRecord);
     const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
-    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName)}${buildTimeContext(timezoneOffset)}`;
+    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
 
     try {
         const aiResponse = await ai.chat.completions.create({
@@ -1034,7 +1150,7 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
 
     const targetPrompt = resolvePromptForUser(targetUser);
     const targetUserName = targetUser.name || targetUser.tg_username || 'Друг';
-    const systemPrompt = buildSystemPrompt(targetPrompt.content, targetUserName);
+    const systemPrompt = buildSystemPrompt(targetPrompt.content, targetUserName, targetUser.core_memory || '');
     const aiTask = `[СИСТЕМНОЕ ЗАДАНИЕ ОТ АДМИНА]: Администратор просит передать этому пользователю информацию.
 Твоя задача: взять "мысль админа" и написать сообщение от своего лица, строго сохраняя свой текущий характер и стиль, заданный в системном промпте.
 НЕ пиши "Админ просил передать", просто вплети эту мысль в разговор от себя.
@@ -1481,19 +1597,20 @@ const resetDailyMessageCounters = () => db.prepare(`
 const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
 const selectUserCustomPrompt = (id: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(CUSTOM_PROMPT_ID, id);
 const updateUserCustomPrompt = (id: number, content: string) => db.prepare('UPDATE users SET custom_prompt_content = ? WHERE id = ?').run(content, id);
+const updateUserCoreMemory = (id: number, memory: string) => db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(memory, id);
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, created_at
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -1501,7 +1618,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -3178,7 +3295,7 @@ bot.on('text', async (ctx) => {
 
     const activePrompt = resolvePromptForUser(userRecord);
     const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
-    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName)}${buildTimeContext(timezoneOffset)}`;
+    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
     const history = getUserHistory(userId);
 
     try {
@@ -3340,6 +3457,14 @@ bot.on('text', async (ctx) => {
                         const limit = typeof parsed.limit === 'number' ? parsed.limit : 20;
                         const tasks = getUserTasks(userId, status as TaskStatus | 'all', limit);
                         toolContent = formatTasksList(tasks);
+                    } else if (toolCall.function.name === 'update_core_memory') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as UpdateCoreMemoryArgs;
+                        const newFact = typeof parsed.new_fact === 'string' ? parsed.new_fact.trim() : '';
+                        const explicitRequest = Boolean(parsed.explicit_request);
+                        if (!newFact) {
+                            throw new Error('Пустой new_fact');
+                        }
+                        toolContent = await runCoreMemoryMerge(userId, newFact, explicitRequest);
                     } else if (toolCall.function.name === 'random_roll') {
                         let args: RandomRollArgs = {};
                         try {
