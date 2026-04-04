@@ -120,7 +120,10 @@ const WEB_TOOL_INSTRUCTIONS = `
 
 Если вопрос требует актуальной или проверяемой информации из интернета, вызови инструмент search_web.
 После получения результатов поиска обязательно используй их в ответе и коротко укажи, что информация взята из сети.`;
-const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
+const SMART_HOME_TOOL_INSTRUCTIONS = `
+
+Если пользователь явно просит управлять устройством умного дома (включить/выключить/сменить цвет), вызови инструмент control_smart_home.`;
+const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const MAX_HISTORY_ITEMS = 20;
 const PAGE_SIZE = 10;
@@ -157,6 +160,14 @@ const parseAdminId = (raw: string | undefined) => {
     if (Number.isNaN(parsed) || parsed <= 0) return null;
     return parsed;
 };
+const parseCsv = (raw: string | undefined) => {
+    if (!raw) return [] as string[];
+    return raw
+        .split(/[,\n;]+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+};
+const normalizeDeviceAlias = (alias: string) => alias.trim().toLowerCase();
 
 const ADMIN_IDS = (() => {
     const ids = new Set<number>();
@@ -179,6 +190,72 @@ const ADMIN_IDS = (() => {
 
     return ids;
 })();
+const SMART_HOME_ALLOWED_IDS = (() => {
+    const ids = new Set<number>();
+
+    for (const raw of parseCsv(process.env.SMART_HOME_ALLOWED_IDS)) {
+        const id = parseAdminId(raw);
+        if (id) ids.add(id);
+    }
+
+    const singleId = parseAdminId(process.env.SMART_HOME_ALLOWED_ID);
+    if (singleId) ids.add(singleId);
+
+    for (const [key, value] of Object.entries(process.env)) {
+        if (!key.startsWith('SMART_HOME_ALLOWED_ID_')) continue;
+        const id = parseAdminId(value);
+        if (id) ids.add(id);
+    }
+
+    return ids;
+})();
+
+const SMART_HOME_DEVICES_FALLBACK: Record<string, string[]> = {
+    'свет': [
+        '20c0fb1b-f5e4-4daf-b121-0ee0fb326586',
+        '619facb9-4ce8-4ed6-b66a-923f01c8e0a4',
+        'e3d027ee-3ca4-4776-9e92-f23c7e6dc926'
+    ],
+    'увлажнитель': [
+        '65b9c366-cb0c-4dfd-8624-1473a811752f'
+    ]
+};
+
+const SMART_HOME_DEVICES: Record<string, string[]> = (() => {
+    const devices: Record<string, string[]> = {};
+    for (const [alias, ids] of Object.entries(SMART_HOME_DEVICES_FALLBACK)) {
+        devices[normalizeDeviceAlias(alias)] = ids.map(id => id.trim()).filter(Boolean);
+    }
+
+    const jsonRaw = process.env.SMART_HOME_DEVICES_JSON;
+    if (jsonRaw) {
+        try {
+            const parsed = JSON.parse(jsonRaw) as Record<string, string[] | string>;
+            for (const [alias, value] of Object.entries(parsed)) {
+                const ids = Array.isArray(value) ? value.map(v => `${v}`.trim()).filter(Boolean) : parseCsv(`${value}`);
+                if (!ids.length) continue;
+                devices[normalizeDeviceAlias(alias)] = ids;
+            }
+        } catch (err) {
+            console.warn('SMART_HOME_DEVICES_JSON имеет неверный JSON-формат');
+        }
+    }
+
+    for (const [key, value] of Object.entries(process.env)) {
+        if (!key.startsWith('SMART_HOME_DEVICE_')) continue;
+        const alias = normalizeDeviceAlias(key.replace('SMART_HOME_DEVICE_', '').replace(/__/g, '-').replace(/_/g, ' '));
+        const ids = parseCsv(value);
+        if (!ids.length) continue;
+        devices[alias] = ids;
+    }
+
+    return devices;
+})();
+const SMART_HOME_DEVICE_NAMES = Object.keys(SMART_HOME_DEVICES);
+const SMART_HOME_DEVICE_OPTIONS_TEXT = SMART_HOME_DEVICE_NAMES.length
+    ? SMART_HOME_DEVICE_NAMES.join(', ')
+    : 'не настроены (добавь SMART_HOME_DEVICE_* в .env)';
+const canUserControlSmartHome = (userId: number) => ADMIN_IDS.has(userId) || SMART_HOME_ALLOWED_IDS.has(userId);
 
 const tools = [
     {
@@ -195,6 +272,32 @@ const tools = [
                     }
                 },
                 required: ['query']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'control_smart_home',
+            description: 'Управляет устройствами умного дома. Используй только при явной просьбе пользователя включить, выключить или поменять цвет устройства.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    device_name: {
+                        type: 'string',
+                        description: `Название устройства. Доступные варианты: ${SMART_HOME_DEVICE_OPTIONS_TEXT}.`
+                    },
+                    action: {
+                        type: 'string',
+                        enum: ['on', 'off', 'set_color'],
+                        description: 'on - включить, off - выключить, set_color - изменить цвет.'
+                    },
+                    color: {
+                        type: 'string',
+                        description: 'Цвет в формате #RRGGBB или имя цвета (красный, синий, зеленый и т.д.). Используется только с action=set_color.'
+                    }
+                },
+                required: ['device_name', 'action']
             }
         }
     }
@@ -320,6 +423,149 @@ const runWebSearch = async (query: string) => {
     } catch (err) {
         console.error('Ошибка Tavily API:', err);
         return 'Ошибка инструмента: поисковый сервис временно недоступен.';
+    }
+};
+
+const COLOR_NAME_TO_HEX: Record<string, string> = {
+    red: '#FF0000',
+    green: '#00FF00',
+    blue: '#0000FF',
+    white: '#FFFFFF',
+    black: '#000000',
+    yellow: '#FFFF00',
+    purple: '#800080',
+    violet: '#800080',
+    pink: '#FFC0CB',
+    orange: '#FFA500',
+    cyan: '#00FFFF',
+    teal: '#008080',
+    warmwhite: '#FFD8A8',
+    coolwhite: '#DCEBFF',
+    'красный': '#FF0000',
+    'зеленый': '#00FF00',
+    'зелёный': '#00FF00',
+    'синий': '#0000FF',
+    'белый': '#FFFFFF',
+    'черный': '#000000',
+    'чёрный': '#000000',
+    'желтый': '#FFFF00',
+    'жёлтый': '#FFFF00',
+    'фиолетовый': '#800080',
+    'розовый': '#FFC0CB',
+    'оранжевый': '#FFA500',
+    'голубой': '#00FFFF',
+    'бирюзовый': '#00FFFF',
+    'теплый белый': '#FFD8A8',
+    'тёплый белый': '#FFD8A8',
+    'холодный белый': '#DCEBFF'
+};
+
+const parseColorToRgb = (value: string) => {
+    const normalized = value.trim().toLowerCase();
+    const mapped = COLOR_NAME_TO_HEX[normalized] || normalized;
+    const compact = mapped.replace(/\s+/g, '');
+
+    if (!/^#?[0-9a-f]{6}$/i.test(compact)) return null;
+    const hex = compact.startsWith('#') ? compact.slice(1) : compact;
+    return Number.parseInt(hex, 16);
+};
+
+type SmartHomeAction = 'on' | 'off' | 'set_color';
+type SmartHomeArgs = {
+    device_name?: string;
+    action?: SmartHomeAction;
+    color?: string;
+};
+
+const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
+    if (!canUserControlSmartHome(userId)) {
+        return 'Ошибка доступа: у тебя нет прав на управление умным домом.';
+    }
+
+    if (!process.env.YANDEX_IOT_TOKEN) {
+        return 'Ошибка конфигурации: не задан YANDEX_IOT_TOKEN.';
+    }
+
+    const deviceName = normalizeDeviceAlias(args.device_name || '');
+    if (!deviceName) {
+        return 'Ошибка инструмента: не передано имя устройства.';
+    }
+
+    const deviceIds = SMART_HOME_DEVICES[deviceName];
+    if (!deviceIds?.length) {
+        return `Ошибка: устройство "${args.device_name}" не найдено.`;
+    }
+
+    const action = args.action;
+    if (!action || !['on', 'off', 'set_color'].includes(action)) {
+        return 'Ошибка инструмента: неизвестное действие.';
+    }
+
+    const onOffPayload = (value: boolean) => ({
+        type: 'devices.capabilities.on_off',
+        state: { instance: 'on', value }
+    });
+    const colorPayload = (rgb: number) => ({
+        type: 'devices.capabilities.color_setting',
+        state: { instance: 'rgb', value: rgb }
+    });
+
+    let actionsPayload: any[] = [];
+    if (action === 'on') actionsPayload = [onOffPayload(true)];
+    if (action === 'off') actionsPayload = [onOffPayload(false)];
+    if (action === 'set_color') {
+        if (!args.color) return 'Ошибка инструмента: для set_color нужен параметр color.';
+        const rgb = parseColorToRgb(args.color);
+        if (rgb === null) return `Ошибка инструмента: не удалось распознать цвет "${args.color}".`;
+        actionsPayload = [colorPayload(rgb)];
+    }
+
+    const devicesPayload = deviceIds.map(id => ({
+        id,
+        actions: actionsPayload
+    }));
+
+    try {
+        const response = await fetch('https://api.iot.yandex.net/v1.0/devices/actions', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env.YANDEX_IOT_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ devices: devicesPayload })
+        });
+
+        const raw = await response.text();
+        let data: any = {};
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (err) {
+            data = { raw };
+        }
+
+        if (!response.ok) {
+            return `Ошибка API Яндекса (${response.status}): ${raw || 'пустой ответ'}`;
+        }
+
+        const devices = Array.isArray(data?.devices) ? data.devices : [];
+        const failed = devices.filter((device: any) =>
+            Array.isArray(device?.capabilities)
+            && device.capabilities.some((cap: any) => cap?.state?.action_result?.status === 'ERROR')
+        );
+
+        if (failed.length) {
+            const failedIds = failed.map((item: any) => item?.id).filter(Boolean).join(', ');
+            return `Команда выполнена частично. Ошибка у устройств: ${failedIds || 'неизвестно'}.`;
+        }
+
+        const actionText = action === 'on'
+            ? 'включено'
+            : action === 'off'
+                ? 'выключено'
+                : `цвет изменен на ${args.color}`;
+        return `Успешно: "${args.device_name}" -> ${actionText}.`;
+    } catch (err) {
+        return `Техническая ошибка при управлении умным домом: ${err instanceof Error ? err.message : String(err)}`;
     }
 };
 
@@ -1751,44 +1997,64 @@ bot.on('text', async (ctx) => {
         const message = response.choices[0].message;
 
         if (message.tool_calls?.length) {
-            let handledSearch = false;
+            let handledToolCall = false;
             const toolMessages: any[] = [];
 
             for (const toolCall of message.tool_calls) {
                 if (toolCall.type !== 'function') continue;
-                if (toolCall.function.name !== 'search_web') continue;
+                if (toolCall.function.name === 'search_web') {
+                    handledToolCall = true;
+                    await ctx.reply('Ищу информацию в сети...');
 
-                handledSearch = true;
-                await ctx.reply('Ищу информацию в сети...');
-
-                let query = '';
-                try {
-                    const parsed = JSON.parse(toolCall.function.arguments || '{}');
-                    query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
-                } catch (err) {
-                    console.warn('Ошибка парсинга аргументов search_web:', err);
-                }
-
-                let toolContent = '';
-                if (!query) {
-                    toolContent = 'Ошибка инструмента: пустой поисковый запрос.';
-                } else {
+                    let query = '';
                     try {
-                        toolContent = await runWebSearch(query);
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}');
+                        query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
                     } catch (err) {
-                        console.error('Ошибка поиска в Tavily:', err);
-                        toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
+                        console.warn('Ошибка парсинга аргументов search_web:', err);
                     }
+
+                    let toolContent = '';
+                    if (!query) {
+                        toolContent = 'Ошибка инструмента: пустой поисковый запрос.';
+                    } else {
+                        try {
+                            toolContent = await runWebSearch(query);
+                        } catch (err) {
+                            console.error('Ошибка поиска в Tavily:', err);
+                            toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
+                        }
+                    }
+
+                    toolMessages.push({
+                        role: 'tool',
+                        tool_call_id: toolCall.id,
+                        content: toolContent
+                    });
+                    continue;
                 }
 
-                toolMessages.push({
-                    role: 'tool',
-                    tool_call_id: toolCall.id,
-                    content: toolContent
-                });
+                if (toolCall.function.name === 'control_smart_home') {
+                    handledToolCall = true;
+                    await ctx.reply('🏠 Выполняю команду умного дома...');
+
+                    let args: SmartHomeArgs = {};
+                    try {
+                        args = JSON.parse(toolCall.function.arguments || '{}') as SmartHomeArgs;
+                    } catch (err) {
+                        console.warn('Ошибка парсинга аргументов control_smart_home:', err);
+                    }
+
+                    const toolContent = await runSmartHomeControl(userId, args);
+                    toolMessages.push({
+                        role: 'tool',
+                        tool_call_id: toolCall.id,
+                        content: toolContent
+                    });
+                }
             }
 
-            if (handledSearch) {
+            if (handledToolCall) {
                 const finalResponse = await ai.chat.completions.create({
                     model: MODEL_NAME,
                     messages: [
