@@ -460,14 +460,46 @@ const COLOR_NAME_TO_HEX: Record<string, string> = {
     'холодный белый': '#DCEBFF'
 };
 
-const parseColorToRgb = (value: string) => {
+const parseColorToHsv = (value: string) => {
     const normalized = value.trim().toLowerCase();
     const mapped = COLOR_NAME_TO_HEX[normalized] || normalized;
     const compact = mapped.replace(/\s+/g, '');
 
     if (!/^#?[0-9a-f]{6}$/i.test(compact)) return null;
     const hex = compact.startsWith('#') ? compact.slice(1) : compact;
-    return Number.parseInt(hex, 16);
+
+    const r = Number.parseInt(hex.slice(0, 2), 16) / 255;
+    const g = Number.parseInt(hex.slice(2, 4), 16) / 255;
+    const b = Number.parseInt(hex.slice(4, 6), 16) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+
+    let h = 0;
+    const s = max === 0 ? 0 : d / max;
+    const v = max;
+
+    if (max !== min) {
+        switch (max) {
+            case r:
+                h = (g - b) / d + (g < b ? 6 : 0);
+                break;
+            case g:
+                h = (b - r) / d + 2;
+                break;
+            case b:
+                h = (r - g) / d + 4;
+                break;
+        }
+        h /= 6;
+    }
+
+    return {
+        h: Math.round(h * 360),
+        s: Math.round(s * 100),
+        v: Math.round(v * 100)
+    };
 };
 
 type SmartHomeAction = 'on' | 'off' | 'set_color';
@@ -505,9 +537,9 @@ const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
         type: 'devices.capabilities.on_off',
         state: { instance: 'on', value }
     });
-    const colorPayload = (rgb: number) => ({
+    const colorPayload = (hsv: { h: number; s: number; v: number }) => ({
         type: 'devices.capabilities.color_setting',
-        state: { instance: 'rgb', value: rgb }
+        state: { instance: 'hsv', value: hsv }
     });
 
     let actionsPayload: any[] = [];
@@ -515,9 +547,9 @@ const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
     if (action === 'off') actionsPayload = [onOffPayload(false)];
     if (action === 'set_color') {
         if (!args.color) return 'Ошибка инструмента: для set_color нужен параметр color.';
-        const rgb = parseColorToRgb(args.color);
-        if (rgb === null) return `Ошибка инструмента: не удалось распознать цвет "${args.color}".`;
-        actionsPayload = [colorPayload(rgb)];
+        const hsv = parseColorToHsv(args.color);
+        if (hsv === null) return `Ошибка инструмента: не удалось распознать цвет "${args.color}".`;
+        actionsPayload = [onOffPayload(true), colorPayload(hsv)];
     }
 
     const devicesPayload = deviceIds.map(id => ({
