@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -56,6 +57,12 @@ db.exec(`
         selected_prompt_id INTEGER,
         custom_prompt_content TEXT,
         core_memory TEXT DEFAULT '',
+        imap_provider TEXT,
+        imap_user TEXT,
+        imap_pass TEXT,
+        imap_host TEXT,
+        imap_port INTEGER DEFAULT 993,
+        imap_secure INTEGER DEFAULT 1,
         timezone_offset INTEGER DEFAULT 5,
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
@@ -130,6 +137,12 @@ const ensureTaskColumn = (columnName: string, alterSql: string) => {
 ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
 ensureUserColumn('custom_prompt_content', 'ALTER TABLE users ADD COLUMN custom_prompt_content TEXT');
 ensureUserColumn('core_memory', `ALTER TABLE users ADD COLUMN core_memory TEXT DEFAULT ''`);
+ensureUserColumn('imap_provider', 'ALTER TABLE users ADD COLUMN imap_provider TEXT');
+ensureUserColumn('imap_user', 'ALTER TABLE users ADD COLUMN imap_user TEXT');
+ensureUserColumn('imap_pass', 'ALTER TABLE users ADD COLUMN imap_pass TEXT');
+ensureUserColumn('imap_host', 'ALTER TABLE users ADD COLUMN imap_host TEXT');
+ensureUserColumn('imap_port', 'ALTER TABLE users ADD COLUMN imap_port INTEGER DEFAULT 993');
+ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGER DEFAULT 1');
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
@@ -182,6 +195,12 @@ if (hasUserColumn('total_web_search_count')) {
 if (hasUserColumn('core_memory')) {
     db.exec(`UPDATE users SET core_memory = '' WHERE core_memory IS NULL`);
 }
+if (hasUserColumn('imap_port')) {
+    db.exec(`UPDATE users SET imap_port = 993 WHERE imap_port IS NULL OR imap_port <= 0`);
+}
+if (hasUserColumn('imap_secure')) {
+    db.exec(`UPDATE users SET imap_secure = 1 WHERE imap_secure IS NULL`);
+}
 if (hasTaskColumn('recurrence_type')) {
     db.exec(`UPDATE tasks SET recurrence_type = 'once' WHERE recurrence_type IS NULL OR recurrence_type = ''`);
 }
@@ -221,7 +240,10 @@ const TIMEZONE_TOOL_INSTRUCTIONS = `
 const RANDOM_TOOL_INSTRUCTIONS = `
 
 Если пользователь просит подкинуть монетку, бросить кубик или сделать случайный бросок, вызови инструмент random_roll.`;
-const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
+const EMAIL_TOOL_INSTRUCTIONS = `
+
+Если пользователь просит проверить почту, найти письмо или посмотреть последние входящие — вызови инструмент check_emails.`;
+const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
     const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
@@ -239,6 +261,10 @@ const MAX_CORE_MEMORY_LENGTH = 400;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
+const EMAIL_PASSWORD_DELIMITER = '::';
+const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
+const ENCRYPTION_IV_LENGTH = 16;
 const BASE_COMMANDS = [
     { command: 'start', description: 'Показать меню' },
     { command: 'menu', description: 'Открыть меню кнопок' },
@@ -246,6 +272,8 @@ const BASE_COMMANDS = [
     { command: 'tz', description: 'Часовой пояс: /tz <UTC>' },
     { command: 'tasks', description: 'Мои напоминания' },
     { command: 'task_delete', description: 'Удалить задачу: /task_delete <id>' },
+    { command: 'mail_setup', description: 'Почта: /mail_setup <prov> <mail> <app_pass>' },
+    { command: 'mail_forget', description: 'Почта: удалить привязку' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
@@ -282,6 +310,31 @@ const parseCsv = (raw: string | undefined) => {
         .filter(Boolean);
 };
 const normalizeDeviceAlias = (alias: string) => alias.trim().toLowerCase();
+const encryptSecret = (text: string) => {
+    const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
+    const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+    const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+    return `${iv.toString('hex')}${EMAIL_PASSWORD_DELIMITER}${encrypted.toString('hex')}`;
+};
+const decryptSecret = (text: string) => {
+    const parts = text.split(EMAIL_PASSWORD_DELIMITER);
+    if (parts.length !== 2) throw new Error('Неверный формат секрета');
+    const iv = Buffer.from(parts[0], 'hex');
+    const encryptedText = Buffer.from(parts[1], 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+    const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
+    return decrypted.toString('utf8');
+};
+const resolveImapProviderConfig = (providerRaw: string) => {
+    const provider = providerRaw.trim().toLowerCase();
+    if (['yandex', 'ya', 'яндекс'].includes(provider)) {
+        return { provider: 'yandex', host: 'imap.yandex.ru', port: 993, secure: 1 };
+    }
+    if (['google', 'gmail', 'гугл', 'googlemail'].includes(provider)) {
+        return { provider: 'google', host: 'imap.gmail.com', port: 993, secure: 1 };
+    }
+    return null;
+};
 
 const ADMIN_IDS = (() => {
     const ids = new Set<number>();
@@ -531,6 +584,26 @@ const tools = [
     {
         type: 'function',
         function: {
+            name: 'check_emails',
+            description: 'Ищет письма в почте пользователя. Можно указать отправителя, тему или ключевое слово. Используй, если нужно найти старые письма или письма от конкретной организации.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    search_query: {
+                        type: 'string',
+                        description: 'Поисковая строка (имя, домен, тема, ключевое слово).'
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Максимум результатов (по умолчанию 5, максимум 10).'
+                    }
+                }
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'update_core_memory',
             description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важной биографии/статуса/долгосрочных предпочтений. Не используй для рутины.',
             parameters: {
@@ -590,6 +663,12 @@ type UserRecord = {
     selected_prompt_id: number | null;
     custom_prompt_content: string | null;
     core_memory: string | null;
+    imap_provider: string | null;
+    imap_user: string | null;
+    imap_pass: string | null;
+    imap_host: string | null;
+    imap_port: number | null;
+    imap_secure: number | null;
     timezone_offset: number | null;
     timezone_confirmed: number;
     daily_message_count: number;
@@ -624,7 +703,7 @@ type PromptRecord = {
 };
 type PendingUserRow = UserRecord & { created_at: string | null };
 type BannedUserRow = UserRecord & { reason: string; banned_at: string };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'pending' | 'banned' | 'help';
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
     label: string;
@@ -644,7 +723,8 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'prompt_admin', label: '⚙️ Промпт-админ', adminOnly: true, row: 4 },
     { id: 'pending', label: '🕓 Заявки', adminOnly: true, row: 5 },
     { id: 'banned', label: '⛔ Забаненные', adminOnly: true, row: 5 },
-    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 6 }
+    { id: 'mail', label: '📬 Почта', adminOnly: false, row: 6 },
+    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 7 }
 ];
 
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
@@ -667,6 +747,13 @@ const buildMainMenuInlineKeyboard = (isAdmin: boolean) => {
 
     return Markup.inlineKeyboard(rows);
 };
+
+const buildMailMenuKeyboard = () => Markup.inlineKeyboard([
+    [Markup.button.callback('➕ Добавить/обновить', 'mail:setup_help')],
+    [Markup.button.callback('🟡 Инструкция Yandex', 'mail:instr:yandex')],
+    [Markup.button.callback('🔵 Инструкция Google', 'mail:instr:google')],
+    [Markup.button.callback('🗑 Удалить привязку', 'mail:forget')]
+]);
 
 const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
     const nextRole: 'admin' | 'user' = isAdmin ? 'admin' : 'user';
@@ -846,6 +933,10 @@ type DeleteTaskArgs = {
 type UpdateCoreMemoryArgs = {
     new_fact?: string;
     explicit_request?: boolean;
+};
+type CheckEmailsArgs = {
+    search_query?: string;
+    limit?: number;
 };
 
 const clampTimezoneOffset = (offset: number) => {
@@ -1537,6 +1628,16 @@ const updateUserTimezone = (id: number, timezoneOffset: number) => db.prepare(`
     SET timezone_offset = ?, timezone_confirmed = 1
     WHERE id = ?
 `).run(timezoneOffset, id);
+const updateUserMailSettings = (id: number, provider: string, email: string, encryptedPassword: string, host: string, port = 993, secure = 1) => db.prepare(`
+    UPDATE users
+    SET imap_provider = ?, imap_user = ?, imap_pass = ?, imap_host = ?, imap_port = ?, imap_secure = ?
+    WHERE id = ?
+`).run(provider, email, encryptedPassword, host, port, secure, id);
+const clearUserMailSettings = (id: number) => db.prepare(`
+    UPDATE users
+    SET imap_provider = NULL, imap_user = NULL, imap_pass = NULL, imap_host = NULL, imap_port = 993, imap_secure = 1
+    WHERE id = ?
+`).run(id);
 const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;
 const formatTokenCountShort = (tokens: number) => {
     const safe = Math.max(0, Math.floor(tokens || 0));
@@ -1549,6 +1650,85 @@ const extractTotalTokens = (response: any) => {
     const total = Number(response?.usage?.total_tokens ?? 0);
     if (!Number.isFinite(total) || total < 0) return 0;
     return Math.floor(total);
+};
+const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5) => {
+    const user = getUser(userId);
+    if (!user?.imap_user || !user?.imap_pass || !user?.imap_host) {
+        return 'Ошибка: почта не настроена. Используй /mail_setup или кнопку "📬 Почта".';
+    }
+
+    const safeLimit = Math.max(1, Math.min(10, Math.floor(limit || 5)));
+    const normalizedQuery = (searchQuery || '').trim();
+    let decryptedPass = '';
+    try {
+        decryptedPass = decryptSecret(user.imap_pass);
+    } catch (err) {
+        return 'Ошибка: не удалось расшифровать пароль почты. Перепривяжи через /mail_setup.';
+    }
+
+    let ImapFlowCtor: any;
+    try {
+        const dynamicImporter = new Function('moduleName', 'return import(moduleName)') as (moduleName: string) => Promise<any>;
+        const mod = await dynamicImporter('imapflow');
+        ImapFlowCtor = mod?.ImapFlow;
+        if (!ImapFlowCtor) {
+            return 'Ошибка: библиотека imapflow не найдена. Установи её на сервере: npm install imapflow';
+        }
+    } catch (err) {
+        return 'Ошибка: библиотека imapflow не найдена. Установи её на сервере: npm install imapflow';
+    }
+
+    const client = new ImapFlowCtor({
+        host: user.imap_host,
+        port: Number(user.imap_port || 993),
+        secure: user.imap_secure !== 0,
+        logger: false,
+        auth: {
+            user: user.imap_user,
+            pass: decryptedPass
+        }
+    });
+
+    try {
+        await client.connect();
+        const lock = await client.getMailboxLock('INBOX');
+        const emails: Array<{ from: string; subject: string; date: string }> = [];
+        try {
+            const searchCriteria = normalizedQuery
+                ? {
+                    or: [
+                        { from: normalizedQuery },
+                        { subject: normalizedQuery },
+                        { body: normalizedQuery }
+                    ]
+                }
+                : { all: true };
+
+            const resultIds = await client.search(searchCriteria);
+            const targetIds = resultIds.slice(-safeLimit);
+            if (!targetIds.length) {
+                return normalizedQuery
+                    ? `Писем по запросу "${normalizedQuery}" не найдено.`
+                    : 'На почте пусто.';
+            }
+
+            for await (const msg of client.fetch(targetIds, { envelope: true })) {
+                const from = msg.envelope?.from?.[0]?.address || 'unknown';
+                const subject = msg.envelope?.subject || '(без темы)';
+                const date = msg.envelope?.date ? new Date(msg.envelope.date).toLocaleString('ru-RU') : 'без даты';
+                emails.push({ from, subject, date });
+            }
+        } finally {
+            lock.release();
+        }
+
+        await client.logout();
+        if (!emails.length) return 'На почте пусто.';
+        return JSON.stringify(emails.reverse(), null, 2);
+    } catch (err) {
+        try { await client.logout(); } catch {}
+        return `Ошибка подключения к почте: ${err instanceof Error ? err.message : String(err)}`;
+    }
 };
 const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
     const safeLength = Math.max(0, messageLength);
@@ -1603,14 +1783,14 @@ const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, created_at
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -1618,7 +1798,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -2603,6 +2783,52 @@ bot.command('task_delete', (ctx) => {
     return ctx.reply(`Удалил задачу #${taskId}.\n\nТекущие задачи (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${updatedText}`);
 });
 
+bot.command('mail_setup', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к настройке почты.');
+    }
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    if (parts.length < 4) {
+        return ctx.reply('Использование: /mail_setup <yandex|google> <email> <пароль_приложения>\nПример: /mail_setup yandex me@yandex.ru abcd1234');
+    }
+
+    const providerConfig = resolveImapProviderConfig(parts[1]);
+    if (!providerConfig) {
+        return ctx.reply('Неизвестный провайдер. Доступно: yandex, google');
+    }
+
+    const email = parts[2].trim();
+    const appPassword = parts.slice(3).join(' ').trim();
+    if (!email || !appPassword) {
+        return ctx.reply('Email и пароль приложения обязательны.');
+    }
+
+    const encryptedPass = encryptSecret(appPassword);
+    updateUserMailSettings(
+        userId,
+        providerConfig.provider,
+        email,
+        encryptedPass,
+        providerConfig.host,
+        providerConfig.port,
+        providerConfig.secure
+    );
+
+    return ctx.reply(`✅ Почта привязана: ${email}\nПровайдер: ${providerConfig.provider}\nТеперь можно просить меня проверить входящие.`);
+});
+
+bot.command('mail_forget', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    clearUserMailSettings(userId);
+    return ctx.reply('🗑 Данные почты удалены.');
+});
+
 bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -2628,7 +2854,7 @@ bot.on('location', (ctx) => {
     return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_admin|pending|banned|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_admin|pending|banned|mail|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -2729,12 +2955,17 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
         return;
     }
 
-    if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+    if (actionId === 'mail') {
+        await ctx.reply('📬 Управление почтой\nВыбери действие:', buildMailMenuKeyboard());
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /rename, /prompts, /prompt_use');
+    if (ctx.state.role === 'admin') {
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        return;
+    }
+
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_forget, /rename, /prompts, /prompt_use');
 });
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
@@ -2746,6 +2977,29 @@ bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[1], 10);
     await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
     await ctx.answerCbQuery();
+});
+
+bot.action('mail:setup_help', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply('Команда: /mail_setup <yandex|google> <email> <пароль_приложения>\nПример: /mail_setup yandex me@yandex.ru app_password');
+});
+
+bot.action('mail:instr:yandex', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply('Яндекс:\n1) Открой Yandex ID → Безопасность.\n2) Создай "Пароль приложения" для почты.\n3) Выполни: /mail_setup yandex <email> <пароль_приложения>.');
+});
+
+bot.action('mail:instr:google', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply('Google:\n1) Включи 2FA в аккаунте.\n2) Создай App Password для Mail.\n3) Выполни: /mail_setup google <email> <app_password>.');
+});
+
+bot.action('mail:forget', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    clearUserMailSettings(userId);
+    await ctx.answerCbQuery('Почта удалена');
+    await ctx.reply('🗑 Данные почты удалены.');
 });
 
 bot.action(/^mod:pv:(\d+):(\d+)$/, async (ctx) => {
@@ -3457,6 +3711,11 @@ bot.on('text', async (ctx) => {
                         const limit = typeof parsed.limit === 'number' ? parsed.limit : 20;
                         const tasks = getUserTasks(userId, status as TaskStatus | 'all', limit);
                         toolContent = formatTasksList(tasks);
+                    } else if (toolCall.function.name === 'check_emails') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as CheckEmailsArgs;
+                        const limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
+                        const searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
+                        toolContent = await runEmailCheck(userId, searchQuery, limit);
                     } else if (toolCall.function.name === 'update_core_memory') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as UpdateCoreMemoryArgs;
                         const newFact = typeof parsed.new_fact === 'string' ? parsed.new_fact.trim() : '';
