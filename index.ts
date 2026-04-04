@@ -769,7 +769,11 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
         }
 
         await safeSendToUser(targetUserId, finalMessage);
-        await ctx.reply(`✅ Сообщение отправлено пользователю ${targetUserName} (ID: ${targetUserId}).`);
+        addHistoryMessage(targetUserId, 'assistant', finalMessage);
+        trimUserHistory(targetUserId);
+        await ctx.reply(
+            `✅ Сообщение отправлено пользователю ${targetUserName} (ID: ${targetUserId}).\n\nТекст, который отправила нейросеть:\n${finalMessage}`
+        );
     } catch (err) {
         await ctx.reply(`❌ Ошибка генерации: ${err instanceof Error ? err.message : String(err)}`);
     }
