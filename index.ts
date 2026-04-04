@@ -1,4 +1,4 @@
-import { Markup, Telegraf } from 'telegraf';
+﻿import { Markup, Telegraf } from 'telegraf';
 import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
@@ -74,6 +74,19 @@ const buildSystemPrompt = (userName: string) => `${TOOL_HINT_PROMPT}\n\nИмя {
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const MAX_HISTORY_ITEMS = 20;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
+const BASE_COMMANDS = [
+    { command: 'start', description: 'Показать меню' },
+    { command: 'menu', description: 'Открыть меню кнопок' },
+    { command: 'clear', description: 'Очистить память диалога' },
+    { command: 'rename', description: 'Переименовать себя' }
+] as const;
+const ADMIN_EXTRA_COMMANDS = [
+    { command: 'add', description: 'Добавить юзера (только админ)' },
+    { command: 'remove', description: 'Удалить юзера (только админ)' },
+    { command: 'users', description: 'Список юзеров (только админ)' }
+] as const;
+const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
+const commandScopeCache = new Map<number, 'admin' | 'user'>();
 const ADMIN_IDS = (() => {
     const ids = new Set<number>();
 
@@ -149,6 +162,18 @@ const canUseMenuItem = (ctx: any, id: MenuItemId) => {
         return false;
     }
     return true;
+};
+
+const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
+    const nextRole: 'admin' | 'user' = isAdmin ? 'admin' : 'user';
+    if (commandScopeCache.get(userId) === nextRole) return;
+
+    const commands = isAdmin ? ADMIN_COMMANDS : BASE_COMMANDS;
+    await bot.telegram.setMyCommands(commands as any, {
+        scope: { type: 'chat', chat_id: userId }
+    } as any);
+
+    commandScopeCache.set(userId, nextRole);
 };
 type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
@@ -256,29 +281,24 @@ bot.use(async (ctx, next) => {
             addUser(userId, userRecord.name || fallbackName, 'admin');
         }
 
+        await syncCommandScopeForUser(userId, true);
         ctx.state.role = 'admin';
         ctx.state.userName = userRecord.name || fallbackName;
         return next();
     }
 
     if (!userRecord) {
+        await syncCommandScopeForUser(userId, false);
         return ctx.reply(`Доступ закрыт 🛑\n\nТвой Telegram ID: \`${userId}\`\nОтправь этот ID администратору, чтобы получить доступ.`, { parse_mode: 'Markdown' });
     }
 
+    await syncCommandScopeForUser(userId, userRecord.role === 'admin');
     ctx.state.role = userRecord.role;
     ctx.state.userName = userRecord.name;
     return next();
 });
 
-bot.telegram.setMyCommands([
-    { command: 'start', description: 'Показать меню' },
-    { command: 'menu', description: 'Открыть меню кнопок' },
-    { command: 'clear', description: 'Очистить память диалога' },
-    { command: 'add', description: 'Добавить юзера (только админ)' },
-    { command: 'remove', description: 'Удалить юзера (только админ)' },
-    { command: 'rename', description: 'Переименовать себя или юзера' },
-    { command: 'users', description: 'Список юзеров (только админ)' }
-]);
+bot.telegram.setMyCommands(BASE_COMMANDS as any);
 
 const showMenu = (ctx: any) => {
     const isAdmin = ctx.state.role === 'admin';
