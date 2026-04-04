@@ -1752,6 +1752,141 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5) =>
     }
 };
 
+const decodeQuotedPrintable = (input: string) => {
+    const normalized = input.replace(/=\r?\n/g, '');
+    return normalized.replace(/=([A-Fa-f0-9]{2})/g, (_, hex: string) => {
+        const code = Number.parseInt(hex, 16);
+        return Number.isNaN(code) ? '' : String.fromCharCode(code);
+    });
+};
+
+const decodeTransferEncodedBody = (rawBody: string, transferEncoding: string | null) => {
+    const encoding = (transferEncoding || '').toLowerCase().trim();
+    if (encoding === 'base64') {
+        try {
+            const compact = rawBody.replace(/\s+/g, '');
+            return Buffer.from(compact, 'base64').toString('utf8');
+        } catch {
+            return rawBody;
+        }
+    }
+    if (encoding === 'quoted-printable') {
+        return decodeQuotedPrintable(rawBody);
+    }
+    return rawBody;
+};
+
+const stripHtmlToText = (html: string) => html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const parseMimeHeaders = (headersRaw: string) => {
+    const map = new Map<string, string>();
+    const unfolded = headersRaw.replace(/\r?\n[ \t]+/g, ' ');
+    for (const line of unfolded.split(/\r?\n/)) {
+        const idx = line.indexOf(':');
+        if (idx <= 0) continue;
+        const key = line.slice(0, idx).trim().toLowerCase();
+        const value = line.slice(idx + 1).trim();
+        if (!map.has(key)) map.set(key, value);
+    }
+    return map;
+};
+
+const extractBoundary = (contentType: string | null) => {
+    if (!contentType) return null;
+    const match = contentType.match(/boundary="?([^";]+)"?/i);
+    return match?.[1] || null;
+};
+
+const splitMimeParts = (body: string, boundary: string) => {
+    const delimiter = `--${boundary}`;
+    const endDelimiter = `--${boundary}--`;
+    const lines = body.replace(/\r\n/g, '\n').split('\n');
+    const parts: string[] = [];
+    let collecting = false;
+    let current: string[] = [];
+
+    for (const line of lines) {
+        if (line === delimiter) {
+            if (collecting && current.length) {
+                parts.push(current.join('\n'));
+            }
+            collecting = true;
+            current = [];
+            continue;
+        }
+        if (line === endDelimiter) {
+            if (collecting && current.length) {
+                parts.push(current.join('\n'));
+            }
+            break;
+        }
+        if (collecting) current.push(line);
+    }
+
+    return parts;
+};
+
+const extractReadableEmailTextFromRaw = (rawSource: string) => {
+    const normalized = rawSource.replace(/\r\n/g, '\n');
+    const splitIndex = normalized.indexOf('\n\n');
+    if (splitIndex < 0) return normalized.trim().slice(0, 2000);
+
+    const topHeadersRaw = normalized.slice(0, splitIndex);
+    const topBody = normalized.slice(splitIndex + 2);
+    const topHeaders = parseMimeHeaders(topHeadersRaw);
+    const topContentType = topHeaders.get('content-type') || null;
+    const boundary = extractBoundary(topContentType);
+
+    const collectPartText = (partRaw: string) => {
+        const idx = partRaw.indexOf('\n\n');
+        if (idx < 0) return null;
+        const partHeadersRaw = partRaw.slice(0, idx);
+        const partBodyRaw = partRaw.slice(idx + 2);
+        const partHeaders = parseMimeHeaders(partHeadersRaw);
+        const partType = (partHeaders.get('content-type') || 'text/plain').toLowerCase();
+        const transfer = partHeaders.get('content-transfer-encoding') || null;
+        const decoded = decodeTransferEncodedBody(partBodyRaw, transfer);
+        if (partType.includes('text/plain')) return decoded;
+        if (partType.includes('text/html')) return stripHtmlToText(decoded);
+        return null;
+    };
+
+    if (boundary) {
+        const parts = splitMimeParts(topBody, boundary);
+        let htmlFallback: string | null = null;
+        for (const part of parts) {
+            const idx = part.indexOf('\n\n');
+            if (idx < 0) continue;
+            const partHeaders = parseMimeHeaders(part.slice(0, idx));
+            const partType = (partHeaders.get('content-type') || '').toLowerCase();
+
+            // Пропускаем вложенные multipart на этом уровне.
+            if (partType.includes('multipart/')) continue;
+
+            const text = collectPartText(part);
+            if (!text) continue;
+            if (partType.includes('text/plain')) return text.replace(/\s+/g, ' ').trim();
+            if (!htmlFallback && partType.includes('text/html')) htmlFallback = text;
+        }
+        if (htmlFallback) return htmlFallback.replace(/\s+/g, ' ').trim();
+    }
+
+    const transfer = topHeaders.get('content-transfer-encoding') || null;
+    const decoded = decodeTransferEncodedBody(topBody, transfer);
+    const topType = (topContentType || '').toLowerCase();
+    const plain = topType.includes('text/html') ? stripHtmlToText(decoded) : decoded;
+    return plain.replace(/\s+/g, ' ').trim();
+};
+
 const runEmailRead = async (userId: number, subjectPart: string) => {
     const user = getUser(userId);
     if (!user?.imap_user || !user?.imap_pass || !user?.imap_host) {
@@ -1805,12 +1940,7 @@ const runEmailRead = async (userId: number, subjectPart: string) => {
             if (!msg?.source) return 'Не удалось прочитать тело письма.';
 
             const sourceText = Buffer.isBuffer(msg.source) ? msg.source.toString('utf8') : `${msg.source}`;
-            const clean = sourceText
-                .replace(/<[^>]*>/g, ' ')
-                .replace(/=\r?\n/g, '')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .slice(0, 2000);
+            const clean = extractReadableEmailTextFromRaw(sourceText).slice(0, 2000);
             const subject = msg.envelope?.subject || '(без темы)';
             return `Тема: ${subject}\nСодержимое (фрагмент):\n${clean || '(пусто)'}`;
         } finally {
