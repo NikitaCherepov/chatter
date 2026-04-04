@@ -54,6 +54,8 @@ db.exec(`
         status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('none', 'approved', 'disapproved', 'banned')),
         tg_username TEXT,
         selected_prompt_id INTEGER,
+        timezone_offset INTEGER DEFAULT 5,
+        timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -84,6 +86,15 @@ db.exec(`
         banned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         banned_by INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        execute_at INTEGER NOT NULL,
+        task_type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending'
+    );
 `);
 
 const hasUserColumn = (columnName: string) => {
@@ -100,6 +111,8 @@ ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_pr
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
+ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER DEFAULT 5');
+ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
 
 if (hasUserColumn('created_at')) {
     db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
@@ -123,7 +136,19 @@ const WEB_TOOL_INSTRUCTIONS = `
 const SMART_HOME_TOOL_INSTRUCTIONS = `
 
 Если пользователь явно просит управлять устройством умного дома (включить/выключить/сменить цвет), вызови инструмент control_smart_home.`;
-const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
+const SCHEDULE_TOOL_INSTRUCTIONS = `
+
+Если пользователь просит напомнить позже, выполнить действие по времени или отложить команду, вызови инструмент schedule_task.`;
+const TIMEZONE_TOOL_INSTRUCTIONS = `
+
+Если пользователь сообщает город/страну, просит установить часовой пояс или пишет "я из ...", вызови инструмент set_user_timezone.`;
+const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
+const buildTimeContext = (timezoneOffset: number) => {
+    const now = new Date();
+    const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
+    const utcSign = timezoneOffset >= 0 ? '+' : '';
+    return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач опирайся на локальное время, но в execute_at передавай строго Unix Timestamp!`;
+};
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const MAX_HISTORY_ITEMS = 20;
 const PAGE_SIZE = 10;
@@ -132,6 +157,7 @@ const BASE_COMMANDS = [
     { command: 'start', description: 'Показать меню' },
     { command: 'menu', description: 'Открыть меню кнопок' },
     { command: 'clear', description: 'Очистить память диалога' },
+    { command: 'tz', description: 'Часовой пояс: /tz <UTC>' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
@@ -304,6 +330,60 @@ const tools = [
                 required: ['device_name', 'action']
             }
         }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'schedule_task',
+            description: 'Создает отложенную задачу (напоминание или действие умного дома). execute_at должен быть Unix timestamp в секундах.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    execute_at: {
+                        type: 'number',
+                        description: 'Unix timestamp в секундах, когда задача должна выполниться.'
+                    },
+                    task_type: {
+                        type: 'string',
+                        enum: ['message', 'smart_home'],
+                        description: 'message - напоминание, smart_home - команда умного дома.'
+                    },
+                    payload: {
+                        type: 'string',
+                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома.'
+                    }
+                },
+                required: ['execute_at', 'task_type', 'payload']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'set_user_timezone',
+            description: 'Устанавливает часовой пояс пользователя. Можно передать timezone_offset напрямую или location/city/country для автоопределения.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    timezone_offset: {
+                        type: 'number',
+                        description: 'Смещение от UTC (целое число от -12 до +14). Если известно — передай его.'
+                    },
+                    location: {
+                        type: 'string',
+                        description: 'Локация в свободной форме, например: "Город, Страна".'
+                    },
+                    city: {
+                        type: 'string',
+                        description: 'Город пользователя, если отдельно.'
+                    },
+                    country: {
+                        type: 'string',
+                        description: 'Страна пользователя, если отдельно.'
+                    }
+                }
+            }
+        }
     }
 ] as const;
 
@@ -317,6 +397,18 @@ type UserRecord = {
     status: UserStatus;
     tg_username: string | null;
     selected_prompt_id: number | null;
+    timezone_offset: number | null;
+    timezone_confirmed: number;
+};
+type TaskStatus = 'pending' | 'done' | 'error';
+type TaskType = 'message' | 'smart_home';
+type TaskRecord = {
+    id: number;
+    user_id: number;
+    execute_at: number;
+    task_type: TaskType;
+    payload: string;
+    status: TaskStatus;
 };
 type PromptRecord = {
     id: number;
@@ -353,6 +445,12 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
 
 const buildMenuTriggerKeyboard = () => Markup.keyboard([[MAIN_MENU_TRIGGER_BUTTON]]).resize().persistent();
+const TZ_BUTTON_SET_UTC = '🕒 Указать UTC';
+const TZ_BUTTON_SEND_LOCATION = '📍 Отправить геопозицию';
+const buildTimezoneSetupKeyboard = () => Markup.keyboard([
+    [TZ_BUTTON_SET_UTC],
+    [Markup.button.locationRequest(TZ_BUTTON_SEND_LOCATION)]
+]).resize().oneTime();
 
 const buildMainMenuInlineKeyboard = (isAdmin: boolean) => {
     const visibleItems = MAIN_MENU_ACTIONS.filter(item => isAdmin || !item.adminOnly);
@@ -378,6 +476,7 @@ const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
 };
 type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
+const timezoneSetupFlows = new Map<number, 'await_offset'>();
 
 const startSelfRenameFlow = (ctx: any) => {
     const userId = ctx.from?.id;
@@ -512,6 +611,90 @@ type SmartHomeArgs = {
     action?: SmartHomeAction;
     color?: string;
     brightness?: number;
+};
+type SetTimezoneArgs = {
+    timezone_offset?: number;
+    location?: string;
+    city?: string;
+    country?: string;
+};
+
+const clampTimezoneOffset = (offset: number) => {
+    if (!Number.isFinite(offset)) return null;
+    const rounded = Math.round(offset);
+    if (rounded < -12 || rounded > 14) return null;
+    return rounded;
+};
+
+const parseUtcOffsetFromText = (raw: string) => {
+    const text = raw.trim().toLowerCase();
+    const utcMatch = text.match(/utc\s*([+-]\s*\d{1,2})/i);
+    if (utcMatch) {
+        const value = Number.parseInt(utcMatch[1].replace(/\s+/g, ''), 10);
+        return clampTimezoneOffset(value);
+    }
+
+    const gmtMatch = text.match(/gmt\s*([+-]\s*\d{1,2})/i);
+    if (gmtMatch) {
+        const value = Number.parseInt(gmtMatch[1].replace(/\s+/g, ''), 10);
+        return clampTimezoneOffset(value);
+    }
+
+    return null;
+};
+
+const estimateOffsetByLongitude = (longitude: number) => {
+    const estimated = Math.round(longitude / 15);
+    if (estimated < -12) return -12;
+    if (estimated > 14) return 14;
+    return estimated;
+};
+
+const resolveOffsetFromLocationText = async (locationText: string) => {
+    const inlineOffset = parseUtcOffsetFromText(locationText);
+    if (inlineOffset !== null) return inlineOffset;
+
+    try {
+        const endpoint = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(locationText)}`;
+        const response = await fetch(endpoint, {
+            headers: { 'User-Agent': 'chatter-bot/1.0 (timezone resolver)' }
+        });
+        if (!response.ok) return null;
+        const data = await response.json() as Array<{ lon?: string }>;
+        const lon = Number.parseFloat(data?.[0]?.lon ?? '');
+        if (!Number.isFinite(lon)) return null;
+        return estimateOffsetByLongitude(lon);
+    } catch (err) {
+        return null;
+    }
+};
+
+const runSetUserTimezone = async (userId: number, args: SetTimezoneArgs) => {
+    let resolvedOffset: number | null = null;
+
+    if (typeof args.timezone_offset === 'number') {
+        resolvedOffset = clampTimezoneOffset(args.timezone_offset);
+    }
+
+    if (resolvedOffset === null) {
+        const locationText = [
+            args.location?.trim(),
+            args.city?.trim(),
+            args.country?.trim()
+        ].filter(Boolean).join(', ');
+
+        if (locationText) {
+            resolvedOffset = await resolveOffsetFromLocationText(locationText);
+        }
+    }
+
+    if (resolvedOffset === null) {
+        return 'Не удалось определить часовой пояс. Попроси пользователя указать смещение явно, например: UTC+7.';
+    }
+
+    updateUserTimezone(userId, resolvedOffset);
+    const sign = resolvedOffset >= 0 ? '+' : '';
+    return `Часовой пояс пользователя установлен: UTC${sign}${resolvedOffset}.`;
 };
 
 const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
@@ -692,6 +875,11 @@ const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SE
 const updateUserTelegramUsername = (id: number, tgUsername: string | null) => db.prepare('UPDATE users SET tg_username = ? WHERE id = ?').run(tgUsername, id);
 const updateUserRole = (id: number, role: string) => db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
 const updateUserStatus = (id: number, status: UserStatus) => db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
+const updateUserTimezone = (id: number, timezoneOffset: number) => db.prepare(`
+    UPDATE users
+    SET timezone_offset = ?, timezone_confirmed = 1
+    WHERE id = ?
+`).run(timezoneOffset, id);
 const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
@@ -734,6 +922,19 @@ const setBan = (id: number, reason: string, bannedBy: number) => db.prepare(`
         banned_at = CURRENT_TIMESTAMP
 `).run(id, reason, bannedBy);
 const removeBan = (id: number) => db.prepare('DELETE FROM bans WHERE user_id = ?').run(id);
+const addTask = (userId: number, executeAt: number, taskType: TaskType, payload: string) => db
+    .prepare('INSERT INTO tasks (user_id, execute_at, task_type, payload) VALUES (?, ?, ?, ?)')
+    .run(userId, executeAt, taskType, payload);
+const getDueTasks = (unixNow: number) => db.prepare(`
+    SELECT id, user_id, execute_at, task_type, payload, status
+    FROM tasks
+    WHERE status = 'pending' AND execute_at <= ?
+    ORDER BY execute_at ASC, id ASC
+`).all(unixNow) as TaskRecord[];
+const updateTaskStatus = (taskId: number, status: TaskStatus) => db
+    .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+    .run(status, taskId);
+const isTimezoneConfigured = (user: UserRecord) => user.timezone_confirmed === 1;
 const getUserHistory = (userId: number) => {
     const rows = db.prepare(`
         SELECT role, content
@@ -1515,6 +1716,46 @@ bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
 
+bot.command('tz', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const offset = Number.parseInt(ctx.message.text.split(' ')[1], 10);
+    if (Number.isNaN(offset) || offset < -12 || offset > 14) {
+        return ctx.reply('Использование: /tz <смещение_от_utc>. Например, для Города: /tz 7');
+    }
+
+    updateUserTimezone(userId, offset);
+    timezoneSetupFlows.delete(userId);
+    const sign = offset >= 0 ? '+' : '';
+    return ctx.reply(`Часовой пояс успешно изменён на UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
+});
+
+bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    timezoneSetupFlows.set(userId, 'await_offset');
+    return ctx.reply('Окей, отправь смещение командой вида: /tz 7\nДопустимый диапазон: от -12 до +14.');
+});
+
+bot.on('location', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) return;
+
+    const longitude = ctx.message.location.longitude;
+    let offset = Math.round(longitude / 15);
+    if (offset < -12) offset = -12;
+    if (offset > 14) offset = 14;
+
+    updateUserTimezone(userId, offset);
+    timezoneSetupFlows.delete(userId);
+    const sign = offset >= 0 ? '+' : '';
+    return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
+});
+
 bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_admin|pending|banned|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
@@ -1611,11 +1852,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /rename, /prompts, /prompt_use');
 });
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
@@ -1980,6 +2221,24 @@ bot.on('text', async (ctx) => {
 
     const userText = ctx.message.text.trim();
     const isAdmin = ctx.state.role === 'admin';
+    const timezoneFlow = timezoneSetupFlows.get(userId);
+
+    if (timezoneFlow === 'await_offset') {
+        let offsetText = userText;
+        if (offsetText.startsWith('/tz')) {
+            offsetText = offsetText.split(' ')[1] ?? '';
+        }
+
+        const offset = Number.parseInt(offsetText, 10);
+        if (Number.isNaN(offset) || offset < -12 || offset > 14) {
+            return ctx.reply('Не понял смещение. Отправь число от -12 до +14, например: 7');
+        }
+
+        updateUserTimezone(userId, offset);
+        timezoneSetupFlows.delete(userId);
+        const sign = offset >= 0 ? '+' : '';
+        return ctx.reply(`Готово, часовой пояс установлен: UTC${sign}${offset}. Теперь могу ставить таймеры.`, buildMenuTriggerKeyboard());
+    }
 
     if (!isAdmin) {
         const renameFlow = renameFlows.get(userId);
@@ -2026,7 +2285,8 @@ bot.on('text', async (ctx) => {
     if (!userRecord) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
 
     const activePrompt = resolvePromptForUser(userRecord);
-    const systemPrompt = buildSystemPrompt(activePrompt.content, userName);
+    const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
+    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName)}${buildTimeContext(timezoneOffset)}`;
     const history = getUserHistory(userId);
 
     try {
@@ -2104,6 +2364,79 @@ bot.on('text', async (ctx) => {
                         tool_call_id: toolCall.id,
                         content: toolContent
                     });
+                    continue;
+                }
+
+                if (toolCall.function.name === 'schedule_task') {
+                    handledToolCall = true;
+                    if (!isTimezoneConfigured(userRecord)) {
+                        toolMessages.push({
+                            role: 'tool',
+                            tool_call_id: toolCall.id,
+                            content: 'Ошибка планирования: часовой пояс пользователя не настроен. Попроси пользователя назвать город/страну или указать UTC-смещение, затем вызови set_user_timezone.'
+                        });
+                        continue;
+                    }
+
+                    try {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as {
+                            execute_at?: number;
+                            task_type?: TaskType;
+                            payload?: string;
+                        };
+
+                        const executeAt = Number(parsed.execute_at);
+                        const taskType = parsed.task_type;
+                        let payload = typeof parsed.payload === 'string' ? parsed.payload : '';
+
+                        if (!Number.isFinite(executeAt) || executeAt <= 0) {
+                            throw new Error('Некорректный execute_at');
+                        }
+                        if (taskType !== 'message' && taskType !== 'smart_home') {
+                            throw new Error('Некорректный task_type');
+                        }
+                        if (!payload.trim()) {
+                            throw new Error('Пустой payload');
+                        }
+
+                        if (taskType === 'smart_home') {
+                            const smartHomePayload = JSON.parse(payload) as SmartHomeArgs;
+                            payload = JSON.stringify(smartHomePayload);
+                        }
+
+                        addTask(userId, Math.floor(executeAt), taskType, payload);
+                        toolMessages.push({
+                            role: 'tool',
+                            tool_call_id: toolCall.id,
+                            content: `Успешно запланировано на timestamp ${Math.floor(executeAt)}.`
+                        });
+                    } catch (err) {
+                        toolMessages.push({
+                            role: 'tool',
+                            tool_call_id: toolCall.id,
+                            content: `Ошибка планирования: ${err instanceof Error ? err.message : String(err)}`
+                        });
+                    }
+                    continue;
+                }
+
+                if (toolCall.function.name === 'set_user_timezone') {
+                    handledToolCall = true;
+                    try {
+                        const args = JSON.parse(toolCall.function.arguments || '{}') as SetTimezoneArgs;
+                        const result = await runSetUserTimezone(userId, args);
+                        toolMessages.push({
+                            role: 'tool',
+                            tool_call_id: toolCall.id,
+                            content: result
+                        });
+                    } catch (err) {
+                        toolMessages.push({
+                            role: 'tool',
+                            tool_call_id: toolCall.id,
+                            content: `Ошибка установки часового пояса: ${err instanceof Error ? err.message : String(err)}`
+                        });
+                    }
                 }
             }
 
@@ -2137,6 +2470,32 @@ bot.on('text', async (ctx) => {
         await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи на сервере.');
     }
 });
+
+setInterval(async () => {
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const pendingTasks = getDueTasks(nowUnix);
+
+    for (const task of pendingTasks) {
+        try {
+            if (task.task_type === 'message') {
+                await bot.telegram.sendMessage(task.user_id, `🔔 *Напоминание:*\n\n${task.payload}`, {
+                    parse_mode: 'Markdown'
+                });
+            } else if (task.task_type === 'smart_home') {
+                const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
+                const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
+                await bot.telegram.sendMessage(task.user_id, `🤖 *Автоматизация сработала:*\n${result}`, {
+                    parse_mode: 'Markdown'
+                });
+            }
+
+            updateTaskStatus(task.id, 'done');
+        } catch (err) {
+            console.error(`Ошибка при выполнении задачи ${task.id}:`, err);
+            updateTaskStatus(task.id, 'error');
+        }
+    }
+}, 30000);
 
 bot.launch();
 console.log('Chatter запущен с базой данных!');
