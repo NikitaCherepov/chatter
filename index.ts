@@ -58,6 +58,12 @@ db.exec(`
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
         total_message_length INTEGER NOT NULL DEFAULT 0,
+        daily_tokens_used INTEGER NOT NULL DEFAULT 0,
+        total_tokens_used INTEGER NOT NULL DEFAULT 0,
+        daily_cost_rub REAL NOT NULL DEFAULT 0,
+        total_cost_rub REAL NOT NULL DEFAULT 0,
+        daily_web_search_count INTEGER NOT NULL DEFAULT 0,
+        total_web_search_count INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -127,6 +133,12 @@ ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offse
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_tokens_used', 'ALTER TABLE users ADD COLUMN daily_tokens_used INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens_used INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
+ensureUserColumn('total_cost_rub', 'ALTER TABLE users ADD COLUMN total_cost_rub REAL NOT NULL DEFAULT 0');
+ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
 
 ensureTaskColumn('recurrence_type', `ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'`);
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
@@ -144,6 +156,24 @@ if (hasUserColumn('daily_message_count')) {
 }
 if (hasUserColumn('total_message_length')) {
     db.exec(`UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL`);
+}
+if (hasUserColumn('daily_tokens_used')) {
+    db.exec(`UPDATE users SET daily_tokens_used = 0 WHERE daily_tokens_used IS NULL`);
+}
+if (hasUserColumn('total_tokens_used')) {
+    db.exec(`UPDATE users SET total_tokens_used = 0 WHERE total_tokens_used IS NULL`);
+}
+if (hasUserColumn('daily_cost_rub')) {
+    db.exec(`UPDATE users SET daily_cost_rub = 0 WHERE daily_cost_rub IS NULL`);
+}
+if (hasUserColumn('total_cost_rub')) {
+    db.exec(`UPDATE users SET total_cost_rub = 0 WHERE total_cost_rub IS NULL`);
+}
+if (hasUserColumn('daily_web_search_count')) {
+    db.exec(`UPDATE users SET daily_web_search_count = 0 WHERE daily_web_search_count IS NULL`);
+}
+if (hasUserColumn('total_web_search_count')) {
+    db.exec(`UPDATE users SET total_web_search_count = 0 WHERE total_web_search_count IS NULL`);
 }
 if (hasTaskColumn('recurrence_type')) {
     db.exec(`UPDATE tasks SET recurrence_type = 'once' WHERE recurrence_type IS NULL OR recurrence_type = ''`);
@@ -188,6 +218,9 @@ const MAX_HISTORY_ITEMS = 10;
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
+const TOKENS_PER_PRICE_BLOCK = 500_000;
+const PRICE_PER_PRICE_BLOCK_RUB = 102;
+const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
 const BASE_COMMANDS = [
     { command: 'start', description: 'Показать меню' },
     { command: 'menu', description: 'Открыть меню кнопок' },
@@ -520,6 +553,12 @@ type UserRecord = {
     timezone_confirmed: number;
     daily_message_count: number;
     total_message_length: number;
+    daily_tokens_used: number;
+    total_tokens_used: number;
+    daily_cost_rub: number;
+    total_cost_rub: number;
+    daily_web_search_count: number;
+    total_web_search_count: number;
 };
 type TaskStatus = 'pending' | 'done' | 'error';
 type TaskType = 'message' | 'smart_home' | 'web_search';
@@ -925,6 +964,7 @@ const runScheduledWebSearchTask = async (task: TaskRecord) => {
         return 'Не получилось выполнить поиск: пустой запрос в задаче.';
     }
 
+    incrementUserWebSearchUsage(task.user_id, 1);
     const webResult = await runWebSearch(query);
     const userRecord = getUser(task.user_id);
 
@@ -954,6 +994,10 @@ ${webResult}
                 }
             ]
         });
+        const totalTokens = extractTotalTokens(aiResponse);
+        if (totalTokens > 0) {
+            incrementUserTokenUsage(task.user_id, totalTokens);
+        }
 
         const finalText = aiResponse.choices[0]?.message?.content?.trim();
         if (!finalText) {
@@ -1000,6 +1044,10 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
                 { role: 'user', content: aiTask }
             ]
         });
+        const totalTokens = extractTotalTokens(response);
+        if (totalTokens > 0) {
+            incrementUserTokenUsage(targetUserId, totalTokens);
+        }
 
         const finalMessage = response.choices[0].message.content?.trim();
         if (!finalMessage) {
@@ -1175,7 +1223,7 @@ const scheduleDailyCounterReset = () => {
     setTimeout(() => {
         try {
             resetDailyMessageCounters();
-            console.log('Счётчики сообщений за день обнулены.');
+            console.log('Дневные счётчики (сообщения/токены/стоимость) обнулены.');
         } catch (err) {
             console.error('Ошибка ежедневного сброса счётчиков:', err);
         } finally {
@@ -1367,15 +1415,62 @@ const updateUserTimezone = (id: number, timezoneOffset: number) => db.prepare(`
     SET timezone_offset = ?, timezone_confirmed = 1
     WHERE id = ?
 `).run(timezoneOffset, id);
-const incrementUserMessageStats = (id: number, messageLength: number) => db.prepare(`
+const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;
+const formatTokenCountShort = (tokens: number) => {
+    const safe = Math.max(0, Math.floor(tokens || 0));
+    if (safe >= 1_000_000) return `${(safe / 1_000_000).toFixed(2)}M`;
+    if (safe >= 1_000) return `${(safe / 1_000).toFixed(1)}k`;
+    return `${safe}`;
+};
+const formatRub = (value: number) => `${(Math.max(0, value || 0)).toFixed(2)}₽`;
+const extractTotalTokens = (response: any) => {
+    const total = Number(response?.usage?.total_tokens ?? 0);
+    if (!Number.isFinite(total) || total < 0) return 0;
+    return Math.floor(total);
+};
+const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
+    const safeLength = Math.max(0, messageLength);
+    const safeTokens = Math.max(0, Math.floor(tokensUsed));
+    const costRub = toRubFromTokens(safeTokens);
+    return db.prepare(`
     UPDATE users
     SET daily_message_count = COALESCE(daily_message_count, 0) + 1,
-        total_message_length = COALESCE(total_message_length, 0) + ?
+        total_message_length = COALESCE(total_message_length, 0) + ?,
+        daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
+        total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
+        daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
+        total_cost_rub = COALESCE(total_cost_rub, 0) + ?
     WHERE id = ?
-`).run(Math.max(0, messageLength), id);
+`).run(safeLength, safeTokens, safeTokens, costRub, costRub, id);
+};
+const incrementUserTokenUsage = (id: number, tokensUsed: number) => {
+    const safeTokens = Math.max(0, Math.floor(tokensUsed));
+    const costRub = toRubFromTokens(safeTokens);
+    return db.prepare(`
+    UPDATE users
+    SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
+        total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
+        daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
+        total_cost_rub = COALESCE(total_cost_rub, 0) + ?
+    WHERE id = ?
+`).run(safeTokens, safeTokens, costRub, costRub, id);
+};
+const incrementUserWebSearchUsage = (id: number, count = 1) => {
+    const safeCount = Math.max(0, Math.floor(count));
+    if (safeCount <= 0) return;
+    return db.prepare(`
+    UPDATE users
+    SET daily_web_search_count = COALESCE(daily_web_search_count, 0) + ?,
+        total_web_search_count = COALESCE(total_web_search_count, 0) + ?
+    WHERE id = ?
+`).run(safeCount, safeCount, id);
+};
 const resetDailyMessageCounters = () => db.prepare(`
     UPDATE users
-    SET daily_message_count = 0
+    SET daily_message_count = 0,
+        daily_tokens_used = 0,
+        daily_cost_rub = 0,
+        daily_web_search_count = 0
 `).run();
 const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
@@ -1383,7 +1478,7 @@ const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, timezone_offset, timezone_confirmed, daily_message_count, total_message_length
+    SELECT id, name, role, status, tg_username, selected_prompt_id, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
@@ -1769,7 +1864,7 @@ const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: n
 const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number) => {
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
-        const usageTag = `msg:${row.daily_message_count ?? 0}`;
+        const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -1853,6 +1948,12 @@ Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
 Статус: ${user.status}
 Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
 Сообщений сегодня: ${user.daily_message_count ?? 0}
+Токенов сегодня: ${user.daily_tokens_used ?? 0}
+Цена сегодня: ${formatRub(user.daily_cost_rub ?? 0)}
+Поисков web сегодня: ${user.daily_web_search_count ?? 0}
+Токенов всего: ${user.total_tokens_used ?? 0}
+Цена всего: ${formatRub(user.total_cost_rub ?? 0)}
+Поисков web всего: ${user.total_web_search_count ?? 0}
 Всего символов отправлено: ${user.total_message_length ?? 0}
 ${ban ? `Бан: ${ban.reason}` : ''}`.trim();
     const keyboard = buildAdminUserCardKeyboard(user, page);
@@ -2922,6 +3023,7 @@ bot.on('text', async (ctx) => {
         let isGenerating = true;
         let loopCount = 0;
         const MAX_TOOL_LOOPS = 6;
+        let totalTokensForTurn = 0;
 
         while (isGenerating && loopCount < MAX_TOOL_LOOPS) {
             loopCount += 1;
@@ -2932,6 +3034,7 @@ bot.on('text', async (ctx) => {
                 tools: tools as any,
                 tool_choice: 'auto'
             });
+            totalTokensForTurn += extractTotalTokens(response);
 
             const message = response.choices[0].message;
             currentMessages.push(message as any);
@@ -2963,6 +3066,7 @@ bot.on('text', async (ctx) => {
                             toolContent = 'Ошибка инструмента: пустой поисковый запрос.';
                         } else {
                             try {
+                                incrementUserWebSearchUsage(userId, 1);
                                 toolContent = await runWebSearch(query);
                             } catch (err) {
                                 console.error('Ошибка поиска в Tavily:', err);
@@ -3100,7 +3204,7 @@ bot.on('text', async (ctx) => {
             console.warn(`Достигнут лимит tool-циклов (${MAX_TOOL_LOOPS}) для user_id=${userId}`);
         }
 
-        incrementUserMessageStats(userId, userText.length);
+        incrementUserStats(userId, userText.length, totalTokensForTurn);
         addHistoryMessage(userId, 'user', userText);
         addHistoryMessage(userId, 'assistant', answer);
         trimUserHistory(userId);
