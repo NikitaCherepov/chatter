@@ -137,6 +137,8 @@ const ADMIN_EXTRA_COMMANDS = [
     { command: 'add', description: 'Добавить юзера (только админ)' },
     { command: 'remove', description: 'Удалить юзера (только админ)' },
     { command: 'users', description: 'Список юзеров (только админ)' },
+    { command: 'ban', description: 'Бан: /ban <id> [причина]' },
+    { command: 'unban', description: 'Разбан: /unban <id>' },
     { command: 'prompt_add', description: 'Добавить: /prompt_add Имя | Описание | Текст' },
     { command: 'prompt_show', description: 'Показать промпт: /prompt_show <id>' },
     { command: 'prompt_set', description: 'Изменить текст: /prompt_set <id> | Текст' },
@@ -395,6 +397,13 @@ const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE us
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
+const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
+const getUsersPage = (limit: number, offset: number) => db.prepare(`
+    SELECT id, name, role, status, tg_username, selected_prompt_id
+    FROM users
+    ORDER BY id ASC
+    LIMIT ? OFFSET ?
+`).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
     SELECT id, name, role, status, tg_username, selected_prompt_id, created_at
@@ -715,6 +724,36 @@ const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: n
     return Markup.inlineKeyboard(keyboardRows);
 };
 
+const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number) => {
+    const keyboardRows = rows.map(row => {
+        const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
+        return [Markup.button.callback(
+            `${statusTag} ${getUserDisplayName(row)} (#${row.id})`,
+            `usr:view:${row.id}:${page}`
+        )];
+    });
+
+    const navRow = [];
+    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `usr:list:${page - 1}`));
+    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `usr:list:${page + 1}`));
+    if (navRow.length) keyboardRows.push(navRow);
+
+    keyboardRows.push([Markup.button.callback('🔄 Обновить', `usr:list:${page}`)]);
+    return Markup.inlineKeyboard(keyboardRows);
+};
+
+const buildAdminUserCardKeyboard = (user: UserRecord, page: number) => {
+    const moderationButton = user.status === 'banned'
+        ? Markup.button.callback('✅ Разбанить', `usr:unban:${user.id}:${page}`)
+        : Markup.button.callback('⛔ Забанить', `usr:ban:${user.id}:${page}`);
+
+    return Markup.inlineKeyboard([
+        [moderationButton],
+        [Markup.button.callback('🗑 Удалить', `usr:remove:${user.id}:${page}`)],
+        [Markup.button.callback('⬅️ К списку', `usr:list:${page}`)]
+    ]);
+};
+
 const buildPendingCardKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
     [
         Markup.button.callback('✅ Подтвердить', `mod:ok:${userId}:${page}`),
@@ -743,6 +782,37 @@ const buildBannedCardKeyboard = (userId: number, page: number) => Markup.inlineK
     [Markup.button.callback('✅ Разблокировать', `mod:unban:${userId}:${page}`)],
     [Markup.button.callback('⬅️ К бан-листу', `mod:bp:${page}`)]
 ]);
+
+const renderAdminUsersList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
+    const safePage = Math.max(0, page);
+    const total = getUsersCount();
+    if (!total) {
+        if (mode === 'edit') return ctx.editMessageText('Пользователей пока нет.');
+        return ctx.reply('Пользователей пока нет.');
+    }
+
+    const rows = getUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const text = `👥 Пользователи\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}`;
+    const keyboard = buildAdminUsersListKeyboard(rows, safePage, total);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+
+const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
+    const prompt = resolvePromptForUser(user);
+    const ban = user.status === 'banned' ? getBanRecord(user.id) : undefined;
+    const text = `Пользователь #${user.id}
+Имя: ${user.name ?? 'не указано'}
+Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
+Роль: ${user.role}
+Статус: ${user.status}
+Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
+${ban ? `Бан: ${ban.reason}` : ''}`.trim();
+    const keyboard = buildAdminUserCardKeyboard(user, page);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
 
 const renderPendingList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
     const safePage = Math.max(0, page);
@@ -1052,6 +1122,43 @@ bot.command('remove', (ctx) => {
     ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) удалён из базы.`);
 });
 
+bot.command('ban', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    const adminId = ctx.from?.id;
+    if (!adminId) return;
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const targetUserId = Number.parseInt(parts[1], 10);
+    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Формат: /ban 123456789 [причина]');
+    if (ADMIN_IDS.has(targetUserId)) return ctx.reply('Нельзя забанить пользователя из ADMIN_IDS.');
+
+    const targetUser = getUser(targetUserId);
+    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
+
+    const reason = parts.slice(2).join(' ').trim() || 'Решение администратора';
+    banUserAccess(targetUserId, adminId, reason);
+    ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) забанен.`);
+
+    bot.telegram.sendMessage(targetUserId, `🚫 Доступ заблокирован администратором.\nПричина: ${reason}`).catch(() => undefined);
+});
+
+bot.command('unban', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const targetUserId = Number.parseInt(parts[1], 10);
+    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Формат: /unban 123456789');
+
+    const targetUser = getUser(targetUserId);
+    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
+    if (targetUser.status !== 'banned') return ctx.reply('Этот пользователь не находится в бане.');
+
+    unbanUserAccess(targetUserId);
+    ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) разбанен и снова в ожидании.`);
+
+    bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.').catch(() => undefined);
+});
+
 // Команда смены имени
 bot.command('rename', (ctx) => {
     const userId = ctx.from?.id;
@@ -1102,10 +1209,7 @@ bot.command('rename', (ctx) => {
 // Команда просмотра списка (только для админов)
 bot.command('users', (ctx) => {
     if (ctx.state.role !== 'admin') return;
-
-    const users = getAllUsers();
-    const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) ${u.tg_username ? `@${u.tg_username}` : '(no @username)'} — ${u.role}/${u.status}`).join('\n');
-    ctx.reply(`Список пользователей:\n${list}`);
+    return renderAdminUsersList(ctx, 0, 'reply');
 });
 
 bot.command('clear', (ctx) => {
@@ -1134,9 +1238,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     if (actionId === 'users') {
-        const users = getAllUsers();
-        const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) ${u.tg_username ? `@${u.tg_username}` : '(no @username)'} — ${u.role}/${u.status}`).join('\n');
-        await ctx.reply(`Список пользователей:\n${list}`);
+        await renderAdminUsersList(ctx, 0, 'reply');
         return;
     }
 
@@ -1210,7 +1312,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
@@ -1374,6 +1476,116 @@ bot.action(/^mod:unban:(\d+):(\d+)$/, async (ctx) => {
 
     await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
     await ctx.answerCbQuery('Разблокирован');
+});
+
+bot.action(/^usr:list:(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const page = Number.parseInt((ctx as any).match[1], 10);
+    await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^usr:view:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const userId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+        return;
+    }
+
+    await renderAdminUserCard(ctx, user, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+    const adminId = ctx.from?.id;
+    if (!adminId) return;
+
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(targetUserId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+    if (ADMIN_IDS.has(targetUserId) || user.role === 'admin') {
+        await ctx.answerCbQuery('Нельзя банить админа');
+        return;
+    }
+
+    banUserAccess(targetUserId, adminId, 'Решение администратора');
+    const refreshed = getUser(targetUserId);
+    if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
+
+    bot.telegram.sendMessage(targetUserId, '🚫 Доступ заблокирован администратором.').catch(() => undefined);
+    await ctx.answerCbQuery('Пользователь забанен');
+});
+
+bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(targetUserId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+    if (user.status !== 'banned') {
+        await ctx.answerCbQuery('Он не в бане');
+        return;
+    }
+
+    unbanUserAccess(targetUserId);
+    const refreshed = getUser(targetUserId);
+    if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
+
+    bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.').catch(() => undefined);
+    await ctx.answerCbQuery('Разбанен');
+});
+
+bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(targetUserId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь уже удален');
+        await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+        return;
+    }
+    if (ADMIN_IDS.has(targetUserId) || user.role === 'admin') {
+        await ctx.answerCbQuery('Нельзя удалить админа');
+        return;
+    }
+
+    removeUser(targetUserId);
+    removeBan(targetUserId);
+    clearUserHistory(targetUserId);
+    await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery('Пользователь удален');
 });
 
 bot.action('prompt:list', async (ctx) => {
