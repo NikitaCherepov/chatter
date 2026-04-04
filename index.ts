@@ -51,7 +51,10 @@ db.exec(`
         id INTEGER PRIMARY KEY,
         name TEXT,
         role TEXT NOT NULL,
-        selected_prompt_id INTEGER
+        status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('none', 'approved', 'disapproved', 'banned')),
+        tg_username TEXT,
+        selected_prompt_id INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS chat_messages (
@@ -74,13 +77,38 @@ db.exec(`
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS bans (
+        user_id INTEGER PRIMARY KEY,
+        reason TEXT NOT NULL DEFAULT 'Без причины',
+        banned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        banned_by INTEGER
+    );
 `);
 
-const usersColumns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
-const hasSelectedPromptColumn = usersColumns.some(c => c.name === 'selected_prompt_id');
-if (!hasSelectedPromptColumn) {
-    db.exec('ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
+const hasUserColumn = (columnName: string) => {
+    const columns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
+    return columns.some(c => c.name === columnName);
+};
+
+const ensureUserColumn = (columnName: string, alterSql: string) => {
+    if (hasUserColumn(columnName)) return;
+    db.exec(alterSql);
+};
+
+ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
+ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
+ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
+ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
+
+if (hasUserColumn('created_at')) {
+    db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
 }
+if (hasUserColumn('status')) {
+    db.exec(`UPDATE users SET status = 'approved' WHERE status IS NULL OR status = ''`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`);
+}
+
 const promptsColumns = db.prepare(`PRAGMA table_info(prompts)`).all() as { name: string }[];
 const hasPromptDescriptionColumn = promptsColumns.some(c => c.name === 'description');
 if (!hasPromptDescriptionColumn) {
@@ -95,6 +123,7 @@ const WEB_TOOL_INSTRUCTIONS = `
 const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const MAX_HISTORY_ITEMS = 20;
+const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const BASE_COMMANDS = [
     { command: 'start', description: 'Показать меню' },
@@ -118,18 +147,32 @@ const ADMIN_EXTRA_COMMANDS = [
 ] as const;
 const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
 const commandScopeCache = new Map<number, 'admin' | 'user'>();
+const parseAdminId = (raw: string | undefined) => {
+    if (!raw) return null;
+    const normalized = raw.replace(/[^\d-]/g, '').trim();
+    if (!normalized) return null;
+    const parsed = Number.parseInt(normalized, 10);
+    if (Number.isNaN(parsed) || parsed <= 0) return null;
+    return parsed;
+};
+
 const ADMIN_IDS = (() => {
     const ids = new Set<number>();
 
-    for (const raw of (process.env.ADMIN_IDS ?? '').split(',')) {
-        const value = Number.parseInt(raw.trim(), 10);
-        if (!Number.isNaN(value) && value > 0) ids.add(value);
+    for (const raw of (process.env.ADMIN_IDS ?? '').split(/[,\s;]+/)) {
+        const value = parseAdminId(raw);
+        if (value) ids.add(value);
+    }
+
+    const singleAdminId = parseAdminId(process.env.ADMIN_ID);
+    if (singleAdminId) {
+        ids.add(singleAdminId);
     }
 
     for (const [key, value] of Object.entries(process.env)) {
         if (!key.startsWith('ADMIN_ID_')) continue;
-        const id = Number.parseInt((value ?? '').trim(), 10);
-        if (!Number.isNaN(id) && id > 0) ids.add(id);
+        const id = parseAdminId(value);
+        if (id) ids.add(id);
     }
 
     return ids;
@@ -156,7 +199,16 @@ const tools = [
 ] as const;
 
 type ChatRole = 'user' | 'assistant';
+type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 type ChatMessage = { role: ChatRole; content: string };
+type UserRecord = {
+    id: number;
+    name: string | null;
+    role: string;
+    status: UserStatus;
+    tg_username: string | null;
+    selected_prompt_id: number | null;
+};
 type PromptRecord = {
     id: number;
     name: string;
@@ -164,7 +216,9 @@ type PromptRecord = {
     content: string;
     is_default: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'help';
+type PendingUserRow = UserRecord & { created_at: string | null };
+type BannedUserRow = UserRecord & { reason: string; banned_at: string };
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'pending' | 'banned' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
     label: string;
@@ -182,7 +236,9 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'add', label: '➕ Добавить пользователя', adminOnly: true, row: 3 },
     { id: 'remove', label: '➖ Удалить пользователя', adminOnly: true, row: 4 },
     { id: 'prompt_admin', label: '⚙️ Промпт-админ', adminOnly: true, row: 4 },
-    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 5 }
+    { id: 'pending', label: '🕓 Заявки', adminOnly: true, row: 5 },
+    { id: 'banned', label: '⛔ Забаненные', adminOnly: true, row: 5 },
+    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 6 }
 ];
 
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
@@ -316,20 +372,60 @@ if (!defaultPromptSeed) {
     throw new Error('Не удалось инициализировать дефолтный промпт.');
 }
 
-const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as { id: number, name: string, role: string, selected_prompt_id: number | null } | undefined;
-const addUser = (id: number, name: string, role: string) => db.prepare(`
-    INSERT INTO users (id, name, role, selected_prompt_id)
-    VALUES (?, ?, ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
+const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRecord | undefined;
+const addUser = (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => db.prepare(`
+    INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
+    VALUES (?, ?, ?, ?, ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
     ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         role = excluded.role,
+        status = excluded.status,
+        tg_username = COALESCE(excluded.tg_username, users.tg_username),
         selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
-`).run(id, name, role, defaultPromptSeed.id);
+`).run(id, name, role, status, tgUsername, defaultPromptSeed.id);
+const createPendingUser = (id: number, name: string | null, tgUsername: string | null) => db.prepare(`
+    INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
+    VALUES (?, ?, 'user', 'none', ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
+`).run(id, name, tgUsername, defaultPromptSeed.id);
 const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
+const updateUserTelegramUsername = (id: number, tgUsername: string | null) => db.prepare('UPDATE users SET tg_username = ? WHERE id = ?').run(tgUsername, id);
+const updateUserRole = (id: number, role: string) => db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+const updateUserStatus = (id: number, status: UserStatus) => db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
 const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
-const getAllUsers = () => db.prepare('SELECT * FROM users').all() as { id: number, name: string, role: string, selected_prompt_id: number | null }[];
+const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
+const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
+const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
+    SELECT id, name, role, status, tg_username, selected_prompt_id, created_at
+    FROM users
+    WHERE status = 'none'
+    ORDER BY id ASC
+    LIMIT ? OFFSET ?
+`).all(limit, offset) as PendingUserRow[];
+const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
+const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
+    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, b.reason, b.banned_at
+    FROM users u
+    LEFT JOIN bans b ON b.user_id = u.id
+    WHERE u.status = 'banned'
+    ORDER BY b.banned_at DESC, u.id ASC
+    LIMIT ? OFFSET ?
+`).all(limit, offset) as BannedUserRow[];
+const getBanRecord = (id: number) => db.prepare(`
+    SELECT user_id, reason, banned_at, banned_by
+    FROM bans
+    WHERE user_id = ?
+`).get(id) as { user_id: number; reason: string; banned_at: string; banned_by: number | null } | undefined;
+const setBan = (id: number, reason: string, bannedBy: number) => db.prepare(`
+    INSERT INTO bans (user_id, reason, banned_by, banned_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id) DO UPDATE SET
+        reason = excluded.reason,
+        banned_by = excluded.banned_by,
+        banned_at = CURRENT_TIMESTAMP
+`).run(id, reason, bannedBy);
+const removeBan = (id: number) => db.prepare('DELETE FROM bans WHERE user_id = ?').run(id);
 const getUserHistory = (userId: number) => {
     const rows = db.prepare(`
         SELECT role, content
@@ -371,43 +467,98 @@ const resolvePromptForUser = (user: { selected_prompt_id: number | null }) => {
 bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const userRecord = getUser(userId);
+    const telegramUsername = ctx.from?.username?.trim() || null;
+    let userRecord = getUser(userId);
+    const isAdminByEnv = ADMIN_IDS.has(userId);
+    const isAdminByDb = userRecord?.role === 'admin';
 
-    if (ADMIN_IDS.has(userId)) {
-        const fallbackName = ctx.from?.first_name || userRecord?.name || 'Admin';
+    if (isAdminByEnv || isAdminByDb) {
+        const fallbackName = userRecord?.name || ctx.from?.first_name || 'Admin';
         if (!userRecord) {
-            addUser(userId, fallbackName, 'admin');
-            ctx.state.role = 'admin';
-            ctx.state.userName = fallbackName;
-            return next();
+            addUser(userId, fallbackName, 'admin', 'approved', telegramUsername);
+            userRecord = getUser(userId);
+        } else {
+            if (userRecord.role !== 'admin' || userRecord.status !== 'approved') {
+                addUser(userId, userRecord.name || fallbackName, 'admin', 'approved', telegramUsername);
+                userRecord = getUser(userId);
+            } else if (userRecord.tg_username !== telegramUsername) {
+                updateUserTelegramUsername(userId, telegramUsername);
+                userRecord = getUser(userId) || userRecord;
+            }
         }
 
-        if (userRecord.role !== 'admin') {
-            addUser(userId, userRecord.name || fallbackName, 'admin');
-        }
-        if (!userRecord.selected_prompt_id) {
+        if (userRecord && !userRecord.selected_prompt_id) {
             const defaultPrompt = ensureDefaultPrompt();
             if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
         }
 
         await syncCommandScopeForUser(userId, true);
         ctx.state.role = 'admin';
-        ctx.state.userName = userRecord.name || fallbackName;
+        ctx.state.userName = fallbackName;
         return next();
     }
 
     if (!userRecord) {
+        const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
+        createPendingUser(userId, initialName, telegramUsername);
         await syncCommandScopeForUser(userId, false);
-        return ctx.reply(`Доступ закрыт 🛑\n\nТвой Telegram ID: \`${userId}\`\nОтправь этот ID администратору, чтобы получить доступ.`, { parse_mode: 'Markdown' });
+
+        const freshUser = getUser(userId);
+        if (freshUser) await notifyAdminsNewRequest(freshUser);
+
+        if (!telegramUsername) {
+            return ctx.reply('Отправили вашу заявку админу, ждём подтверждения.\nУ тебя нет @username, отправь сюда имя одним сообщением.');
+        }
+
+        return ctx.reply('Отправили вашу заявку админу, ждём подтверждения.');
+    }
+
+    if (userRecord.tg_username !== telegramUsername) {
+        updateUserTelegramUsername(userId, telegramUsername);
+        userRecord = getUser(userId) || userRecord;
+    }
+
+    if (userRecord.status === 'banned') {
+        const ban = getBanRecord(userId);
+        const reason = ban?.reason ?? 'Без причины';
+        const date = ban?.banned_at ?? 'неизвестно';
+        await syncCommandScopeForUser(userId, false);
+        return ctx.reply(`🚫 Доступ заблокирован.\nПричина: ${reason}\nДата: ${date}`);
+    }
+
+    if (userRecord.status === 'none') {
+        const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
+        const savedName = maybeCapturePendingName(ctx, userRecord, text);
+        await syncCommandScopeForUser(userId, false);
+
+        if (savedName) {
+            return ctx.reply('Имя сохранено. Заявка отправлена админу, ожидаем подтверждения.');
+        }
+
+        if (!telegramUsername && !(userRecord.name && userRecord.name.trim())) {
+            return ctx.reply('Заявка уже отправлена. У тебя нет @username, отправь своё имя одним сообщением.');
+        }
+
+        return ctx.reply('Заявка уже отправлена администратору. Ожидаем подтверждения.');
+    }
+
+    if (userRecord.status === 'disapproved') {
+        await syncCommandScopeForUser(userId, false);
+        return ctx.reply('Заявка была отклонена администратором. Если это ошибка, свяжись с админом.');
+    }
+
+    if (userRecord.role !== 'user') {
+        updateUserRole(userId, 'user');
+        userRecord = getUser(userId) || userRecord;
     }
     if (!userRecord.selected_prompt_id) {
         const defaultPrompt = ensureDefaultPrompt();
         if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
     }
 
-    await syncCommandScopeForUser(userId, userRecord.role === 'admin');
-    ctx.state.role = userRecord.role;
-    ctx.state.userName = userRecord.name;
+    await syncCommandScopeForUser(userId, false);
+    ctx.state.role = 'user';
+    ctx.state.userName = userRecord.name || ctx.from?.first_name || 'Пользователь';
     return next();
 });
 
@@ -423,6 +574,9 @@ const showMenu = (ctx: any) => {
     const promptLine = activePrompt
         ? `🧠 Текущий промпт: #${activePrompt.id} ${activePrompt.name}`
         : '🧠 Текущий промпт: не найден';
+    const moderationLine = isAdmin
+        ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
+        : '';
 
     const text = `📁 Главное меню
 
@@ -430,6 +584,7 @@ const showMenu = (ctx: any) => {
 🆔 ID: ${userId ?? 'unknown'}
 🛡️ Роль: ${roleLabel}
 ${promptLine}
+${moderationLine}
 
 Выберите действие:`;
 
@@ -519,6 +674,185 @@ const parsePipeParts = (text: string) => {
     const parts = raw.split('|').map(part => part.trim()).filter(Boolean);
     if (!parts.length) return null;
     return parts;
+};
+
+const getUserDisplayName = (user: { name: string | null; tg_username: string | null; id: number }) => {
+    if (user.name && user.name.trim()) return user.name.trim();
+    if (user.tg_username && user.tg_username.trim()) return `@${user.tg_username.trim()}`;
+    return `ID ${user.id}`;
+};
+
+const getStatusLabel = (status: UserStatus) => {
+    if (status === 'approved') return 'approved';
+    if (status === 'none') return 'none';
+    if (status === 'disapproved') return 'disapproved';
+    return 'banned';
+};
+
+const maybeCapturePendingName = (ctx: any, user: UserRecord, text: string) => {
+    if (ctx.from?.username) return false;
+    if (user.name && user.name.trim()) return false;
+    if (!text || text.startsWith('/')) return false;
+
+    const candidate = text.trim();
+    if (!candidate || candidate.length > 64) return false;
+    updateUserName(user.id, candidate);
+    return true;
+};
+
+const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: number) => {
+    const keyboardRows = rows.map(row => [Markup.button.callback(
+        `👤 ${getUserDisplayName(row)} (#${row.id})`,
+        `mod:pv:${row.id}:${page}`
+    )]);
+
+    const navRow = [];
+    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `mod:pp:${page - 1}`));
+    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `mod:pp:${page + 1}`));
+    if (navRow.length) keyboardRows.push(navRow);
+
+    keyboardRows.push([Markup.button.callback('🔄 Обновить', `mod:pp:${page}`)]);
+    return Markup.inlineKeyboard(keyboardRows);
+};
+
+const buildPendingCardKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
+    [
+        Markup.button.callback('✅ Подтвердить', `mod:ok:${userId}:${page}`),
+        Markup.button.callback('❌ Отклонить', `mod:no:${userId}:${page}`)
+    ],
+    [Markup.button.callback('⛔ Забанить', `mod:ban:${userId}:${page}`)],
+    [Markup.button.callback('⬅️ К заявкам', `mod:pp:${page}`)]
+]);
+
+const buildBannedListKeyboard = (rows: BannedUserRow[], page: number, total: number) => {
+    const keyboardRows = rows.map(row => [Markup.button.callback(
+        `⛔ ${getUserDisplayName(row)} (#${row.id})`,
+        `mod:bv:${row.id}:${page}`
+    )]);
+
+    const navRow = [];
+    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `mod:bp:${page - 1}`));
+    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `mod:bp:${page + 1}`));
+    if (navRow.length) keyboardRows.push(navRow);
+
+    keyboardRows.push([Markup.button.callback('🔄 Обновить', `mod:bp:${page}`)]);
+    return Markup.inlineKeyboard(keyboardRows);
+};
+
+const buildBannedCardKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Разблокировать', `mod:unban:${userId}:${page}`)],
+    [Markup.button.callback('⬅️ К бан-листу', `mod:bp:${page}`)]
+]);
+
+const renderPendingList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
+    const safePage = Math.max(0, page);
+    const total = getPendingUsersCount();
+    if (!total) {
+        if (mode === 'edit') return ctx.editMessageText('Неподтверждённых заявок сейчас нет.');
+        return ctx.reply('Неподтверждённых заявок сейчас нет.');
+    }
+
+    const rows = getPendingUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const header = `🕓 Заявки на доступ\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}`;
+    const keyboard = buildPendingListKeyboard(rows, safePage, total);
+    if (mode === 'edit') return ctx.editMessageText(header, keyboard);
+    return ctx.reply(header, keyboard);
+};
+
+const renderPendingCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
+    const username = user.tg_username ? `@${user.tg_username}` : 'нет';
+    const text = `Заявка #${user.id}
+Имя: ${user.name ?? 'не указано'}
+Username: ${username}
+Статус: ${getStatusLabel(user.status)}`;
+    const keyboard = buildPendingCardKeyboard(user.id, page);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+
+const renderBannedList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
+    const safePage = Math.max(0, page);
+    const total = getBannedUsersCount();
+    if (!total) {
+        if (mode === 'edit') return ctx.editMessageText('Сейчас нет забаненных пользователей.');
+        return ctx.reply('Сейчас нет забаненных пользователей.');
+    }
+
+    const rows = getBannedUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const header = `⛔ Забаненные пользователи\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}`;
+    const keyboard = buildBannedListKeyboard(rows, safePage, total);
+    if (mode === 'edit') return ctx.editMessageText(header, keyboard);
+    return ctx.reply(header, keyboard);
+};
+
+const renderBannedCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
+    const ban = getBanRecord(user.id);
+    const text = `Бан #${user.id}
+Имя: ${user.name ?? 'не указано'}
+Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
+Причина: ${ban?.reason ?? 'Без причины'}
+Дата: ${ban?.banned_at ?? 'неизвестно'}`;
+    const keyboard = buildBannedCardKeyboard(user.id, page);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+
+const approveUserAccess = (targetUserId: number) => {
+    const user = getUser(targetUserId);
+    if (!user) return false;
+    updateUserStatus(targetUserId, 'approved');
+    if (!user.selected_prompt_id) {
+        const defaultPrompt = ensureDefaultPrompt();
+        if (defaultPrompt) updateUserPrompt(targetUserId, defaultPrompt.id);
+    }
+    removeBan(targetUserId);
+    return true;
+};
+
+const disapproveUserAccess = (targetUserId: number) => {
+    const user = getUser(targetUserId);
+    if (!user) return false;
+    updateUserStatus(targetUserId, 'disapproved');
+    removeBan(targetUserId);
+    return true;
+};
+
+const banUserAccess = (targetUserId: number, bannedBy: number, reason: string) => {
+    const user = getUser(targetUserId);
+    if (!user) return false;
+    updateUserStatus(targetUserId, 'banned');
+    setBan(targetUserId, reason, bannedBy);
+    return true;
+};
+
+const unbanUserAccess = (targetUserId: number) => {
+    const user = getUser(targetUserId);
+    if (!user) return false;
+    removeBan(targetUserId);
+    updateUserStatus(targetUserId, 'none');
+    return true;
+};
+
+const notifyAdminsNewRequest = async (user: UserRecord) => {
+    const usernameText = user.tg_username ? `@${user.tg_username}` : 'нет username';
+    const text = `🆕 Новая заявка\nID: ${user.id}\nИмя: ${user.name ?? 'не указано'}\nUsername: ${usernameText}`;
+    const keyboard = Markup.inlineKeyboard([
+        [
+            Markup.button.callback('✅ Подтвердить', `mod:ok:${user.id}:0`),
+            Markup.button.callback('❌ Отклонить', `mod:no:${user.id}:0`)
+        ],
+        [Markup.button.callback('⛔ Забанить', `mod:ban:${user.id}:0`)]
+    ]);
+
+    for (const adminId of ADMIN_IDS) {
+        try {
+            await bot.telegram.sendMessage(adminId, text, keyboard);
+        } catch (err) {
+            console.warn(`Не удалось отправить заявку админу ${adminId}`);
+        }
+    }
 };
 
 bot.command('start', async (ctx) => {
@@ -694,7 +1028,8 @@ bot.command('add', (ctx) => {
 
     if (!newUserId || Number.isNaN(newUserId)) return ctx.reply('Укажи правильный ID: /add 123456789 Имя');
 
-    addUser(newUserId, newUserName, 'user');
+    addUser(newUserId, newUserName, 'user', 'approved', null);
+    removeBan(newUserId);
     ctx.reply(`Пользователь ${newUserName} (ID: ${newUserId}) успешно добавлен в базу.`);
 });
 
@@ -712,6 +1047,7 @@ bot.command('remove', (ctx) => {
     if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
 
     removeUser(targetUserId);
+    removeBan(targetUserId);
     clearUserHistory(targetUserId);
     ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) удалён из базы.`);
 });
@@ -768,7 +1104,7 @@ bot.command('users', (ctx) => {
     if (ctx.state.role !== 'admin') return;
 
     const users = getAllUsers();
-    const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) — ${u.role}`).join('\n');
+    const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) ${u.tg_username ? `@${u.tg_username}` : '(no @username)'} — ${u.role}/${u.status}`).join('\n');
     ctx.reply(`Список пользователей:\n${list}`);
 });
 
@@ -776,7 +1112,7 @@ bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_admin|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_admin|pending|banned|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -799,7 +1135,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
 
     if (actionId === 'users') {
         const users = getAllUsers();
-        const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) — ${u.role}`).join('\n');
+        const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) ${u.tg_username ? `@${u.tg_username}` : '(no @username)'} — ${u.role}/${u.status}`).join('\n');
         await ctx.reply(`Список пользователей:\n${list}`);
         return;
     }
@@ -863,12 +1199,181 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
         return;
     }
 
+    if (actionId === 'pending') {
+        await renderPendingList(ctx, 0, 'reply');
+        return;
+    }
+
+    if (actionId === 'banned') {
+        await renderBannedList(ctx, 0, 'reply');
+        return;
+    }
+
     if (ctx.state.role === 'admin') {
         await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
     await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use');
+});
+
+bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const page = Number.parseInt((ctx as any).match[1], 10);
+    await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^mod:pv:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const userId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(userId);
+    if (!user || user.status !== 'none') {
+        await ctx.answerCbQuery('Заявка уже обработана');
+        await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+        return;
+    }
+
+    await renderPendingCard(ctx, user, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^mod:ok:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const ok = approveUserAccess(targetUserId);
+    if (!ok) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+
+    try {
+        await bot.telegram.sendMessage(targetUserId, '✅ Доступ подтверждён. Можешь писать боту.');
+    } catch (err) {
+        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
+    }
+
+    await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery('Подтверждено');
+});
+
+bot.action(/^mod:no:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const ok = disapproveUserAccess(targetUserId);
+    if (!ok) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+
+    try {
+        await bot.telegram.sendMessage(targetUserId, '❌ Заявка отклонена администратором.');
+    } catch (err) {
+        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
+    }
+
+    await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery('Отклонено');
+});
+
+bot.action(/^mod:ban:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const adminId = ctx.from?.id;
+    if (!adminId) return;
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+
+    const ok = banUserAccess(targetUserId, adminId, 'Решение администратора');
+    if (!ok) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+
+    try {
+        await bot.telegram.sendMessage(targetUserId, '🚫 Доступ заблокирован администратором.');
+    } catch (err) {
+        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
+    }
+
+    await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery('Пользователь забанен');
+});
+
+bot.action(/^mod:bp:(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const page = Number.parseInt((ctx as any).match[1], 10);
+    await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^mod:bv:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const userId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(userId);
+    if (!user || user.status !== 'banned') {
+        await ctx.answerCbQuery('Пользователь уже не в бане');
+        await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+        return;
+    }
+
+    await renderBannedCard(ctx, user, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^mod:unban:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const ok = unbanUserAccess(targetUserId);
+    if (!ok) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+
+    try {
+        await bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.');
+    } catch (err) {
+        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
+    }
+
+    await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery('Разблокирован');
 });
 
 bot.action('prompt:list', async (ctx) => {
