@@ -54,6 +54,7 @@ db.exec(`
         status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('none', 'approved', 'disapproved', 'banned')),
         tg_username TEXT,
         selected_prompt_id INTEGER,
+        custom_prompt_content TEXT,
         timezone_offset INTEGER DEFAULT 5,
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
@@ -126,6 +127,7 @@ const ensureTaskColumn = (columnName: string, alterSql: string) => {
 };
 
 ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
+ensureUserColumn('custom_prompt_content', 'ALTER TABLE users ADD COLUMN custom_prompt_content TEXT');
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
@@ -218,6 +220,8 @@ const MAX_HISTORY_ITEMS = 10;
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
+const CUSTOM_PROMPT_ID = -1;
+const MAX_CUSTOM_PROMPT_LENGTH = 800;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
@@ -549,6 +553,7 @@ type UserRecord = {
     status: UserStatus;
     tg_username: string | null;
     selected_prompt_id: number | null;
+    custom_prompt_content: string | null;
     timezone_offset: number | null;
     timezone_confirmed: number;
     daily_message_count: number;
@@ -641,6 +646,7 @@ const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
 type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
 const timezoneSetupFlows = new Map<number, 'await_offset'>();
+const customPromptEditFlows = new Map<number, 'await_content'>();
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
@@ -1473,19 +1479,21 @@ const resetDailyMessageCounters = () => db.prepare(`
         daily_web_search_count = 0
 `).run();
 const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
+const selectUserCustomPrompt = (id: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(CUSTOM_PROMPT_ID, id);
+const updateUserCustomPrompt = (id: number, content: string) => db.prepare('UPDATE users SET custom_prompt_content = ? WHERE id = ?').run(content, id);
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, created_at
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -1493,7 +1501,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -1599,7 +1607,20 @@ const trimUserHistory = (userId: number) => db.prepare(`
 `).run(userId, userId, MAX_HISTORY_ITEMS);
 const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
 
-const resolvePromptForUser = (user: { selected_prompt_id: number | null }) => {
+const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }) => {
+    if (user.selected_prompt_id === CUSTOM_PROMPT_ID) {
+        const custom = (user.custom_prompt_content || '').trim();
+        if (custom) {
+            return {
+                id: CUSTOM_PROMPT_ID,
+                name: 'Кастомный',
+                description: 'Пользовательский промпт',
+                content: custom,
+                is_default: 0
+            } satisfies PromptRecord;
+        }
+    }
+
     if (user.selected_prompt_id) {
         const selected = getPromptById(user.selected_prompt_id);
         if (selected) return selected;
@@ -1718,7 +1739,9 @@ const showMenu = (ctx: any) => {
     const userName = (ctx.state.userName as string | undefined) || userRecord?.name || 'Пользователь';
     const roleLabel = isAdmin ? 'Админ' : 'Пользователь';
     const promptLine = activePrompt
-        ? `🧠 Текущий промпт: #${activePrompt.id} ${activePrompt.name}`
+        ? activePrompt.id === CUSTOM_PROMPT_ID
+            ? '🧠 Текущий промпт: Кастомный'
+            : `🧠 Текущий промпт: #${activePrompt.id} ${activePrompt.name}`
         : '🧠 Текущий промпт: не найден';
     const moderationLine = isAdmin
         ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
@@ -1741,6 +1764,7 @@ const handleClear = (ctx: any) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     renameFlows.delete(userId);
+    customPromptEditFlows.delete(userId);
     clearUserHistory(userId);
     return ctx.reply('Память очищена.');
 };
@@ -1770,12 +1794,24 @@ const getPromptDescription = (description: string) => {
     return normalized.length > 220 ? `${normalized.slice(0, 220)}...` : normalized;
 };
 
-const buildPromptListKeyboard = (prompts: PromptRecord[], currentPromptId: number) => {
+const getCustomPromptPreview = (content: string | null | undefined, maxLen = 220) => {
+    const normalized = (content || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return 'Пока не задан.';
+    return normalized.length > maxLen ? `${normalized.slice(0, maxLen)}...` : normalized;
+};
+
+const buildPromptListKeyboard = (prompts: PromptRecord[], currentPromptId: number, hasCustomPrompt: boolean) => {
     const rows = prompts.map(prompt => {
         const label = prompt.id === currentPromptId ? `✅ ${prompt.name}` : prompt.name;
         return [Markup.button.callback(label, `prompt:view:${prompt.id}`)];
     });
 
+    const customLabel = currentPromptId === CUSTOM_PROMPT_ID
+        ? '✅ Кастомный'
+        : hasCustomPrompt
+            ? '🧩 Кастомный'
+            : '🧩 Кастомный (создать)';
+    rows.push([Markup.button.callback(customLabel, 'prompt:custom:view')]);
     rows.push([Markup.button.callback('❌ Отменить', 'prompt:cancel')]);
     return Markup.inlineKeyboard(rows);
 };
@@ -1791,28 +1827,58 @@ const buildPromptCardKeyboard = (promptId: number, selected: boolean) => {
     ]);
 };
 
-const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id: number | null }, mode: 'reply' | 'edit') => {
+const buildCustomPromptCardKeyboard = (isSelected: boolean, hasCustomPrompt: boolean) => {
+    const selectButton = isSelected
+        ? Markup.button.callback('✅ Оставить текущий', 'prompt:custom:keep')
+        : Markup.button.callback(
+            hasCustomPrompt ? '✅ Использовать текущий' : '✅ Сохранить и использовать',
+            'prompt:custom:use'
+        );
+
+    return Markup.inlineKeyboard([
+        [selectButton],
+        [Markup.button.callback(hasCustomPrompt ? '✏️ Отредактировать' : '✏️ Создать', 'prompt:custom:edit')],
+        [Markup.button.callback('⬅️ К списку', 'prompt:list'), Markup.button.callback('❌ Отменить', 'prompt:cancel')]
+    ]);
+};
+
+const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, mode: 'reply' | 'edit') => {
     const prompts = getAllPrompts();
     if (!prompts.length) {
         if (mode === 'edit') return ctx.editMessageText('Промптов пока нет.');
         return ctx.reply('Промптов пока нет.');
     }
 
-    const currentPromptId = resolvePromptForUser(user).id;
+    const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID ? CUSTOM_PROMPT_ID : resolvePromptForUser(user).id;
     const text = 'Выбери промпт кнопкой ниже:';
-    const keyboard = buildPromptListKeyboard(prompts, currentPromptId);
+    const keyboard = buildPromptListKeyboard(prompts, currentPromptId, !!(user.custom_prompt_content || '').trim());
 
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
 
-const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id: number | null }, prompt: PromptRecord) => {
-    const currentPromptId = resolvePromptForUser(user).id;
+const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, prompt: PromptRecord) => {
+    const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID ? CUSTOM_PROMPT_ID : resolvePromptForUser(user).id;
     const selected = prompt.id === currentPromptId;
     const defaultMark = prompt.is_default ? ' [default]' : '';
     const selectedMark = selected ? ' [selected]' : '';
     const text = `Название: ${prompt.name}${defaultMark}${selectedMark}\nОписание: ${getPromptDescription(prompt.description)}`;
     return ctx.editMessageText(text, buildPromptCardKeyboard(prompt.id, selected));
+};
+
+const renderCustomPromptCardInteractive = async (
+    ctx: any,
+    user: { selected_prompt_id: number | null; custom_prompt_content?: string | null },
+    mode: 'reply' | 'edit' = 'edit'
+) => {
+    const isSelected = user.selected_prompt_id === CUSTOM_PROMPT_ID;
+    const hasCustomPrompt = !!(user.custom_prompt_content || '').trim();
+    const selectedMark = isSelected ? ' [selected]' : '';
+    const body = getCustomPromptPreview(user.custom_prompt_content, 500);
+    const text = `Название: Кастомный${selectedMark}\nЛимит: до ${MAX_CUSTOM_PROMPT_LENGTH} символов.\nТекущий текст:\n${body}`;
+    const keyboard = buildCustomPromptCardKeyboard(isSelected, hasCustomPrompt);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
 };
 
 const parsePipeParts = (text: string) => {
@@ -2510,6 +2576,12 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
         }
 
         const activePrompt = resolvePromptForUser(user);
+        if (activePrompt.id === CUSTOM_PROMPT_ID) {
+            const preview = getCustomPromptPreview(user.custom_prompt_content, 280);
+            await ctx.reply(`Текущий промпт: Кастомный\nЛимит: до ${MAX_CUSTOM_PROMPT_LENGTH} символов.\nТекст:\n${preview}`);
+            return;
+        }
+
         const isDefault = activePrompt.is_default === 1 ? ' (default)' : '';
         await ctx.reply(`Текущий промпт: ${activePrompt.name}${isDefault}\nID: ${activePrompt.id}`);
         return;
@@ -2861,6 +2933,80 @@ bot.action('prompt:list', async (ctx) => {
     await ctx.answerCbQuery();
 });
 
+bot.action('prompt:custom:view', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+
+    if (ctx.state.role === 'admin') {
+        await ctx.answerCbQuery('Для админа используйте /prompt_set');
+        return;
+    }
+
+    await renderCustomPromptCardInteractive(ctx, user, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action('prompt:custom:use', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+    if (ctx.state.role === 'admin') {
+        await ctx.answerCbQuery('Недоступно');
+        return;
+    }
+
+    const customContent = (user.custom_prompt_content || '').trim();
+    if (!customContent) {
+        customPromptEditFlows.set(userId, 'await_content');
+        await ctx.answerCbQuery('Нужно создать текст');
+        await ctx.reply(`Введи текст кастомного промпта (до ${MAX_CUSTOM_PROMPT_LENGTH} символов).`);
+        return;
+    }
+
+    selectUserCustomPrompt(userId);
+    const refreshed = getUser(userId);
+    if (!refreshed) {
+        await ctx.answerCbQuery('Ошибка профиля');
+        return;
+    }
+    await renderCustomPromptCardInteractive(ctx, refreshed, 'edit');
+    await ctx.answerCbQuery('Кастомный промпт выбран');
+});
+
+bot.action('prompt:custom:edit', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+    if (ctx.state.role === 'admin') {
+        await ctx.answerCbQuery('Недоступно');
+        return;
+    }
+
+    customPromptEditFlows.set(userId, 'await_content');
+    await ctx.answerCbQuery('Ожидаю текст');
+    const currentText = getCustomPromptPreview(user.custom_prompt_content, 280);
+    await ctx.reply(`Текущий кастомный промпт:\n${currentText}\n\nОтправь новый текст (до ${MAX_CUSTOM_PROMPT_LENGTH} символов).`);
+});
+
+bot.action('prompt:custom:keep', async (ctx) => {
+    await ctx.answerCbQuery('Оставляем текущий кастомный промпт');
+});
+
 bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -2925,6 +3071,10 @@ bot.action(/^prompt:noop:(\d+)$/, async (ctx) => {
 });
 
 bot.action('prompt:cancel', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (userId) {
+        customPromptEditFlows.delete(userId);
+    }
     await ctx.editMessageText('Выбор промпта отменён.');
     await ctx.answerCbQuery();
 });
@@ -2998,6 +3148,27 @@ bot.on('text', async (ctx) => {
             ctx.state.userName = userText;
             renameFlows.delete(userId);
             return ctx.reply('Имя принято.', buildMenuTriggerKeyboard());
+        }
+
+        const customPromptFlow = customPromptEditFlows.get(userId);
+        if (customPromptFlow === 'await_content') {
+            if (!userText || userText.startsWith('/')) {
+                return ctx.reply('Текст промпта не должен быть пустым и не должен быть командой.');
+            }
+            if (userText.length > MAX_CUSTOM_PROMPT_LENGTH) {
+                return ctx.reply(`Слишком длинно: ${userText.length} символов. Лимит: ${MAX_CUSTOM_PROMPT_LENGTH}.`);
+            }
+
+            const userRecord = getUser(userId);
+            if (!userRecord) {
+                customPromptEditFlows.delete(userId);
+                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+            }
+
+            updateUserCustomPrompt(userId, userText.trim());
+            selectUserCustomPrompt(userId);
+            customPromptEditFlows.delete(userId);
+            return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard());
         }
     }
 
