@@ -242,7 +242,8 @@ const RANDOM_TOOL_INSTRUCTIONS = `
 Если пользователь просит подкинуть монетку, бросить кубик или сделать случайный бросок, вызови инструмент random_roll.`;
 const EMAIL_TOOL_INSTRUCTIONS = `
 
-Если пользователь просит проверить почту, найти письмо или посмотреть последние входящие — вызови инструмент check_emails.`;
+Если пользователь просит проверить почту, найти письмо или посмотреть последние входящие — вызови инструмент check_emails.
+Если нужно открыть конкретное письмо и прочитать содержание — вызови read_email_content.`;
 const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
@@ -604,6 +605,23 @@ const tools = [
     {
         type: 'function',
         function: {
+            name: 'read_email_content',
+            description: 'Читает содержимое конкретного письма по части темы. Используй после check_emails, когда нужно быстро проверить внутренности письма.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    subject_part: {
+                        type: 'string',
+                        description: 'Часть темы письма для поиска.'
+                    }
+                },
+                required: ['subject_part']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'update_core_memory',
             description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важной биографии/статуса/долгосрочных предпочтений. Не используй для рутины.',
             parameters: {
@@ -937,6 +955,9 @@ type UpdateCoreMemoryArgs = {
 type CheckEmailsArgs = {
     search_query?: string;
     limit?: number;
+};
+type ReadEmailContentArgs = {
+    subject_part?: string;
 };
 
 const clampTimezoneOffset = (offset: number) => {
@@ -1728,6 +1749,77 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5) =>
     } catch (err) {
         try { await client.logout(); } catch {}
         return `Ошибка подключения к почте: ${err instanceof Error ? err.message : String(err)}`;
+    }
+};
+
+const runEmailRead = async (userId: number, subjectPart: string) => {
+    const user = getUser(userId);
+    if (!user?.imap_user || !user?.imap_pass || !user?.imap_host) {
+        return 'Ошибка: почта не настроена. Используй /mail_setup или кнопку "📬 Почта".';
+    }
+
+    const query = subjectPart.trim();
+    if (!query) return 'Ошибка: пустой subject_part.';
+
+    let decryptedPass = '';
+    try {
+        decryptedPass = decryptSecret(user.imap_pass);
+    } catch (err) {
+        return 'Ошибка: не удалось расшифровать пароль почты. Перепривяжи через /mail_setup.';
+    }
+
+    let ImapFlowCtor: any;
+    try {
+        const dynamicImporter = new Function('moduleName', 'return import(moduleName)') as (moduleName: string) => Promise<any>;
+        const mod = await dynamicImporter('imapflow');
+        ImapFlowCtor = mod?.ImapFlow;
+        if (!ImapFlowCtor) {
+            return 'Ошибка: библиотека imapflow не найдена. Установи её на сервере: npm install imapflow';
+        }
+    } catch (err) {
+        return 'Ошибка: библиотека imapflow не найдена. Установи её на сервере: npm install imapflow';
+    }
+
+    const client = new ImapFlowCtor({
+        host: user.imap_host,
+        port: Number(user.imap_port || 993),
+        secure: user.imap_secure !== 0,
+        logger: false,
+        auth: {
+            user: user.imap_user,
+            pass: decryptedPass
+        }
+    });
+
+    try {
+        await client.connect();
+        const lock = await client.getMailboxLock('INBOX');
+        try {
+            const resultIds = await client.search({ subject: query });
+            if (!resultIds.length) {
+                return `Письмо с темой "${query}" не найдено.`;
+            }
+
+            const lastId = resultIds[resultIds.length - 1];
+            const msg = await client.fetchOne(lastId, { source: true, envelope: true });
+            if (!msg?.source) return 'Не удалось прочитать тело письма.';
+
+            const sourceText = Buffer.isBuffer(msg.source) ? msg.source.toString('utf8') : `${msg.source}`;
+            const clean = sourceText
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/=\r?\n/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 2000);
+            const subject = msg.envelope?.subject || '(без темы)';
+            return `Тема: ${subject}\nСодержимое (фрагмент):\n${clean || '(пусто)'}`;
+        } finally {
+            lock.release();
+            await client.logout();
+        }
+    } catch (err) {
+        try { await client.logout(); } catch {}
+        return `Ошибка при чтении письма: ${err instanceof Error ? err.message : String(err)}`;
     }
 };
 const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
@@ -3716,6 +3808,10 @@ bot.on('text', async (ctx) => {
                         const limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
                         const searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
                         toolContent = await runEmailCheck(userId, searchQuery, limit);
+                    } else if (toolCall.function.name === 'read_email_content') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as ReadEmailContentArgs;
+                        const subjectPart = typeof parsed.subject_part === 'string' ? parsed.subject_part : '';
+                        toolContent = await runEmailRead(userId, subjectPart);
                     } else if (toolCall.function.name === 'update_core_memory') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as UpdateCoreMemoryArgs;
                         const newFact = typeof parsed.new_fact === 'string' ? parsed.new_fact.trim() : '';
