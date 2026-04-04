@@ -150,6 +150,15 @@ const canUseMenuItem = (ctx: any, id: MenuItemId) => {
     }
     return true;
 };
+type RenameFlowState = 'confirm' | 'await_name';
+const renameFlows = new Map<number, RenameFlowState>();
+
+const startSelfRenameFlow = (ctx: any) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    renameFlows.set(userId, 'confirm');
+    return ctx.reply('Вы хотите сменить имя?', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
+};
 
 const safeReply = async (ctx: any, text: string) => {
     const tgFormattedText = text
@@ -282,6 +291,7 @@ const showMenu = (ctx: any) => {
 const handleClear = (ctx: any) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+    renameFlows.delete(userId);
     clearUserHistory(userId);
     return ctx.reply('Память очищена.');
 };
@@ -328,6 +338,10 @@ bot.command('rename', (ctx) => {
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const isAdmin = ctx.state.role === 'admin';
+
+    if (!isAdmin) {
+        return startSelfRenameFlow(ctx);
+    }
 
     if (parts.length < 2) {
         if (isAdmin) return ctx.reply('Формат: /rename НовоеИмя\nили /rename 123456789 НовоеИмя');
@@ -385,7 +399,10 @@ bot.hears(MENU_BUTTONS.users, (ctx) => {
     const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) — ${u.role}`).join('\n');
     return ctx.reply(`Список пользователей:\n${list}`);
 });
-bot.hears(MENU_BUTTONS.rename, (ctx) => ctx.reply('Для смены имени напиши: /rename НовоеИмя'));
+bot.hears(MENU_BUTTONS.rename, (ctx) => {
+    if (ctx.state.role === 'admin') return ctx.reply('Для себя: /rename НовоеИмя\nДля пользователя: /rename 123456789 НовоеИмя');
+    return startSelfRenameFlow(ctx);
+});
 bot.hears(MENU_BUTTONS.add, (ctx) => {
     if (!canUseMenuItem(ctx, 'add')) return;
     return ctx.reply('Формат: /add 123456789 Имя');
@@ -403,9 +420,51 @@ bot.on('text', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
+    const userText = ctx.message.text.trim();
+    const isAdmin = ctx.state.role === 'admin';
+
+    if (!isAdmin) {
+        const renameFlow = renameFlows.get(userId);
+
+        if (renameFlow === 'confirm') {
+            const answer = userText.toLowerCase();
+            if (answer === 'да') {
+                renameFlows.set(userId, 'await_name');
+                return ctx.reply('Введите имя:');
+            }
+
+            if (answer === 'нет') {
+                renameFlows.delete(userId);
+                return ctx.reply('Ок, отменил.', buildMenuKeyboard(false));
+            }
+
+            return ctx.reply('Ответь "Да" или "Нет".', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
+        }
+
+        if (renameFlow === 'await_name') {
+            if (!userText || userText.startsWith('/')) {
+                return ctx.reply('Имя не может быть пустым. Введи обычный текст без команды.');
+            }
+
+            if (userText.length > 64) {
+                return ctx.reply('Слишком длинное имя. До 64 символов.');
+            }
+
+            const userRecord = getUser(userId);
+            if (!userRecord) {
+                renameFlows.delete(userId);
+                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+            }
+
+            updateUserName(userId, userText);
+            ctx.state.userName = userText;
+            renameFlows.delete(userId);
+            return ctx.reply('Имя принято.', buildMenuKeyboard(false));
+        }
+    }
+
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
     const systemPrompt = buildSystemPrompt(userName);
-    const userText = ctx.message.text;
     const history = getUserHistory(userId);
 
     try {
