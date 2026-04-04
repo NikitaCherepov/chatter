@@ -110,6 +110,8 @@ db.exec(`
         execute_at INTEGER NOT NULL,
         task_type TEXT NOT NULL,
         payload TEXT NOT NULL,
+        notify_mode TEXT NOT NULL DEFAULT 'always',
+        notify_condition TEXT,
         status TEXT NOT NULL DEFAULT 'pending'
     );
 `);
@@ -160,6 +162,8 @@ ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_w
 ensureTaskColumn('recurrence_type', `ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'`);
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
 ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');
+ensureTaskColumn('notify_mode', `ALTER TABLE tasks ADD COLUMN notify_mode TEXT NOT NULL DEFAULT 'always'`);
+ensureTaskColumn('notify_condition', 'ALTER TABLE tasks ADD COLUMN notify_condition TEXT');
 
 if (hasUserColumn('created_at')) {
     db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
@@ -204,6 +208,9 @@ if (hasUserColumn('imap_secure')) {
 if (hasTaskColumn('recurrence_type')) {
     db.exec(`UPDATE tasks SET recurrence_type = 'once' WHERE recurrence_type IS NULL OR recurrence_type = ''`);
 }
+if (hasTaskColumn('notify_mode')) {
+    db.exec(`UPDATE tasks SET notify_mode = 'always' WHERE notify_mode IS NULL OR notify_mode = ''`);
+}
 
 const promptsColumns = db.prepare(`PRAGMA table_info(prompts)`).all() as { name: string }[];
 const hasPromptDescriptionColumn = promptsColumns.some(c => c.name === 'description');
@@ -221,7 +228,7 @@ const SMART_HOME_TOOL_INSTRUCTIONS = `
 Если пользователь явно просит управлять устройством умного дома (включить/выключить/сменить цвет), вызови инструмент control_smart_home.`;
 const SCHEDULE_TOOL_INSTRUCTIONS = `
 
-Если пользователь просит напомнить позже, выполнить действие по времени, отложить команду или сделать поиск в интернете по расписанию, вызови инструмент schedule_task.
+Если пользователь просит напомнить позже, выполнить действие по времени, отложить команду, сделать поиск в интернете по расписанию или регулярно проверять почту — вызови инструмент schedule_task.
 Для времени используй local_time (формат HH:MM) или delay_seconds. Не вычисляй Unix timestamp вручную.`;
 const TASK_DELETE_TOOL_INSTRUCTIONS = `
 
@@ -496,12 +503,12 @@ const tools = [
                     },
                     task_type: {
                         type: 'string',
-                        enum: ['message', 'smart_home', 'web_search'],
-                        description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете.'
+                        enum: ['message', 'smart_home', 'web_search', 'email_check'],
+                        description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете, email_check - запланированная проверка почты.'
                     },
                     payload: {
                         type: 'string',
-                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос.'
+                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"search_query":"...", "limit":5} или просто строка запроса.'
                     },
                     recurrence_type: {
                         type: 'string',
@@ -511,6 +518,15 @@ const tools = [
                     recurrence_weekday: {
                         type: 'number',
                         description: 'День недели для weekly: 1=понедельник ... 7=воскресенье.'
+                    },
+                    notify_mode: {
+                        type: 'string',
+                        enum: ['always', 'never', 'on_match'],
+                        description: 'Режим уведомлений: always - всегда писать о результате, never - никогда не писать, on_match - писать только если результат содержит notify_condition.'
+                    },
+                    notify_condition: {
+                        type: 'string',
+                        description: 'Условие-триггер для notify_mode=on_match. Если строка найдена в результате, бот отправит уведомление.'
                     }
                 },
                 required: ['task_type', 'payload']
@@ -725,8 +741,9 @@ type UserRecord = {
     total_web_search_count: number;
 };
 type TaskStatus = 'pending' | 'done' | 'error';
-type TaskType = 'message' | 'smart_home' | 'web_search';
+type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check';
 type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
+type TaskNotifyMode = 'always' | 'never' | 'on_match';
 type TaskRecord = {
     id: number;
     user_id: number;
@@ -737,6 +754,8 @@ type TaskRecord = {
     recurrence_type: TaskRecurrenceType;
     recurrence_weekday: number | null;
     timezone_offset: number | null;
+    notify_mode: TaskNotifyMode;
+    notify_condition: string | null;
 };
 type PromptRecord = {
     id: number;
@@ -970,6 +989,8 @@ type ScheduleTaskArgs = {
     payload?: string;
     recurrence_type?: TaskRecurrenceType;
     recurrence_weekday?: number;
+    notify_mode?: TaskNotifyMode;
+    notify_condition?: string;
 };
 type DeleteTaskArgs = {
     task_id?: number;
@@ -1367,7 +1388,10 @@ const formatTaskForDisplay = (task: TaskRecord) => {
     const fallbackOffset = getUser(task.user_id)?.timezone_offset ?? 5;
     const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
     const when = formatUnixForTimezone(task.execute_at, timezoneOffset);
-    return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when.local} (${when.tzLabel})\nКогда (UTC): ${when.utc} UTC\nРасписание: ${recurrence}\nДанные: ${payloadPreview}`;
+    const notifyText = task.notify_mode === 'on_match'
+        ? `on_match: ${task.notify_condition || '(пусто)'}`
+        : task.notify_mode;
+    return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when.local} (${when.tzLabel})\nКогда (UTC): ${when.utc} UTC\nРасписание: ${recurrence}\nУведомления: ${notifyText}\nДанные: ${payloadPreview}`;
 };
 
 const formatTasksList = (tasks: TaskRecord[], emptyText = 'Задач не найдено.') => (
@@ -1477,6 +1501,14 @@ const computeNextRecurringExecuteAt = (task: TaskRecord) => {
     }
 
     return null;
+};
+
+const shouldNotifyTaskResult = (task: TaskRecord, resultText: string) => {
+    if (task.notify_mode === 'never') return false;
+    if (task.notify_mode === 'always') return true;
+    const condition = (task.notify_condition || '').trim().toLowerCase();
+    if (!condition) return false;
+    return resultText.toLowerCase().includes(condition);
 };
 
 const scheduleDailyCounterReset = () => {
@@ -1743,40 +1775,62 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5) =>
 
     try {
         await client.connect();
-        const lock = await client.getMailboxLock('INBOX');
-        const emails: Array<{ from: string; subject: string; date: string }> = [];
-        try {
-            const searchCriteria = normalizedQuery
-                ? {
-                    or: [
-                        { from: normalizedQuery },
-                        { subject: normalizedQuery },
-                        { body: normalizedQuery }
-                    ]
+        const emails: Array<{ from: string; subject: string; date: string; mailbox: string; ts: number }> = [];
+
+        const mailboxCandidates = normalizedQuery
+            ? ['INBOX', 'Archive', 'Sent', 'Spam', 'Junk', 'Отправленные', 'Архив', 'Спам']
+            : ['INBOX'];
+
+        for (const mailbox of [...new Set(mailboxCandidates)]) {
+            let lock: any = null;
+            try {
+                lock = await client.getMailboxLock(mailbox);
+            } catch {
+                continue;
+            }
+
+            try {
+                let resultIds: number[] = [];
+                if (normalizedQuery) {
+                    const byFrom = await client.search({ from: normalizedQuery }).catch(() => [] as number[]);
+                    const bySubject = await client.search({ subject: normalizedQuery }).catch(() => [] as number[]);
+                    const byText = await client.search({ text: normalizedQuery }).catch(() => [] as number[]);
+                    const merged = new Set<number>([...byFrom, ...bySubject, ...byText]);
+                    resultIds = [...merged].sort((a, b) => a - b);
+                } else {
+                    resultIds = await client.search({ all: true });
                 }
-                : { all: true };
 
-            const resultIds = await client.search(searchCriteria);
-            const targetIds = resultIds.slice(-safeLimit);
-            if (!targetIds.length) {
-                return normalizedQuery
-                    ? `Писем по запросу "${normalizedQuery}" не найдено.`
-                    : 'На почте пусто.';
-            }
+                const targetIds = resultIds.slice(-safeLimit);
+                if (!targetIds.length) {
+                    continue;
+                }
 
-            for await (const msg of client.fetch(targetIds, { envelope: true })) {
-                const from = msg.envelope?.from?.[0]?.address || 'unknown';
-                const subject = msg.envelope?.subject || '(без темы)';
-                const date = msg.envelope?.date ? new Date(msg.envelope.date).toLocaleString('ru-RU') : 'без даты';
-                emails.push({ from, subject, date });
+                for await (const msg of client.fetch(targetIds, { envelope: true })) {
+                    const from = msg.envelope?.from?.[0]?.address || 'unknown';
+                    const subject = msg.envelope?.subject || '(без темы)';
+                    const dt = msg.envelope?.date ? new Date(msg.envelope.date) : null;
+                    const ts = dt ? dt.getTime() : 0;
+                    const date = dt ? dt.toLocaleString('ru-RU') : 'без даты';
+                    emails.push({ from, subject, date, mailbox, ts });
+                }
+            } finally {
+                lock.release();
             }
-        } finally {
-            lock.release();
         }
 
         await client.logout();
-        if (!emails.length) return 'На почте пусто.';
-        return JSON.stringify(emails.reverse(), null, 2);
+        if (!emails.length) {
+            return normalizedQuery
+                ? `Писем по запросу "${normalizedQuery}" не найдено (проверил INBOX/Архив/Отправленные/Спам).`
+                : 'На почте пусто.';
+        }
+
+        const finalList = emails
+            .sort((a, b) => b.ts - a.ts)
+            .slice(0, safeLimit)
+            .map(({ ts, ...rest }) => rest);
+        return JSON.stringify(finalList, null, 2);
     } catch (err) {
         try { await client.logout(); } catch {}
         return `Ошибка подключения к почте: ${err instanceof Error ? err.message : String(err)}`;
@@ -2052,6 +2106,32 @@ const runEmailSend = async (userId: number, to: string, subject: string, body: s
         return `❌ Ошибка при отправке письма: ${err instanceof Error ? err.message : String(err)}`;
     }
 };
+
+const runScheduledEmailCheckTask = async (task: TaskRecord) => {
+    let searchQuery = '';
+    let limit = 5;
+
+    const raw = task.payload.trim();
+    if (raw) {
+        if (raw.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(raw) as { search_query?: string; limit?: number };
+                searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
+                limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
+            } catch {
+                searchQuery = raw;
+            }
+        } else {
+            searchQuery = raw;
+        }
+    }
+
+    const result = await runEmailCheck(task.user_id, searchQuery, limit);
+    const title = searchQuery
+        ? `📬 *Запланированная проверка почты* (запрос: ${searchQuery})`
+        : '📬 *Запланированная проверка почты*';
+    return `${title}\n\n${result}`;
+};
 const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
     const safeLength = Math.max(0, messageLength);
     const safeTokens = Math.max(0, Math.floor(tokensUsed));
@@ -2148,18 +2228,20 @@ const addTask = (
     payload: string,
     recurrenceType: TaskRecurrenceType,
     recurrenceWeekday: number | null,
-    timezoneOffset: number | null
+    timezoneOffset: number | null,
+    notifyMode: TaskNotifyMode,
+    notifyCondition: string | null
 ) => db
     .prepare(`
-        INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    .run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset);
+    .run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, notifyMode, notifyCondition);
 const getPendingTaskCount = (userId: number) => (
     db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND status = 'pending'`).get(userId) as { count: number }
 ).count;
 const getDueTasks = (unixNow: number) => db.prepare(`
-    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
+    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
     FROM tasks
     WHERE status = 'pending' AND execute_at <= ?
     ORDER BY execute_at ASC, id ASC
@@ -2171,7 +2253,7 @@ const updateTaskNextExecution = (taskId: number, nextExecuteAt: number) => db
     .prepare('UPDATE tasks SET execute_at = ? WHERE id = ?')
     .run(nextExecuteAt, taskId);
 const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
-    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
+    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
     FROM tasks
     WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as TaskRecord | undefined;
@@ -2182,7 +2264,7 @@ const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', li
     const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
     if (status === 'all') {
         return db.prepare(`
-            SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
+            SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
             FROM tasks
             WHERE user_id = ?
             ORDER BY execute_at ASC, id ASC
@@ -2191,7 +2273,7 @@ const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', li
     }
 
     return db.prepare(`
-        SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
+        SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
         FROM tasks
         WHERE user_id = ? AND status = ?
         ORDER BY execute_at ASC, id ASC
@@ -3959,12 +4041,20 @@ bot.on('text', async (ctx) => {
                             const recurrenceType = parsed.recurrence_type ?? 'once';
                             const rawWeekday = Number(parsed.recurrence_weekday);
                             const recurrenceWeekday = Number.isFinite(rawWeekday) ? Math.floor(rawWeekday) : null;
+                            const notifyMode = parsed.notify_mode ?? 'always';
+                            const notifyCondition = typeof parsed.notify_condition === 'string' ? parsed.notify_condition.trim() : null;
 
-                            if (taskType !== 'message' && taskType !== 'smart_home' && taskType !== 'web_search') {
+                            if (taskType !== 'message' && taskType !== 'smart_home' && taskType !== 'web_search' && taskType !== 'email_check') {
                                 throw new Error('Некорректный task_type');
                             }
                             if (recurrenceType !== 'once' && recurrenceType !== 'daily' && recurrenceType !== 'weekly') {
                                 throw new Error('Некорректный recurrence_type');
+                            }
+                            if (notifyMode !== 'always' && notifyMode !== 'never' && notifyMode !== 'on_match') {
+                                throw new Error('Некорректный notify_mode');
+                            }
+                            if (notifyMode === 'on_match' && !notifyCondition) {
+                                throw new Error('Для notify_mode=on_match укажи notify_condition.');
                             }
                             if (recurrenceWeekday !== null && (recurrenceWeekday < 1 || recurrenceWeekday > 7)) {
                                 throw new Error('Для weekly укажи recurrence_weekday от 1 до 7 (1=понедельник).');
@@ -3991,10 +4081,15 @@ bot.on('text', async (ctx) => {
                                 payload,
                                 recurrenceType,
                                 recurrenceType === 'weekly' ? recurrenceWeekday : null,
-                                timezoneOffset
+                                timezoneOffset,
+                                notifyMode,
+                                notifyMode === 'on_match' ? notifyCondition : null
                             );
                             const planned = formatUnixForTimezone(executeAt, timezoneOffset);
-                            toolContent = `Успешно запланировано. Следующий запуск: ${planned.local} (${planned.tzLabel}). UTC-время: ${planned.utc}. Тип расписания: ${recurrenceType}.`;
+                            const notifyInfo = notifyMode === 'on_match'
+                                ? `on_match (${notifyCondition})`
+                                : notifyMode;
+                            toolContent = `Успешно запланировано. Следующий запуск: ${planned.local} (${planned.tzLabel}). UTC-время: ${planned.utc}. Тип расписания: ${recurrenceType}. Режим уведомлений: ${notifyInfo}.`;
                         }
                     } else if (toolCall.function.name === 'delete_my_task') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as DeleteTaskArgs;
@@ -4108,19 +4203,22 @@ setInterval(async () => {
 
     for (const task of pendingTasks) {
         try {
+            let successMessage = '';
             if (task.task_type === 'message') {
-                await bot.telegram.sendMessage(task.user_id, `🔔 *Напоминание:*\n\n${task.payload}`, {
-                    parse_mode: 'Markdown'
-                });
+                successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
             } else if (task.task_type === 'smart_home') {
                 const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
                 const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
-                await bot.telegram.sendMessage(task.user_id, `🤖 *Автоматизация сработала:*\n${result}`, {
-                    parse_mode: 'Markdown'
-                });
+                successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
             } else if (task.task_type === 'web_search') {
                 const result = await runScheduledWebSearchTask(task);
-                await safeSendToUser(task.user_id, `🔎 *Запланированный поиск выполнен:*\n\n${result}`);
+                successMessage = `🔎 *Запланированный поиск выполнен:*\n\n${result}`;
+            } else if (task.task_type === 'email_check') {
+                successMessage = await runScheduledEmailCheckTask(task);
+            }
+
+            if (successMessage && shouldNotifyTaskResult(task, successMessage)) {
+                await safeSendToUser(task.user_id, successMessage);
             }
 
             if (task.recurrence_type === 'once') {
