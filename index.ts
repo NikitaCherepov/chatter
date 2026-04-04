@@ -158,6 +158,7 @@ const BASE_COMMANDS = [
     { command: 'menu', description: 'Открыть меню кнопок' },
     { command: 'clear', description: 'Очистить память диалога' },
     { command: 'tz', description: 'Часовой пояс: /tz <UTC>' },
+    { command: 'tasks', description: 'Мои напоминания' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
@@ -384,6 +385,27 @@ const tools = [
                 }
             }
         }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'get_my_tasks',
+            description: 'Возвращает список задач текущего пользователя. Никогда не запрашивай задачи другого пользователя.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    status: {
+                        type: 'string',
+                        enum: ['pending', 'done', 'error', 'all'],
+                        description: 'Фильтр по статусу задач.'
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Сколько задач вернуть, от 1 до 50.'
+                    }
+                }
+            }
+        }
     }
 ] as const;
 
@@ -477,6 +499,7 @@ const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
 type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
 const timezoneSetupFlows = new Map<number, 'await_offset'>();
+const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
     const userId = ctx.from?.id;
@@ -695,6 +718,67 @@ const runSetUserTimezone = async (userId: number, args: SetTimezoneArgs) => {
     updateUserTimezone(userId, resolvedOffset);
     const sign = resolvedOffset >= 0 ? '+' : '';
     return `Часовой пояс пользователя установлен: UTC${sign}${resolvedOffset}.`;
+};
+
+const safeSendToUser = async (chatId: number, text: string) => {
+    try {
+        await bot.telegram.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.telegram.sendMessage(chatId, text);
+    }
+};
+
+const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction: string) => {
+    const targetUser = getUser(targetUserId);
+    if (!targetUser) {
+        await ctx.reply('Юзер не найден в базе.');
+        return;
+    }
+
+    const thought = instruction.trim();
+    if (!thought) {
+        await ctx.reply('Пустое сообщение. Напиши, что нужно передать.');
+        return;
+    }
+
+    await ctx.reply('⏳ Нейросеть формулирует послание...');
+
+    const targetPrompt = resolvePromptForUser(targetUser);
+    const targetUserName = targetUser.name || targetUser.tg_username || 'Друг';
+    const systemPrompt = buildSystemPrompt(targetPrompt.content, targetUserName);
+    const aiTask = `[СИСТЕМНОЕ ЗАДАНИЕ ОТ АДМИНА]: Администратор просит передать этому пользователю информацию.
+Твоя задача: взять "мысль админа" и написать сообщение от своего лица, строго сохраняя свой текущий характер и стиль, заданный в системном промпте.
+НЕ пиши "Админ просил передать", просто вплети эту мысль в разговор от себя.
+Выведи ТОЛЬКО готовый текст сообщения для юзера, без подтверждений и лишних слов.
+
+Мысль админа: "${thought}"`;
+
+    try {
+        const response = await ai.chat.completions.create({
+            model: MODEL_NAME,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: aiTask }
+            ]
+        });
+
+        const finalMessage = response.choices[0].message.content?.trim();
+        if (!finalMessage) {
+            await ctx.reply('❌ Не получилось сгенерировать текст, попробуй ещё раз.');
+            return;
+        }
+
+        await safeSendToUser(targetUserId, finalMessage);
+        await ctx.reply(`✅ Сообщение отправлено пользователю ${targetUserName} (ID: ${targetUserId}).`);
+    } catch (err) {
+        await ctx.reply(`❌ Ошибка генерации: ${err instanceof Error ? err.message : String(err)}`);
+    }
+};
+
+const formatTaskForDisplay = (task: TaskRecord) => {
+    const when = new Date(task.execute_at * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const payloadPreview = task.payload.length > 140 ? `${task.payload.slice(0, 140)}...` : task.payload;
+    return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when} UTC\nДанные: ${payloadPreview}`;
 };
 
 const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
@@ -934,6 +1018,26 @@ const getDueTasks = (unixNow: number) => db.prepare(`
 const updateTaskStatus = (taskId: number, status: TaskStatus) => db
     .prepare('UPDATE tasks SET status = ? WHERE id = ?')
     .run(status, taskId);
+const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', limit = 20) => {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    if (status === 'all') {
+        return db.prepare(`
+            SELECT id, user_id, execute_at, task_type, payload, status
+            FROM tasks
+            WHERE user_id = ?
+            ORDER BY execute_at ASC, id ASC
+            LIMIT ?
+        `).all(userId, safeLimit) as TaskRecord[];
+    }
+
+    return db.prepare(`
+        SELECT id, user_id, execute_at, task_type, payload, status
+        FROM tasks
+        WHERE user_id = ? AND status = ?
+        ORDER BY execute_at ASC, id ASC
+        LIMIT ?
+    `).all(userId, status, safeLimit) as TaskRecord[];
+};
 const isTimezoneConfigured = (user: UserRecord) => user.timezone_confirmed === 1;
 const getUserHistory = (userId: number) => {
     const rows = db.prepare(`
@@ -1248,6 +1352,7 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number) => {
         : Markup.button.callback('⛔ Забанить', `usr:ban:${user.id}:${page}`);
 
     return Markup.inlineKeyboard([
+        [Markup.button.callback('✉️ Написать', `ai_send:${user.id}`)],
         [moderationButton],
         [Markup.button.callback('🗑 Удалить', `usr:remove:${user.id}:${page}`)],
         [Markup.button.callback('⬅️ К списку', `usr:list:${page}`)]
@@ -1731,6 +1836,22 @@ bot.command('tz', (ctx) => {
     return ctx.reply(`Часовой пояс успешно изменён на UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
 });
 
+bot.command('tasks', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к задачам.');
+    }
+
+    const tasks = getUserTasks(userId, 'pending', 20);
+    if (!tasks.length) return ctx.reply('У тебя нет активных напоминаний.');
+
+    const text = `Твои активные задачи:\n\n${tasks.map(formatTaskForDisplay).join('\n\n')}`;
+    return ctx.reply(text);
+});
+
 bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -1852,11 +1973,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /rename, /prompts, /prompt_use');
 });
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
@@ -2128,6 +2249,31 @@ bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery('Пользователь удален');
 });
 
+bot.action(/^ai_send:(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const adminId = ctx.from?.id;
+    if (!adminId) return;
+
+    const targetId = Number.parseInt((ctx as any).match[1], 10);
+    const targetUser = getUser(targetId);
+    if (!targetUser) {
+        await ctx.answerCbQuery();
+        await ctx.reply('Юзер не найден в базе.');
+        return;
+    }
+
+    adminAiMessageFlow.set(adminId, targetId);
+    await ctx.answerCbQuery('Ожидаю текст');
+    await ctx.reply(
+        `Что ИИ должен передать пользователю *${targetUser.name || targetUser.tg_username || targetId}*?\nНапиши суть сообщения, а нейросеть сама оформит его в своём стиле.`,
+        { parse_mode: 'Markdown' }
+    );
+});
+
 bot.action('prompt:list', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -2220,6 +2366,13 @@ bot.on('text', async (ctx) => {
     if (!userId) return;
 
     const userText = ctx.message.text.trim();
+    const directMessageTargetId = adminAiMessageFlow.get(userId);
+    if (directMessageTargetId) {
+        adminAiMessageFlow.delete(userId);
+        await handleAiDirectMessage(ctx, directMessageTargetId, userText);
+        return;
+    }
+
     const isAdmin = ctx.state.role === 'admin';
     const timezoneFlow = timezoneSetupFlows.get(userId);
 
@@ -2435,6 +2588,37 @@ bot.on('text', async (ctx) => {
                             role: 'tool',
                             tool_call_id: toolCall.id,
                             content: `Ошибка установки часового пояса: ${err instanceof Error ? err.message : String(err)}`
+                        });
+                    }
+                    continue;
+                }
+
+                if (toolCall.function.name === 'get_my_tasks') {
+                    handledToolCall = true;
+                    try {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as {
+                            status?: TaskStatus | 'all';
+                            limit?: number;
+                        };
+                        const status = parsed.status && ['pending', 'done', 'error', 'all'].includes(parsed.status)
+                            ? parsed.status
+                            : 'pending';
+                        const limit = typeof parsed.limit === 'number' ? parsed.limit : 20;
+                        const tasks = getUserTasks(userId, status as TaskStatus | 'all', limit);
+
+                        const content = tasks.length
+                            ? tasks.map(formatTaskForDisplay).join('\n\n')
+                            : 'Задач не найдено.';
+                        toolMessages.push({
+                            role: 'tool',
+                            tool_call_id: toolCall.id,
+                            content
+                        });
+                    } catch (err) {
+                        toolMessages.push({
+                            role: 'tool',
+                            tool_call_id: toolCall.id,
+                            content: `Ошибка получения задач: ${err instanceof Error ? err.message : String(err)}`
                         });
                     }
                 }
