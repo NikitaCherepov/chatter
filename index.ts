@@ -160,7 +160,7 @@ const buildTimeContext = (timezoneOffset: number) => {
     return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач опирайся на локальное время, но в execute_at передавай строго Unix Timestamp!`;
 };
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
-const MAX_HISTORY_ITEMS = 20;
+const MAX_HISTORY_ITEMS = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const BASE_COMMANDS = [
