@@ -289,12 +289,16 @@ const tools = [
                     },
                     action: {
                         type: 'string',
-                        enum: ['on', 'off', 'set_color'],
-                        description: 'on - включить, off - выключить, set_color - изменить цвет.'
+                        enum: ['on', 'off', 'set_color', 'set_brightness'],
+                        description: 'on - включить, off - выключить, set_color - изменить цвет, set_brightness - изменить яркость.'
                     },
                     color: {
                         type: 'string',
-                        description: 'Цвет в формате #RRGGBB или имя цвета (красный, синий, зеленый и т.д.). Используется только с action=set_color.'
+                        description: 'Цвет в формате #RRGGBB или имя цвета (красный, синий и т.д.). Только для set_color.'
+                    },
+                    brightness: {
+                        type: 'number',
+                        description: 'Уровень яркости от 1 до 100. Используется только с action=set_brightness.'
                     }
                 },
                 required: ['device_name', 'action']
@@ -502,11 +506,12 @@ const parseColorToHsv = (value: string) => {
     };
 };
 
-type SmartHomeAction = 'on' | 'off' | 'set_color';
+type SmartHomeAction = 'on' | 'off' | 'set_color' | 'set_brightness';
 type SmartHomeArgs = {
     device_name?: string;
     action?: SmartHomeAction;
     color?: string;
+    brightness?: number;
 };
 
 const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
@@ -529,7 +534,7 @@ const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
     }
 
     const action = args.action;
-    if (!action || !['on', 'off', 'set_color'].includes(action)) {
+    if (!action || !['on', 'off', 'set_color', 'set_brightness'].includes(action)) {
         return 'Ошибка инструмента: неизвестное действие.';
     }
 
@@ -541,8 +546,13 @@ const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
         type: 'devices.capabilities.color_setting',
         state: { instance: 'hsv', value: hsv }
     });
+    const brightnessPayload = (value: number) => ({
+        type: 'devices.capabilities.range',
+        state: { instance: 'brightness', value }
+    });
 
     let actionsPayload: any[] = [];
+    let brightnessValue: number | null = null;
     if (action === 'on') actionsPayload = [onOffPayload(true)];
     if (action === 'off') actionsPayload = [onOffPayload(false)];
     if (action === 'set_color') {
@@ -550,6 +560,15 @@ const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
         const hsv = parseColorToHsv(args.color);
         if (hsv === null) return `Ошибка инструмента: не удалось распознать цвет "${args.color}".`;
         actionsPayload = [onOffPayload(true), colorPayload(hsv)];
+    }
+    if (action === 'set_brightness') {
+        if (args.brightness === undefined) return 'Ошибка инструмента: для set_brightness нужен параметр brightness.';
+        let br = Number(args.brightness);
+        if (Number.isNaN(br)) br = 100;
+        if (br < 1) br = 1;
+        if (br > 100) br = 100;
+        brightnessValue = br;
+        actionsPayload = [onOffPayload(true), brightnessPayload(br)];
     }
 
     const devicesPayload = deviceIds.map(id => ({
@@ -594,7 +613,9 @@ const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
             ? 'включено'
             : action === 'off'
                 ? 'выключено'
-                : `цвет изменен на ${args.color}`;
+                : action === 'set_color'
+                    ? `цвет изменен на ${args.color}`
+                    : `яркость установлена на ${brightnessValue ?? args.brightness}%`;
         return `Успешно: "${args.device_name}" -> ${actionText}.`;
     } catch (err) {
         return `Техническая ошибка при управлении умным домом: ${err instanceof Error ? err.message : String(err)}`;
