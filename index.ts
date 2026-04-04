@@ -109,6 +109,16 @@ const ensureUserColumn = (columnName: string, alterSql: string) => {
     db.exec(alterSql);
 };
 
+const hasTaskColumn = (columnName: string) => {
+    const columns = db.prepare(`PRAGMA table_info(tasks)`).all() as { name: string }[];
+    return columns.some(c => c.name === columnName);
+};
+
+const ensureTaskColumn = (columnName: string, alterSql: string) => {
+    if (hasTaskColumn(columnName)) return;
+    db.exec(alterSql);
+};
+
 ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
@@ -117,6 +127,10 @@ ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offse
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
+
+ensureTaskColumn('recurrence_type', `ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'`);
+ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
+ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');
 
 if (hasUserColumn('created_at')) {
     db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
@@ -130,6 +144,9 @@ if (hasUserColumn('daily_message_count')) {
 }
 if (hasUserColumn('total_message_length')) {
     db.exec(`UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL`);
+}
+if (hasTaskColumn('recurrence_type')) {
+    db.exec(`UPDATE tasks SET recurrence_type = 'once' WHERE recurrence_type IS NULL OR recurrence_type = ''`);
 }
 
 const promptsColumns = db.prepare(`PRAGMA table_info(prompts)`).all() as { name: string }[];
@@ -148,22 +165,27 @@ const SMART_HOME_TOOL_INSTRUCTIONS = `
 Если пользователь явно просит управлять устройством умного дома (включить/выключить/сменить цвет), вызови инструмент control_smart_home.`;
 const SCHEDULE_TOOL_INSTRUCTIONS = `
 
-Если пользователь просит напомнить позже, выполнить действие по времени, отложить команду или сделать поиск в интернете по расписанию, вызови инструмент schedule_task.`;
+Если пользователь просит напомнить позже, выполнить действие по времени, отложить команду или сделать поиск в интернете по расписанию, вызови инструмент schedule_task.
+Для времени используй local_time (формат HH:MM) или delay_seconds. Не вычисляй Unix timestamp вручную.`;
+const TASK_DELETE_TOOL_INSTRUCTIONS = `
+
+Если пользователь просит удалить/отменить конкретную задачу или напоминание, вызови инструмент delete_my_task. Удаляй только по точному ID задачи.`;
 const TIMEZONE_TOOL_INSTRUCTIONS = `
 
 Если пользователь сообщает город/страну, просит установить часовой пояс или пишет "я из ...", вызови инструмент set_user_timezone.`;
 const RANDOM_TOOL_INSTRUCTIONS = `
 
 Если пользователь просит подкинуть монетку, бросить кубик или сделать случайный бросок, вызови инструмент random_roll.`;
-const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
+const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
     const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
     const utcSign = timezoneOffset >= 0 ? '+' : '';
-    return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач опирайся на локальное время, но в execute_at передавай строго Unix Timestamp!`;
+    return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач используй local_time (HH:MM) или delay_seconds.`;
 };
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const MAX_HISTORY_ITEMS = 10;
+const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const BASE_COMMANDS = [
@@ -172,6 +194,7 @@ const BASE_COMMANDS = [
     { command: 'clear', description: 'Очистить память диалога' },
     { command: 'tz', description: 'Часовой пояс: /tz <UTC>' },
     { command: 'tasks', description: 'Мои напоминания' },
+    { command: 'task_delete', description: 'Удалить задачу: /task_delete <id>' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
@@ -349,13 +372,21 @@ const tools = [
         type: 'function',
         function: {
             name: 'schedule_task',
-            description: 'Создает отложенную задачу (напоминание или действие умного дома). execute_at должен быть Unix timestamp в секундах.',
+            description: 'Создает задачу по времени (одноразовую или по расписанию). Для времени предпочтительно local_time (HH:MM) или delay_seconds.',
             parameters: {
                 type: 'object',
                 properties: {
+                    local_time: {
+                        type: 'string',
+                        description: 'Локальное время пользователя в формате HH:MM, например 02:07.'
+                    },
+                    delay_seconds: {
+                        type: 'number',
+                        description: 'Задержка в секундах от текущего момента, например 60.'
+                    },
                     execute_at: {
                         type: 'number',
-                        description: 'Unix timestamp в секундах, когда задача должна выполниться.'
+                        description: 'Legacy-поле: Unix timestamp в секундах. Используй только если local_time/delay_seconds не подходят.'
                     },
                     task_type: {
                         type: 'string',
@@ -365,9 +396,18 @@ const tools = [
                     payload: {
                         type: 'string',
                         description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос.'
+                    },
+                    recurrence_type: {
+                        type: 'string',
+                        enum: ['once', 'daily', 'weekly'],
+                        description: 'Тип расписания: once - один раз, daily - каждый день, weekly - каждую неделю.'
+                    },
+                    recurrence_weekday: {
+                        type: 'number',
+                        description: 'День недели для weekly: 1=понедельник ... 7=воскресенье.'
                     }
                 },
-                required: ['execute_at', 'task_type', 'payload']
+                required: ['task_type', 'payload']
             }
         }
     },
@@ -423,6 +463,23 @@ const tools = [
     {
         type: 'function',
         function: {
+            name: 'delete_my_task',
+            description: 'Удаляет ОДНУ активную задачу текущего пользователя по точному ID и возвращает обновлённый список.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    task_id: {
+                        type: 'number',
+                        description: 'ID задачи для удаления.'
+                    }
+                },
+                required: ['task_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'random_roll',
             description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Для кубиков поддерживает обычный режим, преимущество и помеху.',
             parameters: {
@@ -466,6 +523,7 @@ type UserRecord = {
 };
 type TaskStatus = 'pending' | 'done' | 'error';
 type TaskType = 'message' | 'smart_home' | 'web_search';
+type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 type TaskRecord = {
     id: number;
     user_id: number;
@@ -473,6 +531,9 @@ type TaskRecord = {
     task_type: TaskType;
     payload: string;
     status: TaskStatus;
+    recurrence_type: TaskRecurrenceType;
+    recurrence_weekday: number | null;
+    timezone_offset: number | null;
 };
 type PromptRecord = {
     id: number;
@@ -688,6 +749,18 @@ type RandomRollArgs = {
     roll_type?: 'coin' | 'dice';
     dice_notation?: string;
     mode?: RandomRollMode;
+};
+type ScheduleTaskArgs = {
+    local_time?: string;
+    delay_seconds?: number;
+    execute_at?: number;
+    task_type?: TaskType;
+    payload?: string;
+    recurrence_type?: TaskRecurrenceType;
+    recurrence_weekday?: number;
+};
+type DeleteTaskArgs = {
+    task_id?: number;
 };
 
 const clampTimezoneOffset = (offset: number) => {
@@ -945,10 +1018,152 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
     }
 };
 
+const ISO_WEEKDAY_LABEL: Record<number, string> = {
+    1: 'понедельник',
+    2: 'вторник',
+    3: 'среда',
+    4: 'четверг',
+    5: 'пятница',
+    6: 'суббота',
+    7: 'воскресенье'
+};
+
+const formatRecurrenceForDisplay = (task: TaskRecord) => {
+    if (task.recurrence_type === 'daily') return 'Каждый день';
+    if (task.recurrence_type === 'weekly') {
+        const label = task.recurrence_weekday ? ISO_WEEKDAY_LABEL[task.recurrence_weekday] : null;
+        return label ? `Каждую неделю (${label})` : 'Каждую неделю';
+    }
+    return 'Один раз';
+};
+
+const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
+    const local = new Date((unixSeconds + timezoneOffset * 3600) * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const utc = new Date(unixSeconds * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const sign = timezoneOffset >= 0 ? '+' : '';
+    return {
+        local,
+        utc,
+        tzLabel: `UTC${sign}${timezoneOffset}`
+    };
+};
+
 const formatTaskForDisplay = (task: TaskRecord) => {
-    const when = new Date(task.execute_at * 1000).toISOString().replace('T', ' ').slice(0, 19);
     const payloadPreview = task.payload.length > 140 ? `${task.payload.slice(0, 140)}...` : task.payload;
-    return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when} UTC\nДанные: ${payloadPreview}`;
+    const recurrence = formatRecurrenceForDisplay(task);
+    const fallbackOffset = getUser(task.user_id)?.timezone_offset ?? 5;
+    const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
+    const when = formatUnixForTimezone(task.execute_at, timezoneOffset);
+    return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when.local} (${when.tzLabel})\nКогда (UTC): ${when.utc} UTC\nРасписание: ${recurrence}\nДанные: ${payloadPreview}`;
+};
+
+const formatTasksList = (tasks: TaskRecord[], emptyText = 'Задач не найдено.') => (
+    tasks.length ? tasks.map(formatTaskForDisplay).join('\n\n') : emptyText
+);
+
+const getIsoWeekday = (date: Date) => {
+    const day = date.getUTCDay();
+    return day === 0 ? 7 : day;
+};
+
+const parseLocalTime = (value: string) => {
+    const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+
+    const hours = Number.parseInt(match[1], 10);
+    const minutes = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+
+    return { hours, minutes };
+};
+
+const computeExecuteAtFromLocalTime = (
+    localTime: string,
+    timezoneOffset: number,
+    recurrenceType: TaskRecurrenceType,
+    recurrenceWeekday: number | null
+) => {
+    const parsedTime = parseLocalTime(localTime);
+    if (!parsedTime) {
+        throw new Error('Некорректный local_time. Ожидаю формат HH:MM, например 02:07.');
+    }
+
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const localNow = new Date((nowUnix + timezoneOffset * 3600) * 1000);
+    const targetLocal = new Date(localNow.getTime());
+    targetLocal.setUTCHours(parsedTime.hours, parsedTime.minutes, 0, 0);
+
+    if (recurrenceType === 'weekly') {
+        if (!recurrenceWeekday || recurrenceWeekday < 1 || recurrenceWeekday > 7) {
+            throw new Error('Для weekly укажи recurrence_weekday от 1 до 7 (1=понедельник).');
+        }
+
+        const currentWeekday = getIsoWeekday(targetLocal);
+        let deltaDays = (recurrenceWeekday - currentWeekday + 7) % 7;
+        if (deltaDays === 0 && targetLocal.getTime() <= localNow.getTime()) deltaDays = 7;
+        if (deltaDays > 0) targetLocal.setUTCDate(targetLocal.getUTCDate() + deltaDays);
+    } else if (targetLocal.getTime() <= localNow.getTime()) {
+        targetLocal.setUTCDate(targetLocal.getUTCDate() + 1);
+    }
+
+    return Math.floor(targetLocal.getTime() / 1000 - timezoneOffset * 3600);
+};
+
+const computeExecuteAtFromScheduleArgs = (
+    args: ScheduleTaskArgs,
+    timezoneOffset: number,
+    recurrenceType: TaskRecurrenceType,
+    recurrenceWeekday: number | null
+) => {
+    if (typeof args.local_time === 'string' && args.local_time.trim()) {
+        return computeExecuteAtFromLocalTime(args.local_time, timezoneOffset, recurrenceType, recurrenceWeekday);
+    }
+
+    if (typeof args.delay_seconds === 'number') {
+        if (!Number.isFinite(args.delay_seconds) || args.delay_seconds < 0) {
+            throw new Error('Некорректный delay_seconds (ожидаю число >= 0).');
+        }
+        return Math.floor(Date.now() / 1000) + Math.floor(args.delay_seconds);
+    }
+
+    const executeAt = Number(args.execute_at);
+    if (Number.isFinite(executeAt) && executeAt > 0) {
+        return Math.floor(executeAt);
+    }
+
+    throw new Error('Не указано время задачи. Передай local_time (HH:MM), delay_seconds или execute_at.');
+};
+
+const computeNextRecurringExecuteAt = (task: TaskRecord) => {
+    if (task.recurrence_type === 'once') return null;
+
+    const fallbackOffset = getUser(task.user_id)?.timezone_offset ?? 5;
+    const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
+    const localDate = new Date((task.execute_at + timezoneOffset * 3600) * 1000);
+    const nowUnix = Math.floor(Date.now() / 1000);
+
+    if (task.recurrence_type === 'daily') {
+        do {
+            localDate.setUTCDate(localDate.getUTCDate() + 1);
+        } while (Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600) <= nowUnix);
+        return Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600);
+    }
+
+    if (task.recurrence_type === 'weekly') {
+        const targetWeekday = task.recurrence_weekday;
+        if (!targetWeekday || targetWeekday < 1 || targetWeekday > 7) return null;
+        const currentWeekday = getIsoWeekday(localDate);
+        let deltaDays = (targetWeekday - currentWeekday + 7) % 7;
+        if (deltaDays === 0) deltaDays = 7;
+        localDate.setUTCDate(localDate.getUTCDate() + deltaDays);
+        while (Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600) <= nowUnix) {
+            localDate.setUTCDate(localDate.getUTCDate() + 7);
+        }
+        return Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600);
+    }
+
+    return null;
 };
 
 const scheduleDailyCounterReset = () => {
@@ -1204,11 +1419,25 @@ const setBan = (id: number, reason: string, bannedBy: number) => db.prepare(`
         banned_at = CURRENT_TIMESTAMP
 `).run(id, reason, bannedBy);
 const removeBan = (id: number) => db.prepare('DELETE FROM bans WHERE user_id = ?').run(id);
-const addTask = (userId: number, executeAt: number, taskType: TaskType, payload: string) => db
-    .prepare('INSERT INTO tasks (user_id, execute_at, task_type, payload) VALUES (?, ?, ?, ?)')
-    .run(userId, executeAt, taskType, payload);
+const addTask = (
+    userId: number,
+    executeAt: number,
+    taskType: TaskType,
+    payload: string,
+    recurrenceType: TaskRecurrenceType,
+    recurrenceWeekday: number | null,
+    timezoneOffset: number | null
+) => db
+    .prepare(`
+        INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset);
+const getPendingTaskCount = (userId: number) => (
+    db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND status = 'pending'`).get(userId) as { count: number }
+).count;
 const getDueTasks = (unixNow: number) => db.prepare(`
-    SELECT id, user_id, execute_at, task_type, payload, status
+    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
     FROM tasks
     WHERE status = 'pending' AND execute_at <= ?
     ORDER BY execute_at ASC, id ASC
@@ -1216,11 +1445,22 @@ const getDueTasks = (unixNow: number) => db.prepare(`
 const updateTaskStatus = (taskId: number, status: TaskStatus) => db
     .prepare('UPDATE tasks SET status = ? WHERE id = ?')
     .run(status, taskId);
+const updateTaskNextExecution = (taskId: number, nextExecuteAt: number) => db
+    .prepare('UPDATE tasks SET execute_at = ? WHERE id = ?')
+    .run(nextExecuteAt, taskId);
+const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
+    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
+    FROM tasks
+    WHERE user_id = ? AND id = ?
+`).get(userId, taskId) as TaskRecord | undefined;
+const deletePendingTaskByUserAndId = (userId: number, taskId: number) => db
+    .prepare(`DELETE FROM tasks WHERE user_id = ? AND id = ? AND status = 'pending'`)
+    .run(userId, taskId);
 const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', limit = 20) => {
     const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
     if (status === 'all') {
         return db.prepare(`
-            SELECT id, user_id, execute_at, task_type, payload, status
+            SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
             FROM tasks
             WHERE user_id = ?
             ORDER BY execute_at ASC, id ASC
@@ -1229,7 +1469,7 @@ const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', li
     }
 
     return db.prepare(`
-        SELECT id, user_id, execute_at, task_type, payload, status
+        SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset
         FROM tasks
         WHERE user_id = ? AND status = ?
         ORDER BY execute_at ASC, id ASC
@@ -2047,10 +2287,36 @@ bot.command('tasks', (ctx) => {
     }
 
     const tasks = getUserTasks(userId, 'pending', 20);
-    if (!tasks.length) return ctx.reply('У тебя нет активных напоминаний.');
+    if (!tasks.length) return ctx.reply('У тебя нет активных напоминаний и расписаний.');
 
-    const text = `Твои активные задачи:\n\n${tasks.map(formatTaskForDisplay).join('\n\n')}`;
+    const text = `Твои активные задачи (${tasks.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${formatTasksList(tasks)}`;
     return ctx.reply(text);
+});
+
+bot.command('task_delete', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к задачам.');
+    }
+
+    const taskId = Number.parseInt(ctx.message.text.split(' ')[1], 10);
+    if (!taskId || Number.isNaN(taskId)) {
+        return ctx.reply('Формат: /task_delete <id>. Пример: /task_delete 12');
+    }
+
+    const task = getTaskByUserAndId(userId, taskId);
+    if (!task) return ctx.reply(`Задача с ID ${taskId} не найдена.`);
+    if (task.status !== 'pending') return ctx.reply(`Задача #${taskId} уже не активна (status: ${task.status}).`);
+
+    const result = deletePendingTaskByUserAndId(userId, taskId);
+    if (!result.changes) return ctx.reply(`Не удалось удалить задачу #${taskId}.`);
+
+    const updated = getUserTasks(userId, 'pending', 20);
+    const updatedText = formatTasksList(updated, 'Активных задач больше нет.');
+    return ctx.reply(`Удалил задачу #${taskId}.\n\nТекущие задачи (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${updatedText}`);
 });
 
 bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
@@ -2174,11 +2440,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /rename, /prompts, /prompt_use');
 });
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
@@ -2646,157 +2912,149 @@ bot.on('text', async (ctx) => {
     try {
         await ctx.sendChatAction('typing');
 
-        const currentTurnMessages: any[] = [
+        const currentMessages: any[] = [
+            { role: 'system', content: systemPrompt },
             ...history,
             { role: 'user', content: userText }
         ];
 
-        const response = await ai.chat.completions.create({
-            model: MODEL_NAME,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                ...currentTurnMessages
-            ],
-            tools: tools as any,
-            tool_choice: 'auto'
-        });
+        let answer = FALLBACK_ANSWER;
+        let isGenerating = true;
+        let loopCount = 0;
+        const MAX_TOOL_LOOPS = 6;
 
-        const message = response.choices[0].message;
+        while (isGenerating && loopCount < MAX_TOOL_LOOPS) {
+            loopCount += 1;
 
-        if (message.tool_calls?.length) {
-            let handledToolCall = false;
-            const toolMessages: any[] = [];
+            const response = await ai.chat.completions.create({
+                model: MODEL_NAME,
+                messages: currentMessages,
+                tools: tools as any,
+                tool_choice: 'auto'
+            });
+
+            const message = response.choices[0].message;
+            currentMessages.push(message as any);
+
+            if (!message.tool_calls?.length) {
+                answer = message.content || FALLBACK_ANSWER;
+                isGenerating = false;
+                break;
+            }
 
             for (const toolCall of message.tool_calls) {
                 if (toolCall.type !== 'function') continue;
-                if (toolCall.function.name === 'search_web') {
-                    handledToolCall = true;
-                    await ctx.reply('Ищу информацию в сети...');
 
-                    let query = '';
-                    try {
-                        const parsed = JSON.parse(toolCall.function.arguments || '{}');
-                        query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
-                    } catch (err) {
-                        console.warn('Ошибка парсинга аргументов search_web:', err);
-                    }
+                let toolContent = '';
 
-                    let toolContent = '';
-                    if (!query) {
-                        toolContent = 'Ошибка инструмента: пустой поисковый запрос.';
-                    } else {
+                try {
+                    if (toolCall.function.name === 'search_web') {
+                        await ctx.reply('Ищу информацию в сети...');
+
+                        let query = '';
                         try {
-                            toolContent = await runWebSearch(query);
+                            const parsed = JSON.parse(toolCall.function.arguments || '{}');
+                            query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
                         } catch (err) {
-                            console.error('Ошибка поиска в Tavily:', err);
-                            toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
-                        }
-                    }
-
-                    toolMessages.push({
-                        role: 'tool',
-                        tool_call_id: toolCall.id,
-                        content: toolContent
-                    });
-                    continue;
-                }
-
-                if (toolCall.function.name === 'control_smart_home') {
-                    handledToolCall = true;
-                    await ctx.reply('🏠 Выполняю команду умного дома...');
-
-                    let args: SmartHomeArgs = {};
-                    try {
-                        args = JSON.parse(toolCall.function.arguments || '{}') as SmartHomeArgs;
-                    } catch (err) {
-                        console.warn('Ошибка парсинга аргументов control_smart_home:', err);
-                    }
-
-                    const toolContent = await runSmartHomeControl(userId, args);
-                    toolMessages.push({
-                        role: 'tool',
-                        tool_call_id: toolCall.id,
-                        content: toolContent
-                    });
-                    continue;
-                }
-
-                if (toolCall.function.name === 'schedule_task') {
-                    handledToolCall = true;
-                    if (!isTimezoneConfigured(userRecord)) {
-                        toolMessages.push({
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
-                            content: 'Ошибка планирования: часовой пояс пользователя не настроен. Попроси пользователя назвать город/страну или указать UTC-смещение, затем вызови set_user_timezone.'
-                        });
-                        continue;
-                    }
-
-                    try {
-                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as {
-                            execute_at?: number;
-                            task_type?: TaskType;
-                            payload?: string;
-                        };
-
-                        const executeAt = Number(parsed.execute_at);
-                        const taskType = parsed.task_type;
-                        let payload = typeof parsed.payload === 'string' ? parsed.payload : '';
-
-                        if (!Number.isFinite(executeAt) || executeAt <= 0) {
-                            throw new Error('Некорректный execute_at');
-                        }
-                        if (taskType !== 'message' && taskType !== 'smart_home' && taskType !== 'web_search') {
-                            throw new Error('Некорректный task_type');
-                        }
-                        if (!payload.trim()) {
-                            throw new Error('Пустой payload');
+                            console.warn('Ошибка парсинга аргументов search_web:', err);
                         }
 
-                        if (taskType === 'smart_home') {
-                            const smartHomePayload = JSON.parse(payload) as SmartHomeArgs;
-                            payload = JSON.stringify(smartHomePayload);
+                        if (!query) {
+                            toolContent = 'Ошибка инструмента: пустой поисковый запрос.';
+                        } else {
+                            try {
+                                toolContent = await runWebSearch(query);
+                            } catch (err) {
+                                console.error('Ошибка поиска в Tavily:', err);
+                                toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
+                            }
+                        }
+                    } else if (toolCall.function.name === 'control_smart_home') {
+                        await ctx.reply('🏠 Выполняю команду умного дома...');
+
+                        let args: SmartHomeArgs = {};
+                        try {
+                            args = JSON.parse(toolCall.function.arguments || '{}') as SmartHomeArgs;
+                        } catch (err) {
+                            console.warn('Ошибка парсинга аргументов control_smart_home:', err);
                         }
 
-                        addTask(userId, Math.floor(executeAt), taskType, payload);
-                        toolMessages.push({
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
-                            content: `Успешно запланировано на timestamp ${Math.floor(executeAt)}.`
-                        });
-                    } catch (err) {
-                        toolMessages.push({
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
-                            content: `Ошибка планирования: ${err instanceof Error ? err.message : String(err)}`
-                        });
-                    }
-                    continue;
-                }
+                        toolContent = await runSmartHomeControl(userId, args);
+                    } else if (toolCall.function.name === 'schedule_task') {
+                        if (!isTimezoneConfigured(userRecord)) {
+                            toolContent = 'Ошибка планирования: часовой пояс пользователя не настроен. Попроси пользователя назвать город/страну или указать UTC-смещение, затем вызови set_user_timezone.';
+                        } else {
+                            const parsed = JSON.parse(toolCall.function.arguments || '{}') as ScheduleTaskArgs;
 
-                if (toolCall.function.name === 'set_user_timezone') {
-                    handledToolCall = true;
-                    try {
+                            const taskType = parsed.task_type;
+                            let payload = typeof parsed.payload === 'string' ? parsed.payload : '';
+                            const recurrenceType = parsed.recurrence_type ?? 'once';
+                            const rawWeekday = Number(parsed.recurrence_weekday);
+                            const recurrenceWeekday = Number.isFinite(rawWeekday) ? Math.floor(rawWeekday) : null;
+
+                            if (taskType !== 'message' && taskType !== 'smart_home' && taskType !== 'web_search') {
+                                throw new Error('Некорректный task_type');
+                            }
+                            if (recurrenceType !== 'once' && recurrenceType !== 'daily' && recurrenceType !== 'weekly') {
+                                throw new Error('Некорректный recurrence_type');
+                            }
+                            if (recurrenceWeekday !== null && (recurrenceWeekday < 1 || recurrenceWeekday > 7)) {
+                                throw new Error('Для weekly укажи recurrence_weekday от 1 до 7 (1=понедельник).');
+                            }
+                            if (!payload.trim()) {
+                                throw new Error('Пустой payload');
+                            }
+                            const pendingCount = getPendingTaskCount(userId);
+                            if (pendingCount >= MAX_PENDING_TASKS_PER_USER) {
+                                throw new Error(`Лимит активных задач: ${MAX_PENDING_TASKS_PER_USER}. Удали лишние через delete_my_task или /task_delete <id>.`);
+                            }
+
+                            if (taskType === 'smart_home') {
+                                const smartHomePayload = JSON.parse(payload) as SmartHomeArgs;
+                                payload = JSON.stringify(smartHomePayload);
+                            }
+
+                            const executeAt = computeExecuteAtFromScheduleArgs(parsed, timezoneOffset, recurrenceType, recurrenceWeekday);
+
+                            addTask(
+                                userId,
+                                executeAt,
+                                taskType,
+                                payload,
+                                recurrenceType,
+                                recurrenceType === 'weekly' ? recurrenceWeekday : null,
+                                timezoneOffset
+                            );
+                            const planned = formatUnixForTimezone(executeAt, timezoneOffset);
+                            toolContent = `Успешно запланировано. Следующий запуск: ${planned.local} (${planned.tzLabel}). UTC-время: ${planned.utc}. Тип расписания: ${recurrenceType}.`;
+                        }
+                    } else if (toolCall.function.name === 'delete_my_task') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as DeleteTaskArgs;
+                        const taskId = Number(parsed.task_id);
+                        if (!Number.isFinite(taskId) || taskId <= 0) {
+                            throw new Error('Некорректный task_id');
+                        }
+
+                        const task = getTaskByUserAndId(userId, Math.floor(taskId));
+                        if (!task) {
+                            throw new Error(`Задача #${Math.floor(taskId)} не найдена.`);
+                        }
+                        if (task.status !== 'pending') {
+                            throw new Error(`Задача #${Math.floor(taskId)} уже не активна (status: ${task.status}).`);
+                        }
+
+                        const deleted = deletePendingTaskByUserAndId(userId, Math.floor(taskId));
+                        if (!deleted.changes) {
+                            throw new Error(`Не удалось удалить задачу #${Math.floor(taskId)}.`);
+                        }
+
+                        const updatedTasks = getUserTasks(userId, 'pending', 20);
+                        const listText = formatTasksList(updatedTasks, 'Активных задач больше нет.');
+                        toolContent = `Задача #${Math.floor(taskId)} удалена.\n\nОбновлённый список активных задач (${updatedTasks.length}/${MAX_PENDING_TASKS_PER_USER}):\n${listText}`;
+                    } else if (toolCall.function.name === 'set_user_timezone') {
                         const args = JSON.parse(toolCall.function.arguments || '{}') as SetTimezoneArgs;
-                        const result = await runSetUserTimezone(userId, args);
-                        toolMessages.push({
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
-                            content: result
-                        });
-                    } catch (err) {
-                        toolMessages.push({
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
-                            content: `Ошибка установки часового пояса: ${err instanceof Error ? err.message : String(err)}`
-                        });
-                    }
-                    continue;
-                }
-
-                if (toolCall.function.name === 'get_my_tasks') {
-                    handledToolCall = true;
-                    try {
+                        toolContent = await runSetUserTimezone(userId, args);
+                    } else if (toolCall.function.name === 'get_my_tasks') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as {
                             status?: TaskStatus | 'all';
                             limit?: number;
@@ -2806,72 +3064,42 @@ bot.on('text', async (ctx) => {
                             : 'pending';
                         const limit = typeof parsed.limit === 'number' ? parsed.limit : 20;
                         const tasks = getUserTasks(userId, status as TaskStatus | 'all', limit);
+                        toolContent = formatTasksList(tasks);
+                    } else if (toolCall.function.name === 'random_roll') {
+                        let args: RandomRollArgs = {};
+                        try {
+                            args = JSON.parse(toolCall.function.arguments || '{}') as RandomRollArgs;
+                        } catch (err) {
+                            console.warn('Ошибка парсинга аргументов random_roll:', err);
+                        }
 
-                        const content = tasks.length
-                            ? tasks.map(formatTaskForDisplay).join('\n\n')
-                            : 'Задач не найдено.';
-                        toolMessages.push({
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
-                            content
-                        });
-                    } catch (err) {
-                        toolMessages.push({
-                            role: 'tool',
-                            tool_call_id: toolCall.id,
-                            content: `Ошибка получения задач: ${err instanceof Error ? err.message : String(err)}`
-                        });
+                        const target = args.roll_type === 'coin'
+                            ? 'монетку'
+                            : args.dice_notation
+                                ? `кубики ${args.dice_notation}`
+                                : 'кубики';
+                        await ctx.reply(`Подкидываем ${target}...`);
+
+                        toolContent = runRandomRoll(args);
+                    } else {
+                        toolContent = `Ошибка: неизвестный инструмент ${toolCall.function.name}`;
                     }
-                    continue;
+                } catch (err) {
+                    toolContent = `Ошибка инструмента ${toolCall.function.name}: ${err instanceof Error ? err.message : String(err)}`;
                 }
 
-                if (toolCall.function.name === 'random_roll') {
-                    handledToolCall = true;
-                    let args: RandomRollArgs = {};
-                    try {
-                        args = JSON.parse(toolCall.function.arguments || '{}') as RandomRollArgs;
-                    } catch (err) {
-                        console.warn('Ошибка парсинга аргументов random_roll:', err);
-                    }
-
-                    const target = args.roll_type === 'coin'
-                        ? 'монетку'
-                        : args.dice_notation
-                            ? `кубики ${args.dice_notation}`
-                            : 'кубики';
-                    await ctx.reply(`Подкидываем ${target}...`);
-
-                    const toolContent = runRandomRoll(args);
-                    toolMessages.push({
-                        role: 'tool',
-                        tool_call_id: toolCall.id,
-                        content: toolContent
-                    });
-                }
-            }
-
-            if (handledToolCall) {
-                const finalResponse = await ai.chat.completions.create({
-                    model: MODEL_NAME,
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        ...currentTurnMessages,
-                        message as any,
-                        ...toolMessages
-                    ]
+                currentMessages.push({
+                    role: 'tool',
+                    tool_call_id: toolCall.id,
+                    content: toolContent
                 });
-
-                const finalAnswer = finalResponse.choices[0].message.content || FALLBACK_ANSWER;
-                incrementUserMessageStats(userId, userText.length);
-                addHistoryMessage(userId, 'user', userText);
-                addHistoryMessage(userId, 'assistant', finalAnswer);
-                trimUserHistory(userId);
-                await safeReply(ctx, finalAnswer);
-                return;
             }
         }
 
-        const answer = message.content || FALLBACK_ANSWER;
+        if (isGenerating && loopCount >= MAX_TOOL_LOOPS) {
+            console.warn(`Достигнут лимит tool-циклов (${MAX_TOOL_LOOPS}) для user_id=${userId}`);
+        }
+
         incrementUserMessageStats(userId, userText.length);
         addHistoryMessage(userId, 'user', userText);
         addHistoryMessage(userId, 'assistant', answer);
@@ -2904,7 +3132,15 @@ setInterval(async () => {
                 await safeSendToUser(task.user_id, `🔎 *Запланированный поиск выполнен:*\n\n${result}`);
             }
 
-            updateTaskStatus(task.id, 'done');
+            if (task.recurrence_type === 'once') {
+                updateTaskStatus(task.id, 'done');
+            } else {
+                const nextExecuteAt = computeNextRecurringExecuteAt(task);
+                if (!nextExecuteAt) {
+                    throw new Error(`Не удалось вычислить следующий запуск для recurring-задачи #${task.id}`);
+                }
+                updateTaskNextExecution(task.id, nextExecuteAt);
+            }
         } catch (err) {
             console.error(`Ошибка при выполнении задачи ${task.id}:`, err);
             updateTaskStatus(task.id, 'error');
