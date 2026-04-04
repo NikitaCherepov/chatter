@@ -1,4 +1,4 @@
-﻿import { Telegraf } from 'telegraf';
+import { Markup, Telegraf } from 'telegraf';
 import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
@@ -113,6 +113,43 @@ const tools = [
 
 type ChatRole = 'user' | 'assistant';
 type ChatMessage = { role: ChatRole; content: string };
+type MenuItemId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'help';
+type MenuItem = {
+    id: MenuItemId;
+    label: string;
+    adminOnly: boolean;
+    row: number;
+};
+
+const MENU_ITEMS: MenuItem[] = [
+    { id: 'clear', label: '🧹 Очистить память', adminOnly: false, row: 1 },
+    { id: 'users', label: '👥 Список пользователей', adminOnly: true, row: 1 },
+    { id: 'rename', label: '✏️ Переименовать себя', adminOnly: false, row: 2 },
+    { id: 'add', label: '➕ Добавить пользователя', adminOnly: true, row: 2 },
+    { id: 'remove', label: '➖ Удалить пользователя', adminOnly: true, row: 3 },
+    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 3 }
+];
+
+const MENU_BUTTONS = Object.fromEntries(MENU_ITEMS.map(item => [item.id, item.label])) as Record<MenuItemId, string>;
+const MENU_ITEM_BY_ID = Object.fromEntries(MENU_ITEMS.map(item => [item.id, item])) as Record<MenuItemId, MenuItem>;
+
+const buildMenuKeyboard = (isAdmin: boolean) => {
+    const visibleItems = MENU_ITEMS.filter(item => isAdmin || !item.adminOnly);
+    const rows = [...new Set(visibleItems.map(item => item.row))]
+        .sort((a, b) => a - b)
+        .map(row => visibleItems.filter(item => item.row === row).map(item => item.label));
+
+    return Markup.keyboard(rows).resize().persistent();
+};
+
+const canUseMenuItem = (ctx: any, id: MenuItemId) => {
+    const item = MENU_ITEM_BY_ID[id];
+    if (item.adminOnly && ctx.state.role !== 'admin') {
+        ctx.reply('Эта кнопка только для админов.');
+        return false;
+    }
+    return true;
+};
 
 const safeReply = async (ctx: any, text: string) => {
     const tgFormattedText = text
@@ -225,12 +262,32 @@ bot.use(async (ctx, next) => {
 });
 
 bot.telegram.setMyCommands([
+    { command: 'start', description: 'Показать меню' },
+    { command: 'menu', description: 'Открыть меню кнопок' },
     { command: 'clear', description: 'Очистить память диалога' },
     { command: 'add', description: 'Добавить юзера (только админ)' },
     { command: 'remove', description: 'Удалить юзера (только админ)' },
     { command: 'rename', description: 'Переименовать себя или юзера' },
     { command: 'users', description: 'Список юзеров (только админ)' }
 ]);
+
+const showMenu = (ctx: any) => {
+    const isAdmin = ctx.state.role === 'admin';
+    const text = isAdmin
+        ? 'Меню админа: кнопки для быстрых действий.'
+        : 'Меню: быстрые кнопки для основных действий.';
+    return ctx.reply(text, buildMenuKeyboard(isAdmin));
+};
+
+const handleClear = (ctx: any) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    clearUserHistory(userId);
+    return ctx.reply('Память очищена.');
+};
+
+bot.command('start', (ctx) => showMenu(ctx));
+bot.command('menu', (ctx) => showMenu(ctx));
 
 // Команда добавления пользователя (только для админов)
 bot.command('add', (ctx) => {
@@ -317,11 +374,29 @@ bot.command('users', (ctx) => {
 });
 
 bot.command('clear', (ctx) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
+    return handleClear(ctx);
+});
 
-    clearUserHistory(userId);
-    ctx.reply('Память очищена.');
+bot.hears(MENU_BUTTONS.clear, (ctx) => handleClear(ctx));
+bot.hears(MENU_BUTTONS.users, (ctx) => {
+    if (!canUseMenuItem(ctx, 'users')) return;
+
+    const users = getAllUsers();
+    const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) — ${u.role}`).join('\n');
+    return ctx.reply(`Список пользователей:\n${list}`);
+});
+bot.hears(MENU_BUTTONS.rename, (ctx) => ctx.reply('Для смены имени напиши: /rename НовоеИмя'));
+bot.hears(MENU_BUTTONS.add, (ctx) => {
+    if (!canUseMenuItem(ctx, 'add')) return;
+    return ctx.reply('Формат: /add 123456789 Имя');
+});
+bot.hears(MENU_BUTTONS.remove, (ctx) => {
+    if (!canUseMenuItem(ctx, 'remove')) return;
+    return ctx.reply('Формат: /remove 123456789');
+});
+bot.hears(MENU_BUTTONS.help, (ctx) => {
+    if (ctx.state.role === 'admin') return ctx.reply('Команды: /menu, /clear, /rename, /add, /remove, /users');
+    return ctx.reply('Команды: /menu, /clear, /rename');
 });
 
 bot.on('text', async (ctx) => {
