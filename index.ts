@@ -152,7 +152,10 @@ const SCHEDULE_TOOL_INSTRUCTIONS = `
 const TIMEZONE_TOOL_INSTRUCTIONS = `
 
 Если пользователь сообщает город/страну, просит установить часовой пояс или пишет "я из ...", вызови инструмент set_user_timezone.`;
-const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
+const RANDOM_TOOL_INSTRUCTIONS = `
+
+Если пользователь просит подкинуть монетку, бросить кубик или сделать случайный бросок, вызови инструмент random_roll.`;
+const buildSystemPrompt = (promptContent: string, userName: string) => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
     const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
@@ -416,6 +419,33 @@ const tools = [
                 }
             }
         }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'random_roll',
+            description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Для кубиков поддерживает обычный режим, преимущество и помеху.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    roll_type: {
+                        type: 'string',
+                        enum: ['coin', 'dice'],
+                        description: 'coin - монетка, dice - кубики.'
+                    },
+                    dice_notation: {
+                        type: 'string',
+                        description: 'Нотация кубиков, например: 1d20, 2d6+3, 2д20 + 5.'
+                    },
+                    mode: {
+                        type: 'string',
+                        enum: ['normal', 'advantage', 'disadvantage'],
+                        description: 'Режим для dice: обычный, с преимуществом, с помехой.'
+                    }
+                },
+                required: ['roll_type']
+            }
+        }
     }
 ] as const;
 
@@ -653,6 +683,12 @@ type SetTimezoneArgs = {
     city?: string;
     country?: string;
 };
+type RandomRollMode = 'normal' | 'advantage' | 'disadvantage';
+type RandomRollArgs = {
+    roll_type?: 'coin' | 'dice';
+    dice_notation?: string;
+    mode?: RandomRollMode;
+};
 
 const clampTimezoneOffset = (offset: number) => {
     if (!Number.isFinite(offset)) return null;
@@ -730,6 +766,76 @@ const runSetUserTimezone = async (userId: number, args: SetTimezoneArgs) => {
     updateUserTimezone(userId, resolvedOffset);
     const sign = resolvedOffset >= 0 ? '+' : '';
     return `Часовой пояс пользователя установлен: UTC${sign}${resolvedOffset}.`;
+};
+
+const ALLOWED_DICE_SIDES = new Set([4, 6, 8, 10, 12, 20, 100]);
+const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+const parseDiceNotation = (notation: string) => {
+    const normalized = notation.replace(/\s+/g, '').toLowerCase().replace('д', 'd');
+    const match = normalized.match(/^(\d{1,3})d(4|6|8|10|12|20|100)([+-]\d{1,4})?$/);
+    if (!match) return null;
+
+    const count = Number.parseInt(match[1], 10);
+    const sides = Number.parseInt(match[2], 10);
+    const modifier = match[3] ? Number.parseInt(match[3], 10) : 0;
+
+    if (!Number.isFinite(count) || count <= 0 || count > 100) return null;
+    if (!ALLOWED_DICE_SIDES.has(sides)) return null;
+    if (!Number.isFinite(modifier) || Math.abs(modifier) > 10000) return null;
+
+    return { count, sides, modifier, normalized };
+};
+
+const rollDiceExpression = (count: number, sides: number, modifier: number) => {
+    const rolls = Array.from({ length: count }, () => randomInt(1, sides));
+    const rollsSum = rolls.reduce((acc, value) => acc + value, 0);
+    const total = rollsSum + modifier;
+    return { rolls, rollsSum, modifier, total };
+};
+
+const formatRollLine = (roll: { rolls: number[]; rollsSum: number; modifier: number; total: number }) => {
+    const modifierText = roll.modifier === 0 ? '' : roll.modifier > 0 ? ` + ${roll.modifier}` : ` - ${Math.abs(roll.modifier)}`;
+    return `броски [${roll.rolls.join(', ')}] => ${roll.rollsSum}${modifierText} = ${roll.total}`;
+};
+
+const runRandomRoll = (args: RandomRollArgs) => {
+    const rollType = args.roll_type;
+    if (rollType !== 'coin' && rollType !== 'dice') {
+        return 'Ошибка инструмента: roll_type должен быть coin или dice.';
+    }
+
+    if (rollType === 'coin') {
+        const side = Math.random() < 0.5 ? 'Орёл' : 'Решка';
+        return `Монетка: ${side}.`;
+    }
+
+    const parsed = parseDiceNotation(args.dice_notation || '');
+    if (!parsed) {
+        return 'Ошибка инструмента: некорректная нотация кубиков. Пример: 2d20+5.';
+    }
+
+    const mode: RandomRollMode = args.mode && ['normal', 'advantage', 'disadvantage'].includes(args.mode)
+        ? args.mode
+        : 'normal';
+
+    if (mode === 'normal') {
+        const roll = rollDiceExpression(parsed.count, parsed.sides, parsed.modifier);
+        return `Кубики ${parsed.normalized}: ${formatRollLine(roll)}.`;
+    }
+
+    const first = rollDiceExpression(parsed.count, parsed.sides, parsed.modifier);
+    const second = rollDiceExpression(parsed.count, parsed.sides, parsed.modifier);
+    const pickMax = mode === 'advantage';
+    const chosen = pickMax
+        ? (first.total >= second.total ? first : second)
+        : (first.total <= second.total ? first : second);
+    const modeText = pickMax ? 'преимущество' : 'помеха';
+
+    return `Кубики ${parsed.normalized} (${modeText}):
+1) ${formatRollLine(first)}
+2) ${formatRollLine(second)}
+Итог: ${chosen.total}.`;
 };
 
 const safeSendToUser = async (chatId: number, text: string) => {
@@ -2668,6 +2774,31 @@ bot.on('text', async (ctx) => {
                             content: `Ошибка получения задач: ${err instanceof Error ? err.message : String(err)}`
                         });
                     }
+                    continue;
+                }
+
+                if (toolCall.function.name === 'random_roll') {
+                    handledToolCall = true;
+                    let args: RandomRollArgs = {};
+                    try {
+                        args = JSON.parse(toolCall.function.arguments || '{}') as RandomRollArgs;
+                    } catch (err) {
+                        console.warn('Ошибка парсинга аргументов random_roll:', err);
+                    }
+
+                    const target = args.roll_type === 'coin'
+                        ? 'монетку'
+                        : args.dice_notation
+                            ? `кубики ${args.dice_notation}`
+                            : 'кубики';
+                    await ctx.reply(`Подкидываем ${target}...`);
+
+                    const toolContent = runRandomRoll(args);
+                    toolMessages.push({
+                        role: 'tool',
+                        tool_call_id: toolCall.id,
+                        content: toolContent
+                    });
                 }
             }
 
