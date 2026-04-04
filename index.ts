@@ -243,7 +243,8 @@ const RANDOM_TOOL_INSTRUCTIONS = `
 const EMAIL_TOOL_INSTRUCTIONS = `
 
 Если пользователь просит проверить почту, найти письмо или посмотреть последние входящие — вызови инструмент check_emails.
-Если нужно открыть конкретное письмо и прочитать содержание — вызови read_email_content.`;
+Если нужно открыть конкретное письмо и прочитать содержание — вызови read_email_content.
+Если пользователь просит отправить письмо — вызови send_email.`;
 const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
@@ -622,6 +623,31 @@ const tools = [
     {
         type: 'function',
         function: {
+            name: 'send_email',
+            description: 'Отправляет письмо от имени пользователя. Используй, когда пользователь прямо просит отправить email.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    to: {
+                        type: 'string',
+                        description: 'Email получателя.'
+                    },
+                    subject: {
+                        type: 'string',
+                        description: 'Тема письма.'
+                    },
+                    body: {
+                        type: 'string',
+                        description: 'Текст письма.'
+                    }
+                },
+                required: ['to', 'subject', 'body']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'update_core_memory',
             description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важной биографии/статуса/долгосрочных предпочтений. Не используй для рутины.',
             parameters: {
@@ -958,6 +984,11 @@ type CheckEmailsArgs = {
 };
 type ReadEmailContentArgs = {
     subject_part?: string;
+};
+type SendEmailArgs = {
+    to?: string;
+    subject?: string;
+    body?: string;
 };
 
 const clampTimezoneOffset = (offset: number) => {
@@ -1950,6 +1981,74 @@ const runEmailRead = async (userId: number, subjectPart: string) => {
     } catch (err) {
         try { await client.logout(); } catch {}
         return `Ошибка при чтении письма: ${err instanceof Error ? err.message : String(err)}`;
+    }
+};
+
+const resolveSmtpHostFromImapHost = (imapHost: string) => {
+    const normalized = imapHost.trim().toLowerCase();
+    if (!normalized) return '';
+    if (normalized.includes('imap.gmail.com')) return 'smtp.gmail.com';
+    if (normalized.includes('imap.yandex')) return 'smtp.yandex.ru';
+    if (normalized.includes('imap.mail.ru')) return 'smtp.mail.ru';
+    return normalized.replace(/^imap\./, 'smtp.');
+};
+
+const runEmailSend = async (userId: number, to: string, subject: string, body: string) => {
+    const user = getUser(userId);
+    if (!user?.imap_user || !user?.imap_pass || !user?.imap_host) {
+        return 'Ошибка: почта не настроена. Сначала используй /mail_setup.';
+    }
+
+    const recipient = to.trim();
+    const mailSubject = subject.trim();
+    const mailBody = body.trim();
+    if (!recipient || !mailSubject || !mailBody) {
+        return 'Ошибка: нужны to, subject и body.';
+    }
+
+    const smtpHost = resolveSmtpHostFromImapHost(user.imap_host);
+    if (!smtpHost) {
+        return 'Ошибка: не удалось определить SMTP-хост.';
+    }
+
+    let decryptedPass = '';
+    try {
+        decryptedPass = decryptSecret(user.imap_pass);
+    } catch (err) {
+        return 'Ошибка: не удалось расшифровать пароль почты. Перепривяжи через /mail_setup.';
+    }
+
+    let nodemailerMod: any;
+    try {
+        const dynamicImporter = new Function('moduleName', 'return import(moduleName)') as (moduleName: string) => Promise<any>;
+        nodemailerMod = await dynamicImporter('nodemailer');
+        if (!nodemailerMod?.default?.createTransport) {
+            return 'Ошибка: библиотека nodemailer не найдена. Установи её на сервере: npm install nodemailer';
+        }
+    } catch (err) {
+        return 'Ошибка: библиотека nodemailer не найдена. Установи её на сервере: npm install nodemailer';
+    }
+
+    const transporter = nodemailerMod.default.createTransport({
+        host: smtpHost,
+        port: 465,
+        secure: true,
+        auth: {
+            user: user.imap_user,
+            pass: decryptedPass
+        }
+    });
+
+    try {
+        await transporter.sendMail({
+            from: user.imap_user,
+            to: recipient,
+            subject: mailSubject,
+            text: mailBody
+        });
+        return `✅ Письмо успешно отправлено на ${recipient}`;
+    } catch (err) {
+        return `❌ Ошибка при отправке письма: ${err instanceof Error ? err.message : String(err)}`;
     }
 };
 const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
@@ -3942,6 +4041,12 @@ bot.on('text', async (ctx) => {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as ReadEmailContentArgs;
                         const subjectPart = typeof parsed.subject_part === 'string' ? parsed.subject_part : '';
                         toolContent = await runEmailRead(userId, subjectPart);
+                    } else if (toolCall.function.name === 'send_email') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as SendEmailArgs;
+                        const to = typeof parsed.to === 'string' ? parsed.to : '';
+                        const subject = typeof parsed.subject === 'string' ? parsed.subject : '';
+                        const body = typeof parsed.body === 'string' ? parsed.body : '';
+                        toolContent = await runEmailSend(userId, to, subject, body);
                     } else if (toolCall.function.name === 'update_core_memory') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as UpdateCoreMemoryArgs;
                         const newFact = typeof parsed.new_fact === 'string' ? parsed.new_fact.trim() : '';
