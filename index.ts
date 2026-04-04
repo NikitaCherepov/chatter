@@ -164,15 +164,16 @@ type PromptRecord = {
     content: string;
     is_default: number;
 };
-type MenuItemId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'help';
-type MenuItem = {
-    id: MenuItemId;
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'help';
+type MenuActionButton = {
+    id: MenuActionId;
     label: string;
     adminOnly: boolean;
     row: number;
 };
 
-const MENU_ITEMS: MenuItem[] = [
+const MAIN_MENU_TRIGGER_BUTTON = '📋 Меню';
+const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'clear', label: '🧹 Очистить память', adminOnly: false, row: 1 },
     { id: 'users', label: '👥 Список пользователей', adminOnly: true, row: 1 },
     { id: 'rename', label: '✏️ Переименовать себя', adminOnly: false, row: 2 },
@@ -184,25 +185,19 @@ const MENU_ITEMS: MenuItem[] = [
     { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 5 }
 ];
 
-const MENU_BUTTONS = Object.fromEntries(MENU_ITEMS.map(item => [item.id, item.label])) as Record<MenuItemId, string>;
-const MENU_ITEM_BY_ID = Object.fromEntries(MENU_ITEMS.map(item => [item.id, item])) as Record<MenuItemId, MenuItem>;
+const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
 
-const buildMenuKeyboard = (isAdmin: boolean) => {
-    const visibleItems = MENU_ITEMS.filter(item => isAdmin || !item.adminOnly);
+const buildMenuTriggerKeyboard = () => Markup.keyboard([[MAIN_MENU_TRIGGER_BUTTON]]).resize().persistent();
+
+const buildMainMenuInlineKeyboard = (isAdmin: boolean) => {
+    const visibleItems = MAIN_MENU_ACTIONS.filter(item => isAdmin || !item.adminOnly);
     const rows = [...new Set(visibleItems.map(item => item.row))]
         .sort((a, b) => a - b)
-        .map(row => visibleItems.filter(item => item.row === row).map(item => item.label));
+        .map(row => visibleItems
+            .filter(item => item.row === row)
+            .map(item => Markup.button.callback(item.label, `main:${item.id}`)));
 
-    return Markup.keyboard(rows).resize().persistent();
-};
-
-const canUseMenuItem = (ctx: any, id: MenuItemId) => {
-    const item = MENU_ITEM_BY_ID[id];
-    if (item.adminOnly && ctx.state.role !== 'admin') {
-        ctx.reply('Эта кнопка только для админов.');
-        return false;
-    }
-    return true;
+    return Markup.inlineKeyboard(rows);
 };
 
 const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
@@ -420,10 +415,25 @@ bot.telegram.setMyCommands(BASE_COMMANDS as any);
 
 const showMenu = (ctx: any) => {
     const isAdmin = ctx.state.role === 'admin';
-    const text = isAdmin
-        ? 'Меню админа: кнопки для быстрых действий.'
-        : 'Меню: быстрые кнопки для основных действий.';
-    return ctx.reply(text, buildMenuKeyboard(isAdmin));
+    const userId = ctx.from?.id;
+    const userRecord = userId ? getUser(userId) : undefined;
+    const activePrompt = userRecord ? resolvePromptForUser(userRecord) : ensureDefaultPrompt();
+    const userName = (ctx.state.userName as string | undefined) || userRecord?.name || 'Пользователь';
+    const roleLabel = isAdmin ? 'Админ' : 'Пользователь';
+    const promptLine = activePrompt
+        ? `🧠 Текущий промпт: #${activePrompt.id} ${activePrompt.name}`
+        : '🧠 Текущий промпт: не найден';
+
+    const text = `📁 Главное меню
+
+👤 Имя: ${userName}
+🆔 ID: ${userId ?? 'unknown'}
+🛡️ Роль: ${roleLabel}
+${promptLine}
+
+Выберите действие:`;
+
+    return ctx.reply(text, buildMainMenuInlineKeyboard(isAdmin));
 };
 
 const handleClear = (ctx: any) => {
@@ -511,8 +521,12 @@ const parsePipeParts = (text: string) => {
     return parts;
 };
 
-bot.command('start', (ctx) => showMenu(ctx));
+bot.command('start', async (ctx) => {
+    await ctx.reply('Кнопка меню закреплена внизу.', buildMenuTriggerKeyboard());
+    return showMenu(ctx);
+});
 bot.command('menu', (ctx) => showMenu(ctx));
+bot.hears(MAIN_MENU_TRIGGER_BUTTON, (ctx) => showMenu(ctx));
 
 bot.command('prompts', (ctx) => {
     const userId = ctx.from?.id;
@@ -762,57 +776,99 @@ bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
 
-bot.hears(MENU_BUTTONS.clear, (ctx) => handleClear(ctx));
-bot.hears(MENU_BUTTONS.users, (ctx) => {
-    if (!canUseMenuItem(ctx, 'users')) return;
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_admin|help)$/, async (ctx) => {
+    const actionId = (ctx as any).match[1] as MenuActionId;
+    const action = MENU_ACTION_BY_ID[actionId];
 
-    const users = getAllUsers();
-    const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) — ${u.role}`).join('\n');
-    return ctx.reply(`Список пользователей:\n${list}`);
-});
-bot.hears(MENU_BUTTONS.rename, (ctx) => {
-    if (ctx.state.role === 'admin') return ctx.reply('Для себя: /rename НовоеИмя\nДля пользователя: /rename 123456789 НовоеИмя');
-    return startSelfRenameFlow(ctx);
-});
-bot.hears(MENU_BUTTONS.prompts, (ctx) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
-
-    const user = getUser(userId);
-    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
-
-    if (ctx.state.role !== 'admin') {
-        return renderPromptListInteractive(ctx, user, 'reply');
+    if (!action) {
+        await ctx.answerCbQuery('Неизвестное действие');
+        return;
     }
 
-    return ctx.reply(`${formatPromptsList(user.selected_prompt_id)}\n\nЧтобы выбрать: /prompt_use <id>`);
-});
-bot.hears(MENU_BUTTONS.current_prompt, (ctx) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
+    if (action.adminOnly && ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Это только для админа');
+        return;
+    }
 
-    const user = getUser(userId);
-    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+    await ctx.answerCbQuery();
 
-    const activePrompt = resolvePromptForUser(user);
-    const isDefault = activePrompt.is_default === 1 ? ' (default)' : '';
-    return ctx.reply(`Текущий промпт: ${activePrompt.name}${isDefault}\nID: ${activePrompt.id}`);
-});
-bot.hears(MENU_BUTTONS.add, (ctx) => {
-    if (!canUseMenuItem(ctx, 'add')) return;
-    return ctx.reply('Формат: /add 123456789 Имя');
-});
-bot.hears(MENU_BUTTONS.remove, (ctx) => {
-    if (!canUseMenuItem(ctx, 'remove')) return;
-    return ctx.reply('Формат: /remove 123456789');
-});
-bot.hears(MENU_BUTTONS.prompt_admin, (ctx) => {
-    if (!canUseMenuItem(ctx, 'prompt_admin')) return;
-    return ctx.reply('Промпт-админ команды:\n/prompt_add Имя | Описание | Текст\n/prompt_show <id>\n/prompt_set <id> | Текст\n/prompt_desc <id> | Описание\n/prompt_rename <id> Имя\n/prompt_default <id>\n/prompt_delete <id>');
-});
-bot.hears(MENU_BUTTONS.help, (ctx) => {
-    if (ctx.state.role === 'admin') return ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
-    return ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use');
+    if (actionId === 'clear') {
+        await handleClear(ctx);
+        return;
+    }
+
+    if (actionId === 'users') {
+        const users = getAllUsers();
+        const list = users.map(u => `- ${u.name ?? 'Без_имени'} (ID: ${u.id}) — ${u.role}`).join('\n');
+        await ctx.reply(`Список пользователей:\n${list}`);
+        return;
+    }
+
+    if (actionId === 'rename') {
+        if (ctx.state.role === 'admin') {
+            await ctx.reply('Для себя: /rename НовоеИмя\nДля пользователя: /rename 123456789 НовоеИмя');
+            return;
+        }
+        await startSelfRenameFlow(ctx);
+        return;
+    }
+
+    if (actionId === 'prompts') {
+        const userId = ctx.from?.id;
+        if (!userId) return;
+
+        const user = getUser(userId);
+        if (!user) {
+            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            return;
+        }
+
+        if (ctx.state.role !== 'admin') {
+            await renderPromptListInteractive(ctx, user, 'reply');
+            return;
+        }
+
+        await ctx.reply(`${formatPromptsList(user.selected_prompt_id, true)}\n\nЧтобы выбрать: /prompt_use <id>`);
+        return;
+    }
+
+    if (actionId === 'current_prompt') {
+        const userId = ctx.from?.id;
+        if (!userId) return;
+
+        const user = getUser(userId);
+        if (!user) {
+            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            return;
+        }
+
+        const activePrompt = resolvePromptForUser(user);
+        const isDefault = activePrompt.is_default === 1 ? ' (default)' : '';
+        await ctx.reply(`Текущий промпт: ${activePrompt.name}${isDefault}\nID: ${activePrompt.id}`);
+        return;
+    }
+
+    if (actionId === 'add') {
+        await ctx.reply('Формат: /add 123456789 Имя');
+        return;
+    }
+
+    if (actionId === 'remove') {
+        await ctx.reply('Формат: /remove 123456789');
+        return;
+    }
+
+    if (actionId === 'prompt_admin') {
+        await ctx.reply('Промпт-админ команды:\n/prompt_add Имя | Описание | Текст\n/prompt_show <id>\n/prompt_set <id> | Текст\n/prompt_desc <id> | Описание\n/prompt_rename <id> Имя\n/prompt_default <id>\n/prompt_delete <id>');
+        return;
+    }
+
+    if (ctx.state.role === 'admin') {
+        await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use, /add, /remove, /users, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        return;
+    }
+
+    await ctx.reply('Команды: /menu, /clear, /rename, /prompts, /prompt_use');
 });
 
 bot.action('prompt:list', async (ctx) => {
@@ -921,7 +977,7 @@ bot.on('text', async (ctx) => {
 
             if (answer === 'нет') {
                 renameFlows.delete(userId);
-                return ctx.reply('Ок, отменил.', buildMenuKeyboard(false));
+                return ctx.reply('Ок, отменил.', buildMenuTriggerKeyboard());
             }
 
             return ctx.reply('Ответь "Да" или "Нет".', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
@@ -945,7 +1001,7 @@ bot.on('text', async (ctx) => {
             updateUserName(userId, userText);
             ctx.state.userName = userText;
             renameFlows.delete(userId);
-            return ctx.reply('Имя принято.', buildMenuKeyboard(false));
+            return ctx.reply('Имя принято.', buildMenuTriggerKeyboard());
         }
     }
 
