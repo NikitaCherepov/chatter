@@ -114,6 +114,20 @@ db.exec(`
         notify_condition TEXT,
         status TEXT NOT NULL DEFAULT 'pending'
     );
+
+    CREATE TABLE IF NOT EXISTS mail_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        provider TEXT NOT NULL CHECK(provider IN ('yandex', 'google')),
+        imap_user TEXT NOT NULL,
+        imap_pass TEXT NOT NULL,
+        imap_host TEXT NOT NULL,
+        imap_port INTEGER NOT NULL DEFAULT 993,
+        imap_secure INTEGER NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, provider)
+    );
 `);
 
 const hasUserColumn = (columnName: string) => {
@@ -205,6 +219,30 @@ if (hasUserColumn('imap_port')) {
 if (hasUserColumn('imap_secure')) {
     db.exec(`UPDATE users SET imap_secure = 1 WHERE imap_secure IS NULL`);
 }
+
+db.exec(`
+    INSERT INTO mail_accounts (user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure)
+    SELECT
+        id,
+        CASE
+            WHEN LOWER(COALESCE(imap_provider, '')) = 'google' OR LOWER(COALESCE(imap_host, '')) LIKE '%gmail%' THEN 'google'
+            ELSE 'yandex'
+        END AS provider,
+        imap_user,
+        imap_pass,
+        COALESCE(imap_host, 'imap.yandex.ru'),
+        COALESCE(imap_port, 993),
+        COALESCE(imap_secure, 1)
+    FROM users
+    WHERE imap_user IS NOT NULL AND imap_user <> '' AND imap_pass IS NOT NULL AND imap_pass <> ''
+    ON CONFLICT(user_id, provider) DO UPDATE SET
+        imap_user = excluded.imap_user,
+        imap_pass = excluded.imap_pass,
+        imap_host = excluded.imap_host,
+        imap_port = excluded.imap_port,
+        imap_secure = excluded.imap_secure,
+        updated_at = CURRENT_TIMESTAMP
+`);
 if (hasTaskColumn('recurrence_type')) {
     db.exec(`UPDATE tasks SET recurrence_type = 'once' WHERE recurrence_type IS NULL OR recurrence_type = ''`);
 }
@@ -251,7 +289,8 @@ const EMAIL_TOOL_INSTRUCTIONS = `
 
 Если пользователь просит проверить почту, найти письмо или посмотреть последние входящие — вызови инструмент check_emails.
 Если нужно открыть конкретное письмо и прочитать содержание — вызови read_email_content.
-Если пользователь просит отправить письмо — вызови send_email.`;
+Если пользователь просит отправить письмо — вызови send_email.
+Если пользователь явно пишет "в яндексе" или "в gmail/google", обязательно передай provider в соответствующий инструмент.`;
 const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
@@ -282,7 +321,8 @@ const BASE_COMMANDS = [
     { command: 'tasks', description: 'Мои напоминания' },
     { command: 'task_delete', description: 'Удалить задачу: /task_delete <id>' },
     { command: 'mail_setup', description: 'Почта: /mail_setup <prov> <mail> <app_pass>' },
-    { command: 'mail_forget', description: 'Почта: удалить привязку' },
+    { command: 'mail_use', description: 'Почта: /mail_use <yandex|google>' },
+    { command: 'mail_forget', description: 'Почта: /mail_forget [yandex|google]' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
@@ -334,12 +374,24 @@ const decryptSecret = (text: string) => {
     const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
     return decrypted.toString('utf8');
 };
+const normalizeMailProvider = (providerRaw: string | null | undefined): MailProvider | null => {
+    const provider = (providerRaw || '').trim().toLowerCase();
+    if (['yandex', 'ya', 'яндекс'].includes(provider)) return 'yandex';
+    if (['google', 'gmail', 'гугл', 'googlemail'].includes(provider)) return 'google';
+    return null;
+};
+const detectMailProviderByEmail = (emailRaw: string) => {
+    const email = emailRaw.trim().toLowerCase();
+    if (/@gmail\.com$/.test(email)) return 'google' as MailProvider;
+    if (/@(yandex\.|ya\.)/.test(email)) return 'yandex' as MailProvider;
+    return null;
+};
 const resolveImapProviderConfig = (providerRaw: string) => {
-    const provider = providerRaw.trim().toLowerCase();
-    if (['yandex', 'ya', 'яндекс'].includes(provider)) {
+    const provider = normalizeMailProvider(providerRaw);
+    if (provider === 'yandex') {
         return { provider: 'yandex', host: 'imap.yandex.ru', port: 993, secure: 1 };
     }
-    if (['google', 'gmail', 'гугл', 'googlemail'].includes(provider)) {
+    if (provider === 'google') {
         return { provider: 'google', host: 'imap.gmail.com', port: 993, secure: 1 };
     }
     return null;
@@ -508,7 +560,7 @@ const tools = [
                     },
                     payload: {
                         type: 'string',
-                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"search_query":"...", "limit":5} или просто строка запроса.'
+                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":5} или просто строка запроса.'
                     },
                     recurrence_type: {
                         type: 'string',
@@ -607,6 +659,11 @@ const tools = [
             parameters: {
                 type: 'object',
                 properties: {
+                    provider: {
+                        type: 'string',
+                        enum: ['yandex', 'google'],
+                        description: 'Какой ящик использовать.'
+                    },
                     search_query: {
                         type: 'string',
                         description: 'Поисковая строка (имя, домен, тема, ключевое слово).'
@@ -627,6 +684,11 @@ const tools = [
             parameters: {
                 type: 'object',
                 properties: {
+                    provider: {
+                        type: 'string',
+                        enum: ['yandex', 'google'],
+                        description: 'Какой ящик использовать.'
+                    },
                     subject_part: {
                         type: 'string',
                         description: 'Часть темы письма для поиска.'
@@ -644,6 +706,11 @@ const tools = [
             parameters: {
                 type: 'object',
                 properties: {
+                    provider: {
+                        type: 'string',
+                        enum: ['yandex', 'google'],
+                        description: 'Какой ящик использовать.'
+                    },
                     to: {
                         type: 'string',
                         description: 'Email получателя.'
@@ -713,6 +780,7 @@ const tools = [
 
 type ChatRole = 'user' | 'assistant';
 type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
+type MailProvider = 'yandex' | 'google';
 type ChatMessage = { role: ChatRole; content: string };
 type UserRecord = {
     id: number;
@@ -766,6 +834,15 @@ type PromptRecord = {
 };
 type PendingUserRow = UserRecord & { created_at: string | null };
 type BannedUserRow = UserRecord & { reason: string; banned_at: string };
+type MailAccountRecord = {
+    user_id: number;
+    provider: MailProvider;
+    imap_user: string;
+    imap_pass: string;
+    imap_host: string;
+    imap_port: number;
+    imap_secure: number;
+};
 type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
@@ -1000,13 +1077,16 @@ type UpdateCoreMemoryArgs = {
     explicit_request?: boolean;
 };
 type CheckEmailsArgs = {
+    provider?: MailProvider;
     search_query?: string;
     limit?: number;
 };
 type ReadEmailContentArgs = {
+    provider?: MailProvider;
     subject_part?: string;
 };
 type SendEmailArgs = {
+    provider?: MailProvider;
     to?: string;
     subject?: string;
     body?: string;
@@ -1717,6 +1797,67 @@ const updateUserMailSettings = (id: number, provider: string, email: string, enc
     SET imap_provider = ?, imap_user = ?, imap_pass = ?, imap_host = ?, imap_port = ?, imap_secure = ?
     WHERE id = ?
 `).run(provider, email, encryptedPassword, host, port, secure, id);
+const upsertMailAccount = (userId: number, provider: MailProvider, email: string, encryptedPassword: string, host: string, port = 993, secure = 1) => db.prepare(`
+    INSERT INTO mail_accounts (user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id, provider) DO UPDATE SET
+        imap_user = excluded.imap_user,
+        imap_pass = excluded.imap_pass,
+        imap_host = excluded.imap_host,
+        imap_port = excluded.imap_port,
+        imap_secure = excluded.imap_secure,
+        updated_at = CURRENT_TIMESTAMP
+`).run(userId, provider, email, encryptedPassword, host, port, secure);
+const setActiveMailProvider = (userId: number, provider: MailProvider) => db.prepare(`
+    UPDATE users SET imap_provider = ? WHERE id = ?
+`).run(provider, userId);
+const getMailAccountsForUser = (userId: number) => db.prepare(`
+    SELECT user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure
+    FROM mail_accounts
+    WHERE user_id = ?
+    ORDER BY provider ASC
+`).all(userId) as MailAccountRecord[];
+const getMailAccountForUser = (userId: number, provider: MailProvider) => db.prepare(`
+    SELECT user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure
+    FROM mail_accounts
+    WHERE user_id = ? AND provider = ?
+`).get(userId, provider) as MailAccountRecord | undefined;
+const deleteMailAccount = (userId: number, provider: MailProvider) => db
+    .prepare(`DELETE FROM mail_accounts WHERE user_id = ? AND provider = ?`)
+    .run(userId, provider);
+const resolveUserMailAccount = (user: UserRecord, preferredProviderRaw?: string | null) => {
+    const preferredProvider = normalizeMailProvider(preferredProviderRaw);
+    const activeProvider = normalizeMailProvider(user.imap_provider);
+
+    if (preferredProvider) {
+        const preferred = getMailAccountForUser(user.id, preferredProvider);
+        if (preferred) return preferred;
+    }
+
+    if (activeProvider) {
+        const active = getMailAccountForUser(user.id, activeProvider);
+        if (active) return active;
+    }
+
+    const all = getMailAccountsForUser(user.id);
+    if (all.length) return all[0];
+
+    if (user.imap_user && user.imap_pass && user.imap_host) {
+        const provider = normalizeMailProvider(user.imap_provider)
+            || (user.imap_host.includes('gmail') ? 'google' : 'yandex');
+        return {
+            user_id: user.id,
+            provider,
+            imap_user: user.imap_user,
+            imap_pass: user.imap_pass,
+            imap_host: user.imap_host,
+            imap_port: user.imap_port ?? 993,
+            imap_secure: user.imap_secure ?? 1
+        } satisfies MailAccountRecord;
+    }
+
+    return null;
+};
 const clearUserMailSettings = (id: number) => db.prepare(`
     UPDATE users
     SET imap_provider = NULL, imap_user = NULL, imap_pass = NULL, imap_host = NULL, imap_port = 993, imap_secure = 1
@@ -1735,9 +1876,13 @@ const extractTotalTokens = (response: any) => {
     if (!Number.isFinite(total) || total < 0) return 0;
     return Math.floor(total);
 };
-const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5) => {
+const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5, provider?: string) => {
     const user = getUser(userId);
-    if (!user?.imap_user || !user?.imap_pass || !user?.imap_host) {
+    if (!user) {
+        return 'Ошибка: пользователь не найден.';
+    }
+    const account = resolveUserMailAccount(user, provider);
+    if (!account) {
         return 'Ошибка: почта не настроена. Используй /mail_setup или кнопку "📬 Почта".';
     }
 
@@ -1745,7 +1890,7 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5) =>
     const normalizedQuery = (searchQuery || '').trim();
     let decryptedPass = '';
     try {
-        decryptedPass = decryptSecret(user.imap_pass);
+        decryptedPass = decryptSecret(account.imap_pass);
     } catch (err) {
         return 'Ошибка: не удалось расшифровать пароль почты. Перепривяжи через /mail_setup.';
     }
@@ -1763,12 +1908,12 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5) =>
     }
 
     const client = new ImapFlowCtor({
-        host: user.imap_host,
-        port: Number(user.imap_port || 993),
-        secure: user.imap_secure !== 0,
+        host: account.imap_host,
+        port: Number(account.imap_port || 993),
+        secure: account.imap_secure !== 0,
         logger: false,
         auth: {
-            user: user.imap_user,
+            user: account.imap_user,
             pass: decryptedPass
         }
     });
@@ -1972,9 +2117,13 @@ const extractReadableEmailTextFromRaw = (rawSource: string) => {
     return plain.replace(/\s+/g, ' ').trim();
 };
 
-const runEmailRead = async (userId: number, subjectPart: string) => {
+const runEmailRead = async (userId: number, subjectPart: string, provider?: string) => {
     const user = getUser(userId);
-    if (!user?.imap_user || !user?.imap_pass || !user?.imap_host) {
+    if (!user) {
+        return 'Ошибка: пользователь не найден.';
+    }
+    const account = resolveUserMailAccount(user, provider);
+    if (!account) {
         return 'Ошибка: почта не настроена. Используй /mail_setup или кнопку "📬 Почта".';
     }
 
@@ -1983,7 +2132,7 @@ const runEmailRead = async (userId: number, subjectPart: string) => {
 
     let decryptedPass = '';
     try {
-        decryptedPass = decryptSecret(user.imap_pass);
+        decryptedPass = decryptSecret(account.imap_pass);
     } catch (err) {
         return 'Ошибка: не удалось расшифровать пароль почты. Перепривяжи через /mail_setup.';
     }
@@ -2001,12 +2150,12 @@ const runEmailRead = async (userId: number, subjectPart: string) => {
     }
 
     const client = new ImapFlowCtor({
-        host: user.imap_host,
-        port: Number(user.imap_port || 993),
-        secure: user.imap_secure !== 0,
+        host: account.imap_host,
+        port: Number(account.imap_port || 993),
+        secure: account.imap_secure !== 0,
         logger: false,
         auth: {
-            user: user.imap_user,
+            user: account.imap_user,
             pass: decryptedPass
         }
     });
@@ -2047,9 +2196,13 @@ const resolveSmtpHostFromImapHost = (imapHost: string) => {
     return normalized.replace(/^imap\./, 'smtp.');
 };
 
-const runEmailSend = async (userId: number, to: string, subject: string, body: string) => {
+const runEmailSend = async (userId: number, to: string, subject: string, body: string, provider?: string) => {
     const user = getUser(userId);
-    if (!user?.imap_user || !user?.imap_pass || !user?.imap_host) {
+    if (!user) {
+        return 'Ошибка: пользователь не найден.';
+    }
+    const account = resolveUserMailAccount(user, provider);
+    if (!account) {
         return 'Ошибка: почта не настроена. Сначала используй /mail_setup.';
     }
 
@@ -2060,14 +2213,14 @@ const runEmailSend = async (userId: number, to: string, subject: string, body: s
         return 'Ошибка: нужны to, subject и body.';
     }
 
-    const smtpHost = resolveSmtpHostFromImapHost(user.imap_host);
+    const smtpHost = resolveSmtpHostFromImapHost(account.imap_host);
     if (!smtpHost) {
         return 'Ошибка: не удалось определить SMTP-хост.';
     }
 
     let decryptedPass = '';
     try {
-        decryptedPass = decryptSecret(user.imap_pass);
+        decryptedPass = decryptSecret(account.imap_pass);
     } catch (err) {
         return 'Ошибка: не удалось расшифровать пароль почты. Перепривяжи через /mail_setup.';
     }
@@ -2088,14 +2241,14 @@ const runEmailSend = async (userId: number, to: string, subject: string, body: s
         port: 465,
         secure: true,
         auth: {
-            user: user.imap_user,
+            user: account.imap_user,
             pass: decryptedPass
         }
     });
 
     try {
         await transporter.sendMail({
-            from: user.imap_user,
+            from: account.imap_user,
             to: recipient,
             subject: mailSubject,
             text: mailBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
@@ -2110,12 +2263,14 @@ const runEmailSend = async (userId: number, to: string, subject: string, body: s
 const runScheduledEmailCheckTask = async (task: TaskRecord) => {
     let searchQuery = '';
     let limit = 5;
+    let provider = '';
 
     const raw = task.payload.trim();
     if (raw) {
         if (raw.startsWith('{')) {
             try {
-                const parsed = JSON.parse(raw) as { search_query?: string; limit?: number };
+                const parsed = JSON.parse(raw) as { provider?: string; search_query?: string; limit?: number };
+                provider = typeof parsed.provider === 'string' ? parsed.provider : '';
                 searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
                 limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
             } catch {
@@ -2126,10 +2281,10 @@ const runScheduledEmailCheckTask = async (task: TaskRecord) => {
         }
     }
 
-    const result = await runEmailCheck(task.user_id, searchQuery, limit);
+    const result = await runEmailCheck(task.user_id, searchQuery, limit, provider);
     const title = searchQuery
-        ? `📬 *Запланированная проверка почты* (запрос: ${searchQuery})`
-        : '📬 *Запланированная проверка почты*';
+        ? `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''} (запрос: ${searchQuery})`
+        : `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''}`;
     return `${title}\n\n${result}`;
 };
 const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
@@ -3197,22 +3352,46 @@ bot.command('mail_setup', async (ctx) => {
     }
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
-    if (parts.length < 4) {
-        return ctx.reply('Использование: /mail_setup <yandex|google> <email> <пароль_приложения>\nПример: /mail_setup yandex me@yandex.ru abcd1234');
+    if (parts.length < 3) {
+        return ctx.reply('Использование: /mail_setup <yandex|google> <email> <пароль_приложения>\nили: /mail_setup <email> <пароль_приложения> (провайдер определится по домену)');
     }
 
-    const providerConfig = resolveImapProviderConfig(parts[1]);
+    let providerInput = '';
+    let email = '';
+    let appPassword = '';
+
+    const explicitProvider = resolveImapProviderConfig(parts[1]);
+    if (explicitProvider) {
+        providerInput = parts[1];
+        email = parts[2]?.trim() || '';
+        appPassword = parts.slice(3).join(' ').trim();
+    } else {
+        email = parts[1]?.trim() || '';
+        appPassword = parts.slice(2).join(' ').trim();
+        const detected = detectMailProviderByEmail(email);
+        if (detected) providerInput = detected;
+    }
+
+    const providerConfig = resolveImapProviderConfig(providerInput);
     if (!providerConfig) {
-        return ctx.reply('Неизвестный провайдер. Доступно: yandex, google');
+        return ctx.reply('Не удалось определить провайдер. Укажи явно: yandex или google.');
     }
 
-    const email = parts[2].trim();
-    const appPassword = parts.slice(3).join(' ').trim();
     if (!email || !appPassword) {
         return ctx.reply('Email и пароль приложения обязательны.');
     }
 
     const encryptedPass = encryptSecret(appPassword);
+    upsertMailAccount(
+        userId,
+        providerConfig.provider as MailProvider,
+        email,
+        encryptedPass,
+        providerConfig.host,
+        providerConfig.port,
+        providerConfig.secure
+    );
+    setActiveMailProvider(userId, providerConfig.provider as MailProvider);
     updateUserMailSettings(
         userId,
         providerConfig.provider,
@@ -3223,14 +3402,53 @@ bot.command('mail_setup', async (ctx) => {
         providerConfig.secure
     );
 
-    return ctx.reply(`✅ Почта привязана: ${email}\nПровайдер: ${providerConfig.provider}\nТеперь можно просить меня проверить входящие.`);
+    const accounts = getMailAccountsForUser(userId);
+    const connected = accounts.map(a => `${a.provider}: ${a.imap_user}`).join('\n');
+    return ctx.reply(`✅ Почта привязана: ${email}\nПровайдер: ${providerConfig.provider} (активный)\n\nПодключенные ящики:\n${connected}\n\nПереключение: /mail_use <yandex|google>`);
+});
+
+bot.command('mail_use', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const provider = normalizeMailProvider(parts[1]);
+    if (!provider) {
+        return ctx.reply('Использование: /mail_use <yandex|google>');
+    }
+
+    const account = getMailAccountForUser(userId, provider);
+    if (!account) {
+        return ctx.reply(`У тебя не привязан ${provider}. Сначала: /mail_setup ${provider} <email> <пароль_приложения>`);
+    }
+
+    setActiveMailProvider(userId, provider);
+    updateUserMailSettings(userId, provider, account.imap_user, account.imap_pass, account.imap_host, account.imap_port, account.imap_secure);
+    return ctx.reply(`✅ Активный почтовый ящик: ${provider} (${account.imap_user})`);
 });
 
 bot.command('mail_forget', (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    clearUserMailSettings(userId);
-    return ctx.reply('🗑 Данные почты удалены.');
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const provider = normalizeMailProvider(parts[1]);
+    if (!provider) {
+        clearUserMailSettings(userId);
+        db.prepare('DELETE FROM mail_accounts WHERE user_id = ?').run(userId);
+        return ctx.reply('🗑 Данные всех почтовых ящиков удалены.');
+    }
+
+    deleteMailAccount(userId, provider);
+    const remaining = getMailAccountsForUser(userId);
+    if (!remaining.length) {
+        clearUserMailSettings(userId);
+        return ctx.reply(`🗑 ${provider} удалён. Больше привязанных ящиков нет.`);
+    }
+
+    const nextActive = remaining[0];
+    setActiveMailProvider(userId, nextActive.provider);
+    updateUserMailSettings(userId, nextActive.provider, nextActive.imap_user, nextActive.imap_pass, nextActive.imap_host, nextActive.imap_port, nextActive.imap_secure);
+    return ctx.reply(`🗑 ${provider} удалён. Активный ящик теперь: ${nextActive.provider} (${nextActive.imap_user})`);
 });
 
 bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
@@ -3365,11 +3583,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_forget, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_forget, /rename, /prompts, /prompt_use');
 });
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
@@ -3385,7 +3603,7 @@ bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
 
 bot.action('mail:setup_help', async (ctx) => {
     await ctx.answerCbQuery();
-    await ctx.reply('Команда: /mail_setup <yandex|google> <email> <пароль_приложения>\nПример: /mail_setup yandex me@yandex.ru app_password');
+    await ctx.reply('Команда: /mail_setup <yandex|google> <email> <пароль_приложения>\nили: /mail_setup <email> <пароль_приложения>\nПереключение активного: /mail_use <yandex|google>\nУдаление: /mail_forget [yandex|google]');
 });
 
 bot.action('mail:instr:yandex', async (ctx) => {
@@ -4132,17 +4350,20 @@ bot.on('text', async (ctx) => {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as CheckEmailsArgs;
                         const limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
                         const searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
-                        toolContent = await runEmailCheck(userId, searchQuery, limit);
+                        const provider = typeof parsed.provider === 'string' ? parsed.provider : '';
+                        toolContent = await runEmailCheck(userId, searchQuery, limit, provider);
                     } else if (toolCall.function.name === 'read_email_content') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as ReadEmailContentArgs;
                         const subjectPart = typeof parsed.subject_part === 'string' ? parsed.subject_part : '';
-                        toolContent = await runEmailRead(userId, subjectPart);
+                        const provider = typeof parsed.provider === 'string' ? parsed.provider : '';
+                        toolContent = await runEmailRead(userId, subjectPart, provider);
                     } else if (toolCall.function.name === 'send_email') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as SendEmailArgs;
                         const to = typeof parsed.to === 'string' ? parsed.to : '';
                         const subject = typeof parsed.subject === 'string' ? parsed.subject : '';
                         const body = typeof parsed.body === 'string' ? parsed.body : '';
-                        toolContent = await runEmailSend(userId, to, subject, body);
+                        const provider = typeof parsed.provider === 'string' ? parsed.provider : '';
+                        toolContent = await runEmailSend(userId, to, subject, body, provider);
                     } else if (toolCall.function.name === 'update_core_memory') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as UpdateCoreMemoryArgs;
                         const newFact = typeof parsed.new_fact === 'string' ? parsed.new_fact.trim() : '';
