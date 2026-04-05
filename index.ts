@@ -290,7 +290,8 @@ const EMAIL_TOOL_INSTRUCTIONS = `
 Если пользователь просит проверить почту, найти письмо или посмотреть последние входящие — вызови инструмент check_emails.
 Если нужно открыть конкретное письмо и прочитать содержание — вызови read_email_content.
 Если пользователь просит отправить письмо — вызови send_email.
-Если пользователь явно пишет "в яндексе" или "в gmail/google", обязательно передай provider в соответствующий инструмент.`;
+Если пользователь явно пишет "в яндексе" или "в gmail/google", обязательно передай provider в соответствующий инструмент.
+Для "следующие 10 писем" используй check_emails с offset=10 (или 20, 30 и т.д.).`;
 const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
@@ -560,7 +561,7 @@ const tools = [
                     },
                     payload: {
                         type: 'string',
-                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":5} или просто строка запроса.'
+                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":10, "offset":10, "date_from":"2026-04-01","date_to":"2026-04-30"} или просто строка запроса.'
                     },
                     recurrence_type: {
                         type: 'string',
@@ -668,9 +669,21 @@ const tools = [
                         type: 'string',
                         description: 'Поисковая строка (имя, домен, тема, ключевое слово).'
                     },
+                    date_from: {
+                        type: 'string',
+                        description: 'Начальная дата (включительно) в формате YYYY-MM-DD.'
+                    },
+                    date_to: {
+                        type: 'string',
+                        description: 'Конечная дата (включительно) в формате YYYY-MM-DD.'
+                    },
                     limit: {
                         type: 'number',
                         description: 'Максимум результатов (по умолчанию 5, максимум 10).'
+                    },
+                    offset: {
+                        type: 'number',
+                        description: 'Сдвиг для пагинации. Пример: сначала offset=0, потом offset=10 для следующих 10 писем.'
                     }
                 }
             }
@@ -1079,7 +1092,10 @@ type UpdateCoreMemoryArgs = {
 type CheckEmailsArgs = {
     provider?: MailProvider;
     search_query?: string;
+    date_from?: string;
+    date_to?: string;
     limit?: number;
+    offset?: number;
 };
 type ReadEmailContentArgs = {
     provider?: MailProvider;
@@ -1876,7 +1892,15 @@ const extractTotalTokens = (response: any) => {
     if (!Number.isFinite(total) || total < 0) return 0;
     return Math.floor(total);
 };
-const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5, provider?: string) => {
+const runEmailCheck = async (
+    userId: number,
+    searchQuery?: string,
+    limit = 5,
+    provider?: string,
+    offset = 0,
+    dateFrom?: string,
+    dateTo?: string
+) => {
     const user = getUser(userId);
     if (!user) {
         return 'Ошибка: пользователь не найден.';
@@ -1887,7 +1911,19 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5, pr
     }
 
     const safeLimit = Math.max(1, Math.min(10, Math.floor(limit || 5)));
+    const safeOffset = Math.max(0, Math.min(500, Math.floor(offset || 0)));
+    const fetchWindow = Math.min(500, safeLimit + safeOffset + 20);
     const normalizedQuery = (searchQuery || '').trim();
+    const normalizeDateOnly = (value?: string) => {
+        if (!value) return null;
+        const raw = value.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+        return raw;
+    };
+    const fromDate = normalizeDateOnly(dateFrom);
+    const toDate = normalizeDateOnly(dateTo);
+    const fromTs = fromDate ? Date.parse(`${fromDate}T00:00:00Z`) : null;
+    const toTs = toDate ? Date.parse(`${toDate}T23:59:59Z`) : null;
     let decryptedPass = '';
     try {
         decryptedPass = decryptSecret(account.imap_pass);
@@ -1946,7 +1982,7 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5, pr
                     resultIds = await client.search({ all: true });
                 }
 
-                const targetIds = resultIds.slice(-safeLimit);
+                const targetIds = resultIds.slice(-fetchWindow);
                 if (!targetIds.length) {
                     continue;
                 }
@@ -1956,6 +1992,8 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5, pr
                     const subject = msg.envelope?.subject || '(без темы)';
                     const dt = msg.envelope?.date ? new Date(msg.envelope.date) : null;
                     const ts = dt ? dt.getTime() : 0;
+                    if (fromTs !== null && ts && ts < fromTs) continue;
+                    if (toTs !== null && ts && ts > toTs) continue;
                     const date = dt ? dt.toLocaleString('ru-RU') : 'без даты';
                     emails.push({ from, subject, date, mailbox, ts });
                 }
@@ -1966,16 +2004,29 @@ const runEmailCheck = async (userId: number, searchQuery?: string, limit = 5, pr
 
         await client.logout();
         if (!emails.length) {
+            const dateHint = (fromDate || toDate)
+                ? ` c учетом диапазона ${fromDate || '...'}..${toDate || '...'}`
+                : '';
             return normalizedQuery
-                ? `Писем по запросу "${normalizedQuery}" не найдено (проверил INBOX/Архив/Отправленные/Спам).`
+                ? `Писем по запросу "${normalizedQuery}"${dateHint} не найдено (проверил INBOX/Архив/Отправленные/Спам).`
                 : 'На почте пусто.';
         }
 
-        const finalList = emails
+        const sorted = emails
             .sort((a, b) => b.ts - a.ts)
-            .slice(0, safeLimit)
+            .slice(safeOffset, safeOffset + safeLimit)
             .map(({ ts, ...rest }) => rest);
-        return JSON.stringify(finalList, null, 2);
+        if (!sorted.length) {
+            return `Писем больше нет для этой страницы (offset=${safeOffset}, limit=${safeLimit}).`;
+        }
+        return JSON.stringify({
+            page: {
+                offset: safeOffset,
+                limit: safeLimit,
+                returned: sorted.length
+            },
+            items: sorted
+        }, null, 2);
     } catch (err) {
         try { await client.logout(); } catch {}
         return `Ошибка подключения к почте: ${err instanceof Error ? err.message : String(err)}`;
@@ -2264,15 +2315,21 @@ const runScheduledEmailCheckTask = async (task: TaskRecord) => {
     let searchQuery = '';
     let limit = 5;
     let provider = '';
+    let offset = 0;
+    let dateFrom = '';
+    let dateTo = '';
 
     const raw = task.payload.trim();
     if (raw) {
         if (raw.startsWith('{')) {
             try {
-                const parsed = JSON.parse(raw) as { provider?: string; search_query?: string; limit?: number };
+                const parsed = JSON.parse(raw) as { provider?: string; search_query?: string; limit?: number; offset?: number; date_from?: string; date_to?: string };
                 provider = typeof parsed.provider === 'string' ? parsed.provider : '';
                 searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
                 limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
+                offset = typeof parsed.offset === 'number' ? parsed.offset : 0;
+                dateFrom = typeof parsed.date_from === 'string' ? parsed.date_from : '';
+                dateTo = typeof parsed.date_to === 'string' ? parsed.date_to : '';
             } catch {
                 searchQuery = raw;
             }
@@ -2281,7 +2338,7 @@ const runScheduledEmailCheckTask = async (task: TaskRecord) => {
         }
     }
 
-    const result = await runEmailCheck(task.user_id, searchQuery, limit, provider);
+    const result = await runEmailCheck(task.user_id, searchQuery, limit, provider, offset, dateFrom, dateTo);
     const title = searchQuery
         ? `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''} (запрос: ${searchQuery})`
         : `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''}`;
@@ -4351,7 +4408,10 @@ bot.on('text', async (ctx) => {
                         const limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
                         const searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
                         const provider = typeof parsed.provider === 'string' ? parsed.provider : '';
-                        toolContent = await runEmailCheck(userId, searchQuery, limit, provider);
+                        const offset = typeof parsed.offset === 'number' ? parsed.offset : 0;
+                        const dateFrom = typeof parsed.date_from === 'string' ? parsed.date_from : '';
+                        const dateTo = typeof parsed.date_to === 'string' ? parsed.date_to : '';
+                        toolContent = await runEmailCheck(userId, searchQuery, limit, provider, offset, dateFrom, dateTo);
                     } else if (toolCall.function.name === 'read_email_content') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as ReadEmailContentArgs;
                         const subjectPart = typeof parsed.subject_part === 'string' ? parsed.subject_part : '';
