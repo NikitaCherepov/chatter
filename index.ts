@@ -63,6 +63,7 @@ db.exec(`
         imap_host TEXT,
         imap_port INTEGER DEFAULT 993,
         imap_secure INTEGER DEFAULT 1,
+        mail_check_limit INTEGER NOT NULL DEFAULT 10,
         timezone_offset INTEGER DEFAULT 5,
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
@@ -159,6 +160,7 @@ ensureUserColumn('imap_pass', 'ALTER TABLE users ADD COLUMN imap_pass TEXT');
 ensureUserColumn('imap_host', 'ALTER TABLE users ADD COLUMN imap_host TEXT');
 ensureUserColumn('imap_port', 'ALTER TABLE users ADD COLUMN imap_port INTEGER DEFAULT 993');
 ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGER DEFAULT 1');
+ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
@@ -218,6 +220,9 @@ if (hasUserColumn('imap_port')) {
 }
 if (hasUserColumn('imap_secure')) {
     db.exec(`UPDATE users SET imap_secure = 1 WHERE imap_secure IS NULL`);
+}
+if (hasUserColumn('mail_check_limit')) {
+    db.exec(`UPDATE users SET mail_check_limit = 10 WHERE mail_check_limit IS NULL OR mail_check_limit <= 0`);
 }
 
 db.exec(`
@@ -307,6 +312,7 @@ const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй е
 const CUSTOM_PROMPT_ID = -1;
 const MAX_CUSTOM_PROMPT_LENGTH = 800;
 const MAX_CORE_MEMORY_LENGTH = 400;
+const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
@@ -323,6 +329,7 @@ const BASE_COMMANDS = [
     { command: 'task_delete', description: 'Удалить задачу: /task_delete <id>' },
     { command: 'mail_setup', description: 'Почта: /mail_setup <prov> <mail> <app_pass>' },
     { command: 'mail_use', description: 'Почта: /mail_use <yandex|google>' },
+    { command: 'mail_limit', description: 'Почта: лимит check_emails' },
     { command: 'mail_forget', description: 'Почта: /mail_forget [yandex|google]' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
@@ -679,7 +686,7 @@ const tools = [
                     },
                     limit: {
                         type: 'number',
-                        description: 'Максимум результатов (по умолчанию 5, максимум 10).'
+                        description: 'Количество результатов. Если не указано, берётся пользовательский лимит из настроек почты.'
                     },
                     offset: {
                         type: 'number',
@@ -810,6 +817,7 @@ type UserRecord = {
     imap_host: string | null;
     imap_port: number | null;
     imap_secure: number | null;
+    mail_check_limit: number;
     timezone_offset: number | null;
     timezone_confirmed: number;
     daily_message_count: number;
@@ -903,9 +911,14 @@ const buildMainMenuInlineKeyboard = (isAdmin: boolean) => {
 
 const buildMailMenuKeyboard = () => Markup.inlineKeyboard([
     [Markup.button.callback('➕ Добавить/обновить', 'mail:setup_help')],
+    [Markup.button.callback('⚙️ Почта: настройки', 'mail:settings')],
     [Markup.button.callback('🟡 Инструкция Yandex', 'mail:instr:yandex')],
     [Markup.button.callback('🔵 Инструкция Google', 'mail:instr:google')],
     [Markup.button.callback('🗑 Удалить привязку', 'mail:forget')]
+]);
+const buildMailSettingsKeyboard = () => Markup.inlineKeyboard([
+    [Markup.button.callback('✏️ Изменить лимит', 'mail:limit:change')],
+    [Markup.button.callback('⬅️ Назад', 'mail:settings:back')]
 ]);
 
 const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
@@ -923,6 +936,7 @@ type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
 const timezoneSetupFlows = new Map<number, 'await_offset'>();
 const customPromptEditFlows = new Map<number, 'await_content'>();
+const mailLimitFlows = new Map<number, 'await_limit'>();
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
@@ -1827,6 +1841,9 @@ const upsertMailAccount = (userId: number, provider: MailProvider, email: string
 const setActiveMailProvider = (userId: number, provider: MailProvider) => db.prepare(`
     UPDATE users SET imap_provider = ? WHERE id = ?
 `).run(provider, userId);
+const updateUserMailCheckLimit = (userId: number, limit: number) => db.prepare(`
+    UPDATE users SET mail_check_limit = ? WHERE id = ?
+`).run(limit, userId);
 const getMailAccountsForUser = (userId: number) => db.prepare(`
     SELECT user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure
     FROM mail_accounts
@@ -1910,7 +1927,14 @@ const runEmailCheck = async (
         return 'Ошибка: почта не настроена. Используй /mail_setup или кнопку "📬 Почта".';
     }
 
-    const safeLimit = Math.max(1, Math.min(10, Math.floor(limit || 5)));
+    const requestedLimitRaw = Number.isFinite(limit) ? Math.floor(limit) : 0;
+    const userDefaultLimit = Number.isFinite(user.mail_check_limit) && user.mail_check_limit > 0
+        ? Math.floor(user.mail_check_limit)
+        : DEFAULT_MAIL_CHECK_LIMIT;
+    const desiredLimit = requestedLimitRaw > 0 ? requestedLimitRaw : userDefaultLimit;
+    const safeLimit = user.role === 'admin'
+        ? Math.max(1, desiredLimit)
+        : Math.max(1, Math.min(10, desiredLimit));
     const safeOffset = Math.max(0, Math.min(500, Math.floor(offset || 0)));
     const fetchWindow = Math.min(500, safeLimit + safeOffset + 20);
     const normalizedQuery = (searchQuery || '').trim();
@@ -2397,14 +2421,14 @@ const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, created_at
+    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -2412,7 +2436,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -2678,6 +2702,7 @@ const handleClear = (ctx: any) => {
     if (!userId) return;
     renameFlows.delete(userId);
     customPromptEditFlows.delete(userId);
+    mailLimitFlows.delete(userId);
     clearUserHistory(userId);
     return ctx.reply('Память очищена.');
 };
@@ -3484,6 +3509,30 @@ bot.command('mail_use', (ctx) => {
     return ctx.reply(`✅ Активный почтовый ящик: ${provider} (${account.imap_user})`);
 });
 
+bot.command('mail_limit', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к настройке почты.');
+    }
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const parsed = Number.parseInt(parts[1] || '', 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        const current = user.mail_check_limit || DEFAULT_MAIL_CHECK_LIMIT;
+        const capText = user.role === 'admin' ? 'без лимита' : 'максимум 10';
+        return ctx.reply(`Текущий лимит check_emails: ${current}.\nУстановить: /mail_limit <число> (${capText}).`);
+    }
+
+    if (user.role !== 'admin' && parsed > 10) {
+        return ctx.reply('Вам доступно максимум 10 писем за запрос.');
+    }
+
+    updateUserMailCheckLimit(userId, parsed);
+    return ctx.reply(`✅ Лимит check_emails обновлён: ${parsed}.`);
+});
+
 bot.command('mail_forget', (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -3640,11 +3689,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_forget, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
 });
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
@@ -3661,6 +3710,41 @@ bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
 bot.action('mail:setup_help', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply('Команда: /mail_setup <yandex|google> <email> <пароль_приложения>\nили: /mail_setup <email> <пароль_приложения>\nПереключение активного: /mail_use <yandex|google>\nУдаление: /mail_forget [yandex|google]');
+});
+
+bot.action('mail:settings', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+    await ctx.answerCbQuery();
+    const current = user.mail_check_limit || DEFAULT_MAIL_CHECK_LIMIT;
+    const capText = user.role === 'admin' ? 'без ограничения' : 'до 10';
+    await ctx.reply(`⚙️ Почта: настройки\nТекущее ограничение check_emails: ${current}\nВам доступно: ${capText}`, buildMailSettingsKeyboard());
+});
+
+bot.action('mail:limit:change', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+
+    mailLimitFlows.set(userId, 'await_limit');
+    await ctx.answerCbQuery('Ожидаю число');
+    await ctx.reply('Введите новое ограничение для check_emails одним числом.');
+});
+
+bot.action('mail:settings:back', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (userId) mailLimitFlows.delete(userId);
+    await ctx.answerCbQuery();
+    await ctx.reply('📬 Управление почтой\nВыбери действие:', buildMailMenuKeyboard());
 });
 
 bot.action('mail:instr:yandex', async (ctx) => {
@@ -4220,6 +4304,33 @@ bot.on('text', async (ctx) => {
             customPromptEditFlows.delete(userId);
             return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard());
         }
+    }
+
+    const mailLimitFlow = mailLimitFlows.get(userId);
+    if (mailLimitFlow === 'await_limit') {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            mailLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение лимита отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
+        }
+
+        const userRecord = getUser(userId);
+        if (!userRecord) {
+            mailLimitFlows.delete(userId);
+            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+        }
+        if (userRecord.role !== 'admin' && parsed > 10) {
+            return ctx.reply('Для вас доступно максимум 10. Введи число от 1 до 10.');
+        }
+
+        updateUserMailCheckLimit(userId, parsed);
+        mailLimitFlows.delete(userId);
+        return ctx.reply(`✅ Новое ограничение check_emails: ${parsed}.`);
     }
 
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
