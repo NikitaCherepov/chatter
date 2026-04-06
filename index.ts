@@ -25,6 +25,11 @@ const PLAN_DAILY_MESSAGE_LIMITS: Record<UserPlan, number> = {
     standart: 20,
     pro: 50
 };
+const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<UserPlan, number> = {
+    free: 0,
+    standart: 2,
+    pro: 10
+};
 const DEFAULT_USER_PLAN: UserPlan = 'free';
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
@@ -95,6 +100,7 @@ db.exec(`
         daily_cost_rub REAL NOT NULL DEFAULT 0,
         total_cost_rub REAL NOT NULL DEFAULT 0,
         daily_web_search_count INTEGER NOT NULL DEFAULT 0,
+        daily_web_search_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]},
         total_web_search_count INTEGER NOT NULL DEFAULT 0,
         context_window INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]},
         context_window_max INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]},
@@ -216,6 +222,7 @@ ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens
 ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
 ensureUserColumn('total_cost_rub', 'ALTER TABLE users ADD COLUMN total_cost_rub REAL NOT NULL DEFAULT 0');
 ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_web_search_limit', `ALTER TABLE users ADD COLUMN daily_web_search_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`);
 ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('context_window', `ALTER TABLE users ADD COLUMN context_window INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]}`);
 ensureUserColumn('context_window_max', `ALTER TABLE users ADD COLUMN context_window_max INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]}`);
@@ -260,6 +267,9 @@ if (hasUserColumn('total_cost_rub')) {
 if (hasUserColumn('daily_web_search_count')) {
     db.exec(`UPDATE users SET daily_web_search_count = 0 WHERE daily_web_search_count IS NULL`);
 }
+if (hasUserColumn('daily_web_search_limit')) {
+    db.exec(`UPDATE users SET daily_web_search_limit = ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]} WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0`);
+}
 if (hasUserColumn('total_web_search_count')) {
     db.exec(`UPDATE users SET total_web_search_count = 0 WHERE total_web_search_count IS NULL`);
 }
@@ -297,6 +307,17 @@ if (hasUserColumn('plan') && hasUserColumn('daily_message_limit')) {
             ELSE ${PLAN_DAILY_MESSAGE_LIMITS.free}
         END
         WHERE daily_message_limit IS NULL OR daily_message_limit < 0
+    `);
+}
+if (hasUserColumn('plan') && hasUserColumn('daily_web_search_limit')) {
+    db.exec(`
+        UPDATE users
+        SET daily_web_search_limit = CASE
+            WHEN plan = 'pro' THEN ${PLAN_DAILY_WEB_SEARCH_LIMITS.pro}
+            WHEN plan = 'standart' THEN ${PLAN_DAILY_WEB_SEARCH_LIMITS.standart}
+            ELSE ${PLAN_DAILY_WEB_SEARCH_LIMITS.free}
+        END
+        WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0
     `);
 }
 if (hasUserColumn('context_window')) {
@@ -915,6 +936,7 @@ type UserRecord = {
     daily_cost_rub: number;
     total_cost_rub: number;
     daily_web_search_count: number;
+    daily_web_search_limit: number;
     total_web_search_count: number;
     context_window: number;
     context_window_max: number;
@@ -1459,6 +1481,11 @@ const runScheduledWebSearchTask = async (task: TaskRecord) => {
         return 'Не получилось выполнить поиск: пустой запрос в задаче.';
     }
 
+    const webLimitState = checkWebSearchLimit(task.user_id);
+    if (!webLimitState.allowed) {
+        return `Запрос: ${query}\n\n${webLimitState.reason}`;
+    }
+
     incrementUserWebSearchUsage(task.user_id, 1);
     const webResult = await runWebSearch(query);
     const userRecord = getUser(task.user_id);
@@ -1918,7 +1945,7 @@ const updateUserRole = (id: number, role: string) => db.prepare('UPDATE users SE
 const updateUserStatus = (id: number, status: UserStatus) => db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
 const updateUserPlan = (id: number, plan: UserPlan) => db.prepare(`
     UPDATE users
-    SET plan = ?, context_window_max = ?, daily_message_limit = ?, context_window = CASE
+    SET plan = ?, context_window_max = ?, daily_message_limit = ?, daily_web_search_limit = ?, context_window = CASE
         WHEN COALESCE(context_window, 0) <= 0 THEN ?
         WHEN context_window > ? THEN ?
         ELSE context_window
@@ -1928,6 +1955,7 @@ const updateUserPlan = (id: number, plan: UserPlan) => db.prepare(`
     plan,
     PLAN_CONTEXT_LIMITS[plan],
     PLAN_DAILY_MESSAGE_LIMITS[plan],
+    PLAN_DAILY_WEB_SEARCH_LIMITS[plan],
     PLAN_CONTEXT_LIMITS[plan],
     PLAN_CONTEXT_LIMITS[plan],
     PLAN_CONTEXT_LIMITS[plan],
@@ -1994,9 +2022,39 @@ const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
 };
 const getPlanContextLimit = (plan: UserPlan) => PLAN_CONTEXT_LIMITS[plan] || PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN];
 const getPlanDailyMessageLimit = (plan: UserPlan) => PLAN_DAILY_MESSAGE_LIMITS[plan] ?? PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN];
+const getPlanDailyWebSearchLimit = (plan: UserPlan) => PLAN_DAILY_WEB_SEARCH_LIMITS[plan] ?? PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN];
 const normalizeDailyMessageLimit = (value: number | null | undefined) => {
     if (!Number.isFinite(value)) return getPlanDailyMessageLimit(DEFAULT_USER_PLAN);
     return Math.max(0, Math.floor(value as number));
+};
+const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return getPlanDailyWebSearchLimit(DEFAULT_USER_PLAN);
+    return Math.max(0, Math.floor(value as number));
+};
+const checkWebSearchLimit = (userId: number) => {
+    const user = getUser(userId);
+    if (!user) {
+        return { allowed: false, count: 0, limit: 0, reason: 'Пользователь не найден.' };
+    }
+    const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
+    const count = Math.max(0, Math.floor(user.daily_web_search_count || 0));
+    if (limit <= 0) {
+        return {
+            allowed: false,
+            count,
+            limit,
+            reason: `По твоему плану (${getPlanLabel(parsePlanFromDb(user.plan))}) web-поиск отключен на сегодня.`
+        };
+    }
+    if (count >= limit) {
+        return {
+            allowed: false,
+            count,
+            limit,
+            reason: `Лимит web-поиска на сегодня исчерпан (${count}/${limit}).`
+        };
+    }
+    return { allowed: true, count, limit, reason: '' };
 };
 const applyUserPlan = (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
     closeCurrentPlanSubscriptions(userId);
@@ -2641,14 +2699,14 @@ const removeUserPlanSubscriptions = (id: number) => db.prepare('DELETE FROM user
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count, context_window, context_window_max
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, daily_web_search_limit, total_web_search_count, context_window, context_window_max
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, context_window, context_window_max, created_at
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, daily_web_search_limit, context_window, context_window_max, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -2656,7 +2714,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.daily_web_search_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -2938,6 +2996,9 @@ const showMenu = (ctx: any) => {
     const messageLimitLine = userRecord
         ? `📨 Сообщения сегодня: ${getDailyMessageLimitText(userRecord)}`
         : `📨 Сообщения сегодня: 0/${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]}`;
+    const webLimitLine = userRecord
+        ? `🌐 Web-поиск сегодня: ${getDailyWebSearchLimitText(userRecord)}`
+        : `🌐 Web-поиск сегодня: 0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`;
     const moderationLine = isAdmin
         ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
         : '';
@@ -2950,6 +3011,7 @@ const showMenu = (ctx: any) => {
 ${planLine}
 ${contextLine}
 ${messageLimitLine}
+${webLimitLine}
 ${promptLine}
 ${moderationLine}
 
@@ -3114,6 +3176,10 @@ const getDailyMessageLimitText = (user: UserRecord) => {
     const limit = normalizeDailyMessageLimit(user.daily_message_limit);
     return limit === 0 ? 'безлимит' : `${user.daily_message_count ?? 0}/${limit}`;
 };
+const getDailyWebSearchLimitText = (user: UserRecord) => {
+    const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
+    return `${user.daily_web_search_count ?? 0}/${limit}`;
+};
 const getDurationLabel = (duration: PlanDurationCode) => {
     if (duration === 'day') return '1 день';
     if (duration === 'week') return '1 неделя';
@@ -3153,7 +3219,8 @@ const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: nu
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
         const planTag = getPlanLabel(parsePlanFromDb(row.plan));
         const messageLimit = normalizeDailyMessageLimit(row.daily_message_limit);
-        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0} ${formatRub(row.daily_cost_rub ?? 0)}`;
+        const webLimit = normalizeDailyWebSearchLimit(row.daily_web_search_limit);
+        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0}/${webLimit} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -3185,9 +3252,9 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number) => {
     ]);
 };
 const buildAdminPlanChoiceKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
-    [Markup.button.callback(`FREE (ctx ${PLAN_CONTEXT_LIMITS.free}, msg ${PLAN_DAILY_MESSAGE_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
-    [Markup.button.callback(`STANDART (ctx ${PLAN_CONTEXT_LIMITS.standart}, msg ${PLAN_DAILY_MESSAGE_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
-    [Markup.button.callback(`PRO (ctx ${PLAN_CONTEXT_LIMITS.pro}, msg ${PLAN_DAILY_MESSAGE_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
+    [Markup.button.callback(`FREE (ctx ${PLAN_CONTEXT_LIMITS.free}, msg ${PLAN_DAILY_MESSAGE_LIMITS.free}, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
+    [Markup.button.callback(`STANDART (ctx ${PLAN_CONTEXT_LIMITS.standart}, msg ${PLAN_DAILY_MESSAGE_LIMITS.standart}, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
+    [Markup.button.callback(`PRO (ctx ${PLAN_CONTEXT_LIMITS.pro}, msg ${PLAN_DAILY_MESSAGE_LIMITS.pro}, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
     [Markup.button.callback('⬅️ Назад к пользователю', `usr:view:${userId}:${page}`)]
 ]);
 const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan) => Markup.inlineKeyboard([
@@ -3263,6 +3330,7 @@ Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
 План до: ${subscriptionEnds}
 Контекст (текущий/макс): ${getContextWindowText(user)}
 Сообщения в день: ${getDailyMessageLimitText(user)}
+Web-поиск в день: ${getDailyWebSearchLimitText(user)}
 Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
 Сообщений сегодня: ${user.daily_message_count ?? 0}
 Токенов сегодня: ${user.daily_tokens_used ?? 0}
@@ -3293,6 +3361,7 @@ const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: num
 Новый план: ${getPlanLabel(plan)}
 Лимит контекста у плана: ${PLAN_CONTEXT_LIMITS[plan]}
 Лимит сообщений в день у плана: ${PLAN_DAILY_MESSAGE_LIMITS[plan]}
+Лимит web-поиска в день у плана: ${PLAN_DAILY_WEB_SEARCH_LIMITS[plan]}
 
 Выберите срок действия:`;
     const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan);
@@ -4996,8 +5065,13 @@ bot.on('text', async (ctx) => {
                             toolContent = 'Ошибка инструмента: пустой поисковый запрос.';
                         } else {
                             try {
-                                incrementUserWebSearchUsage(userId, 1);
-                                toolContent = await runWebSearch(query);
+                                const webLimitState = checkWebSearchLimit(userId);
+                                if (!webLimitState.allowed) {
+                                    toolContent = webLimitState.reason;
+                                } else {
+                                    incrementUserWebSearchUsage(userId, 1);
+                                    toolContent = await runWebSearch(query);
+                                }
                             } catch (err) {
                                 console.error('Ошибка поиска в Tavily:', err);
                                 toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
