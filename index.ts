@@ -20,6 +20,11 @@ const PLAN_CONTEXT_LIMITS: Record<UserPlan, number> = {
     standart: 10,
     pro: 20
 };
+const PLAN_DAILY_MESSAGE_LIMITS: Record<UserPlan, number> = {
+    free: 10,
+    standart: 20,
+    pro: 50
+};
 const DEFAULT_USER_PLAN: UserPlan = 'free';
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
@@ -84,6 +89,7 @@ db.exec(`
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
         total_message_length INTEGER NOT NULL DEFAULT 0,
+        daily_message_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]},
         daily_tokens_used INTEGER NOT NULL DEFAULT 0,
         total_tokens_used INTEGER NOT NULL DEFAULT 0,
         daily_cost_rub REAL NOT NULL DEFAULT 0,
@@ -204,6 +210,7 @@ ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offse
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_message_limit', `ALTER TABLE users ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]}`);
 ensureUserColumn('daily_tokens_used', 'ALTER TABLE users ADD COLUMN daily_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
@@ -231,6 +238,9 @@ if (hasUserColumn('plan')) {
 }
 if (hasUserColumn('daily_message_count')) {
     db.exec(`UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL`);
+}
+if (hasUserColumn('daily_message_limit')) {
+    db.exec(`UPDATE users SET daily_message_limit = ${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]} WHERE daily_message_limit IS NULL OR daily_message_limit < 0`);
 }
 if (hasUserColumn('total_message_length')) {
     db.exec(`UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL`);
@@ -276,6 +286,17 @@ if (hasUserColumn('plan') && hasUserColumn('context_window_max')) {
             WHEN plan = 'standart' THEN ${PLAN_CONTEXT_LIMITS.standart}
             ELSE ${PLAN_CONTEXT_LIMITS.free}
         END
+    `);
+}
+if (hasUserColumn('plan') && hasUserColumn('daily_message_limit')) {
+    db.exec(`
+        UPDATE users
+        SET daily_message_limit = CASE
+            WHEN plan = 'pro' THEN ${PLAN_DAILY_MESSAGE_LIMITS.pro}
+            WHEN plan = 'standart' THEN ${PLAN_DAILY_MESSAGE_LIMITS.standart}
+            ELSE ${PLAN_DAILY_MESSAGE_LIMITS.free}
+        END
+        WHERE daily_message_limit IS NULL OR daily_message_limit < 0
     `);
 }
 if (hasUserColumn('context_window')) {
@@ -887,6 +908,7 @@ type UserRecord = {
     timezone_offset: number | null;
     timezone_confirmed: number;
     daily_message_count: number;
+    daily_message_limit: number;
     total_message_length: number;
     daily_tokens_used: number;
     total_tokens_used: number;
@@ -1013,6 +1035,7 @@ const customPromptEditFlows = new Map<number, 'await_content'>();
 const mailLimitFlows = new Map<number, 'await_limit'>();
 const contextLimitFlows = new Map<number, 'await_limit'>();
 const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page: number }>();
+const adminUserMessageLimitFlows = new Map<number, { targetUserId: number; page: number }>();
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
@@ -1895,18 +1918,31 @@ const updateUserRole = (id: number, role: string) => db.prepare('UPDATE users SE
 const updateUserStatus = (id: number, status: UserStatus) => db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
 const updateUserPlan = (id: number, plan: UserPlan) => db.prepare(`
     UPDATE users
-    SET plan = ?, context_window_max = ?, context_window = CASE
+    SET plan = ?, context_window_max = ?, daily_message_limit = ?, context_window = CASE
         WHEN COALESCE(context_window, 0) <= 0 THEN ?
         WHEN context_window > ? THEN ?
         ELSE context_window
     END
     WHERE id = ?
-`).run(plan, PLAN_CONTEXT_LIMITS[plan], PLAN_CONTEXT_LIMITS[plan], PLAN_CONTEXT_LIMITS[plan], PLAN_CONTEXT_LIMITS[plan], id);
+`).run(
+    plan,
+    PLAN_CONTEXT_LIMITS[plan],
+    PLAN_DAILY_MESSAGE_LIMITS[plan],
+    PLAN_CONTEXT_LIMITS[plan],
+    PLAN_CONTEXT_LIMITS[plan],
+    PLAN_CONTEXT_LIMITS[plan],
+    id
+);
 const updateUserContextWindow = (id: number, contextWindow: number) => db.prepare(`
     UPDATE users
     SET context_window = ?
     WHERE id = ?
 `).run(contextWindow, id);
+const updateUserDailyMessageLimit = (id: number, dailyMessageLimit: number) => db.prepare(`
+    UPDATE users
+    SET daily_message_limit = ?
+    WHERE id = ?
+`).run(Math.max(0, Math.floor(dailyMessageLimit)), id);
 const updateUserContextWindowMax = (id: number, contextWindowMax: number) => db.prepare(`
     UPDATE users
     SET context_window_max = ?,
@@ -1957,6 +1993,11 @@ const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
     return DEFAULT_USER_PLAN;
 };
 const getPlanContextLimit = (plan: UserPlan) => PLAN_CONTEXT_LIMITS[plan] || PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN];
+const getPlanDailyMessageLimit = (plan: UserPlan) => PLAN_DAILY_MESSAGE_LIMITS[plan] ?? PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN];
+const normalizeDailyMessageLimit = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return getPlanDailyMessageLimit(DEFAULT_USER_PLAN);
+    return Math.max(0, Math.floor(value as number));
+};
 const applyUserPlan = (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
     closeCurrentPlanSubscriptions(userId);
     updateUserPlan(userId, plan);
@@ -2600,14 +2641,14 @@ const removeUserPlanSubscriptions = (id: number) => db.prepare('DELETE FROM user
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count, context_window, context_window_max
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count, context_window, context_window_max
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, context_window, context_window_max, created_at
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, context_window, context_window_max, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -2615,7 +2656,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -2894,6 +2935,9 @@ const showMenu = (ctx: any) => {
     const contextLine = userRecord
         ? `🗂 Контекст (текущий/доступный): ${getContextWindowText(userRecord)}`
         : `🗂 Контекст: ${MAX_HISTORY_ITEMS}/${MAX_HISTORY_ITEMS}`;
+    const messageLimitLine = userRecord
+        ? `📨 Сообщения сегодня: ${getDailyMessageLimitText(userRecord)}`
+        : `📨 Сообщения сегодня: 0/${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]}`;
     const moderationLine = isAdmin
         ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
         : '';
@@ -2905,6 +2949,7 @@ const showMenu = (ctx: any) => {
 🛡️ Роль: ${roleLabel}
 ${planLine}
 ${contextLine}
+${messageLimitLine}
 ${promptLine}
 ${moderationLine}
 
@@ -2921,6 +2966,7 @@ const handleClear = (ctx: any) => {
     mailLimitFlows.delete(userId);
     contextLimitFlows.delete(userId);
     adminUserContextLimitFlows.delete(userId);
+    adminUserMessageLimitFlows.delete(userId);
     clearUserHistory(userId);
     return ctx.reply('Память очищена.');
 };
@@ -3064,6 +3110,10 @@ const getContextWindowText = (user: UserRecord) => {
         : getPlanContextLimit(parsePlanFromDb(user.plan));
     return `${effective}/${maxWindow}`;
 };
+const getDailyMessageLimitText = (user: UserRecord) => {
+    const limit = normalizeDailyMessageLimit(user.daily_message_limit);
+    return limit === 0 ? 'безлимит' : `${user.daily_message_count ?? 0}/${limit}`;
+};
 const getDurationLabel = (duration: PlanDurationCode) => {
     if (duration === 'day') return '1 день';
     if (duration === 'week') return '1 неделя';
@@ -3102,7 +3152,8 @@ const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: nu
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
         const planTag = getPlanLabel(parsePlanFromDb(row.plan));
-        const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0} ${formatRub(row.daily_cost_rub ?? 0)}`;
+        const messageLimit = normalizeDailyMessageLimit(row.daily_message_limit);
+        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -3127,15 +3178,16 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number) => {
         [Markup.button.callback('✉️ Написать', `ai_send:${user.id}`)],
         [Markup.button.callback('🧩 Поменять план', `usr:plan:open:${user.id}:${page}`)],
         [Markup.button.callback('🗂 Изменить контекст', `usr:ctx:ask:${user.id}:${page}`)],
+        [Markup.button.callback('📨 Лимит сообщений', `usr:msg:ask:${user.id}:${page}`)],
         [moderationButton],
         [Markup.button.callback('🗑 Удалить', `usr:remove:${user.id}:${page}`)],
         [Markup.button.callback('⬅️ К списку', `usr:list:${page}`)]
     ]);
 };
 const buildAdminPlanChoiceKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
-    [Markup.button.callback(`FREE (${PLAN_CONTEXT_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
-    [Markup.button.callback(`STANDART (${PLAN_CONTEXT_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
-    [Markup.button.callback(`PRO (${PLAN_CONTEXT_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
+    [Markup.button.callback(`FREE (ctx ${PLAN_CONTEXT_LIMITS.free}, msg ${PLAN_DAILY_MESSAGE_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
+    [Markup.button.callback(`STANDART (ctx ${PLAN_CONTEXT_LIMITS.standart}, msg ${PLAN_DAILY_MESSAGE_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
+    [Markup.button.callback(`PRO (ctx ${PLAN_CONTEXT_LIMITS.pro}, msg ${PLAN_DAILY_MESSAGE_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
     [Markup.button.callback('⬅️ Назад к пользователю', `usr:view:${userId}:${page}`)]
 ]);
 const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan) => Markup.inlineKeyboard([
@@ -3210,6 +3262,7 @@ Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
 План: ${getPlanLabel(plan)}
 План до: ${subscriptionEnds}
 Контекст (текущий/макс): ${getContextWindowText(user)}
+Сообщения в день: ${getDailyMessageLimitText(user)}
 Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
 Сообщений сегодня: ${user.daily_message_count ?? 0}
 Токенов сегодня: ${user.daily_tokens_used ?? 0}
@@ -3239,6 +3292,7 @@ const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: num
     const text = `Пользователь #${user.id}
 Новый план: ${getPlanLabel(plan)}
 Лимит контекста у плана: ${PLAN_CONTEXT_LIMITS[plan]}
+Лимит сообщений в день у плана: ${PLAN_DAILY_MESSAGE_LIMITS[plan]}
 
 Выберите срок действия:`;
     const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan);
@@ -4357,6 +4411,30 @@ bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
     );
 });
 
+bot.action(/^usr:msg:ask:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const adminId = ctx.from?.id;
+    if (!adminId) return;
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(targetUserId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+
+    adminUserMessageLimitFlows.set(adminId, { targetUserId, page: Number.isNaN(page) ? 0 : page });
+    const plan = parsePlanFromDb(user.plan);
+    await ctx.answerCbQuery('Ожидаю число');
+    await ctx.reply(
+        `Введите лимит сообщений в день для пользователя #${targetUserId}.\nТекущий: ${normalizeDailyMessageLimit(user.daily_message_limit)}\nСегодня отправлено: ${user.daily_message_count ?? 0}\nПо плану ${getPlanLabel(plan)}: ${PLAN_DAILY_MESSAGE_LIMITS[plan]}\n0 = безлимит.\nДля отмены: "отмена".`
+    );
+});
+
 bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
         await ctx.answerCbQuery('Только для админа');
@@ -4671,6 +4749,37 @@ bot.on('text', async (ctx) => {
         return ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${nextValue}.`);
     }
 
+    const adminMessageLimitFlow = adminUserMessageLimitFlows.get(userId);
+    if (adminMessageLimitFlow) {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            adminUserMessageLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение лимита сообщений отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+            return ctx.reply('Нужно ввести число 0 или больше. 0 = безлимит. Для отмены: "отмена".');
+        }
+
+        const targetUser = getUser(adminMessageLimitFlow.targetUserId);
+        if (!targetUser) {
+            adminUserMessageLimitFlows.delete(userId);
+            return ctx.reply('Пользователь не найден.');
+        }
+
+        const nextLimit = normalizeDailyMessageLimit(parsed);
+        updateUserDailyMessageLimit(adminMessageLimitFlow.targetUserId, nextLimit);
+        adminUserMessageLimitFlows.delete(userId);
+        const refreshed = getUser(adminMessageLimitFlow.targetUserId);
+        if (refreshed) {
+            await ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${normalizeDailyMessageLimit(refreshed.daily_message_limit)} (0 = безлимит).`);
+            await renderAdminUserCard(ctx, refreshed, adminMessageLimitFlow.page, 'reply');
+            return;
+        }
+        return ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${nextLimit}.`);
+    }
+
     const isAdmin = ctx.state.role === 'admin';
     const timezoneFlow = timezoneSetupFlows.get(userId);
 
@@ -4818,6 +4927,13 @@ bot.on('text', async (ctx) => {
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
     const userRecord = getUser(userId);
     if (!userRecord) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+    if (ctx.state.role !== 'admin') {
+        const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
+        const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
+        if (dailyLimit > 0 && dailyCount >= dailyLimit) {
+            return ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+        }
+    }
 
     const activePrompt = resolvePromptForUser(userRecord);
     const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
