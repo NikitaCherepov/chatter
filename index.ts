@@ -7,6 +7,21 @@ import crypto from 'crypto';
 
 dotenv.config();
 
+const MAX_HISTORY_ITEMS = 6;
+const USER_PLANS = ['free', 'standart', 'pro'] as const;
+type UserPlan = typeof USER_PLANS[number];
+const PLAN_LABELS: Record<UserPlan, string> = {
+    free: 'FREE',
+    standart: 'STANDART',
+    pro: 'PRO'
+};
+const PLAN_CONTEXT_LIMITS: Record<UserPlan, number> = {
+    free: MAX_HISTORY_ITEMS,
+    standart: 10,
+    pro: 20
+};
+const DEFAULT_USER_PLAN: UserPlan = 'free';
+
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
 const ai = new OpenAI({
     apiKey: process.env.TIMEWEB_API_KEY,
@@ -53,6 +68,7 @@ db.exec(`
         name TEXT,
         role TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('none', 'approved', 'disapproved', 'banned')),
+        plan TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free', 'standart', 'pro')),
         tg_username TEXT,
         selected_prompt_id INTEGER,
         custom_prompt_content TEXT,
@@ -74,6 +90,8 @@ db.exec(`
         total_cost_rub REAL NOT NULL DEFAULT 0,
         daily_web_search_count INTEGER NOT NULL DEFAULT 0,
         total_web_search_count INTEGER NOT NULL DEFAULT 0,
+        context_window INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]},
+        context_window_max INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]},
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -129,6 +147,23 @@ db.exec(`
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, provider)
     );
+
+    CREATE TABLE IF NOT EXISTS user_plan_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        plan TEXT NOT NULL CHECK(plan IN ('free', 'standart', 'pro')),
+        started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ends_at DATETIME,
+        is_current INTEGER NOT NULL DEFAULT 1 CHECK(is_current IN (0, 1)),
+        assigned_by INTEGER,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_user_id
+    ON user_plan_subscriptions(user_id);
+
+    CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_current
+    ON user_plan_subscriptions(user_id, is_current, ends_at);
 `);
 
 const hasUserColumn = (columnName: string) => {
@@ -162,6 +197,7 @@ ensureUserColumn('imap_port', 'ALTER TABLE users ADD COLUMN imap_port INTEGER DE
 ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGER DEFAULT 1');
 ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
+ensureUserColumn('plan', `ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT '${DEFAULT_USER_PLAN}'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
 ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER DEFAULT 5');
@@ -174,6 +210,8 @@ ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub 
 ensureUserColumn('total_cost_rub', 'ALTER TABLE users ADD COLUMN total_cost_rub REAL NOT NULL DEFAULT 0');
 ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('context_window', `ALTER TABLE users ADD COLUMN context_window INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]}`);
+ensureUserColumn('context_window_max', `ALTER TABLE users ADD COLUMN context_window_max INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]}`);
 
 ensureTaskColumn('recurrence_type', `ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'`);
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
@@ -187,6 +225,9 @@ if (hasUserColumn('created_at')) {
 if (hasUserColumn('status')) {
     db.exec(`UPDATE users SET status = 'approved' WHERE status IS NULL OR status = ''`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`);
+}
+if (hasUserColumn('plan')) {
+    db.exec(`UPDATE users SET plan = '${DEFAULT_USER_PLAN}' WHERE plan IS NULL OR plan = '' OR plan NOT IN ('free', 'standart', 'pro')`);
 }
 if (hasUserColumn('daily_message_count')) {
     db.exec(`UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL`);
@@ -223,6 +264,31 @@ if (hasUserColumn('imap_secure')) {
 }
 if (hasUserColumn('mail_check_limit')) {
     db.exec(`UPDATE users SET mail_check_limit = 10 WHERE mail_check_limit IS NULL OR mail_check_limit <= 0`);
+}
+if (hasUserColumn('context_window_max')) {
+    db.exec(`UPDATE users SET context_window_max = ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]} WHERE context_window_max IS NULL OR context_window_max <= 0`);
+}
+if (hasUserColumn('plan') && hasUserColumn('context_window_max')) {
+    db.exec(`
+        UPDATE users
+        SET context_window_max = CASE
+            WHEN plan = 'pro' THEN ${PLAN_CONTEXT_LIMITS.pro}
+            WHEN plan = 'standart' THEN ${PLAN_CONTEXT_LIMITS.standart}
+            ELSE ${PLAN_CONTEXT_LIMITS.free}
+        END
+    `);
+}
+if (hasUserColumn('context_window')) {
+    db.exec(`
+        UPDATE users
+        SET context_window = COALESCE(context_window_max, ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]})
+        WHERE context_window IS NULL OR context_window <= 0
+    `);
+    db.exec(`
+        UPDATE users
+        SET context_window = context_window_max
+        WHERE context_window > context_window_max AND context_window_max > 0
+    `);
 }
 
 db.exec(`
@@ -305,7 +371,6 @@ const buildTimeContext = (timezoneOffset: number) => {
     return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач используй local_time (HH:MM) или delay_seconds.`;
 };
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
-const MAX_HISTORY_ITEMS = 10;
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
@@ -807,6 +872,7 @@ type UserRecord = {
     name: string | null;
     role: string;
     status: UserStatus;
+    plan: UserPlan;
     tg_username: string | null;
     selected_prompt_id: number | null;
     custom_prompt_content: string | null;
@@ -828,7 +894,10 @@ type UserRecord = {
     total_cost_rub: number;
     daily_web_search_count: number;
     total_web_search_count: number;
+    context_window: number;
+    context_window_max: number;
 };
+type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
 type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check';
 type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
@@ -864,7 +933,7 @@ type MailAccountRecord = {
     imap_port: number;
     imap_secure: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'help';
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
     label: string;
@@ -879,6 +948,7 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'rename', label: '✏️ Переименовать себя', adminOnly: false, row: 2 },
     { id: 'prompts', label: '🧠 Промпты', adminOnly: false, row: 2 },
     { id: 'current_prompt', label: '✅ Мой промпт', adminOnly: false, row: 3 },
+    { id: 'context_size', label: '🗂 Размер контекста', adminOnly: false, row: 3 },
     { id: 'add', label: '➕ Добавить пользователя', adminOnly: true, row: 3 },
     { id: 'remove', label: '➖ Удалить пользователя', adminOnly: true, row: 4 },
     { id: 'prompt_admin', label: '⚙️ Промпт-админ', adminOnly: true, row: 4 },
@@ -920,6 +990,10 @@ const buildMailSettingsKeyboard = () => Markup.inlineKeyboard([
     [Markup.button.callback('✏️ Изменить лимит', 'mail:limit:change')],
     [Markup.button.callback('⬅️ Назад', 'mail:settings:back')]
 ]);
+const buildContextSettingsKeyboard = () => Markup.inlineKeyboard([
+    [Markup.button.callback('✏️ Изменить лимит', 'context:change')],
+    [Markup.button.callback('⬅️ Назад в меню', 'context:back')]
+]);
 
 const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
     const nextRole: 'admin' | 'user' = isAdmin ? 'admin' : 'user';
@@ -937,6 +1011,8 @@ const renameFlows = new Map<number, RenameFlowState>();
 const timezoneSetupFlows = new Map<number, 'await_offset'>();
 const customPromptEditFlows = new Map<number, 'await_content'>();
 const mailLimitFlows = new Map<number, 'await_limit'>();
+const contextLimitFlows = new Map<number, 'await_limit'>();
+const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page: number }>();
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
@@ -1817,6 +1893,108 @@ const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SE
 const updateUserTelegramUsername = (id: number, tgUsername: string | null) => db.prepare('UPDATE users SET tg_username = ? WHERE id = ?').run(tgUsername, id);
 const updateUserRole = (id: number, role: string) => db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
 const updateUserStatus = (id: number, status: UserStatus) => db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
+const updateUserPlan = (id: number, plan: UserPlan) => db.prepare(`
+    UPDATE users
+    SET plan = ?, context_window_max = ?, context_window = CASE
+        WHEN COALESCE(context_window, 0) <= 0 THEN ?
+        WHEN context_window > ? THEN ?
+        ELSE context_window
+    END
+    WHERE id = ?
+`).run(plan, PLAN_CONTEXT_LIMITS[plan], PLAN_CONTEXT_LIMITS[plan], PLAN_CONTEXT_LIMITS[plan], PLAN_CONTEXT_LIMITS[plan], id);
+const updateUserContextWindow = (id: number, contextWindow: number) => db.prepare(`
+    UPDATE users
+    SET context_window = ?
+    WHERE id = ?
+`).run(contextWindow, id);
+const updateUserContextWindowMax = (id: number, contextWindowMax: number) => db.prepare(`
+    UPDATE users
+    SET context_window_max = ?,
+        context_window = CASE
+            WHEN COALESCE(context_window, 0) <= 0 THEN ?
+            WHEN context_window > ? THEN ?
+            ELSE context_window
+        END
+    WHERE id = ?
+`).run(contextWindowMax, contextWindowMax, contextWindowMax, contextWindowMax, id);
+const closeCurrentPlanSubscriptions = (userId: number) => db.prepare(`
+    UPDATE user_plan_subscriptions
+    SET is_current = 0
+    WHERE user_id = ? AND is_current = 1
+`).run(userId);
+const addPlanSubscription = (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => db.prepare(`
+    INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
+    VALUES (?, ?, CURRENT_TIMESTAMP, ?, 1, ?)
+`).run(userId, plan, endsAt, assignedBy);
+const getCurrentPlanSubscription = (userId: number) => db.prepare(`
+    SELECT id, user_id, plan, started_at, ends_at, is_current
+    FROM user_plan_subscriptions
+    WHERE user_id = ? AND is_current = 1
+    ORDER BY id DESC
+    LIMIT 1
+`).get(userId) as {
+    id: number;
+    user_id: number;
+    plan: UserPlan;
+    started_at: string;
+    ends_at: string | null;
+    is_current: number;
+} | undefined;
+const getExpiredCurrentSubscriptions = () => db.prepare(`
+    SELECT id, user_id, plan, started_at, ends_at
+    FROM user_plan_subscriptions
+    WHERE is_current = 1 AND ends_at IS NOT NULL AND datetime(ends_at) <= CURRENT_TIMESTAMP
+    ORDER BY user_id ASC, id ASC
+`).all() as Array<{
+    id: number;
+    user_id: number;
+    plan: UserPlan;
+    started_at: string;
+    ends_at: string | null;
+}>;
+const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
+    if (raw === 'free' || raw === 'standart' || raw === 'pro') return raw;
+    return DEFAULT_USER_PLAN;
+};
+const getPlanContextLimit = (plan: UserPlan) => PLAN_CONTEXT_LIMITS[plan] || PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN];
+const applyUserPlan = (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
+    closeCurrentPlanSubscriptions(userId);
+    updateUserPlan(userId, plan);
+    addPlanSubscription(userId, plan, endsAt, assignedBy);
+};
+const ensureUserCurrentPlanSubscription = (userId: number) => {
+    const current = getCurrentPlanSubscription(userId);
+    if (current) return;
+    const user = getUser(userId);
+    if (!user) return;
+    const normalizedPlan = parsePlanFromDb(user.plan);
+    updateUserPlan(userId, normalizedPlan);
+    addPlanSubscription(userId, normalizedPlan, null, null);
+};
+const ensureCurrentPlanSubscriptionsForAllUsers = () => {
+    const users = getAllUsers();
+    for (const user of users) {
+        ensureUserCurrentPlanSubscription(user.id);
+    }
+};
+const getEndsAtForDuration = (duration: PlanDurationCode) => {
+    if (duration === 'forever') return null;
+    const dt = new Date();
+    if (duration === 'day') dt.setDate(dt.getDate() + 1);
+    if (duration === 'week') dt.setDate(dt.getDate() + 7);
+    if (duration === 'month') dt.setMonth(dt.getMonth() + 1);
+    if (duration === 'year') dt.setFullYear(dt.getFullYear() + 1);
+    return dt.toISOString().slice(0, 19).replace('T', ' ');
+};
+const expireFinishedPlanSubscriptions = () => {
+    const expiredRows = getExpiredCurrentSubscriptions();
+    const processedUsers = new Set<number>();
+    for (const row of expiredRows) {
+        if (processedUsers.has(row.user_id)) continue;
+        processedUsers.add(row.user_id);
+        applyUserPlan(row.user_id, DEFAULT_USER_PLAN, null, null);
+    }
+};
 const updateUserTimezone = (id: number, timezoneOffset: number) => db.prepare(`
     UPDATE users
     SET timezone_offset = ?, timezone_confirmed = 1
@@ -2418,17 +2596,18 @@ const updateUserCustomPrompt = (id: number, content: string) => db.prepare('UPDA
 const updateUserCoreMemory = (id: number, memory: string) => db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(memory, id);
 const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
 const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
+const removeUserPlanSubscriptions = (id: number) => db.prepare('DELETE FROM user_plan_subscriptions WHERE user_id = ?').run(id);
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, total_web_search_count, context_window, context_window_max
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, created_at
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, context_window, context_window_max, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -2436,7 +2615,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -2517,14 +2696,26 @@ const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', li
     `).all(userId, status, safeLimit) as TaskRecord[];
 };
 const isTimezoneConfigured = (user: UserRecord) => user.timezone_confirmed === 1;
+const resolveEffectiveContextWindow = (user: UserRecord | undefined) => {
+    if (!user) return MAX_HISTORY_ITEMS;
+    const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0
+        ? Math.floor(user.context_window_max)
+        : getPlanContextLimit(parsePlanFromDb(user.plan));
+    const currentWindow = Number.isFinite(user.context_window) && user.context_window > 0
+        ? Math.floor(user.context_window)
+        : maxWindow;
+    return Math.max(1, Math.min(currentWindow, maxWindow));
+};
 const getUserHistory = (userId: number) => {
+    const user = getUser(userId);
+    const contextWindow = resolveEffectiveContextWindow(user);
     const rows = db.prepare(`
         SELECT role, content
         FROM chat_messages
         WHERE user_id = ?
         ORDER BY id DESC
         LIMIT ?
-    `).all(userId, MAX_HISTORY_ITEMS) as ChatMessage[];
+    `).all(userId, contextWindow) as ChatMessage[];
 
     return rows.reverse();
 };
@@ -2541,8 +2732,10 @@ const trimUserHistory = (userId: number) => db.prepare(`
         ORDER BY id DESC
         LIMIT ?
       )
-`).run(userId, userId, MAX_HISTORY_ITEMS);
+`).run(userId, userId, resolveEffectiveContextWindow(getUser(userId)));
 const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
+
+ensureCurrentPlanSubscriptionsForAllUsers();
 
 const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }) => {
     if (user.selected_prompt_id === CUSTOM_PROMPT_ID) {
@@ -2594,6 +2787,14 @@ bot.use(async (ctx, next) => {
         if (userRecord && !userRecord.selected_prompt_id) {
             const defaultPrompt = ensureDefaultPrompt();
             if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
+        }
+        if (userRecord) {
+            const normalizedPlan = parsePlanFromDb(userRecord.plan);
+            if (userRecord.plan !== normalizedPlan) {
+                updateUserPlan(userId, normalizedPlan);
+                userRecord = getUser(userId) || userRecord;
+            }
+            ensureUserCurrentPlanSubscription(userId);
         }
 
         await syncCommandScopeForUser(userId, true);
@@ -2659,6 +2860,14 @@ bot.use(async (ctx, next) => {
         const defaultPrompt = ensureDefaultPrompt();
         if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
     }
+    {
+        const normalizedPlan = parsePlanFromDb(userRecord.plan);
+        if (userRecord.plan !== normalizedPlan) {
+            updateUserPlan(userId, normalizedPlan);
+            userRecord = getUser(userId) || userRecord;
+        }
+        ensureUserCurrentPlanSubscription(userId);
+    }
 
     await syncCommandScopeForUser(userId, false);
     ctx.state.role = 'user';
@@ -2680,6 +2889,11 @@ const showMenu = (ctx: any) => {
             ? '🧠 Текущий промпт: Кастомный'
             : `🧠 Текущий промпт: #${activePrompt.id} ${activePrompt.name}`
         : '🧠 Текущий промпт: не найден';
+    const userPlan = userRecord ? parsePlanFromDb(userRecord.plan) : DEFAULT_USER_PLAN;
+    const planLine = `💳 План: ${getPlanLabel(userPlan)}`;
+    const contextLine = userRecord
+        ? `🗂 Контекст (текущий/доступный): ${getContextWindowText(userRecord)}`
+        : `🗂 Контекст: ${MAX_HISTORY_ITEMS}/${MAX_HISTORY_ITEMS}`;
     const moderationLine = isAdmin
         ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
         : '';
@@ -2689,6 +2903,8 @@ const showMenu = (ctx: any) => {
 👤 Имя: ${userName}
 🆔 ID: ${userId ?? 'unknown'}
 🛡️ Роль: ${roleLabel}
+${planLine}
+${contextLine}
 ${promptLine}
 ${moderationLine}
 
@@ -2703,6 +2919,8 @@ const handleClear = (ctx: any) => {
     renameFlows.delete(userId);
     customPromptEditFlows.delete(userId);
     mailLimitFlows.delete(userId);
+    contextLimitFlows.delete(userId);
+    adminUserContextLimitFlows.delete(userId);
     clearUserHistory(userId);
     return ctx.reply('Память очищена.');
 };
@@ -2838,6 +3056,21 @@ const getStatusLabel = (status: UserStatus) => {
     if (status === 'disapproved') return 'disapproved';
     return 'banned';
 };
+const getPlanLabel = (plan: UserPlan) => PLAN_LABELS[plan] || PLAN_LABELS[DEFAULT_USER_PLAN];
+const getContextWindowText = (user: UserRecord) => {
+    const effective = resolveEffectiveContextWindow(user);
+    const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0
+        ? Math.floor(user.context_window_max)
+        : getPlanContextLimit(parsePlanFromDb(user.plan));
+    return `${effective}/${maxWindow}`;
+};
+const getDurationLabel = (duration: PlanDurationCode) => {
+    if (duration === 'day') return '1 день';
+    if (duration === 'week') return '1 неделя';
+    if (duration === 'month') return '1 месяц';
+    if (duration === 'year') return '1 год';
+    return 'Бессрочно';
+};
 
 const maybeCapturePendingName = (ctx: any, user: UserRecord, text: string) => {
     if (ctx.from?.username) return false;
@@ -2868,9 +3101,10 @@ const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: n
 const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number) => {
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
+        const planTag = getPlanLabel(parsePlanFromDb(row.plan));
         const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
-            `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${usageTag}`,
+            `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
         )];
     });
@@ -2891,11 +3125,31 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number) => {
 
     return Markup.inlineKeyboard([
         [Markup.button.callback('✉️ Написать', `ai_send:${user.id}`)],
+        [Markup.button.callback('🧩 Поменять план', `usr:plan:open:${user.id}:${page}`)],
+        [Markup.button.callback('🗂 Изменить контекст', `usr:ctx:ask:${user.id}:${page}`)],
         [moderationButton],
         [Markup.button.callback('🗑 Удалить', `usr:remove:${user.id}:${page}`)],
         [Markup.button.callback('⬅️ К списку', `usr:list:${page}`)]
     ]);
 };
+const buildAdminPlanChoiceKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
+    [Markup.button.callback(`FREE (${PLAN_CONTEXT_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
+    [Markup.button.callback(`STANDART (${PLAN_CONTEXT_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
+    [Markup.button.callback(`PRO (${PLAN_CONTEXT_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
+    [Markup.button.callback('⬅️ Назад к пользователю', `usr:view:${userId}:${page}`)]
+]);
+const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan) => Markup.inlineKeyboard([
+    [
+        Markup.button.callback('День', `usr:plan:dur:${userId}:${page}:${plan}:day`),
+        Markup.button.callback('Неделя', `usr:plan:dur:${userId}:${page}:${plan}:week`)
+    ],
+    [
+        Markup.button.callback('Месяц', `usr:plan:dur:${userId}:${page}:${plan}:month`),
+        Markup.button.callback('Год', `usr:plan:dur:${userId}:${page}:${plan}:year`)
+    ],
+    [Markup.button.callback('Бессрочно', `usr:plan:dur:${userId}:${page}:${plan}:forever`)],
+    [Markup.button.callback('⬅️ К выбору плана', `usr:plan:open:${userId}:${page}`)]
+]);
 
 const buildPendingCardKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
     [
@@ -2945,11 +3199,17 @@ const renderAdminUsersList = async (ctx: any, page: number, mode: 'reply' | 'edi
 const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
     const prompt = resolvePromptForUser(user);
     const ban = user.status === 'banned' ? getBanRecord(user.id) : undefined;
+    const plan = parsePlanFromDb(user.plan);
+    const subscription = getCurrentPlanSubscription(user.id);
+    const subscriptionEnds = subscription?.ends_at ? subscription.ends_at : 'бессрочно';
     const text = `Пользователь #${user.id}
 Имя: ${user.name ?? 'не указано'}
 Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
 Роль: ${user.role}
 Статус: ${user.status}
+План: ${getPlanLabel(plan)}
+План до: ${subscriptionEnds}
+Контекст (текущий/макс): ${getContextWindowText(user)}
 Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
 Сообщений сегодня: ${user.daily_message_count ?? 0}
 Токенов сегодня: ${user.daily_tokens_used ?? 0}
@@ -2961,6 +3221,27 @@ Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
 Всего символов отправлено: ${user.total_message_length ?? 0}
 ${ban ? `Бан: ${ban.reason}` : ''}`.trim();
     const keyboard = buildAdminUserCardKeyboard(user, page);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+const renderAdminPlanChoiceCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
+    const plan = parsePlanFromDb(user.plan);
+    const text = `Пользователь #${user.id}
+Текущий план: ${getPlanLabel(plan)}
+Текущий контекст: ${getContextWindowText(user)}
+
+Выберите новый план:`;
+    const keyboard = buildAdminPlanChoiceKeyboard(user.id, page);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: number, plan: UserPlan, mode: 'reply' | 'edit' = 'edit') => {
+    const text = `Пользователь #${user.id}
+Новый план: ${getPlanLabel(plan)}
+Лимит контекста у плана: ${PLAN_CONTEXT_LIMITS[plan]}
+
+Выберите срок действия:`;
+    const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -3269,6 +3550,7 @@ bot.command('remove', (ctx) => {
 
     removeUser(targetUserId);
     removeBan(targetUserId);
+    removeUserPlanSubscriptions(targetUserId);
     clearUserHistory(targetUserId);
     ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) удалён из базы.`);
 });
@@ -3582,7 +3864,7 @@ bot.on('location', (ctx) => {
     return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_admin|pending|banned|mail|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_size|prompt_admin|pending|banned|mail|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -3658,6 +3940,21 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
         return;
     }
 
+    if (actionId === 'context_size') {
+        const userId = ctx.from?.id;
+        if (!userId) return;
+        const user = getUser(userId);
+        if (!user) {
+            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            return;
+        }
+        await ctx.reply(
+            `🗂 Размер контекста\nТекущий: ${resolveEffectiveContextWindow(user)}\nДоступно максимум: ${Math.max(1, user.context_window_max || getPlanContextLimit(parsePlanFromDb(user.plan)))}\nПлан: ${getPlanLabel(parsePlanFromDb(user.plan))}`,
+            buildContextSettingsKeyboard()
+        );
+        return;
+    }
+
     if (actionId === 'add') {
         await ctx.reply('Формат: /add 123456789 Имя');
         return;
@@ -3694,6 +3991,29 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|prompt_a
     }
 
     await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
+});
+
+bot.action('context:change', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+
+    contextLimitFlows.set(userId, 'await_limit');
+    await ctx.answerCbQuery('Ожидаю число');
+    await ctx.reply(
+        `Введите новый размер контекста.\nСейчас: ${resolveEffectiveContextWindow(user)}\nМаксимум для вас: ${Math.max(1, user.context_window_max || getPlanContextLimit(parsePlanFromDb(user.plan)))}\nДля отмены: "отмена".`
+    );
+});
+
+bot.action('context:back', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (userId) contextLimitFlows.delete(userId);
+    await ctx.answerCbQuery();
+    await showMenu(ctx);
 });
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
@@ -3941,6 +4261,100 @@ bot.action(/^usr:view:(\d+):(\d+)$/, async (ctx) => {
 
     await renderAdminUserCard(ctx, user, Number.isNaN(page) ? 0 : page, 'edit');
     await ctx.answerCbQuery();
+});
+
+bot.action(/^usr:plan:open:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const userId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+        return;
+    }
+
+    await renderAdminPlanChoiceCard(ctx, user, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^usr:plan:pick:(\d+):(\d+):(free|standart|pro)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const userId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const plan = (ctx as any).match[3] as UserPlan;
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+        return;
+    }
+
+    await renderAdminPlanDurationCard(ctx, user, Number.isNaN(page) ? 0 : page, plan, 'edit');
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|forever)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const adminId = ctx.from?.id;
+    if (!adminId) return;
+    const userId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const plan = (ctx as any).match[3] as UserPlan;
+    const duration = (ctx as any).match[4] as PlanDurationCode;
+    const user = getUser(userId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
+        return;
+    }
+
+    const endsAt = getEndsAtForDuration(duration);
+    applyUserPlan(userId, plan, endsAt, adminId);
+    trimUserHistory(userId);
+    const refreshed = getUser(userId);
+    if (!refreshed) {
+        await ctx.answerCbQuery('Ошибка обновления');
+        return;
+    }
+
+    await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
+    await ctx.answerCbQuery(`План ${getPlanLabel(plan)} на ${getDurationLabel(duration)}`);
+});
+
+bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.state.role !== 'admin') {
+        await ctx.answerCbQuery('Только для админа');
+        return;
+    }
+
+    const adminId = ctx.from?.id;
+    if (!adminId) return;
+    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const user = getUser(targetUserId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+
+    adminUserContextLimitFlows.set(adminId, { targetUserId, page: Number.isNaN(page) ? 0 : page });
+    await ctx.answerCbQuery('Ожидаю число');
+    await ctx.reply(
+        `Введите новый текущий размер контекста для пользователя #${targetUserId}.\nСейчас: ${resolveEffectiveContextWindow(user)}\nМаксимум по плану: ${Math.max(1, user.context_window_max || getPlanContextLimit(parsePlanFromDb(user.plan)))}\nДля админа ограничений нет.\nДля отмены: "отмена".`
+    );
 });
 
 bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
@@ -4225,6 +4639,38 @@ bot.on('text', async (ctx) => {
         return;
     }
 
+    const adminContextFlow = adminUserContextLimitFlows.get(userId);
+    if (adminContextFlow) {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            adminUserContextLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение контекста пользователя отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return ctx.reply('Нужно ввести положительное число. Например: 25. Для отмены: "отмена".');
+        }
+
+        const targetUser = getUser(adminContextFlow.targetUserId);
+        if (!targetUser) {
+            adminUserContextLimitFlows.delete(userId);
+            return ctx.reply('Пользователь не найден.');
+        }
+
+        const nextValue = Math.max(1, Math.floor(parsed));
+        updateUserContextWindow(adminContextFlow.targetUserId, nextValue);
+        trimUserHistory(adminContextFlow.targetUserId);
+        adminUserContextLimitFlows.delete(userId);
+        const refreshed = getUser(adminContextFlow.targetUserId);
+        if (refreshed) {
+            await ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${resolveEffectiveContextWindow(refreshed)} (макс: ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))})`);
+            await renderAdminUserCard(ctx, refreshed, adminContextFlow.page, 'reply');
+            return;
+        }
+        return ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${nextValue}.`);
+    }
+
     const isAdmin = ctx.state.role === 'admin';
     const timezoneFlow = timezoneSetupFlows.get(userId);
 
@@ -4331,6 +4777,42 @@ bot.on('text', async (ctx) => {
         updateUserMailCheckLimit(userId, parsed);
         mailLimitFlows.delete(userId);
         return ctx.reply(`✅ Новое ограничение check_emails: ${parsed}.`);
+    }
+
+    const contextLimitFlow = contextLimitFlows.get(userId);
+    if (contextLimitFlow === 'await_limit') {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            contextLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение размера контекста отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
+        }
+
+        const userRecord = getUser(userId);
+        if (!userRecord) {
+            contextLimitFlows.delete(userId);
+            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+        }
+
+        const maxAllowed = Math.max(1, userRecord.context_window_max || getPlanContextLimit(parsePlanFromDb(userRecord.plan)));
+        if (parsed > maxAllowed) {
+            return ctx.reply(`Для тебя доступно максимум ${maxAllowed}. Введи число от 1 до ${maxAllowed}.`);
+        }
+
+        updateUserContextWindow(userId, Math.floor(parsed));
+        trimUserHistory(userId);
+        contextLimitFlows.delete(userId);
+        const refreshed = getUser(userId);
+        if (refreshed) {
+            return ctx.reply(
+                `✅ Размер контекста обновлён: ${resolveEffectiveContextWindow(refreshed)} из ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))}.`
+            );
+        }
+        return ctx.reply(`✅ Размер контекста обновлён: ${Math.floor(parsed)}.`);
     }
 
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
@@ -4628,6 +5110,20 @@ setInterval(async () => {
         }
     }
 }, 30000);
+
+setInterval(() => {
+    try {
+        expireFinishedPlanSubscriptions();
+    } catch (err) {
+        console.error('Ошибка проверки истекших подписок:', err);
+    }
+}, 60 * 60 * 1000);
+
+try {
+    expireFinishedPlanSubscriptions();
+} catch (err) {
+    console.error('Ошибка первичной проверки подписок:', err);
+}
 
 scheduleDailyCounterReset();
 
