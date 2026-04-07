@@ -30,6 +30,21 @@ const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<UserPlan, number> = {
     standart: 2,
     pro: 10
 };
+const PLAN_NOTES_LIMITS: Record<UserPlan, number> = {
+    free: 10,
+    standart: 50,
+    pro: 250
+};
+const PLAN_NOTE_CONTENT_LIMITS: Record<UserPlan, number> = {
+    free: 400,
+    standart: 800,
+    pro: 3000
+};
+const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
+    free: 5,
+    standart: 10,
+    pro: 20
+};
 const DEFAULT_USER_PLAN: UserPlan = 'free';
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
@@ -405,6 +420,7 @@ const MEMORY_TOOL_INSTRUCTIONS = `
 Считай важными: возраст, профессию/смену работы, рождение детей, семейное положение, переезд/город, устойчивые долгосрочные предпочтения.
 НЕ считай важными: повседневные события, разовые рабочие мелочи, "не успел на автобус", "сегодня сделал функцию", "написал трек".
 Если пользователь явно говорит "запомни" — уточни факт при необходимости и затем вызови update_core_memory.
+Если пользователь просит "запиши в заметки/записную книжку", используй save_note (а не update_core_memory).
 Не сообщай о внутреннем обновлении памяти, если пользователь прямо не просил подтвердить запоминание.
 USE ONLY FOR CRITICAL LIFE EVENTS. DO NOT USE FOR DAILY ROUTINE.`;
 const TIMEZONE_TOOL_INSTRUCTIONS = `
@@ -420,7 +436,16 @@ const EMAIL_TOOL_INSTRUCTIONS = `
 Если пользователь просит отправить письмо — вызови send_email.
 Если пользователь явно пишет "в яндексе" или "в gmail/google", обязательно передай provider в соответствующий инструмент.
 Для "следующие 10 писем" используй check_emails с offset=10 (или 20, 30 и т.д.).`;
-const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
+const NOTEBOOK_TOOL_INSTRUCTIONS = `
+
+Если пользователь просит записать что-то в записную книжку/заметки, вызови save_note.
+Если пользователь просит показать/вывести заметки, вызови list_my_notes.
+Если пользователь просит прочитать конкретную заметку целиком, вызови read_note по note_id.
+Если пользователь просит удалить заметку, вызови delete_note по точному note_id.
+Записная книжка (save_note/list_my_notes) — это отдельное хранилище заметок пользователя.
+Долговременная память (update_core_memory) — только для критически важных биографических фактов.
+Не путай эти инструменты между собой.`;
+const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${NOTEBOOK_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
     const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
@@ -435,10 +460,11 @@ const CUSTOM_PROMPT_ID = -1;
 const MAX_CUSTOM_PROMPT_LENGTH = 800;
 const MAX_CORE_MEMORY_LENGTH = 400;
 const NOTES_WEBAPP_URL = (process.env.NOTES_WEBAPP_URL || '').trim();
-const NOTE_CONTENT_MAX_LENGTH = 2000;
+const NOTE_CONTENT_MAX_LENGTH = 3000;
 const NOTE_TITLE_MAX_LENGTH = 120;
 const NOTE_QUERY_MAX_LENGTH = 120;
 const NOTES_PAGE_SIZE_DEFAULT = 10;
+const NOTES_MENU_PAGE_SIZE = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
@@ -882,6 +908,85 @@ const tools = [
     {
         type: 'function',
         function: {
+            name: 'save_note',
+            description: 'Сохраняет запись в личную записную книжку пользователя. Используй, когда пользователь просит "запиши", "сохрани в заметки" и т.д.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    title: {
+                        type: 'string',
+                        description: 'Короткий заголовок заметки (необязательно).'
+                    },
+                    content: {
+                        type: 'string',
+                        description: 'Текст заметки, который нужно сохранить.'
+                    }
+                },
+                required: ['content']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_my_notes',
+            description: 'Показывает заметки пользователя из записной книжки. Поддерживает поиск и пагинацию.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'Поисковая строка по заголовку и тексту.'
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Сколько заметок вернуть за запрос (1..50).'
+                    },
+                    offset: {
+                        type: 'number',
+                        description: 'Сдвиг для пагинации. Пример: 0, затем 10.'
+                    }
+                }
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_note',
+            description: 'Читает одну заметку пользователя целиком по ID.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    note_id: {
+                        type: 'number',
+                        description: 'ID заметки.'
+                    }
+                },
+                required: ['note_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'delete_note',
+            description: 'Удаляет одну заметку пользователя по ID и возвращает обновлённый список.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    note_id: {
+                        type: 'number',
+                        description: 'ID заметки для удаления.'
+                    }
+                },
+                required: ['note_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'update_core_memory',
             description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важной биографии/статуса/долгосрочных предпочтений. Не используй для рутины.',
             parameters: {
@@ -1009,7 +1114,12 @@ type NoteRecord = {
     created_at: number;
     updated_at: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'help';
+type NoteStatsRecord = {
+    user_id: number;
+    notes_count: number;
+    notes_chars: number;
+};
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
     label: string;
@@ -1031,7 +1141,8 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'pending', label: '🕓 Заявки', adminOnly: true, row: 5 },
     { id: 'banned', label: '⛔ Забаненные', adminOnly: true, row: 5 },
     { id: 'mail', label: '📬 Почта', adminOnly: false, row: 6 },
-    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 7 }
+    { id: 'notes', label: '📝 Заметки', adminOnly: false, row: 7 },
+    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 8 }
 ];
 
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
@@ -1094,6 +1205,7 @@ const timezoneSetupFlows = new Map<number, 'await_offset'>();
 const customPromptEditFlows = new Map<number, 'await_content'>();
 const mailLimitFlows = new Map<number, 'await_limit'>();
 const contextLimitFlows = new Map<number, 'await_limit'>();
+const noteEditFlows = new Map<number, { noteId: number; page: number }>();
 const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page: number }>();
 const adminUserMessageLimitFlows = new Map<number, { targetUserId: number; page: number }>();
 const adminAiMessageFlow = new Map<number, number>();
@@ -1279,6 +1391,21 @@ type SendEmailArgs = {
     to?: string;
     subject?: string;
     body?: string;
+};
+type SaveNoteArgs = {
+    content?: string;
+    title?: string;
+};
+type ListMyNotesArgs = {
+    query?: string;
+    limit?: number;
+    offset?: number;
+};
+type ReadNoteArgs = {
+    note_id?: number;
+};
+type DeleteNoteArgs = {
+    note_id?: number;
 };
 
 const clampTimezoneOffset = (offset: number) => {
@@ -1982,6 +2109,14 @@ const deleteNoteByUserAndId = (userId: number, noteId: number) => db.prepare(`
     DELETE FROM notes
     WHERE user_id = ? AND id = ?
 `).run(userId, noteId);
+const updateNoteByUserAndId = (userId: number, noteId: number, content: string) => {
+    const nowTs = Math.floor(Date.now() / 1000);
+    return db.prepare(`
+        UPDATE notes
+        SET content = ?, updated_at = ?
+        WHERE user_id = ? AND id = ?
+    `).run(content, nowTs, userId, noteId);
+};
 const getNoteByUserAndId = (userId: number, noteId: number) => db.prepare(`
     SELECT id, user_id, title, content, created_at, updated_at
     FROM notes
@@ -2021,6 +2156,13 @@ const countNotes = (userId: number, query = '') => {
         WHERE user_id = ? AND (title LIKE ? OR content LIKE ?)
     `).get(userId, like, like) as { c: number }).c;
 };
+const getPlanNotesLimit = (plan: UserPlan) => PLAN_NOTES_LIMITS[plan] ?? PLAN_NOTES_LIMITS[DEFAULT_USER_PLAN];
+const getPlanNoteContentLimit = (plan: UserPlan) => PLAN_NOTE_CONTENT_LIMITS[plan] ?? PLAN_NOTE_CONTENT_LIMITS[DEFAULT_USER_PLAN];
+const getPlanNoteListLimit = (plan: UserPlan) => PLAN_NOTE_LIST_LIMITS[plan] ?? PLAN_NOTE_LIST_LIMITS[DEFAULT_USER_PLAN];
+const formatNoteDate = (unixTs: number) => {
+    if (!Number.isFinite(unixTs) || unixTs <= 0) return 'дата неизвестна';
+    return new Date(unixTs * 1000).toLocaleString('ru-RU');
+};
 const formatNotesPage = (notes: NoteRecord[], page: number, total: number, pageSize: number, query?: string) => {
     if (!notes.length) {
         return query
@@ -2034,9 +2176,169 @@ const formatNotesPage = (notes: NoteRecord[], page: number, total: number, pageS
         : `Заметки (${total}):`;
     const list = notes.map(note => {
         const titlePart = note.title?.trim() ? `${normalizeTextPreview(note.title, 40)} | ` : '';
-        return `#${note.id} — ${titlePart}${normalizeTextPreview(note.content, 120)}`;
+        return `#${note.id} [${formatNoteDate(note.created_at)}] — ${titlePart}${normalizeTextPreview(note.content, 120)}`;
     }).join('\n');
     return `${head}\n${list}\n\nСтраница ${safePage}/${totalPages}.`;
+};
+const getNoteMenuTitle = (note: NoteRecord) => {
+    const title = (note.title || '').trim();
+    if (title) return normalizeTextPreview(title, 48);
+    return normalizeTextPreview(note.content || 'Без текста', 48);
+};
+const buildNotesMenuKeyboard = (notes: NoteRecord[], page: number, total: number) => {
+    const keyboardRows = notes.map(note => [
+        Markup.button.callback(
+            `#${note.id} ${getNoteMenuTitle(note)}`,
+            `notes:view:${note.id}:${page}`
+        )
+    ]);
+
+    const navRow = [];
+    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `notes:list:${page - 1}`));
+    if ((page + 1) * NOTES_MENU_PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `notes:list:${page + 1}`));
+    if (navRow.length) keyboardRows.push(navRow);
+
+    keyboardRows.push([Markup.button.callback('⬅️ В меню', 'notes:back:menu')]);
+    return Markup.inlineKeyboard(keyboardRows);
+};
+const buildNoteViewKeyboard = (noteId: number, page: number) => Markup.inlineKeyboard([
+    [Markup.button.callback('✏️ Редактировать', `notes:edit:${noteId}:${page}`)],
+    [Markup.button.callback('🗑 Удалить', `notes:delete:${noteId}:${page}`)],
+    [Markup.button.callback('⬅️ К списку заметок', `notes:list:${page}`)],
+    [Markup.button.callback('⬅️ В меню', 'notes:back:menu')]
+]);
+const renderNotesMenuList = async (ctx: any, userId: number, page: number, mode: 'reply' | 'edit' = 'reply') => {
+    const safePage = Math.max(0, page);
+    const total = countNotes(userId);
+    if (!total) {
+        const text = 'Заметок пока нет. Можно добавить через /note_add <текст>.';
+        const keyboard = Markup.inlineKeyboard([[Markup.button.callback('⬅️ В меню', 'notes:back:menu')]]);
+        if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+        return ctx.reply(text, keyboard);
+    }
+
+    const offset = safePage * NOTES_MENU_PAGE_SIZE;
+    const notes = getNotesPage(userId, NOTES_MENU_PAGE_SIZE, offset);
+    const pages = Math.max(1, Math.ceil(total / NOTES_MENU_PAGE_SIZE));
+    const text = `📝 Заметки\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}\n\nНажми на заметку, чтобы открыть полностью.`;
+    const keyboard = buildNotesMenuKeyboard(notes, safePage, total);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+const renderNoteView = async (ctx: any, userId: number, noteId: number, page: number, mode: 'reply' | 'edit' = 'edit') => {
+    const note = getNoteByUserAndId(userId, noteId);
+    if (!note) {
+        const text = `Заметка #${noteId} не найдена.`;
+        const keyboard = Markup.inlineKeyboard([
+            [Markup.button.callback('⬅️ К списку заметок', `notes:list:${page}`)],
+            [Markup.button.callback('⬅️ В меню', 'notes:back:menu')]
+        ]);
+        if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+        return ctx.reply(text, keyboard);
+    }
+
+    const title = note.title?.trim() ? note.title.trim() : 'без заголовка';
+    const text = `Заметка #${note.id}\nДата: ${formatNoteDate(note.created_at)}\nЗаголовок: ${title}\n\n${note.content}`;
+    const keyboard = buildNoteViewKeyboard(note.id, page);
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+const getNoteStatsForUser = (userId: number) => db.prepare(`
+    SELECT
+        ? as user_id,
+        COUNT(*) as notes_count,
+        COALESCE(SUM(LENGTH(COALESCE(title, '')) + LENGTH(COALESCE(content, ''))), 0) as notes_chars
+    FROM notes
+    WHERE user_id = ?
+`).get(userId, userId) as NoteStatsRecord;
+const getNoteStatsForUsers = (userIds: number[]) => {
+    const unique = [...new Set(userIds.filter(id => Number.isFinite(id) && id > 0))];
+    const statsMap = new Map<number, NoteStatsRecord>();
+    if (!unique.length) return statsMap;
+
+    const placeholders = unique.map(() => '?').join(',');
+    const rows = db.prepare(`
+        SELECT
+            user_id,
+            COUNT(*) as notes_count,
+            COALESCE(SUM(LENGTH(COALESCE(title, '')) + LENGTH(COALESCE(content, ''))), 0) as notes_chars
+        FROM notes
+        WHERE user_id IN (${placeholders})
+        GROUP BY user_id
+    `).all(...unique) as NoteStatsRecord[];
+
+    for (const id of unique) {
+        statsMap.set(id, { user_id: id, notes_count: 0, notes_chars: 0 });
+    }
+    for (const row of rows) {
+        statsMap.set(row.user_id, {
+            user_id: row.user_id,
+            notes_count: Number(row.notes_count || 0),
+            notes_chars: Number(row.notes_chars || 0)
+        });
+    }
+    return statsMap;
+};
+const runSaveNoteTool = (userId: number, rawContent: string, rawTitle = '') => {
+    const user = getUser(userId);
+    if (!user) return 'Ошибка: пользователь не найден.';
+
+    const content = rawContent.trim();
+    const title = rawTitle.trim();
+    if (!content) return 'Ошибка: пустой content.';
+    if (title.length > NOTE_TITLE_MAX_LENGTH) {
+        return `Ошибка: title слишком длинный (${title.length}/${NOTE_TITLE_MAX_LENGTH}).`;
+    }
+
+    const userPlan = parsePlanFromDb(user.plan);
+    const contentLimit = getPlanNoteContentLimit(userPlan);
+    if (content.length > contentLimit) {
+        return `Ошибка: content слишком длинный (${content.length}/${contentLimit}) для плана ${getPlanLabel(userPlan)}.`;
+    }
+    const notesLimit = getPlanNotesLimit(userPlan);
+    const notesCount = countNotes(userId);
+    if (notesCount >= notesLimit) {
+        return `Ошибка: лимит записной книжки достигнут (${notesCount}/${notesLimit}) для плана ${getPlanLabel(userPlan)}.`;
+    }
+
+    const created = createNote(userId, content, title);
+    const noteId = Number(created.lastInsertRowid);
+    const createdNote = getNoteByUserAndId(userId, noteId);
+    const createdAt = createdNote ? formatNoteDate(createdNote.created_at) : 'дата неизвестна';
+    return `Заметка сохранена: #${noteId} [${createdAt}]. Всего: ${notesCount + 1}/${notesLimit}.`;
+};
+const runListMyNotesTool = (userId: number, rawQuery = '', rawLimit?: number, rawOffset?: number) => {
+    const user = getUser(userId);
+    if (!user) return 'Ошибка: пользователь не найден.';
+    const userPlan = parsePlanFromDb(user.plan);
+    const maxListLimit = getPlanNoteListLimit(userPlan);
+    const query = (rawQuery || '').trim().slice(0, NOTE_QUERY_MAX_LENGTH);
+    const limit = Number.isFinite(rawLimit)
+        ? Math.max(1, Math.min(maxListLimit, Math.floor(rawLimit as number)))
+        : maxListLimit;
+    const offset = Number.isFinite(rawOffset) ? Math.max(0, Math.floor(rawOffset as number)) : 0;
+    const notes = getNotesPage(userId, limit, offset, query);
+    const total = countNotes(userId, query);
+    const page = Math.floor(offset / limit) + 1;
+    return formatNotesPage(notes, page, total, limit, query || undefined);
+};
+const runReadNoteTool = (userId: number, noteIdRaw?: number) => {
+    const noteId = Number(noteIdRaw);
+    if (!Number.isFinite(noteId) || noteId <= 0) return 'Ошибка: некорректный note_id.';
+    const note = getNoteByUserAndId(userId, Math.floor(noteId));
+    if (!note) return `Заметка #${Math.floor(noteId)} не найдена.`;
+    const titleText = note.title?.trim() ? note.title.trim() : 'без заголовка';
+    return `Заметка #${note.id}\nДата: ${formatNoteDate(note.created_at)}\nЗаголовок: ${titleText}\n\n${note.content}`;
+};
+const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
+    const noteId = Number(noteIdRaw);
+    if (!Number.isFinite(noteId) || noteId <= 0) return 'Ошибка: некорректный note_id.';
+    const note = getNoteByUserAndId(userId, Math.floor(noteId));
+    if (!note) return `Заметка #${Math.floor(noteId)} не найдена.`;
+    const deleted = deleteNoteByUserAndId(userId, Math.floor(noteId));
+    if (!deleted.changes) return `Не удалось удалить заметку #${Math.floor(noteId)}.`;
+    const updated = runListMyNotesTool(userId, '', undefined, 0);
+    return `Заметка #${Math.floor(noteId)} удалена.\n\n${updated}`;
 };
 
 const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRecord | undefined;
@@ -3146,6 +3448,7 @@ const handleClear = (ctx: any) => {
     customPromptEditFlows.delete(userId);
     mailLimitFlows.delete(userId);
     contextLimitFlows.delete(userId);
+    noteEditFlows.delete(userId);
     adminUserContextLimitFlows.delete(userId);
     adminUserMessageLimitFlows.delete(userId);
     clearUserHistory(userId);
@@ -3333,13 +3636,14 @@ const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: n
     return Markup.inlineKeyboard(keyboardRows);
 };
 
-const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number) => {
+const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number, noteStatsMap: Map<number, NoteStatsRecord>) => {
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
         const planTag = getPlanLabel(parsePlanFromDb(row.plan));
         const messageLimit = normalizeDailyMessageLimit(row.daily_message_limit);
         const webLimit = normalizeDailyWebSearchLimit(row.daily_web_search_limit);
-        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0}/${webLimit} ${formatRub(row.daily_cost_rub ?? 0)}`;
+        const notesStats = noteStatsMap.get(row.id) || { user_id: row.id, notes_count: 0, notes_chars: 0 };
+        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0}/${webLimit} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -3427,9 +3731,10 @@ const renderAdminUsersList = async (ctx: any, page: number, mode: 'reply' | 'edi
     }
 
     const rows = getUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
+    const noteStatsMap = getNoteStatsForUsers(rows.map(r => r.id));
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const text = `👥 Пользователи\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}`;
-    const keyboard = buildAdminUsersListKeyboard(rows, safePage, total);
+    const keyboard = buildAdminUsersListKeyboard(rows, safePage, total, noteStatsMap);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -3438,6 +3743,9 @@ const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mod
     const prompt = resolvePromptForUser(user);
     const ban = user.status === 'banned' ? getBanRecord(user.id) : undefined;
     const plan = parsePlanFromDb(user.plan);
+    const notesStats = getNoteStatsForUser(user.id);
+    const notesLimit = getPlanNotesLimit(plan);
+    const noteContentLimit = getPlanNoteContentLimit(plan);
     const subscription = getCurrentPlanSubscription(user.id);
     const subscriptionEnds = subscription?.ends_at ? subscription.ends_at : 'бессрочно';
     const text = `Пользователь #${user.id}
@@ -3458,6 +3766,9 @@ Web-поиск в день: ${getDailyWebSearchLimitText(user)}
 Токенов всего: ${user.total_tokens_used ?? 0}
 Цена всего: ${formatRub(user.total_cost_rub ?? 0)}
 Поисков web всего: ${user.total_web_search_count ?? 0}
+Заметок: ${notesStats.notes_count}/${notesLimit}
+Символов в заметках: ${notesStats.notes_chars}
+Лимит символов на заметку: ${noteContentLimit}
 Всего символов отправлено: ${user.total_message_length ?? 0}
 ${ban ? `Бан: ${ban.reason}` : ''}`.trim();
     const keyboard = buildAdminUserCardKeyboard(user, page);
@@ -3481,6 +3792,8 @@ const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: num
 Лимит контекста у плана: ${PLAN_CONTEXT_LIMITS[plan]}
 Лимит сообщений в день у плана: ${PLAN_DAILY_MESSAGE_LIMITS[plan]}
 Лимит web-поиска в день у плана: ${PLAN_DAILY_WEB_SEARCH_LIMITS[plan]}
+Лимит заметок: ${getPlanNotesLimit(plan)}
+Лимит символов на заметку: ${getPlanNoteContentLimit(plan)}
 
 Выберите срок действия:`;
     const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan);
@@ -3958,8 +4271,15 @@ bot.command('note_add', (ctx) => {
 
     const content = extractCommandPayload(ctx.message.text, 'note_add');
     if (!content) return ctx.reply('Формат: /note_add <текст заметки>');
-    if (content.length > NOTE_CONTENT_MAX_LENGTH) {
-        return ctx.reply(`Слишком длинная заметка: ${content.length} символов. Лимит: ${NOTE_CONTENT_MAX_LENGTH}.`);
+    const userPlan = parsePlanFromDb(user.plan);
+    const contentLimit = getPlanNoteContentLimit(userPlan);
+    if (content.length > contentLimit) {
+        return ctx.reply(`Слишком длинная заметка: ${content.length} символов. Лимит для плана ${getPlanLabel(userPlan)}: ${contentLimit}.`);
+    }
+    const notesLimit = getPlanNotesLimit(userPlan);
+    const notesCount = countNotes(userId);
+    if (notesCount >= notesLimit) {
+        return ctx.reply(`Лимит записной книжки для плана ${getPlanLabel(userPlan)}: ${notesLimit}. Удали старые заметки (/note_delete <id>) или обнови план.`);
     }
 
     const created = createNote(userId, content, '');
@@ -3978,10 +4298,11 @@ bot.command('notes', (ctx) => {
     const pageRaw = ctx.message.text.split(' ').filter(Boolean)[1];
     const pageParsed = Number.parseInt(pageRaw || '1', 10);
     const page = Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1;
-    const offset = (page - 1) * NOTES_PAGE_SIZE_DEFAULT;
-    const notes = getNotesPage(userId, NOTES_PAGE_SIZE_DEFAULT, offset);
+    const listLimit = getPlanNoteListLimit(parsePlanFromDb(user.plan));
+    const offset = (page - 1) * listLimit;
+    const notes = getNotesPage(userId, listLimit, offset);
     const total = countNotes(userId);
-    return ctx.reply(formatNotesPage(notes, page, total, NOTES_PAGE_SIZE_DEFAULT));
+    return ctx.reply(formatNotesPage(notes, page, total, listLimit));
 });
 
 bot.command('note_find', (ctx) => {
@@ -3998,9 +4319,10 @@ bot.command('note_find', (ctx) => {
         return ctx.reply(`Слишком длинный запрос: ${query.length} символов. Лимит: ${NOTE_QUERY_MAX_LENGTH}.`);
     }
 
-    const notes = getNotesPage(userId, NOTES_PAGE_SIZE_DEFAULT, 0, query);
+    const listLimit = getPlanNoteListLimit(parsePlanFromDb(user.plan));
+    const notes = getNotesPage(userId, listLimit, 0, query);
     const total = countNotes(userId, query);
-    return ctx.reply(formatNotesPage(notes, 1, total, NOTES_PAGE_SIZE_DEFAULT, query));
+    return ctx.reply(formatNotesPage(notes, 1, total, listLimit, query));
 });
 
 bot.command('note_delete', (ctx) => {
@@ -4180,7 +4502,7 @@ bot.on('location', (ctx) => {
     return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_size|prompt_admin|pending|banned|mail|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_size|prompt_admin|pending|banned|mail|notes|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -4301,6 +4623,13 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
         return;
     }
 
+    if (actionId === 'notes') {
+        const userId = ctx.from?.id;
+        if (!userId) return;
+        await renderNotesMenuList(ctx, userId, 0, 'reply');
+        return;
+    }
+
     if (ctx.state.role === 'admin') {
         await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
@@ -4399,6 +4728,101 @@ bot.action('mail:forget', async (ctx) => {
     clearUserMailSettings(userId);
     await ctx.answerCbQuery('Почта удалена');
     await ctx.reply('🗑 Данные почты удалены.');
+});
+
+bot.action(/^notes:list:(\d+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+    const page = Number.parseInt((ctx as any).match[1], 10);
+    await ctx.answerCbQuery();
+    await renderNotesMenuList(ctx, userId, Number.isNaN(page) ? 0 : page, 'edit');
+});
+
+bot.action(/^notes:view:(\d+):(\d+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+    const noteId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    await ctx.answerCbQuery();
+    if (Number.isNaN(noteId) || noteId <= 0) {
+        await ctx.reply('Некорректный ID заметки.');
+        return;
+    }
+    await renderNoteView(ctx, userId, noteId, Number.isNaN(page) ? 0 : page, 'edit');
+});
+
+bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+    const noteId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    if (Number.isNaN(noteId) || noteId <= 0) {
+        await ctx.answerCbQuery('Некорректный ID');
+        return;
+    }
+    const note = getNoteByUserAndId(userId, noteId);
+    if (!note) {
+        await ctx.answerCbQuery('Заметка не найдена');
+        return;
+    }
+    noteEditFlows.set(userId, { noteId, page: Number.isNaN(page) ? 0 : page });
+    await ctx.answerCbQuery('Ожидаю текст');
+    await ctx.reply(`Введите новый текст для заметки #${noteId}.\nЛимит по вашему плану: ${getPlanNoteContentLimit(parsePlanFromDb(user.plan))} символов.\nДля отмены: "отмена".`);
+});
+
+bot.action(/^notes:delete:(\d+):(\d+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        await ctx.answerCbQuery('Нет доступа');
+        return;
+    }
+    const noteId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    const safePage = Number.isNaN(page) ? 0 : page;
+    if (Number.isNaN(noteId) || noteId <= 0) {
+        await ctx.answerCbQuery('Некорректный ID');
+        return;
+    }
+    const note = getNoteByUserAndId(userId, noteId);
+    if (!note) {
+        await ctx.answerCbQuery('Уже удалена');
+        await renderNotesMenuList(ctx, userId, safePage, 'edit');
+        return;
+    }
+    const deleted = deleteNoteByUserAndId(userId, noteId);
+    if (!deleted.changes) {
+        await ctx.answerCbQuery('Не удалось удалить');
+        return;
+    }
+    const totalAfter = countNotes(userId);
+    const maxPage = Math.max(0, Math.ceil(totalAfter / NOTES_MENU_PAGE_SIZE) - 1);
+    const nextPage = Math.min(safePage, maxPage);
+    await ctx.answerCbQuery('Удалено');
+    await renderNotesMenuList(ctx, userId, nextPage, 'edit');
+});
+
+bot.action('notes:back:menu', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (userId) noteEditFlows.delete(userId);
+    await ctx.answerCbQuery();
+    await showMenu(ctx);
 });
 
 bot.action(/^mod:pv:(\d+):(\d+)$/, async (ctx) => {
@@ -5186,6 +5610,43 @@ bot.on('text', async (ctx) => {
         return ctx.reply(`✅ Размер контекста обновлён: ${Math.floor(parsed)}.`);
     }
 
+    const noteEditFlow = noteEditFlows.get(userId);
+    if (noteEditFlow) {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            noteEditFlows.delete(userId);
+            return ctx.reply('Ок, редактирование заметки отменено.');
+        }
+
+        const userRecord = getUser(userId);
+        if (!userRecord) {
+            noteEditFlows.delete(userId);
+            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+        }
+
+        const userPlan = parsePlanFromDb(userRecord.plan);
+        const contentLimit = getPlanNoteContentLimit(userPlan);
+        if (!userText || userText.length > contentLimit) {
+            return ctx.reply(`Текст заметки должен быть от 1 до ${contentLimit} символов. Для отмены: "отмена".`);
+        }
+
+        const note = getNoteByUserAndId(userId, noteEditFlow.noteId);
+        if (!note) {
+            noteEditFlows.delete(userId);
+            return ctx.reply(`Заметка #${noteEditFlow.noteId} не найдена.`);
+        }
+
+        const result = updateNoteByUserAndId(userId, noteEditFlow.noteId, userText.trim());
+        noteEditFlows.delete(userId);
+        if (!result.changes) {
+            return ctx.reply(`Не удалось обновить заметку #${noteEditFlow.noteId}.`);
+        }
+
+        await ctx.reply(`✅ Заметка #${noteEditFlow.noteId} обновлена.`);
+        await renderNoteView(ctx, userId, noteEditFlow.noteId, noteEditFlow.page, 'reply');
+        return;
+    }
+
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
     const userRecord = getUser(userId);
     if (!userRecord) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
@@ -5400,6 +5861,23 @@ bot.on('text', async (ctx) => {
                         const body = typeof parsed.body === 'string' ? parsed.body : '';
                         const provider = typeof parsed.provider === 'string' ? parsed.provider : '';
                         toolContent = await runEmailSend(userId, to, subject, body, provider);
+                    } else if (toolCall.function.name === 'save_note') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as SaveNoteArgs;
+                        const content = typeof parsed.content === 'string' ? parsed.content : '';
+                        const title = typeof parsed.title === 'string' ? parsed.title : '';
+                        toolContent = runSaveNoteTool(userId, content, title);
+                    } else if (toolCall.function.name === 'list_my_notes') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as ListMyNotesArgs;
+                        const query = typeof parsed.query === 'string' ? parsed.query : '';
+                        const limit = typeof parsed.limit === 'number' ? parsed.limit : undefined;
+                        const offset = typeof parsed.offset === 'number' ? parsed.offset : undefined;
+                        toolContent = runListMyNotesTool(userId, query, limit, offset);
+                    } else if (toolCall.function.name === 'read_note') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as ReadNoteArgs;
+                        toolContent = runReadNoteTool(userId, parsed.note_id);
+                    } else if (toolCall.function.name === 'delete_note') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as DeleteNoteArgs;
+                        toolContent = runDeleteNoteTool(userId, parsed.note_id);
                     } else if (toolCall.function.name === 'update_core_memory') {
                         const parsed = JSON.parse(toolCall.function.arguments || '{}') as UpdateCoreMemoryArgs;
                         const newFact = typeof parsed.new_fact === 'string' ? parsed.new_fact.trim() : '';
