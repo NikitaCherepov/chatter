@@ -45,12 +45,26 @@ const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
     standart: 10,
     pro: 20
 };
+const PLAN_LITE_ROUTER_ENABLED: Record<UserPlan, boolean> = {
+    free: false,
+    standart: true,
+    pro: true
+};
+const PLAN_ESCALATE_TOOL_ENABLED: Record<UserPlan, boolean> = {
+    free: false,
+    standart: true,
+    pro: true
+};
 const DEFAULT_USER_PLAN: UserPlan = 'free';
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
 const ai = new OpenAI({
     apiKey: process.env.TIMEWEB_API_KEY,
     baseURL: process.env.TIMEWEB_BASE_URL,
+});
+const aiLite = new OpenAI({
+    apiKey: process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_API_KEY,
+    baseURL: process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_BASE_URL,
 });
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
@@ -445,6 +459,12 @@ const NOTEBOOK_TOOL_INSTRUCTIONS = `
 Записная книжка (save_note/list_my_notes) — это отдельное хранилище заметок пользователя.
 Долговременная память (update_core_memory) — только для критически важных биографических фактов.
 Не путай эти инструменты между собой.`;
+const LITE_ROUTER_INSTRUCTIONS = `
+
+Ты — быстрый ассистент-диспетчер.
+Твоя главная задача: управление устройствами, простые заметки, проверка почты/погоды, короткие бытовые ответы.
+ПРАВИЛО ЭСКАЛАЦИИ: если запрос сложный (творчество, глубокий анализ, длинная структурированная расшифровка, программирование, большой текст), не пытайся отвечать сам.
+Ты ОБЯЗАН немедленно вызвать инструмент escalate_to_pro и передать исходный запрос пользователя в original_query.`;
 const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${NOTEBOOK_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
@@ -453,6 +473,7 @@ const buildTimeContext = (timezoneOffset: number) => {
     return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач используй local_time (HH:MM) или delay_seconds.`;
 };
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
+const LITE_MODEL_NAME = process.env.TIMEWEB_LITE_MODEL || 'gemini-2.5-flash-lite';
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
@@ -1035,6 +1056,23 @@ const tools = [
         }
     }
 ] as const;
+const ESCALATE_TO_PRO_TOOL = {
+    type: 'function',
+    function: {
+        name: 'escalate_to_pro',
+        description: 'Используй ТОЛЬКО если запрос требует глубокого анализа, творческого мышления, сложного структурирования, написания кода или длинного рассказа. Передай исходный запрос пользователя.',
+        parameters: {
+            type: 'object',
+            properties: {
+                original_query: {
+                    type: 'string',
+                    description: 'Изначальный запрос пользователя для передачи в старшую модель.'
+                }
+            },
+            required: ['original_query']
+        }
+    }
+} as const;
 
 type ChatRole = 'user' | 'assistant';
 type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
@@ -5396,15 +5434,28 @@ bot.action('prompt:cancel', async (ctx) => {
     await ctx.answerCbQuery();
 });
 
-const processUserTextThroughAi = async (ctx: any, rawText: string) => {
+const processUserTextThroughAi = async (
+    ctx: any,
+    rawText: string,
+    options?: { forcePro?: boolean; persistUserText?: string }
+) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const userText = rawText.trim();
+    let userText = rawText.trim();
     if (!userText) {
         await ctx.reply('Пустое сообщение. Попробуй ещё раз.');
         return;
     }
+    const forceProRoute = Boolean(options?.forcePro) || userText.startsWith('!!!');
+    if (forceProRoute && !options?.forcePro) {
+        userText = userText.replace(/^!{3,}/, '').trim();
+    }
+    if (!userText) {
+        await ctx.reply('После !!! нужен текст запроса.');
+        return;
+    }
+    const userTextForHistory = options?.persistUserText?.trim() || userText;
 
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
     const userRecord = getUser(userId);
@@ -5422,8 +5473,21 @@ const processUserTextThroughAi = async (ctx: any, rawText: string) => {
     }
 
     const activePrompt = resolvePromptForUser(userRecord);
+    const userPlan = parsePlanFromDb(userRecord.plan);
+    const canUseLiteRouter = PLAN_LITE_ROUTER_ENABLED[userPlan];
+    const canUseEscalateTool = PLAN_ESCALATE_TOOL_ENABLED[userPlan];
+    const useLiteRouter = !forceProRoute && canUseLiteRouter && canUseEscalateTool;
     const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
-    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
+    const systemPromptBase = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
+    const systemPrompt = useLiteRouter
+        ? `${systemPromptBase}\n\n${LITE_ROUTER_INSTRUCTIONS}`
+        : systemPromptBase;
+    const modelClient = useLiteRouter ? aiLite : ai;
+    const modelName = useLiteRouter ? LITE_MODEL_NAME : MODEL_NAME;
+    const baseTools = tools as unknown as any[];
+    const modelTools = useLiteRouter
+        ? [...baseTools, ESCALATE_TO_PRO_TOOL as any]
+        : baseTools;
     const history = getUserHistory(userId);
 
     try {
@@ -5444,10 +5508,10 @@ const processUserTextThroughAi = async (ctx: any, rawText: string) => {
         while (isGenerating && loopCount < MAX_TOOL_LOOPS) {
             loopCount += 1;
 
-            const response = await ai.chat.completions.create({
-                model: MODEL_NAME,
+            const response = await modelClient.chat.completions.create({
+                model: modelName,
                 messages: currentMessages,
-                tools: tools as any,
+                tools: modelTools,
                 tool_choice: 'auto'
             });
             totalTokensForTurn += extractTotalTokens(response);
@@ -5467,7 +5531,25 @@ const processUserTextThroughAi = async (ctx: any, rawText: string) => {
                 let toolContent = '';
 
                 try {
-                    if (toolCall.function.name === 'search_web') {
+                    if (toolCall.function.name === 'escalate_to_pro') {
+                        if (!useLiteRouter || !canUseEscalateTool) {
+                            toolContent = 'Ошибка инструмента escalate_to_pro: недоступно для текущего тарифа.';
+                        } else {
+                            let queryForPro = userText;
+                            try {
+                                const parsed = JSON.parse(toolCall.function.arguments || '{}');
+                                if (typeof parsed.original_query === 'string' && parsed.original_query.trim()) {
+                                    queryForPro = parsed.original_query.trim();
+                                }
+                            } catch (err) {
+                                console.warn('Ошибка парсинга аргументов escalate_to_pro:', err);
+                            }
+                            return processUserTextThroughAi(ctx, queryForPro, {
+                                forcePro: true,
+                                persistUserText: userTextForHistory
+                            });
+                        }
+                    } else if (toolCall.function.name === 'search_web') {
                         await ctx.reply('Ищу информацию в сети...');
 
                         let query = '';
@@ -5684,8 +5766,8 @@ const processUserTextThroughAi = async (ctx: any, rawText: string) => {
             console.warn(`Достигнут лимит tool-циклов (${MAX_TOOL_LOOPS}) для user_id=${userId}`);
         }
 
-        incrementUserStats(userId, userText.length, totalTokensForTurn);
-        addHistoryMessage(userId, 'user', userText);
+        incrementUserStats(userId, userTextForHistory.length, totalTokensForTurn);
+        addHistoryMessage(userId, 'user', userTextForHistory);
         addHistoryMessage(userId, 'assistant', answer);
         trimUserHistory(userId);
         await safeReply(ctx, answer);
