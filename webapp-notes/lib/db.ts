@@ -1,9 +1,9 @@
-﻿import Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import path from 'node:path';
 
 const dbPath = process.env.NOTES_DB_PATH
-  ? path.resolve(process.cwd(), process.env.NOTES_DB_PATH)
-  : path.resolve(process.cwd(), '..', 'chatter.db');
+  ? path.resolve(/*turbopackIgnore: true*/ process.cwd(), process.env.NOTES_DB_PATH)
+  : path.resolve(/*turbopackIgnore: true*/ process.cwd(), '..', 'chatter.db');
 
 const db = new Database(dbPath);
 
