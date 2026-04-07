@@ -146,6 +146,21 @@ db.exec(`
         status TEXT NOT NULL DEFAULT 'pending'
     );
 
+    CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notes_user_created
+    ON notes(user_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_notes_user_id_desc
+    ON notes(user_id, id DESC);
+
     CREATE TABLE IF NOT EXISTS mail_accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -419,6 +434,11 @@ const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй е
 const CUSTOM_PROMPT_ID = -1;
 const MAX_CUSTOM_PROMPT_LENGTH = 800;
 const MAX_CORE_MEMORY_LENGTH = 400;
+const NOTES_WEBAPP_URL = (process.env.NOTES_WEBAPP_URL || '').trim();
+const NOTE_CONTENT_MAX_LENGTH = 2000;
+const NOTE_TITLE_MAX_LENGTH = 120;
+const NOTE_QUERY_MAX_LENGTH = 120;
+const NOTES_PAGE_SIZE_DEFAULT = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
@@ -434,6 +454,10 @@ const BASE_COMMANDS = [
     { command: 'tz', description: 'Часовой пояс: /tz <UTC>' },
     { command: 'tasks', description: 'Мои напоминания' },
     { command: 'task_delete', description: 'Удалить задачу: /task_delete <id>' },
+    { command: 'note_add', description: 'Заметки: /note_add <текст>' },
+    { command: 'notes', description: 'Заметки: список /notes [page]' },
+    { command: 'note_find', description: 'Заметки: поиск /note_find <текст>' },
+    { command: 'note_delete', description: 'Заметки: удалить /note_delete <id>' },
     { command: 'mail_setup', description: 'Почта: /mail_setup <prov> <mail> <app_pass>' },
     { command: 'mail_use', description: 'Почта: /mail_use <yandex|google>' },
     { command: 'mail_limit', description: 'Почта: лимит check_emails' },
@@ -977,6 +1001,14 @@ type MailAccountRecord = {
     imap_port: number;
     imap_secure: number;
 };
+type NoteRecord = {
+    id: number;
+    user_id: number;
+    title: string;
+    content: string;
+    created_at: number;
+    updated_at: number;
+};
 type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
@@ -1019,6 +1051,12 @@ const buildMainMenuInlineKeyboard = (isAdmin: boolean) => {
         .map(row => visibleItems
             .filter(item => item.row === row)
             .map(item => Markup.button.callback(item.label, `main:${item.id}`)));
+
+    if (NOTES_WEBAPP_URL) {
+        rows.push([
+            { text: '📝 Заметки (WebApp)', web_app: { url: NOTES_WEBAPP_URL } } as any
+        ]);
+    }
 
     return Markup.inlineKeyboard(rows);
 };
@@ -1923,6 +1961,83 @@ const defaultPromptSeed = ensureDefaultPrompt();
 if (!defaultPromptSeed) {
     throw new Error('Не удалось инициализировать дефолтный промпт.');
 }
+
+const normalizeTextPreview = (value: string, maxLen = 120) => {
+    const compact = value.replace(/\s+/g, ' ').trim();
+    if (!compact) return '';
+    return compact.length > maxLen ? `${compact.slice(0, maxLen)}...` : compact;
+};
+const extractCommandPayload = (messageText: string, command: string) => {
+    const pattern = new RegExp(`^\\/${command}(?:@\\w+)?\\s*`, 'i');
+    return messageText.replace(pattern, '').trim();
+};
+const createNote = (userId: number, content: string, title = '') => {
+    const nowTs = Math.floor(Date.now() / 1000);
+    return db.prepare(`
+        INSERT INTO notes (user_id, title, content, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+    `).run(userId, title, content, nowTs, nowTs);
+};
+const deleteNoteByUserAndId = (userId: number, noteId: number) => db.prepare(`
+    DELETE FROM notes
+    WHERE user_id = ? AND id = ?
+`).run(userId, noteId);
+const getNoteByUserAndId = (userId: number, noteId: number) => db.prepare(`
+    SELECT id, user_id, title, content, created_at, updated_at
+    FROM notes
+    WHERE user_id = ? AND id = ?
+`).get(userId, noteId) as NoteRecord | undefined;
+const getNotesPage = (userId: number, limit: number, offset: number, query = '') => {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const trimmed = query.trim();
+    if (!trimmed) {
+        return db.prepare(`
+            SELECT id, user_id, title, content, created_at, updated_at
+            FROM notes
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ? OFFSET ?
+        `).all(userId, safeLimit, safeOffset) as NoteRecord[];
+    }
+    const like = `%${trimmed}%`;
+    return db.prepare(`
+        SELECT id, user_id, title, content, created_at, updated_at
+        FROM notes
+        WHERE user_id = ? AND (title LIKE ? OR content LIKE ?)
+        ORDER BY created_at DESC, id DESC
+        LIMIT ? OFFSET ?
+    `).all(userId, like, like, safeLimit, safeOffset) as NoteRecord[];
+};
+const countNotes = (userId: number, query = '') => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+        return (db.prepare(`SELECT COUNT(*) as c FROM notes WHERE user_id = ?`).get(userId) as { c: number }).c;
+    }
+    const like = `%${trimmed}%`;
+    return (db.prepare(`
+        SELECT COUNT(*) as c
+        FROM notes
+        WHERE user_id = ? AND (title LIKE ? OR content LIKE ?)
+    `).get(userId, like, like) as { c: number }).c;
+};
+const formatNotesPage = (notes: NoteRecord[], page: number, total: number, pageSize: number, query?: string) => {
+    if (!notes.length) {
+        return query
+            ? `По запросу "${query}" ничего не найдено.`
+            : 'Заметок пока нет.';
+    }
+    const safePage = Math.max(1, page);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const head = query
+        ? `Заметки по запросу "${query}" (${total}):`
+        : `Заметки (${total}):`;
+    const list = notes.map(note => {
+        const titlePart = note.title?.trim() ? `${normalizeTextPreview(note.title, 40)} | ` : '';
+        return `#${note.id} — ${titlePart}${normalizeTextPreview(note.content, 120)}`;
+    }).join('\n');
+    return `${head}\n${list}\n\nСтраница ${safePage}/${totalPages}.`;
+};
 
 const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRecord | undefined;
 const addUser = (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => db.prepare(`
@@ -2999,6 +3114,9 @@ const showMenu = (ctx: any) => {
     const webLimitLine = userRecord
         ? `🌐 Web-поиск сегодня: ${getDailyWebSearchLimitText(userRecord)}`
         : `🌐 Web-поиск сегодня: 0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`;
+    const notesLine = NOTES_WEBAPP_URL
+        ? '📝 Заметки: доступны в кнопке WebApp'
+        : '📝 Заметки: команды /note_add, /notes, /note_find, /note_delete';
     const moderationLine = isAdmin
         ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
         : '';
@@ -3012,6 +3130,7 @@ ${planLine}
 ${contextLine}
 ${messageLimitLine}
 ${webLimitLine}
+${notesLine}
 ${promptLine}
 ${moderationLine}
 
@@ -3829,6 +3948,80 @@ bot.command('task_delete', (ctx) => {
     return ctx.reply(`Удалил задачу #${taskId}.\n\nТекущие задачи (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${updatedText}`);
 });
 
+bot.command('note_add', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к заметкам.');
+    }
+
+    const content = extractCommandPayload(ctx.message.text, 'note_add');
+    if (!content) return ctx.reply('Формат: /note_add <текст заметки>');
+    if (content.length > NOTE_CONTENT_MAX_LENGTH) {
+        return ctx.reply(`Слишком длинная заметка: ${content.length} символов. Лимит: ${NOTE_CONTENT_MAX_LENGTH}.`);
+    }
+
+    const created = createNote(userId, content, '');
+    const noteId = Number(created.lastInsertRowid);
+    return ctx.reply(`✅ Заметка сохранена (ID: ${noteId}).`);
+});
+
+bot.command('notes', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к заметкам.');
+    }
+
+    const pageRaw = ctx.message.text.split(' ').filter(Boolean)[1];
+    const pageParsed = Number.parseInt(pageRaw || '1', 10);
+    const page = Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1;
+    const offset = (page - 1) * NOTES_PAGE_SIZE_DEFAULT;
+    const notes = getNotesPage(userId, NOTES_PAGE_SIZE_DEFAULT, offset);
+    const total = countNotes(userId);
+    return ctx.reply(formatNotesPage(notes, page, total, NOTES_PAGE_SIZE_DEFAULT));
+});
+
+bot.command('note_find', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к заметкам.');
+    }
+
+    const query = extractCommandPayload(ctx.message.text, 'note_find');
+    if (!query) return ctx.reply('Формат: /note_find <поисковая строка>');
+    if (query.length > NOTE_QUERY_MAX_LENGTH) {
+        return ctx.reply(`Слишком длинный запрос: ${query.length} символов. Лимит: ${NOTE_QUERY_MAX_LENGTH}.`);
+    }
+
+    const notes = getNotesPage(userId, NOTES_PAGE_SIZE_DEFAULT, 0, query);
+    const total = countNotes(userId, query);
+    return ctx.reply(formatNotesPage(notes, 1, total, NOTES_PAGE_SIZE_DEFAULT, query));
+});
+
+bot.command('note_delete', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к заметкам.');
+    }
+
+    const noteId = Number.parseInt(ctx.message.text.split(' ').filter(Boolean)[1], 10);
+    if (!noteId || Number.isNaN(noteId)) {
+        return ctx.reply('Формат: /note_delete <id>');
+    }
+    const note = getNoteByUserAndId(userId, noteId);
+    if (!note) return ctx.reply(`Заметка #${noteId} не найдена.`);
+    const result = deleteNoteByUserAndId(userId, noteId);
+    if (!result.changes) return ctx.reply(`Не удалось удалить заметку #${noteId}.`);
+    return ctx.reply(`🗑 Заметка #${noteId} удалена.`);
+});
+
 bot.command('mail_setup', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -4109,11 +4302,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
 });
 
 bot.action('context:change', async (ctx) => {
