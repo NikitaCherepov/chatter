@@ -5473,29 +5473,95 @@ const processUserTextThroughAi = async (
     }
 
     const activePrompt = resolvePromptForUser(userRecord);
-    const userPlan = parsePlanFromDb(userRecord.plan);
-    const canUseLiteRouter = PLAN_LITE_ROUTER_ENABLED[userPlan];
-    const canUseEscalateTool = PLAN_ESCALATE_TOOL_ENABLED[userPlan];
-    const useLiteRouter = !forceProRoute && canUseLiteRouter && canUseEscalateTool;
     const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
-    const systemPromptBase = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
-    const systemPrompt = useLiteRouter
-        ? `${systemPromptBase}\n\n${LITE_ROUTER_INSTRUCTIONS}`
-        : systemPromptBase;
-    const modelClient = useLiteRouter ? aiLite : ai;
-    const modelName = useLiteRouter ? LITE_MODEL_NAME : MODEL_NAME;
-    const baseTools = tools as unknown as any[];
-    const modelTools = useLiteRouter
-        ? [...baseTools, ESCALATE_TO_PRO_TOOL as any]
-        : baseTools;
+    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
     const history = getUserHistory(userId);
+    const baseTools = tools as unknown as any[];
 
     try {
         await ctx.sendChatAction('typing');
 
+        let totalTokensForTurn = 0;
+        const finishTurn = async (assistantText: string) => {
+            incrementUserStats(userId, userTextForHistory.length, totalTokensForTurn);
+            addHistoryMessage(userId, 'user', userTextForHistory);
+            addHistoryMessage(userId, 'assistant', assistantText);
+            trimUserHistory(userId);
+            await safeReply(ctx, assistantText);
+        };
+
+        let executionModelClient = ai;
+        let executionModelName = MODEL_NAME;
+        let executionTools = baseTools;
+        let executionSystemPrompt = systemPrompt;
+        let executionHistory = history;
+
+        if (!forceProRoute) {
+            type CheapRoute = 'SMART_HOME' | 'NOTES' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
+            const cheapToolsMapping: Record<Exclude<CheapRoute, 'PRO'>, string[]> = {
+                SMART_HOME: ['control_smart_home'],
+                NOTES: ['save_note', 'list_my_notes', 'read_note', 'delete_note'],
+                QUICK_SEARCH: ['search_web'],
+                TIMEZONE: ['set_user_timezone'],
+                RANDOM: ['random_roll']
+            };
+
+            let routeLabel: CheapRoute = 'PRO';
+            const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса.
+Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
+
+[ПРОСТЫЕ КАТЕГОРИИ - не требуют истории чата]:
+- SMART_HOME (управление светом, розетками)
+- NOTES (создание, чтение, удаление заметок)
+- QUICK_SEARCH (узнать погоду, курс валют, быстрый факт из сети)
+- TIMEZONE (установить часовой пояс)
+- RANDOM (бросить кубик, монетку)
+
+[СЛОЖНАЯ КАТЕГОРИЯ]:
+- PRO (любой сложный вопрос, программирование, анализ, почта (email), расписания, работа с памятью, длинные беседы)
+
+Запрос пользователя: "${userText}"`;
+
+            try {
+                const routerResponse = await aiLite.chat.completions.create({
+                    model: LITE_MODEL_NAME,
+                    messages: [{ role: 'user', content: routerPrompt }],
+                    temperature: 0,
+                    max_tokens: 8
+                } as any);
+                totalTokensForTurn += extractTotalTokens(routerResponse);
+                const rawRoute = `${routerResponse.choices[0]?.message?.content || ''}`.toUpperCase();
+                const matchedRoute = rawRoute.match(/\b(SMART_HOME|NOTES|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
+                if (
+                    matchedRoute?.[1] === 'SMART_HOME'
+                    || matchedRoute?.[1] === 'NOTES'
+                    || matchedRoute?.[1] === 'QUICK_SEARCH'
+                    || matchedRoute?.[1] === 'TIMEZONE'
+                    || matchedRoute?.[1] === 'RANDOM'
+                    || matchedRoute?.[1] === 'PRO'
+                ) {
+                    routeLabel = matchedRoute[1];
+                }
+            } catch (err) {
+                console.warn('Ошибка дешёвого роутера, использую PRO:', err);
+            }
+
+            if (routeLabel !== 'PRO') {
+                const allowedToolNames = cheapToolsMapping[routeLabel];
+                const allowedTools = baseTools.filter(tool => allowedToolNames.includes(`${tool?.function?.name || ''}`));
+                if (allowedTools.length) {
+                    executionModelClient = aiLite;
+                    executionModelName = LITE_MODEL_NAME;
+                    executionTools = allowedTools;
+                    executionSystemPrompt = 'Ты ассистент. Выполни задачу пользователя, используя доступные функции. Отвечай максимально коротко.';
+                    executionHistory = [];
+                }
+            }
+        }
+
         const currentMessages: any[] = [
-            { role: 'system', content: systemPrompt },
-            ...history,
+            { role: 'system', content: executionSystemPrompt },
+            ...executionHistory,
             { role: 'user', content: userText }
         ];
 
@@ -5503,15 +5569,14 @@ const processUserTextThroughAi = async (
         let isGenerating = true;
         let loopCount = 0;
         const MAX_TOOL_LOOPS = 6;
-        let totalTokensForTurn = 0;
 
         while (isGenerating && loopCount < MAX_TOOL_LOOPS) {
             loopCount += 1;
 
-            const response = await modelClient.chat.completions.create({
-                model: modelName,
+            const response = await executionModelClient.chat.completions.create({
+                model: executionModelName,
                 messages: currentMessages,
-                tools: modelTools,
+                tools: executionTools,
                 tool_choice: 'auto'
             });
             totalTokensForTurn += extractTotalTokens(response);
@@ -5531,25 +5596,7 @@ const processUserTextThroughAi = async (
                 let toolContent = '';
 
                 try {
-                    if (toolCall.function.name === 'escalate_to_pro') {
-                        if (!useLiteRouter || !canUseEscalateTool) {
-                            toolContent = 'Ошибка инструмента escalate_to_pro: недоступно для текущего тарифа.';
-                        } else {
-                            let queryForPro = userText;
-                            try {
-                                const parsed = JSON.parse(toolCall.function.arguments || '{}');
-                                if (typeof parsed.original_query === 'string' && parsed.original_query.trim()) {
-                                    queryForPro = parsed.original_query.trim();
-                                }
-                            } catch (err) {
-                                console.warn('Ошибка парсинга аргументов escalate_to_pro:', err);
-                            }
-                            return processUserTextThroughAi(ctx, queryForPro, {
-                                forcePro: true,
-                                persistUserText: userTextForHistory
-                            });
-                        }
-                    } else if (toolCall.function.name === 'search_web') {
+                    if (toolCall.function.name === 'search_web') {
                         await ctx.reply('Ищу информацию в сети...');
 
                         let query = '';
@@ -5766,11 +5813,7 @@ const processUserTextThroughAi = async (
             console.warn(`Достигнут лимит tool-циклов (${MAX_TOOL_LOOPS}) для user_id=${userId}`);
         }
 
-        incrementUserStats(userId, userTextForHistory.length, totalTokensForTurn);
-        addHistoryMessage(userId, 'user', userTextForHistory);
-        addHistoryMessage(userId, 'assistant', answer);
-        trimUserHistory(userId);
-        await safeReply(ctx, answer);
+        await finishTurn(answer);
     } catch (e) {
         console.error(e);
         await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи на сервере.');
