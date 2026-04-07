@@ -470,6 +470,8 @@ const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
 const EMAIL_PASSWORD_DELIMITER = '::';
+const VOICE_TRANSCRIBE_URL = (process.env.VOICE_TRANSCRIBE_URL || 'http://***REMOVED_VOICE_ENDPOINT***/api/voice').trim();
+const VOICE_TRANSCRIBE_TOKEN = (process.env.VOICE_TRANSCRIBE_TOKEN || '***REMOVED_VOICE_SECRET***').trim();
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -1406,6 +1408,9 @@ type ReadNoteArgs = {
 };
 type DeleteNoteArgs = {
     note_id?: number;
+};
+type VoiceTranscribeResponse = {
+    text?: string;
 };
 
 const clampTimezoneOffset = (offset: number) => {
@@ -5391,270 +5396,28 @@ bot.action('prompt:cancel', async (ctx) => {
     await ctx.answerCbQuery();
 });
 
-bot.on('text', async (ctx) => {
+const processUserTextThroughAi = async (ctx: any, rawText: string) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const userText = ctx.message.text.trim();
-    const directMessageTargetId = adminAiMessageFlow.get(userId);
-    if (directMessageTargetId) {
-        adminAiMessageFlow.delete(userId);
-        await handleAiDirectMessage(ctx, directMessageTargetId, userText);
-        return;
-    }
-
-    const adminContextFlow = adminUserContextLimitFlows.get(userId);
-    if (adminContextFlow) {
-        const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
-            adminUserContextLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение контекста пользователя отменено.');
-        }
-
-        const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            return ctx.reply('Нужно ввести положительное число. Например: 25. Для отмены: "отмена".');
-        }
-
-        const targetUser = getUser(adminContextFlow.targetUserId);
-        if (!targetUser) {
-            adminUserContextLimitFlows.delete(userId);
-            return ctx.reply('Пользователь не найден.');
-        }
-
-        const nextValue = Math.max(1, Math.floor(parsed));
-        updateUserContextWindow(adminContextFlow.targetUserId, nextValue);
-        trimUserHistory(adminContextFlow.targetUserId);
-        adminUserContextLimitFlows.delete(userId);
-        const refreshed = getUser(adminContextFlow.targetUserId);
-        if (refreshed) {
-            await ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${resolveEffectiveContextWindow(refreshed)} (макс: ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))})`);
-            await renderAdminUserCard(ctx, refreshed, adminContextFlow.page, 'reply');
-            return;
-        }
-        return ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${nextValue}.`);
-    }
-
-    const adminMessageLimitFlow = adminUserMessageLimitFlows.get(userId);
-    if (adminMessageLimitFlow) {
-        const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
-            adminUserMessageLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение лимита сообщений отменено.');
-        }
-
-        const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-            return ctx.reply('Нужно ввести число 0 или больше. 0 = безлимит. Для отмены: "отмена".');
-        }
-
-        const targetUser = getUser(adminMessageLimitFlow.targetUserId);
-        if (!targetUser) {
-            adminUserMessageLimitFlows.delete(userId);
-            return ctx.reply('Пользователь не найден.');
-        }
-
-        const nextLimit = normalizeDailyMessageLimit(parsed);
-        updateUserDailyMessageLimit(adminMessageLimitFlow.targetUserId, nextLimit);
-        adminUserMessageLimitFlows.delete(userId);
-        const refreshed = getUser(adminMessageLimitFlow.targetUserId);
-        if (refreshed) {
-            await ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${normalizeDailyMessageLimit(refreshed.daily_message_limit)} (0 = безлимит).`);
-            await renderAdminUserCard(ctx, refreshed, adminMessageLimitFlow.page, 'reply');
-            return;
-        }
-        return ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${nextLimit}.`);
-    }
-
-    const isAdmin = ctx.state.role === 'admin';
-    const timezoneFlow = timezoneSetupFlows.get(userId);
-
-    if (timezoneFlow === 'await_offset') {
-        let offsetText = userText;
-        if (offsetText.startsWith('/tz')) {
-            offsetText = offsetText.split(' ')[1] ?? '';
-        }
-
-        const offset = Number.parseInt(offsetText, 10);
-        if (Number.isNaN(offset) || offset < -12 || offset > 14) {
-            return ctx.reply('Не понял смещение. Отправь число от -12 до +14, например: 7');
-        }
-
-        updateUserTimezone(userId, offset);
-        timezoneSetupFlows.delete(userId);
-        const sign = offset >= 0 ? '+' : '';
-        return ctx.reply(`Готово, часовой пояс установлен: UTC${sign}${offset}. Теперь могу ставить таймеры.`, buildMenuTriggerKeyboard());
-    }
-
-    if (!isAdmin) {
-        const renameFlow = renameFlows.get(userId);
-
-        if (renameFlow === 'confirm') {
-            const answer = userText.toLowerCase();
-            if (answer === 'да') {
-                renameFlows.set(userId, 'await_name');
-                return ctx.reply('Введите имя:');
-            }
-
-            if (answer === 'нет') {
-                renameFlows.delete(userId);
-                return ctx.reply('Ок, отменил.', buildMenuTriggerKeyboard());
-            }
-
-            return ctx.reply('Ответь "Да" или "Нет".', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
-        }
-
-        if (renameFlow === 'await_name') {
-            if (!userText || userText.startsWith('/')) {
-                return ctx.reply('Имя не может быть пустым. Введи обычный текст без команды.');
-            }
-
-            if (userText.length > 64) {
-                return ctx.reply('Слишком длинное имя. До 64 символов.');
-            }
-
-            const userRecord = getUser(userId);
-            if (!userRecord) {
-                renameFlows.delete(userId);
-                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
-            }
-
-            updateUserName(userId, userText);
-            ctx.state.userName = userText;
-            renameFlows.delete(userId);
-            return ctx.reply('Имя принято.', buildMenuTriggerKeyboard());
-        }
-
-        const customPromptFlow = customPromptEditFlows.get(userId);
-        if (customPromptFlow === 'await_content') {
-            if (!userText || userText.startsWith('/')) {
-                return ctx.reply('Текст промпта не должен быть пустым и не должен быть командой.');
-            }
-            if (userText.length > MAX_CUSTOM_PROMPT_LENGTH) {
-                return ctx.reply(`Слишком длинно: ${userText.length} символов. Лимит: ${MAX_CUSTOM_PROMPT_LENGTH}.`);
-            }
-
-            const userRecord = getUser(userId);
-            if (!userRecord) {
-                customPromptEditFlows.delete(userId);
-                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
-            }
-
-            updateUserCustomPrompt(userId, userText.trim());
-            selectUserCustomPrompt(userId);
-            customPromptEditFlows.delete(userId);
-            return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard());
-        }
-    }
-
-    const mailLimitFlow = mailLimitFlows.get(userId);
-    if (mailLimitFlow === 'await_limit') {
-        const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
-            mailLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение лимита отменено.');
-        }
-
-        const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
-        }
-
-        const userRecord = getUser(userId);
-        if (!userRecord) {
-            mailLimitFlows.delete(userId);
-            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
-        }
-        if (userRecord.role !== 'admin' && parsed > 10) {
-            return ctx.reply('Для вас доступно максимум 10. Введи число от 1 до 10.');
-        }
-
-        updateUserMailCheckLimit(userId, parsed);
-        mailLimitFlows.delete(userId);
-        return ctx.reply(`✅ Новое ограничение check_emails: ${parsed}.`);
-    }
-
-    const contextLimitFlow = contextLimitFlows.get(userId);
-    if (contextLimitFlow === 'await_limit') {
-        const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
-            contextLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение размера контекста отменено.');
-        }
-
-        const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
-        }
-
-        const userRecord = getUser(userId);
-        if (!userRecord) {
-            contextLimitFlows.delete(userId);
-            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
-        }
-
-        const maxAllowed = Math.max(1, userRecord.context_window_max || getPlanContextLimit(parsePlanFromDb(userRecord.plan)));
-        if (parsed > maxAllowed) {
-            return ctx.reply(`Для тебя доступно максимум ${maxAllowed}. Введи число от 1 до ${maxAllowed}.`);
-        }
-
-        updateUserContextWindow(userId, Math.floor(parsed));
-        trimUserHistory(userId);
-        contextLimitFlows.delete(userId);
-        const refreshed = getUser(userId);
-        if (refreshed) {
-            return ctx.reply(
-                `✅ Размер контекста обновлён: ${resolveEffectiveContextWindow(refreshed)} из ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))}.`
-            );
-        }
-        return ctx.reply(`✅ Размер контекста обновлён: ${Math.floor(parsed)}.`);
-    }
-
-    const noteEditFlow = noteEditFlows.get(userId);
-    if (noteEditFlow) {
-        const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
-            noteEditFlows.delete(userId);
-            return ctx.reply('Ок, редактирование заметки отменено.');
-        }
-
-        const userRecord = getUser(userId);
-        if (!userRecord) {
-            noteEditFlows.delete(userId);
-            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
-        }
-
-        const userPlan = parsePlanFromDb(userRecord.plan);
-        const contentLimit = getPlanNoteContentLimit(userPlan);
-        if (!userText || userText.length > contentLimit) {
-            return ctx.reply(`Текст заметки должен быть от 1 до ${contentLimit} символов. Для отмены: "отмена".`);
-        }
-
-        const note = getNoteByUserAndId(userId, noteEditFlow.noteId);
-        if (!note) {
-            noteEditFlows.delete(userId);
-            return ctx.reply(`Заметка #${noteEditFlow.noteId} не найдена.`);
-        }
-
-        const result = updateNoteByUserAndId(userId, noteEditFlow.noteId, userText.trim());
-        noteEditFlows.delete(userId);
-        if (!result.changes) {
-            return ctx.reply(`Не удалось обновить заметку #${noteEditFlow.noteId}.`);
-        }
-
-        await ctx.reply(`✅ Заметка #${noteEditFlow.noteId} обновлена.`);
-        await renderNoteView(ctx, userId, noteEditFlow.noteId, noteEditFlow.page, 'reply');
+    const userText = rawText.trim();
+    if (!userText) {
+        await ctx.reply('Пустое сообщение. Попробуй ещё раз.');
         return;
     }
 
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
     const userRecord = getUser(userId);
-    if (!userRecord) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+    if (!userRecord) {
+        await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+        return;
+    }
     if (ctx.state.role !== 'admin') {
         const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
         const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
         if (dailyLimit > 0 && dailyCount >= dailyLimit) {
-            return ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+            await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+            return;
         }
     }
 
@@ -5929,6 +5692,326 @@ bot.on('text', async (ctx) => {
     } catch (e) {
         console.error(e);
         await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи на сервере.');
+    }
+};
+
+bot.on('text', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const userText = ctx.message.text.trim();
+    const directMessageTargetId = adminAiMessageFlow.get(userId);
+    if (directMessageTargetId) {
+        adminAiMessageFlow.delete(userId);
+        await handleAiDirectMessage(ctx, directMessageTargetId, userText);
+        return;
+    }
+
+    const adminContextFlow = adminUserContextLimitFlows.get(userId);
+    if (adminContextFlow) {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            adminUserContextLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение контекста пользователя отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return ctx.reply('Нужно ввести положительное число. Например: 25. Для отмены: "отмена".');
+        }
+
+        const targetUser = getUser(adminContextFlow.targetUserId);
+        if (!targetUser) {
+            adminUserContextLimitFlows.delete(userId);
+            return ctx.reply('Пользователь не найден.');
+        }
+
+        const nextValue = Math.max(1, Math.floor(parsed));
+        updateUserContextWindow(adminContextFlow.targetUserId, nextValue);
+        trimUserHistory(adminContextFlow.targetUserId);
+        adminUserContextLimitFlows.delete(userId);
+        const refreshed = getUser(adminContextFlow.targetUserId);
+        if (refreshed) {
+            await ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${resolveEffectiveContextWindow(refreshed)} (макс: ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))})`);
+            await renderAdminUserCard(ctx, refreshed, adminContextFlow.page, 'reply');
+            return;
+        }
+        return ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${nextValue}.`);
+    }
+
+    const adminMessageLimitFlow = adminUserMessageLimitFlows.get(userId);
+    if (adminMessageLimitFlow) {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            adminUserMessageLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение лимита сообщений отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+            return ctx.reply('Нужно ввести число 0 или больше. 0 = безлимит. Для отмены: "отмена".');
+        }
+
+        const targetUser = getUser(adminMessageLimitFlow.targetUserId);
+        if (!targetUser) {
+            adminUserMessageLimitFlows.delete(userId);
+            return ctx.reply('Пользователь не найден.');
+        }
+
+        const nextLimit = normalizeDailyMessageLimit(parsed);
+        updateUserDailyMessageLimit(adminMessageLimitFlow.targetUserId, nextLimit);
+        adminUserMessageLimitFlows.delete(userId);
+        const refreshed = getUser(adminMessageLimitFlow.targetUserId);
+        if (refreshed) {
+            await ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${normalizeDailyMessageLimit(refreshed.daily_message_limit)} (0 = безлимит).`);
+            await renderAdminUserCard(ctx, refreshed, adminMessageLimitFlow.page, 'reply');
+            return;
+        }
+        return ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${nextLimit}.`);
+    }
+
+    const isAdmin = ctx.state.role === 'admin';
+    const timezoneFlow = timezoneSetupFlows.get(userId);
+
+    if (timezoneFlow === 'await_offset') {
+        let offsetText = userText;
+        if (offsetText.startsWith('/tz')) {
+            offsetText = offsetText.split(' ')[1] ?? '';
+        }
+
+        const offset = Number.parseInt(offsetText, 10);
+        if (Number.isNaN(offset) || offset < -12 || offset > 14) {
+            return ctx.reply('Не понял смещение. Отправь число от -12 до +14, например: 7');
+        }
+
+        updateUserTimezone(userId, offset);
+        timezoneSetupFlows.delete(userId);
+        const sign = offset >= 0 ? '+' : '';
+        return ctx.reply(`Готово, часовой пояс установлен: UTC${sign}${offset}. Теперь могу ставить таймеры.`, buildMenuTriggerKeyboard());
+    }
+
+    if (!isAdmin) {
+        const renameFlow = renameFlows.get(userId);
+
+        if (renameFlow === 'confirm') {
+            const answer = userText.toLowerCase();
+            if (answer === 'да') {
+                renameFlows.set(userId, 'await_name');
+                return ctx.reply('Введите имя:');
+            }
+
+            if (answer === 'нет') {
+                renameFlows.delete(userId);
+                return ctx.reply('Ок, отменил.', buildMenuTriggerKeyboard());
+            }
+
+            return ctx.reply('Ответь "Да" или "Нет".', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
+        }
+
+        if (renameFlow === 'await_name') {
+            if (!userText || userText.startsWith('/')) {
+                return ctx.reply('Имя не может быть пустым. Введи обычный текст без команды.');
+            }
+
+            if (userText.length > 64) {
+                return ctx.reply('Слишком длинное имя. До 64 символов.');
+            }
+
+            const userRecord = getUser(userId);
+            if (!userRecord) {
+                renameFlows.delete(userId);
+                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+            }
+
+            updateUserName(userId, userText);
+            ctx.state.userName = userText;
+            renameFlows.delete(userId);
+            return ctx.reply('Имя принято.', buildMenuTriggerKeyboard());
+        }
+
+        const customPromptFlow = customPromptEditFlows.get(userId);
+        if (customPromptFlow === 'await_content') {
+            if (!userText || userText.startsWith('/')) {
+                return ctx.reply('Текст промпта не должен быть пустым и не должен быть командой.');
+            }
+            if (userText.length > MAX_CUSTOM_PROMPT_LENGTH) {
+                return ctx.reply(`Слишком длинно: ${userText.length} символов. Лимит: ${MAX_CUSTOM_PROMPT_LENGTH}.`);
+            }
+
+            const userRecord = getUser(userId);
+            if (!userRecord) {
+                customPromptEditFlows.delete(userId);
+                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+            }
+
+            updateUserCustomPrompt(userId, userText.trim());
+            selectUserCustomPrompt(userId);
+            customPromptEditFlows.delete(userId);
+            return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard());
+        }
+    }
+
+    const mailLimitFlow = mailLimitFlows.get(userId);
+    if (mailLimitFlow === 'await_limit') {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            mailLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение лимита отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
+        }
+
+        const userRecord = getUser(userId);
+        if (!userRecord) {
+            mailLimitFlows.delete(userId);
+            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+        }
+        if (userRecord.role !== 'admin' && parsed > 10) {
+            return ctx.reply('Для вас доступно максимум 10. Введи число от 1 до 10.');
+        }
+
+        updateUserMailCheckLimit(userId, parsed);
+        mailLimitFlows.delete(userId);
+        return ctx.reply(`✅ Новое ограничение check_emails: ${parsed}.`);
+    }
+
+    const contextLimitFlow = contextLimitFlows.get(userId);
+    if (contextLimitFlow === 'await_limit') {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            contextLimitFlows.delete(userId);
+            return ctx.reply('Ок, изменение размера контекста отменено.');
+        }
+
+        const parsed = Number.parseInt(userText, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
+        }
+
+        const userRecord = getUser(userId);
+        if (!userRecord) {
+            contextLimitFlows.delete(userId);
+            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+        }
+
+        const maxAllowed = Math.max(1, userRecord.context_window_max || getPlanContextLimit(parsePlanFromDb(userRecord.plan)));
+        if (parsed > maxAllowed) {
+            return ctx.reply(`Для тебя доступно максимум ${maxAllowed}. Введи число от 1 до ${maxAllowed}.`);
+        }
+
+        updateUserContextWindow(userId, Math.floor(parsed));
+        trimUserHistory(userId);
+        contextLimitFlows.delete(userId);
+        const refreshed = getUser(userId);
+        if (refreshed) {
+            return ctx.reply(
+                `✅ Размер контекста обновлён: ${resolveEffectiveContextWindow(refreshed)} из ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))}.`
+            );
+        }
+        return ctx.reply(`✅ Размер контекста обновлён: ${Math.floor(parsed)}.`);
+    }
+
+    const noteEditFlow = noteEditFlows.get(userId);
+    if (noteEditFlow) {
+        const lowered = userText.toLowerCase();
+        if (lowered === 'отмена' || lowered === '/cancel') {
+            noteEditFlows.delete(userId);
+            return ctx.reply('Ок, редактирование заметки отменено.');
+        }
+
+        const userRecord = getUser(userId);
+        if (!userRecord) {
+            noteEditFlows.delete(userId);
+            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+        }
+
+        const userPlan = parsePlanFromDb(userRecord.plan);
+        const contentLimit = getPlanNoteContentLimit(userPlan);
+        if (!userText || userText.length > contentLimit) {
+            return ctx.reply(`Текст заметки должен быть от 1 до ${contentLimit} символов. Для отмены: "отмена".`);
+        }
+
+        const note = getNoteByUserAndId(userId, noteEditFlow.noteId);
+        if (!note) {
+            noteEditFlows.delete(userId);
+            return ctx.reply(`Заметка #${noteEditFlow.noteId} не найдена.`);
+        }
+
+        const result = updateNoteByUserAndId(userId, noteEditFlow.noteId, userText.trim());
+        noteEditFlows.delete(userId);
+        if (!result.changes) {
+            return ctx.reply(`Не удалось обновить заметку #${noteEditFlow.noteId}.`);
+        }
+
+        await ctx.reply(`✅ Заметка #${noteEditFlow.noteId} обновлена.`);
+        await renderNoteView(ctx, userId, noteEditFlow.noteId, noteEditFlow.page, 'reply');
+        return;
+    }
+
+    await processUserTextThroughAi(ctx, userText);
+});
+
+bot.on('voice', async (ctx) => {
+    const voice = ctx.message?.voice;
+    const chatId = ctx.chat?.id;
+    if (!voice || !chatId) return;
+
+    const processingMsg = await ctx.reply('🎙 Перевариваю аудио в текст...');
+
+    try {
+        const fileLink = await ctx.telegram.getFileLink(voice.file_id);
+        const response = await fetch(fileLink.href);
+        if (!response.ok) {
+            throw new Error(`Не удалось скачать голосовое из Telegram: ${response.status} ${response.statusText}`);
+        }
+
+        const audioBuffer = await response.arrayBuffer();
+        const formData = new FormData();
+        const mimeType = voice.mime_type || 'audio/ogg';
+        formData.append('audio', new Blob([audioBuffer], { type: mimeType }), 'voice.ogg');
+
+        const headers: Record<string, string> = {};
+        if (VOICE_TRANSCRIBE_TOKEN) {
+            headers.Authorization = `Bearer ${VOICE_TRANSCRIBE_TOKEN}`;
+        }
+
+        const kzResponse = await fetch(VOICE_TRANSCRIBE_URL, {
+            method: 'POST',
+            headers,
+            body: formData
+        });
+
+        if (!kzResponse.ok) {
+            const details = await kzResponse.text().catch(() => '');
+            const extra = details ? ` | ${details.slice(0, 200)}` : '';
+            throw new Error(`Ошибка от микросервиса: ${kzResponse.status} ${kzResponse.statusText}${extra}`);
+        }
+
+        const payload = await kzResponse.json() as VoiceTranscribeResponse;
+        const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+
+        if (!text) {
+            await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, '🗣 Ничего не расслышал.');
+            return;
+        }
+
+        await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, `🗣 Распознано:\n${text}`);
+        await processUserTextThroughAi(ctx, text);
+    } catch (error) {
+        console.error('Ошибка работы с голосовым:', error);
+        try {
+            await ctx.telegram.editMessageText(
+                chatId,
+                processingMsg.message_id,
+                undefined,
+                '❌ Сбой связи с сервером расшифровки или внутренняя ошибка.'
+            );
+        } catch {
+            await ctx.reply('❌ Сбой связи с сервером расшифровки или внутренняя ошибка.');
+        }
     }
 });
 
