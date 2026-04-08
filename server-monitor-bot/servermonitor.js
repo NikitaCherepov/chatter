@@ -59,6 +59,15 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL,
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
+
+CREATE TABLE IF NOT EXISTS process_registry (
+    process_name TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    aliases TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
 `);
 
 const insertHistoryStmt = db.prepare(`
@@ -100,6 +109,26 @@ const upsertSettingStmt = db.prepare(`
         value = excluded.value,
         updated_at = excluded.updated_at
 `);
+const getAllProcessRegistryStmt = db.prepare(`
+    SELECT process_name, display_name, description, aliases, created_at, updated_at
+    FROM process_registry
+    ORDER BY process_name ASC
+`);
+const getProcessByNameStmt = db.prepare(`
+    SELECT process_name, display_name, description, aliases, created_at, updated_at
+    FROM process_registry
+    WHERE process_name = ?
+    LIMIT 1
+`);
+const upsertProcessRegistryStmt = db.prepare(`
+    INSERT INTO process_registry (process_name, display_name, description, aliases, updated_at)
+    VALUES (?, ?, ?, ?, strftime('%s', 'now'))
+    ON CONFLICT(process_name) DO UPDATE SET
+        display_name = excluded.display_name,
+        description = excluded.description,
+        aliases = excluded.aliases,
+        updated_at = excluded.updated_at
+`);
 
 const LOG_INTERPRETER_SETTING_KEY = 'log_interpreter';
 upsertSettingStmt.run(
@@ -123,6 +152,7 @@ const SYSTEM_PROMPT = `Ты — технический консольный ас
 3. Команды для СЕБЯ (watchdog) выполняй только если прямо попросили "рестартни себя" или "рестартни админа".
 
 Разрешённые инструменты: list, status, restart, stop, logs, flush.
+Также у тебя есть реестр процессов: добавляй/обновляй процессы через специальный инструмент, когда пользователь просит.
 Отвечай максимально коротко и технично.`;
 const LOG_INTERPRETER_PROMPT = `Ты анализируешь логи сервисов.
 Ответ: кратко, технично, по делу.
@@ -181,6 +211,78 @@ const saveConversationTurn = (userId, userText, assistantText) => {
     addHistoryMessage(userId, 'user', userText);
     addHistoryMessage(userId, 'assistant', assistantText);
     trimHistory(userId);
+};
+const normalizeRegistryToken = (value) => String(value || '').trim().toLowerCase();
+const parseAliases = (value) => {
+    const raw = Array.isArray(value) ? value.join(',') : String(value || '');
+    const parts = raw.split(/[,\n;|]+/).map((x) => normalizeRegistryToken(x)).filter(Boolean);
+    return [...new Set(parts)];
+};
+const toAliasesString = (aliases) => parseAliases(aliases).join(', ');
+const mergeAliases = (a, b) => [...new Set([...parseAliases(a), ...parseAliases(b)])];
+const upsertProcessRegistry = (processName, payload = {}) => {
+    const normalizedName = String(processName || '').trim();
+    if (!normalizedName) return { ok: false, reason: 'Пустое имя процесса.' };
+    const existing = getProcessByNameStmt.get(normalizedName);
+    const displayName = (payload.display_name ?? existing?.display_name ?? normalizedName).trim();
+    const description = (payload.description ?? existing?.description ?? '').trim();
+    const aliasesMerged = mergeAliases(existing?.aliases || '', payload.aliases || '');
+    const aliases = aliasesMerged.join(', ');
+    upsertProcessRegistryStmt.run(normalizedName, displayName, description, aliases);
+    return { ok: true, reason: '' };
+};
+const getProcessRegistryRows = () => getAllProcessRegistryStmt.all();
+const buildRegistryTokenMap = () => {
+    const map = new Map();
+    for (const row of getProcessRegistryRows()) {
+        map.set(normalizeRegistryToken(row.process_name), row.process_name);
+        const display = normalizeRegistryToken(row.display_name);
+        if (display) map.set(display, row.process_name);
+        for (const alias of parseAliases(row.aliases || '')) {
+            map.set(alias, row.process_name);
+        }
+    }
+    return map;
+};
+const resolveTargetFromRegistry = (target) => {
+    const normalized = normalizeRegistryToken(target);
+    if (!normalized) return '';
+    if (ALL_TARGET_ALIASES.has(normalized)) return 'all';
+    const tokenMap = buildRegistryTokenMap();
+    return tokenMap.get(normalized) || target;
+};
+const formatRegistryList = () => {
+    const rows = getProcessRegistryRows();
+    if (!rows.length) return 'Реестр процессов пуст.';
+    return clipText(`Реестр процессов:\n\n${rows.map((row) => {
+        const aliases = parseAliases(row.aliases || '');
+        const aliasesText = aliases.length ? aliases.join(', ') : '-';
+        const desc = row.description?.trim() || '-';
+        return `- ${row.process_name}\n  Имя: ${row.display_name || row.process_name}\n  Описание: ${desc}\n  Алиасы: ${aliasesText}`;
+    }).join('\n\n')}`);
+};
+const syncRegistryFromPm2Processes = (processes) => {
+    const known = new Set(getProcessRegistryRows().map((row) => row.process_name));
+    const newNames = [];
+    for (const proc of processes || []) {
+        const name = String(proc?.name || '').trim();
+        if (!name) continue;
+        if (!known.has(name)) {
+            upsertProcessRegistry(name, { display_name: name, description: '', aliases: '' });
+            known.add(name);
+            newNames.push(name);
+        }
+    }
+    return newNames;
+};
+const buildRegistryContextMessage = () => {
+    const rows = getProcessRegistryRows();
+    if (!rows.length) return 'Реестр процессов пока пуст.';
+    const text = rows.slice(0, 50).map((row) => {
+        const aliases = parseAliases(row.aliases || '');
+        return `- ${row.process_name} | имя: ${row.display_name || row.process_name} | алиасы: ${aliases.join(', ') || '-'} | описание: ${row.description || '-'}`;
+    }).join('\n');
+    return `Текущий реестр процессов:\n${text}`;
 };
 const getSettingValue = (key, fallback = '') => {
     const row = getSettingStmt.get(key);
@@ -380,12 +482,13 @@ const formatLogsOutput = (rawText, target) => {
 };
 
 const extractToolCall = (message) => {
-    const toolCall = message?.tool_calls?.find(
-        (item) => item.type === 'function' && item.function?.name === 'pm2_command'
+    const toolCall = message?.tool_calls?.find((item) =>
+        item.type === 'function'
+        && (item.function?.name === 'pm2_command' || item.function?.name === 'process_registry_command')
     );
-    if (toolCall) return { arguments: toolCall.function.arguments || '{}' };
-    if (message?.function_call?.name === 'pm2_command') {
-        return { arguments: message.function_call.arguments || '{}' };
+    if (toolCall) return { name: toolCall.function.name, arguments: toolCall.function.arguments || '{}' };
+    if (message?.function_call?.name === 'pm2_command' || message?.function_call?.name === 'process_registry_command') {
+        return { name: message.function_call.name, arguments: message.function_call.arguments || '{}' };
     }
     return null;
 };
@@ -442,7 +545,9 @@ const normalizeAllTarget = (value) => {
 bot.telegram.setMyCommands([
     { command: 'clear', description: 'Очистить контекст watchdog' },
     { command: 'settings', description: 'Настройки watchdog' },
-    { command: 'flush', description: 'Очистить логи: /flush <process|all>' }
+    { command: 'flush', description: 'Очистить логи: /flush <process|all>' },
+    { command: 'proc_list', description: 'Список процессов из реестра' },
+    { command: 'proc_add', description: 'Добавить/обновить: /proc_add name | desc | aliases' }
 ]).catch(() => undefined);
 
 bot.use((ctx, next) => {
@@ -491,6 +596,38 @@ bot.command('flush', async (ctx) => {
     await ctx.reply(clipText(responseText));
     saveConversationTurn(userId, `/flush ${target}`, responseText);
 });
+bot.command('proc_list', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const text = formatRegistryList();
+    await ctx.reply(text);
+    saveConversationTurn(userId, '/proc_list', text);
+});
+bot.command('proc_add', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const payload = String(ctx.message?.text || '').replace(/^\/proc_add\s*/i, '').trim();
+    if (!payload) {
+        const text = 'Использование: /proc_add <process_name> | <описание> | <алиасы через запятую>';
+        await ctx.reply(text);
+        saveConversationTurn(userId, '/proc_add', text);
+        return;
+    }
+    const parts = payload.split('|').map((x) => x.trim());
+    const processName = parts[0] || '';
+    const description = parts[1] || '';
+    const aliases = parts[2] || '';
+    const result = upsertProcessRegistry(processName, {
+        display_name: processName,
+        description,
+        aliases
+    });
+    const text = result.ok
+        ? `Процесс сохранён: ${processName}`
+        : `❌ ${result.reason}`;
+    await ctx.reply(text);
+    saveConversationTurn(userId, `/proc_add ${payload}`, text);
+});
 bot.action('settings:refresh', async (ctx) => {
     await ctx.answerCbQuery();
     await sendSettingsPanel(ctx, 'edit');
@@ -512,6 +649,8 @@ bot.on('text', async (ctx) => {
         userText === '/clear' || userText.startsWith('/clear ')
         || userText === '/settings' || userText.startsWith('/settings ')
         || userText === '/flush' || userText.startsWith('/flush ')
+        || userText === '/proc_list' || userText.startsWith('/proc_list ')
+        || userText === '/proc_add' || userText.startsWith('/proc_add ')
     ) return;
 
     try {
@@ -521,6 +660,7 @@ bot.on('text', async (ctx) => {
             temperature: 0,
             messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'system', content: buildRegistryContextMessage() },
                 ...history,
                 { role: 'user', content: userText }
             ],
@@ -534,6 +674,23 @@ bot.on('text', async (ctx) => {
                             properties: {
                                 action: { type: 'string', enum: ['list', 'status', 'restart', 'stop', 'logs', 'flush'] },
                                 target: { type: 'string', description: 'Имя или id PM2 процесса' }
+                            },
+                            required: ['action']
+                        }
+                    }
+                },
+                {
+                    type: 'function',
+                    function: {
+                        name: 'process_registry_command',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                action: { type: 'string', enum: ['list', 'add', 'update', 'sync_from_pm2'] },
+                                process_name: { type: 'string' },
+                                display_name: { type: 'string' },
+                                description: { type: 'string' },
+                                aliases: { type: 'string' }
                             },
                             required: ['action']
                         }
@@ -563,9 +720,57 @@ bot.on('text', async (ctx) => {
             return;
         }
 
+        const toolName = call.name || message?.tool_calls?.[0]?.function?.name || 'pm2_command';
+        if (toolName === 'process_registry_command') {
+            const regAction = String(parsed.action || '').trim().toLowerCase();
+            if (regAction === 'list') {
+                const text = formatRegistryList();
+                await ctx.reply(text);
+                saveConversationTurn(userId, userText, text);
+                return;
+            }
+            if (regAction === 'sync_from_pm2') {
+                const snapshot = await getPm2Snapshot();
+                if (!snapshot.ok) {
+                    const errText = `❌ ${snapshot.reason}`;
+                    await ctx.reply(errText);
+                    saveConversationTurn(userId, userText, errText);
+                    return;
+                }
+                const added = syncRegistryFromPm2Processes(snapshot.processes);
+                const text = added.length
+                    ? `Синхронизация завершена. Добавлены процессы: ${added.join(', ')}`
+                    : 'Синхронизация завершена. Новых процессов нет.';
+                await ctx.reply(text);
+                saveConversationTurn(userId, userText, text);
+                return;
+            }
+            if (regAction === 'add' || regAction === 'update') {
+                const processName = String(parsed.process_name || '').trim();
+                const displayName = String(parsed.display_name || processName).trim();
+                const description = String(parsed.description || '').trim();
+                const aliases = String(parsed.aliases || '').trim();
+                const result = upsertProcessRegistry(processName, {
+                    display_name: displayName,
+                    description,
+                    aliases
+                });
+                const text = result.ok
+                    ? `Процесс сохранён: ${processName}`
+                    : `❌ ${result.reason}`;
+                await ctx.reply(text);
+                saveConversationTurn(userId, userText, text);
+                return;
+            }
+            const errText = '❌ Неизвестное действие реестра.';
+            await ctx.reply(errText);
+            saveConversationTurn(userId, userText, errText);
+            return;
+        }
+
         const action = String(parsed.action || '').trim().toLowerCase();
         const rawTarget = typeof parsed.target === 'string' ? parsed.target.trim() : '';
-        let target = normalizeAllTarget(rawTarget);
+        let target = resolveTargetFromRegistry(normalizeAllTarget(rawTarget));
         if (action === 'flush' && !target) {
             const loweredUserText = userText.toLowerCase();
             if (
@@ -632,7 +837,22 @@ bot.on('text', async (ctx) => {
             const title = target ? `Статус процесса "${target}"` : 'Статус процессов PM2';
             const responseText = formatProcessList(title, filtered);
             await ctx.reply(responseText);
-            saveConversationTurn(userId, userText, responseText);
+            let finalText = responseText;
+            if (!target) {
+                const added = syncRegistryFromPm2Processes(snapshot.processes);
+                if (added.length) {
+                    const hint = `Вижу новые процессы: ${added.join(', ')}.\nДобавить описание? Напиши: "Добавь процесс <имя> | <описание> | <алиасы>"`;
+                    await ctx.reply(hint);
+                    finalText = `${finalText}\n\n${hint}`;
+                }
+            }
+            if (isLogInterpreterEnabled()) {
+                const compact = filtered.map((proc) => `#${proc.pm_id} ${proc.name} ${proc.pm2_env?.status || 'unknown'} cpu:${proc.monit?.cpu ?? '-'} mem:${proc.monit?.memory ?? '-'}`).join('\n');
+                const interpretation = clipText(await interpretLogsWithAi(target || 'pm2-status', compact), 3900);
+                await ctx.reply(`Интерпретация:\n${interpretation}`);
+                finalText = `${finalText}\n\nИнтерпретация:\n${interpretation}`;
+            }
+            saveConversationTurn(userId, userText, finalText);
             return;
         }
 
