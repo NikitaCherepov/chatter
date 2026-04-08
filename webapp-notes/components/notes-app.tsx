@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -42,6 +42,15 @@ const preview = (value: string, max = 160) => {
   return `${compact.slice(0, max)}...`;
 };
 
+const extractInitDataFromLaunchParams = () => {
+  const fromSearch = new URLSearchParams(window.location.search).get('tgWebAppData') || '';
+  if (fromSearch) return fromSearch;
+
+  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const fromHash = new URLSearchParams(hash).get('tgWebAppData') || '';
+  return fromHash;
+};
+
 export function NotesApp() {
   const [initData, setInitData] = useState('');
   const [query, setQuery] = useState('');
@@ -57,7 +66,8 @@ export function NotesApp() {
     const tg = window.Telegram?.WebApp;
     if (tg?.ready) tg.ready();
     if (tg?.expand) tg.expand();
-    setInitData(tg?.initData || '');
+    const value = tg?.initData || extractInitDataFromLaunchParams();
+    setInitData(value || '');
   }, []);
 
   const canPrev = offset > 0;
@@ -106,7 +116,7 @@ export function NotesApp() {
     event.preventDefault();
     setError('');
     if (!content.trim()) {
-      setError('Текст заметки обязателен.');
+      setError('Note text is required.');
       return;
     }
 
@@ -138,7 +148,7 @@ export function NotesApp() {
   };
 
   const onDelete = async (id: number) => {
-    const ok = window.confirm(`Удалить заметку #${id}?`);
+    const ok = window.confirm(`Delete note #${id}?`);
     if (!ok) return;
 
     setLoading(true);
@@ -166,38 +176,38 @@ export function NotesApp() {
 
   return (
     <main>
-      <h1>📝 Заметки</h1>
+      <h1>Notes</h1>
 
       <section className="card">
         <form className="grid" onSubmit={onCreate}>
           <input
-            placeholder="Заголовок (необязательно)"
+            placeholder="Title (optional)"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={120}
           />
           <textarea
-            placeholder="Текст заметки"
+            placeholder="Note text"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            maxLength={2000}
+            maxLength={3000}
             required
           />
-          <button disabled={loading} type="submit">Добавить заметку</button>
+          <button disabled={loading} type="submit">Add note</button>
         </form>
       </section>
 
       <section className="card grid">
         <div className="grid grid-2">
           <input
-            placeholder="Поиск по заголовку и тексту"
+            placeholder="Search in title and text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={120}
           />
           <div className="inline-actions">
-            <button className="secondary" disabled={loading} onClick={() => loadNotes(0, query)} type="button">Искать</button>
-            <button className="secondary" disabled={loading} onClick={() => { setQuery(''); loadNotes(0, ''); }} type="button">Сбросить</button>
+            <button className="secondary" disabled={loading} onClick={() => loadNotes(0, query)} type="button">Search</button>
+            <button className="secondary" disabled={loading} onClick={() => { setQuery(''); loadNotes(0, ''); }} type="button">Reset</button>
           </div>
         </div>
 
@@ -206,15 +216,15 @@ export function NotesApp() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Заметка</th>
-                <th>Создано</th>
-                <th>Действие</th>
+                <th>Note</th>
+                <th>Created</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="muted">Нет данных</td>
+                  <td colSpan={4} className="muted">No data</td>
                 </tr>
               )}
               {items.map((item) => (
@@ -226,7 +236,7 @@ export function NotesApp() {
                   </td>
                   <td className="muted">{formatTs(item.created_at)}</td>
                   <td>
-                    <button className="danger" disabled={loading} onClick={() => onDelete(item.id)} type="button">Удалить</button>
+                    <button className="danger" disabled={loading} onClick={() => onDelete(item.id)} type="button">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -235,14 +245,14 @@ export function NotesApp() {
         </div>
 
         <div className="inline-actions">
-          <button className="secondary" disabled={!canPrev || loading} onClick={() => loadNotes(Math.max(0, offset - PAGE_SIZE), query)} type="button">← Назад</button>
-          <button className="secondary" disabled={!canNext || loading} onClick={() => loadNotes(offset + PAGE_SIZE, query)} type="button">Вперед →</button>
+          <button className="secondary" disabled={!canPrev || loading} onClick={() => loadNotes(Math.max(0, offset - PAGE_SIZE), query)} type="button">{'<- Prev'}</button>
+          <button className="secondary" disabled={!canNext || loading} onClick={() => loadNotes(offset + PAGE_SIZE, query)} type="button">{'Next ->'}</button>
         </div>
-        <div className="muted">Страница {page}/{totalPages}, всего: {total}</div>
+        <div className="muted">Page {page}/{totalPages}, total: {total}</div>
       </section>
 
-      {error ? <section className="card" style={{ borderColor: '#e53e3e' }}><strong>Ошибка:</strong> {error}</section> : null}
-      {!initData ? <section className="card"><span className="muted">WebApp initData не найден. Открывай страницу из Telegram-кнопки `web_app`.</span></section> : null}
+      {error ? <section className="card" style={{ borderColor: '#e53e3e' }}><strong>Error:</strong> {error}</section> : null}
+      {!initData ? <section className="card"><span className="muted">WebApp initData not found. Open this page from Telegram `web_app` button.</span></section> : null}
     </main>
   );
 }
