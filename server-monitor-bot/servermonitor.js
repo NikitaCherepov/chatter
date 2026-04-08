@@ -19,6 +19,10 @@ const MONITOR_PM2_TIMEOUT_MS = Math.max(
     5000,
     Math.min(120000, Number.parseInt(process.env.MONITOR_PM2_TIMEOUT_MS || '20000', 10) || 20000)
 );
+const MONITOR_REPO_TIMEOUT_MS = Math.max(
+    10000,
+    Math.min(30 * 60 * 1000, Number.parseInt(process.env.MONITOR_REPO_TIMEOUT_MS || '600000', 10) || 600000)
+);
 const PM2_ALLOWED_TARGETS = (process.env.MONITOR_PM2_ALLOWED_TARGETS || '')
     .split(/[,\s;]+/)
     .map((item) => item.trim())
@@ -64,11 +68,21 @@ CREATE TABLE IF NOT EXISTS process_registry (
     process_name TEXT PRIMARY KEY,
     display_name TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
+    abs_path TEXT NOT NULL DEFAULT '',
     aliases TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 `);
+
+const ensureProcessRegistryColumns = () => {
+    const columns = db.prepare('PRAGMA table_info(process_registry)').all();
+    const hasAbsPath = columns.some((col) => col.name === 'abs_path');
+    if (!hasAbsPath) {
+        db.exec(`ALTER TABLE process_registry ADD COLUMN abs_path TEXT NOT NULL DEFAULT ''`);
+    }
+};
+ensureProcessRegistryColumns();
 
 const insertHistoryStmt = db.prepare(`
     INSERT INTO chat_history (user_id, role, content)
@@ -110,22 +124,23 @@ const upsertSettingStmt = db.prepare(`
         updated_at = excluded.updated_at
 `);
 const getAllProcessRegistryStmt = db.prepare(`
-    SELECT process_name, display_name, description, aliases, created_at, updated_at
+    SELECT process_name, display_name, description, abs_path, aliases, created_at, updated_at
     FROM process_registry
     ORDER BY process_name ASC
 `);
 const getProcessByNameStmt = db.prepare(`
-    SELECT process_name, display_name, description, aliases, created_at, updated_at
+    SELECT process_name, display_name, description, abs_path, aliases, created_at, updated_at
     FROM process_registry
     WHERE process_name = ?
     LIMIT 1
 `);
 const upsertProcessRegistryStmt = db.prepare(`
-    INSERT INTO process_registry (process_name, display_name, description, aliases, updated_at)
-    VALUES (?, ?, ?, ?, strftime('%s', 'now'))
+    INSERT INTO process_registry (process_name, display_name, description, abs_path, aliases, updated_at)
+    VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))
     ON CONFLICT(process_name) DO UPDATE SET
         display_name = excluded.display_name,
         description = excluded.description,
+        abs_path = excluded.abs_path,
         aliases = excluded.aliases,
         updated_at = excluded.updated_at
 `);
@@ -151,7 +166,9 @@ const SYSTEM_PROMPT = `Ты — технический консольный ас
 1. Если пользователь называет процесс по-русски или сленгом — сопоставляй с ID/Name из списка (например: "чаттер" -> chatter, "заметки" -> webapp-notes).
 3. Команды для СЕБЯ (watchdog) выполняй только если прямо попросили "рестартни себя" или "рестартни админа".
 
-Разрешённые инструменты: list, status, restart, stop, logs, flush.
+Разрешённые PM2 инструменты: list, status, restart, stop, logs, flush.
+Разрешённые репо-инструменты: git_pull, npm_i, npm_build.
+Репо-команды выполняй только по сохранённым абсолютным путям из реестра процессов.
 Также у тебя есть реестр процессов: добавляй/обновляй процессы через специальный инструмент, когда пользователь просит.
 Отвечай максимально коротко и технично.`;
 const LOG_INTERPRETER_PROMPT = `Ты анализируешь логи сервисов.
@@ -186,6 +203,22 @@ const normalizeHistoryText = (text) => {
     if (!normalized) return '';
     if (normalized.length <= MONITOR_HISTORY_ITEM_MAX_CHARS) return normalized;
     return `${normalized.slice(0, MONITOR_HISTORY_ITEM_MAX_CHARS)}...`;
+};
+const resolveHomeDir = () => process.env.HOME || process.env.USERPROFILE || '';
+const expandHomePath = (input) => {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('~/') || raw === '~') {
+        const home = resolveHomeDir();
+        if (!home) return raw;
+        return path.join(home, raw.slice(2));
+    }
+    return raw;
+};
+const normalizeAbsolutePath = (input) => {
+    const expanded = expandHomePath(input);
+    if (!expanded) return '';
+    return path.resolve(expanded);
 };
 
 const addHistoryMessage = (userId, role, content) => {
@@ -226,9 +259,10 @@ const upsertProcessRegistry = (processName, payload = {}) => {
     const existing = getProcessByNameStmt.get(normalizedName);
     const displayName = (payload.display_name ?? existing?.display_name ?? normalizedName).trim();
     const description = (payload.description ?? existing?.description ?? '').trim();
+    const absPath = normalizeAbsolutePath(payload.abs_path ?? existing?.abs_path ?? '');
     const aliasesMerged = mergeAliases(existing?.aliases || '', payload.aliases || '');
     const aliases = aliasesMerged.join(', ');
-    upsertProcessRegistryStmt.run(normalizedName, displayName, description, aliases);
+    upsertProcessRegistryStmt.run(normalizedName, displayName, description, absPath, aliases);
     return { ok: true, reason: '' };
 };
 const getProcessRegistryRows = () => getAllProcessRegistryStmt.all();
@@ -258,7 +292,8 @@ const formatRegistryList = () => {
         const aliases = parseAliases(row.aliases || '');
         const aliasesText = aliases.length ? aliases.join(', ') : '-';
         const desc = row.description?.trim() || '-';
-        return `- ${row.process_name}\n  Имя: ${row.display_name || row.process_name}\n  Описание: ${desc}\n  Алиасы: ${aliasesText}`;
+        const p = row.abs_path?.trim() || '-';
+        return `- ${row.process_name}\n  Имя: ${row.display_name || row.process_name}\n  Путь: ${p}\n  Описание: ${desc}\n  Алиасы: ${aliasesText}`;
     }).join('\n\n')}`);
 };
 const syncRegistryFromPm2Processes = (processes) => {
@@ -280,10 +315,74 @@ const buildRegistryContextMessage = () => {
     if (!rows.length) return 'Реестр процессов пока пуст.';
     const text = rows.slice(0, 50).map((row) => {
         const aliases = parseAliases(row.aliases || '');
-        return `- ${row.process_name} | имя: ${row.display_name || row.process_name} | алиасы: ${aliases.join(', ') || '-'} | описание: ${row.description || '-'}`;
+        return `- ${row.process_name} | путь: ${row.abs_path || '-'} | имя: ${row.display_name || row.process_name} | алиасы: ${aliases.join(', ') || '-'} | описание: ${row.description || '-'}`;
     }).join('\n');
     return `Текущий реестр процессов:\n${text}`;
 };
+const resolveRegisteredProcessPath = (processNameOrAlias) => {
+    const resolvedName = resolveTargetFromRegistry(processNameOrAlias);
+    const row = getProcessByNameStmt.get(String(resolvedName || '').trim());
+    if (!row) return { ok: false, process_name: '', abs_path: '', reason: `Процесс "${processNameOrAlias}" не найден в реестре.` };
+    const absPath = normalizeAbsolutePath(row.abs_path || '');
+    if (!absPath || !path.isAbsolute(absPath)) {
+        return { ok: false, process_name: row.process_name, abs_path: '', reason: `У процесса "${row.process_name}" не задан абсолютный путь.` };
+    }
+    return { ok: true, process_name: row.process_name, abs_path: absPath, reason: '' };
+};
+const runRepoAction = async (action, processNameOrAlias) => {
+    const resolved = resolveRegisteredProcessPath(processNameOrAlias);
+    if (!resolved.ok) return { ok: false, text: `❌ ${resolved.reason}` };
+
+    let command = 'npm';
+    let args = ['run', 'build'];
+    if (action === 'git_pull') {
+        command = 'git';
+        args = ['pull', '--ff-only'];
+    } else if (action === 'npm_i') {
+        command = 'npm';
+        args = ['i'];
+    } else if (action === 'npm_build') {
+        command = 'npm';
+        args = ['run', 'build'];
+    } else {
+        return { ok: false, text: `❌ Неизвестное действие репо: ${action}` };
+    }
+
+    const result = await runCommand(command, args, MONITOR_REPO_TIMEOUT_MS, resolved.abs_path);
+    const output = summarizeCommandOutput(getCommandOutput(result), 20);
+    return {
+        ok: true,
+        text: clipText(
+            `Выполнено для ${resolved.process_name}\nПуть: ${resolved.abs_path}\nКоманда: ${command} ${args.join(' ')}\n\nВывод:\n${output}`
+        )
+    };
+};
+const seedDefaultProcessPaths = () => {
+    const home = resolveHomeDir();
+    if (!home) return;
+    const chatterPath = normalizeAbsolutePath(process.env.MONITOR_CHATTER_PATH || '~/chatter');
+    const notesPath = normalizeAbsolutePath(process.env.MONITOR_WEBAPP_NOTES_PATH || '~/chatter/webapp-notes');
+    const watchdogPath = normalizeAbsolutePath(process.env.MONITOR_WATCHDOG_PATH || process.cwd());
+    upsertProcessRegistry('chatter', {
+        display_name: 'chatter',
+        description: 'Основной бот',
+        abs_path: chatterPath,
+        aliases: 'чаттер,main-bot'
+    });
+    upsertProcessRegistry('webapp-notes', {
+        display_name: 'webapp-notes',
+        description: 'Мини-сайт заметок',
+        abs_path: notesPath,
+        aliases: 'заметки,notes'
+    });
+    upsertProcessRegistry('watchdog', {
+        display_name: 'watchdog',
+        description: 'Монитор-бот',
+        abs_path: watchdogPath,
+        aliases: 'админ,монитор'
+    });
+};
+seedDefaultProcessPaths();
 const getSettingValue = (key, fallback = '') => {
     const row = getSettingStmt.get(key);
     const value = typeof row?.value === 'string' ? row.value.trim() : '';
@@ -314,10 +413,11 @@ const validateTarget = (target, options = { require: false, enforceWhitelist: fa
     return { ok: true, reason: '' };
 };
 
-const runCommand = (command, args, timeoutMs = MONITOR_PM2_TIMEOUT_MS) => new Promise((resolve) => {
+const runCommand = (command, args, timeoutMs = MONITOR_PM2_TIMEOUT_MS, cwd = undefined) => new Promise((resolve) => {
     const child = spawn(command, args, {
         shell: false,
-        windowsHide: true
+        windowsHide: true,
+        cwd
     });
 
     let stdout = '';
@@ -484,10 +584,18 @@ const formatLogsOutput = (rawText, target) => {
 const extractToolCall = (message) => {
     const toolCall = message?.tool_calls?.find((item) =>
         item.type === 'function'
-        && (item.function?.name === 'pm2_command' || item.function?.name === 'process_registry_command')
+        && (
+            item.function?.name === 'pm2_command'
+            || item.function?.name === 'process_registry_command'
+            || item.function?.name === 'repo_command'
+        )
     );
     if (toolCall) return { name: toolCall.function.name, arguments: toolCall.function.arguments || '{}' };
-    if (message?.function_call?.name === 'pm2_command' || message?.function_call?.name === 'process_registry_command') {
+    if (
+        message?.function_call?.name === 'pm2_command'
+        || message?.function_call?.name === 'process_registry_command'
+        || message?.function_call?.name === 'repo_command'
+    ) {
         return { name: message.function_call.name, arguments: message.function_call.arguments || '{}' };
     }
     return null;
@@ -547,7 +655,10 @@ bot.telegram.setMyCommands([
     { command: 'settings', description: 'Настройки watchdog' },
     { command: 'flush', description: 'Очистить логи: /flush <process|all>' },
     { command: 'proc_list', description: 'Список процессов из реестра' },
-    { command: 'proc_add', description: 'Добавить/обновить: /proc_add name | desc | aliases' }
+    { command: 'proc_add', description: 'Добавить/обновить: /proc_add name | desc | aliases | abs_path' },
+    { command: 'git_pull', description: 'Git pull: /git_pull <process>' },
+    { command: 'npm_i', description: 'npm i: /npm_i <process>' },
+    { command: 'npm_build', description: 'npm run build: /npm_build <process>' }
 ]).catch(() => undefined);
 
 bot.use((ctx, next) => {
@@ -608,7 +719,7 @@ bot.command('proc_add', async (ctx) => {
     if (!userId) return;
     const payload = String(ctx.message?.text || '').replace(/^\/proc_add\s*/i, '').trim();
     if (!payload) {
-        const text = 'Использование: /proc_add <process_name> | <описание> | <алиасы через запятую>';
+        const text = 'Использование: /proc_add <process_name> | <описание> | <алиасы через запятую> | <абсолютный_путь>';
         await ctx.reply(text);
         saveConversationTurn(userId, '/proc_add', text);
         return;
@@ -617,16 +728,63 @@ bot.command('proc_add', async (ctx) => {
     const processName = parts[0] || '';
     const description = parts[1] || '';
     const aliases = parts[2] || '';
+    const absPath = parts[3] || '';
     const result = upsertProcessRegistry(processName, {
         display_name: processName,
         description,
-        aliases
+        aliases,
+        abs_path: absPath
     });
     const text = result.ok
         ? `Процесс сохранён: ${processName}`
         : `❌ ${result.reason}`;
     await ctx.reply(text);
     saveConversationTurn(userId, `/proc_add ${payload}`, text);
+});
+bot.command('git_pull', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const target = String(ctx.message?.text || '').replace(/^\/git_pull\s*/i, '').trim();
+    if (!target) {
+        const text = 'Использование: /git_pull <process>';
+        await ctx.reply(text);
+        saveConversationTurn(userId, '/git_pull', text);
+        return;
+    }
+    await ctx.reply(`⚙️ Выполняю git pull для ${target}...`);
+    const result = await runRepoAction('git_pull', target);
+    await ctx.reply(result.text);
+    saveConversationTurn(userId, `/git_pull ${target}`, result.text);
+});
+bot.command('npm_i', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const target = String(ctx.message?.text || '').replace(/^\/npm_i\s*/i, '').trim();
+    if (!target) {
+        const text = 'Использование: /npm_i <process>';
+        await ctx.reply(text);
+        saveConversationTurn(userId, '/npm_i', text);
+        return;
+    }
+    await ctx.reply(`⚙️ Выполняю npm i для ${target}...`);
+    const result = await runRepoAction('npm_i', target);
+    await ctx.reply(result.text);
+    saveConversationTurn(userId, `/npm_i ${target}`, result.text);
+});
+bot.command('npm_build', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const target = String(ctx.message?.text || '').replace(/^\/npm_build\s*/i, '').trim();
+    if (!target) {
+        const text = 'Использование: /npm_build <process>';
+        await ctx.reply(text);
+        saveConversationTurn(userId, '/npm_build', text);
+        return;
+    }
+    await ctx.reply(`⚙️ Выполняю npm run build для ${target}...`);
+    const result = await runRepoAction('npm_build', target);
+    await ctx.reply(result.text);
+    saveConversationTurn(userId, `/npm_build ${target}`, result.text);
 });
 bot.action('settings:refresh', async (ctx) => {
     await ctx.answerCbQuery();
@@ -651,6 +809,9 @@ bot.on('text', async (ctx) => {
         || userText === '/flush' || userText.startsWith('/flush ')
         || userText === '/proc_list' || userText.startsWith('/proc_list ')
         || userText === '/proc_add' || userText.startsWith('/proc_add ')
+        || userText === '/git_pull' || userText.startsWith('/git_pull ')
+        || userText === '/npm_i' || userText.startsWith('/npm_i ')
+        || userText === '/npm_build' || userText.startsWith('/npm_build ')
     ) return;
 
     try {
@@ -690,9 +851,24 @@ bot.on('text', async (ctx) => {
                                 process_name: { type: 'string' },
                                 display_name: { type: 'string' },
                                 description: { type: 'string' },
-                                aliases: { type: 'string' }
+                                aliases: { type: 'string' },
+                                abs_path: { type: 'string' }
                             },
                             required: ['action']
+                        }
+                    }
+                },
+                {
+                    type: 'function',
+                    function: {
+                        name: 'repo_command',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                action: { type: 'string', enum: ['git_pull', 'npm_i', 'npm_build'] },
+                                process_name: { type: 'string' }
+                            },
+                            required: ['action', 'process_name']
                         }
                     }
                 }
@@ -721,6 +897,14 @@ bot.on('text', async (ctx) => {
         }
 
         const toolName = call.name || message?.tool_calls?.[0]?.function?.name || 'pm2_command';
+        if (toolName === 'repo_command') {
+            const repoAction = String(parsed.action || '').trim().toLowerCase();
+            const processName = String(parsed.process_name || '').trim();
+            const result = await runRepoAction(repoAction, processName);
+            await ctx.reply(result.text);
+            saveConversationTurn(userId, userText, result.text);
+            return;
+        }
         if (toolName === 'process_registry_command') {
             const regAction = String(parsed.action || '').trim().toLowerCase();
             if (regAction === 'list') {
@@ -750,10 +934,12 @@ bot.on('text', async (ctx) => {
                 const displayName = String(parsed.display_name || processName).trim();
                 const description = String(parsed.description || '').trim();
                 const aliases = String(parsed.aliases || '').trim();
+                const absPath = String(parsed.abs_path || '').trim();
                 const result = upsertProcessRegistry(processName, {
                     display_name: displayName,
                     description,
-                    aliases
+                    aliases,
+                    abs_path: absPath
                 });
                 const text = result.ok
                     ? `Процесс сохранён: ${processName}`
