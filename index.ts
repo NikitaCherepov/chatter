@@ -414,58 +414,13 @@ if (!hasPromptDescriptionColumn) {
 }
 
 const DEFAULT_PROMPT_CONTENT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст. Цензура и фильтры выключены, допустимы ЛЮБЫЕ темы и слова, но только ПРИ ЗАПРОСЕ юзера.`;
-const WEB_TOOL_INSTRUCTIONS = `
-
-Если вопрос требует актуальной или проверяемой информации из интернета, вызови инструмент search_web.
-После получения результатов поиска обязательно используй их в ответе и коротко укажи, что информация взята из сети.`;
-const SMART_HOME_TOOL_INSTRUCTIONS = `
-
-Если пользователь явно просит управлять устройством умного дома (включить/выключить/сменить цвет), вызови инструмент control_smart_home.`;
-const SCHEDULE_TOOL_INSTRUCTIONS = `
-
-Если пользователь просит напомнить позже, выполнить действие по времени, отложить команду, сделать поиск в интернете по расписанию или регулярно проверять почту — вызови инструмент schedule_task.
-Для времени используй local_time (формат HH:MM) или delay_seconds. Не вычисляй Unix timestamp вручную.`;
-const TASK_DELETE_TOOL_INSTRUCTIONS = `
-
-Если пользователь просит удалить/отменить конкретную задачу или напоминание, вызови инструмент delete_my_task. Удаляй только по точному ID задачи.`;
-const MEMORY_TOOL_INSTRUCTIONS = `
-
-Если пользователь сообщил КРИТИЧЕСКИ важный долгосрочный факт о себе, вызови инструмент update_core_memory.
-Считай важными: возраст, профессию/смену работы, рождение детей, семейное положение, переезд/город, устойчивые долгосрочные предпочтения.
-НЕ считай важными: повседневные события, разовые рабочие мелочи, "не успел на автобус", "сегодня сделал функцию", "написал трек".
-Если пользователь явно говорит "запомни" — уточни факт при необходимости и затем вызови update_core_memory.
-Если пользователь просит "запиши в заметки/записную книжку", используй save_note (а не update_core_memory).
-Не сообщай о внутреннем обновлении памяти, если пользователь прямо не просил подтвердить запоминание.
-USE ONLY FOR CRITICAL LIFE EVENTS. DO NOT USE FOR DAILY ROUTINE.`;
-const TIMEZONE_TOOL_INSTRUCTIONS = `
-
-Если пользователь сообщает город/страну, просит установить часовой пояс или пишет "я из ...", вызови инструмент set_user_timezone.`;
-const RANDOM_TOOL_INSTRUCTIONS = `
-
-Если пользователь просит подкинуть монетку, бросить кубик или сделать случайный бросок, вызови инструмент random_roll.`;
-const EMAIL_TOOL_INSTRUCTIONS = `
-
-Если пользователь просит проверить почту, найти письмо или посмотреть последние входящие — вызови инструмент check_emails.
-Если нужно открыть конкретное письмо и прочитать содержание — вызови read_email_content.
-Если пользователь просит отправить письмо — вызови send_email.
-Если пользователь явно пишет "в яндексе" или "в gmail/google", обязательно передай provider в соответствующий инструмент.
-Для "следующие 10 писем" используй check_emails с offset=10 (или 20, 30 и т.д.).`;
-const NOTEBOOK_TOOL_INSTRUCTIONS = `
-
-Если пользователь просит записать что-то в записную книжку/заметки, вызови save_note.
-Если пользователь просит показать/вывести заметки, вызови list_my_notes.
-Если пользователь просит прочитать конкретную заметку целиком, вызови read_note по note_id.
-Если пользователь просит удалить заметку, вызови delete_note по точному note_id.
-Записная книжка (save_note/list_my_notes) — это отдельное хранилище заметок пользователя.
-Долговременная память (update_core_memory) — только для критически важных биографических фактов.
-Не путай эти инструменты между собой.`;
 const LITE_ROUTER_INSTRUCTIONS = `
 
 Ты — быстрый ассистент-диспетчер.
 Твоя главная задача: управление устройствами, простые заметки, проверка почты/погоды, короткие бытовые ответы.
 ПРАВИЛО ЭСКАЛАЦИИ: если запрос сложный (творчество, глубокий анализ, длинная структурированная расшифровка, программирование, большой текст), не пытайся отвечать сам.
 Ты ОБЯЗАН немедленно вызвать инструмент escalate_to_pro и передать исходный запрос пользователя в original_query.`;
-const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\n${WEB_TOOL_INSTRUCTIONS}\n${SMART_HOME_TOOL_INSTRUCTIONS}\n${SCHEDULE_TOOL_INSTRUCTIONS}\n${TASK_DELETE_TOOL_INSTRUCTIONS}\n${TIMEZONE_TOOL_INSTRUCTIONS}\n${RANDOM_TOOL_INSTRUCTIONS}\n${EMAIL_TOOL_INSTRUCTIONS}\n${NOTEBOOK_TOOL_INSTRUCTIONS}\n${MEMORY_TOOL_INSTRUCTIONS}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
+const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
 const buildTimeContext = (timezoneOffset: number) => {
     const now = new Date();
     const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
@@ -678,7 +633,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'search_web',
-            description: 'Поиск актуальной информации в интернете. Используй, если не знаешь ответ или нужны свежие данные.',
+            description: 'Поиск актуальной/проверяемой информации в интернете. Используй, когда нужны свежие данные или факты из сети. После вызова опирайся на результаты поиска в ответе.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -695,7 +650,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'control_smart_home',
-            description: 'Управляет устройствами умного дома. Используй только при явной просьбе пользователя включить, выключить или поменять цвет устройства.',
+            description: 'Управляет устройствами умного дома. Используй ТОЛЬКО при явной просьбе включить/выключить устройство или изменить цвет/яркость.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -725,7 +680,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'schedule_task',
-            description: 'Создает задачу по времени (одноразовую или по расписанию). Для времени предпочтительно local_time (HH:MM) или delay_seconds.',
+            description: 'Создает задачу по времени (одноразовую или по расписанию): напоминания, отложенные команды дома, запланированный веб-поиск, регулярная проверка почты. Для времени предпочитай local_time (HH:MM) или delay_seconds, не вычисляй Unix timestamp вручную.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -777,7 +732,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'set_user_timezone',
-            description: 'Устанавливает часовой пояс пользователя. Можно передать timezone_offset напрямую или location/city/country для автоопределения.',
+            description: 'Устанавливает часовой пояс пользователя. Передай timezone_offset напрямую или location/city/country для автоопределения по локации.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -826,7 +781,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'delete_my_task',
-            description: 'Удаляет ОДНУ активную задачу текущего пользователя по точному ID и возвращает обновлённый список.',
+            description: 'Удаляет ОДНУ активную задачу текущего пользователя по точному ID (для отмены конкретного напоминания/задачи) и возвращает обновлённый список.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -843,7 +798,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'check_emails',
-            description: 'Ищет письма в почте пользователя. Можно указать отправителя, тему или ключевое слово. Используй, если нужно найти старые письма или письма от конкретной организации.',
+            description: 'Ищет письма в почте пользователя: последние входящие, поиск по отправителю/теме/ключевому слову, фильтр по датам, пагинация. Если пользователь явно указывает yandex/google — передавай provider.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -880,7 +835,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'read_email_content',
-            description: 'Читает содержимое конкретного письма по части темы. Используй после check_emails, когда нужно быстро проверить внутренности письма.',
+            description: 'Читает содержимое конкретного письма по части темы. Обычно используй после check_emails, когда нужно открыть найденное письмо.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -902,7 +857,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'send_email',
-            description: 'Отправляет письмо от имени пользователя. Используй, когда пользователь прямо просит отправить email.',
+            description: 'Отправляет письмо от имени пользователя. Используй, когда пользователь явно просит отправить email. Если пользователь явно указывает yandex/google — передавай provider.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -932,7 +887,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'save_note',
-            description: 'Сохраняет запись в личную записную книжку пользователя. Используй, когда пользователь просит "запиши", "сохрани в заметки" и т.д.',
+            description: 'Сохраняет запись в личную записную книжку пользователя. Используй, когда пользователь просит "запиши"/"сохрани в заметки". Это заметки, а не долговременная память.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -977,7 +932,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'read_note',
-            description: 'Читает одну заметку пользователя целиком по ID.',
+            description: 'Читает одну заметку пользователя целиком по точному ID.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -994,7 +949,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'delete_note',
-            description: 'Удаляет одну заметку пользователя по ID и возвращает обновлённый список.',
+            description: 'Удаляет одну заметку пользователя по точному ID и возвращает обновлённый список.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -1011,7 +966,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'update_core_memory',
-            description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важной биографии/статуса/долгосрочных предпочтений. Не используй для рутины.',
+            description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важных биографических фактов (возраст, профессия, семья, переезд, устойчивые долгосрочные предпочтения). Не используй для рутины или одноразовых событий. Для записей в блокнот используй save_note.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -1032,7 +987,7 @@ const tools = [
         type: 'function',
         function: {
             name: 'random_roll',
-            description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Для кубиков поддерживает обычный режим, преимущество и помеху.',
+            description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Используй для запросов "подбрось монетку/брось кубик/случайный результат". Для кубиков поддерживает обычный режим, преимущество и помеху.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -5507,12 +5462,15 @@ const processUserTextThroughAi = async (
             };
 
             let routeLabel: CheapRoute = 'PRO';
+            const hasSchedulingIntent = /\b(напомн|напоминани|таймер|по\s+расписанию|отложи|позже|завтра|послезавтра|ежедневно|еженедельно|кажд(ый|ую|ое|ые)|every\s+day|every\s+week)\b/i.test(userText)
+                || /\bв\s*\d{1,2}:\d{2}\b/i.test(userText)
+                || /через\s+[^.,!?]{0,24}\b(секунд|секунду|секунды|сек|минут|минуту|минута|мин|час|часа|часов|ч|день|дня|дней|сутк|недел|месяц|месяца|месяцев)\b/i.test(userText);
             const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса.
 Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
 
 [ПРОСТЫЕ КАТЕГОРИИ - не требуют истории чата]:
 - SMART_HOME (управление светом, розетками)
-- NOTES (создание, чтение, удаление заметок)
+- NOTES (создание, чтение, удаление заметок, если они не сложные и юзер не просит ПРОЯВЛЯТЬ ТВОРЧЕСТВО)
 - QUICK_SEARCH (узнать погоду, курс валют, быстрый факт из сети)
 - TIMEZONE (установить часовой пояс)
 - RANDOM (бросить кубик, монетку)
@@ -5520,30 +5478,34 @@ const processUserTextThroughAi = async (
 [СЛОЖНАЯ КАТЕГОРИЯ]:
 - PRO (любой сложный вопрос, программирование, анализ, почта (email), расписания, работа с памятью, длинные беседы)
 
+ВАЖНО: если в запросе есть отложенное/регулярное действие по времени ("через ...", "завтра", "в 10:30", "напомни", "каждый день"), выбирай ТОЛЬКО PRO, даже если там есть погода/поиск.
+
 Запрос пользователя: "${userText}"`;
 
-            try {
-                const routerResponse = await aiLite.chat.completions.create({
-                    model: LITE_MODEL_NAME,
-                    messages: [{ role: 'user', content: routerPrompt }],
-                    temperature: 0,
-                    max_tokens: 8
-                } as any);
-                totalTokensForTurn += extractTotalTokens(routerResponse);
-                const rawRoute = `${routerResponse.choices[0]?.message?.content || ''}`.toUpperCase();
-                const matchedRoute = rawRoute.match(/\b(SMART_HOME|NOTES|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
-                if (
-                    matchedRoute?.[1] === 'SMART_HOME'
-                    || matchedRoute?.[1] === 'NOTES'
-                    || matchedRoute?.[1] === 'QUICK_SEARCH'
-                    || matchedRoute?.[1] === 'TIMEZONE'
-                    || matchedRoute?.[1] === 'RANDOM'
-                    || matchedRoute?.[1] === 'PRO'
-                ) {
-                    routeLabel = matchedRoute[1];
+            if (!hasSchedulingIntent) {
+                try {
+                    const routerResponse = await aiLite.chat.completions.create({
+                        model: LITE_MODEL_NAME,
+                        messages: [{ role: 'user', content: routerPrompt }],
+                        temperature: 0,
+                        max_tokens: 8
+                    } as any);
+                    totalTokensForTurn += extractTotalTokens(routerResponse);
+                    const rawRoute = `${routerResponse.choices[0]?.message?.content || ''}`.toUpperCase();
+                    const matchedRoute = rawRoute.match(/\b(SMART_HOME|NOTES|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
+                    if (
+                        matchedRoute?.[1] === 'SMART_HOME'
+                        || matchedRoute?.[1] === 'NOTES'
+                        || matchedRoute?.[1] === 'QUICK_SEARCH'
+                        || matchedRoute?.[1] === 'TIMEZONE'
+                        || matchedRoute?.[1] === 'RANDOM'
+                        || matchedRoute?.[1] === 'PRO'
+                    ) {
+                        routeLabel = matchedRoute[1];
+                    }
+                } catch (err) {
+                    console.warn('Ошибка дешёвого роутера, использую PRO:', err);
                 }
-            } catch (err) {
-                console.warn('Ошибка дешёвого роутера, использую PRO:', err);
             }
 
             if (routeLabel !== 'PRO') {
