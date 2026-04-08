@@ -246,6 +246,11 @@ const saveConversationTurn = (userId, userText, assistantText) => {
     trimHistory(userId);
 };
 const normalizeRegistryToken = (value) => String(value || '').trim().toLowerCase();
+const asOptionalTrimmed = (value) => {
+    if (value === undefined || value === null) return undefined;
+    const text = String(value).trim();
+    return text.length ? text : undefined;
+};
 const parseAliases = (value) => {
     const raw = Array.isArray(value) ? value.join(',') : String(value || '');
     const parts = raw.split(/[,\n;|]+/).map((x) => normalizeRegistryToken(x)).filter(Boolean);
@@ -257,10 +262,17 @@ const upsertProcessRegistry = (processName, payload = {}) => {
     const normalizedName = String(processName || '').trim();
     if (!normalizedName) return { ok: false, reason: 'Пустое имя процесса.' };
     const existing = getProcessByNameStmt.get(normalizedName);
-    const displayName = (payload.display_name ?? existing?.display_name ?? normalizedName).trim();
-    const description = (payload.description ?? existing?.description ?? '').trim();
-    const absPath = normalizeAbsolutePath(payload.abs_path ?? existing?.abs_path ?? '');
-    const aliasesMerged = mergeAliases(existing?.aliases || '', payload.aliases || '');
+    const displayName = asOptionalTrimmed(payload.display_name)
+        ?? asOptionalTrimmed(existing?.display_name)
+        ?? normalizedName;
+    const description = asOptionalTrimmed(payload.description)
+        ?? asOptionalTrimmed(existing?.description)
+        ?? '';
+    const absPathRaw = asOptionalTrimmed(payload.abs_path)
+        ?? asOptionalTrimmed(existing?.abs_path)
+        ?? '';
+    const absPath = normalizeAbsolutePath(absPathRaw);
+    const aliasesMerged = mergeAliases(existing?.aliases || '', asOptionalTrimmed(payload.aliases) || '');
     const aliases = aliasesMerged.join(', ');
     upsertProcessRegistryStmt.run(normalizedName, displayName, description, absPath, aliases);
     return { ok: true, reason: '' };
@@ -296,19 +308,41 @@ const formatRegistryList = () => {
         return `- ${row.process_name}\n  Имя: ${row.display_name || row.process_name}\n  Путь: ${p}\n  Описание: ${desc}\n  Алиасы: ${aliasesText}`;
     }).join('\n\n')}`);
 };
+const getPm2ProcessPath = (proc) => {
+    const cwd = asOptionalTrimmed(proc?.pm2_env?.pm_cwd);
+    if (cwd) return normalizeAbsolutePath(cwd);
+    const execPath = asOptionalTrimmed(proc?.pm2_env?.pm_exec_path);
+    if (execPath) return normalizeAbsolutePath(path.dirname(execPath));
+    return '';
+};
 const syncRegistryFromPm2Processes = (processes) => {
-    const known = new Set(getProcessRegistryRows().map((row) => row.process_name));
+    const rows = getProcessRegistryRows();
+    const known = new Set(rows.map((row) => row.process_name));
+    const byName = new Map(rows.map((row) => [row.process_name, row]));
     const newNames = [];
+    const pathUpdated = [];
     for (const proc of processes || []) {
         const name = String(proc?.name || '').trim();
         if (!name) continue;
+        const pm2Path = getPm2ProcessPath(proc);
         if (!known.has(name)) {
-            upsertProcessRegistry(name, { display_name: name, description: '', aliases: '' });
+            upsertProcessRegistry(name, { display_name: name, description: '', aliases: '', abs_path: pm2Path });
             known.add(name);
             newNames.push(name);
+            if (pm2Path) pathUpdated.push(name);
+            byName.set(name, getProcessByNameStmt.get(name));
+            continue;
+        }
+
+        const existing = byName.get(name);
+        const existingPath = normalizeAbsolutePath(existing?.abs_path || '');
+        if (pm2Path && !existingPath) {
+            upsertProcessRegistry(name, { abs_path: pm2Path });
+            pathUpdated.push(name);
+            byName.set(name, getProcessByNameStmt.get(name));
         }
     }
-    return newNames;
+    return { newNames, pathUpdated };
 };
 const buildRegistryContextMessage = () => {
     const rows = getProcessRegistryRows();
@@ -330,7 +364,14 @@ const resolveRegisteredProcessPath = (processNameOrAlias) => {
     return { ok: true, process_name: row.process_name, abs_path: absPath, reason: '' };
 };
 const runRepoAction = async (action, processNameOrAlias) => {
-    const resolved = resolveRegisteredProcessPath(processNameOrAlias);
+    let resolved = resolveRegisteredProcessPath(processNameOrAlias);
+    if (!resolved.ok) {
+        const snapshot = await getPm2Snapshot();
+        if (snapshot.ok) {
+            syncRegistryFromPm2Processes(snapshot.processes);
+            resolved = resolveRegisteredProcessPath(processNameOrAlias);
+        }
+    }
     if (!resolved.ok) return { ok: false, text: `❌ ${resolved.reason}` };
 
     let command = 'npm';
@@ -921,10 +962,13 @@ bot.on('text', async (ctx) => {
                     saveConversationTurn(userId, userText, errText);
                     return;
                 }
-                const added = syncRegistryFromPm2Processes(snapshot.processes);
-                const text = added.length
-                    ? `Синхронизация завершена. Добавлены процессы: ${added.join(', ')}`
-                    : 'Синхронизация завершена. Новых процессов нет.';
+                const syncResult = syncRegistryFromPm2Processes(snapshot.processes);
+                const chunks = [];
+                if (syncResult.newNames.length) chunks.push(`Добавлены: ${syncResult.newNames.join(', ')}`);
+                if (syncResult.pathUpdated.length) chunks.push(`Пути обновлены: ${syncResult.pathUpdated.join(', ')}`);
+                const text = chunks.length
+                    ? `Синхронизация завершена.\n${chunks.join('\n')}`
+                    : 'Синхронизация завершена. Новых процессов и новых путей нет.';
                 await ctx.reply(text);
                 saveConversationTurn(userId, userText, text);
                 return;
@@ -1025,9 +1069,17 @@ bot.on('text', async (ctx) => {
             await ctx.reply(responseText);
             let finalText = responseText;
             if (!target) {
-                const added = syncRegistryFromPm2Processes(snapshot.processes);
-                if (added.length) {
-                    const hint = `Вижу новые процессы: ${added.join(', ')}.\nДобавить описание? Напиши: "Добавь процесс <имя> | <описание> | <алиасы>"`;
+                const syncResult = syncRegistryFromPm2Processes(snapshot.processes);
+                if (syncResult.newNames.length || syncResult.pathUpdated.length) {
+                    const blocks = [];
+                    if (syncResult.newNames.length) {
+                        blocks.push(`Вижу новые процессы: ${syncResult.newNames.join(', ')}.`);
+                    }
+                    if (syncResult.pathUpdated.length) {
+                        blocks.push(`Автообновил пути из PM2 для: ${syncResult.pathUpdated.join(', ')}.`);
+                    }
+                    blocks.push('Добавить/уточнить описание можно так: "Добавь процесс <имя> | <описание> | <алиасы> | <абсолютный_путь>"');
+                    const hint = blocks.join('\n');
                     await ctx.reply(hint);
                     finalText = `${finalText}\n\n${hint}`;
                 }
