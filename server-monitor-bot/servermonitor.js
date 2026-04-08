@@ -1,6 +1,6 @@
 ﻿const path = require('path');
 const { spawn } = require('child_process');
-const { Telegraf } = require('telegraf');
+const { Markup, Telegraf } = require('telegraf');
 const OpenAI = require('openai');
 const Database = require('better-sqlite3');
 require('dotenv').config();
@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS chat_history (
 
 CREATE INDEX IF NOT EXISTS idx_chat_history_user_id_id
 ON chat_history(user_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
 `);
 
 const insertHistoryStmt = db.prepare(`
@@ -81,6 +87,25 @@ const clearHistoryStmt = db.prepare(`
     DELETE FROM chat_history
     WHERE user_id = ?
 `);
+const getSettingStmt = db.prepare(`
+    SELECT value
+    FROM settings
+    WHERE key = ?
+    LIMIT 1
+`);
+const upsertSettingStmt = db.prepare(`
+    INSERT INTO settings (key, value, updated_at)
+    VALUES (?, ?, strftime('%s', 'now'))
+    ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = excluded.updated_at
+`);
+
+const LOG_INTERPRETER_SETTING_KEY = 'log_interpreter';
+upsertSettingStmt.run(
+    LOG_INTERPRETER_SETTING_KEY,
+    (getSettingStmt.get(LOG_INTERPRETER_SETTING_KEY)?.value || 'off').toLowerCase() === 'on' ? 'on' : 'off'
+);
 
 const bot = new Telegraf(BOT_TOKEN);
 const openai = new OpenAI({ apiKey: AI_API_KEY, baseURL: AI_BASE_URL });
@@ -97,11 +122,20 @@ const SYSTEM_PROMPT = `Ты — технический консольный ас
 1. Если пользователь называет процесс по-русски или сленгом — сопоставляй с ID/Name из списка (например: "чаттер" -> chatter, "заметки" -> webapp-notes).
 3. Команды для СЕБЯ (watchdog) выполняй только если прямо попросили "рестартни себя" или "рестартни админа".
 
-Разрешённые инструменты: list, status, restart, stop, logs.
+Разрешённые инструменты: list, status, restart, stop, logs, flush.
 Отвечай максимально коротко и технично.`;
+const LOG_INTERPRETER_PROMPT = `Ты анализируешь логи сервисов.
+Ответ: кратко, технично, по делу.
+Формат:
+1) Состояние (OK / WARNING / ERROR)
+2) Что обнаружено (1-4 пункта)
+3) Что сделать (до 3 шагов)
 
-const ALLOWED_ACTIONS = new Set(['list', 'status', 'restart', 'stop', 'logs']);
+Если в логах нет явных проблем — так и скажи.`;
+
+const ALLOWED_ACTIONS = new Set(['list', 'status', 'restart', 'stop', 'logs', 'flush']);
 const PM2_TARGET_RE = /^[a-zA-Z0-9._:-]{1,80}$/;
+const ALL_TARGET_ALIASES = new Set(['all', 'все', 'всё', 'all_logs', 'all-logs']);
 
 const escapeHtml = (text) => text
     .replace(/&/g, '&amp;')
@@ -147,6 +181,18 @@ const saveConversationTurn = (userId, userText, assistantText) => {
     addHistoryMessage(userId, 'user', userText);
     addHistoryMessage(userId, 'assistant', assistantText);
     trimHistory(userId);
+};
+const getSettingValue = (key, fallback = '') => {
+    const row = getSettingStmt.get(key);
+    const value = typeof row?.value === 'string' ? row.value.trim() : '';
+    return value || fallback;
+};
+const setSettingValue = (key, value) => {
+    upsertSettingStmt.run(key, value);
+};
+const isLogInterpreterEnabled = () => getSettingValue(LOG_INTERPRETER_SETTING_KEY, 'off').toLowerCase() === 'on';
+const setLogInterpreterEnabled = (enabled) => {
+    setSettingValue(LOG_INTERPRETER_SETTING_KEY, enabled ? 'on' : 'off');
 };
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -204,6 +250,13 @@ const runCommand = (command, args, timeoutMs = MONITOR_PM2_TIMEOUT_MS) => new Pr
 
 const runPm2 = (action, target = '') => {
     const args = [action];
+    if (action === 'flush') {
+        if (target && target.toLowerCase() !== 'all') {
+            args.push(target);
+        }
+        return runCommand('pm2', args);
+    }
+
     if (target) args.push(target);
     if (action === 'logs') {
         args.push('--lines', String(MONITOR_PM2_LOG_LINES), '--nostream');
@@ -336,9 +389,60 @@ const extractToolCall = (message) => {
     }
     return null;
 };
+const buildSettingsKeyboard = (enabled) => Markup.inlineKeyboard([
+    [Markup.button.callback(`Интерпретатор логов: ${enabled ? 'ON' : 'OFF'}`, 'settings:log_interpreter:toggle')],
+    [Markup.button.callback('Обновить', 'settings:refresh')]
+]);
+const renderSettingsPanelText = () => {
+    const enabled = isLogInterpreterEnabled();
+    return `⚙️ Настройки Watchdog
+
+Интерпретатор логов: ${enabled ? 'ON' : 'OFF'}
+Когда ON: после сырых логов бот присылает AI-разбор.
+Когда OFF: только сырые логи.`;
+};
+const sendSettingsPanel = async (ctx, mode = 'reply') => {
+    const text = renderSettingsPanelText();
+    const keyboard = buildSettingsKeyboard(isLogInterpreterEnabled());
+    if (mode === 'edit') return ctx.editMessageText(text, keyboard);
+    return ctx.reply(text, keyboard);
+};
+const interpretLogsWithAi = async (target, logsText) => {
+    const clean = String(logsText || '').trim();
+    if (!clean || clean === 'Логи пустые.') {
+        return 'Интерпретация: логи пустые.';
+    }
+
+    const sample = clean.length > 5000 ? `${clean.slice(-5000)}` : clean;
+    try {
+        const completion = await openai.chat.completions.create({
+            model: AI_MODEL,
+            temperature: 0.1,
+            messages: [
+                { role: 'system', content: LOG_INTERPRETER_PROMPT },
+                {
+                    role: 'user',
+                    content: `Процесс: ${target || 'unknown'}\n\nЛоги:\n${sample}`
+                }
+            ]
+        });
+        const text = String(completion.choices?.[0]?.message?.content || '').trim();
+        return text || 'Интерпретация: модель не вернула текст.';
+    } catch (error) {
+        return `Интерпретация недоступна: ${error instanceof Error ? error.message : String(error)}`;
+    }
+};
+const normalizeAllTarget = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return '';
+    if (ALL_TARGET_ALIASES.has(normalized)) return 'all';
+    return value;
+};
 
 bot.telegram.setMyCommands([
-    { command: 'clear', description: 'Очистить контекст watchdog' }
+    { command: 'clear', description: 'Очистить контекст watchdog' },
+    { command: 'settings', description: 'Настройки watchdog' },
+    { command: 'flush', description: 'Очистить логи: /flush <process|all>' }
 ]).catch(() => undefined);
 
 bot.use((ctx, next) => {
@@ -352,6 +456,51 @@ bot.command('clear', async (ctx) => {
     clearHistory(userId);
     await ctx.reply('История watchdog очищена.');
 });
+bot.command('settings', async (ctx) => {
+    await sendSettingsPanel(ctx, 'reply');
+});
+bot.command('flush', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const parts = String(ctx.message?.text || '').split(/\s+/).filter(Boolean);
+    const target = (parts[1] || '').trim();
+    if (!target) {
+        const errText = 'Использование: /flush <process|all>';
+        await ctx.reply(errText);
+        saveConversationTurn(userId, '/flush', errText);
+        return;
+    }
+
+    const isAll = target.toLowerCase() === 'all';
+    if (!isAll) {
+        const targetCheck = validateTarget(target, { require: true, enforceWhitelist: true });
+        if (!targetCheck.ok) {
+            const errText = `❌ ${targetCheck.reason}`;
+            await ctx.reply(errText);
+            saveConversationTurn(userId, `/flush ${target}`, errText);
+            return;
+        }
+    }
+
+    const cmdText = isAll ? 'pm2 flush' : `pm2 flush ${target}`;
+    await ctx.reply(`⚙️ Выполняю: ${cmdText}...`);
+    const runResult = await runPm2('flush', target);
+    const outputSummary = summarizeCommandOutput(getCommandOutput(runResult));
+    const responseText = `Логи очищены: ${isAll ? 'все процессы' : target}\n\nВывод PM2:\n${outputSummary}`;
+    await ctx.reply(clipText(responseText));
+    saveConversationTurn(userId, `/flush ${target}`, responseText);
+});
+bot.action('settings:refresh', async (ctx) => {
+    await ctx.answerCbQuery();
+    await sendSettingsPanel(ctx, 'edit');
+});
+bot.action('settings:log_interpreter:toggle', async (ctx) => {
+    const next = !isLogInterpreterEnabled();
+    setLogInterpreterEnabled(next);
+    await ctx.answerCbQuery(`Интерпретатор: ${next ? 'ON' : 'OFF'}`);
+    await sendSettingsPanel(ctx, 'edit');
+});
 
 bot.on('text', async (ctx) => {
     const userId = ctx.from?.id;
@@ -359,7 +508,11 @@ bot.on('text', async (ctx) => {
 
     const userText = (ctx.message?.text || '').trim();
     if (!userText) return;
-    if (userText === '/clear' || userText.startsWith('/clear ')) return;
+    if (
+        userText === '/clear' || userText.startsWith('/clear ')
+        || userText === '/settings' || userText.startsWith('/settings ')
+        || userText === '/flush' || userText.startsWith('/flush ')
+    ) return;
 
     try {
         const history = getRecentHistory(userId);
@@ -379,7 +532,7 @@ bot.on('text', async (ctx) => {
                         parameters: {
                             type: 'object',
                             properties: {
-                                action: { type: 'string', enum: ['list', 'status', 'restart', 'stop', 'logs'] },
+                                action: { type: 'string', enum: ['list', 'status', 'restart', 'stop', 'logs', 'flush'] },
                                 target: { type: 'string', description: 'Имя или id PM2 процесса' }
                             },
                             required: ['action']
@@ -411,10 +564,22 @@ bot.on('text', async (ctx) => {
         }
 
         const action = String(parsed.action || '').trim().toLowerCase();
-        const target = typeof parsed.target === 'string' ? parsed.target.trim() : '';
+        const rawTarget = typeof parsed.target === 'string' ? parsed.target.trim() : '';
+        let target = normalizeAllTarget(rawTarget);
+        if (action === 'flush' && !target) {
+            const loweredUserText = userText.toLowerCase();
+            if (
+                /\b(все|всё|all)\b/.test(loweredUserText)
+                || /почисти\s+логи/.test(loweredUserText)
+                || /очисти\s+логи/.test(loweredUserText)
+                || /flush\s+logs/.test(loweredUserText)
+            ) {
+                target = 'all';
+            }
+        }
 
         if (!ALLOWED_ACTIONS.has(action)) {
-            const errText = '❌ Недопустимое действие. Разрешено: list, status, restart, stop, logs.';
+            const errText = '❌ Недопустимое действие. Разрешено: list, status, restart, stop, logs, flush.';
             await ctx.reply(errText);
             saveConversationTurn(userId, userText, errText);
             return;
@@ -430,7 +595,9 @@ bot.on('text', async (ctx) => {
                 return;
             }
         } else if (target) {
-            const targetCheck = validateTarget(target, { require: true, enforceWhitelist: false });
+            const targetCheck = action === 'flush' && target.toLowerCase() === 'all'
+                ? { ok: true, reason: '' }
+                : validateTarget(target, { require: true, enforceWhitelist: false });
             if (!targetCheck.ok) {
                 const errText = `❌ ${targetCheck.reason}`;
                 await ctx.reply(errText);
@@ -475,7 +642,32 @@ bot.on('text', async (ctx) => {
             const prettyLogs = formatLogsOutput(output, target);
             const header = `Логи процесса "${target}" (последние ${MONITOR_PM2_LOG_LINES} строк):`;
             await ctx.reply(`${header}\n<pre>${escapeHtml(prettyLogs)}</pre>`, { parse_mode: 'HTML' });
-            saveConversationTurn(userId, userText, `${header}\n${prettyLogs}`);
+
+            let assistantText = `${header}\n${prettyLogs}`;
+            if (isLogInterpreterEnabled()) {
+                await ctx.reply('🧠 Интерпретирую логи...');
+                const interpretation = clipText(await interpretLogsWithAi(target, prettyLogs), 3900);
+                await ctx.reply(`Интерпретация:\n${interpretation}`);
+                assistantText = `${assistantText}\n\nИнтерпретация:\n${interpretation}`;
+            }
+
+            saveConversationTurn(userId, userText, assistantText);
+            return;
+        }
+
+        if (action === 'flush') {
+            const effectiveTarget = target || 'all';
+            const isAll = effectiveTarget.toLowerCase() === 'all';
+            const runResult = await runPm2(action, target);
+            const outputSummary = summarizeCommandOutput(getCommandOutput(runResult));
+            const responseText = clipText(
+                `Логи очищены: ${isAll ? 'все процессы' : target}
+
+Вывод PM2:
+${outputSummary}`
+            );
+            await ctx.reply(responseText);
+            saveConversationTurn(userId, userText, responseText);
             return;
         }
 
