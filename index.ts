@@ -417,7 +417,7 @@ const DEFAULT_PROMPT_CONTENT = `Ты — Chatter, дружелюбный ИИ с
 const LITE_ROUTER_INSTRUCTIONS = `
 
 Ты — быстрый ассистент-диспетчер.
-Твоя главная задача: управление устройствами, простые заметки, проверка почты/погоды, короткие бытовые ответы.
+Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
 ПРАВИЛО ЭСКАЛАЦИИ: если запрос сложный (творчество, глубокий анализ, длинная структурированная расшифровка, программирование, большой текст), не пытайся отвечать сам.
 Ты ОБЯЗАН немедленно вызвать инструмент escalate_to_pro и передать исходный запрос пользователя в original_query.`;
 const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}`;
@@ -5452,10 +5452,9 @@ const processUserTextThroughAi = async (
         let executionHistory = history;
 
         if (!forceProRoute) {
-            type CheapRoute = 'SMART_HOME' | 'NOTES' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
+            type CheapRoute = 'SMART_HOME' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
             const cheapToolsMapping: Record<Exclude<CheapRoute, 'PRO'>, string[]> = {
                 SMART_HOME: ['control_smart_home'],
-                NOTES: ['save_note', 'list_my_notes', 'read_note', 'delete_note'],
                 QUICK_SEARCH: ['search_web'],
                 TIMEZONE: ['set_user_timezone'],
                 RANDOM: ['random_roll']
@@ -5470,13 +5469,12 @@ const processUserTextThroughAi = async (
 
 [ПРОСТЫЕ КАТЕГОРИИ - не требуют истории чата]:
 - SMART_HOME (управление светом, розетками)
-- NOTES (создание, чтение, удаление заметок, если они не сложные и юзер не просит ПРОЯВЛЯТЬ ТВОРЧЕСТВО)
 - QUICK_SEARCH (узнать погоду, курс валют, быстрый факт из сети)
 - TIMEZONE (установить часовой пояс)
 - RANDOM (бросить кубик, монетку)
 
 [СЛОЖНАЯ КАТЕГОРИЯ]:
-- PRO (любой сложный вопрос, программирование, анализ, почта (email), расписания, работа с памятью, длинные беседы)
+- PRO (любой сложный вопрос, программирование, анализ, почта (email), расписания, работа с памятью, заметки/блокнот, длинные беседы)
 
 ВАЖНО: если в запросе есть отложенное/регулярное действие по времени ("через ...", "завтра", "в 10:30", "напомни", "каждый день"), выбирай ТОЛЬКО PRO, даже если там есть погода/поиск.
 
@@ -5492,10 +5490,9 @@ const processUserTextThroughAi = async (
                     } as any);
                     totalTokensForTurn += extractTotalTokens(routerResponse);
                     const rawRoute = `${routerResponse.choices[0]?.message?.content || ''}`.toUpperCase();
-                    const matchedRoute = rawRoute.match(/\b(SMART_HOME|NOTES|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
+                    const matchedRoute = rawRoute.match(/\b(SMART_HOME|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
                     if (
                         matchedRoute?.[1] === 'SMART_HOME'
-                        || matchedRoute?.[1] === 'NOTES'
                         || matchedRoute?.[1] === 'QUICK_SEARCH'
                         || matchedRoute?.[1] === 'TIMEZONE'
                         || matchedRoute?.[1] === 'RANDOM'
