@@ -5551,7 +5551,8 @@ const processUserTextThroughAi = async (
                         model: LITE_MODEL_NAME,
                         messages: [{ role: 'user', content: routerPrompt }],
                         temperature: 0,
-                        max_tokens: 8
+                        max_tokens: 100,
+                        thinking: { type: 'disabled' }
                     } as any);
                     if (DEBUG_AI_RAW_LITE_RESPONSE) {
                         try {
@@ -5609,7 +5610,7 @@ const processUserTextThroughAi = async (
                 messages: currentMessages,
                 tools: executionTools,
                 tool_choice: 'auto',
-                thinking: { type: 'enabled' },
+                thinking: executionModelClient === aiLite ? { type: 'disabled' } : { type: 'enabled' },
                 clear_thinking: false
             } as any);
             if (DEBUG_AI_RAW_MAIN_RESPONSE) {
