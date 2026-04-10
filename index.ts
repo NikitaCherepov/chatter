@@ -429,6 +429,7 @@ const buildTimeContext = (timezoneOffset: number) => {
 };
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const LITE_MODEL_NAME = process.env.TIMEWEB_LITE_MODEL || 'gemini-2.5-flash-lite';
+const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
@@ -5603,6 +5604,13 @@ const processUserTextThroughAi = async (
                 thinking: { type: 'enabled' },
                 clear_thinking: false
             } as any);
+            if (DEBUG_AI_RAW_MAIN_RESPONSE) {
+                try {
+                    console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(response, null, 2));
+                } catch (err) {
+                    console.warn('[DEBUG_AI_RAW_MAIN_RESPONSE] Не удалось сериализовать ответ:', err);
+                }
+            }
             totalTokensForTurn += extractTotalTokens(response);
 
             const message = response.choices[0].message;
