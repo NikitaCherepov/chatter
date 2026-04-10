@@ -430,6 +430,7 @@ const buildTimeContext = (timezoneOffset: number) => {
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const LITE_MODEL_NAME = process.env.TIMEWEB_LITE_MODEL || 'gemini-2.5-flash-lite';
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
+const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
@@ -5552,6 +5553,13 @@ const processUserTextThroughAi = async (
                         temperature: 0,
                         max_tokens: 8
                     } as any);
+                    if (DEBUG_AI_RAW_LITE_RESPONSE) {
+                        try {
+                            console.log('[DEBUG_AI_RAW_LITE_RESPONSE][router]', JSON.stringify(routerResponse, null, 2));
+                        } catch (err) {
+                            console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][router] Не удалось сериализовать ответ:', err);
+                        }
+                    }
                     totalTokensForTurn += extractTotalTokens(routerResponse);
                     const rawRoute = `${routerResponse.choices[0]?.message?.content || ''}`.toUpperCase();
                     const matchedRoute = rawRoute.match(/\b(SMART_HOME|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
@@ -5609,6 +5617,13 @@ const processUserTextThroughAi = async (
                     console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(response, null, 2));
                 } catch (err) {
                     console.warn('[DEBUG_AI_RAW_MAIN_RESPONSE] Не удалось сериализовать ответ:', err);
+                }
+            }
+            if (DEBUG_AI_RAW_LITE_RESPONSE && executionModelClient === aiLite) {
+                try {
+                    console.log('[DEBUG_AI_RAW_LITE_RESPONSE][chat]', JSON.stringify(response, null, 2));
+                } catch (err) {
+                    console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][chat] Не удалось сериализовать ответ:', err);
                 }
             }
             totalTokensForTurn += extractTotalTokens(response);
