@@ -448,6 +448,20 @@ const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
 const EMAIL_PASSWORD_DELIMITER = '::';
 const VOICE_TRANSCRIBE_URL = (process.env.VOICE_TRANSCRIBE_URL || 'http://***REMOVED_VOICE_ENDPOINT***/api/voice').trim();
 const VOICE_TRANSCRIBE_TOKEN = (process.env.VOICE_TRANSCRIBE_TOKEN || '***REMOVED_VOICE_SECRET***').trim();
+const resolveDefaultTtsUrl = (transcribeUrl: string) => {
+    try {
+        const parsed = new URL(transcribeUrl);
+        if (parsed.pathname.endsWith('/api/voice')) {
+            parsed.pathname = parsed.pathname.replace(/\/api\/voice$/, '/api/tts');
+        } else if (!parsed.pathname || parsed.pathname === '/') {
+            parsed.pathname = '/api/tts';
+        }
+        return parsed.toString();
+    } catch {
+        return 'http://***REMOVED_VOICE_ENDPOINT***/api/tts';
+    }
+};
+const VOICE_TTS_URL = (process.env.VOICE_TTS_URL || resolveDefaultTtsUrl(VOICE_TRANSCRIBE_URL)).trim();
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -2337,6 +2351,44 @@ const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
     if (!deleted.changes) return `Не удалось удалить заметку #${Math.floor(noteId)}.`;
     const updated = runListMyNotesTool(userId, '', undefined, 0);
     return `Заметка #${Math.floor(noteId)} удалена.\n\n${updated}`;
+};
+const sendVoiceResponse = async (ctx: any, text: string) => {
+    const safeText = (text || '').trim();
+    if (!safeText) {
+        await ctx.reply('❌ Пустой текст для озвучки.');
+        return;
+    }
+
+    try {
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+        };
+        if (VOICE_TRANSCRIBE_TOKEN) {
+            headers.Authorization = `Bearer ${VOICE_TRANSCRIBE_TOKEN}`;
+        }
+
+        const response = await fetch(VOICE_TTS_URL, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ text: safeText })
+        });
+
+        if (!response.ok) {
+            const details = await response.text().catch(() => '');
+            const extra = details ? ` | ${details.slice(0, 200)}` : '';
+            throw new Error(`TTS ${response.status} ${response.statusText}${extra}`);
+        }
+
+        const audioBuffer = await response.arrayBuffer();
+        if (!audioBuffer.byteLength) {
+            throw new Error('TTS вернул пустой аудиофайл.');
+        }
+
+        await ctx.replyWithVoice({ source: Buffer.from(audioBuffer) });
+    } catch (err) {
+        console.error('Ошибка генерации голоса:', err);
+        await ctx.reply(`❌ Ошибка генерации голоса: ${safeText}`);
+    }
 };
 
 const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRecord | undefined;
@@ -5392,7 +5444,7 @@ bot.action('prompt:cancel', async (ctx) => {
 const processUserTextThroughAi = async (
     ctx: any,
     rawText: string,
-    options?: { forcePro?: boolean; persistUserText?: string }
+    options?: { forcePro?: boolean; persistUserText?: string; onAssistantReply?: (assistantText: string) => Promise<void> | void }
 ) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -5443,6 +5495,9 @@ const processUserTextThroughAi = async (
             addHistoryMessage(userId, 'assistant', assistantText);
             trimUserHistory(userId);
             await safeReply(ctx, assistantText);
+            if (options?.onAssistantReply) {
+                await options.onAssistantReply(assistantText);
+            }
         };
 
         let executionModelClient = ai;
@@ -6083,7 +6138,12 @@ bot.on('voice', async (ctx) => {
         }
 
         await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, `🗣 Распознано:\n${text}`);
-        await processUserTextThroughAi(ctx, text);
+        await processUserTextThroughAi(ctx, text, {
+            persistUserText: text,
+            onAssistantReply: async (assistantText: string) => {
+                await sendVoiceResponse(ctx, assistantText);
+            }
+        });
     } catch (error) {
         console.error('Ошибка работы с голосовым:', error);
         try {
