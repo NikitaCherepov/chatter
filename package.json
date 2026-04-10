@@ -1,7 +1,6 @@
 {
   "name": "chatter-bot",
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx index.ts",
