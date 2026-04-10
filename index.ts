@@ -5599,8 +5599,10 @@ const processUserTextThroughAi = async (
                 model: executionModelName,
                 messages: currentMessages,
                 tools: executionTools,
-                tool_choice: 'auto'
-            });
+                tool_choice: 'auto',
+                thinking: { type: 'enabled' },
+                clear_thinking: false
+            } as any);
             totalTokensForTurn += extractTotalTokens(response);
 
             const message = response.choices[0].message;
