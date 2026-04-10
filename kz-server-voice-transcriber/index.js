@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -82,6 +82,33 @@ app.post('/api/tts', (req, res) => {
     ttsProcess.on('close', (code) => {
         if (code !== 0 || !fs.existsSync(filePath)) {
             console.error('Ошибка TTS:', stderr || `exit code ${code}`);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            return res.status(500).json({ error: 'Ошибка генерации' });
+        }
+
+        res.download(filePath, fileName, () => {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        });
+    });
+});
+
+app.post('/api/silero', (req, res) => {
+    if (req.headers.authorization !== `Bearer ${SECRET_TOKEN}`) {
+        return res.status(403).json({ error: 'Доступ запрещен' });
+    }
+
+    const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+    if (!text) return res.status(400).json({ error: 'Нет текста' });
+
+    const fileName = `silero_${Date.now()}.wav`;
+    const filePath = path.resolve(TMP_DIR, fileName);
+
+    const safeText = text.replace(/"/g, '\\"');
+    const cmd = `python3 silero_tts.py "${safeText}" "${filePath}"`;
+
+    exec(cmd, (error) => {
+        if (error) {
+            console.error('Ошибка Silero:', error);
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             return res.status(500).json({ error: 'Ошибка генерации' });
         }

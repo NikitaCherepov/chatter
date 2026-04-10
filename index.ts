@@ -448,20 +448,27 @@ const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
 const EMAIL_PASSWORD_DELIMITER = '::';
 const VOICE_TRANSCRIBE_URL = (process.env.VOICE_TRANSCRIBE_URL || 'http://***REMOVED_VOICE_ENDPOINT***/api/voice').trim();
 const VOICE_TRANSCRIBE_TOKEN = (process.env.VOICE_TRANSCRIBE_TOKEN || '***REMOVED_VOICE_SECRET***').trim();
-const resolveDefaultTtsUrl = (transcribeUrl: string) => {
+const resolveDefaultVoiceEndpoint = (transcribeUrl: string, targetPath: '/api/tts' | '/api/silero') => {
     try {
         const parsed = new URL(transcribeUrl);
         if (parsed.pathname.endsWith('/api/voice')) {
-            parsed.pathname = parsed.pathname.replace(/\/api\/voice$/, '/api/tts');
+            parsed.pathname = parsed.pathname.replace(/\/api\/voice$/, targetPath);
         } else if (!parsed.pathname || parsed.pathname === '/') {
-            parsed.pathname = '/api/tts';
+            parsed.pathname = targetPath;
         }
         return parsed.toString();
     } catch {
-        return 'http://***REMOVED_VOICE_ENDPOINT***/api/tts';
+        return `http://***REMOVED_VOICE_ENDPOINT***${targetPath}`;
     }
 };
-const VOICE_TTS_URL = (process.env.VOICE_TTS_URL || resolveDefaultTtsUrl(VOICE_TRANSCRIBE_URL)).trim();
+const normalizeTtsEngine = (raw: string | undefined) => {
+    const value = (raw || 'tts').trim().toLowerCase();
+    return value === 'silero' ? 'silero' : 'tts';
+};
+const VOICE_TTS_ENGINE = normalizeTtsEngine(process.env.VOICE_TTS_ENGINE);
+const VOICE_TTS_URL = (process.env.VOICE_TTS_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/tts')).trim();
+const VOICE_SILERO_URL = (process.env.VOICE_SILERO_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/silero')).trim();
+const getVoiceSynthesisUrl = () => (VOICE_TTS_ENGINE === 'silero' ? VOICE_SILERO_URL : VOICE_TTS_URL);
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -2360,6 +2367,7 @@ const sendVoiceResponse = async (ctx: any, text: string) => {
     }
 
     try {
+        const synthesisUrl = getVoiceSynthesisUrl();
         const headers: Record<string, string> = {
             'Content-Type': 'application/json'
         };
@@ -2367,7 +2375,7 @@ const sendVoiceResponse = async (ctx: any, text: string) => {
             headers.Authorization = `Bearer ${VOICE_TRANSCRIBE_TOKEN}`;
         }
 
-        const response = await fetch(VOICE_TTS_URL, {
+        const response = await fetch(synthesisUrl, {
             method: 'POST',
             headers,
             body: JSON.stringify({ text: safeText })
@@ -2376,7 +2384,7 @@ const sendVoiceResponse = async (ctx: any, text: string) => {
         if (!response.ok) {
             const details = await response.text().catch(() => '');
             const extra = details ? ` | ${details.slice(0, 200)}` : '';
-            throw new Error(`TTS ${response.status} ${response.statusText}${extra}`);
+            throw new Error(`VOICE_SYNTH ${response.status} ${response.statusText}${extra}`);
         }
 
         const audioBuffer = await response.arrayBuffer();
