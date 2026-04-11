@@ -7,7 +7,7 @@ import crypto from 'crypto';
 
 dotenv.config();
 
-const MAX_HISTORY_ITEMS = 6;
+const MAX_HISTORY_ITEMS = 10;
 const USER_PLANS = ['free', 'standart', 'pro'] as const;
 type UserPlan = typeof USER_PLANS[number];
 const PLAN_LABELS: Record<UserPlan, string> = {
@@ -17,8 +17,8 @@ const PLAN_LABELS: Record<UserPlan, string> = {
 };
 const PLAN_CONTEXT_LIMITS: Record<UserPlan, number> = {
     free: MAX_HISTORY_ITEMS,
-    standart: 10,
-    pro: 20
+    standart: 20,
+    pro: 50
 };
 const PLAN_DAILY_MESSAGE_LIMITS: Record<UserPlan, number> = {
     free: 10,
