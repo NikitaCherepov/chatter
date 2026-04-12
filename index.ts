@@ -541,7 +541,8 @@ const ADMIN_EXTRA_COMMANDS = [
     { command: 'prompt_rename', description: 'Переименовать: /prompt_rename <id> Имя' },
     { command: 'prompt_delete', description: 'Удалить: /prompt_delete <id>' },
     { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' },
-    { command: 'history_user', description: 'История юзера: /history_user <user_id> [limit]' }
+    { command: 'history_user', description: 'История юзера: /history_user <user_id> [limit]' },
+    { command: 'history_delete', description: 'Удалить историю: /history_delete <user_id> <user|assistant|all>' }
 ] as const;
 const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
 const commandScopeCache = new Map<number, 'admin' | 'user'>();
@@ -3513,6 +3514,12 @@ const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[]) => {
     });
     return `Последние сообщения пользователя #${userId} (новые -> старые):\n\n${lines.join('\n\n')}`;
 };
+const deleteHistoryByUserAndRole = (userId: number, role: ChatRole | 'all') => {
+    if (role === 'all') {
+        return db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
+    }
+    return db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND role = ?').run(userId, role);
+};
 const trimUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
     WHERE user_id = ?
@@ -4493,6 +4500,26 @@ bot.command('history_user', (ctx) => {
     return ctx.reply(formatRecentHistoryRows(targetUserId, rows));
 });
 
+bot.command('history_delete', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const targetUserId = Number.parseInt(parts[1], 10);
+    const roleRaw = (parts[2] || 'all').toLowerCase();
+    const role: ChatRole | 'all' = roleRaw === 'user' || roleRaw === 'assistant' ? roleRaw : 'all';
+
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+        return ctx.reply('Формат: /history_delete <user_id> <user|assistant|all>');
+    }
+
+    const result = deleteHistoryByUserAndRole(targetUserId, role);
+    if (!result.changes) {
+        return ctx.reply(`Ничего не удалено для user_id=${targetUserId} (role=${role}).`);
+    }
+
+    return ctx.reply(`Удалено ${result.changes} записей истории для user_id=${targetUserId} (role=${role}).`);
+});
+
 bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
@@ -4924,7 +4951,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /history_user, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /history_user, /history_delete, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
