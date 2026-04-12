@@ -66,6 +66,14 @@ const aiLite = new OpenAI({
     apiKey: process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_API_KEY,
     baseURL: process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_BASE_URL,
 });
+const aiVision = new OpenAI({
+    apiKey: process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY,
+    baseURL: process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL,
+});
+const aiVisionLite = new OpenAI({
+    apiKey: process.env.TIMEWEB_LITE_VISION_API_KEY || process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY,
+    baseURL: process.env.TIMEWEB_LITE_VISION_BASE_URL || process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL,
+});
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 // Инициализация базы данных
@@ -429,6 +437,8 @@ const buildTimeContext = (timezoneOffset: number) => {
 };
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const LITE_MODEL_NAME = process.env.TIMEWEB_LITE_MODEL || 'gemini-2.5-flash-lite';
+const VISION_MODEL_NAME = process.env.TIMEWEB_VISION_MODEL || process.env.TIMEWEB_MODEL || 'glm-4v';
+const LITE_VISION_MODEL_NAME = process.env.TIMEWEB_LITE_VISION_MODEL || process.env.TIMEWEB_LITE_MODEL || VISION_MODEL_NAME;
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
 const MAX_PENDING_TASKS_PER_USER = 10;
@@ -444,6 +454,7 @@ const NOTE_QUERY_MAX_LENGTH = 120;
 const NOTES_PAGE_SIZE_DEFAULT = 10;
 const NOTES_MENU_PAGE_SIZE = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
+const MAX_TELEGRAM_PHOTO_BYTES = 20 * 1024 * 1024;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
@@ -2398,6 +2409,121 @@ const sendVoiceResponse = async (ctx: any, text: string) => {
     } catch (err) {
         console.error('Ошибка генерации голоса:', err);
         await ctx.reply(`❌ Ошибка генерации голоса: ${safeText}`);
+    }
+};
+
+const detectImageMimeType = (url: string, fallback: string | null = null) => {
+    const normalizedFallback = (fallback || '').trim().toLowerCase();
+    if (normalizedFallback.startsWith('image/')) return normalizedFallback;
+
+    const cleanUrl = url.split('?')[0].toLowerCase();
+    if (cleanUrl.endsWith('.png')) return 'image/png';
+    if (cleanUrl.endsWith('.webp')) return 'image/webp';
+    if (cleanUrl.endsWith('.gif')) return 'image/gif';
+    if (cleanUrl.endsWith('.bmp')) return 'image/bmp';
+    if (cleanUrl.endsWith('.heic')) return 'image/heic';
+    if (cleanUrl.endsWith('.heif')) return 'image/heif';
+    return 'image/jpeg';
+};
+
+const processUserPhotoThroughAi = async (ctx: any) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const photos = ctx.message?.photo;
+    if (!Array.isArray(photos) || !photos.length) return;
+
+    const caption = typeof ctx.message?.caption === 'string' ? ctx.message.caption.trim() : '';
+    const userPrompt = caption || 'Что на этой картинке?';
+
+    const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
+    const userRecord = getUser(userId);
+    if (!userRecord) {
+        await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+        return;
+    }
+
+    if (ctx.state.role !== 'admin') {
+        const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
+        const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
+        if (dailyLimit > 0 && dailyCount >= dailyLimit) {
+            await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+            return;
+        }
+    }
+
+    try {
+        await ctx.sendChatAction('typing');
+
+        const biggestPhoto = photos[photos.length - 1];
+        const fileLink = await ctx.telegram.getFileLink(biggestPhoto.file_id);
+        const imageResponse = await fetch(fileLink.href);
+        if (!imageResponse.ok) {
+            throw new Error(`Не удалось скачать фото из Telegram: ${imageResponse.status} ${imageResponse.statusText}`);
+        }
+
+        const imageBuffer = await imageResponse.arrayBuffer();
+        if (!imageBuffer.byteLength) {
+            throw new Error('Telegram вернул пустой файл изображения.');
+        }
+        if (imageBuffer.byteLength > MAX_TELEGRAM_PHOTO_BYTES) {
+            throw new Error(`Фото слишком большое (${Math.round(imageBuffer.byteLength / 1024 / 1024)}MB). Лимит: 20MB.`);
+        }
+
+        const mimeType = detectImageMimeType(fileLink.href, imageResponse.headers.get('content-type'));
+        const base64Image = Buffer.from(imageBuffer).toString('base64');
+        const activePrompt = resolvePromptForUser(userRecord);
+        const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
+        const history = getUserHistory(userId);
+        const plan = parsePlanFromDb(userRecord.plan);
+        const useLiteVision = plan !== 'pro';
+        const visionClient = useLiteVision ? aiVisionLite : aiVision;
+        const visionModel = useLiteVision ? LITE_VISION_MODEL_NAME : VISION_MODEL_NAME;
+
+        const response = await visionClient.chat.completions.create({
+            model: visionModel,
+            messages: [
+                { role: 'system', content: `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}\n\nЕсли пользователь прислал изображение, анализируй его и отвечай конкретно по запросу пользователя.` },
+                ...history,
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: userPrompt },
+                        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } }
+                    ]
+                }
+            ],
+            max_tokens: 1024,
+            thinking: useLiteVision ? { type: 'disabled' } : { type: 'enabled' },
+            clear_thinking: false
+        } as any);
+
+        if (DEBUG_AI_RAW_MAIN_RESPONSE && !useLiteVision) {
+            try {
+                console.log('[DEBUG_AI_RAW_MAIN_RESPONSE][vision]', JSON.stringify(response, null, 2));
+            } catch (err) {
+                console.warn('[DEBUG_AI_RAW_MAIN_RESPONSE][vision] Не удалось сериализовать ответ:', err);
+            }
+        }
+        if (DEBUG_AI_RAW_LITE_RESPONSE && useLiteVision) {
+            try {
+                console.log('[DEBUG_AI_RAW_LITE_RESPONSE][vision]', JSON.stringify(response, null, 2));
+            } catch (err) {
+                console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][vision] Не удалось сериализовать ответ:', err);
+            }
+        }
+
+        const answer = response.choices?.[0]?.message?.content || FALLBACK_ANSWER;
+        const userHistoryText = caption ? `[Фото] ${caption}` : '[Фото] Что на этой картинке?';
+        const totalTokens = extractTotalTokens(response);
+        incrementUserStats(userId, userHistoryText.length, totalTokens);
+        addHistoryMessage(userId, 'user', userHistoryText);
+        addHistoryMessage(userId, 'assistant', answer);
+        trimUserHistory(userId);
+        await safeReply(ctx, answer);
+    } catch (err) {
+        console.error('Ошибка анализа изображения:', err);
+        await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
     }
 };
 
@@ -6207,6 +6333,10 @@ bot.on('voice', async (ctx) => {
             await ctx.reply('❌ Сбой связи с сервером расшифровки или внутренняя ошибка.');
         }
     }
+});
+
+bot.on('photo', async (ctx) => {
+    await processUserPhotoThroughAi(ctx);
 });
 
 setInterval(async () => {
