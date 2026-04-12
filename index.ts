@@ -542,7 +542,7 @@ const ADMIN_EXTRA_COMMANDS = [
     { command: 'prompt_delete', description: 'Удалить: /prompt_delete <id>' },
     { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' },
     { command: 'history_user', description: 'История юзера: /history_user <user_id> [limit]' },
-    { command: 'history_delete', description: 'Удалить историю: /history_delete <user_id> <user|assistant|all>' }
+    { command: 'history_delete', description: 'Удалить сообщение: /history_delete <user_id> <message_id> [db|tg]' }
 ] as const;
 const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
 const commandScopeCache = new Map<number, 'admin' | 'user'>();
@@ -3520,6 +3520,14 @@ const deleteHistoryByUserAndRole = (userId: number, role: ChatRole | 'all') => {
     }
     return db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND role = ?').run(userId, role);
 };
+const deleteHistoryMessageByUserAndMessageId = (userId: number, messageId: number) => db.prepare(`
+    DELETE FROM chat_messages
+    WHERE user_id = ? AND id = ?
+`).run(userId, messageId);
+const deleteHistoryMessageByUserAndTelegramMessageId = (userId: number, telegramMessageId: number) => db.prepare(`
+    DELETE FROM chat_messages
+    WHERE user_id = ? AND telegram_message_id = ?
+`).run(userId, telegramMessageId);
 const trimUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
     WHERE user_id = ?
@@ -4505,19 +4513,54 @@ bot.command('history_delete', (ctx) => {
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
-    const roleRaw = (parts[2] || 'all').toLowerCase();
-    const role: ChatRole | 'all' = roleRaw === 'user' || roleRaw === 'assistant' ? roleRaw : 'all';
-
     if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
-        return ctx.reply('Формат: /history_delete <user_id> <user|assistant|all>');
+        return ctx.reply('Формат: /history_delete <user_id> <message_id> [db|tg]\nили /history_delete <user_id> <user|assistant|all>');
+    }
+    const secondArg = (parts[2] || '').toLowerCase();
+    if (!secondArg) {
+        return ctx.reply('Формат: /history_delete <user_id> <message_id> [db|tg]\nили /history_delete <user_id> <user|assistant|all>');
     }
 
-    const result = deleteHistoryByUserAndRole(targetUserId, role);
-    if (!result.changes) {
-        return ctx.reply(`Ничего не удалено для user_id=${targetUserId} (role=${role}).`);
+    if (secondArg === 'user' || secondArg === 'assistant' || secondArg === 'all') {
+        const role: ChatRole | 'all' = secondArg;
+        const result = deleteHistoryByUserAndRole(targetUserId, role);
+        if (!result.changes) {
+            return ctx.reply(`Ничего не удалено для user_id=${targetUserId} (role=${role}).`);
+        }
+        return ctx.reply(`Удалено ${result.changes} записей истории для user_id=${targetUserId} (role=${role}).`);
     }
 
-    return ctx.reply(`Удалено ${result.changes} записей истории для user_id=${targetUserId} (role=${role}).`);
+    const messageId = Number.parseInt(secondArg, 10);
+    if (!Number.isFinite(messageId) || messageId <= 0) {
+        return ctx.reply('Некорректный message_id. Формат: /history_delete <user_id> <message_id> [db|tg]');
+    }
+
+    const mode = (parts[3] || '').toLowerCase();
+    let result;
+    if (mode === 'tg') {
+        result = deleteHistoryMessageByUserAndTelegramMessageId(targetUserId, messageId);
+        if (!result.changes) {
+            return ctx.reply(`Сообщение не найдено: user_id=${targetUserId}, telegram_message_id=${messageId}.`);
+        }
+        return ctx.reply(`Удалено ${result.changes} сообщение(й): user_id=${targetUserId}, telegram_message_id=${messageId}.`);
+    }
+    if (mode === 'db') {
+        result = deleteHistoryMessageByUserAndMessageId(targetUserId, messageId);
+        if (!result.changes) {
+            return ctx.reply(`Сообщение не найдено: user_id=${targetUserId}, db_id=${messageId}.`);
+        }
+        return ctx.reply(`Удалено ${result.changes} сообщение(й): user_id=${targetUserId}, db_id=${messageId}.`);
+    }
+
+    result = deleteHistoryMessageByUserAndMessageId(targetUserId, messageId);
+    if (result.changes) {
+        return ctx.reply(`Удалено ${result.changes} сообщение(й): user_id=${targetUserId}, db_id=${messageId}.`);
+    }
+    const tgResult = deleteHistoryMessageByUserAndTelegramMessageId(targetUserId, messageId);
+    if (tgResult.changes) {
+        return ctx.reply(`Удалено ${tgResult.changes} сообщение(й): user_id=${targetUserId}, telegram_message_id=${messageId}.`);
+    }
+    return ctx.reply(`Сообщение не найдено для user_id=${targetUserId}, message_id=${messageId} (проверил db_id и telegram_message_id).`);
 });
 
 bot.command('clear', (ctx) => {
