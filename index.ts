@@ -437,8 +437,18 @@ const buildTimeContext = (timezoneOffset: number) => {
 };
 const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
 const LITE_MODEL_NAME = process.env.TIMEWEB_LITE_MODEL || 'gemini-2.5-flash-lite';
-const VISION_MODEL_NAME = process.env.TIMEWEB_VISION_MODEL || process.env.TIMEWEB_MODEL || 'glm-4v';
-const LITE_VISION_MODEL_NAME = process.env.TIMEWEB_LITE_VISION_MODEL || process.env.TIMEWEB_LITE_MODEL || VISION_MODEL_NAME;
+const parseModelChain = (raw: string | undefined, fallback: string[]) => {
+    const parsed = (raw || '')
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean);
+    return parsed.length ? parsed : fallback;
+};
+const VISION_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [process.env.TIMEWEB_MODEL || 'glm-4v']);
+const LITE_VISION_MODEL_CHAIN = parseModelChain(
+    process.env.TIMEWEB_LITE_VISION_MODEL,
+    [...VISION_MODEL_CHAIN, process.env.TIMEWEB_LITE_MODEL || 'glm-4v']
+);
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
 const MAX_PENDING_TASKS_PER_USER = 10;
@@ -2478,36 +2488,53 @@ const processUserPhotoThroughAi = async (ctx: any) => {
         const plan = parsePlanFromDb(userRecord.plan);
         const useLiteVision = plan !== 'pro';
         const visionClient = useLiteVision ? aiVisionLite : aiVision;
-        const visionModel = useLiteVision ? LITE_VISION_MODEL_NAME : VISION_MODEL_NAME;
+        const visionModels = useLiteVision ? LITE_VISION_MODEL_CHAIN : VISION_MODEL_CHAIN;
+        const visionMessages = [
+            { role: 'system', content: `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}\n\nЕсли пользователь прислал изображение, анализируй его и отвечай конкретно по запросу пользователя.` },
+            ...history,
+            {
+                role: 'user',
+                content: [
+                    { type: 'text', text: userPrompt },
+                    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } }
+                ]
+            }
+        ];
 
-        const response = await visionClient.chat.completions.create({
-            model: visionModel,
-            messages: [
-                { role: 'system', content: `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}\n\nЕсли пользователь прислал изображение, анализируй его и отвечай конкретно по запросу пользователя.` },
-                ...history,
-                {
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: userPrompt },
-                        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } }
-                    ]
-                }
-            ],
-            max_tokens: 1024,
-            thinking: useLiteVision ? { type: 'disabled' } : { type: 'enabled' },
-            clear_thinking: false
-        } as any);
+        let response: any = null;
+        let usedVisionModel = '';
+        let lastVisionError: unknown = null;
+        for (const modelName of visionModels) {
+            try {
+                response = await visionClient.chat.completions.create({
+                    model: modelName,
+                    messages: visionMessages as any,
+                    max_tokens: 1024,
+                    thinking: useLiteVision ? { type: 'disabled' } : { type: 'enabled' },
+                    clear_thinking: false
+                } as any);
+                usedVisionModel = modelName;
+                break;
+            } catch (visionErr) {
+                lastVisionError = visionErr;
+                console.warn(`[VISION_FALLBACK] Модель ${modelName} вернула ошибку, пробую следующую...`, visionErr);
+            }
+        }
+
+        if (!response) {
+            throw (lastVisionError || new Error('Не удалось получить ответ от vision-моделей.'));
+        }
 
         if (DEBUG_AI_RAW_MAIN_RESPONSE && !useLiteVision) {
             try {
-                console.log('[DEBUG_AI_RAW_MAIN_RESPONSE][vision]', JSON.stringify(response, null, 2));
+                console.log(`[DEBUG_AI_RAW_MAIN_RESPONSE][vision][model=${usedVisionModel}]`, JSON.stringify(response, null, 2));
             } catch (err) {
                 console.warn('[DEBUG_AI_RAW_MAIN_RESPONSE][vision] Не удалось сериализовать ответ:', err);
             }
         }
         if (DEBUG_AI_RAW_LITE_RESPONSE && useLiteVision) {
             try {
-                console.log('[DEBUG_AI_RAW_LITE_RESPONSE][vision]', JSON.stringify(response, null, 2));
+                console.log(`[DEBUG_AI_RAW_LITE_RESPONSE][vision][model=${usedVisionModel}]`, JSON.stringify(response, null, 2));
             } catch (err) {
                 console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][vision] Не удалось сериализовать ответ:', err);
             }
