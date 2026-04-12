@@ -479,6 +479,8 @@ const NOTES_PAGE_SIZE_DEFAULT = 10;
 const NOTES_MENU_PAGE_SIZE = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const MAX_TELEGRAM_PHOTO_BYTES = 20 * 1024 * 1024;
+const IMAGE_GENERATION_MODEL = (process.env.TIMEWEB_IMAGE_MODEL || 'cogview-3-plus').trim();
+const IMAGE_GENERATION_SIZE = (process.env.TIMEWEB_IMAGE_SIZE || '1024x1024').trim();
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
@@ -520,6 +522,7 @@ const BASE_COMMANDS = [
     { command: 'notes', description: 'Заметки: список /notes [page]' },
     { command: 'note_find', description: 'Заметки: поиск /note_find <текст>' },
     { command: 'note_delete', description: 'Заметки: удалить /note_delete <id>' },
+    { command: 'imagine', description: 'Сгенерировать картинку: /imagine <промпт>' },
     { command: 'mail_setup', description: 'Почта: /mail_setup <prov> <mail> <app_pass>' },
     { command: 'mail_use', description: 'Почта: /mail_use <yandex|google>' },
     { command: 'mail_limit', description: 'Почта: лимит check_emails' },
@@ -702,6 +705,27 @@ const tools = [
                     }
                 },
                 required: ['query']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'generate_image',
+            description: 'Генерирует изображение по текстовому описанию и отправляет его пользователю в чат. Используй, когда пользователь явно просит "нарисуй"/"сгенерируй картинку".',
+            parameters: {
+                type: 'object',
+                properties: {
+                    prompt: {
+                        type: 'string',
+                        description: 'Подробное описание изображения, которое нужно сгенерировать.'
+                    },
+                    size: {
+                        type: 'string',
+                        description: 'Размер изображения (например 1024x1024). Если не указан, используется дефолт.'
+                    }
+                },
+                required: ['prompt']
             }
         }
     },
@@ -1322,6 +1346,34 @@ const runWebSearch = async (query: string) => {
     }
 };
 
+const runImageGeneration = async (prompt: string, sizeRaw?: string) => {
+    const promptText = (prompt || '').trim();
+    if (!promptText) {
+        throw new Error('Пустой prompt для генерации изображения.');
+    }
+
+    const size = (sizeRaw || IMAGE_GENERATION_SIZE).trim() || IMAGE_GENERATION_SIZE;
+    const response = await ai.images.generate({
+        model: IMAGE_GENERATION_MODEL,
+        prompt: promptText,
+        size
+    } as any);
+
+    const first = (response as any)?.data?.[0];
+    const imageUrl = typeof first?.url === 'string' ? first.url : '';
+    const b64 = typeof first?.b64_json === 'string' ? first.b64_json : '';
+    if (!imageUrl && !b64) {
+        throw new Error('API не вернул изображение (нет url и b64_json).');
+    }
+
+    return {
+        imageUrl,
+        imageBuffer: b64 ? Buffer.from(b64, 'base64') : null,
+        size,
+        model: IMAGE_GENERATION_MODEL
+    };
+};
+
 const COLOR_NAME_TO_HEX: Record<string, string> = {
     red: '#FF0000',
     green: '#00FF00',
@@ -1467,6 +1519,10 @@ type ReadNoteArgs = {
 };
 type DeleteNoteArgs = {
     note_id?: number;
+};
+type GenerateImageArgs = {
+    prompt?: string;
+    size?: string;
 };
 type VoiceTranscribeResponse = {
     text?: string;
@@ -4493,6 +4549,57 @@ bot.command('history_user', (ctx) => {
     return ctx.reply(formatRecentHistoryRows(targetUserId, rows));
 });
 
+bot.command('imagine', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа.');
+    }
+
+    const prompt = extractCommandPayload(ctx.message.text, 'imagine');
+    if (!prompt) {
+        return ctx.reply('Напиши, что нарисовать. Пример: /imagine Киберпанк Город');
+    }
+
+    if (ctx.state.role !== 'admin') {
+        const dailyLimit = normalizeDailyMessageLimit(user.daily_message_limit);
+        const dailyCount = Math.max(0, Math.floor(user.daily_message_count || 0));
+        if (dailyLimit > 0 && dailyCount >= dailyLimit) {
+            return ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+        }
+    }
+
+    await ctx.reply('🎨 Рисую...');
+    try {
+        const generated = await runImageGeneration(prompt);
+        let sentMessage: any;
+        if (generated.imageUrl) {
+            sentMessage = await ctx.replyWithPhoto(generated.imageUrl, {
+                caption: `🖼 Готово (${generated.model}, ${generated.size})`
+            });
+        } else if (generated.imageBuffer) {
+            sentMessage = await ctx.replyWithPhoto({ source: generated.imageBuffer }, {
+                caption: `🖼 Готово (${generated.model}, ${generated.size})`
+            });
+        } else {
+            throw new Error('Генератор не вернул изображение для отправки.');
+        }
+
+        const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
+        const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
+        const assistantMessageId = Number.isFinite(Number(sentMessage?.message_id)) ? Math.floor(Number(sentMessage?.message_id)) : null;
+        incrementUserStats(userId, prompt.length, 0);
+        addHistoryMessage(userId, 'user', `/imagine ${prompt}`, { chatId: userChatId, messageId: userMessageId });
+        addHistoryMessage(userId, 'assistant', `[image:${generated.model}:${generated.size}]`, { chatId: userChatId, messageId: assistantMessageId });
+        trimUserHistory(userId);
+    } catch (err) {
+        console.error('Ошибка генерации изображения:', err);
+        await ctx.reply('Краски закончились. Похоже, лимит или ошибка API.');
+    }
+});
+
 bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
@@ -4924,11 +5031,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /history_user, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /imagine, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /history_user, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /imagine, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
 });
 
 bot.action('context:change', async (ctx) => {
@@ -5923,6 +6030,30 @@ PRO
                                 toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
                             }
                         }
+                    } else if (toolCall.function.name === 'generate_image') {
+                        const parsed = JSON.parse(toolCall.function.arguments || '{}') as GenerateImageArgs;
+                        const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
+                        const size = typeof parsed.size === 'string' ? parsed.size.trim() : '';
+                        if (!prompt) {
+                            throw new Error('Пустой prompt для generate_image.');
+                        }
+
+                        await ctx.reply('🎨 Рисую...');
+                        const generated = await runImageGeneration(prompt, size);
+                        let sentMessage: any;
+                        if (generated.imageUrl) {
+                            sentMessage = await ctx.replyWithPhoto(generated.imageUrl, {
+                                caption: `🖼 Готово (${generated.model}, ${generated.size})`
+                            });
+                        } else if (generated.imageBuffer) {
+                            sentMessage = await ctx.replyWithPhoto({ source: generated.imageBuffer }, {
+                                caption: `🖼 Готово (${generated.model}, ${generated.size})`
+                            });
+                        } else {
+                            throw new Error('Генератор не вернул изображение для отправки.');
+                        }
+
+                        toolContent = `Изображение сгенерировано и отправлено пользователю. model=${generated.model}, size=${generated.size}, telegram_message_id=${sentMessage?.message_id ?? 'unknown'}.`;
                     } else if (toolCall.function.name === 'control_smart_home') {
                         await ctx.reply('🏠 Выполняю команду умного дома...');
 
