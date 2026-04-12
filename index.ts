@@ -149,6 +149,8 @@ db.exec(`
         user_id INTEGER NOT NULL,
         role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
         content TEXT NOT NULL,
+        telegram_chat_id INTEGER,
+        telegram_message_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -250,6 +252,16 @@ const ensureTaskColumn = (columnName: string, alterSql: string) => {
     db.exec(alterSql);
 };
 
+const hasChatMessageColumn = (columnName: string) => {
+    const columns = db.prepare(`PRAGMA table_info(chat_messages)`).all() as { name: string }[];
+    return columns.some(c => c.name === columnName);
+};
+
+const ensureChatMessageColumn = (columnName: string, alterSql: string) => {
+    if (hasChatMessageColumn(columnName)) return;
+    db.exec(alterSql);
+};
+
 ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
 ensureUserColumn('custom_prompt_content', 'ALTER TABLE users ADD COLUMN custom_prompt_content TEXT');
 ensureUserColumn('core_memory', `ALTER TABLE users ADD COLUMN core_memory TEXT DEFAULT ''`);
@@ -284,6 +296,8 @@ ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_
 ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');
 ensureTaskColumn('notify_mode', `ALTER TABLE tasks ADD COLUMN notify_mode TEXT NOT NULL DEFAULT 'always'`);
 ensureTaskColumn('notify_condition', 'ALTER TABLE tasks ADD COLUMN notify_condition TEXT');
+ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
+ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
 
 if (hasUserColumn('created_at')) {
     db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
@@ -1268,10 +1282,10 @@ const safeReply = async (ctx: any, text: string) => {
         .replace(/\*\*(.*?)\*\*/g, '*$1*');
 
     try {
-        await ctx.reply(tgFormattedText, { parse_mode: 'Markdown' });
+        return await ctx.reply(tgFormattedText, { parse_mode: 'Markdown' });
     } catch (err) {
         console.warn('Ошибка разметки, отправляю чистый текст');
-        await ctx.reply(text);
+        return await ctx.reply(text);
     }
 };
 
@@ -2543,11 +2557,14 @@ const processUserPhotoThroughAi = async (ctx: any) => {
         const answer = response.choices?.[0]?.message?.content || FALLBACK_ANSWER;
         const userHistoryText = caption ? `[Фото] ${caption}` : '[Фото] Что на этой картинке?';
         const totalTokens = extractTotalTokens(response);
+        const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
+        const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
         incrementUserStats(userId, userHistoryText.length, totalTokens);
-        addHistoryMessage(userId, 'user', userHistoryText);
-        addHistoryMessage(userId, 'assistant', answer);
+        addHistoryMessage(userId, 'user', userHistoryText, { chatId: userChatId, messageId: userMessageId });
+        const sentMessage = await safeReply(ctx, answer);
+        const assistantMessageId = Number.isFinite(Number(sentMessage?.message_id)) ? Math.floor(Number(sentMessage?.message_id)) : null;
+        addHistoryMessage(userId, 'assistant', answer, { chatId: userChatId, messageId: assistantMessageId });
         trimUserHistory(userId);
-        await safeReply(ctx, answer);
     } catch (err) {
         console.error('Ошибка анализа изображения:', err);
         await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
@@ -3448,9 +3465,20 @@ const getUserHistory = (userId: number) => {
 
     return rows.reverse();
 };
-const addHistoryMessage = (userId: number, role: ChatRole, content: string) => db
-    .prepare('INSERT INTO chat_messages (user_id, role, content) VALUES (?, ?, ?)')
-    .run(userId, role, content);
+const addHistoryMessage = (
+    userId: number,
+    role: ChatRole,
+    content: string,
+    telegramMeta?: { chatId?: number | null; messageId?: number | null }
+) => db
+    .prepare('INSERT INTO chat_messages (user_id, role, content, telegram_chat_id, telegram_message_id) VALUES (?, ?, ?, ?, ?)')
+    .run(
+        userId,
+        role,
+        content,
+        Number.isFinite(Number(telegramMeta?.chatId)) ? Math.floor(Number(telegramMeta?.chatId)) : null,
+        Number.isFinite(Number(telegramMeta?.messageId)) ? Math.floor(Number(telegramMeta?.messageId)) : null
+    );
 const trimUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
     WHERE user_id = ?
@@ -5653,11 +5681,14 @@ const processUserTextThroughAi = async (
 
         let totalTokensForTurn = 0;
         const finishTurn = async (assistantText: string) => {
+            const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
+            const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
             incrementUserStats(userId, userTextForHistory.length, totalTokensForTurn);
-            addHistoryMessage(userId, 'user', userTextForHistory);
-            addHistoryMessage(userId, 'assistant', assistantText);
+            addHistoryMessage(userId, 'user', userTextForHistory, { chatId: userChatId, messageId: userMessageId });
+            const sentMessage = await safeReply(ctx, assistantText);
+            const assistantMessageId = Number.isFinite(Number(sentMessage?.message_id)) ? Math.floor(Number(sentMessage?.message_id)) : null;
+            addHistoryMessage(userId, 'assistant', assistantText, { chatId: userChatId, messageId: assistantMessageId });
             trimUserHistory(userId);
-            await safeReply(ctx, assistantText);
             if (options?.onAssistantReply) {
                 await options.onAssistantReply(assistantText);
             }
