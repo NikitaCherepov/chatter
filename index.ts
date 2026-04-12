@@ -3497,10 +3497,10 @@ const getRecentHistoryRowsByUser = (userId: number, limit = 20) => {
         LIMIT ?
     `).all(userId, safeLimit) as UserHistoryRow[];
 };
-const shortenHistoryContent = (text: string, maxLen = 120) => {
+const shortenHistoryContent = (text: string, maxLen = 10) => {
     const clean = text.replace(/\s+/g, ' ').trim();
     if (clean.length <= maxLen) return clean;
-    return `${clean.slice(0, maxLen - 1)}…`;
+    return clean.slice(0, maxLen);
 };
 const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[]) => {
     if (!rows.length) {
