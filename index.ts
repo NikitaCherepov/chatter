@@ -540,7 +540,8 @@ const ADMIN_EXTRA_COMMANDS = [
     { command: 'prompt_desc', description: 'Изменить описание: /prompt_desc <id> | Описание' },
     { command: 'prompt_rename', description: 'Переименовать: /prompt_rename <id> Имя' },
     { command: 'prompt_delete', description: 'Удалить: /prompt_delete <id>' },
-    { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' }
+    { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' },
+    { command: 'history_user', description: 'История юзера: /history_user <user_id> [limit]' }
 ] as const;
 const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
 const commandScopeCache = new Map<number, 'admin' | 'user'>();
@@ -1091,6 +1092,13 @@ type ChatRole = 'user' | 'assistant';
 type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 type MailProvider = 'yandex' | 'google';
 type ChatMessage = { role: ChatRole; content: string };
+type UserHistoryRow = {
+    id: number;
+    role: ChatRole;
+    content: string;
+    telegram_message_id: number | null;
+    created_at: string;
+};
 type UserRecord = {
     id: number;
     name: string | null;
@@ -3479,6 +3487,32 @@ const addHistoryMessage = (
         Number.isFinite(Number(telegramMeta?.chatId)) ? Math.floor(Number(telegramMeta?.chatId)) : null,
         Number.isFinite(Number(telegramMeta?.messageId)) ? Math.floor(Number(telegramMeta?.messageId)) : null
     );
+const getRecentHistoryRowsByUser = (userId: number, limit = 20) => {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    return db.prepare(`
+        SELECT id, role, content, telegram_message_id, created_at
+        FROM chat_messages
+        WHERE user_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+    `).all(userId, safeLimit) as UserHistoryRow[];
+};
+const shortenHistoryContent = (text: string, maxLen = 120) => {
+    const clean = text.replace(/\s+/g, ' ').trim();
+    if (clean.length <= maxLen) return clean;
+    return `${clean.slice(0, maxLen - 1)}…`;
+};
+const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[]) => {
+    if (!rows.length) {
+        return `История пользователя #${userId} пуста.`;
+    }
+    const lines = rows.map(row => {
+        const tgMsg = row.telegram_message_id ? ` tg:${row.telegram_message_id}` : '';
+        const preview = shortenHistoryContent(row.content);
+        return `#${row.id} [${row.role}]${tgMsg} ${row.created_at}\n${preview}`;
+    });
+    return `Последние сообщения пользователя #${userId} (новые -> старые):\n\n${lines.join('\n\n')}`;
+};
 const trimUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
     WHERE user_id = ?
@@ -4441,6 +4475,24 @@ bot.command('users', (ctx) => {
     return renderAdminUsersList(ctx, 0, 'reply');
 });
 
+bot.command('history_user', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+
+    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const targetUserId = Number.parseInt(parts[1], 10);
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+        return ctx.reply('Формат: /history_user <user_id> [limit]');
+    }
+
+    const rawLimit = Number.parseInt(parts[2], 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0
+        ? Math.max(1, Math.min(20, rawLimit))
+        : 10;
+
+    const rows = getRecentHistoryRowsByUser(targetUserId, limit);
+    return ctx.reply(formatRecentHistoryRows(targetUserId, rows));
+});
+
 bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
@@ -4872,7 +4924,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /history_user, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
