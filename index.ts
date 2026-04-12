@@ -1279,6 +1279,22 @@ const startSelfRenameFlow = (ctx: any) => {
     return ctx.reply('Вы хотите сменить имя?', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
 };
 
+const sendLongMessage = async (ctx: any, text: string, extra?: Record<string, unknown>) => {
+    const MAX_LENGTH = 4000;
+    const source = typeof text === 'string' ? text : String(text ?? '');
+    const chunks: string[] = [];
+    for (let i = 0; i < source.length; i += MAX_LENGTH) {
+        chunks.push(source.substring(i, i + MAX_LENGTH));
+    }
+    if (!chunks.length) chunks.push('');
+
+    let lastMessage: any = null;
+    for (const chunk of chunks) {
+        lastMessage = await ctx.reply(chunk, extra);
+    }
+    return lastMessage;
+};
+
 const safeReply = async (ctx: any, text: string) => {
     const tgFormattedText = text
         // 1. Бывает, что ИИ генерит заголовок сразу с жирным шрифтом (### **Текст**) — чистим двойное форматирование
@@ -1291,10 +1307,10 @@ const safeReply = async (ctx: any, text: string) => {
         .replace(/\*\*(.*?)\*\*/g, '*$1*');
 
     try {
-        return await ctx.reply(tgFormattedText, { parse_mode: 'Markdown' });
+        return await sendLongMessage(ctx, tgFormattedText, { parse_mode: 'Markdown' });
     } catch (err) {
         console.warn('Ошибка разметки, отправляю чистый текст');
-        return await ctx.reply(text);
+        return await sendLongMessage(ctx, text);
     }
 };
 
