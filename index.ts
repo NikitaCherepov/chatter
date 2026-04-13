@@ -462,6 +462,7 @@ const LITE_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemin
 const LITE_MODEL_NAME = LITE_MODEL_CHAIN[0];
 const MODEL_RETRY_SECONDS = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRY_SECONDS || '3').trim(), 10) || 3);
 const MODEL_RETRIES_PER_MODEL = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRIES_PER_MODEL || '1').trim(), 10) || 1);
+const AUTO_SYNC_PLAN_LIMITS_ON_BOOT = process.env.AUTO_SYNC_PLAN_LIMITS_ON_BOOT === '1';
 const VISION_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [MODEL_CHAIN[0] || 'glm-4v']);
 const LITE_VISION_MODEL_CHAIN = parseModelChain(
     process.env.TIMEWEB_LITE_VISION_MODEL,
@@ -546,7 +547,8 @@ const ADMIN_EXTRA_COMMANDS = [
     { command: 'prompt_delete', description: 'Удалить: /prompt_delete <id>' },
     { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' },
     { command: 'history_user', description: 'История юзера: /history_user <user_id> [limit]' },
-    { command: 'history_delete', description: 'Удалить сообщение: /history_delete <user_id> <message_id> [db|tg]' }
+    { command: 'history_delete', description: 'Удалить сообщение: /history_delete <user_id> <message_id> [db|tg]' },
+    { command: 'sync_plan_limits', description: 'Синхронизировать лимиты по планам' }
 ] as const;
 const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
 const commandScopeCache = new Map<number, 'admin' | 'user'>();
@@ -2704,6 +2706,48 @@ const updateUserPlan = (id: number, plan: UserPlan) => db.prepare(`
     PLAN_CONTEXT_LIMITS[plan],
     id
 );
+const syncAllUsersPlanLimits = () => db.prepare(`
+    UPDATE users
+    SET context_window_max = CASE
+            WHEN plan = 'pro' THEN ?
+            WHEN plan = 'standart' THEN ?
+            ELSE ?
+        END,
+        daily_message_limit = CASE
+            WHEN plan = 'pro' THEN ?
+            WHEN plan = 'standart' THEN ?
+            ELSE ?
+        END,
+        daily_web_search_limit = CASE
+            WHEN plan = 'pro' THEN ?
+            WHEN plan = 'standart' THEN ?
+            ELSE ?
+        END,
+        context_window = CASE
+            WHEN COALESCE(context_window, 0) <= 0 THEN CASE
+                WHEN plan = 'pro' THEN ?
+                WHEN plan = 'standart' THEN ?
+                ELSE ?
+            END
+            WHEN context_window > CASE
+                WHEN plan = 'pro' THEN ?
+                WHEN plan = 'standart' THEN ?
+                ELSE ?
+            END THEN CASE
+                WHEN plan = 'pro' THEN ?
+                WHEN plan = 'standart' THEN ?
+                ELSE ?
+            END
+            ELSE context_window
+        END
+`).run(
+    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free,
+    PLAN_DAILY_MESSAGE_LIMITS.pro, PLAN_DAILY_MESSAGE_LIMITS.standart, PLAN_DAILY_MESSAGE_LIMITS.free,
+    PLAN_DAILY_WEB_SEARCH_LIMITS.pro, PLAN_DAILY_WEB_SEARCH_LIMITS.standart, PLAN_DAILY_WEB_SEARCH_LIMITS.free,
+    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free,
+    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free,
+    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free
+);
 const updateUserContextWindow = (id: number, contextWindow: number) => db.prepare(`
     UPDATE users
     SET context_window = ?
@@ -4577,6 +4621,12 @@ bot.command('users', (ctx) => {
     return renderAdminUsersList(ctx, 0, 'reply');
 });
 
+bot.command('sync_plan_limits', (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    const result = syncAllUsersPlanLimits();
+    return ctx.reply(`✅ Лимиты по планам синхронизированы. Обновлено записей: ${result.changes}.`);
+});
+
 bot.command('history_user', (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
@@ -5081,7 +5131,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /history_user, /history_delete, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /sync_plan_limits, /history_user, /history_delete, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
@@ -6676,6 +6726,15 @@ try {
     expireFinishedPlanSubscriptions();
 } catch (err) {
     console.error('Ошибка первичной проверки подписок:', err);
+}
+
+if (AUTO_SYNC_PLAN_LIMITS_ON_BOOT) {
+    try {
+        const syncResult = syncAllUsersPlanLimits();
+        console.log(`Автосинхронизация лимитов по планам выполнена. Обновлено записей: ${syncResult.changes}.`);
+    } catch (err) {
+        console.error('Ошибка автосинхронизации лимитов по планам:', err);
+    }
 }
 
 scheduleDailyCounterReset();
