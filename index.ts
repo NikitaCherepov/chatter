@@ -449,8 +449,6 @@ const buildTimeContext = (timezoneOffset: number) => {
     const utcSign = timezoneOffset >= 0 ? '+' : '';
     return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач используй local_time (HH:MM) или delay_seconds.`;
 };
-const MODEL_NAME = process.env.TIMEWEB_MODEL || 'gemini-3.1-flash-lite-preview';
-const LITE_MODEL_NAME = process.env.TIMEWEB_LITE_MODEL || 'gemini-2.5-flash-lite';
 const parseModelChain = (raw: string | undefined, fallback: string[]) => {
     const parsed = (raw || '')
         .split(',')
@@ -458,10 +456,16 @@ const parseModelChain = (raw: string | undefined, fallback: string[]) => {
         .filter(Boolean);
     return parsed.length ? parsed : fallback;
 };
-const VISION_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [process.env.TIMEWEB_MODEL || 'glm-4v']);
+const MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
+const MODEL_NAME = MODEL_CHAIN[0];
+const LITE_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite']);
+const LITE_MODEL_NAME = LITE_MODEL_CHAIN[0];
+const MODEL_RETRY_SECONDS = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRY_SECONDS || '3').trim(), 10) || 3);
+const MODEL_RETRIES_PER_MODEL = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRIES_PER_MODEL || '1').trim(), 10) || 1);
+const VISION_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [MODEL_CHAIN[0] || 'glm-4v']);
 const LITE_VISION_MODEL_CHAIN = parseModelChain(
     process.env.TIMEWEB_LITE_VISION_MODEL,
-    [...VISION_MODEL_CHAIN, process.env.TIMEWEB_LITE_MODEL || 'glm-4v']
+    [...VISION_MODEL_CHAIN, LITE_MODEL_CHAIN[0] || 'glm-4v']
 );
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
@@ -1314,6 +1318,73 @@ const safeReply = async (ctx: any, text: string) => {
     }
 };
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const extractApiErrorInfo = (err: any) => {
+    const status = Number(err?.status || err?.response?.status || 0) || 0;
+    const code = `${err?.code || err?.error?.code || ''}`.trim();
+    const message = `${err?.message || err?.error?.message || ''}`.toLowerCase();
+    return { status, code, message };
+};
+
+const isRetryableModelError = (err: any) => {
+    const { status, code, message } = extractApiErrorInfo(err);
+    if (status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+        return true;
+    }
+    if (code === '1305') return true;
+    return message.includes('temporarily overloaded')
+        || message.includes('overloaded')
+        || message.includes('try again later')
+        || message.includes('timeout')
+        || message.includes('timed out')
+        || message.includes('rate limit')
+        || message.includes('network');
+};
+
+const createChatCompletionWithFallback = async (
+    client: OpenAI,
+    modelChain: string[],
+    requestBody: Record<string, unknown>,
+    retriesPerModel = MODEL_RETRIES_PER_MODEL,
+    retrySeconds = MODEL_RETRY_SECONDS
+) => {
+    const failedModels: string[] = [];
+    let lastError: unknown = null;
+
+    for (const modelName of modelChain) {
+        const attempts = Math.max(1, retriesPerModel + 1);
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                const response = await client.chat.completions.create({
+                    ...requestBody,
+                    model: modelName
+                } as any);
+                return {
+                    response,
+                    modelUsed: modelName,
+                    failedModels
+                };
+            } catch (err) {
+                lastError = err;
+                const retryable = isRetryableModelError(err);
+                const isLastAttempt = attempt >= attempts;
+                if (retryable && !isLastAttempt) {
+                    await sleep(Math.max(0, retrySeconds) * 1000);
+                    continue;
+                }
+                break;
+            }
+        }
+        failedModels.push(modelName);
+    }
+
+    throw Object.assign(new Error('Все модели из цепочки недоступны.'), {
+        cause: lastError,
+        failedModels
+    });
+};
+
 const runWebSearch = async (query: string) => {
     try {
         const response = await tvly.search(query, {
@@ -1681,13 +1752,13 @@ ${fact}
     let reason = 'без комментария';
 
     try {
-        const mergeResponse = await ai.chat.completions.create({
-            model: MODEL_NAME,
+        const mergeCompletion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
             messages: [
                 { role: 'system', content: 'Ты аккуратный модуль памяти. Верни только готовый текст памяти.' },
                 { role: 'user', content: mergePrompt }
             ]
         });
+        const mergeResponse = mergeCompletion.response;
         const mergeTokens = extractTotalTokens(mergeResponse);
         if (mergeTokens > 0) {
             incrementUserTokenUsage(userId, mergeTokens);
@@ -1746,8 +1817,7 @@ const runScheduledWebSearchTask = async (task: TaskRecord) => {
     const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
 
     try {
-        const aiResponse = await ai.chat.completions.create({
-            model: MODEL_NAME,
+        const completion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
             messages: [
                 { role: 'system', content: systemPrompt },
                 {
@@ -1762,6 +1832,7 @@ ${webResult}
                 }
             ]
         });
+        const aiResponse = completion.response;
         const totalTokens = extractTotalTokens(aiResponse);
         if (totalTokens > 0) {
             incrementUserTokenUsage(task.user_id, totalTokens);
@@ -1805,13 +1876,13 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
 Мысль админа: "${thought}"`;
 
     try {
-        const response = await ai.chat.completions.create({
-            model: MODEL_NAME,
+        const completion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: aiTask }
             ]
         });
+        const response = completion.response;
         const totalTokens = extractTotalTokens(response);
         if (totalTokens > 0) {
             incrementUserTokenUsage(targetUserId, totalTokens);
@@ -5938,19 +6009,37 @@ PRO
         let answer = FALLBACK_ANSWER;
         let isGenerating = true;
         let loopCount = 0;
+        let modelFallbackNoticeSent = false;
         const MAX_TOOL_LOOPS = 6;
 
         while (isGenerating && loopCount < MAX_TOOL_LOOPS) {
             loopCount += 1;
 
-            const response = await executionModelClient.chat.completions.create({
-                model: executionModelName,
+            const requestPayload = {
                 messages: currentMessages,
                 tools: executionTools,
                 tool_choice: 'auto',
                 thinking: executionModelClient === aiLite ? { type: 'disabled' } : { type: 'enabled' },
                 clear_thinking: false
-            } as any);
+            } as Record<string, unknown>;
+            let response: any;
+            if (executionModelClient === ai) {
+                const completion = await createChatCompletionWithFallback(
+                    executionModelClient,
+                    MODEL_CHAIN,
+                    requestPayload
+                );
+                response = completion.response;
+                if (!modelFallbackNoticeSent && completion.failedModels.length > 0) {
+                    modelFallbackNoticeSent = true;
+                    await ctx.reply(`⚙️ Модель(и) ${completion.failedModels.join(', ')} были недоступны. Ответ получен от ${completion.modelUsed}.`);
+                }
+            } else {
+                response = await executionModelClient.chat.completions.create({
+                    ...requestPayload,
+                    model: executionModelName
+                } as any);
+            }
             if (DEBUG_AI_RAW_MAIN_RESPONSE) {
                 try {
                     console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(response, null, 2));
