@@ -27,8 +27,8 @@ const PLAN_DAILY_MESSAGE_LIMITS: Record<UserPlan, number> = {
 };
 const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<UserPlan, number> = {
     free: 0,
-    standart: 2,
-    pro: 10
+    standart: 5,
+    pro: 20
 };
 const PLAN_NOTES_LIMITS: Record<UserPlan, number> = {
     free: 10,
