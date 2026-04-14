@@ -782,12 +782,12 @@ const tools = [
                     },
                     notify_mode: {
                         type: 'string',
-                        enum: ['always', 'never', 'on_match'],
-                        description: 'Режим уведомлений: always - всегда писать о результате, never - никогда не писать, on_match - писать только если результат содержит notify_condition.'
+                        enum: ['always', 'never', 'on_match', 'on_condition'],
+                        description: 'Режим уведомлений: always - всегда писать о результате, never - никогда не писать, on_match - писать только если результат содержит notify_condition как подстроку, on_condition - ИИ проверит условие notify_condition и решит, отправлять уведомление или нет.'
                     },
                     notify_condition: {
                         type: 'string',
-                        description: 'Условие-триггер для notify_mode=on_match. Если строка найдена в результате, бот отправит уведомление.'
+                        description: 'Условие для notify_mode=on_match/on_condition. Для on_match: короткая строка/ключевое слово. Для on_condition: осмысленное условие ("есть важные письма от X", "найдены тревожные новости", и т.д.).'
                     }
                 },
                 required: ['task_type', 'payload']
@@ -1142,7 +1142,7 @@ type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
 type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check' | 'ai_instruction';
 type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
-type TaskNotifyMode = 'always' | 'never' | 'on_match';
+type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
 type TaskRecord = {
     id: number;
     user_id: number;
@@ -2058,12 +2058,47 @@ const computeNextRecurringExecuteAt = (task: TaskRecord) => {
     return null;
 };
 
-const shouldNotifyTaskResult = (task: TaskRecord, resultText: string) => {
+const shouldNotifyByAiCondition = async (task: TaskRecord, resultText: string) => {
+    const condition = (task.notify_condition || '').trim();
+    if (!condition) return false;
+    try {
+        const completion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
+            messages: [
+                {
+                    role: 'system',
+                    content: 'Ты модуль принятия решения по уведомлению. Ответь строго одним словом: YES или NO.'
+                },
+                {
+                    role: 'user',
+                    content: `Условие уведомления:\n${condition}\n\nРезультат выполнения задачи:\n${resultText.slice(0, 6000)}\n\nНужно ли отправить уведомление пользователю? Ответь только YES или NO.`
+                }
+            ],
+            thinking: { type: 'disabled' }
+        });
+        const tokens = extractTotalTokens(completion.response);
+        if (tokens > 0) {
+            incrementUserTokenUsage(task.user_id, tokens);
+        }
+        const raw = `${completion.response?.choices?.[0]?.message?.content || ''}`.trim().toUpperCase();
+        return raw.startsWith('YES') || raw.startsWith('ДА');
+    } catch (err) {
+        console.warn(`Ошибка AI-проверки notify_condition для задачи #${task.id}:`, err);
+        return false;
+    }
+};
+
+const shouldNotifyTaskResult = async (task: TaskRecord, resultText: string) => {
     if (task.notify_mode === 'never') return false;
     if (task.notify_mode === 'always') return true;
     const condition = (task.notify_condition || '').trim().toLowerCase();
     if (!condition) return false;
-    return resultText.toLowerCase().includes(condition);
+    if (task.notify_mode === 'on_match') {
+        return resultText.toLowerCase().includes(condition);
+    }
+    if (task.notify_mode === 'on_condition') {
+        return shouldNotifyByAiCondition(task, resultText);
+    }
+    return false;
 };
 
 const scheduleDailyCounterReset = () => {
@@ -6240,11 +6275,11 @@ PRO
                             if (recurrenceType !== 'once' && recurrenceType !== 'daily' && recurrenceType !== 'weekly') {
                                 throw new Error('Некорректный recurrence_type');
                             }
-                            if (notifyMode !== 'always' && notifyMode !== 'never' && notifyMode !== 'on_match') {
+                            if (notifyMode !== 'always' && notifyMode !== 'never' && notifyMode !== 'on_match' && notifyMode !== 'on_condition') {
                                 throw new Error('Некорректный notify_mode');
                             }
-                            if (notifyMode === 'on_match' && !notifyCondition) {
-                                throw new Error('Для notify_mode=on_match укажи notify_condition.');
+                            if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) {
+                                throw new Error('Для notify_mode=on_match/on_condition укажи notify_condition.');
                             }
                             if (recurrenceWeekday !== null && (recurrenceWeekday < 1 || recurrenceWeekday > 7)) {
                                 throw new Error('Для weekly укажи recurrence_weekday от 1 до 7 (1=понедельник).');
@@ -6762,7 +6797,7 @@ setInterval(async () => {
                 successMessage = `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}`;
             }
 
-            if (successMessage && shouldNotifyTaskResult(task, successMessage)) {
+            if (successMessage && await shouldNotifyTaskResult(task, successMessage)) {
                 await safeSendToUser(task.user_id, successMessage);
             }
 
