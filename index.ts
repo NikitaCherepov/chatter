@@ -1943,8 +1943,8 @@ const formatTaskForDisplay = (task: TaskRecord) => {
     const fallbackOffset = getUser(task.user_id)?.timezone_offset ?? 5;
     const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
     const when = formatUnixForTimezone(task.execute_at, timezoneOffset);
-    const notifyText = task.notify_mode === 'on_match'
-        ? `on_match: ${task.notify_condition || '(пусто)'}`
+    const notifyText = (task.notify_mode === 'on_match' || task.notify_mode === 'on_condition')
+        ? `${task.notify_mode}: ${task.notify_condition || '(пусто)'}`
         : task.notify_mode;
     return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when.local} (${when.tzLabel})\nКогда (UTC): ${when.utc} UTC\nРасписание: ${recurrence}\nУведомления: ${notifyText}\nДанные: ${payloadPreview}`;
 };
@@ -2059,7 +2059,10 @@ const computeNextRecurringExecuteAt = (task: TaskRecord) => {
 };
 
 const shouldNotifyByAiCondition = async (task: TaskRecord, resultText: string) => {
-    const condition = (task.notify_condition || '').trim();
+    const condition = (
+        task.notify_condition
+        || (task.task_type === 'ai_instruction' ? task.payload : '')
+    ).trim();
     if (!condition) return false;
     try {
         const completion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
@@ -2091,8 +2094,8 @@ const shouldNotifyTaskResult = async (task: TaskRecord, resultText: string) => {
     if (task.notify_mode === 'never') return false;
     if (task.notify_mode === 'always') return true;
     const condition = (task.notify_condition || '').trim().toLowerCase();
-    if (!condition) return false;
     if (task.notify_mode === 'on_match') {
+        if (!condition) return false;
         return resultText.toLowerCase().includes(condition);
     }
     if (task.notify_mode === 'on_condition') {
@@ -6308,11 +6311,11 @@ PRO
                                 recurrenceType === 'weekly' ? recurrenceWeekday : null,
                                 timezoneOffset,
                                 notifyMode,
-                                notifyMode === 'on_match' ? notifyCondition : null
+                                (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null
                             );
                             const planned = formatUnixForTimezone(executeAt, timezoneOffset);
-                            const notifyInfo = notifyMode === 'on_match'
-                                ? `on_match (${notifyCondition})`
+                            const notifyInfo = (notifyMode === 'on_match' || notifyMode === 'on_condition')
+                                ? `${notifyMode} (${notifyCondition})`
                                 : notifyMode;
                             toolContent = `Успешно запланировано. Следующий запуск: ${planned.local} (${planned.tzLabel}). UTC-время: ${planned.utc}. Тип расписания: ${recurrenceType}. Режим уведомлений: ${notifyInfo}.`;
                         }
