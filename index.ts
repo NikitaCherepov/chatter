@@ -764,12 +764,12 @@ const tools = [
                     },
                     task_type: {
                         type: 'string',
-                        enum: ['message', 'smart_home', 'web_search', 'email_check'],
-                        description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете, email_check - запланированная проверка почты.'
+                        enum: ['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'],
+                        description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете, email_check - запланированная проверка почты, ai_instruction - запуск AI-инструкции по расписанию.'
                     },
                     payload: {
                         type: 'string',
-                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":10, "offset":10, "date_from":"2026-04-01","date_to":"2026-04-30"} или просто строка запроса.'
+                        description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":10, "offset":10, "date_from":"2026-04-01","date_to":"2026-04-30"} или просто строка запроса. Для ai_instruction: текст инструкции, которую AI выполнит по расписанию.'
                     },
                     recurrence_type: {
                         type: 'string',
@@ -1140,7 +1140,7 @@ type UserRecord = {
 };
 type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
-type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check';
+type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check' | 'ai_instruction';
 type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 type TaskNotifyMode = 'always' | 'never' | 'on_match';
 type TaskRecord = {
@@ -3431,6 +3431,40 @@ const runScheduledEmailCheckTask = async (task: TaskRecord) => {
         ? `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''} (запрос: ${searchQuery})`
         : `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''}`;
     return `${title}\n\n${result}`;
+};
+const runScheduledAiInstructionTask = async (task: TaskRecord) => {
+    const instruction = task.payload.trim();
+    if (!instruction) {
+        return 'Не получилось выполнить AI-инструкцию: пустой payload задачи.';
+    }
+
+    const user = getUser(task.user_id);
+    if (!user) {
+        return 'Не получилось выполнить AI-инструкцию: пользователь не найден.';
+    }
+
+    const userName = user.name || user.tg_username || 'Пользователь';
+    const fakeCtx = {
+        from: { id: task.user_id },
+        state: { role: user.role === 'admin' ? 'admin' : 'user', userName },
+        chat: { id: task.user_id },
+        message: { message_id: 0, text: instruction },
+        sendChatAction: async () => undefined,
+        reply: async () => ({ message_id: 0 }),
+        replyWithPhoto: async () => ({ message_id: 0 }),
+        telegram: {}
+    };
+
+    const result = await processUserTextThroughAi(fakeCtx as any, instruction, {
+        forcePro: true,
+        suppressFinalReply: true,
+        ignoreDailyLimit: true,
+        countAsUserMessage: false,
+        skipHistory: true,
+        persistUserText: `[AI-инструкция по расписанию] ${instruction}`
+    });
+
+    return result || 'AI-инструкция выполнена без текстового результата.';
 };
 const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
     const safeLength = Math.max(0, messageLength);
@@ -5894,38 +5928,54 @@ bot.action('prompt:cancel', async (ctx) => {
 const processUserTextThroughAi = async (
     ctx: any,
     rawText: string,
-    options?: { forcePro?: boolean; persistUserText?: string; onAssistantReply?: (assistantText: string) => Promise<void> | void }
+    options?: {
+        forcePro?: boolean;
+        persistUserText?: string;
+        onAssistantReply?: (assistantText: string) => Promise<void> | void;
+        suppressFinalReply?: boolean;
+        ignoreDailyLimit?: boolean;
+        countAsUserMessage?: boolean;
+        skipHistory?: boolean;
+    }
 ) => {
     const userId = ctx.from?.id;
-    if (!userId) return;
+    if (!userId) return null;
 
     let userText = rawText.trim();
     if (!userText) {
-        await ctx.reply('Пустое сообщение. Попробуй ещё раз.');
-        return;
+        if (!options?.suppressFinalReply) {
+            await ctx.reply('Пустое сообщение. Попробуй ещё раз.');
+        }
+        return null;
     }
     const forceProRoute = Boolean(options?.forcePro) || userText.startsWith('!!!');
     if (forceProRoute && !options?.forcePro) {
         userText = userText.replace(/^!{3,}/, '').trim();
     }
     if (!userText) {
-        await ctx.reply('После !!! нужен текст запроса.');
-        return;
+        if (!options?.suppressFinalReply) {
+            await ctx.reply('После !!! нужен текст запроса.');
+        }
+        return null;
     }
     const userTextForHistory = options?.persistUserText?.trim() || userText;
 
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
     const userRecord = getUser(userId);
     if (!userRecord) {
-        await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
-        return;
+        if (!options?.suppressFinalReply) {
+            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+        }
+        return null;
     }
-    if (ctx.state.role !== 'admin') {
+    if (!options?.ignoreDailyLimit && ctx.state.role !== 'admin') {
         const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
         const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
         if (dailyLimit > 0 && dailyCount >= dailyLimit) {
-            await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
-            return;
+            if (!options?.suppressFinalReply) {
+                await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+            }
+            return null;
         }
     }
 
@@ -5942,12 +5992,23 @@ const processUserTextThroughAi = async (
         const finishTurn = async (assistantText: string) => {
             const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
             const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
-            incrementUserStats(userId, userTextForHistory.length, totalTokensForTurn);
-            addHistoryMessage(userId, 'user', userTextForHistory, { chatId: userChatId, messageId: userMessageId });
-            const sentMessage = await safeReply(ctx, assistantText);
-            const assistantMessageId = Number.isFinite(Number(sentMessage?.message_id)) ? Math.floor(Number(sentMessage?.message_id)) : null;
-            addHistoryMessage(userId, 'assistant', assistantText, { chatId: userChatId, messageId: assistantMessageId });
-            trimUserHistory(userId);
+            if (options?.countAsUserMessage === false) {
+                incrementUserTokenUsage(userId, totalTokensForTurn);
+            } else {
+                incrementUserStats(userId, userTextForHistory.length, totalTokensForTurn);
+            }
+            if (!options?.skipHistory) {
+                addHistoryMessage(userId, 'user', userTextForHistory, { chatId: userChatId, messageId: userMessageId });
+            }
+            let assistantMessageId: number | null = null;
+            if (!options?.suppressFinalReply) {
+                const sentMessage = await safeReply(ctx, assistantText);
+                assistantMessageId = Number.isFinite(Number(sentMessage?.message_id)) ? Math.floor(Number(sentMessage?.message_id)) : null;
+            }
+            if (!options?.skipHistory) {
+                addHistoryMessage(userId, 'assistant', assistantText, { chatId: userChatId, messageId: assistantMessageId });
+                trimUserHistory(userId);
+            }
             if (options?.onAssistantReply) {
                 await options.onAssistantReply(assistantText);
             }
@@ -6173,7 +6234,7 @@ PRO
                             const notifyMode = parsed.notify_mode ?? 'always';
                             const notifyCondition = typeof parsed.notify_condition === 'string' ? parsed.notify_condition.trim() : null;
 
-                            if (taskType !== 'message' && taskType !== 'smart_home' && taskType !== 'web_search' && taskType !== 'email_check') {
+                            if (taskType !== 'message' && taskType !== 'smart_home' && taskType !== 'web_search' && taskType !== 'email_check' && taskType !== 'ai_instruction') {
                                 throw new Error('Некорректный task_type');
                             }
                             if (recurrenceType !== 'once' && recurrenceType !== 'daily' && recurrenceType !== 'weekly') {
@@ -6339,9 +6400,13 @@ PRO
         }
 
         await finishTurn(answer);
+        return answer;
     } catch (e) {
         console.error(e);
-        await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи на сервере.');
+        if (!options?.suppressFinalReply) {
+            await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи на сервере.');
+        }
+        return null;
     }
 };
 
@@ -6692,6 +6757,9 @@ setInterval(async () => {
                 successMessage = `🔎 *Запланированный поиск выполнен:*\n\n${result}`;
             } else if (task.task_type === 'email_check') {
                 successMessage = await runScheduledEmailCheckTask(task);
+            } else if (task.task_type === 'ai_instruction') {
+                const result = await runScheduledAiInstructionTask(task);
+                successMessage = `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}`;
             }
 
             if (successMessage && shouldNotifyTaskResult(task, successMessage)) {
