@@ -52,6 +52,8 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
                 'Authorization': `Bearer ${KZ_SECRET}`,
                 ...formData.getHeaders()
             },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
             // Убираем таймаут, длинные файлы могут расшифровываться 10+ минут
             timeout: 0 
         });
