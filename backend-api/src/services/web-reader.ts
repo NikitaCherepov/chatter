@@ -44,24 +44,25 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
       }
     );
 
-    // Вытаскиваем текст
+    // ПРОВЕРКА НА ВНУТРЕННИЕ ОШИБКИ GRAPHQL
+    if (response.data?.errors && response.data.errors.length > 0) {
+      const errorMsg = response.data.errors.map((e: any) => e.message).join(' | ');
+      console.error('GraphQL Internal Errors:', errorMsg);
+      return `Ошибка парсера (GraphQL): ${errorMsg}`;
+    }
+
     const rawText = response.data?.data?.text?.text || '';
-    
-    // Схлопываем все переносы и гигантские пробелы в один
     const cleanText = rawText.replace(/\s+/g, ' ').trim();
 
     if (!cleanText) {
-      return 'Текст на странице не найден или контент заблокирован.';
+      return 'Текст на странице не найден или контент заблокирован (возможно, пустой body).';
     }
 
-    // Режем до 15к символов, чтобы не взорвать контекст Gemini 
-    // (весь мусор из футеров обычно отсекается)
     return cleanText.slice(0, 15000);
 
   } catch (error: any) {
-    // Если упадет, выведет нормальную ошибку
     const errorDetails = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-    console.error('Browserless BQL Error:', errorDetails);
-    return `Ошибка при чтении страницы: ${error.message}`;
+    console.error('Browserless BQL HTTP Error:', errorDetails);
+    return `HTTP Ошибка при чтении страницы: ${error.message}`;
   }
 };
