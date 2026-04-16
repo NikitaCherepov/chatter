@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
 import crypto from 'crypto';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -626,6 +627,8 @@ const VOICE_TTS_ENGINE = normalizeTtsEngine(process.env.VOICE_TTS_ENGINE);
 const VOICE_TTS_URL = (process.env.VOICE_TTS_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/tts')).trim();
 const VOICE_SILERO_URL = (process.env.VOICE_SILERO_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/silero')).trim();
 const getVoiceSynthesisUrl = () => (VOICE_TTS_ENGINE === 'silero' ? VOICE_SILERO_URL : VOICE_TTS_URL);
+const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:3050').trim().replace(/\/$/, '');
+const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim();
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -827,6 +830,23 @@ const tools = [
                     }
                 },
                 required: ['query']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_webpage',
+            description: 'Читает и очищает текст веб-страницы через backend-читалку (Browserless). Используй, когда нужно извлечь содержание конкретной страницы по URL.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    url: {
+                        type: 'string',
+                        description: 'Полный URL страницы (http/https).'
+                    }
+                },
+                required: ['url']
             }
         }
     },
@@ -2254,6 +2274,36 @@ const shouldNotifyByAiCondition = async (task: TaskRecord, resultText: string) =
     } catch (err) {
         console.warn(`Ошибка AI-проверки notify_condition для задачи #${task.id}:`, err);
         return false;
+    }
+};
+
+const runBackendReadUrl = async (url: string) => {
+    const normalized = `${url || ''}`.trim();
+    if (!normalized) {
+        return 'Ошибка инструмента: пустой URL.';
+    }
+    if (!BACKEND_INTERNAL_TOKEN) {
+        return 'Ошибка инструмента: BACKEND_INTERNAL_TOKEN не настроен.';
+    }
+    try {
+        const response = await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/tools/read_url`,
+            { url: normalized },
+            {
+                headers: {
+                    Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+                },
+                timeout: 90000
+            }
+        );
+        const text = `${response.data?.text || ''}`.trim();
+        if (!text) {
+            return 'Страница обработана, но текст не найден.';
+        }
+        return text;
+    } catch (err: any) {
+        const detail = err?.response?.data?.error || err?.message || String(err);
+        return `Ошибка инструмента read_webpage: ${detail}`;
     }
 };
 type UserChatRecord = {
@@ -6594,6 +6644,20 @@ PRO
                                 toolContent = 'Ошибка инструмента: не удалось получить результаты поиска.';
                             }
                         }
+                    } else if (toolCall.function.name === 'read_webpage') {
+                        await ctx.reply('Открываю страницу и извлекаю текст...');
+                        let url = '';
+                        try {
+                            const parsed = JSON.parse(toolCall.function.arguments || '{}');
+                            url = typeof parsed.url === 'string' ? parsed.url.trim() : '';
+                        } catch (err) {
+                            console.warn('Ошибка парсинга аргументов read_webpage:', err);
+                        }
+                        if (!url) {
+                            toolContent = 'Ошибка инструмента: пустой URL.';
+                        } else {
+                            toolContent = await runBackendReadUrl(url);
+                        }
                     } else if (toolCall.function.name === 'control_smart_home') {
                         await ctx.reply('🏠 Выполняю команду умного дома...');
 
@@ -7203,3 +7267,4 @@ console.log('Chatter запущен с базой данных!');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
+

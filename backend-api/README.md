@@ -27,6 +27,7 @@ npm run logs:api
 - `API_DB_PATH` (default `../chatter.db`)
 - model keys/base URLs from current bot env (`TIMEWEB_*`).
 - optional for mail tools: `imapflow`, `nodemailer` packages + `ENCRYPTION_KEY`.
+- for URL reader tool: `BACKEND_INTERNAL_TOKEN`, `BROWSERLESS_TOKEN`, optional `BROWSERLESS_BASE_URL`.
 
 ## REST v1
 
@@ -46,6 +47,7 @@ npm run logs:api
 - `POST /api/v1/tasks`
 - `DELETE /api/v1/tasks/:id`
 - `GET /api/v1/admin/users` (admin-only)
+- `POST /internal/tools/read_url` (internal token required)
 
 ## Notes
 

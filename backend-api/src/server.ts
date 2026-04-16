@@ -6,16 +6,37 @@ import { createNote, countNotes, deleteNote, listNotes } from './services/notes.
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi } from './services/ai.js';
 import { db } from './db.js';
+import { getCleanTextFromUrl } from './services/web-reader.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
+const BACKEND_INTERNAL_TOKEN = `${process.env.BACKEND_INTERNAL_TOKEN || ''}`.trim();
 
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'backend-api', now: Math.floor(Date.now() / 1000) });
+});
+
+const internalAuth = (req: any, res: any, next: any) => {
+  if (!BACKEND_INTERNAL_TOKEN) return res.status(503).json({ error: 'internal_token_not_configured' });
+  const authHeader = `${req.headers.authorization || ''}`;
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (token !== BACKEND_INTERNAL_TOKEN) return res.status(401).json({ error: 'unauthorized_internal' });
+  next();
+};
+
+app.post('/internal/tools/read_url', internalAuth, async (req, res) => {
+  const url = `${req.body?.url || ''}`.trim();
+  if (!url) return res.status(400).json({ error: 'url_required' });
+  try {
+    const cleanText = await getCleanTextFromUrl(url);
+    return res.json({ ok: true, url, text: cleanText });
+  } catch (err: any) {
+    return res.status(422).json({ ok: false, error: err?.message || String(err) });
+  }
 });
 
 app.post('/api/v1/auth/register', (req, res) => {
