@@ -26,7 +26,7 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
   const query = `
     mutation ScrapeTarget($target: String!) {
       goto(url: $target, waitUntil: networkIdle) { status }
-      solve(wait: true) { status }
+      solve(wait: true) { time }
       text(selector: "body") { text }
     }
   `;

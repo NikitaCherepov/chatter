@@ -14,9 +14,7 @@ const query = `
     goto(url: $target, waitUntil: networkIdle) { 
       status 
     }
-    html { 
-      html 
-    }
+solve(wait: true) { time }
     text(selector: "body") { 
       text 
     }
