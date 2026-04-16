@@ -6487,6 +6487,7 @@ PRO
         let isGenerating = true;
         let loopCount = 0;
         let modelFallbackNoticeSent = false;
+        const toolOutputsForFallback: string[] = [];
         const MAX_TOOL_LOOPS = 6;
 
         while (isGenerating && loopCount < MAX_TOOL_LOOPS) {
@@ -6545,7 +6546,17 @@ PRO
             currentMessages.push(message as any);
 
             if (!message.tool_calls?.length) {
-                answer = message.content || FALLBACK_ANSWER;
+                const messageContent = typeof message.content === 'string'
+                    ? message.content.trim()
+                    : '';
+                if (messageContent) {
+                    answer = messageContent;
+                } else if (toolOutputsForFallback.length) {
+                    const latestToolOutput = toolOutputsForFallback[toolOutputsForFallback.length - 1].trim();
+                    answer = latestToolOutput || FALLBACK_ANSWER;
+                } else {
+                    answer = FALLBACK_ANSWER;
+                }
                 isGenerating = false;
                 break;
             }
@@ -6766,6 +6777,9 @@ PRO
                     tool_call_id: toolCall.id,
                     content: toolContent
                 });
+                if (typeof toolContent === 'string' && toolContent.trim()) {
+                    toolOutputsForFallback.push(toolContent);
+                }
             }
         }
 
