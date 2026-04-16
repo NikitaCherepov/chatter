@@ -127,6 +127,7 @@ db.exec(`
         imap_port INTEGER DEFAULT 993,
         imap_secure INTEGER DEFAULT 1,
         mail_check_limit INTEGER NOT NULL DEFAULT 10,
+        active_chat_id INTEGER,
         timezone_offset INTEGER DEFAULT 5,
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
@@ -149,6 +150,7 @@ db.exec(`
         user_id INTEGER NOT NULL,
         role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
         content TEXT NOT NULL,
+        chat_id INTEGER,
         telegram_chat_id INTEGER,
         telegram_message_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -156,6 +158,17 @@ db.exec(`
 
     CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id_id
     ON chat_messages(user_id, id);
+
+    CREATE TABLE IF NOT EXISTS user_chats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL DEFAULT 'Основной',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id
+    ON user_chats(user_id, id DESC);
 
     CREATE TABLE IF NOT EXISTS prompts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -272,6 +285,7 @@ ensureUserColumn('imap_host', 'ALTER TABLE users ADD COLUMN imap_host TEXT');
 ensureUserColumn('imap_port', 'ALTER TABLE users ADD COLUMN imap_port INTEGER DEFAULT 993');
 ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGER DEFAULT 1');
 ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
+ensureUserColumn('active_chat_id', 'ALTER TABLE users ADD COLUMN active_chat_id INTEGER');
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('plan', `ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT '${DEFAULT_USER_PLAN}'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
@@ -298,6 +312,58 @@ ensureTaskColumn('notify_mode', `ALTER TABLE tasks ADD COLUMN notify_mode TEXT N
 ensureTaskColumn('notify_condition', 'ALTER TABLE tasks ADD COLUMN notify_condition TEXT');
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
+ensureChatMessageColumn('chat_id', 'ALTER TABLE chat_messages ADD COLUMN chat_id INTEGER');
+
+db.exec(`
+    CREATE TABLE IF NOT EXISTS user_chats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL DEFAULT 'Основной',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id ON user_chats(user_id, id DESC)`);
+
+db.exec(`
+    INSERT INTO user_chats (user_id, title)
+    SELECT u.id, 'Основной'
+    FROM users u
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM user_chats uc
+        WHERE uc.user_id = u.id
+    )
+`);
+
+db.exec(`
+    UPDATE users
+    SET active_chat_id = (
+        SELECT uc.id
+        FROM user_chats uc
+        WHERE uc.user_id = users.id
+        ORDER BY uc.id ASC
+        LIMIT 1
+    )
+    WHERE active_chat_id IS NULL
+       OR NOT EXISTS (
+            SELECT 1
+            FROM user_chats uc2
+            WHERE uc2.user_id = users.id AND uc2.id = users.active_chat_id
+       )
+`);
+
+if (hasChatMessageColumn('chat_id')) {
+    db.exec(`
+        UPDATE chat_messages
+        SET chat_id = (
+            SELECT u.active_chat_id
+            FROM users u
+            WHERE u.id = chat_messages.user_id
+        )
+        WHERE chat_id IS NULL
+    `);
+}
 
 if (hasUserColumn('created_at')) {
     db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
@@ -529,6 +595,9 @@ const BASE_COMMANDS = [
     { command: 'mail_use', description: 'Почта: /mail_use <yandex|google>' },
     { command: 'mail_limit', description: 'Почта: лимит check_emails' },
     { command: 'mail_forget', description: 'Почта: /mail_forget [yandex|google]' },
+    { command: 'chats', description: 'Список чатов и активный чат' },
+    { command: 'chat_new', description: 'Создать чат: /chat_new [название]' },
+    { command: 'chat_use', description: 'Переключить чат: /chat_use <id>' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
@@ -1101,6 +1170,7 @@ type MailProvider = 'yandex' | 'google';
 type ChatMessage = { role: ChatRole; content: string };
 type UserHistoryRow = {
     id: number;
+    chat_id: number | null;
     role: ChatRole;
     content: string;
     telegram_message_id: number | null;
@@ -1123,6 +1193,7 @@ type UserRecord = {
     imap_port: number | null;
     imap_secure: number | null;
     mail_check_limit: number;
+    active_chat_id: number | null;
     timezone_offset: number | null;
     timezone_confirmed: number;
     daily_message_count: number;
@@ -2089,6 +2160,13 @@ const shouldNotifyByAiCondition = async (task: TaskRecord, resultText: string) =
         return false;
     }
 };
+type UserChatRecord = {
+    id: number;
+    user_id: number;
+    title: string;
+    created_at: string;
+    updated_at: string;
+};
 
 const shouldNotifyTaskResult = async (task: TaskRecord, resultText: string) => {
     if (task.notify_mode === 'never') return false;
@@ -2708,20 +2786,28 @@ const processUserPhotoThroughAi = async (ctx: any) => {
 };
 
 const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRecord | undefined;
-const addUser = (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => db.prepare(`
-    INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
-    VALUES (?, ?, ?, ?, ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
-    ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name,
-        role = excluded.role,
-        status = excluded.status,
-        tg_username = COALESCE(excluded.tg_username, users.tg_username),
-        selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
-`).run(id, name, role, status, tgUsername, defaultPromptSeed.id);
-const createPendingUser = (id: number, name: string | null, tgUsername: string | null) => db.prepare(`
-    INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
-    VALUES (?, ?, 'user', 'none', ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
-`).run(id, name, tgUsername, defaultPromptSeed.id);
+const addUser = (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => {
+    const result = db.prepare(`
+        INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
+        VALUES (?, ?, ?, ?, ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
+        ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            role = excluded.role,
+            status = excluded.status,
+            tg_username = COALESCE(excluded.tg_username, users.tg_username),
+            selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
+    `).run(id, name, role, status, tgUsername, defaultPromptSeed.id);
+    ensureActiveChatForUser(id);
+    return result;
+};
+const createPendingUser = (id: number, name: string | null, tgUsername: string | null) => {
+    const result = db.prepare(`
+        INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
+        VALUES (?, ?, 'user', 'none', ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
+    `).run(id, name, tgUsername, defaultPromptSeed.id);
+    ensureActiveChatForUser(id);
+    return result;
+};
 const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
 const updateUserTelegramUsername = (id: number, tgUsername: string | null) => db.prepare('UPDATE users SET tg_username = ? WHERE id = ?').run(tgUsername, id);
 const updateUserRole = (id: number, role: string) => db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
@@ -3663,16 +3749,72 @@ const resolveEffectiveContextWindow = (user: UserRecord | undefined) => {
         : maxWindow;
     return Math.max(1, Math.min(currentWindow, maxWindow));
 };
-const getUserHistory = (userId: number) => {
-    const user = getUser(userId);
-    const contextWindow = resolveEffectiveContextWindow(user);
-    const rows = db.prepare(`
-        SELECT role, content
-        FROM chat_messages
+const createUserChat = (userId: number, title: string) => {
+    const normalized = title.trim() || 'Новый чат';
+    return db.prepare(`
+        INSERT INTO user_chats (user_id, title)
+        VALUES (?, ?)
+    `).run(userId, normalized);
+};
+const getUserChatById = (userId: number, chatId: number) => db.prepare(`
+    SELECT id, user_id, title, created_at, updated_at
+    FROM user_chats
+    WHERE user_id = ? AND id = ?
+`).get(userId, chatId) as UserChatRecord | undefined;
+const getUserChats = (userId: number, limit = 100) => {
+    const safeLimit = Math.max(1, Math.min(200, Math.floor(limit)));
+    return db.prepare(`
+        SELECT id, user_id, title, created_at, updated_at
+        FROM user_chats
         WHERE user_id = ?
         ORDER BY id DESC
         LIMIT ?
-    `).all(userId, contextWindow) as ChatMessage[];
+    `).all(userId, safeLimit) as UserChatRecord[];
+};
+const setUserActiveChat = (userId: number, chatId: number) => db.prepare(`
+    UPDATE users
+    SET active_chat_id = ?
+    WHERE id = ?
+`).run(chatId, userId);
+const ensureActiveChatForUser = (userId: number) => {
+    const current = db.prepare(`
+        SELECT active_chat_id
+        FROM users
+        WHERE id = ?
+    `).get(userId) as { active_chat_id: number | null } | undefined;
+
+    if (current?.active_chat_id) {
+        const exists = getUserChatById(userId, current.active_chat_id);
+        if (exists) return exists.id;
+    }
+
+    const firstChat = db.prepare(`
+        SELECT id
+        FROM user_chats
+        WHERE user_id = ?
+        ORDER BY id ASC
+        LIMIT 1
+    `).get(userId) as { id: number } | undefined;
+
+    const chatId = firstChat?.id ?? Number(createUserChat(userId, 'Основной').lastInsertRowid);
+    setUserActiveChat(userId, chatId);
+    return chatId;
+};
+const getActiveChatForUser = (userId: number) => {
+    const activeChatId = ensureActiveChatForUser(userId);
+    return getUserChatById(userId, activeChatId);
+};
+const getUserHistory = (userId: number) => {
+    const user = getUser(userId);
+    const contextWindow = resolveEffectiveContextWindow(user);
+    const activeChatId = ensureActiveChatForUser(userId);
+    const rows = db.prepare(`
+        SELECT role, content
+        FROM chat_messages
+        WHERE user_id = ? AND chat_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+    `).all(userId, activeChatId, contextWindow) as ChatMessage[];
 
     return rows.reverse();
 };
@@ -3680,20 +3822,32 @@ const addHistoryMessage = (
     userId: number,
     role: ChatRole,
     content: string,
-    telegramMeta?: { chatId?: number | null; messageId?: number | null }
-) => db
-    .prepare('INSERT INTO chat_messages (user_id, role, content, telegram_chat_id, telegram_message_id) VALUES (?, ?, ?, ?, ?)')
-    .run(
-        userId,
-        role,
-        content,
-        Number.isFinite(Number(telegramMeta?.chatId)) ? Math.floor(Number(telegramMeta?.chatId)) : null,
-        Number.isFinite(Number(telegramMeta?.messageId)) ? Math.floor(Number(telegramMeta?.messageId)) : null
-    );
+    telegramMeta?: { chatId?: number | null; messageId?: number | null; historyChatId?: number | null }
+) => {
+    const resolvedChatId = Number.isFinite(Number(telegramMeta?.historyChatId))
+        ? Math.floor(Number(telegramMeta?.historyChatId))
+        : ensureActiveChatForUser(userId);
+    const result = db
+        .prepare('INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(
+            userId,
+            role,
+            content,
+            resolvedChatId,
+            Number.isFinite(Number(telegramMeta?.chatId)) ? Math.floor(Number(telegramMeta?.chatId)) : null,
+            Number.isFinite(Number(telegramMeta?.messageId)) ? Math.floor(Number(telegramMeta?.messageId)) : null
+        );
+    db.prepare(`
+        UPDATE user_chats
+        SET updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ?
+    `).run(resolvedChatId, userId);
+    return result;
+};
 const getRecentHistoryRowsByUser = (userId: number, limit = 20) => {
     const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
     return db.prepare(`
-        SELECT id, role, content, telegram_message_id, created_at
+        SELECT id, chat_id, role, content, telegram_message_id, created_at
         FROM chat_messages
         WHERE user_id = ?
         ORDER BY id DESC
@@ -3710,9 +3864,10 @@ const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[]) => {
         return `История пользователя #${userId} пуста.`;
     }
     const lines = rows.map(row => {
+        const chatPart = row.chat_id ? ` chat:${row.chat_id}` : '';
         const tgMsg = row.telegram_message_id ? ` tg:${row.telegram_message_id}` : '';
         const preview = shortenHistoryContent(row.content);
-        return `#${row.id} [${row.role}]${tgMsg} ${row.created_at}\n${preview}`;
+        return `#${row.id}${chatPart} [${row.role}]${tgMsg} ${row.created_at}\n${preview}`;
     });
     return `Последние сообщения пользователя #${userId} (новые -> старые):\n\n${lines.join('\n\n')}`;
 };
@@ -3733,14 +3888,25 @@ const deleteHistoryMessageByUserAndTelegramMessageId = (userId: number, telegram
 const trimUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
     WHERE user_id = ?
+      AND chat_id = ?
       AND id NOT IN (
         SELECT id
         FROM chat_messages
-        WHERE user_id = ?
+        WHERE user_id = ? AND chat_id = ?
         ORDER BY id DESC
         LIMIT ?
       )
-`).run(userId, userId, resolveEffectiveContextWindow(getUser(userId)));
+`).run(
+    userId,
+    ensureActiveChatForUser(userId),
+    userId,
+    ensureActiveChatForUser(userId),
+    resolveEffectiveContextWindow(getUser(userId))
+);
+const clearActiveUserHistory = (userId: number) => db.prepare(`
+    DELETE FROM chat_messages
+    WHERE user_id = ? AND chat_id = ?
+`).run(userId, ensureActiveChatForUser(userId));
 const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
 
 ensureCurrentPlanSubscriptionsForAllUsers();
@@ -3911,6 +4077,10 @@ const showMenu = (ctx: any) => {
     const notesLine = NOTES_WEBAPP_URL
         ? '📝 Заметки: доступны в кнопке WebApp'
         : '📝 Заметки: команды /note_add, /notes, /note_find, /note_delete';
+    const activeChat = userId ? getActiveChatForUser(userId) : null;
+    const chatLine = activeChat
+        ? `💬 Активный чат: #${activeChat.id} (${activeChat.title})`
+        : '💬 Активный чат: не выбран';
     const moderationLine = isAdmin
         ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
         : '';
@@ -3924,6 +4094,7 @@ ${planLine}
 ${contextLine}
 ${messageLimitLine}
 ${webLimitLine}
+${chatLine}
 ${notesLine}
 ${promptLine}
 ${moderationLine}
@@ -3943,8 +4114,8 @@ const handleClear = (ctx: any) => {
     noteEditFlows.delete(userId);
     adminUserContextLimitFlows.delete(userId);
     adminUserMessageLimitFlows.delete(userId);
-    clearUserHistory(userId);
-    return ctx.reply('Память очищена.');
+    clearActiveUserHistory(userId);
+    return ctx.reply('Память активного чата очищена.');
 };
 
 const formatPromptsList = (currentPromptId: number | null, includeDescription = false) => {
@@ -4832,6 +5003,63 @@ bot.command('task_delete', (ctx) => {
     return ctx.reply(`Удалил задачу #${taskId}.\n\nТекущие задачи (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${updatedText}`);
 });
 
+bot.command('chats', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к чатам.');
+    }
+
+    const active = getActiveChatForUser(userId);
+    const chats = getUserChats(userId, 50);
+    if (!chats.length) return ctx.reply('Чатов пока нет.');
+    const lines = chats.map(chat => {
+        const marker = active?.id === chat.id ? ' [активный]' : '';
+        return `#${chat.id}${marker} ${chat.title}`;
+    });
+    return ctx.reply(`Твои чаты (${chats.length}):\n\n${lines.join('\n')}\n\nКоманды:\n/chat_new <название>\n/chat_use <id>`);
+});
+
+bot.command('chat_new', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к чатам.');
+    }
+
+    const titleRaw = extractCommandPayload(ctx.message.text, 'chat_new');
+    const existingCount = getUserChats(userId, 500).length;
+    const autoTitle = `Чат ${existingCount + 1}`;
+    const title = (titleRaw || autoTitle).slice(0, 80).trim() || autoTitle;
+    const created = createUserChat(userId, title);
+    const chatId = Number(created.lastInsertRowid);
+    setUserActiveChat(userId, chatId);
+    return ctx.reply(`Создал и активировал чат #${chatId}: ${title}`);
+});
+
+bot.command('chat_use', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const user = getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        return ctx.reply('Нет доступа к чатам.');
+    }
+
+    const chatId = Number.parseInt(ctx.message.text.split(' ').filter(Boolean)[1], 10);
+    if (!Number.isFinite(chatId) || chatId <= 0) {
+        return ctx.reply('Формат: /chat_use <id>');
+    }
+
+    const chat = getUserChatById(userId, chatId);
+    if (!chat) {
+        return ctx.reply(`Чат #${chatId} не найден.`);
+    }
+    setUserActiveChat(userId, chatId);
+    return ctx.reply(`Активный чат переключен на #${chat.id}: ${chat.title}`);
+});
+
 bot.command('note_add', (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -5202,11 +5430,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /sync_plan_limits, /history_user, /history_delete, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /chats, /chat_new, /chat_use, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /sync_plan_limits, /history_user, /history_delete, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
+    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /chats, /chat_new, /chat_use, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
 });
 
 bot.action('context:change', async (ctx) => {
