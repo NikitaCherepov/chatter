@@ -1,10 +1,11 @@
 ﻿import express from 'express';
 import dotenv from 'dotenv';
-import { authMiddleware, issueAuthTokens, refreshAccessToken, validateTelegramInitData, type AuthedRequest } from './auth.js';
-import { activateUserChat, createUserChat, ensureActiveChat, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
+import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
+import { activateUserChat, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
 import { createNote, countNotes, deleteNote, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi } from './services/ai.js';
+import { db } from './db.js';
 
 dotenv.config();
 
@@ -15,6 +16,68 @@ app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'backend-api', now: Math.floor(Date.now() / 1000) });
+});
+
+app.post('/api/v1/auth/register', (req, res) => {
+  const login = `${req.body?.login || ''}`.trim().toLowerCase();
+  const password = `${req.body?.password || ''}`;
+  const name = `${req.body?.name || ''}`.trim() || null;
+
+  if (!/^[-_.a-z0-9]{3,64}$/i.test(login)) return res.status(400).json({ error: 'bad_login' });
+  if (password.length < 8 || password.length > 128) return res.status(400).json({ error: 'bad_password_length' });
+
+  if (getApiAccountByLogin(login)) return res.status(409).json({ error: 'login_already_exists' });
+
+  const userId = createOrUpdateUserForApiRegistration(name);
+  const hashed = makePasswordHash(password);
+  createApiAccount(userId, login, hashed.salt, hashed.hash);
+
+  const user = getUserById(userId);
+  if (!user) return res.status(500).json({ error: 'user_create_failed' });
+
+  const tokens = issueAuthTokens(userId);
+  return res.status(201).json({
+    ...tokens,
+    user: {
+      id: user.id,
+      name: user.name,
+      username: user.tg_username,
+      role: user.role,
+      is_admin: user.is_admin,
+      plan: user.plan
+    }
+  });
+});
+
+app.post('/api/v1/auth/login', (req, res) => {
+  const login = `${req.body?.login || ''}`.trim().toLowerCase();
+  const password = `${req.body?.password || ''}`;
+
+  if (!login || !password) return res.status(400).json({ error: 'login_password_required' });
+  const account = getApiAccountByLogin(login);
+  if (!account) return res.status(401).json({ error: 'invalid_credentials' });
+  if (!verifyPassword(password, account.password_salt, account.password_hash)) {
+    return res.status(401).json({ error: 'invalid_credentials' });
+  }
+
+  const user = getUserById(account.user_id);
+  if (!user) return res.status(401).json({ error: 'invalid_credentials' });
+  if (user.status !== 'approved' && user.is_admin !== 1) {
+    return res.status(403).json({ error: 'access_not_approved', status: user.status });
+  }
+
+  const tokens = issueAuthTokens(user.id);
+  return res.json({
+    ...tokens,
+    user: {
+      id: user.id,
+      name: user.name,
+      username: user.tg_username,
+      role: user.role,
+      is_admin: user.is_admin,
+      plan: user.plan
+    }
+  });
 });
 
 app.post('/api/v1/auth/telegram', (req, res) => {
@@ -30,7 +93,7 @@ app.post('/api/v1/auth/telegram', (req, res) => {
 
   const userRecord = getUserById(user.id);
   if (!userRecord) return res.status(500).json({ error: 'user_create_failed' });
-  if (userRecord.status !== 'approved' && userRecord.role !== 'admin') {
+  if (userRecord.status !== 'approved' && userRecord.is_admin !== 1) {
     return res.status(403).json({ error: 'access_not_approved', status: userRecord.status });
   }
 
@@ -42,6 +105,7 @@ app.post('/api/v1/auth/telegram', (req, res) => {
       name: userRecord.name,
       username: userRecord.tg_username,
       role: userRecord.role,
+      is_admin: userRecord.is_admin,
       plan: userRecord.plan
     }
   });
@@ -181,6 +245,16 @@ app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   const ok = deletePendingTask(userId, taskId);
   if (!ok) return res.status(404).json({ error: 'task_not_found_or_not_pending' });
   return res.json({ ok: true });
+});
+
+app.get('/api/v1/admin/users', adminMiddleware, (_req: AuthedRequest, res) => {
+  const rows = db.prepare(`
+    SELECT id, name, role, is_admin, status, plan, tg_username
+    FROM users
+    ORDER BY id ASC
+    LIMIT 500
+  `).all();
+  res.json({ users: rows });
 });
 
 app.use((err: any, _req: any, res: any, _next: any) => {

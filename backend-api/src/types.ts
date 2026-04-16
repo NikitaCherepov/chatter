@@ -9,12 +9,15 @@ export type UserRecord = {
   id: number;
   name: string | null;
   role: string;
+  is_admin: number;
   status: 'none' | 'approved' | 'disapproved' | 'banned';
   plan: UserPlan;
   tg_username: string | null;
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
   core_memory: string | null;
+  timezone_offset?: number | null;
+  timezone_confirmed?: number;
   context_window: number;
   context_window_max: number;
   daily_message_count: number;

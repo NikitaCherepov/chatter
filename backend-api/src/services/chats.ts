@@ -1,17 +1,66 @@
 ﻿import { db, toUnix } from '../db.js';
 import type { ChatDto, MessageDto, ChatRole, UserRecord } from '../types.js';
 
+const parseAdminId = (raw: string | undefined) => {
+  if (!raw) return null;
+  const normalized = raw.replace(/[^\d-]/g, '').trim();
+  if (!normalized) return null;
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const ADMIN_IDS = (() => {
+  const ids = new Set<number>();
+  for (const raw of (process.env.ADMIN_IDS || '').split(/[,\s;]+/)) {
+    const id = parseAdminId(raw);
+    if (id) ids.add(id);
+  }
+  const one = parseAdminId(process.env.ADMIN_ID);
+  if (one) ids.add(one);
+  return ids;
+})();
+
 export const getUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
   .get(userId) as UserRecord | undefined;
 
 export const upsertUserFromTelegram = (userId: number, username: string | null, name: string | null) => db.prepare(`
-  INSERT INTO users (id, name, role, status, plan, tg_username)
-  VALUES (?, ?, 'user', 'none', 'free', ?)
+  INSERT INTO users (id, name, role, is_admin, status, plan, tg_username)
+  VALUES (?, ?, ?, ?, 'none', 'free', ?)
   ON CONFLICT(id) DO UPDATE SET
     tg_username = COALESCE(excluded.tg_username, users.tg_username),
-    name = COALESCE(users.name, excluded.name)
-`).run(userId, name, username);
+    name = COALESCE(users.name, excluded.name),
+    is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
+    role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
+`).run(userId, name, ADMIN_IDS.has(userId) ? 'admin' : 'user', ADMIN_IDS.has(userId) ? 1 : 0, username);
+
+export const createOrUpdateUserForApiRegistration = (name: string | null = null) => {
+  const inserted = db.prepare(`
+    INSERT INTO users (name, role, is_admin, status, plan)
+    VALUES (?, 'user', 0, 'approved', 'free')
+  `).run(name);
+  const userId = Number(inserted.lastInsertRowid);
+  ensureActiveChat(userId);
+  return userId;
+};
+
+export const setUserTimezone = (userId: number, timezoneOffset: number) => db.prepare(`
+  UPDATE users
+  SET timezone_offset = ?, timezone_confirmed = 1
+  WHERE id = ?
+`).run(timezoneOffset, userId);
+
+export const getApiAccountByLogin = (login: string) => db.prepare(`
+  SELECT id, user_id, login, password_salt, password_hash
+  FROM api_accounts
+  WHERE login = ?
+`).get(login) as { id: number; user_id: number; login: string; password_salt: string; password_hash: string } | undefined;
+
+export const createApiAccount = (userId: number, login: string, passwordSalt: string, passwordHash: string) => db.prepare(`
+  INSERT INTO api_accounts (user_id, login, password_salt, password_hash)
+  VALUES (?, ?, ?, ?)
+`).run(userId, login, passwordSalt, passwordHash);
 
 const createChat = (userId: number, title: string) => db.prepare(`
   INSERT INTO user_chats (user_id, title)

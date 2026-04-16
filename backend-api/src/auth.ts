@@ -1,5 +1,6 @@
 ﻿import crypto from 'node:crypto';
 import dotenv from 'dotenv';
+import { getUserById } from './services/chats.js';
 
 dotenv.config();
 
@@ -51,6 +52,17 @@ const verifyToken = (token: string, expectedType: 'access' | 'refresh') => {
   if (decoded.typ !== expectedType) return null;
   if (!decoded.sub || decoded.exp < Math.floor(Date.now() / 1000)) return null;
   return decoded;
+};
+
+export const makePasswordHash = (plain: string) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(plain, salt, 64).toString('hex');
+  return { salt, hash };
+};
+
+export const verifyPassword = (plain: string, salt: string, hash: string) => {
+  const candidate = crypto.scryptSync(plain, salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(hash));
 };
 
 const parseInitData = (initData: string) => {
@@ -106,9 +118,18 @@ export const refreshAccessToken = (refreshToken: string) => {
 export const authMiddleware = (req: AuthedRequest, res: any, next: any) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token) return res.status(401).json({ error: 'unauthorized' });
   const payload = verifyToken(token, 'access');
-  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  if (!payload) return res.status(401).json({ error: 'unauthorized' });
   req.authUserId = payload.sub;
+  next();
+};
+
+export const adminMiddleware = (req: AuthedRequest, res: any, next: any) => {
+  const userId = req.authUserId;
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+  const user = getUserById(userId);
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
+  if (user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
   next();
 };
