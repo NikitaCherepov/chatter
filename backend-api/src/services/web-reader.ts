@@ -1,15 +1,6 @@
 ﻿import axios from 'axios';
 
-const optionalRequire = (moduleName: string) => {
-  try {
-    const req = (0, eval)('require');
-    return req(moduleName);
-  } catch {
-    return null;
-  }
-};
-
-const BROWSERLESS_BASE_URL = (process.env.BROWSERLESS_BASE_URL || 'https://chrome.browserless.io').trim().replace(/\/$/, '');
+const BROWSERLESS_BASE_URL = (process.env.BROWSERLESS_BASE_URL || 'https://production-sfo.browserless.io').trim().replace(/\/$/, '');
 const BROWSERLESS_TOKEN = (process.env.BROWSERLESS_TOKEN || '').trim();
 
 const isHttpUrl = (value: string) => {
@@ -27,26 +18,29 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
   if (!isHttpUrl(url)) throw new Error('bad_url');
   if (!BROWSERLESS_TOKEN) throw new Error('browserless_token_missing');
 
-  const endpoint = `${BROWSERLESS_BASE_URL}/content?token=${encodeURIComponent(BROWSERLESS_TOKEN)}`;
-  const response = await axios.post(endpoint, { url }, { timeout: 60_000, responseType: 'text' });
-  const html = typeof response.data === 'string' ? response.data : `${response.data || ''}`;
+  const endpoint = `${BROWSERLESS_BASE_URL}/scrape?token=${encodeURIComponent(BROWSERLESS_TOKEN)}`;
+  const response = await axios.post(endpoint, {
+    url,
+    elements: [
+      { selector: 'article', timeout: 5000 },
+      { selector: 'main', timeout: 5000 },
+      { selector: 'body', timeout: 5000 }
+    ]
+  }, { timeout: 60_000 });
 
-  const cheerio = optionalRequire('cheerio');
-  let cleanText = '';
+  const entries = Array.isArray(response.data?.data) ? response.data.data : [];
+  const chunks: string[] = [];
 
-  if (cheerio?.load) {
-    const $ = cheerio.load(html);
-    $('script, style, svg, nav, footer, header, noscript').remove();
-    cleanText = $('body').text();
-  } else {
-    cleanText = html
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ');
+  for (const entry of entries) {
+    const results = Array.isArray(entry?.results) ? entry.results : [];
+    for (const result of results) {
+      const text = `${result?.text || ''}`.replace(/\s+/g, ' ').trim();
+      if (text) chunks.push(text);
+    }
   }
 
-  cleanText = cleanText.replace(/\s+/g, ' ').trim();
+  const uniqueChunks = [...new Set(chunks)];
+  const cleanText = uniqueChunks.join('\n\n').trim();
   if (!cleanText) {
     return 'Текст на странице не найден или страница пуста после рендера.';
   }
