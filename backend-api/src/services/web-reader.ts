@@ -1,8 +1,7 @@
 ﻿import axios from 'axios';
-import * as cheerio from 'cheerio'; // Убедись, что сделал: npm install cheerio
 
-// Жестко прибиваем гвоздями рабочий домен v1/v2
-const BROWSERLESS_BASE_URL = 'https://chrome.browserless.io';
+// Используем базовый урл. Если в .env ничего нет, берем рабочий production-sfo
+const BROWSERLESS_BASE_URL = (process.env.BROWSERLESS_BASE_URL || 'https://production-sfo.browserless.io').trim().replace(/\/$/, '');
 const BROWSERLESS_TOKEN = (process.env.BROWSERLESS_TOKEN || '').trim();
 
 const isHttpUrl = (value: string) => {
@@ -20,38 +19,48 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
   if (!isHttpUrl(url)) throw new Error('bad_url');
   if (!BROWSERLESS_TOKEN) throw new Error('browserless_token_missing');
 
-  // Используем самый стабильный эндпоинт, он есть на всех серверах
-  const endpoint = `${BROWSERLESS_BASE_URL}/content?token=${encodeURIComponent(BROWSERLESS_TOKEN)}`;
+  // Тот самый рабочий Stealth эндпоинт
+  const endpoint = `${BROWSERLESS_BASE_URL}/stealth/bql?token=${encodeURIComponent(BROWSERLESS_TOKEN)}&blockConsentModals=true`;
+
+  // Идеально выверенная мутация
+  const query = `
+    mutation ScrapeTarget($target: String!) {
+      goto(url: $target, waitUntil: networkIdle) { status }
+      text(selector: "body") { text }
+    }
+  `;
 
   try {
     const response = await axios.post(
       endpoint,
-      { url: url }, // Просто кидаем URL, никаких сложных GraphQL-запросов
+      {
+        query: query,
+        variables: { target: url }
+      },
       { 
         headers: { 'Content-Type': 'application/json' },
-        timeout: 60_000 
+        timeout: 45000 // Даем браузеру время отрендерить React/Vue
       }
     );
 
-    // Получили сырой HTML
-    const html = response.data;
+    // Вытаскиваем текст
+    const rawText = response.data?.data?.text?.text || '';
     
-    // Чистим его локально через Cheerio
-    const $ = cheerio.load(html);
-    $('script, style, svg, nav, footer, header, noscript, iframe').remove();
-    
-    let cleanText = $('body').text().replace(/\s+/g, ' ').trim();
+    // Схлопываем все переносы и гигантские пробелы в один
+    const cleanText = rawText.replace(/\s+/g, ' ').trim();
 
     if (!cleanText) {
-      return 'Текст на странице не найден или страница пуста после рендера.';
+      return 'Текст на странице не найден или контент заблокирован.';
     }
 
+    // Режем до 15к символов, чтобы не взорвать контекст Gemini 
+    // (весь мусор из футеров обычно отсекается)
     return cleanText.slice(0, 15000);
 
   } catch (error: any) {
-    // Выводим РЕАЛЬНУЮ ошибку от Browserless, а не просто "404"
+    // Если упадет, выведет нормальную ошибку
     const errorDetails = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-    console.error('Browserless Error:', errorDetails);
-    return `Ошибка при чтении страницы: ${error.response?.status} - ${errorDetails}`;
+    console.error('Browserless BQL Error:', errorDetails);
+    return `Ошибка при чтении страницы: ${error.message}`;
   }
 };
