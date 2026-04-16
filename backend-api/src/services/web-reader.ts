@@ -25,7 +25,9 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
   // Идеально выверенная мутация
   const query = `
     mutation ScrapeTarget($target: String!) {
+      reject(type: [image, media, stylesheet, font]) { status }
       goto(url: $target, waitUntil: networkIdle) { status }
+      solve(wait: true) { status }
       text(selector: "body") { text }
     }
   `;
