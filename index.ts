@@ -3495,14 +3495,13 @@ const runScheduledAiInstructionTask = async (task: TaskRecord) => {
 
     const result = await processUserTextThroughAi(fakeCtx as any, instruction, {
         forcePro: true,
-        suppressFinalReply: true,
         ignoreDailyLimit: true,
         countAsUserMessage: false,
         skipHistory: true,
         persistUserText: `[AI-инструкция по расписанию] ${instruction}`
     });
 
-    return result || 'AI-инструкция выполнена без текстового результата.';
+    return (result || '').trim();
 };
 const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
     const safeLength = Math.max(0, messageLength);
@@ -6797,10 +6796,13 @@ setInterval(async () => {
                 successMessage = await runScheduledEmailCheckTask(task);
             } else if (task.task_type === 'ai_instruction') {
                 const result = await runScheduledAiInstructionTask(task);
-                successMessage = `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}`;
+                successMessage = result
+                    ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}`
+                    : '';
             }
 
             if (successMessage && await shouldNotifyTaskResult(task, successMessage)) {
+                console.log(`Планировщик: отправка уведомления по задаче #${task.id} (${task.task_type}, notify_mode=${task.notify_mode})`);
                 await safeSendToUser(task.user_id, successMessage);
             }
 
