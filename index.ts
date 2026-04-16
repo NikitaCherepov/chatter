@@ -526,6 +526,55 @@ const MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flas
 const MODEL_NAME = MODEL_CHAIN[0];
 const LITE_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite']);
 const LITE_MODEL_NAME = LITE_MODEL_CHAIN[0];
+type LiteEndpointProvider = {
+    name: string;
+    baseURL: string;
+    modelChain: string[];
+    client: OpenAI;
+};
+const parseLiteEndpointProviders = () => {
+    const defaultBaseUrl = (process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
+    const defaultApiKey = (process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
+    const providers: LiteEndpointProvider[] = [];
+    const raw = (process.env.TIMEWEB_LITE_ENDPOINTS || '').trim();
+
+    if (!raw) {
+        if (defaultBaseUrl && defaultApiKey) {
+            providers.push({
+                name: 'lite-1',
+                baseURL: defaultBaseUrl,
+                modelChain: LITE_MODEL_CHAIN,
+                client: new OpenAI({ apiKey: defaultApiKey, baseURL: defaultBaseUrl })
+            });
+        }
+        return providers;
+    }
+
+    const chunks = raw
+        .split(';')
+        .map(v => v.trim())
+        .filter(Boolean);
+
+    for (let i = 0; i < chunks.length; i += 1) {
+        const [baseRaw, keyRaw, modelsRaw] = chunks[i].split('|').map(v => `${v || ''}`.trim());
+        const baseURL = baseRaw || defaultBaseUrl;
+        const apiKey = keyRaw || defaultApiKey;
+        const modelChain = parseModelChain(modelsRaw, LITE_MODEL_CHAIN);
+        if (!baseURL || !apiKey || !modelChain.length) continue;
+        providers.push({
+            name: `lite-${i + 1}`,
+            baseURL,
+            modelChain,
+            client: new OpenAI({ apiKey, baseURL })
+        });
+    }
+
+    return providers;
+};
+const LITE_ENDPOINT_PROVIDERS = parseLiteEndpointProviders();
+if (!LITE_ENDPOINT_PROVIDERS.length) {
+    throw new Error('Не удалось инициализировать LITE endpoint/providers. Проверь TIMEWEB_LITE_* в .env');
+}
 const MODEL_RETRY_SECONDS = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRY_SECONDS || '3').trim(), 10) || 3);
 const MODEL_RETRIES_PER_MODEL = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRIES_PER_MODEL || '1').trim(), 10) || 1);
 const AUTO_SYNC_PLAN_LIMITS_ON_BOOT = process.env.AUTO_SYNC_PLAN_LIMITS_ON_BOOT === '1';
@@ -1454,6 +1503,53 @@ const createChatCompletionWithFallback = async (
 
     throw Object.assign(new Error('Все модели из цепочки недоступны.'), {
         cause: lastError,
+        failedModels
+    });
+};
+
+const createLiteChatCompletionWithProviderFallback = async (
+    requestBody: Record<string, unknown>,
+    retriesPerModel = MODEL_RETRIES_PER_MODEL,
+    retrySeconds = MODEL_RETRY_SECONDS
+) => {
+    const failedProviders: string[] = [];
+    const failedModels: string[] = [];
+    let lastError: unknown = null;
+
+    for (const provider of LITE_ENDPOINT_PROVIDERS) {
+        try {
+            const completion = await createChatCompletionWithFallback(
+                provider.client,
+                provider.modelChain,
+                requestBody,
+                retriesPerModel,
+                retrySeconds
+            );
+            if (completion.failedModels.length) {
+                failedModels.push(...completion.failedModels.map(model => `${provider.name}:${model}`));
+            }
+            return {
+                response: completion.response,
+                modelUsed: completion.modelUsed,
+                providerUsed: provider.name,
+                baseURLUsed: provider.baseURL,
+                failedProviders,
+                failedModels
+            };
+        } catch (err: any) {
+            lastError = err;
+            failedProviders.push(provider.name);
+            const providerFailedModels = Array.isArray(err?.failedModels)
+                ? err.failedModels.map((model: string) => `${provider.name}:${model}`)
+                : [];
+            failedModels.push(...providerFailedModels);
+            continue;
+        }
+    }
+
+    throw Object.assign(new Error('Все LITE endpoint/providers недоступны.'), {
+        cause: lastError,
+        failedProviders,
         failedModels
     });
 };
@@ -6330,19 +6426,24 @@ PRO
 
             if (!hasSchedulingIntent) {
                 try {
-                    const routerResponse = await aiLite.chat.completions.create({
-                        model: LITE_MODEL_NAME,
+                    const liteRouterCompletion = await createLiteChatCompletionWithProviderFallback({
                         messages: [{ role: 'user', content: routerPrompt }],
                         temperature: 0,
                         max_tokens: 8,
                         thinking: { type: 'disabled' }
-                    } as any);
+                    });
+                    const routerResponse = liteRouterCompletion.response;
                     if (DEBUG_AI_RAW_LITE_RESPONSE) {
                         try {
                             console.log('[DEBUG_AI_RAW_LITE_RESPONSE][router]', JSON.stringify(routerResponse, null, 2));
                         } catch (err) {
                             console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][router] Не удалось сериализовать ответ:', err);
                         }
+                    }
+                    if (liteRouterCompletion.failedProviders.length || liteRouterCompletion.failedModels.length) {
+                        console.warn(
+                            `[LITE router fallback] providers_failed=${liteRouterCompletion.failedProviders.join(',') || '-'} models_failed=${liteRouterCompletion.failedModels.join(',') || '-'} used=${liteRouterCompletion.providerUsed}/${liteRouterCompletion.modelUsed} (${liteRouterCompletion.baseURLUsed})`
+                        );
                     }
                     totalTokensForTurn += extractTotalTokens(routerResponse);
                     const rawRoute = `${routerResponse.choices[0]?.message?.content || ''}`.toUpperCase();
@@ -6409,6 +6510,14 @@ PRO
                 if (!modelFallbackNoticeSent && completion.failedModels.length > 0) {
                     modelFallbackNoticeSent = true;
                     await ctx.reply(`⚙️ Модель(и) ${completion.failedModels.join(', ')} были недоступны. Ответ получен от ${completion.modelUsed}.`);
+                }
+            } else if (executionModelClient === aiLite) {
+                const completion = await createLiteChatCompletionWithProviderFallback(requestPayload);
+                response = completion.response;
+                if (completion.failedProviders.length || completion.failedModels.length) {
+                    console.warn(
+                        `[LITE main fallback] providers_failed=${completion.failedProviders.join(',') || '-'} models_failed=${completion.failedModels.join(',') || '-'} used=${completion.providerUsed}/${completion.modelUsed} (${completion.baseURLUsed})`
+                    );
                 }
             } else {
                 response = await executionModelClient.chat.completions.create({
