@@ -1,0 +1,72 @@
+﻿export type UserPlan = 'free' | 'standart' | 'pro';
+export type ChatRole = 'user' | 'assistant';
+export type TaskStatus = 'pending' | 'done' | 'error';
+export type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check' | 'ai_instruction';
+export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
+export type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
+
+export type UserRecord = {
+  id: number;
+  name: string | null;
+  role: string;
+  status: 'none' | 'approved' | 'disapproved' | 'banned';
+  plan: UserPlan;
+  tg_username: string | null;
+  selected_prompt_id: number | null;
+  custom_prompt_content: string | null;
+  core_memory: string | null;
+  context_window: number;
+  context_window_max: number;
+  daily_message_count: number;
+  daily_message_limit: number;
+};
+
+export type ChatDto = {
+  id: number;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  is_active: boolean;
+};
+
+export type MessageDto = {
+  id: number;
+  chat_id: number;
+  role: ChatRole;
+  content: string;
+  created_at: number;
+};
+
+export type NoteDto = {
+  id: number;
+  title: string;
+  content: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export type TaskDto = {
+  id: number;
+  execute_at: number;
+  task_type: TaskType;
+  payload: string;
+  status: TaskStatus;
+  recurrence_type: TaskRecurrenceType;
+  recurrence_weekday: number | null;
+  timezone_offset: number | null;
+  notify_mode: TaskNotifyMode;
+  notify_condition: string | null;
+};
+
+export type UsageDto = {
+  tokens_used: number;
+  used_model: string;
+  used_provider: string;
+};
+
+export type AiSendResult = {
+  reply_text: string;
+  chat_id: number;
+  message_id: number;
+  usage: UsageDto;
+};

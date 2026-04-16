@@ -1,0 +1,193 @@
+﻿import express from 'express';
+import dotenv from 'dotenv';
+import { authMiddleware, issueAuthTokens, refreshAccessToken, validateTelegramInitData, type AuthedRequest } from './auth.js';
+import { activateUserChat, createUserChat, ensureActiveChat, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
+import { createNote, countNotes, deleteNote, listNotes } from './services/notes.js';
+import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
+import { sendMessageThroughAi } from './services/ai.js';
+
+dotenv.config();
+
+const app = express();
+const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
+
+app.use(express.json({ limit: '1mb' }));
+
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'backend-api', now: Math.floor(Date.now() / 1000) });
+});
+
+app.post('/api/v1/auth/telegram', (req, res) => {
+  const initData = `${req.body?.initData || ''}`.trim();
+  if (!initData) return res.status(400).json({ error: 'initData_required' });
+
+  const validated = validateTelegramInitData(initData);
+  if (!validated.ok) return res.status(401).json({ error: 'invalid_init_data', reason: validated.reason });
+
+  const user = validated.user;
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
+  upsertUserFromTelegram(user.id, user.username || null, fullName);
+
+  const userRecord = getUserById(user.id);
+  if (!userRecord) return res.status(500).json({ error: 'user_create_failed' });
+  if (userRecord.status !== 'approved' && userRecord.role !== 'admin') {
+    return res.status(403).json({ error: 'access_not_approved', status: userRecord.status });
+  }
+
+  const tokens = issueAuthTokens(user.id);
+  return res.json({
+    ...tokens,
+    user: {
+      id: userRecord.id,
+      name: userRecord.name,
+      username: userRecord.tg_username,
+      role: userRecord.role,
+      plan: userRecord.plan
+    }
+  });
+});
+
+app.post('/api/v1/auth/refresh', (req, res) => {
+  const refresh = `${req.body?.refresh_token || ''}`.trim();
+  if (!refresh) return res.status(400).json({ error: 'refresh_token_required' });
+  const tokens = refreshAccessToken(refresh);
+  if (!tokens) return res.status(401).json({ error: 'invalid_refresh_token' });
+  return res.json(tokens);
+});
+
+app.use('/api/v1', authMiddleware);
+
+app.get('/api/v1/chats', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const chats = listUserChats(userId);
+  const activeChatId = ensureActiveChat(userId);
+  res.json({ chats, active_chat_id: activeChatId });
+});
+
+app.post('/api/v1/chats', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const title = `${req.body?.title || ''}`;
+  const chatId = createUserChat(userId, title);
+  res.status(201).json({ chat_id: chatId });
+});
+
+app.post('/api/v1/chats/:id/activate', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const ok = activateUserChat(userId, chatId);
+  if (!ok) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ ok: true, active_chat_id: chatId });
+});
+
+app.get('/api/v1/chats/:id/messages', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
+  const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
+  const messages = getChatMessages(userId, chatId, limit, offset);
+  res.json({ messages, limit: Math.max(1, Math.min(100, limit || 20)), offset: Math.max(0, offset || 0) });
+});
+
+app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const text = `${req.body?.text || ''}`;
+  const chatIdRaw = req.body?.chat_id;
+  const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
+
+  try {
+    const result = await sendMessageThroughAi(userId, text, chatId);
+    res.json(result);
+  } catch (err: any) {
+    const code = `${err?.message || 'ai_send_failed'}`;
+    if (code === 'user_not_approved') return res.status(403).json({ error: code });
+    if (code === 'empty_text') return res.status(400).json({ error: code });
+    if (code === 'user_not_found') return res.status(404).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
+app.get('/api/v1/notes', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
+  const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
+  const query = `${req.query.query || ''}`;
+  const notes = listNotes(userId, limit, offset, query);
+  const total = countNotes(userId, query);
+  res.json({ notes, total, limit: Math.max(1, Math.min(50, limit || 20)), offset: Math.max(0, offset || 0) });
+});
+
+app.post('/api/v1/notes', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const title = `${req.body?.title || ''}`;
+  const content = `${req.body?.content || ''}`;
+
+  const created = createNote(userId, user.plan, title, content);
+  if (!created.ok) {
+    if (created.error === 'content_required') return res.status(400).json({ error: created.error });
+    if (created.error === 'title_too_long' || created.error === 'content_too_long' || created.error === 'notes_limit') return res.status(422).json({ error: created.error });
+    return res.status(400).json({ error: created.error });
+  }
+  return res.status(201).json({ note_id: created.id });
+});
+
+app.delete('/api/v1/notes/:id', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const noteId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_note_id' });
+  const ok = deleteNote(userId, noteId);
+  if (!ok) return res.status(404).json({ error: 'note_not_found' });
+  return res.json({ ok: true });
+});
+
+app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const statusRaw = `${req.query.status || 'pending'}` as 'pending' | 'done' | 'error' | 'all';
+  const status = ['pending', 'done', 'error', 'all'].includes(statusRaw) ? statusRaw : 'pending';
+  const limit = Number.parseInt(`${req.query.limit || '50'}`, 10);
+  const tasks = listTasks(userId, limit, status);
+  res.json({ tasks });
+});
+
+app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const executeAt = Number(req.body?.execute_at);
+  const taskType = `${req.body?.task_type || ''}` as any;
+  const payload = `${req.body?.payload || ''}`;
+  const recurrenceType = `${req.body?.recurrence_type || 'once'}` as any;
+  const recurrenceWeekday = Number.isFinite(Number(req.body?.recurrence_weekday))
+    ? Math.floor(Number(req.body?.recurrence_weekday))
+    : null;
+  const timezoneOffset = Number.isFinite(Number(req.body?.timezone_offset))
+    ? Math.floor(Number(req.body?.timezone_offset))
+    : null;
+  const notifyMode = `${req.body?.notify_mode || 'always'}` as any;
+  const notifyCondition = req.body?.notify_condition == null ? null : `${req.body.notify_condition}`;
+
+  if (!Number.isFinite(executeAt) || executeAt <= 0) return res.status(400).json({ error: 'bad_execute_at' });
+  if (!payload.trim()) return res.status(400).json({ error: 'payload_required' });
+
+  const taskId = createTask(userId, Math.floor(executeAt), taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, notifyMode, notifyCondition);
+  return res.status(201).json({ task_id: taskId });
+});
+
+app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const taskId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_task_id' });
+  const ok = deletePendingTask(userId, taskId);
+  if (!ok) return res.status(404).json({ error: 'task_not_found_or_not_pending' });
+  return res.json({ ok: true });
+});
+
+app.use((err: any, _req: any, res: any, _next: any) => {
+  console.error('API error:', err);
+  res.status(500).json({ error: 'internal_error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`[backend-api] started on :${PORT}`);
+});

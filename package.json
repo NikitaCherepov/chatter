@@ -3,11 +3,17 @@
   "version": "1.0.0",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:api": "tsc -p backend-api/tsconfig.json",
     "dev": "tsx index.ts",
+    "dev:api": "tsx backend-api/src/server.ts",
     "start": "pm2 start index.ts --interpreter tsx --name chatter",
+    "start:api": "pm2 start backend-api/src/server.ts --interpreter tsx --name chatter-api",
     "restart": "pm2 restart chatter --update-env",
+    "restart:api": "pm2 restart chatter-api --update-env",
     "stop": "pm2 stop chatter",
-    "logs": "pm2 logs chatter"
+    "stop:api": "pm2 stop chatter-api",
+    "logs": "pm2 logs chatter",
+    "logs:api": "pm2 logs chatter-api"
   },
   "dependencies": {
     "@tavily/core": "latest",
