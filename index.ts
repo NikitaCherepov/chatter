@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
 import crypto from 'crypto';
 import axios from 'axios';
-import { toolDefinitions } from './backend-api/src/services/ai.ts';
+import path from 'path';
 
 dotenv.config();
 
@@ -815,7 +815,6 @@ const SMART_HOME_DEVICE_OPTIONS_TEXT = SMART_HOME_DEVICE_NAMES.length
     : 'не настроены (добавь SMART_HOME_DEVICE_* в .env)';
 const canUserControlSmartHome = (userId: number) => ADMIN_IDS.has(userId) || SMART_HOME_ALLOWED_IDS.has(userId);
 
-const tools = toolDefinitions as unknown as any[];
 const legacyTools = [
     {
         type: 'function',
@@ -1216,6 +1215,28 @@ const legacyTools = [
         }
     }
 ] as const;
+const loadSharedToolDefinitions = (): any[] | null => {
+    const candidates = [
+        path.join(process.cwd(), 'backend-api', 'dist', 'services', 'ai.js'),
+        path.join(process.cwd(), 'backend-api', 'src', 'services', 'ai.ts')
+    ];
+
+    for (const absolutePath of candidates) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const imported = require(absolutePath) as { toolDefinitions?: unknown };
+            if (Array.isArray(imported?.toolDefinitions)) {
+                console.log(`[tools] Использую toolDefinitions из ${absolutePath}`);
+                return imported.toolDefinitions as any[];
+            }
+        } catch {
+            // ignore candidate and continue
+        }
+    }
+
+    return null;
+};
+const tools = (loadSharedToolDefinitions() ?? legacyTools) as unknown as any[];
 const ESCALATE_TO_PRO_TOOL = {
     type: 'function',
     function: {
