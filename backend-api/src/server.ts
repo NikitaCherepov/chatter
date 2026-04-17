@@ -8,6 +8,7 @@ import { sendMessageThroughAi } from './services/ai.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
+import { runVoiceTurn } from './services/voice.js';
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ const app = express();
 const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
 const BACKEND_INTERNAL_TOKEN = `${process.env.BACKEND_INTERNAL_TOKEN || ''}`.trim();
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'backend-api', now: Math.floor(Date.now() / 1000) });
@@ -28,6 +29,8 @@ const internalAuth = (req: any, res: any, next: any) => {
   if (token !== BACKEND_INTERNAL_TOKEN) return res.status(401).json({ error: 'unauthorized_internal' });
   next();
 };
+
+const BACKEND_VOICE_API_ENABLED = `${process.env.BACKEND_VOICE_API_ENABLED || '0'}`.trim() === '1';
 
 app.post('/internal/tools/read_url', internalAuth, async (req, res) => {
   const url = `${req.body?.url || ''}`.trim();
@@ -89,6 +92,44 @@ app.post('/internal/messages/bind-telegram', internalAuth, (req, res) => {
   const result = bindChatMessageTelegramMeta(Math.floor(userId), Math.floor(messageId), telegramChatId, telegramMessageId);
   if (!result.changes) return res.status(404).json({ error: 'message_not_found' });
   return res.json({ ok: true });
+});
+
+app.post('/internal/voice/turn', internalAuth, async (req, res) => {
+  if (!BACKEND_VOICE_API_ENABLED) {
+    return res.status(503).json({ error: 'backend_voice_api_disabled' });
+  }
+
+  const userId = Number(req.body?.user_id);
+  const audioBase64 = `${req.body?.audio_base64 || ''}`;
+  const mimeType = `${req.body?.mime_type || 'audio/ogg'}`;
+  const chatIdRaw = req.body?.chat_id;
+  const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
+  const optionsRaw = req.body?.options || {};
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!audioBase64.trim()) return res.status(400).json({ error: 'empty_audio' });
+
+  try {
+    const result = await runVoiceTurn(
+      Math.floor(userId),
+      audioBase64,
+      mimeType,
+      chatId,
+      {
+        userTelegramChatId: Number.isFinite(Number(optionsRaw.userTelegramChatId)) ? Math.floor(Number(optionsRaw.userTelegramChatId)) : null,
+        userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null,
+        assistantTelegramChatId: Number.isFinite(Number(optionsRaw.assistantTelegramChatId)) ? Math.floor(Number(optionsRaw.assistantTelegramChatId)) : null
+      }
+    );
+    return res.json(result);
+  } catch (err: any) {
+    const code = `${err?.message || 'voice_turn_failed'}`;
+    if (code === 'user_not_approved') return res.status(403).json({ error: code });
+    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
+    if (code === 'empty_audio') return res.status(400).json({ error: code });
+    if (code === 'user_not_found') return res.status(404).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
 });
 
 app.post('/api/v1/auth/register', (req, res) => {

@@ -631,6 +631,7 @@ const getVoiceSynthesisUrl = () => (VOICE_TTS_ENGINE === 'silero' ? VOICE_SILERO
 const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:3050').trim().replace(/\/$/, '');
 const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim();
 const BOT_USE_BACKEND_AI = (process.env.BOT_USE_BACKEND_AI || '1').trim() !== '0';
+const BOT_USE_BACKEND_VOICE = (process.env.BOT_USE_BACKEND_VOICE || '0').trim() === '1';
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -2361,6 +2362,54 @@ const runBackendAiSend = async (
             used_model?: string;
             used_provider?: string;
         };
+    };
+};
+
+const runBackendVoiceTurn = async (
+    userId: number,
+    audioBuffer: Buffer,
+    mimeType: string,
+    options?: {
+        chatId?: number;
+        userTelegramChatId?: number | null;
+        userTelegramMessageId?: number | null;
+        assistantTelegramChatId?: number | null;
+    }
+) => {
+    if (!BACKEND_INTERNAL_TOKEN) {
+        throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    }
+    const response = await axios.post(
+        `${BACKEND_API_BASE_URL}/internal/voice/turn`,
+        {
+            user_id: userId,
+            audio_base64: audioBuffer.toString('base64'),
+            mime_type: mimeType || 'audio/ogg',
+            chat_id: Number.isFinite(Number(options?.chatId)) ? Math.floor(Number(options?.chatId)) : undefined,
+            options: {
+                userTelegramChatId: Number.isFinite(Number(options?.userTelegramChatId)) ? Math.floor(Number(options?.userTelegramChatId)) : null,
+                userTelegramMessageId: Number.isFinite(Number(options?.userTelegramMessageId)) ? Math.floor(Number(options?.userTelegramMessageId)) : null,
+                assistantTelegramChatId: Number.isFinite(Number(options?.assistantTelegramChatId)) ? Math.floor(Number(options?.assistantTelegramChatId)) : null
+            }
+        },
+        {
+            headers: {
+                Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+            },
+            timeout: 180000,
+            maxBodyLength: Infinity
+        }
+    );
+
+    return response.data as {
+        recognized_text?: string;
+        reply_text?: string;
+        voice_audio_base64?: string | null;
+        voice_mime_type?: string | null;
+        voice_error?: string | null;
+        model_fallback_notice?: string | null;
+        tool_user_messages?: string[];
+        message_id?: number | null;
     };
 };
 
@@ -7278,8 +7327,72 @@ bot.on('voice', async (ctx) => {
         }
 
         const audioBuffer = await response.arrayBuffer();
-        const formData = new FormData();
         const mimeType = voice.mime_type || 'audio/ogg';
+        if (BOT_USE_BACKEND_VOICE) {
+            const userId = Math.floor(Number(ctx.from.id));
+            const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
+            const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
+
+            const backend = await runBackendVoiceTurn(userId, Buffer.from(audioBuffer), mimeType, {
+                chatId: undefined,
+                userTelegramChatId: userChatId,
+                userTelegramMessageId: userMessageId,
+                assistantTelegramChatId: userChatId
+            });
+
+            const text = typeof backend?.recognized_text === 'string' ? backend.recognized_text.trim() : '';
+            if (!text) {
+                await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, '🗣 Ничего не расслышал.');
+                return;
+            }
+
+            await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, `🗣 Распознано:\n${text}`);
+
+            if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length) {
+                for (const message of backend.tool_user_messages) {
+                    const trimmed = typeof message === 'string' ? message.trim() : '';
+                    if (trimmed) {
+                        await ctx.reply(trimmed);
+                    }
+                }
+            }
+
+            if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
+                await ctx.reply(backend.model_fallback_notice.trim());
+            }
+
+            const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
+                ? backend.reply_text.trim()
+                : FALLBACK_ANSWER;
+            const sentTextMessage = await safeReply(ctx, assistantText);
+
+            const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
+                ? Math.floor(Number(backend?.message_id))
+                : null;
+            const assistantTgMessageId = Number.isFinite(Number(sentTextMessage?.message_id))
+                ? Math.floor(Number(sentTextMessage?.message_id))
+                : null;
+            if (backendAssistantMessageId) {
+                try {
+                    await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
+                } catch (bindErr) {
+                    console.warn('Не удалось привязать telegram_message_id к backend voice сообщению:', bindErr);
+                }
+            }
+
+            const voiceAudioBase64 = typeof backend?.voice_audio_base64 === 'string' ? backend.voice_audio_base64.trim() : '';
+            if (voiceAudioBase64) {
+                const voiceBuffer = Buffer.from(voiceAudioBase64, 'base64');
+                if (voiceBuffer.length) {
+                    await ctx.replyWithVoice({ source: voiceBuffer });
+                }
+            } else if (typeof backend?.voice_error === 'string' && backend.voice_error.trim()) {
+                console.warn('Ошибка генерации голоса на backend:', backend.voice_error);
+            }
+            return;
+        }
+
+        const formData = new FormData();
         formData.append('audio', new Blob([audioBuffer], { type: mimeType }), 'voice.ogg');
 
         const headers: Record<string, string> = {};
