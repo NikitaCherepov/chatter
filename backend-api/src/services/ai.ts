@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
 import type { AiSendResult, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
@@ -8,6 +8,7 @@ import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from '.
 import { runSmartHomeControl, type SmartHomeArgs, SMART_HOME_DEVICE_OPTIONS_TEXT } from './smart-home.js';
 import { runEmailCheck, runEmailRead, runEmailSend } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
+import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
 import { db } from '../db.js';
 
@@ -722,6 +723,50 @@ const toolDefinitions = [
       }
     }
   },
+{
+    type: 'function',
+    function: {
+      name: 'search_cold_memory',
+      description: 'Поиск по архиву. Вызывай автономно, если для качественного ответа не хватает прошлых знаний (старый код, лор проектов, детали бесед), или по прямой просьбе.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Точный поисковый запрос (например: "Сюжет D&D", "настройки Nginx").' },
+          top_k: { type: 'number', description: 'Количество фрагментов от 3 до 8 (обычно 5).' }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_to_cold_memory',
+      description: 'Сохраняет объемную суть, код или идеи в архив. Вызывай автономно при генерации чего-то важного.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Самодостаточная выжимка. СТРОГО без размытых местоимений (он/это). Используй конкретные имена и названия, чтобы текст был понятен сам по себе.' },
+          source: { type: 'string', description: 'Короткий тег (например: "D&D лор", "React код").' }
+        },
+        required: ['text', 'source']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_from_cold_memory',
+      description: 'Удаляет фрагмент из архива по ID. Строго используй search_cold_memory перед удалением, чтобы найти этот ID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chunk_id: { type: 'string', description: 'Точный ID из результатов поиска (например: fact_123_chunk_0).' }
+        },
+        required: ['chunk_id']
+      }
+    }
+  },
   {
     type: 'function',
     function: {
@@ -894,6 +939,24 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
 
   if (toolName === 'read_email_content') return runEmailRead(user.id, typeof parsed.subject_part === 'string' ? parsed.subject_part : '', typeof parsed.provider === 'string' ? parsed.provider : '');
   if (toolName === 'send_email') return runEmailSend(user.id, typeof parsed.to === 'string' ? parsed.to : '', typeof parsed.subject === 'string' ? parsed.subject : '', typeof parsed.body === 'string' ? parsed.body : '', typeof parsed.provider === 'string' ? parsed.provider : '');
+  if (toolName === 'search_cold_memory') {
+    const query = typeof parsed.query === 'string' ? parsed.query : '';
+    const topK = Number.isFinite(Number(parsed.top_k)) ? Number(parsed.top_k) : 5;
+    const result = await VectorMemoryService.search(user.id, query, topK);
+    if (!result.matches.length) return `По запросу "${query}" в памяти ничего не найдено.`;
+    return `Найдено в архиве:\n${result.text}`;
+  }
+  if (toolName === 'save_to_cold_memory') {
+    const textToSave = typeof parsed.text === 'string' ? parsed.text : '';
+    const source = typeof parsed.source === 'string' ? parsed.source : 'manual';
+    const result = await VectorMemoryService.saveFactBatched(user.id, textToSave, source);
+    return `Успешно сохранено в архив (${result.chunks_saved} фрагментов).`;
+  }
+  if (toolName === 'delete_from_cold_memory') {
+    const chunkId = typeof parsed.chunk_id === 'string' ? parsed.chunk_id : '';
+    await VectorMemoryService.deleteChunk(user.id, chunkId);
+    return `Фрагмент [${chunkId}] успешно удален из памяти.`;
+  }
   if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
 
   return `Ошибка: неизвестный инструмент ${toolName}`;
@@ -953,12 +1016,12 @@ export const sendMessageThroughAi = async (
   const contextWindow = resolveEffectiveContextWindow(user);
   const history = getHistoryForAi(userId, chatId, contextWindow);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
-  const baseSystemPrompt = `${buildSystemPrompt(getPromptForUser(user), user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}`;
+  const proSystemPrompt = `${buildSystemPrompt(getPromptForUser(user), user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}`;
 
   let executionMode: 'pro' | 'lite' = 'pro';
   let executionTools: any[] = [...toolDefinitions] as any[];
   let executionHistory = history;
-  let executionSystemPrompt = baseSystemPrompt;
+  let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
 
 if (!forceProRoute) {
@@ -1135,7 +1198,7 @@ for (const toolCall of message.tool_calls) {
     executionTools = [...toolDefinitions] as any[];
     currentMessages.length = 0;
     currentMessages.push(
-      { role: 'system', content: baseSystemPrompt },
+      { role: 'system', content: proSystemPrompt },
       ...history,
       { role: 'user', content: originalQuery }
     );
