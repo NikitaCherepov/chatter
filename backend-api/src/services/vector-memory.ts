@@ -145,7 +145,7 @@ export class VectorMemoryService {
           id: `${baseId}_chunk_${index}`,
           values,
           metadata: {
-            text: chunks[index] || '',
+            text: inputForEmbeddings[index] || '',
             source: safeSource,
             timestamp: now,
             chunk_index: index,
