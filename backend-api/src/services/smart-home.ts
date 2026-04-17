@@ -82,6 +82,11 @@ const SMART_HOME_DEVICES: Record<string, string[]> = (() => {
   return devices;
 })();
 
+const SMART_HOME_DEVICE_NAMES = Object.keys(SMART_HOME_DEVICES);
+export const SMART_HOME_DEVICE_OPTIONS_TEXT = SMART_HOME_DEVICE_NAMES.length
+  ? SMART_HOME_DEVICE_NAMES.join(', ')
+  : 'не настроены (добавь SMART_HOME_DEVICE_* в .env)';
+
 type SmartHomeAction = 'on' | 'off' | 'set_color' | 'set_brightness';
 export type SmartHomeArgs = {
   device_name?: string;

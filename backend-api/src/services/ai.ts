@@ -492,6 +492,38 @@ const toolDefinitions = [
   { type: 'function', function: { name: 'update_core_memory', description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важных биографических фактов (возраст, профессия, семья, переезд, устойчивые долгосрочные предпочтения). Не используй для рутины или одноразовых событий. Для записей в блокнот используй save_note.', parameters: { type: 'object', properties: { new_fact: { type: 'string' }, explicit_request: { type: 'boolean' } }, required: ['new_fact'] } } },
   { type: 'function', function: { name: 'random_roll', description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Используй для запросов "подбрось монетку/брось кубик/случайный результат". Для кубиков поддерживает обычный режим, преимущество и помеху.', parameters: { type: 'object', properties: { roll_type: { type: 'string', enum: ['coin', 'dice'] }, dice_notation: { type: 'string' }, mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'] } }, required: ['roll_type'] } } }
 ] as const;
+const LITE_ROUTER_INSTRUCTIONS = `
+Ты — быстрый ассистент-диспетчер.
+Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
+
+ПРАВИЛО ЭСКАЛАЦИИ:
+если запрос сложный (творчество, глубокий анализ, длинная структурированная расшифровка, программирование, большой текст, почта, заметки, память, планирование, многошаговая задача),
+ты ОБЯЗАН немедленно вызвать инструмент escalate_to_pro и передать исходный запрос пользователя в original_query.
+`;
+
+const ESCALATE_TO_PRO_TOOL = {
+  type: 'function',
+  function: {
+    name: 'escalate_to_pro',
+    description: 'Используй ТОЛЬКО если запрос требует глубокого анализа, творческого мышления, сложного структурирования, написания кода или длинного рассказа. Передай исходный запрос пользователя.',
+    parameters: {
+      type: 'object',
+      properties: {
+        original_query: {
+          type: 'string',
+          description: 'Изначальный запрос пользователя для передачи в старшую модель.'
+        }
+      },
+      required: ['original_query']
+    }
+  }
+} as const;
+
+const buildLiteExecutionTools = (allowedToolNames: string[]) => {
+  const allowed = new Set(allowedToolNames);
+  const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
+  return [...filtered, ESCALATE_TO_PRO_TOOL as any];
+};
 const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string, unknown>): Promise<CompletionMeta> => {
   if (mode === 'pro') {
     const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload);
@@ -682,8 +714,8 @@ export const sendMessageThroughAi = async (
   let executionSystemPrompt = baseSystemPrompt;
   let totalTokens = 0;
 
-  if (!forceProRoute) {
-    const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
+if (!forceProRoute) {
+  const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
 Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
 
 [ПРОСТЫЕ КАТЕГОРИИ - не требуют истории чата]:
@@ -712,57 +744,71 @@ PRO
 ВАЖНО: если в запросе есть отложенное/регулярное действие по времени ("через ...", "завтра", "в 10:30", "напомни", "каждый день"), выбирай ТОЛЬКО PRO, даже если там есть погода/поиск.
 
 Запрос пользователя: "${text}"`;
-    type CheapRoute = 'SMART_HOME' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
-    const cheapMap: Record<Exclude<CheapRoute, 'PRO'>, string[]> = {
-      SMART_HOME: ['control_smart_home'],
-      QUICK_SEARCH: ['search_web'],
-      TIMEZONE: ['set_user_timezone'],
-      RANDOM: ['random_roll']
-    };
-    let routeLabel: CheapRoute = 'PRO';
-    if (!hasSchedulingIntent(text)) {
-      try {
-        const routed = await runCompletion('lite', { messages: [{ role: 'user', content: routerPrompt }], temperature: 0, max_tokens: 8, thinking: { type: 'disabled' } });
-        totalTokens += extractTokens(routed.response);
-        if (DEBUG_AI_RAW_LITE_RESPONSE) {
-          try {
-            console.log('[DEBUG_AI_RAW_LITE_RESPONSE][router]', JSON.stringify(routed.response, null, 2));
-          } catch (err) {
-            console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][router] serialization failed:', err);
-          }
-        }
-        if ((routed.failedProviders?.length || 0) > 0 || (routed.failedModels?.length || 0) > 0) {
-          console.warn(
-            `[LITE router fallback] providers_failed=${routed.failedProviders?.join(',') || '-'} models_failed=${routed.failedModels?.join(',') || '-'} used=${routed.usedProvider}/${routed.usedModel} (${routed.baseURLUsed || '-'})`
-          );
-        }
-        const rawRoute = `${routed.response?.choices?.[0]?.message?.content || ''}`.toUpperCase();
-        const matchedRoute = rawRoute.match(/\b(SMART_HOME|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
-        if (
-          matchedRoute?.[1] === 'SMART_HOME'
-          || matchedRoute?.[1] === 'QUICK_SEARCH'
-          || matchedRoute?.[1] === 'TIMEZONE'
-          || matchedRoute?.[1] === 'RANDOM'
-          || matchedRoute?.[1] === 'PRO'
-        ) {
-          routeLabel = matchedRoute[1];
-        }
-      } catch {
-        routeLabel = 'PRO';
-      }
-    }
 
-    if (routeLabel !== 'PRO') {
-      const allowedToolNames = cheapMap[routeLabel];
-      if (allowedToolNames.length) {
-        const allowed = new Set(allowedToolNames);
-        executionTools = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
-        executionHistory = [];
-        executionSystemPrompt = 'Ты ассистент. Выполни задачу пользователя, используя доступные функции. Отвечай максимально коротко.';
-        executionMode = 'lite';
+  type CheapRoute = 'SMART_HOME' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
+
+  const cheapMap: Record<Exclude<CheapRoute, 'PRO'>, string[]> = {
+    SMART_HOME: ['control_smart_home'],
+    QUICK_SEARCH: ['search_web'],
+    TIMEZONE: ['set_user_timezone'],
+    RANDOM: ['random_roll']
+  };
+
+  let routeLabel: CheapRoute = 'PRO';
+
+  if (!hasSchedulingIntent(text)) {
+    try {
+      const routed = await runCompletion('lite', {
+        messages: [{ role: 'user', content: routerPrompt }],
+        temperature: 0,
+        max_tokens: 8,
+        thinking: { type: 'disabled' }
+      });
+
+      totalTokens += extractTokens(routed.response);
+
+      if (DEBUG_AI_RAW_LITE_RESPONSE) {
+        try {
+          console.log('[DEBUG_AI_RAW_LITE_RESPONSE][router]', JSON.stringify(routed.response, null, 2));
+        } catch (err) {
+          console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][router] serialization failed:', err);
+        }
       }
+
+      if ((routed.failedProviders?.length || 0) > 0 || (routed.failedModels?.length || 0) > 0) {
+        console.warn(
+          `[LITE router fallback] providers_failed=${routed.failedProviders?.join(',') || '-'} models_failed=${routed.failedModels?.join(',') || '-'} used=${routed.usedProvider}/${routed.usedModel} (${routed.baseURLUsed || '-'})`
+        );
+      }
+
+      const rawRoute = `${routed.response?.choices?.[0]?.message?.content || ''}`.toUpperCase();
+      const matchedRoute = rawRoute.match(/\b(SMART_HOME|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
+
+      if (
+        matchedRoute?.[1] === 'SMART_HOME'
+        || matchedRoute?.[1] === 'QUICK_SEARCH'
+        || matchedRoute?.[1] === 'TIMEZONE'
+        || matchedRoute?.[1] === 'RANDOM'
+        || matchedRoute?.[1] === 'PRO'
+      ) {
+        routeLabel = matchedRoute[1];
+      }
+    } catch {
+      routeLabel = 'PRO';
     }
   }
+
+  if (routeLabel !== 'PRO') {
+    const allowedToolNames = cheapMap[routeLabel];
+
+    if (allowedToolNames.length) {
+      executionTools = buildLiteExecutionTools(allowedToolNames);
+      executionHistory = [];
+      executionSystemPrompt = `${LITE_ROUTER_INSTRUCTIONS}${buildTimeContext(timezone)}`;
+      executionMode = 'lite';
+    }
+  }
+}
 
   const currentMessages: any[] = [
     { role: 'system', content: executionSystemPrompt },
@@ -819,20 +865,68 @@ PRO
       break;
     }
 
-    for (const toolCall of message.tool_calls) {
-      if (toolCall.type !== 'function') continue;
-      const toolName = `${toolCall.function?.name || ''}`;
-      const toolUserMessage = getToolUserMessage(toolName, toolCall.function?.arguments || '{}');
-      if (toolUserMessage) toolUserMessages.push(toolUserMessage);
-      let toolContent = '';
-      try {
-        toolContent = await runTool(user, timezone, toolName, toolCall.function?.arguments || '{}', (payload) => runCompletion('pro', payload));
-      } catch (err: any) {
-        toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
+let escalatedToPro = false;
+
+for (const toolCall of message.tool_calls) {
+  if (toolCall.type !== 'function') continue;
+
+  const toolName = `${toolCall.function?.name || ''}`;
+
+  if (toolName === 'escalate_to_pro') {
+    let originalQuery = text;
+
+    try {
+      const parsed = JSON.parse(toolCall.function?.arguments || '{}');
+      if (typeof parsed.original_query === 'string' && parsed.original_query.trim()) {
+        originalQuery = parsed.original_query.trim();
       }
-      currentMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolContent });
-      if (toolContent.trim()) toolOutputsForFallback.push(toolContent.trim());
+    } catch {
+      // ignore
     }
+
+    executionMode = 'pro';
+    executionTools = [...toolDefinitions] as any[];
+    currentMessages.length = 0;
+    currentMessages.push(
+      { role: 'system', content: baseSystemPrompt },
+      ...history,
+      { role: 'user', content: originalQuery }
+    );
+
+    escalatedToPro = true;
+    break;
+  }
+
+  const toolUserMessage = getToolUserMessage(toolName, toolCall.function?.arguments || '{}');
+  if (toolUserMessage) toolUserMessages.push(toolUserMessage);
+
+  let toolContent = '';
+  try {
+    toolContent = await runTool(
+      user,
+      timezone,
+      toolName,
+      toolCall.function?.arguments || '{}',
+      (payload) => runCompletion('pro', payload)
+    );
+  } catch (err: any) {
+    toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
+  }
+
+  currentMessages.push({
+    role: 'tool',
+    tool_call_id: toolCall.id,
+    content: toolContent
+  });
+
+  if (toolContent.trim()) {
+    toolOutputsForFallback.push(toolContent.trim());
+  }
+}
+
+if (escalatedToPro) {
+  continue;
+}
   }
 
   const userTextForHistory = options?.persistUserText?.trim() || text;
