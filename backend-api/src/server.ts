@@ -388,5 +388,10 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 
 app.listen(PORT, () => {
   console.log(`[backend-api] started on :${PORT}`);
+  if (BACKEND_VOICE_API_ENABLED) {
+    console.log('[backend-voice] enabled (BACKEND_VOICE_API_ENABLED=1), endpoint: POST /internal/voice/turn');
+  } else {
+    console.log('[backend-voice] disabled (BACKEND_VOICE_API_ENABLED != 1)');
+  }
   startTaskScheduler();
 });
