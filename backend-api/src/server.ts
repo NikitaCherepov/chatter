@@ -10,6 +10,7 @@ import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
+import { VectorMemoryService } from './services/vector-memory.js';
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ const internalAuth = (req: any, res: any, next: any) => {
 
 const BACKEND_VOICE_API_ENABLED = `${process.env.BACKEND_VOICE_API_ENABLED || '0'}`.trim() === '1';
 const BACKEND_PHOTO_API_ENABLED = `${process.env.BACKEND_PHOTO_API_ENABLED || '0'}`.trim() === '1';
+const BACKEND_VECTOR_MEMORY_API_ENABLED = `${process.env.BACKEND_VECTOR_MEMORY_API_ENABLED || '0'}`.trim() === '1';
 
 app.post('/internal/tools/read_url', internalAuth, async (req, res) => {
   const url = `${req.body?.url || ''}`.trim();
@@ -277,6 +279,79 @@ app.post('/api/v1/auth/refresh', (req, res) => {
 
 app.use('/api/v1', authMiddleware);
 
+app.post('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
+  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
+    return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
+  }
+  const userId = req.authUserId!;
+  const text = `${req.body?.text || ''}`;
+  const source = `${req.body?.source || 'manual'}`;
+
+  try {
+    const saved = await VectorMemoryService.saveChunk(userId, text, source);
+    return res.status(201).json(saved);
+  } catch (err: any) {
+    const code = `${err?.message || 'vector_memory_save_failed'}`;
+    if (code === 'text_required') return res.status(400).json({ error: code });
+    if (code.startsWith('text_too_long_max_')) return res.status(422).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
+app.post('/api/v1/vector-memory/search', async (req: AuthedRequest, res) => {
+  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
+    return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
+  }
+  const userId = req.authUserId!;
+  const query = `${req.body?.query || ''}`;
+  const topK = Number(req.body?.top_k);
+
+  try {
+    const found = await VectorMemoryService.search(userId, query, Number.isFinite(topK) ? topK : 3);
+    return res.json(found);
+  } catch (err: any) {
+    const code = `${err?.message || 'vector_memory_search_failed'}`;
+    if (code === 'query_required') return res.status(400).json({ error: code });
+    if (code.startsWith('query_too_long_max_')) return res.status(422).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
+app.delete('/api/v1/vector-memory/chunks/:id', async (req: AuthedRequest, res) => {
+  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
+    return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
+  }
+  const userId = req.authUserId!;
+  const chunkId = `${req.params.id || ''}`;
+
+  try {
+    const out = await VectorMemoryService.deleteChunk(userId, chunkId);
+    return res.json(out);
+  } catch (err: any) {
+    const code = `${err?.message || 'vector_memory_delete_failed'}`;
+    if (code === 'chunk_id_required') return res.status(400).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
+app.delete('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
+  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
+    return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
+  }
+  if (`${req.query.all || ''}` !== '1') {
+    return res.status(400).json({ error: 'set_all_1_to_confirm' });
+  }
+  const userId = req.authUserId!;
+
+  try {
+    const out = await VectorMemoryService.deleteAll(userId);
+    return res.json(out);
+  } catch (err: any) {
+    const code = `${err?.message || 'vector_memory_delete_all_failed'}`;
+    return res.status(500).json({ error: code });
+  }
+});
+
 app.get('/api/v1/chats', (req: AuthedRequest, res) => {
   const userId = req.authUserId!;
   const chats = listUserChats(userId);
@@ -439,6 +514,11 @@ app.listen(PORT, () => {
     console.log('[backend-photo] enabled (BACKEND_PHOTO_API_ENABLED=1), endpoint: POST /internal/photo/analyze');
   } else {
     console.log('[backend-photo] disabled (BACKEND_PHOTO_API_ENABLED != 1)');
+  }
+  if (BACKEND_VECTOR_MEMORY_API_ENABLED) {
+    console.log('[backend-vector-memory] enabled (BACKEND_VECTOR_MEMORY_API_ENABLED=1), endpoints: POST /api/v1/vector-memory/chunks, POST /api/v1/vector-memory/search');
+  } else {
+    console.log('[backend-vector-memory] disabled (BACKEND_VECTOR_MEMORY_API_ENABLED != 1)');
   }
   startTaskScheduler();
 });
