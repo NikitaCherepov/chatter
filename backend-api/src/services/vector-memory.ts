@@ -125,7 +125,7 @@ export class VectorMemoryService {
       const openai = getOpenAIClient();
       const embedResponse = await openai.embeddings.create({
         model: TIMEWEB_EMBED_MODEL,
-        input: chunks[0],
+        input: chunks.map(chunk => chunk.replace(/\n/g, ' ').trim())
       } as any);
 
       const now = Math.floor(Date.now() / 1000);
