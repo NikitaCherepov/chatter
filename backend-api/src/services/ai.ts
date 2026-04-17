@@ -5,7 +5,7 @@ import type { AiSendResult, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPl
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getPromptForUser, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
-import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
+import { runSmartHomeControl, type SmartHomeArgs, SMART_HOME_DEVICE_OPTIONS_TEXT } from './smart-home.js';
 import { runEmailCheck, runEmailRead, runEmailSend } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
@@ -475,22 +475,269 @@ const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
 };
 
 const toolDefinitions = [
-  { type: 'function', function: { name: 'search_web', description: 'Поиск актуальной/проверяемой информации в интернете. Используй, когда нужны свежие данные или факты из сети. После вызова опирайся на результаты поиска в ответе.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Поисковый запрос' } }, required: ['query'] } } },
-  { type: 'function', function: { name: 'read_webpage', description: 'Читает и очищает текст веб-страницы через backend-читалку (Browserless). Используй, когда нужно извлечь содержание конкретной страницы по URL.', parameters: { type: 'object', properties: { url: { type: 'string', description: 'Полный URL страницы (http/https).' } }, required: ['url'] } } },
-  { type: 'function', function: { name: 'control_smart_home', description: 'Управляет устройствами умного дома. Используй ТОЛЬКО при явной просьбе включить/выключить устройство или изменить цвет/яркость.', parameters: { type: 'object', properties: { device_name: { type: 'string' }, action: { type: 'string', enum: ['on', 'off', 'set_color', 'set_brightness'] }, color: { type: 'string' }, brightness: { type: 'number' } }, required: ['device_name', 'action'] } } },
-  { type: 'function', function: { name: 'schedule_task', description: 'Создает задачу по времени (одноразовую или по расписанию): напоминания, отложенные команды дома, запланированный веб-поиск, регулярная проверка почты. Для времени предпочитай local_time (HH:MM) или delay_seconds, не вычисляй Unix timestamp вручную.', parameters: { type: 'object', properties: { local_time: { type: 'string' }, delay_seconds: { type: 'number' }, execute_at: { type: 'number' }, task_type: { type: 'string', enum: ['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'] }, payload: { type: 'string' }, recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'] }, recurrence_weekday: { type: 'number' }, notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'] }, notify_condition: { type: 'string' } }, required: ['task_type', 'payload'] } } },
-  { type: 'function', function: { name: 'set_user_timezone', description: 'Устанавливает часовой пояс пользователя. Передай timezone_offset напрямую или location/city/country для автоопределения по локации.', parameters: { type: 'object', properties: { timezone_offset: { type: 'number' }, location: { type: 'string' }, city: { type: 'string' }, country: { type: 'string' } } } } },
-  { type: 'function', function: { name: 'get_my_tasks', description: 'Возвращает список задач текущего пользователя. Никогда не запрашивай задачи другого пользователя.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['pending', 'done', 'error', 'all'] }, limit: { type: 'number' } } } } },
-  { type: 'function', function: { name: 'delete_my_task', description: 'Удаляет ОДНУ активную задачу текущего пользователя по точному ID (для отмены конкретного напоминания/задачи) и возвращает обновлённый список.', parameters: { type: 'object', properties: { task_id: { type: 'number' } }, required: ['task_id'] } } },
-  { type: 'function', function: { name: 'check_emails', description: 'Ищет письма в почте пользователя: последние входящие, поиск по отправителю/теме/ключевому слову, фильтр по датам, пагинация. Если пользователь явно указывает yandex/google — передавай provider.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, search_query: { type: 'string' }, date_from: { type: 'string' }, date_to: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } } } },
-  { type: 'function', function: { name: 'read_email_content', description: 'Читает содержимое конкретного письма по части темы. Обычно используй после check_emails, когда нужно открыть найденное письмо.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, subject_part: { type: 'string' } }, required: ['subject_part'] } } },
-  { type: 'function', function: { name: 'send_email', description: 'Отправляет письмо от имени пользователя. Используй, когда пользователь явно просит отправить email. Если пользователь явно указывает yandex/google — передавай provider.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['to', 'subject', 'body'] } } },
-  { type: 'function', function: { name: 'save_note', description: 'Сохраняет запись в личную записную книжку пользователя. Используй, когда пользователь просит "запиши"/"сохрани в заметки". Это заметки, а не долговременная память.', parameters: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' } }, required: ['content'] } } },
-  { type: 'function', function: { name: 'list_my_notes', description: 'Показывает заметки пользователя из записной книжки. Поддерживает поиск и пагинацию.', parameters: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } } } },
-  { type: 'function', function: { name: 'read_note', description: 'Читает одну заметку пользователя целиком по точному ID.', parameters: { type: 'object', properties: { note_id: { type: 'number' } }, required: ['note_id'] } } },
-  { type: 'function', function: { name: 'delete_note', description: 'Удаляет одну заметку пользователя по точному ID и возвращает обновлённый список.', parameters: { type: 'object', properties: { note_id: { type: 'number' } }, required: ['note_id'] } } },
-  { type: 'function', function: { name: 'update_core_memory', description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важных биографических фактов (возраст, профессия, семья, переезд, устойчивые долгосрочные предпочтения). Не используй для рутины или одноразовых событий. Для записей в блокнот используй save_note.', parameters: { type: 'object', properties: { new_fact: { type: 'string' }, explicit_request: { type: 'boolean' } }, required: ['new_fact'] } } },
-  { type: 'function', function: { name: 'random_roll', description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Используй для запросов "подбрось монетку/брось кубик/случайный результат". Для кубиков поддерживает обычный режим, преимущество и помеху.', parameters: { type: 'object', properties: { roll_type: { type: 'string', enum: ['coin', 'dice'] }, dice_notation: { type: 'string' }, mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'] } }, required: ['roll_type'] } } }
+  {
+    type: 'function',
+    function: {
+      name: 'search_web',
+      description: 'Поиск актуальной/проверяемой информации в интернете. Используй, когда нужны свежие данные или факты из сети. После вызова опирайся на результаты поиска в ответе.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Поисковый запрос' }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_webpage',
+      description: 'Читает и очищает текст веб-страницы через backend-читалку (Browserless). Используй, когда нужно извлечь содержание конкретной страницы по URL.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Полный URL страницы (http/https).' }
+        },
+        required: ['url']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'control_smart_home',
+      description: 'Управляет устройствами умного дома. Используй ТОЛЬКО при явной просьбе включить/выключить устройство или изменить цвет/яркость.',
+      parameters: {
+        type: 'object',
+        properties: {
+          device_name: {
+            type: 'string',
+            description: `Название устройства. Доступные варианты: ${SMART_HOME_DEVICE_OPTIONS_TEXT}.`
+          },
+          action: {
+            type: 'string',
+            enum: ['on', 'off', 'set_color', 'set_brightness'],
+            description: 'on - включить, off - выключить, set_color - изменить цвет, set_brightness - изменить яркость.'
+          },
+          color: {
+            type: 'string',
+            description: 'Цвет в формате #RRGGBB или имя цвета (красный, синий и т.д.). Только для set_color.'
+          },
+          brightness: {
+            type: 'number',
+            description: 'Уровень яркости от 1 до 100. Используется только с action=set_brightness.'
+          }
+        },
+        required: ['device_name', 'action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'schedule_task',
+      description: 'Создает задачу по времени (одноразовую или по расписанию): напоминания, отложенные команды дома, запланированный веб-поиск, регулярная проверка почты. Для времени предпочитай local_time (HH:MM) или delay_seconds, не вычисляй Unix timestamp вручную.',
+      parameters: {
+        type: 'object',
+        properties: {
+          local_time: { type: 'string', description: 'Локальное время пользователя в формате HH:MM, например 02:07.' },
+          delay_seconds: { type: 'number', description: 'Задержка в секундах от текущего момента, например 60.' },
+          execute_at: { type: 'number', description: 'Legacy-поле: Unix timestamp в секундах. Используй только если local_time/delay_seconds не подходят.' },
+          task_type: { type: 'string', enum: ['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'], description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете, email_check - запланированная проверка почты, ai_instruction - запуск AI-инструкции по расписанию.' },
+          payload: { type: 'string', description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":10, "offset":10, "date_from":"2026-04-01","date_to":"2026-04-30"} или просто строка запроса. Для ai_instruction: текст инструкции, которую AI выполнит по расписанию.' },
+          recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Тип расписания: once - один раз, daily - каждый день, weekly - каждую неделю.' },
+          recurrence_weekday: { type: 'number', description: 'День недели для weekly: 1=понедельник ... 7=воскресенье.' },
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'Режим уведомлений: always - всегда писать о результате, never - никогда не писать, on_match - писать только если результат содержит notify_condition как подстроку, on_condition - ИИ проверит условие notify_condition и решит, отправлять уведомление или нет.' },
+          notify_condition: { type: 'string', description: 'Условие для notify_mode=on_match/on_condition. Для on_match: короткая строка/ключевое слово. Для on_condition: осмысленное условие ("есть важные письма от X", "найдены тревожные новости", и т.д.).' }
+        },
+        required: ['task_type', 'payload']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_user_timezone',
+      description: 'Устанавливает часовой пояс пользователя. Передай timezone_offset напрямую или location/city/country для автоопределения по локации.',
+      parameters: {
+        type: 'object',
+        properties: {
+          timezone_offset: { type: 'number', description: 'Смещение от UTC (целое число от -12 до +14). Если известно — передай его.' },
+          location: { type: 'string', description: 'Локация в свободной форме, например: "Город, Страна".' },
+          city: { type: 'string', description: 'Город пользователя, если отдельно.' },
+          country: { type: 'string', description: 'Страна пользователя, если отдельно.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_my_tasks',
+      description: 'Возвращает список задач текущего пользователя. Никогда не запрашивай задачи другого пользователя.',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['pending', 'done', 'error', 'all'], description: 'Фильтр по статусу задач.' },
+          limit: { type: 'number', description: 'Сколько задач вернуть, от 1 до 50.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_my_task',
+      description: 'Удаляет ОДНУ активную задачу текущего пользователя по точному ID (для отмены конкретного напоминания/задачи) и возвращает обновлённый список.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'number', description: 'ID задачи для удаления.' }
+        },
+        required: ['task_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'check_emails',
+      description: 'Ищет письма в почте пользователя: последние входящие, поиск по отправителю/теме/ключевому слову, фильтр по датам, пагинация. Если пользователь явно указывает yandex/google — передавай provider.',
+      parameters: {
+        type: 'object',
+        properties: {
+          provider: { type: 'string', enum: ['yandex', 'google'], description: 'Какой ящик использовать.' },
+          search_query: { type: 'string', description: 'Поисковая строка (имя, домен, тема, ключевое слово).' },
+          date_from: { type: 'string', description: 'Начальная дата (включительно) в формате YYYY-MM-DD.' },
+          date_to: { type: 'string', description: 'Конечная дата (включительно) в формате YYYY-MM-DD.' },
+          limit: { type: 'number', description: 'Количество результатов. Если не указано, берётся пользовательский лимит из настроек почты.' },
+          offset: { type: 'number', description: 'Сдвиг для пагинации. Пример: сначала offset=0, потом offset=10 для следующих 10 писем.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_email_content',
+      description: 'Читает содержимое конкретного письма по части темы. Обычно используй после check_emails, когда нужно открыть найденное письмо.',
+      parameters: {
+        type: 'object',
+        properties: {
+          provider: { type: 'string', enum: ['yandex', 'google'], description: 'Какой ящик использовать.' },
+          subject_part: { type: 'string', description: 'Часть темы письма для поиска.' }
+        },
+        required: ['subject_part']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_email',
+      description: 'Отправляет письмо от имени пользователя. Используй, когда пользователь явно просит отправить email. Если пользователь явно указывает yandex/google — передавай provider.',
+      parameters: {
+        type: 'object',
+        properties: {
+          provider: { type: 'string', enum: ['yandex', 'google'], description: 'Какой ящик использовать.' },
+          to: { type: 'string', description: 'Email получателя.' },
+          subject: { type: 'string', description: 'Тема письма.' },
+          body: { type: 'string', description: 'Текст письма. Можно передавать HTML-разметку (<b>, <h1>, <ul>, <a> и т.д.) для красивого письма.' }
+        },
+        required: ['to', 'subject', 'body']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_note',
+      description: 'Сохраняет запись в личную записную книжку пользователя. Используй, когда пользователь просит "запиши"/"сохрани в заметки". Это заметки, а не долговременная память.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Короткий заголовок заметки (необязательно).' },
+          content: { type: 'string', description: 'Текст заметки, который нужно сохранить.' }
+        },
+        required: ['content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_my_notes',
+      description: 'Показывает заметки пользователя из записной книжки. Поддерживает поиск и пагинацию.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Поисковая строка по заголовку и тексту.' },
+          limit: { type: 'number', description: 'Сколько заметок вернуть за запрос (1..50).' },
+          offset: { type: 'number', description: 'Сдвиг для пагинации. Пример: 0, затем 10.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_note',
+      description: 'Читает одну заметку пользователя целиком по точному ID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          note_id: { type: 'number', description: 'ID заметки.' }
+        },
+        required: ['note_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_note',
+      description: 'Удаляет одну заметку пользователя по точному ID и возвращает обновлённый список.',
+      parameters: {
+        type: 'object',
+        properties: {
+          note_id: { type: 'number', description: 'ID заметки для удаления.' }
+        },
+        required: ['note_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_core_memory',
+      description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важных биографических фактов (возраст, профессия, семья, переезд, устойчивые долгосрочные предпочтения). Не используй для рутины или одноразовых событий. Для записей в блокнот используй save_note.',
+      parameters: {
+        type: 'object',
+        properties: {
+          new_fact: { type: 'string', description: 'Новый важный факт о пользователе, кратко и конкретно.' },
+          explicit_request: { type: 'boolean', description: 'true, если пользователь явно попросил "запомни".' }
+        },
+        required: ['new_fact']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'random_roll',
+      description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Используй для запросов "подбрось монетку/брось кубик/случайный результат". Для кубиков поддерживает обычный режим, преимущество и помеху.',
+      parameters: {
+        type: 'object',
+        properties: {
+          roll_type: { type: 'string', enum: ['coin', 'dice'], description: 'coin - монетка, dice - кубики.' },
+          dice_notation: { type: 'string', description: 'Нотация кубиков, например: 1d20, 2d6+3, 2д20 + 5.' },
+          mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'], description: 'Режим для dice: обычный, с преимуществом, с помехой.' }
+        },
+        required: ['roll_type']
+      }
+    }
+  }
 ] as const;
 const LITE_ROUTER_INSTRUCTIONS = `
 Ты — быстрый ассистент-диспетчер.
