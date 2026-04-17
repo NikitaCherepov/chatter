@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
 import crypto from 'crypto';
 import axios from 'axios';
-import { toolDefinitions } from './backend-api/src/services/ai.js';
+import { toolDefinitions } from './backend-api/src/services/ai.ts';
 
 dotenv.config();
 
