@@ -1,8 +1,13 @@
-﻿import type OpenAI from 'openai';
 import { db } from '../db.js';
 import { getUserById } from './chats.js';
 
 const MAX_CORE_MEMORY_LENGTH = 400;
+const TOKENS_PER_PRICE_BLOCK = 500_000;
+const PRICE_PER_PRICE_BLOCK_RUB = 102;
+const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
+
+const extractTokens = (response: any) => Number(response?.usage?.total_tokens || 0);
+const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;
 
 export const runCoreMemoryMerge = async (
   aiCall: (requestPayload: Record<string, unknown>) => Promise<{ response: any; usedModel: string; usedProvider: string }>,
@@ -11,43 +16,85 @@ export const runCoreMemoryMerge = async (
   explicitRequest: boolean
 ) => {
   const user = getUserById(userId);
-  if (!user) return 'Ошибка: пользователь не найден.';
+  if (!user) {
+    return 'Ошибка памяти: пользователь не найден.';
+  }
 
-  const normalizedFact = newFact.trim();
-  if (!normalizedFact) return 'Ошибка: пустой факт для памяти.';
+  const fact = newFact.trim();
+  if (!fact) {
+    return 'Ошибка памяти: пустой факт.';
+  }
 
-  const current = (user.core_memory || '').trim();
-  const systemPrompt = `Ты — безжалостный редактор памяти ИИ-ассистента.
+  const currentMemory = (user.core_memory || '').trim();
+  const mergePrompt = `Ты — безжалостный редактор памяти ИИ-ассистента.
 Твоя задача: обновить профиль пользователя, интегрировав в него новый факт.
 
-ПРАВИЛА:
-1. ЖЕСТКИЙ ЛИМИТ: ровно ${MAX_CORE_MEMORY_LENGTH} символов максимум. Если превышаешь — удаляй наименее важное.
-2. СТИЛЬ: Телеграфный. Никаких полных предложений.
-3. Дедупликация: если новый факт конфликтует со старым — удаляй старый.
-4. Верни ТОЛЬКО новый текст памяти, без комментариев.`;
+ТЕКУЩАЯ ПАМЯТЬ:
+${currentMemory || '(пусто)'}
 
-  const userPrompt = `ТЕКУЩАЯ ПАМЯТЬ:\n${current || '(пусто)'}\n\nНОВЫЙ ФАКТ:\n${normalizedFact}`;
+НОВЫЙ ФАКТ:
+${fact}
+
+КОНТЕКСТ:
+- Явный запрос "запомни": ${explicitRequest ? 'да' : 'нет'}.
+- Если факт явно незначительный и explicitRequest=нет — можешь оставить память без изменений.
+
+ПРАВИЛА:
+1. ЖЕСТКИЙ ЛИМИТ: ровно ${MAX_CORE_MEMORY_LENGTH} символов максимум. Если превышаешь — удаляй самую старую и наименее важную информацию (оставляй ядро: кто он, где живет, кем работает, близкие люди).
+2. СТИЛЬ: телеграфный. Никаких полных предложений. Используй списки, сокращения, теги.
+3. Дедупликация: если новый факт конфликтует со старым (например, сменил город/работу) — удаляй старый.
+4. В ответе выдай ТОЛЬКО новый текст памяти, без комментариев и JSON.`;
+
+  let mergedMemory = currentMemory;
+  let action: 'updated' | 'unchanged' = 'unchanged';
+  let reason = 'без комментария';
 
   try {
     const completion = await aiCall({
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      thinking: { type: 'disabled' }
+        { role: 'system', content: 'Ты аккуратный модуль памяти. Верни только готовый текст памяти.' },
+        { role: 'user', content: mergePrompt }
+      ]
     });
 
-    let merged = `${completion.response?.choices?.[0]?.message?.content || ''}`.trim();
-    if (!merged) merged = current || normalizedFact;
-    if (merged.length > MAX_CORE_MEMORY_LENGTH) merged = merged.slice(0, MAX_CORE_MEMORY_LENGTH);
-
-    db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(merged, userId);
-
-    if (explicitRequest) {
-      return `Память обновлена: ${merged}`;
+    const response = completion.response;
+    const mergeTokens = extractTokens(response);
+    if (mergeTokens > 0) {
+      const safeTokens = Math.max(0, Math.floor(mergeTokens));
+      const costRub = toRubFromTokens(safeTokens);
+      db.prepare(`
+        UPDATE users
+        SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
+            total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
+            daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
+            total_cost_rub = COALESCE(total_cost_rub, 0) + ?
+        WHERE id = ?
+      `).run(safeTokens, safeTokens, costRub, costRub, userId);
     }
-    return 'Память обновлена.';
-  } catch (err: any) {
-    return `Ошибка обновления памяти: ${err?.message || String(err)}`;
+
+    const raw = response?.choices?.[0]?.message?.content?.trim() || '';
+    mergedMemory = raw || currentMemory;
+    if (mergedMemory.length > MAX_CORE_MEMORY_LENGTH) {
+      mergedMemory = mergedMemory.slice(0, MAX_CORE_MEMORY_LENGTH).trim();
+    }
+    action = mergedMemory === currentMemory ? 'unchanged' : 'updated';
+    reason = 'merge-модель';
+  } catch {
+    const fallbackCandidate = currentMemory
+      ? `${currentMemory}\n- ${fact}`
+      : `- ${fact}`;
+    mergedMemory = fallbackCandidate.slice(0, MAX_CORE_MEMORY_LENGTH).trim();
+    action = mergedMemory === currentMemory ? 'unchanged' : 'updated';
+    reason = 'fallback-слияние';
   }
+
+  if (mergedMemory !== currentMemory) {
+    db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(mergedMemory, userId);
+  }
+
+  return `Память: ${action}.
+Причина: ${reason}.
+Текущая длина памяти: ${mergedMemory.length}/${MAX_CORE_MEMORY_LENGTH}.
+Текущая память:
+${mergedMemory || '(пусто)'}`;
 };

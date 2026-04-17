@@ -43,6 +43,13 @@ type CompletionMeta = {
   failedProviders?: string[];
 };
 
+type SetTimezoneArgs = {
+  timezone_offset?: number;
+  location?: string;
+  city?: string;
+  country?: string;
+};
+
 const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
 const PRO_CLIENT = new OpenAI({
   apiKey: process.env.TIMEWEB_API_KEY,
@@ -163,7 +170,7 @@ const buildTimeContext = (timezoneOffset: number) => {
   const now = new Date();
   const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
   const sign = timezoneOffset >= 0 ? '+' : '';
-  return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').slice(0, 19)} (UTC${sign}${timezoneOffset}).`;
+  return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').slice(0, 19)} (UTC${sign}${timezoneOffset}). При планировании задач используй local_time (HH:MM) или delay_seconds.`;
 };
 
 const isLitePlan = (plan: UserPlan) => plan === 'free' || plan === 'standart';
@@ -179,12 +186,90 @@ const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
   return Math.max(0, Math.floor(Number(value)));
 };
 
-const ALLOWED_DICE_SIDES = new Set([2, 3, 4, 6, 8, 10, 12, 20, 100]);
+const clampTimezoneOffset = (offset: number) => {
+  if (!Number.isFinite(offset)) return null;
+  const rounded = Math.round(offset);
+  if (rounded < -12 || rounded > 14) return null;
+  return rounded;
+};
+
+const parseUtcOffsetFromText = (raw: string) => {
+  const text = raw.trim().toLowerCase();
+  const utcMatch = text.match(/utc\s*([+-]\s*\d{1,2})/i);
+  if (utcMatch) {
+    const value = Number.parseInt(utcMatch[1].replace(/\s+/g, ''), 10);
+    return clampTimezoneOffset(value);
+  }
+
+  const gmtMatch = text.match(/gmt\s*([+-]\s*\d{1,2})/i);
+  if (gmtMatch) {
+    const value = Number.parseInt(gmtMatch[1].replace(/\s+/g, ''), 10);
+    return clampTimezoneOffset(value);
+  }
+
+  return null;
+};
+
+const estimateOffsetByLongitude = (longitude: number) => {
+  const estimated = Math.round(longitude / 15);
+  if (estimated < -12) return -12;
+  if (estimated > 14) return 14;
+  return estimated;
+};
+
+const resolveOffsetFromLocationText = async (locationText: string) => {
+  const inlineOffset = parseUtcOffsetFromText(locationText);
+  if (inlineOffset !== null) return inlineOffset;
+
+  try {
+    const endpoint = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(locationText)}`;
+    const response = await fetch(endpoint, {
+      headers: { 'User-Agent': 'chatter-bot/1.0 (timezone resolver)' }
+    });
+    if (!response.ok) return null;
+    const data = await response.json() as Array<{ lon?: string }>;
+    const lon = Number.parseFloat(data?.[0]?.lon ?? '');
+    if (!Number.isFinite(lon)) return null;
+    return estimateOffsetByLongitude(lon);
+  } catch {
+    return null;
+  }
+};
+
+const runSetUserTimezone = async (userId: number, args: SetTimezoneArgs) => {
+  let resolvedOffset: number | null = null;
+
+  if (typeof args.timezone_offset === 'number') {
+    resolvedOffset = clampTimezoneOffset(args.timezone_offset);
+  }
+
+  if (resolvedOffset === null) {
+    const locationText = [
+      args.location?.trim(),
+      args.city?.trim(),
+      args.country?.trim()
+    ].filter(Boolean).join(', ');
+
+    if (locationText) {
+      resolvedOffset = await resolveOffsetFromLocationText(locationText);
+    }
+  }
+
+  if (resolvedOffset === null) {
+    return 'Не удалось определить часовой пояс. Попроси пользователя указать смещение явно, например: UTC+7.';
+  }
+
+  setUserTimezone(userId, resolvedOffset);
+  const sign = resolvedOffset >= 0 ? '+' : '';
+  return `Часовой пояс пользователя установлен: UTC${sign}${resolvedOffset}.`;
+};
+
+const ALLOWED_DICE_SIDES = new Set([4, 6, 8, 10, 12, 20, 100]);
 const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 const parseDiceNotation = (input: string) => {
-  const normalized = input.trim().toLowerCase().replace(/\s+/g, '');
-  const match = normalized.match(/^(\d{1,3})d(\d{1,3})([+-]\d{1,5})?$/);
+  const normalized = input.replace(/\s+/g, '').toLowerCase().replace('д', 'd');
+  const match = normalized.match(/^(\d{1,3})d(4|6|8|10|12|20|100)([+-]\d{1,4})?$/);
   if (!match) return null;
   const count = Number.parseInt(match[1], 10);
   const sides = Number.parseInt(match[2], 10);
@@ -194,7 +279,6 @@ const parseDiceNotation = (input: string) => {
   if (!Number.isFinite(modifier) || Math.abs(modifier) > 10000) return null;
   return { count, sides, modifier, normalized };
 };
-
 const rollDiceExpression = (count: number, sides: number, modifier: number) => {
   const rolls = Array.from({ length: count }, () => randomInt(1, sides));
   const rollsSum = rolls.reduce((acc, value) => acc + value, 0);
@@ -322,8 +406,30 @@ const incrementUserWebSearchUsage = (userId: number, count = 1) => {
   `).run(safeCount, safeCount, userId);
 };
 
-const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: number) => {
-  if (!tasks.length) return 'Задач нет.';
+const runWebSearch = async (query: string) => {
+  if (!tvly) return 'Ошибка инструмента: поисковый сервис временно недоступен.';
+
+  try {
+    const response = await tvly.search(query, {
+      searchDepth: 'basic',
+      maxResults: 3,
+      includeAnswer: true
+    });
+
+    if (!response.results.length) {
+      return `По запросу "${query}" ничего не найдено.`;
+    }
+
+    let resultText = response.answer ? `Сводка: ${response.answer}\n\n` : '';
+    resultText += response.results.map((item: any, index: number) => `${index + 1}. ${item.title}\n${item.content}\nИсточник: ${item.url}`).join('\n\n');
+    return resultText;
+  } catch {
+    return 'Ошибка инструмента: поисковый сервис временно недоступен.';
+  }
+};
+
+const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: number, emptyText = 'Задач не найдено.') => {
+  if (!tasks.length) return emptyText;
   return tasks.map((t) => {
     const when = formatUnixForTimezone(t.execute_at, t.timezone_offset ?? timezoneOffset);
     const notifyText = (t.notify_mode === 'on_match' || t.notify_mode === 'on_condition')
@@ -343,7 +449,6 @@ const runSaveNoteTool = (user: UserRecord, contentRaw: string, titleRaw = '') =>
   }
   return `Заметка сохранена: #${created.id}`;
 };
-
 const runListNotesTool = (userId: number, queryRaw = '', limitRaw?: number, offsetRaw?: number) => {
   const limit = Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : 20;
   const offset = Number.isFinite(Number(offsetRaw)) ? Number(offsetRaw) : 0;
@@ -370,25 +475,23 @@ const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
 };
 
 const toolDefinitions = [
-  { type: 'function', function: { name: 'search_web', description: 'Поиск актуальной информации в интернете.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
-  { type: 'function', function: { name: 'read_webpage', description: 'Читает и очищает текст веб-страницы по URL.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
-  { type: 'function', function: { name: 'control_smart_home', description: 'Управление устройствами умного дома.', parameters: { type: 'object', properties: { device_name: { type: 'string' }, action: { type: 'string', enum: ['on', 'off', 'set_color', 'set_brightness'] }, color: { type: 'string' }, brightness: { type: 'number' } }, required: ['device_name', 'action'] } } },
-  { type: 'function', function: { name: 'set_user_timezone', description: 'Установка часового пояса пользователя в формате UTC offset.', parameters: { type: 'object', properties: { timezone_offset: { type: 'number' } }, required: ['timezone_offset'] } } },
-  { type: 'function', function: { name: 'random_roll', description: 'Подбросить монетку или бросить кубик.', parameters: { type: 'object', properties: { roll_type: { type: 'string', enum: ['coin', 'dice'] }, dice_notation: { type: 'string' }, mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'] } } } } },
-  { type: 'function', function: { name: 'save_note', description: 'Сохранить заметку пользователя.', parameters: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' } }, required: ['content'] } } },
-  { type: 'function', function: { name: 'list_my_notes', description: 'Показать заметки пользователя.', parameters: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } } } },
-  { type: 'function', function: { name: 'read_note', description: 'Прочитать одну заметку по id.', parameters: { type: 'object', properties: { note_id: { type: 'number' } }, required: ['note_id'] } } },
-  { type: 'function', function: { name: 'delete_note', description: 'Удалить заметку по id.', parameters: { type: 'object', properties: { note_id: { type: 'number' } }, required: ['note_id'] } } },
-  { type: 'function', function: { name: 'get_my_tasks', description: 'Показать задачи пользователя.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['pending', 'done', 'error', 'all'] }, limit: { type: 'number' } } } } },
-  { type: 'function', function: { name: 'schedule_task', description: 'Создать задачу/напоминание.', parameters: { type: 'object', properties: { task_type: { type: 'string', enum: ['message', 'web_search', 'email_check', 'ai_instruction', 'smart_home'] }, payload: { type: 'string' }, local_time: { type: 'string' }, execute_at: { type: 'number' }, delay_seconds: { type: 'number' }, recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'] }, recurrence_weekday: { type: 'number' }, notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'] }, notify_condition: { type: 'string' } }, required: ['task_type', 'payload'] } } },
-  { type: 'function', function: { name: 'delete_my_task', description: 'Удалить pending-задачу по id.', parameters: { type: 'object', properties: { task_id: { type: 'number' } }, required: ['task_id'] } } },
-  { type: 'function', function: { name: 'check_emails', description: 'Проверить почту пользователя (поиск, фильтр по датам, пагинация).', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, search_query: { type: 'string' }, date_from: { type: 'string' }, date_to: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } } } },
-  { type: 'function', function: { name: 'read_email_content', description: 'Прочитать текст письма по части темы.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, subject_part: { type: 'string' } }, required: ['subject_part'] } } },
-  { type: 'function', function: { name: 'send_email', description: 'Отправить письмо от имени пользователя.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['to', 'subject', 'body'] } } },
-  { type: 'function', function: { name: 'update_core_memory', description: 'Обновить постоянную память пользователя важным фактом.', parameters: { type: 'object', properties: { new_fact: { type: 'string' }, explicit_request: { type: 'boolean' } }, required: ['new_fact'] } } },
-  { type: 'function', function: { name: 'escalate_to_pro', description: 'Эскалация в старшую модель. Используй только если запрос сложный и требует PRO.', parameters: { type: 'object', properties: { original_query: { type: 'string' } }, required: ['original_query'] } } }
+  { type: 'function', function: { name: 'search_web', description: 'Поиск актуальной/проверяемой информации в интернете. Используй, когда нужны свежие данные или факты из сети. После вызова опирайся на результаты поиска в ответе.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Поисковый запрос' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'read_webpage', description: 'Читает и очищает текст веб-страницы через backend-читалку (Browserless). Используй, когда нужно извлечь содержание конкретной страницы по URL.', parameters: { type: 'object', properties: { url: { type: 'string', description: 'Полный URL страницы (http/https).' } }, required: ['url'] } } },
+  { type: 'function', function: { name: 'control_smart_home', description: 'Управляет устройствами умного дома. Используй ТОЛЬКО при явной просьбе включить/выключить устройство или изменить цвет/яркость.', parameters: { type: 'object', properties: { device_name: { type: 'string' }, action: { type: 'string', enum: ['on', 'off', 'set_color', 'set_brightness'] }, color: { type: 'string' }, brightness: { type: 'number' } }, required: ['device_name', 'action'] } } },
+  { type: 'function', function: { name: 'schedule_task', description: 'Создает задачу по времени (одноразовую или по расписанию): напоминания, отложенные команды дома, запланированный веб-поиск, регулярная проверка почты. Для времени предпочитай local_time (HH:MM) или delay_seconds, не вычисляй Unix timestamp вручную.', parameters: { type: 'object', properties: { local_time: { type: 'string' }, delay_seconds: { type: 'number' }, execute_at: { type: 'number' }, task_type: { type: 'string', enum: ['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'] }, payload: { type: 'string' }, recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'] }, recurrence_weekday: { type: 'number' }, notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'] }, notify_condition: { type: 'string' } }, required: ['task_type', 'payload'] } } },
+  { type: 'function', function: { name: 'set_user_timezone', description: 'Устанавливает часовой пояс пользователя. Передай timezone_offset напрямую или location/city/country для автоопределения по локации.', parameters: { type: 'object', properties: { timezone_offset: { type: 'number' }, location: { type: 'string' }, city: { type: 'string' }, country: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'get_my_tasks', description: 'Возвращает список задач текущего пользователя. Никогда не запрашивай задачи другого пользователя.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['pending', 'done', 'error', 'all'] }, limit: { type: 'number' } } } } },
+  { type: 'function', function: { name: 'delete_my_task', description: 'Удаляет ОДНУ активную задачу текущего пользователя по точному ID (для отмены конкретного напоминания/задачи) и возвращает обновлённый список.', parameters: { type: 'object', properties: { task_id: { type: 'number' } }, required: ['task_id'] } } },
+  { type: 'function', function: { name: 'check_emails', description: 'Ищет письма в почте пользователя: последние входящие, поиск по отправителю/теме/ключевому слову, фильтр по датам, пагинация. Если пользователь явно указывает yandex/google — передавай provider.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, search_query: { type: 'string' }, date_from: { type: 'string' }, date_to: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } } } },
+  { type: 'function', function: { name: 'read_email_content', description: 'Читает содержимое конкретного письма по части темы. Обычно используй после check_emails, когда нужно открыть найденное письмо.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, subject_part: { type: 'string' } }, required: ['subject_part'] } } },
+  { type: 'function', function: { name: 'send_email', description: 'Отправляет письмо от имени пользователя. Используй, когда пользователь явно просит отправить email. Если пользователь явно указывает yandex/google — передавай provider.', parameters: { type: 'object', properties: { provider: { type: 'string', enum: ['yandex', 'google'] }, to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['to', 'subject', 'body'] } } },
+  { type: 'function', function: { name: 'save_note', description: 'Сохраняет запись в личную записную книжку пользователя. Используй, когда пользователь просит "запиши"/"сохрани в заметки". Это заметки, а не долговременная память.', parameters: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' } }, required: ['content'] } } },
+  { type: 'function', function: { name: 'list_my_notes', description: 'Показывает заметки пользователя из записной книжки. Поддерживает поиск и пагинацию.', parameters: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } } } },
+  { type: 'function', function: { name: 'read_note', description: 'Читает одну заметку пользователя целиком по точному ID.', parameters: { type: 'object', properties: { note_id: { type: 'number' } }, required: ['note_id'] } } },
+  { type: 'function', function: { name: 'delete_note', description: 'Удаляет одну заметку пользователя по точному ID и возвращает обновлённый список.', parameters: { type: 'object', properties: { note_id: { type: 'number' } }, required: ['note_id'] } } },
+  { type: 'function', function: { name: 'update_core_memory', description: 'Критически важная долговременная память о пользователе. Используй ТОЛЬКО для важных биографических фактов (возраст, профессия, семья, переезд, устойчивые долгосрочные предпочтения). Не используй для рутины или одноразовых событий. Для записей в блокнот используй save_note.', parameters: { type: 'object', properties: { new_fact: { type: 'string' }, explicit_request: { type: 'boolean' } }, required: ['new_fact'] } } },
+  { type: 'function', function: { name: 'random_roll', description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Используй для запросов "подбрось монетку/брось кубик/случайный результат". Для кубиков поддерживает обычный режим, преимущество и помеху.', parameters: { type: 'object', properties: { roll_type: { type: 'string', enum: ['coin', 'dice'] }, dice_notation: { type: 'string' }, mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'] } }, required: ['roll_type'] } } }
 ] as const;
-
 const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string, unknown>): Promise<CompletionMeta> => {
   if (mode === 'pro') {
     const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload);
@@ -415,77 +518,105 @@ const hasSchedulingIntent = (text: string) => /\b(напомн|напомина�
   || /\bв\s*\d{1,2}:\d{2}\b/i.test(text)
   || /через\s+[^.,!?]{0,24}\b(секунд|секунду|секунды|сек|минут|минуту|минута|мин|час|часа|часов|ч|день|дня|дней|сутк|недел|месяц|месяца|месяцев)\b/i.test(text);
 
+const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
+  SELECT id, status
+  FROM tasks
+  WHERE user_id = ? AND id = ?
+`).get(userId, taskId) as { id: number; status: string } | undefined;
+
 const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
     const query = `${parsed.query || ''}`.trim();
-    if (!query) return 'Ошибка: пустой query.';
-    if (!tvly) return 'Ошибка: web search отключен (нет TAVILY_API_KEY).';
+    if (!query) return 'Ошибка инструмента: пустой поисковый запрос.';
     const webLimit = checkWebSearchLimit(user);
     if (!webLimit.allowed) return webLimit.reason;
-    const res = await tvly.search(query, { searchDepth: 'basic', maxResults: 3, includeAnswer: true });
     incrementUserWebSearchUsage(user.id, 1);
-    const list = (res.results || []).map((item: any, idx: number) => `${idx + 1}. ${item.title}\n${item.content}\nИсточник: ${item.url}`).join('\n\n');
-    return `${res.answer ? `Сводка: ${res.answer}\n\n` : ''}${list || 'Ничего не найдено.'}`;
+    return runWebSearch(query);
   }
 
   if (toolName === 'read_webpage') {
     const url = `${parsed.url || ''}`.trim();
     if (!url) return 'Ошибка инструмента: пустой URL.';
-    try { return await getCleanTextFromUrl(url); } catch (err: any) { return `Ошибка инструмента read_webpage: ${err?.message || String(err)}`; }
+    try {
+      return await getCleanTextFromUrl(url);
+    } catch (err: any) {
+      return `Ошибка инструмента read_webpage: ${err?.message || String(err)}`;
+    }
   }
+
   if (toolName === 'control_smart_home') return runSmartHomeControl(user.id, parsed as SmartHomeArgs);
-  if (toolName === 'set_user_timezone') {
-    const tz = Number(parsed.timezone_offset);
-    if (!Number.isFinite(tz) || tz < -12 || tz > 14) return 'Ошибка: timezone_offset должен быть от -12 до 14.';
-    setUserTimezone(user.id, Math.floor(tz));
-    const sign = tz >= 0 ? '+' : '';
-    return `Часовой пояс обновлён: UTC${sign}${Math.floor(tz)}.`;
-  }
+  if (toolName === 'set_user_timezone') return runSetUserTimezone(user.id, parsed as SetTimezoneArgs);
   if (toolName === 'random_roll') return runRandomRoll(parsed);
   if (toolName === 'save_note') return runSaveNoteTool(user, typeof parsed.content === 'string' ? parsed.content : '', typeof parsed.title === 'string' ? parsed.title : '');
   if (toolName === 'list_my_notes') return runListNotesTool(user.id, typeof parsed.query === 'string' ? parsed.query : '', Number(parsed.limit), Number(parsed.offset));
   if (toolName === 'read_note') return runReadNoteTool(user.id, Number(parsed.note_id));
   if (toolName === 'delete_note') return runDeleteNoteTool(user.id, Number(parsed.note_id));
+
   if (toolName === 'get_my_tasks') {
     const status = ['pending', 'done', 'error', 'all'].includes(`${parsed.status || ''}`) ? parsed.status : 'pending';
     const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 20;
-    return formatTasksList(listTasks(user.id, limit, status), timezoneOffset);
+    return formatTasksList(listTasks(user.id, limit, status), timezoneOffset, 'Задач не найдено.');
   }
+
   if (toolName === 'schedule_task') {
-    if (user.timezone_confirmed !== 1) return 'Ошибка планирования: часовой пояс пользователя не настроен. Сначала вызови set_user_timezone.';
+    if (user.timezone_confirmed !== 1) return 'Ошибка планирования: часовой пояс пользователя не настроен. Попроси пользователя назвать город/страну или указать UTC-смещение, затем вызови set_user_timezone.';
+
     const taskType = `${parsed.task_type || ''}` as TaskType;
     if (!['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'].includes(taskType)) return 'Ошибка: Некорректный task_type';
     let payload = `${parsed.payload || ''}`.trim();
     if (!payload) return 'Ошибка: payload_required';
+
     const recurrenceType = `${parsed.recurrence_type || 'once'}` as TaskRecurrenceType;
     if (!['once', 'daily', 'weekly'].includes(recurrenceType)) return 'Ошибка: Некорректный recurrence_type';
+
     const recurrenceWeekday = Number.isFinite(Number(parsed.recurrence_weekday)) ? Math.floor(Number(parsed.recurrence_weekday)) : null;
     if (recurrenceType === 'weekly' && (!recurrenceWeekday || recurrenceWeekday < 1 || recurrenceWeekday > 7)) return 'Ошибка: Для weekly укажи recurrence_weekday от 1 до 7 (1=понедельник).';
+
     const notifyMode = `${parsed.notify_mode || 'always'}` as TaskNotifyMode;
     if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return 'Ошибка: Некорректный notify_mode';
     const notifyCondition = parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim();
     if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return 'Ошибка: Для notify_mode=on_match/on_condition укажи notify_condition.';
-    if (getPendingTaskCount(user.id) >= MAX_PENDING_TASKS_PER_USER) return `Лимит активных задач: ${MAX_PENDING_TASKS_PER_USER}. Удали лишние через delete_my_task.`;
+
+    if (getPendingTaskCount(user.id) >= MAX_PENDING_TASKS_PER_USER) {
+      return `Лимит активных задач: ${MAX_PENDING_TASKS_PER_USER}. Удали лишние через delete_my_task или /task_delete <id>.`;
+    }
+
     if (taskType === 'smart_home') payload = JSON.stringify(JSON.parse(payload) as SmartHomeArgs);
+
     const executeAt = computeExecuteAtFromScheduleArgs(parsed, timezoneOffset, recurrenceType, recurrenceWeekday);
-    const taskId = createTask(user.id, executeAt, taskType, payload, recurrenceType, recurrenceType === 'weekly' ? recurrenceWeekday : null, timezoneOffset, notifyMode, (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null);
+    createTask(user.id, executeAt, taskType, payload, recurrenceType, recurrenceType === 'weekly' ? recurrenceWeekday : null, timezoneOffset, notifyMode, (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null);
     const planned = formatUnixForTimezone(executeAt, timezoneOffset);
-    return `Задача создана: #${taskId}. Следующий запуск: ${planned.local} (${planned.tzLabel}), UTC: ${planned.utc}.`;
+    const notifyInfo = (notifyMode === 'on_match' || notifyMode === 'on_condition') ? `${notifyMode} (${notifyCondition})` : notifyMode;
+    return `Успешно запланировано. Следующий запуск: ${planned.local} (${planned.tzLabel}). UTC-время: ${planned.utc}. Тип расписания: ${recurrenceType}. Режим уведомлений: ${notifyInfo}.`;
   }
+
   if (toolName === 'delete_my_task') {
     const taskId = Number(parsed.task_id);
-    if (!Number.isFinite(taskId) || taskId <= 0) return 'Ошибка: bad task_id';
-    const ok = deletePendingTask(user.id, Math.floor(taskId));
-    if (!ok) return 'Задача не найдена или уже не pending.';
+    if (!Number.isFinite(taskId) || taskId <= 0) return 'Ошибка: Некорректный task_id';
+
+    const normalizedTaskId = Math.floor(taskId);
+    const task = getTaskByUserAndId(user.id, normalizedTaskId);
+    if (!task) return `Ошибка инструмента delete_my_task: Задача #${normalizedTaskId} не найдена.`;
+    if (task.status !== 'pending') return `Ошибка инструмента delete_my_task: Задача #${normalizedTaskId} уже не активна (status: ${task.status}).`;
+
+    const ok = deletePendingTask(user.id, normalizedTaskId);
+    if (!ok) return `Ошибка инструмента delete_my_task: Не удалось удалить задачу #${normalizedTaskId}.`;
+
     const updated = listTasks(user.id, 20, 'pending');
-    return `Задача #${Math.floor(taskId)} удалена.\n\nОбновлённый список активных задач (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n${formatTasksList(updated, timezoneOffset)}`;
+    return `Задача #${normalizedTaskId} удалена.\n\nОбновлённый список активных задач (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n${formatTasksList(updated, timezoneOffset, 'Активных задач больше нет.')}`;
   }
-  if (toolName === 'check_emails') return runEmailCheck(user.id, typeof parsed.search_query === 'string' ? parsed.search_query : '', Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : (Number(user.mail_check_limit) || DEFAULT_MAIL_CHECK_LIMIT), typeof parsed.provider === 'string' ? parsed.provider : '', Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0, typeof parsed.date_from === 'string' ? parsed.date_from : '', typeof parsed.date_to === 'string' ? parsed.date_to : '');
+
+  if (toolName === 'check_emails') {
+    const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 5;
+    return runEmailCheck(user.id, typeof parsed.search_query === 'string' ? parsed.search_query : '', limit, typeof parsed.provider === 'string' ? parsed.provider : '', Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0, typeof parsed.date_from === 'string' ? parsed.date_from : '', typeof parsed.date_to === 'string' ? parsed.date_to : '');
+  }
+
   if (toolName === 'read_email_content') return runEmailRead(user.id, typeof parsed.subject_part === 'string' ? parsed.subject_part : '', typeof parsed.provider === 'string' ? parsed.provider : '');
   if (toolName === 'send_email') return runEmailSend(user.id, typeof parsed.to === 'string' ? parsed.to : '', typeof parsed.subject === 'string' ? parsed.subject : '', typeof parsed.body === 'string' ? parsed.body : '', typeof parsed.provider === 'string' ? parsed.provider : '');
   if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
+
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
@@ -508,7 +639,6 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   }
   return null;
 };
-
 export const sendMessageThroughAi = async (
   userId: number,
   inputText: string,
@@ -543,7 +673,7 @@ export const sendMessageThroughAi = async (
   const chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
   const contextWindow = resolveEffectiveContextWindow(user);
   const history = getHistoryForAi(userId, chatId, contextWindow);
-  const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 7;
+  const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const baseSystemPrompt = `${buildSystemPrompt(getPromptForUser(user), user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}`;
 
   let executionMode: 'pro' | 'lite' = 'pro';
