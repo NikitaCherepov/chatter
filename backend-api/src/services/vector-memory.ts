@@ -170,6 +170,12 @@ export class VectorMemoryService {
       });
       return result;
     } catch (error: any) {
+      console.error('[vector-memory] FULL ERROR:', error?.response?.data || error?.message || error);
+      console.error('[vector-memory] FULL ERROR META:', {
+        status: error?.status || error?.response?.status || null,
+        code: error?.code || error?.error?.code || null,
+        stack: error?.stack || null
+      });
       logError('saveFactBatched failed', {
         user_id: Math.floor(userId),
         error: `${error?.message || String(error)}`
