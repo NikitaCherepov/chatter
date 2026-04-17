@@ -20,6 +20,15 @@ const ensureUserColumn = (name: string, sql: string) => {
   if (!hasUserColumn(name)) db.exec(sql);
 };
 
+const hasChatMessageColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(chat_messages)').all() as Array<{ name: string }>;
+  return columns.some(c => c.name === columnName);
+};
+
+const ensureChatMessageColumn = (name: string, sql: string) => {
+  if (!hasChatMessageColumn(name)) db.exec(sql);
+};
+
 if (!hasUserColumn('is_admin')) {
   db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
 }
@@ -34,6 +43,10 @@ ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_w
 ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
 ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER');
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
+
+ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
+ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
 
 db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
 

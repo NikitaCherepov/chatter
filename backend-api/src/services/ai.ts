@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
 import type { AiSendResult, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getPromptForUser, getUserById, resolveEffectiveContextWindow, setUserTimezone } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getPromptForUser, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
@@ -38,6 +38,7 @@ type CompletionMeta = {
   response: any;
   usedModel: string;
   usedProvider: string;
+  baseURLUsed?: string;
   failedModels?: string[];
   failedProviders?: string[];
 };
@@ -139,6 +140,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         response: completion.response,
         modelUsed: completion.modelUsed,
         providerUsed: provider.name,
+        baseURLUsed: provider.baseURL,
         failedProviders,
         failedModels
       };
@@ -175,6 +177,61 @@ const normalizeDailyMessageLimit = (value: number | null | undefined) => {
 const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
   if (!Number.isFinite(Number(value))) return 0;
   return Math.max(0, Math.floor(Number(value)));
+};
+
+const ALLOWED_DICE_SIDES = new Set([2, 3, 4, 6, 8, 10, 12, 20, 100]);
+const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+const parseDiceNotation = (input: string) => {
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, '');
+  const match = normalized.match(/^(\d{1,3})d(\d{1,3})([+-]\d{1,5})?$/);
+  if (!match) return null;
+  const count = Number.parseInt(match[1], 10);
+  const sides = Number.parseInt(match[2], 10);
+  const modifier = match[3] ? Number.parseInt(match[3], 10) : 0;
+  if (!Number.isFinite(count) || count <= 0 || count > 100) return null;
+  if (!ALLOWED_DICE_SIDES.has(sides)) return null;
+  if (!Number.isFinite(modifier) || Math.abs(modifier) > 10000) return null;
+  return { count, sides, modifier, normalized };
+};
+
+const rollDiceExpression = (count: number, sides: number, modifier: number) => {
+  const rolls = Array.from({ length: count }, () => randomInt(1, sides));
+  const rollsSum = rolls.reduce((acc, value) => acc + value, 0);
+  const total = rollsSum + modifier;
+  return { rolls, rollsSum, modifier, total };
+};
+
+const formatRollLine = (roll: { rolls: number[]; rollsSum: number; modifier: number; total: number }) => {
+  const modifierText = roll.modifier === 0 ? '' : roll.modifier > 0 ? ` + ${roll.modifier}` : ` - ${Math.abs(roll.modifier)}`;
+  return `броски [${roll.rolls.join(', ')}] => ${roll.rollsSum}${modifierText} = ${roll.total}`;
+};
+
+const runRandomRoll = (parsed: Record<string, any>) => {
+  const rollType = `${parsed.roll_type || ''}`;
+  if (rollType !== 'coin' && rollType !== 'dice') return 'Ошибка инструмента: roll_type должен быть coin или dice.';
+  if (rollType === 'coin') return `Монетка: ${Math.random() < 0.5 ? 'Орёл' : 'Решка'}.`;
+
+  const parsedDice = parseDiceNotation(`${parsed.dice_notation || ''}`);
+  if (!parsedDice) return 'Ошибка инструмента: некорректная нотация кубиков. Пример: 2d20+5.';
+
+  const mode = parsed.mode && ['normal', 'advantage', 'disadvantage'].includes(parsed.mode)
+    ? parsed.mode
+    : 'normal';
+
+  if (mode === 'normal') {
+    const roll = rollDiceExpression(parsedDice.count, parsedDice.sides, parsedDice.modifier);
+    return `Кубики ${parsedDice.normalized}: ${formatRollLine(roll)}.`;
+  }
+
+  const first = rollDiceExpression(parsedDice.count, parsedDice.sides, parsedDice.modifier);
+  const second = rollDiceExpression(parsedDice.count, parsedDice.sides, parsedDice.modifier);
+  const pickMax = mode === 'advantage';
+  const chosen = pickMax
+    ? (first.total >= second.total ? first : second)
+    : (first.total <= second.total ? first : second);
+  const modeText = pickMax ? 'преимущество' : 'помеха';
+  return `Кубики ${parsedDice.normalized} (${modeText}):\n1) ${formatRollLine(first)}\n2) ${formatRollLine(second)}\nИтог: ${chosen.total}.`;
 };
 
 const getIsoWeekday = (date: Date) => {
@@ -317,7 +374,7 @@ const toolDefinitions = [
   { type: 'function', function: { name: 'read_webpage', description: 'Читает и очищает текст веб-страницы по URL.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
   { type: 'function', function: { name: 'control_smart_home', description: 'Управление устройствами умного дома.', parameters: { type: 'object', properties: { device_name: { type: 'string' }, action: { type: 'string', enum: ['on', 'off', 'set_color', 'set_brightness'] }, color: { type: 'string' }, brightness: { type: 'number' } }, required: ['device_name', 'action'] } } },
   { type: 'function', function: { name: 'set_user_timezone', description: 'Установка часового пояса пользователя в формате UTC offset.', parameters: { type: 'object', properties: { timezone_offset: { type: 'number' } }, required: ['timezone_offset'] } } },
-  { type: 'function', function: { name: 'random_roll', description: 'Подбросить монетку или бросить кубик.', parameters: { type: 'object', properties: { roll_type: { type: 'string', enum: ['coin', 'dice'] }, dice_notation: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'random_roll', description: 'Подбросить монетку или бросить кубик.', parameters: { type: 'object', properties: { roll_type: { type: 'string', enum: ['coin', 'dice'] }, dice_notation: { type: 'string' }, mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'] } } } } },
   { type: 'function', function: { name: 'save_note', description: 'Сохранить заметку пользователя.', parameters: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' } }, required: ['content'] } } },
   { type: 'function', function: { name: 'list_my_notes', description: 'Показать заметки пользователя.', parameters: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } } } },
   { type: 'function', function: { name: 'read_note', description: 'Прочитать одну заметку по id.', parameters: { type: 'object', properties: { note_id: { type: 'number' } }, required: ['note_id'] } } },
@@ -339,6 +396,7 @@ const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string
       response: res.response,
       usedModel: res.modelUsed,
       usedProvider: 'pro-main',
+      baseURLUsed: process.env.TIMEWEB_BASE_URL || '',
       failedModels: res.failedModels
     };
   }
@@ -347,6 +405,7 @@ const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string
     response: res.response,
     usedModel: res.modelUsed,
     usedProvider: res.providerUsed,
+    baseURLUsed: res.baseURLUsed,
     failedModels: res.failedModels,
     failedProviders: res.failedProviders
   };
@@ -384,7 +443,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const sign = tz >= 0 ? '+' : '';
     return `Часовой пояс обновлён: UTC${sign}${Math.floor(tz)}.`;
   }
-  if (toolName === 'random_roll') return `${parsed.roll_type || 'coin'}` === 'dice' ? `Кубик: ${1 + Math.floor(Math.random() * 6)}` : (Math.random() < 0.5 ? 'Монетка: орёл' : 'Монетка: решка');
+  if (toolName === 'random_roll') return runRandomRoll(parsed);
   if (toolName === 'save_note') return runSaveNoteTool(user, typeof parsed.content === 'string' ? parsed.content : '', typeof parsed.title === 'string' ? parsed.title : '');
   if (toolName === 'list_my_notes') return runListNotesTool(user.id, typeof parsed.query === 'string' ? parsed.query : '', Number(parsed.limit), Number(parsed.offset));
   if (toolName === 'read_note') return runReadNoteTool(user.id, Number(parsed.note_id));
@@ -431,6 +490,26 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
+const getToolUserMessage = (toolName: string, argsRaw: string) => {
+  if (toolName === 'search_web') return 'Ищу информацию в сети...';
+  if (toolName === 'read_webpage') return 'Открываю страницу и извлекаю текст...';
+  if (toolName === 'control_smart_home') return '🏠 Выполняю команду умного дома...';
+  if (toolName === 'random_roll') {
+    try {
+      const parsed = JSON.parse(argsRaw || '{}');
+      const target = parsed.roll_type === 'coin'
+        ? 'монетку'
+        : parsed.dice_notation
+          ? `кубики ${parsed.dice_notation}`
+          : 'кубики';
+      return `Подкидываем ${target}...`;
+    } catch {
+      return 'Подкидываем кубики...';
+    }
+  }
+  return null;
+};
+
 export const sendMessageThroughAi = async (
   userId: number,
   inputText: string,
@@ -441,6 +520,9 @@ export const sendMessageThroughAi = async (
     countAsUserMessage?: boolean;
     skipHistory?: boolean;
     persistUserText?: string;
+    userTelegramChatId?: number | null;
+    userTelegramMessageId?: number | null;
+    assistantTelegramChatId?: number | null;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -450,7 +532,7 @@ export const sendMessageThroughAi = async (
   let text = (inputText || '').trim();
   if (!text) throw new Error('empty_text');
   const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!');
-  if (forceProRoute) {
+  if (forceProRoute && !options?.forcePro) {
     text = text.replace(/^!{3,}/, '').trim();
     if (!text) throw new Error('empty_text');
   }
@@ -465,17 +547,54 @@ export const sendMessageThroughAi = async (
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 7;
   const baseSystemPrompt = `${buildSystemPrompt(getPromptForUser(user), user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}`;
 
-  let executionMode: 'pro' | 'lite' = isLitePlan(user.plan) ? 'lite' : 'pro';
+  let executionMode: 'pro' | 'lite' = 'pro';
   let executionTools: any[] = [...toolDefinitions] as any[];
   let executionHistory = history;
   let executionSystemPrompt = baseSystemPrompt;
+  let totalTokens = 0;
 
-  if (!forceProRoute && executionMode === 'lite') {
-    const routerPrompt = `Ты - маршрутизатор запросов. Твоя цель - определить категорию запроса. ВСЕ, что не укладывается в тип запроса, перенаправляй в PRO. Верни только одно слово: SMART_HOME, QUICK_SEARCH, TIMEZONE, RANDOM, PRO. Запрос: "${text}"`;
-    let route = 'PRO';
+  if (!forceProRoute) {
+    const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
+Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
+
+[ПРОСТЫЕ КАТЕГОРИИ - не требуют истории чата]:
+- SMART_HOME (управление светом, розетками)
+- QUICK_SEARCH (узнать погоду, курс валют, быстрый факт из сети)
+- TIMEZONE (установить часовой пояс)
+- RANDOM (бросить кубик, монетку)
+
+[СЛОЖНАЯ КАТЕГОРИЯ]:
+- PRO (любой сложный вопрос, любая простая беседа, программирование, анализ, почта (email), расписания, работа с памятью, заметки/блокнот, длинные беседы)
+
+[ПРИМЕРЫ СТРОГОГО ВЫВОДА]:
+Запрос: Включи свет на кухне
+SMART_HOME
+Запрос: Подбрось монетку
+RANDOM
+Запрос: Включи свет через 10 минут
+PRO
+Запрос: Да пошел ты
+PRO
+Запрос: Как дела?
+PRO
+Запрос: Напиши код на TS
+PRO
+
+ВАЖНО: если в запросе есть отложенное/регулярное действие по времени ("через ...", "завтра", "в 10:30", "напомни", "каждый день"), выбирай ТОЛЬКО PRO, даже если там есть погода/поиск.
+
+Запрос пользователя: "${text}"`;
+    type CheapRoute = 'SMART_HOME' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
+    const cheapMap: Record<Exclude<CheapRoute, 'PRO'>, string[]> = {
+      SMART_HOME: ['control_smart_home'],
+      QUICK_SEARCH: ['search_web'],
+      TIMEZONE: ['set_user_timezone'],
+      RANDOM: ['random_roll']
+    };
+    let routeLabel: CheapRoute = 'PRO';
     if (!hasSchedulingIntent(text)) {
       try {
         const routed = await runCompletion('lite', { messages: [{ role: 'user', content: routerPrompt }], temperature: 0, max_tokens: 8, thinking: { type: 'disabled' } });
+        totalTokens += extractTokens(routed.response);
         if (DEBUG_AI_RAW_LITE_RESPONSE) {
           try {
             console.log('[DEBUG_AI_RAW_LITE_RESPONSE][router]', JSON.stringify(routed.response, null, 2));
@@ -485,31 +604,35 @@ export const sendMessageThroughAi = async (
         }
         if ((routed.failedProviders?.length || 0) > 0 || (routed.failedModels?.length || 0) > 0) {
           console.warn(
-            `[LITE router fallback] providers_failed=${routed.failedProviders?.join(',') || '-'} models_failed=${routed.failedModels?.join(',') || '-'} used=${routed.usedProvider}/${routed.usedModel}`
+            `[LITE router fallback] providers_failed=${routed.failedProviders?.join(',') || '-'} models_failed=${routed.failedModels?.join(',') || '-'} used=${routed.usedProvider}/${routed.usedModel} (${routed.baseURLUsed || '-'})`
           );
         }
-        route = `${routed.response?.choices?.[0]?.message?.content || ''}`.toUpperCase();
+        const rawRoute = `${routed.response?.choices?.[0]?.message?.content || ''}`.toUpperCase();
+        const matchedRoute = rawRoute.match(/\b(SMART_HOME|QUICK_SEARCH|TIMEZONE|RANDOM|PRO)\b/);
+        if (
+          matchedRoute?.[1] === 'SMART_HOME'
+          || matchedRoute?.[1] === 'QUICK_SEARCH'
+          || matchedRoute?.[1] === 'TIMEZONE'
+          || matchedRoute?.[1] === 'RANDOM'
+          || matchedRoute?.[1] === 'PRO'
+        ) {
+          routeLabel = matchedRoute[1];
+        }
       } catch {
-        route = 'PRO';
+        routeLabel = 'PRO';
       }
     }
 
-    if (!route.includes('PRO')) {
-      const cheapMap: Record<string, string[]> = { SMART_HOME: ['control_smart_home'], QUICK_SEARCH: ['search_web'], TIMEZONE: ['set_user_timezone'], RANDOM: ['random_roll'] };
-      const matched = Object.keys(cheapMap).find(k => route.includes(k));
-      if (matched) {
-        const allowed = new Set(cheapMap[matched]);
+    if (routeLabel !== 'PRO') {
+      const allowedToolNames = cheapMap[routeLabel];
+      if (allowedToolNames.length) {
+        const allowed = new Set(allowedToolNames);
         executionTools = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
         executionHistory = [];
         executionSystemPrompt = 'Ты ассистент. Выполни задачу пользователя, используя доступные функции. Отвечай максимально коротко.';
-      } else {
-        executionMode = 'pro';
+        executionMode = 'lite';
       }
-    } else {
-      executionMode = 'pro';
     }
-  } else {
-    executionMode = 'pro';
   }
 
   const currentMessages: any[] = [
@@ -519,11 +642,13 @@ export const sendMessageThroughAi = async (
   ];
 
   let answer = FALLBACK_ANSWER;
-  let totalTokens = 0;
   let usedModel = '';
   let usedProvider = '';
   let loop = 0;
   const toolOutputsForFallback: string[] = [];
+  const toolUserMessages: string[] = [];
+  let modelFallbackNotice: string | null = null;
+  let modelFallbackNoticeSent = false;
 
   while (loop < MAX_TOOL_LOOPS) {
     loop += 1;
@@ -544,8 +669,12 @@ export const sendMessageThroughAi = async (
     }
     if ((completion.failedProviders?.length || 0) > 0 || (completion.failedModels?.length || 0) > 0) {
       console.warn(
-        `[${completion.usedProvider.startsWith('lite-') ? 'LITE main fallback' : 'PRO main fallback'}] providers_failed=${completion.failedProviders?.join(',') || '-'} models_failed=${completion.failedModels?.join(',') || '-'} used=${completion.usedProvider}/${completion.usedModel}`
+        `[${completion.usedProvider.startsWith('lite-') ? 'LITE main fallback' : 'PRO main fallback'}] providers_failed=${completion.failedProviders?.join(',') || '-'} models_failed=${completion.failedModels?.join(',') || '-'} used=${completion.usedProvider}/${completion.usedModel} (${completion.baseURLUsed || '-'})`
       );
+    }
+    if (!modelFallbackNoticeSent && executionMode === 'pro' && (completion.failedModels?.length || 0) > 0) {
+      modelFallbackNoticeSent = true;
+      modelFallbackNotice = `⚙️ Модель(и) ${completion.failedModels?.join(', ')} были недоступны. Ответ получен от ${completion.usedModel}.`;
     }
     usedModel = completion.usedModel;
     usedProvider = completion.usedProvider;
@@ -564,6 +693,8 @@ export const sendMessageThroughAi = async (
     for (const toolCall of message.tool_calls) {
       if (toolCall.type !== 'function') continue;
       const toolName = `${toolCall.function?.name || ''}`;
+      const toolUserMessage = getToolUserMessage(toolName, toolCall.function?.arguments || '{}');
+      if (toolUserMessage) toolUserMessages.push(toolUserMessage);
       let toolContent = '';
       try {
         toolContent = await runTool(user, timezone, toolName, toolCall.function?.arguments || '{}', (payload) => runCompletion('pro', payload));
@@ -581,9 +712,20 @@ export const sendMessageThroughAi = async (
 
   const userTextForHistory = options?.persistUserText?.trim() || text;
   if (!options?.skipHistory) {
-    appendChatMessage(userId, chatId, 'user', userTextForHistory);
+    const userTelegramChatId = Number.isFinite(Number(options?.userTelegramChatId))
+      ? Math.floor(Number(options?.userTelegramChatId))
+      : null;
+    const userTelegramMessageId = Number.isFinite(Number(options?.userTelegramMessageId))
+      ? Math.floor(Number(options?.userTelegramMessageId))
+      : null;
+    appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId);
   }
-  const assistantMessageId = options?.skipHistory ? 0 : appendChatMessage(userId, chatId, 'assistant', answer);
+  const assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
+    ? Math.floor(Number(options?.assistantTelegramChatId))
+    : null;
+  const assistantMessageId = options?.skipHistory
+    ? 0
+    : appendChatMessage(userId, chatId, 'assistant', answer, assistantTelegramChatId, null);
 
   const safeTokens = Math.max(0, Math.floor(totalTokens));
   const costRub = toRubFromTokens(safeTokens);
@@ -594,10 +736,11 @@ export const sendMessageThroughAi = async (
     SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
         total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
         daily_message_count = COALESCE(daily_message_count, 0) + 1,
+        total_message_length = COALESCE(total_message_length, 0) + ?,
         daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
         total_cost_rub = COALESCE(total_cost_rub, 0) + ?
     WHERE id = ?
-  `).run(safeTokens, safeTokens, costRub, costRub, userId);
+  `).run(safeTokens, safeTokens, userTextForHistory.length, costRub, costRub, userId);
   } else {
     db.prepare(`
       UPDATE users
@@ -609,10 +752,14 @@ export const sendMessageThroughAi = async (
     `).run(safeTokens, safeTokens, costRub, costRub, userId);
   }
 
+  trimUserHistoryByChat(userId, chatId, contextWindow);
+
   return {
     reply_text: answer,
     chat_id: chatId,
     message_id: assistantMessageId,
+    model_fallback_notice: modelFallbackNotice,
+    tool_user_messages: toolUserMessages,
     usage: {
       tokens_used: totalTokens,
       used_model: usedModel,

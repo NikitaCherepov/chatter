@@ -2318,6 +2318,9 @@ const runBackendAiSend = async (
         ignoreDailyLimit?: boolean;
         countAsUserMessage?: boolean;
         skipHistory?: boolean;
+        userTelegramChatId?: number | null;
+        userTelegramMessageId?: number | null;
+        assistantTelegramChatId?: number | null;
     }
 ) => {
     if (!BACKEND_INTERNAL_TOKEN) {
@@ -2334,7 +2337,10 @@ const runBackendAiSend = async (
                 ignoreDailyLimit: Boolean(options?.ignoreDailyLimit),
                 countAsUserMessage: options?.countAsUserMessage === false ? false : true,
                 skipHistory: Boolean(options?.skipHistory),
-                persistUserText: typeof options?.persistUserText === 'string' ? options.persistUserText : undefined
+                persistUserText: typeof options?.persistUserText === 'string' ? options.persistUserText : undefined,
+                userTelegramChatId: Number.isFinite(Number(options?.userTelegramChatId)) ? Math.floor(Number(options?.userTelegramChatId)) : null,
+                userTelegramMessageId: Number.isFinite(Number(options?.userTelegramMessageId)) ? Math.floor(Number(options?.userTelegramMessageId)) : null,
+                assistantTelegramChatId: Number.isFinite(Number(options?.assistantTelegramChatId)) ? Math.floor(Number(options?.assistantTelegramChatId)) : null
             }
         },
         {
@@ -2346,13 +2352,42 @@ const runBackendAiSend = async (
     );
 
     return response.data as {
+        message_id?: number;
         reply_text?: string;
+        model_fallback_notice?: string | null;
+        tool_user_messages?: string[];
         usage?: {
             tokens_used?: number;
             used_model?: string;
             used_provider?: string;
         };
     };
+};
+
+const runBackendBindTelegramMessage = async (
+    userId: number,
+    messageId: number,
+    telegramChatId: number | null,
+    telegramMessageId: number | null
+) => {
+    if (!BACKEND_INTERNAL_TOKEN) {
+        throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    }
+    await axios.post(
+        `${BACKEND_API_BASE_URL}/internal/messages/bind-telegram`,
+        {
+            user_id: userId,
+            message_id: messageId,
+            telegram_chat_id: Number.isFinite(Number(telegramChatId)) ? Math.floor(Number(telegramChatId)) : null,
+            telegram_message_id: Number.isFinite(Number(telegramMessageId)) ? Math.floor(Number(telegramMessageId)) : null
+        },
+        {
+            headers: {
+                Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+            },
+            timeout: 30000
+        }
+    );
 };
 type UserChatRecord = {
     id: number;
@@ -6441,18 +6476,48 @@ const processUserTextThroughAi = async (
     if (BOT_USE_BACKEND_AI) {
         try {
             await ctx.sendChatAction('typing');
+            const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
+            const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
             const backend = await runBackendAiSend(userId, userText, {
                 forcePro: forceProRoute,
                 persistUserText: userTextForHistory,
                 ignoreDailyLimit: options?.ignoreDailyLimit,
                 countAsUserMessage: options?.countAsUserMessage,
-                skipHistory: options?.skipHistory
+                skipHistory: options?.skipHistory,
+                userTelegramChatId: userChatId,
+                userTelegramMessageId: userMessageId,
+                assistantTelegramChatId: userChatId
             });
+            if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length > 0 && !options?.suppressFinalReply) {
+                for (const msg of backend.tool_user_messages) {
+                    const trimmed = typeof msg === 'string' ? msg.trim() : '';
+                    if (trimmed) {
+                        await ctx.reply(trimmed);
+                    }
+                }
+            }
+            if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim() && !options?.suppressFinalReply) {
+                await ctx.reply(backend.model_fallback_notice.trim());
+            }
             const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
                 ? backend.reply_text.trim()
                 : FALLBACK_ANSWER;
+            let sentMessage: any = null;
             if (!options?.suppressFinalReply) {
-                await safeReply(ctx, assistantText);
+                sentMessage = await safeReply(ctx, assistantText);
+                const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
+                    ? Math.floor(Number(backend?.message_id))
+                    : null;
+                const assistantTgMessageId = Number.isFinite(Number(sentMessage?.message_id))
+                    ? Math.floor(Number(sentMessage?.message_id))
+                    : null;
+                if (backendAssistantMessageId && !options?.skipHistory) {
+                    try {
+                        await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
+                    } catch (bindErr) {
+                        console.warn('Не удалось привязать telegram_message_id к backend сообщению:', bindErr);
+                    }
+                }
             }
             if (options?.onAssistantReply) {
                 await options.onAssistantReply(assistantText);

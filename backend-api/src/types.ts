@@ -45,6 +45,8 @@ export type MessageDto = {
   chat_id: number;
   role: ChatRole;
   content: string;
+  telegram_chat_id?: number | null;
+  telegram_message_id?: number | null;
   created_at: number;
 };
 
@@ -79,5 +81,7 @@ export type AiSendResult = {
   reply_text: string;
   chat_id: number;
   message_id: number;
+  model_fallback_notice?: string | null;
+  tool_user_messages?: string[];
   usage: UsageDto;
 };

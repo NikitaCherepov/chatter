@@ -1,7 +1,7 @@
 ﻿import express from 'express';
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
-import { activateUserChat, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi } from './services/ai.js';
@@ -51,7 +51,10 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
     ignoreDailyLimit: Boolean(optionsRaw.ignoreDailyLimit),
     countAsUserMessage: optionsRaw.countAsUserMessage === false ? false : true,
     skipHistory: Boolean(optionsRaw.skipHistory),
-    persistUserText: typeof optionsRaw.persistUserText === 'string' ? optionsRaw.persistUserText : undefined
+    persistUserText: typeof optionsRaw.persistUserText === 'string' ? optionsRaw.persistUserText : undefined,
+    userTelegramChatId: Number.isFinite(Number(optionsRaw.userTelegramChatId)) ? Math.floor(Number(optionsRaw.userTelegramChatId)) : null,
+    userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null,
+    assistantTelegramChatId: Number.isFinite(Number(optionsRaw.assistantTelegramChatId)) ? Math.floor(Number(optionsRaw.assistantTelegramChatId)) : null
   };
 
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -68,6 +71,24 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
     if (code === 'user_not_found') return res.status(404).json({ error: code });
     return res.status(500).json({ error: code });
   }
+});
+
+app.post('/internal/messages/bind-telegram', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const messageId = Number(req.body?.message_id);
+  const telegramChatId = Number.isFinite(Number(req.body?.telegram_chat_id))
+    ? Math.floor(Number(req.body?.telegram_chat_id))
+    : null;
+  const telegramMessageId = Number.isFinite(Number(req.body?.telegram_message_id))
+    ? Math.floor(Number(req.body?.telegram_message_id))
+    : null;
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
+
+  const result = bindChatMessageTelegramMeta(Math.floor(userId), Math.floor(messageId), telegramChatId, telegramMessageId);
+  if (!result.changes) return res.status(404).json({ error: 'message_not_found' });
+  return res.json({ ok: true });
 });
 
 app.post('/api/v1/auth/register', (req, res) => {
