@@ -9,6 +9,8 @@ const PINECONE_INDEX_NAME = `${process.env.PINECONE_INDEX_NAME || 'bot-memory'}`
 const VECTOR_MEMORY_MAX_TEXT = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_MAX_TEXT || '4000', 10) || 4000);
 const VECTOR_MEMORY_MAX_QUERY = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_MAX_QUERY || '1000', 10) || 1000);
 const VECTOR_MEMORY_TOP_K_MAX = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_TOP_K_MAX || '20', 10) || 20);
+const VECTOR_MEMORY_CHUNK_SIZE = Math.max(100, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_SIZE || '1000', 10) || 1000);
+const VECTOR_MEMORY_CHUNK_OVERLAP = Math.max(0, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_OVERLAP || '200', 10) || 200);
 
 let openaiClient: OpenAI | null = null;
 let pineconeClient: Pinecone | null = null;
@@ -54,35 +56,96 @@ const getEmbedding = async (text: string): Promise<number[]> => {
   return embedding as number[];
 };
 
+const chunkText = (text: string, chunkSize = VECTOR_MEMORY_CHUNK_SIZE, overlap = VECTOR_MEMORY_CHUNK_OVERLAP): string[] => {
+  const chunks: string[] = [];
+  const paragraphs = text.split(/\n\n+/);
+  let currentChunk = '';
+  const safeOverlap = Math.max(0, Math.min(overlap, Math.max(0, chunkSize - 1)));
+
+  for (const paragraphRaw of paragraphs) {
+    const paragraph = `${paragraphRaw || ''}`.trim();
+    if (!paragraph) continue;
+
+    if (paragraph.length > chunkSize) {
+      const sentences = paragraph.match(/[^.!?]+[.!?]+/g) || [paragraph];
+      for (const sentenceRaw of sentences) {
+        const sentence = `${sentenceRaw || ''}`.trim();
+        if (!sentence) continue;
+        if ((currentChunk + (currentChunk ? ' ' : '') + sentence).length > chunkSize && currentChunk.length > 0) {
+          chunks.push(currentChunk.trim());
+          currentChunk = `${currentChunk.slice(-safeOverlap)}${sentence}`;
+        } else {
+          currentChunk += (currentChunk ? ' ' : '') + sentence;
+        }
+      }
+    } else if ((currentChunk + (currentChunk ? '\n\n' : '') + paragraph).length > chunkSize && currentChunk.length > 0) {
+      chunks.push(currentChunk.trim());
+      currentChunk = `${currentChunk.slice(-safeOverlap)}\n\n${paragraph}`;
+    } else {
+      currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+    }
+  }
+
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks.length ? chunks : [text.trim()];
+};
+
 export class VectorMemoryService {
-  static async saveChunk(userId: number, textChunk: string, sourceTag: string) {
-    const safeText = `${textChunk || ''}`.trim();
+  static async saveFactBatched(userId: number, fullText: string, sourceTag: string) {
+    const safeText = `${fullText || ''}`.trim();
     if (!safeText) throw new Error('text_required');
     if (safeText.length > VECTOR_MEMORY_MAX_TEXT) throw new Error(`text_too_long_max_${VECTOR_MEMORY_MAX_TEXT}`);
 
     const safeSource = `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
+    const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
     const namespace = `${Math.floor(userId)}`;
-    const vector = await getEmbedding(safeText);
-    const chunkId = `chunk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+    const openai = getOpenAIClient();
+    const embedResponse = await openai.embeddings.create({
+      model: TIMEWEB_EMBED_MODEL,
+      input: chunks.map(chunk => chunk.replace(/\n/g, ' ').trim())
+    } as any);
+
+    const now = Math.floor(Date.now() / 1000);
+    const baseId = `fact_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const embeddings = Array.isArray(embedResponse?.data) ? embedResponse.data : [];
+    if (!embeddings.length) throw new Error('embedding_empty');
+
+    const records = embeddings.map((embedData: any, index: number) => {
+      const values = Array.isArray(embedData?.embedding) ? embedData.embedding : [];
+      if (!values.length) throw new Error('embedding_empty');
+      return {
+        id: `${baseId}_chunk_${index}`,
+        values,
+        metadata: {
+          text: chunks[index] || '',
+          source: safeSource,
+          timestamp: now,
+          chunk_index: index,
+          total_chunks: chunks.length
+        }
+      };
+    });
 
     const index = getPineconeIndex();
-    await index.namespace(namespace).upsert([{
-      id: chunkId,
-      values: vector,
-      metadata: {
-        text: safeText,
-        source: safeSource,
-        timestamp: Date.now()
-      }
-    } as any]);
+    await index.namespace(namespace).upsert(records as any);
 
     return {
       ok: true,
-      id: chunkId,
+      id: baseId,
       namespace,
       source: safeSource,
-      size: safeText.length
+      size: safeText.length,
+      chunks_saved: records.length,
+      total_tokens_used: Number(embedResponse?.usage?.total_tokens || 0)
     };
+  }
+
+  static async saveChunk(userId: number, textChunk: string, sourceTag: string) {
+    return this.saveFactBatched(userId, textChunk, sourceTag);
   }
 
   static async search(userId: number, query: string, topK = 3) {
