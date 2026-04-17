@@ -123,9 +123,14 @@ export class VectorMemoryService {
       const namespace = `${Math.floor(userId)}`;
 
       const openai = getOpenAIClient();
+
+      const inputForEmbeddings = chunks.map(chunk => {
+        // Приклеиваем тег к каждому чанку, чтобы каждый вектор "помнил" откуда он
+        return `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim();
+      });
       const embedResponse = await openai.embeddings.create({
         model: TIMEWEB_EMBED_MODEL,
-        input: chunks.map(chunk => chunk.replace(/\n/g, ' ').trim())
+        input: inputForEmbeddings // <--- Отправляем обогащенные чанки
       } as any);
 
       const now = Math.floor(Date.now() / 1000);
