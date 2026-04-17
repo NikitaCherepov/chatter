@@ -78,3 +78,21 @@ export const deleteNote = (userId: number, noteId: number) => db
   .prepare('DELETE FROM notes WHERE user_id = ? AND id = ?')
   .run(userId, noteId)
   .changes > 0;
+
+export const getNoteById = (userId: number, noteId: number): NoteDto | null => {
+  const row = db.prepare(`
+    SELECT id, title, content, created_at, updated_at
+    FROM notes
+    WHERE user_id = ? AND id = ?
+    LIMIT 1
+  `).get(userId, noteId) as { id: number; title: string; content: string; created_at: number; updated_at: number } | undefined;
+
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    created_at: Math.floor(row.created_at),
+    updated_at: Math.floor(row.updated_at)
+  };
+};

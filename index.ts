@@ -579,6 +579,7 @@ if (!LITE_ENDPOINT_PROVIDERS.length) {
 const MODEL_RETRY_SECONDS = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRY_SECONDS || '3').trim(), 10) || 3);
 const MODEL_RETRIES_PER_MODEL = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRIES_PER_MODEL || '1').trim(), 10) || 1);
 const AUTO_SYNC_PLAN_LIMITS_ON_BOOT = process.env.AUTO_SYNC_PLAN_LIMITS_ON_BOOT === '1';
+const BOT_TASK_SCHEDULER_ENABLED = (process.env.BOT_TASK_SCHEDULER_ENABLED || '1').trim() !== '0';
 const VISION_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [MODEL_CHAIN[0] || 'glm-4v']);
 const LITE_VISION_MODEL_CHAIN = parseModelChain(
     process.env.TIMEWEB_LITE_VISION_MODEL,
@@ -7191,51 +7192,55 @@ bot.on('photo', async (ctx) => {
     await processUserPhotoThroughAi(ctx);
 });
 
-setInterval(async () => {
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const pendingTasks = getDueTasks(nowUnix);
+if (BOT_TASK_SCHEDULER_ENABLED) {
+    setInterval(async () => {
+        const nowUnix = Math.floor(Date.now() / 1000);
+        const pendingTasks = getDueTasks(nowUnix);
 
-    for (const task of pendingTasks) {
-        try {
-            let successMessage = '';
-            if (task.task_type === 'message') {
-                successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
-            } else if (task.task_type === 'smart_home') {
-                const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
-                const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
-                successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
-            } else if (task.task_type === 'web_search') {
-                const result = await runScheduledWebSearchTask(task);
-                successMessage = `🔎 *Запланированный поиск выполнен:*\n\n${result}`;
-            } else if (task.task_type === 'email_check') {
-                successMessage = await runScheduledEmailCheckTask(task);
-            } else if (task.task_type === 'ai_instruction') {
-                const result = await runScheduledAiInstructionTask(task);
-                successMessage = result
-                    ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}`
-                    : '';
-            }
-
-            if (successMessage && await shouldNotifyTaskResult(task, successMessage)) {
-                console.log(`Планировщик: отправка уведомления по задаче #${task.id} (${task.task_type}, notify_mode=${task.notify_mode})`);
-                await safeSendToUser(task.user_id, successMessage);
-            }
-
-            if (task.recurrence_type === 'once') {
-                updateTaskStatus(task.id, 'done');
-            } else {
-                const nextExecuteAt = computeNextRecurringExecuteAt(task);
-                if (!nextExecuteAt) {
-                    throw new Error(`Не удалось вычислить следующий запуск для recurring-задачи #${task.id}`);
+        for (const task of pendingTasks) {
+            try {
+                let successMessage = '';
+                if (task.task_type === 'message') {
+                    successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
+                } else if (task.task_type === 'smart_home') {
+                    const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
+                    const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
+                    successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
+                } else if (task.task_type === 'web_search') {
+                    const result = await runScheduledWebSearchTask(task);
+                    successMessage = `🔎 *Запланированный поиск выполнен:*\n\n${result}`;
+                } else if (task.task_type === 'email_check') {
+                    successMessage = await runScheduledEmailCheckTask(task);
+                } else if (task.task_type === 'ai_instruction') {
+                    const result = await runScheduledAiInstructionTask(task);
+                    successMessage = result
+                        ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}`
+                        : '';
                 }
-                updateTaskNextExecution(task.id, nextExecuteAt);
+
+                if (successMessage && await shouldNotifyTaskResult(task, successMessage)) {
+                    console.log(`Планировщик: отправка уведомления по задаче #${task.id} (${task.task_type}, notify_mode=${task.notify_mode})`);
+                    await safeSendToUser(task.user_id, successMessage);
+                }
+
+                if (task.recurrence_type === 'once') {
+                    updateTaskStatus(task.id, 'done');
+                } else {
+                    const nextExecuteAt = computeNextRecurringExecuteAt(task);
+                    if (!nextExecuteAt) {
+                        throw new Error(`Не удалось вычислить следующий запуск для recurring-задачи #${task.id}`);
+                    }
+                    updateTaskNextExecution(task.id, nextExecuteAt);
+                }
+            } catch (err) {
+                console.error(`Ошибка при выполнении задачи ${task.id}:`, err);
+                updateTaskStatus(task.id, 'error');
             }
-        } catch (err) {
-            console.error(`Ошибка при выполнении задачи ${task.id}:`, err);
-            updateTaskStatus(task.id, 'error');
         }
-    }
-}, 30000);
+    }, 30000);
+} else {
+    console.log('Task scheduler в Telegram-боте отключен (BOT_TASK_SCHEDULER_ENABLED=0).');
+}
 
 setInterval(() => {
     try {

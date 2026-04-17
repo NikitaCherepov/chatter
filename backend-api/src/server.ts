@@ -2,11 +2,12 @@
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
 import { activateUserChat, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
-import { createNote, countNotes, deleteNote, listNotes } from './services/notes.js';
+import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi } from './services/ai.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
+import { startTaskScheduler } from './services/scheduler.js';
 
 dotenv.config();
 
@@ -187,6 +188,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   } catch (err: any) {
     const code = `${err?.message || 'ai_send_failed'}`;
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
+    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_text') return res.status(400).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
     return res.status(500).json({ error: code });
@@ -226,6 +228,15 @@ app.delete('/api/v1/notes/:id', (req: AuthedRequest, res) => {
   const ok = deleteNote(userId, noteId);
   if (!ok) return res.status(404).json({ error: 'note_not_found' });
   return res.json({ ok: true });
+});
+
+app.get('/api/v1/notes/:id', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const noteId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_note_id' });
+  const note = getNoteById(userId, noteId);
+  if (!note) return res.status(404).json({ error: 'note_not_found' });
+  return res.json({ note });
 });
 
 app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
@@ -285,4 +296,5 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 
 app.listen(PORT, () => {
   console.log(`[backend-api] started on :${PORT}`);
+  startTaskScheduler();
 });

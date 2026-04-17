@@ -22,6 +22,14 @@ export type UserRecord = {
   context_window_max: number;
   daily_message_count: number;
   daily_message_limit: number;
+  daily_tokens_used?: number;
+  total_tokens_used?: number;
+  daily_cost_rub?: number;
+  total_cost_rub?: number;
+  daily_web_search_count?: number;
+  daily_web_search_limit?: number;
+  total_web_search_count?: number;
+  mail_check_limit?: number;
 };
 
 export type ChatDto = {

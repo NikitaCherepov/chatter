@@ -1,5 +1,6 @@
 ﻿import crypto from 'node:crypto';
 import { db } from '../db.js';
+import { getUserById } from './chats.js';
 
 export type MailProvider = 'yandex' | 'google';
 
@@ -102,7 +103,9 @@ export const runEmailCheck = async (
   offset = 0,
   dateFrom?: string,
   dateTo?: string
-) => {
+ ) => {
+  const user = getUserById(userId);
+  if (!user) return 'Ошибка: пользователь не найден.';
   const account = resolveUserMailAccount(userId, provider);
   if (!account) return 'Ошибка: почта не настроена.';
 
@@ -119,7 +122,14 @@ export const runEmailCheck = async (
     return `Ошибка: не удалось расшифровать пароль почты (${err?.message || String(err)}).`;
   }
 
-  const safeLimit = Math.max(1, Math.min(50, Number.isFinite(limit) ? Math.floor(limit) : 5));
+  const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : 0;
+  const userDefaultLimit = Number.isFinite(Number(user.mail_check_limit)) && Number(user.mail_check_limit) > 0
+    ? Math.floor(Number(user.mail_check_limit))
+    : 10;
+  const desiredLimit = requestedLimit > 0 ? requestedLimit : userDefaultLimit;
+  const safeLimit = user.role === 'admin'
+    ? Math.max(1, desiredLimit)
+    : Math.max(1, Math.min(10, desiredLimit));
   const safeOffset = Math.max(0, Math.min(500, Math.floor(offset || 0)));
   const fetchWindow = Math.min(500, safeLimit + safeOffset + 20);
   const normalizedQuery = (searchQuery || '').trim();
@@ -216,7 +226,9 @@ export const runEmailCheck = async (
   }
 };
 
-export const runEmailRead = async (userId: number, subjectPart: string, provider?: string) => {
+export const runEmailRead = async (userId: number, subjectPart: string, provider?: string ) => {
+  const user = getUserById(userId);
+  if (!user) return 'Ошибка: пользователь не найден.';
   const account = resolveUserMailAccount(userId, provider);
   if (!account) return 'Ошибка: почта не настроена.';
 
@@ -292,7 +304,9 @@ export const runEmailRead = async (userId: number, subjectPart: string, provider
   }
 };
 
-export const runEmailSend = async (userId: number, to: string, subject: string, body: string, provider?: string) => {
+export const runEmailSend = async (userId: number, to: string, subject: string, body: string, provider?: string ) => {
+  const user = getUserById(userId);
+  if (!user) return 'Ошибка: пользователь не найден.';
   const account = resolveUserMailAccount(userId, provider);
   if (!account) return 'Ошибка: почта не настроена.';
 
@@ -347,3 +361,4 @@ export const runEmailSend = async (userId: number, to: string, subject: string, 
     return `❌ Ошибка отправки: ${err?.message || String(err)}`;
   }
 };
+
