@@ -43,7 +43,7 @@ type CompletionMeta = {
   failedProviders?: string[];
 };
 
-const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini/gemini-3.1-flash-lite-preview']);
+const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
 const PRO_CLIENT = new OpenAI({
   apiKey: process.env.TIMEWEB_API_KEY,
   baseURL: process.env.TIMEWEB_BASE_URL
@@ -52,7 +52,7 @@ const PRO_CLIENT = new OpenAI({
 const parseLiteProviders = (): LiteProvider[] => {
   const defaultBase = (process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
   const defaultKey = (process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
-  const defaultModels = parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini/gemini-2.5-flash-lite']);
+  const defaultModels = parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite']);
   const raw = (process.env.TIMEWEB_LITE_ENDPOINTS || '').trim();
 
   if (!raw) {
@@ -486,7 +486,6 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
   if (toolName === 'read_email_content') return runEmailRead(user.id, typeof parsed.subject_part === 'string' ? parsed.subject_part : '', typeof parsed.provider === 'string' ? parsed.provider : '');
   if (toolName === 'send_email') return runEmailSend(user.id, typeof parsed.to === 'string' ? parsed.to : '', typeof parsed.subject === 'string' ? parsed.subject : '', typeof parsed.body === 'string' ? parsed.body : '', typeof parsed.provider === 'string' ? parsed.provider : '');
   if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
-  if (toolName === 'escalate_to_pro') return '__ESCALATE_TO_PRO__';
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
@@ -552,7 +551,6 @@ export const sendMessageThroughAi = async (
   let executionHistory = history;
   let executionSystemPrompt = baseSystemPrompt;
   let totalTokens = 0;
-  let forcedToolOnFirstLoop: string | null = null;
 
   if (!forceProRoute) {
     const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
@@ -632,9 +630,6 @@ PRO
         executionHistory = [];
         executionSystemPrompt = 'Ты ассистент. Выполни задачу пользователя, используя доступные функции. Отвечай максимально коротко.';
         executionMode = 'lite';
-        if (allowedToolNames.length === 1) {
-          forcedToolOnFirstLoop = allowedToolNames[0];
-        }
       }
     }
   }
@@ -656,10 +651,7 @@ PRO
 
   while (loop < MAX_TOOL_LOOPS) {
     loop += 1;
-    const toolChoice: any = (loop === 1 && forcedToolOnFirstLoop)
-      ? { type: 'function', function: { name: forcedToolOnFirstLoop } }
-      : 'auto';
-    const completion = await runCompletion(executionMode, { messages: currentMessages, tools: executionTools, tool_choice: toolChoice, thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' }, clear_thinking: false });
+    const completion = await runCompletion(executionMode, { messages: currentMessages, tools: executionTools, tool_choice: 'auto', thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' }, clear_thinking: false });
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
@@ -705,10 +697,6 @@ PRO
       let toolContent = '';
       try {
         toolContent = await runTool(user, timezone, toolName, toolCall.function?.arguments || '{}', (payload) => runCompletion('pro', payload));
-        if (toolContent === '__ESCALATE_TO_PRO__') {
-          executionMode = 'pro';
-          toolContent = 'Эскалация на PRO-модель выполнена.';
-        }
       } catch (err: any) {
         toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
       }
