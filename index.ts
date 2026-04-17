@@ -5,6 +5,7 @@ import * as dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
 import crypto from 'crypto';
 import axios from 'axios';
+import { toolDefinitions } from './backend-api/src/services/ai.js';
 
 dotenv.config();
 
@@ -814,7 +815,8 @@ const SMART_HOME_DEVICE_OPTIONS_TEXT = SMART_HOME_DEVICE_NAMES.length
     : 'не настроены (добавь SMART_HOME_DEVICE_* в .env)';
 const canUserControlSmartHome = (userId: number) => ADMIN_IDS.has(userId) || SMART_HOME_ALLOWED_IDS.has(userId);
 
-const tools = [
+const tools = toolDefinitions as unknown as any[];
+const legacyTools = [
     {
         type: 'function',
         function: {

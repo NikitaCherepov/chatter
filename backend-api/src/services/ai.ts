@@ -475,7 +475,7 @@ const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
   return `Заметка #${Math.floor(noteId)} удалена.\n\nОбновлённый список:\n${updated}`;
 };
 
-const toolDefinitions = [
+export const toolDefinitions = [
   {
     type: 'function',
     function: {
