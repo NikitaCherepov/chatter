@@ -552,6 +552,7 @@ export const sendMessageThroughAi = async (
   let executionHistory = history;
   let executionSystemPrompt = baseSystemPrompt;
   let totalTokens = 0;
+  let forcedToolOnFirstLoop: string | null = null;
 
   if (!forceProRoute) {
     const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
@@ -631,6 +632,9 @@ PRO
         executionHistory = [];
         executionSystemPrompt = 'Ты ассистент. Выполни задачу пользователя, используя доступные функции. Отвечай максимально коротко.';
         executionMode = 'lite';
+        if (allowedToolNames.length === 1) {
+          forcedToolOnFirstLoop = allowedToolNames[0];
+        }
       }
     }
   }
@@ -652,7 +656,10 @@ PRO
 
   while (loop < MAX_TOOL_LOOPS) {
     loop += 1;
-    const completion = await runCompletion(executionMode, { messages: currentMessages, tools: executionTools, tool_choice: 'auto', thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' }, clear_thinking: false });
+    const toolChoice: any = (loop === 1 && forcedToolOnFirstLoop)
+      ? { type: 'function', function: { name: forcedToolOnFirstLoop } }
+      : 'auto';
+    const completion = await runCompletion(executionMode, { messages: currentMessages, tools: executionTools, tool_choice: toolChoice, thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' }, clear_thinking: false });
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
