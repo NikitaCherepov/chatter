@@ -40,6 +40,36 @@ app.post('/internal/tools/read_url', internalAuth, async (req, res) => {
   }
 });
 
+app.post('/internal/ai/send', internalAuth, async (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const text = `${req.body?.text || ''}`;
+  const chatIdRaw = req.body?.chat_id;
+  const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
+  const optionsRaw = req.body?.options || {};
+  const options = {
+    forcePro: Boolean(optionsRaw.forcePro),
+    ignoreDailyLimit: Boolean(optionsRaw.ignoreDailyLimit),
+    countAsUserMessage: optionsRaw.countAsUserMessage === false ? false : true,
+    skipHistory: Boolean(optionsRaw.skipHistory),
+    persistUserText: typeof optionsRaw.persistUserText === 'string' ? optionsRaw.persistUserText : undefined
+  };
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
+
+  try {
+    const result = await sendMessageThroughAi(Math.floor(userId), text, chatId, options);
+    return res.json(result);
+  } catch (err: any) {
+    const code = `${err?.message || 'ai_send_failed'}`;
+    if (code === 'user_not_approved') return res.status(403).json({ error: code });
+    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
+    if (code === 'empty_text') return res.status(400).json({ error: code });
+    if (code === 'user_not_found') return res.status(404).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
 app.post('/api/v1/auth/register', (req, res) => {
   const login = `${req.body?.login || ''}`.trim().toLowerCase();
   const password = `${req.body?.password || ''}`;

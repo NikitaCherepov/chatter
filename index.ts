@@ -630,6 +630,7 @@ const VOICE_SILERO_URL = (process.env.VOICE_SILERO_URL || resolveDefaultVoiceEnd
 const getVoiceSynthesisUrl = () => (VOICE_TTS_ENGINE === 'silero' ? VOICE_SILERO_URL : VOICE_TTS_URL);
 const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:3050').trim().replace(/\/$/, '');
 const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim();
+const BOT_USE_BACKEND_AI = (process.env.BOT_USE_BACKEND_AI || '1').trim() !== '0';
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -2306,6 +2307,52 @@ const runBackendReadUrl = async (url: string) => {
         const detail = err?.response?.data?.error || err?.message || String(err);
         return `Ошибка инструмента read_webpage: ${detail}`;
     }
+};
+
+const runBackendAiSend = async (
+    userId: number,
+    text: string,
+    options?: {
+        forcePro?: boolean;
+        persistUserText?: string;
+        ignoreDailyLimit?: boolean;
+        countAsUserMessage?: boolean;
+        skipHistory?: boolean;
+    }
+) => {
+    if (!BACKEND_INTERNAL_TOKEN) {
+        throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    }
+
+    const response = await axios.post(
+        `${BACKEND_API_BASE_URL}/internal/ai/send`,
+        {
+            user_id: userId,
+            text,
+            options: {
+                forcePro: Boolean(options?.forcePro),
+                ignoreDailyLimit: Boolean(options?.ignoreDailyLimit),
+                countAsUserMessage: options?.countAsUserMessage === false ? false : true,
+                skipHistory: Boolean(options?.skipHistory),
+                persistUserText: typeof options?.persistUserText === 'string' ? options.persistUserText : undefined
+            }
+        },
+        {
+            headers: {
+                Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+            },
+            timeout: 120000
+        }
+    );
+
+    return response.data as {
+        reply_text?: string;
+        usage?: {
+            tokens_used?: number;
+            used_model?: string;
+            used_provider?: string;
+        };
+    };
 };
 type UserChatRecord = {
     id: number;
@@ -6386,6 +6433,35 @@ const processUserTextThroughAi = async (
         if (dailyLimit > 0 && dailyCount >= dailyLimit) {
             if (!options?.suppressFinalReply) {
                 await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+            }
+            return null;
+        }
+    }
+
+    if (BOT_USE_BACKEND_AI) {
+        try {
+            await ctx.sendChatAction('typing');
+            const backend = await runBackendAiSend(userId, userText, {
+                forcePro: forceProRoute,
+                persistUserText: userTextForHistory,
+                ignoreDailyLimit: options?.ignoreDailyLimit,
+                countAsUserMessage: options?.countAsUserMessage,
+                skipHistory: options?.skipHistory
+            });
+            const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
+                ? backend.reply_text.trim()
+                : FALLBACK_ANSWER;
+            if (!options?.suppressFinalReply) {
+                await safeReply(ctx, assistantText);
+            }
+            if (options?.onAssistantReply) {
+                await options.onAssistantReply(assistantText);
+            }
+            return assistantText;
+        } catch (err) {
+            console.error('Ошибка backend-ai вызова:', err);
+            if (!options?.suppressFinalReply) {
+                await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи backend-api.');
             }
             return null;
         }
