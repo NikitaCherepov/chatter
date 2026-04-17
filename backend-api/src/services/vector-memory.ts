@@ -11,9 +11,27 @@ const VECTOR_MEMORY_MAX_QUERY = Math.max(1, Number.parseInt(process.env.VECTOR_M
 const VECTOR_MEMORY_TOP_K_MAX = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_TOP_K_MAX || '20', 10) || 20);
 const VECTOR_MEMORY_CHUNK_SIZE = Math.max(100, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_SIZE || '1000', 10) || 1000);
 const VECTOR_MEMORY_CHUNK_OVERLAP = Math.max(0, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_OVERLAP || '200', 10) || 200);
+const VECTOR_MEMORY_LOG_SUCCESS = `${process.env.VECTOR_MEMORY_LOG_SUCCESS || '0'}`.trim() === '1';
 
 let openaiClient: OpenAI | null = null;
 let pineconeClient: Pinecone | null = null;
+
+const logSuccess = (message: string, payload?: Record<string, unknown>) => {
+  if (!VECTOR_MEMORY_LOG_SUCCESS) return;
+  if (payload) {
+    console.log(`[vector-memory] ${message}`, payload);
+    return;
+  }
+  console.log(`[vector-memory] ${message}`);
+};
+
+const logError = (message: string, payload?: Record<string, unknown>) => {
+  if (payload) {
+    console.error(`[vector-memory] ${message}`, payload);
+    return;
+  }
+  console.error(`[vector-memory] ${message}`);
+};
 
 const getOpenAIClient = () => {
   if (!TIMEWEB_EMBED_API_KEY) {
@@ -95,53 +113,69 @@ const chunkText = (text: string, chunkSize = VECTOR_MEMORY_CHUNK_SIZE, overlap =
 
 export class VectorMemoryService {
   static async saveFactBatched(userId: number, fullText: string, sourceTag: string) {
-    const safeText = `${fullText || ''}`.trim();
-    if (!safeText) throw new Error('text_required');
-    if (safeText.length > VECTOR_MEMORY_MAX_TEXT) throw new Error(`text_too_long_max_${VECTOR_MEMORY_MAX_TEXT}`);
+    try {
+      const safeText = `${fullText || ''}`.trim();
+      if (!safeText) throw new Error('text_required');
+      if (safeText.length > VECTOR_MEMORY_MAX_TEXT) throw new Error(`text_too_long_max_${VECTOR_MEMORY_MAX_TEXT}`);
 
-    const safeSource = `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
-    const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
-    const namespace = `${Math.floor(userId)}`;
+      const safeSource = `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
+      const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
+      const namespace = `${Math.floor(userId)}`;
 
-    const openai = getOpenAIClient();
-    const embedResponse = await openai.embeddings.create({
-      model: TIMEWEB_EMBED_MODEL,
-      input: chunks.map(chunk => chunk.replace(/\n/g, ' ').trim())
-    } as any);
+      const openai = getOpenAIClient();
+      const embedResponse = await openai.embeddings.create({
+        model: TIMEWEB_EMBED_MODEL,
+        input: chunks.map(chunk => chunk.replace(/\n/g, ' ').trim())
+      } as any);
 
-    const now = Math.floor(Date.now() / 1000);
-    const baseId = `fact_${now}_${Math.random().toString(36).slice(2, 8)}`;
-    const embeddings = Array.isArray(embedResponse?.data) ? embedResponse.data : [];
-    if (!embeddings.length) throw new Error('embedding_empty');
+      const now = Math.floor(Date.now() / 1000);
+      const baseId = `fact_${now}_${Math.random().toString(36).slice(2, 8)}`;
+      const embeddings = Array.isArray(embedResponse?.data) ? embedResponse.data : [];
+      if (!embeddings.length) throw new Error('embedding_empty');
 
-    const records = embeddings.map((embedData: any, index: number) => {
-      const values = Array.isArray(embedData?.embedding) ? embedData.embedding : [];
-      if (!values.length) throw new Error('embedding_empty');
-      return {
-        id: `${baseId}_chunk_${index}`,
-        values,
-        metadata: {
-          text: chunks[index] || '',
-          source: safeSource,
-          timestamp: now,
-          chunk_index: index,
-          total_chunks: chunks.length
-        }
+      const records = embeddings.map((embedData: any, index: number) => {
+        const values = Array.isArray(embedData?.embedding) ? embedData.embedding : [];
+        if (!values.length) throw new Error('embedding_empty');
+        return {
+          id: `${baseId}_chunk_${index}`,
+          values,
+          metadata: {
+            text: chunks[index] || '',
+            source: safeSource,
+            timestamp: now,
+            chunk_index: index,
+            total_chunks: chunks.length
+          }
+        };
+      });
+
+      const index = getPineconeIndex();
+      await index.namespace(namespace).upsert(records as any);
+
+      const result = {
+        ok: true,
+        id: baseId,
+        namespace,
+        source: safeSource,
+        size: safeText.length,
+        chunks_saved: records.length,
+        total_tokens_used: Number(embedResponse?.usage?.total_tokens || 0)
       };
-    });
 
-    const index = getPineconeIndex();
-    await index.namespace(namespace).upsert(records as any);
-
-    return {
-      ok: true,
-      id: baseId,
-      namespace,
-      source: safeSource,
-      size: safeText.length,
-      chunks_saved: records.length,
-      total_tokens_used: Number(embedResponse?.usage?.total_tokens || 0)
-    };
+      logSuccess('saveFactBatched ok', {
+        user_id: Math.floor(userId),
+        namespace,
+        chunks_saved: result.chunks_saved,
+        total_tokens_used: result.total_tokens_used
+      });
+      return result;
+    } catch (error: any) {
+      logError('saveFactBatched failed', {
+        user_id: Math.floor(userId),
+        error: `${error?.message || String(error)}`
+      });
+      throw error;
+    }
   }
 
   static async saveChunk(userId: number, textChunk: string, sourceTag: string) {
@@ -149,67 +183,110 @@ export class VectorMemoryService {
   }
 
   static async search(userId: number, query: string, topK = 3) {
-    const safeQuery = `${query || ''}`.trim();
-    if (!safeQuery) throw new Error('query_required');
-    if (safeQuery.length > VECTOR_MEMORY_MAX_QUERY) throw new Error(`query_too_long_max_${VECTOR_MEMORY_MAX_QUERY}`);
+    try {
+      const safeQuery = `${query || ''}`.trim();
+      if (!safeQuery) throw new Error('query_required');
+      if (safeQuery.length > VECTOR_MEMORY_MAX_QUERY) throw new Error(`query_too_long_max_${VECTOR_MEMORY_MAX_QUERY}`);
 
-    const safeTopK = Math.max(1, Math.min(VECTOR_MEMORY_TOP_K_MAX, Math.floor(Number(topK) || 3)));
-    const namespace = `${Math.floor(userId)}`;
-    const queryVector = await getEmbedding(safeQuery);
-    const index = getPineconeIndex();
+      const safeTopK = Math.max(1, Math.min(VECTOR_MEMORY_TOP_K_MAX, Math.floor(Number(topK) || 3)));
+      const namespace = `${Math.floor(userId)}`;
+      const queryVector = await getEmbedding(safeQuery);
+      const index = getPineconeIndex();
 
-    const result = await index.namespace(namespace).query({
-      vector: queryVector,
-      topK: safeTopK,
-      includeMetadata: true
-    } as any);
+      const result = await index.namespace(namespace).query({
+        vector: queryVector,
+        topK: safeTopK,
+        includeMetadata: true
+      } as any);
 
-    const matches = Array.isArray(result?.matches) ? result.matches : [];
-    const items = matches.map((match: any) => ({
-      id: `${match?.id || ''}`,
-      score: Number(match?.score || 0),
-      text: `${match?.metadata?.text || ''}`,
-      source: `${match?.metadata?.source || ''}`,
-      timestamp: Number(match?.metadata?.timestamp || 0)
-    }));
+      const matches = Array.isArray(result?.matches) ? result.matches : [];
+      const items = matches.map((match: any) => ({
+        id: `${match?.id || ''}`,
+        score: Number(match?.score || 0),
+        text: `${match?.metadata?.text || ''}`,
+        source: `${match?.metadata?.source || ''}`,
+        timestamp: Number(match?.metadata?.timestamp || 0)
+      }));
 
-    const joinedText = items
-      .map(item => `[Источник: ${item.source || 'unknown'}]\n${item.text}`)
-      .join('\n\n---\n\n');
+      const joinedText = items
+        .map(item => `[Источник: ${item.source || 'unknown'}]\n${item.text}`)
+        .join('\n\n---\n\n');
 
-    return {
-      ok: true,
-      namespace,
-      top_k: safeTopK,
-      matches: items,
-      text: joinedText
-    };
+      const out = {
+        ok: true,
+        namespace,
+        top_k: safeTopK,
+        matches: items,
+        text: joinedText
+      };
+
+      logSuccess('search ok', {
+        user_id: Math.floor(userId),
+        namespace,
+        top_k: safeTopK,
+        matches_count: items.length
+      });
+      return out;
+    } catch (error: any) {
+      logError('search failed', {
+        user_id: Math.floor(userId),
+        error: `${error?.message || String(error)}`
+      });
+      throw error;
+    }
   }
 
   static async deleteChunk(userId: number, chunkId: string) {
-    const safeChunkId = `${chunkId || ''}`.trim();
-    if (!safeChunkId) throw new Error('chunk_id_required');
+    try {
+      const safeChunkId = `${chunkId || ''}`.trim();
+      if (!safeChunkId) throw new Error('chunk_id_required');
 
-    const namespace = `${Math.floor(userId)}`;
-    const index = getPineconeIndex();
-    await index.namespace(namespace).deleteOne(safeChunkId);
+      const namespace = `${Math.floor(userId)}`;
+      const index = getPineconeIndex();
+      await index.namespace(namespace).deleteOne(safeChunkId);
 
-    return {
-      ok: true,
-      namespace,
-      id: safeChunkId
-    };
+      const out = {
+        ok: true,
+        namespace,
+        id: safeChunkId
+      };
+      logSuccess('deleteChunk ok', {
+        user_id: Math.floor(userId),
+        namespace,
+        id: safeChunkId
+      });
+      return out;
+    } catch (error: any) {
+      logError('deleteChunk failed', {
+        user_id: Math.floor(userId),
+        error: `${error?.message || String(error)}`
+      });
+      throw error;
+    }
   }
 
   static async deleteAll(userId: number) {
-    const namespace = `${Math.floor(userId)}`;
-    const index = getPineconeIndex();
-    await index.namespace(namespace).deleteAll();
+    try {
+      const namespace = `${Math.floor(userId)}`;
+      const index = getPineconeIndex();
+      await index.namespace(namespace).deleteAll();
 
-    return {
-      ok: true,
-      namespace,
-      deleted_all: true
-    };
+      const out = {
+        ok: true,
+        namespace,
+        deleted_all: true
+      };
+      logSuccess('deleteAll ok', {
+        user_id: Math.floor(userId),
+        namespace
+      });
+      return out;
+    } catch (error: any) {
+      logError('deleteAll failed', {
+        user_id: Math.floor(userId),
+        error: `${error?.message || String(error)}`
+      });
+      throw error;
+    }
   }
 }
