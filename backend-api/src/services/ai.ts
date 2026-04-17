@@ -723,16 +723,16 @@ export const toolDefinitions = [
       }
     }
   },
-{
+  {
     type: 'function',
     function: {
       name: 'search_cold_memory',
-      description: 'Поиск по архиву. Вызывай автономно, если для качественного ответа не хватает прошлых знаний (старый код, лор проектов, детали бесед), или по прямой просьбе.',
+      description: 'Поиск по векторному архиву. Обязателен при любых вопросах о прошлом.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Точный поисковый запрос (например: "Сюжет D&D", "настройки Nginx").' },
-          top_k: { type: 'number', description: 'Количество фрагментов от 3 до 8 (обычно 5).' }
+          query: { type: 'string', description: 'Смысловой запрос для поиска.' },
+          top_k: { type: 'number', description: 'Количество фрагментов (3-8, обычно 5).' }
         },
         required: ['query']
       }
@@ -742,12 +742,12 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'save_to_cold_memory',
-      description: 'Сохраняет объемную суть, код или идеи в архив. Вызывай автономно при генерации чего-то важного.',
+      description: 'Сохранение данных в архив. Используй для фиксации важных фактов, и идей.',
       parameters: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: 'Самодостаточная выжимка. СТРОГО без размытых местоимений (он/это). Используй конкретные имена и названия, чтобы текст был понятен сам по себе.' },
-          source: { type: 'string', description: 'Короткий тег (например: "D&D лор", "React код").' }
+          text: { type: 'string', description: 'Текст: плотный, без местоимений. Используй конкретные имена, названия и детали, чтобы текст был понятен сам по себе.' },
+          source: { type: 'string', description: 'Специфичный заголовок/тег (напр. "D&D: Билд Локадина", "Прогулка и арест полицией с Катей").' }
         },
         required: ['text', 'source']
       }
@@ -757,7 +757,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'delete_from_cold_memory',
-      description: 'Удаляет фрагмент из архива по ID. Строго используй search_cold_memory перед удалением, чтобы найти этот ID.',
+      description: 'Удаление записи по ID. Требует предварительного поиска ID.',
       parameters: {
         type: 'object',
         properties: {
