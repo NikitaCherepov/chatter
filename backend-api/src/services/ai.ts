@@ -38,6 +38,8 @@ type CompletionMeta = {
   response: any;
   usedModel: string;
   usedProvider: string;
+  failedModels?: string[];
+  failedProviders?: string[];
 };
 
 const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini/gemini-3.1-flash-lite-preview']);
@@ -81,6 +83,8 @@ const parseLiteProviders = (): LiteProvider[] => {
 };
 
 const LITE_PROVIDERS = parseLiteProviders();
+const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
+const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
 
 const extractTokens = (response: any) => Number(response?.usage?.total_tokens || 0);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -331,10 +335,21 @@ const toolDefinitions = [
 const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string, unknown>): Promise<CompletionMeta> => {
   if (mode === 'pro') {
     const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload);
-    return { response: res.response, usedModel: res.modelUsed, usedProvider: 'pro-main' };
+    return {
+      response: res.response,
+      usedModel: res.modelUsed,
+      usedProvider: 'pro-main',
+      failedModels: res.failedModels
+    };
   }
   const res = await createCompletionWithLiteProviderFallback(requestPayload);
-  return { response: res.response, usedModel: res.modelUsed, usedProvider: res.providerUsed };
+  return {
+    response: res.response,
+    usedModel: res.modelUsed,
+    usedProvider: res.providerUsed,
+    failedModels: res.failedModels,
+    failedProviders: res.failedProviders
+  };
 };
 
 const hasSchedulingIntent = (text: string) => /\b(напомн|напоминани|таймер|по\s+расписанию|отложи|позже|завтра|послезавтра|ежедневно|еженедельно|кажд(ый|ую|ое|ые)|every\s+day|every\s+week)\b/i.test(text)
@@ -461,6 +476,18 @@ export const sendMessageThroughAi = async (
     if (!hasSchedulingIntent(text)) {
       try {
         const routed = await runCompletion('lite', { messages: [{ role: 'user', content: routerPrompt }], temperature: 0, max_tokens: 8, thinking: { type: 'disabled' } });
+        if (DEBUG_AI_RAW_LITE_RESPONSE) {
+          try {
+            console.log('[DEBUG_AI_RAW_LITE_RESPONSE][router]', JSON.stringify(routed.response, null, 2));
+          } catch (err) {
+            console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][router] serialization failed:', err);
+          }
+        }
+        if ((routed.failedProviders?.length || 0) > 0 || (routed.failedModels?.length || 0) > 0) {
+          console.warn(
+            `[LITE router fallback] providers_failed=${routed.failedProviders?.join(',') || '-'} models_failed=${routed.failedModels?.join(',') || '-'} used=${routed.usedProvider}/${routed.usedModel}`
+          );
+        }
         route = `${routed.response?.choices?.[0]?.message?.content || ''}`.toUpperCase();
       } catch {
         route = 'PRO';
@@ -501,6 +528,25 @@ export const sendMessageThroughAi = async (
   while (loop < MAX_TOOL_LOOPS) {
     loop += 1;
     const completion = await runCompletion(executionMode, { messages: currentMessages, tools: executionTools, tool_choice: 'auto', thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' }, clear_thinking: false });
+    if (DEBUG_AI_RAW_MAIN_RESPONSE) {
+      try {
+        console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
+      } catch (err) {
+        console.warn('[DEBUG_AI_RAW_MAIN_RESPONSE] serialization failed:', err);
+      }
+    }
+    if (DEBUG_AI_RAW_LITE_RESPONSE && completion.usedProvider.startsWith('lite-')) {
+      try {
+        console.log('[DEBUG_AI_RAW_LITE_RESPONSE][chat]', JSON.stringify(completion.response, null, 2));
+      } catch (err) {
+        console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][chat] serialization failed:', err);
+      }
+    }
+    if ((completion.failedProviders?.length || 0) > 0 || (completion.failedModels?.length || 0) > 0) {
+      console.warn(
+        `[${completion.usedProvider.startsWith('lite-') ? 'LITE main fallback' : 'PRO main fallback'}] providers_failed=${completion.failedProviders?.join(',') || '-'} models_failed=${completion.failedModels?.join(',') || '-'} used=${completion.usedProvider}/${completion.usedModel}`
+      );
+    }
     usedModel = completion.usedModel;
     usedProvider = completion.usedProvider;
     const response = completion.response;
