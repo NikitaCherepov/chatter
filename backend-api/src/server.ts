@@ -9,6 +9,7 @@ import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
 import { runVoiceTurn } from './services/voice.js';
+import { runPhotoAnalyzeTurn } from './services/photo.js';
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ const internalAuth = (req: any, res: any, next: any) => {
 };
 
 const BACKEND_VOICE_API_ENABLED = `${process.env.BACKEND_VOICE_API_ENABLED || '0'}`.trim() === '1';
+const BACKEND_PHOTO_API_ENABLED = `${process.env.BACKEND_PHOTO_API_ENABLED || '0'}`.trim() === '1';
 
 app.post('/internal/tools/read_url', internalAuth, async (req, res) => {
   const url = `${req.body?.url || ''}`.trim();
@@ -127,6 +129,46 @@ app.post('/internal/voice/turn', internalAuth, async (req, res) => {
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
     if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_audio') return res.status(400).json({ error: code });
+    if (code === 'user_not_found') return res.status(404).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
+app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
+  if (!BACKEND_PHOTO_API_ENABLED) {
+    return res.status(503).json({ error: 'backend_photo_api_disabled' });
+  }
+
+  const userId = Number(req.body?.user_id);
+  const imageBase64 = `${req.body?.image_base64 || ''}`;
+  const imageMimeType = `${req.body?.image_mime_type || 'image/jpeg'}`;
+  const caption = `${req.body?.caption || ''}`;
+  const chatIdRaw = req.body?.chat_id;
+  const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
+  const optionsRaw = req.body?.options || {};
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!imageBase64.trim()) return res.status(400).json({ error: 'empty_image' });
+
+  try {
+    const result = await runPhotoAnalyzeTurn(
+      Math.floor(userId),
+      imageBase64,
+      imageMimeType,
+      caption,
+      chatId,
+      {
+        userTelegramChatId: Number.isFinite(Number(optionsRaw.userTelegramChatId)) ? Math.floor(Number(optionsRaw.userTelegramChatId)) : null,
+        userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null
+      }
+    );
+    return res.json(result);
+  } catch (err: any) {
+    const code = `${err?.message || 'photo_analyze_failed'}`;
+    if (code === 'user_not_approved') return res.status(403).json({ error: code });
+    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
+    if (code === 'empty_image') return res.status(400).json({ error: code });
+    if (code === 'image_too_large') return res.status(413).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
     return res.status(500).json({ error: code });
   }
@@ -392,6 +434,11 @@ app.listen(PORT, () => {
     console.log('[backend-voice] enabled (BACKEND_VOICE_API_ENABLED=1), endpoint: POST /internal/voice/turn');
   } else {
     console.log('[backend-voice] disabled (BACKEND_VOICE_API_ENABLED != 1)');
+  }
+  if (BACKEND_PHOTO_API_ENABLED) {
+    console.log('[backend-photo] enabled (BACKEND_PHOTO_API_ENABLED=1), endpoint: POST /internal/photo/analyze');
+  } else {
+    console.log('[backend-photo] disabled (BACKEND_PHOTO_API_ENABLED != 1)');
   }
   startTaskScheduler();
 });

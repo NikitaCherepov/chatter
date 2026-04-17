@@ -632,6 +632,7 @@ const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.
 const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim();
 const BOT_USE_BACKEND_AI = (process.env.BOT_USE_BACKEND_AI || '1').trim() !== '0';
 const BOT_USE_BACKEND_VOICE = (process.env.BOT_USE_BACKEND_VOICE || '0').trim() === '1';
+const BOT_USE_BACKEND_PHOTO = (process.env.BOT_USE_BACKEND_PHOTO || '0').trim() === '1';
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -2413,6 +2414,53 @@ const runBackendVoiceTurn = async (
     };
 };
 
+const runBackendPhotoAnalyze = async (
+    userId: number,
+    imageBuffer: Buffer,
+    imageMimeType: string,
+    caption: string,
+    options?: {
+        chatId?: number;
+        userTelegramChatId?: number | null;
+        userTelegramMessageId?: number | null;
+    }
+) => {
+    if (!BACKEND_INTERNAL_TOKEN) {
+        throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    }
+    const response = await axios.post(
+        `${BACKEND_API_BASE_URL}/internal/photo/analyze`,
+        {
+            user_id: userId,
+            image_base64: imageBuffer.toString('base64'),
+            image_mime_type: imageMimeType || 'image/jpeg',
+            caption: caption || '',
+            chat_id: Number.isFinite(Number(options?.chatId)) ? Math.floor(Number(options?.chatId)) : undefined,
+            options: {
+                userTelegramChatId: Number.isFinite(Number(options?.userTelegramChatId)) ? Math.floor(Number(options?.userTelegramChatId)) : null,
+                userTelegramMessageId: Number.isFinite(Number(options?.userTelegramMessageId)) ? Math.floor(Number(options?.userTelegramMessageId)) : null
+            }
+        },
+        {
+            headers: {
+                Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+            },
+            timeout: 180000,
+            maxBodyLength: Infinity
+        }
+    );
+
+    return response.data as {
+        message_id?: number | null;
+        reply_text?: string;
+        model_fallback_notice?: string | null;
+        used_model?: string;
+        used_provider?: string;
+        tokens_used?: number;
+        chat_id?: number;
+    };
+};
+
 const runBackendBindTelegramMessage = async (
     userId: number,
     messageId: number,
@@ -2988,6 +3036,50 @@ const processUserPhotoThroughAi = async (ctx: any) => {
 
         const mimeType = detectImageMimeType(fileLink.href, imageResponse.headers.get('content-type'));
         const base64Image = Buffer.from(imageBuffer).toString('base64');
+
+        if (BOT_USE_BACKEND_PHOTO) {
+            const backend = await runBackendPhotoAnalyze(
+                userId,
+                Buffer.from(imageBuffer),
+                mimeType,
+                caption,
+                {
+                    chatId: undefined,
+                    userTelegramChatId: Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
+                    userTelegramMessageId: Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null
+                }
+            );
+
+            if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
+                await ctx.reply(backend.model_fallback_notice.trim());
+            }
+
+            const answer = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
+                ? backend.reply_text.trim()
+                : FALLBACK_ANSWER;
+            const sentMessage = await safeReply(ctx, answer);
+
+            const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
+                ? Math.floor(Number(backend?.message_id))
+                : null;
+            const assistantTgMessageId = Number.isFinite(Number(sentMessage?.message_id))
+                ? Math.floor(Number(sentMessage?.message_id))
+                : null;
+            if (backendAssistantMessageId) {
+                try {
+                    await runBackendBindTelegramMessage(
+                        userId,
+                        backendAssistantMessageId,
+                        Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
+                        assistantTgMessageId
+                    );
+                } catch (bindErr) {
+                    console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', bindErr);
+                }
+            }
+            return;
+        }
+
         const activePrompt = resolvePromptForUser(userRecord);
         const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
         const history = getUserHistory(userId);
