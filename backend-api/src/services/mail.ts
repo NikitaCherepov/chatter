@@ -17,7 +17,7 @@ type MailAccountRecord = {
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
-const EMAIL_PASSWORD_DELIMITER = ':';
+const EMAIL_PASSWORD_DELIMITER = '::';
 
 const decryptSecret = (text: string) => {
   const parts = text.split(EMAIL_PASSWORD_DELIMITER);
