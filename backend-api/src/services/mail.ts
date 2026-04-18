@@ -95,6 +95,13 @@ const optionalRequire = (moduleName: string) => {
   }
 };
 
+const resolveImapFlowCtor = () => {
+  const mod = optionalRequire('imapflow');
+  if (!mod) return null;
+  // CJS: { ImapFlow }, ESM transpiled: { default: { ImapFlow } } or { default: ImapFlow }
+  return mod.ImapFlow || mod.default?.ImapFlow || mod.default || null;
+};
+
 export const runEmailCheck = async (
   userId: number,
   searchQuery?: string,
@@ -109,11 +116,12 @@ export const runEmailCheck = async (
   const account = resolveUserMailAccount(userId, provider);
   if (!account) return 'Ошибка: почта не настроена.';
 
-  const imapflowMod = optionalRequire('imapflow');
-  if (!imapflowMod?.ImapFlow) {
-    return 'Ошибка: модуль imapflow не установлен на сервере.';
+  const ImapFlow = resolveImapFlowCtor();
+  if (!ImapFlow) {
+    const mod = optionalRequire('imapflow');
+    const keys = mod && typeof mod === 'object' ? Object.keys(mod).join(',') : '';
+    return `Ошибка: модуль imapflow недоступен для runtime (keys: ${keys || 'none'}).`;
   }
-  const ImapFlow = imapflowMod.ImapFlow;
 
   let decryptedPass = '';
   try {
@@ -232,11 +240,12 @@ export const runEmailRead = async (userId: number, subjectPart: string, provider
   const account = resolveUserMailAccount(userId, provider);
   if (!account) return 'Ошибка: почта не настроена.';
 
-  const imapflowMod = optionalRequire('imapflow');
-  if (!imapflowMod?.ImapFlow) {
-    return 'Ошибка: модуль imapflow не установлен на сервере.';
+  const ImapFlow = resolveImapFlowCtor();
+  if (!ImapFlow) {
+    const mod = optionalRequire('imapflow');
+    const keys = mod && typeof mod === 'object' ? Object.keys(mod).join(',') : '';
+    return `Ошибка: модуль imapflow недоступен для runtime (keys: ${keys || 'none'}).`;
   }
-  const ImapFlow = imapflowMod.ImapFlow;
 
   let decryptedPass = '';
   try {
