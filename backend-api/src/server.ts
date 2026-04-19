@@ -4,7 +4,7 @@ import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, ref
 import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
-import { sendMessageThroughAi } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
@@ -76,6 +76,25 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
     if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_text') return res.status(400).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
+app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
+  const targetUserId = Number(req.body?.target_user_id);
+  const adminInstruction = `${req.body?.admin_instruction || ''}`;
+
+  if (!Number.isFinite(targetUserId) || targetUserId <= 0) return res.status(400).json({ error: 'bad_target_user_id' });
+  if (!adminInstruction.trim()) return res.status(400).json({ error: 'empty_instruction' });
+
+  try {
+    const result = await generateAdminOutreach(Math.floor(targetUserId), adminInstruction);
+    return res.json(result);
+  } catch (err: any) {
+    const code = `${err?.message || 'admin_outreach_failed'}`;
+    if (code === 'user_not_found') return res.status(404).json({ error: code });
+    if (code === 'empty_instruction') return res.status(400).json({ error: code });
+    if (code === 'empty_ai_response') return res.status(502).json({ error: code });
     return res.status(500).json({ error: code });
   }
 });

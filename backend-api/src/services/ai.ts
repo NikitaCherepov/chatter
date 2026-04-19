@@ -1296,3 +1296,69 @@ if (escalatedToPro) {
     }
   };
 };
+
+export const generateAdminOutreach = async (targetUserId: number, adminInstruction: string) => {
+  const user = getUserById(targetUserId);
+  if (!user) throw new Error('user_not_found');
+
+  const instruction = adminInstruction.trim();
+  if (!instruction) throw new Error('empty_instruction');
+
+  const chatId = ensureActiveChat(targetUserId);
+  const contextWindow = resolveEffectiveContextWindow(user);
+  const history = getHistoryForAi(targetUserId, chatId, contextWindow);
+  const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
+
+  const prompt = resolvePromptForUser(user);
+  const userName = user.name || user.tg_username || 'Пользователь';
+  const systemPrompt = buildSystemPrompt(prompt.content, userName, user.core_memory || '');
+  const timeContext = buildTimeContext(timezone);
+
+  const aiTask = `[СИСТЕМНОЕ ЗАДАНИЕ ОТ АДМИНА]: Администратор просит передать этому пользователю информацию.
+Твоя задача: взять "мысль админа" и написать сообщение от своего лица, строго сохраняя свой текущий характер и стиль, заданный в системном промпте.
+НЕ пиши "Админ просил передать", просто вплети эту мысль в разговор от себя.
+Выведи ТОЛЬКО готовый текст сообщения для юзера, без подтверждений и лишних слов.
+Если НЕОБХОДИМО использовать инструменты (поискать в интернете, или залезть в архив) - используй.
+
+Мысль админа: "${instruction}"`;
+
+  const messages: any[] = [
+    { role: 'system', content: `${systemPrompt}${timeContext}` },
+    ...history,
+    { role: 'user', content: aiTask }
+  ];
+
+  const completion = await runCompletion('pro', {
+    messages,
+    thinking: { type: 'enabled' },
+    clear_thinking: false
+  });
+
+  const totalTokens = extractTokens(completion.response);
+  const reply = `${completion.response?.choices?.[0]?.message?.content || ''}`.trim();
+
+  if (!reply) throw new Error('empty_ai_response');
+
+  // Сохраняем в историю пользователя
+  appendChatMessage(targetUserId, chatId, 'assistant', reply);
+  trimUserHistoryByChat(targetUserId, chatId, contextWindow);
+
+  // Учитываем токены
+  const safeTokens = Math.max(0, Math.floor(totalTokens));
+  const costRub = toRubFromTokens(safeTokens);
+  db.prepare(`
+    UPDATE users
+    SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
+        total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
+        daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
+        total_cost_rub = COALESCE(total_cost_rub, 0) + ?
+    WHERE id = ?
+  `).run(safeTokens, safeTokens, costRub, costRub, targetUserId);
+
+  return {
+    reply_text: reply,
+    tokens_used: totalTokens,
+    used_model: completion.usedModel,
+    used_provider: completion.usedProvider
+  };
+};

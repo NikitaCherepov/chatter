@@ -1969,40 +1969,35 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
         return;
     }
 
+    const targetUserName = targetUser.name || targetUser.tg_username || 'Друг';
     await ctx.reply('⏳ Нейросеть формулирует послание...');
 
-    const targetPrompt = resolvePromptForUser(targetUser);
-    const targetUserName = targetUser.name || targetUser.tg_username || 'Друг';
-    const systemPrompt = buildSystemPrompt(targetPrompt.content, targetUserName, targetUser.core_memory || '');
-    const aiTask = `[СИСТЕМНОЕ ЗАДАНИЕ ОТ АДМИНА]: Администратор просит передать этому пользователю информацию.
-Твоя задача: взять "мысль админа" и написать сообщение от своего лица, строго сохраняя свой текущий характер и стиль, заданный в системном промпте.
-НЕ пиши "Админ просил передать", просто вплети эту мысль в разговор от себя.
-Выведи ТОЛЬКО готовый текст сообщения для юзера, без подтверждений и лишних слов.
-
-Мысль админа: "${thought}"`;
-
     try {
-        const completion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: aiTask }
-            ]
-        });
-        const response = completion.response;
-        const totalTokens = extractTotalTokens(response);
-        if (totalTokens > 0) {
-            incrementUserTokenUsage(targetUserId, totalTokens);
+        if (!BACKEND_INTERNAL_TOKEN) {
+            throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
         }
 
-        const finalMessage = response.choices[0].message.content?.trim();
+        const response = await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/ai/admin-outreach`,
+            {
+                target_user_id: targetUserId,
+                admin_instruction: thought
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+                },
+                timeout: 120000
+            }
+        );
+
+        const finalMessage = (response.data?.reply_text || '').trim();
         if (!finalMessage) {
             await ctx.reply('❌ Не получилось сгенерировать текст, попробуй ещё раз.');
             return;
         }
 
         await safeSendToUser(targetUserId, finalMessage);
-        addHistoryMessage(targetUserId, 'assistant', finalMessage);
-        trimUserHistory(targetUserId);
         await ctx.reply(
             `✅ Сообщение отправлено пользователю ${targetUserName} (ID: ${targetUserId}).\n\nТекст, который отправила нейросеть:\n${finalMessage}`
         );
