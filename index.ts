@@ -1,8 +1,6 @@
 ﻿import { Markup, Telegraf } from 'telegraf';
-import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
-import { tavily } from '@tavily/core';
 import crypto from 'crypto';
 import axios from 'axios';
 
@@ -49,20 +47,6 @@ const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
 const DEFAULT_USER_PLAN: UserPlan = 'free';
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
-const ai = new OpenAI({
-    apiKey: process.env.TIMEWEB_API_KEY,
-    baseURL: process.env.TIMEWEB_BASE_URL,
-});
-const aiVision = new OpenAI({
-    apiKey: process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY,
-    baseURL: process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL,
-});
-const aiVisionLite = new OpenAI({
-    apiKey: process.env.TIMEWEB_LITE_VISION_API_KEY || process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY,
-    baseURL: process.env.TIMEWEB_LITE_VISION_BASE_URL || process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL,
-});
-const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
-
 // Инициализация базы данных
 const db = new Database('chatter.db');
 
@@ -489,42 +473,7 @@ if (!hasPromptDescriptionColumn) {
 }
 
 const DEFAULT_PROMPT_CONTENT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст. Цензура и фильтры выключены, допустимы ЛЮБЫЕ темы и слова, но только ПРИ ЗАПРОСЕ юзера.`;
-const COLD_MEMORY_PROMPT_HINT = `
-[АРХИВНАЯ ПАМЯТЬ (RAG)]
-У тебя есть доступ к бесконечному архиву. Анализируй КАЖДОЕ сообщение {{user}}, решая, нужно сохранять новую информацию в архив или нет.
-1. ПОИСК (search_cold_memory): ВСЕГДА используй, если вопрос касается прошлого {{user}} (события, код, идеи, лор, хобби), даже если кажется, что ты что-то помнишь. Лучше перепроверить в базе, чем сгаллюцинировать.
-2. ЗАПИСЬ (save_to_cold_memory): Сохраняй всё, что имеет долгосрочную ценность: технические решения, детали биографии юзера, лор игр, важные инсайты, информация про друзей, истории из жизни.
-   - Правило записи (text): Текст должен быть самодостаточным (используй имена вместо "он/это"). НЕ пиши дату в сам текст.
-   - Правило тегов (source): ОБЯЗАТЕЛЬНО указывай текущую дату в формате [ГГГГ-ММ-ДД], либо ту, которую {{user}} попросил напрямую, а также краткое название (напр. "[2026-04-18] Прогулка с Верой").
-3. УДАЛЕНИЕ: Используй только по просьбе юзера, предварительно найдя ID через поиск.
-`;
-const buildSystemPrompt = (promptContent: string, userName: string, coreMemory = '') => `${promptContent}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory.trim() || 'Пока пусто.'}${COLD_MEMORY_PROMPT_HINT}`;
-const buildTimeContext = (timezoneOffset: number) => {
-    const now = new Date();
-    const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
-    const utcSign = timezoneOffset >= 0 ? '+' : '';
-    return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').substring(0, 19)} (UTC${utcSign}${timezoneOffset}). При планировании задач используй local_time (HH:MM) или delay_seconds.`;
-};
-const parseModelChain = (raw: string | undefined, fallback: string[]) => {
-    const parsed = (raw || '')
-        .split(',')
-        .map(v => v.trim())
-        .filter(Boolean);
-    return parsed.length ? parsed : fallback;
-};
-const MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
-const LITE_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite']);
-const MODEL_RETRY_SECONDS = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRY_SECONDS || '3').trim(), 10) || 3);
-const MODEL_RETRIES_PER_MODEL = Math.max(0, Number.parseInt((process.env.TIMEWEB_MODEL_RETRIES_PER_MODEL || '1').trim(), 10) || 1);
 const AUTO_SYNC_PLAN_LIMITS_ON_BOOT = process.env.AUTO_SYNC_PLAN_LIMITS_ON_BOOT === '1';
-const BOT_TASK_SCHEDULER_ENABLED = (process.env.BOT_TASK_SCHEDULER_ENABLED || '1').trim() !== '0';
-const VISION_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [MODEL_CHAIN[0] || 'glm-4v']);
-const LITE_VISION_MODEL_CHAIN = parseModelChain(
-    process.env.TIMEWEB_LITE_VISION_MODEL,
-    [...VISION_MODEL_CHAIN, LITE_MODEL_CHAIN[0] || 'glm-4v']
-);
-const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
-const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
@@ -536,38 +485,9 @@ const NOTES_PAGE_SIZE_DEFAULT = 10;
 const NOTES_MENU_PAGE_SIZE = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const MAX_TELEGRAM_PHOTO_BYTES = 20 * 1024 * 1024;
-const TOKENS_PER_PRICE_BLOCK = 500_000;
-const PRICE_PER_PRICE_BLOCK_RUB = 102;
-const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
 const EMAIL_PASSWORD_DELIMITER = '::';
-const VOICE_TRANSCRIBE_URL = (process.env.VOICE_TRANSCRIBE_URL || 'http://***REMOVED_VOICE_ENDPOINT***/api/voice').trim();
-const VOICE_TRANSCRIBE_TOKEN = (process.env.VOICE_TRANSCRIBE_TOKEN || '***REMOVED_VOICE_SECRET***').trim();
-const resolveDefaultVoiceEndpoint = (transcribeUrl: string, targetPath: '/api/tts' | '/api/silero') => {
-    try {
-        const parsed = new URL(transcribeUrl);
-        if (parsed.pathname.endsWith('/api/voice')) {
-            parsed.pathname = parsed.pathname.replace(/\/api\/voice$/, targetPath);
-        } else if (!parsed.pathname || parsed.pathname === '/') {
-            parsed.pathname = targetPath;
-        }
-        return parsed.toString();
-    } catch {
-        return `http://***REMOVED_VOICE_ENDPOINT***${targetPath}`;
-    }
-};
-const normalizeTtsEngine = (raw: string | undefined) => {
-    const value = (raw || 'tts').trim().toLowerCase();
-    return value === 'silero' ? 'silero' : 'tts';
-};
-const VOICE_TTS_ENGINE = normalizeTtsEngine(process.env.VOICE_TTS_ENGINE);
-const VOICE_TTS_URL = (process.env.VOICE_TTS_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/tts')).trim();
-const VOICE_SILERO_URL = (process.env.VOICE_SILERO_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/silero')).trim();
-const getVoiceSynthesisUrl = () => (VOICE_TTS_ENGINE === 'silero' ? VOICE_SILERO_URL : VOICE_TTS_URL);
 const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:3050').trim().replace(/\/$/, '');
 const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim();
-const BOT_USE_BACKEND_AI = (process.env.BOT_USE_BACKEND_AI || '1').trim() !== '0';
-const BOT_USE_BACKEND_VOICE = (process.env.BOT_USE_BACKEND_VOICE || '0').trim() === '1';
-const BOT_USE_BACKEND_PHOTO = (process.env.BOT_USE_BACKEND_PHOTO || '0').trim() === '1';
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -620,28 +540,11 @@ const parseAdminId = (raw: string | undefined) => {
     if (Number.isNaN(parsed) || parsed <= 0) return null;
     return parsed;
 };
-const parseCsv = (raw: string | undefined) => {
-    if (!raw) return [] as string[];
-    return raw
-        .split(/[,\n;]+/)
-        .map(item => item.trim())
-        .filter(Boolean);
-};
-const normalizeDeviceAlias = (alias: string) => alias.trim().toLowerCase();
 const encryptSecret = (text: string) => {
     const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
     const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
     const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
     return `${iv.toString('hex')}${EMAIL_PASSWORD_DELIMITER}${encrypted.toString('hex')}`;
-};
-const decryptSecret = (text: string) => {
-    const parts = text.split(EMAIL_PASSWORD_DELIMITER);
-    if (parts.length !== 2) throw new Error('Неверный формат секрета');
-    const iv = Buffer.from(parts[0], 'hex');
-    const encryptedText = Buffer.from(parts[1], 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-    const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
-    return decrypted.toString('utf8');
 };
 const normalizeMailProvider = (providerRaw: string | null | undefined): MailProvider | null => {
     const provider = (providerRaw || '').trim().toLowerCase();
@@ -687,73 +590,10 @@ const ADMIN_IDS = (() => {
 
     return ids;
 })();
-const SMART_HOME_ALLOWED_IDS = (() => {
-    const ids = new Set<number>();
-
-    for (const raw of parseCsv(process.env.SMART_HOME_ALLOWED_IDS)) {
-        const id = parseAdminId(raw);
-        if (id) ids.add(id);
-    }
-
-    const singleId = parseAdminId(process.env.SMART_HOME_ALLOWED_ID);
-    if (singleId) ids.add(singleId);
-
-    for (const [key, value] of Object.entries(process.env)) {
-        if (!key.startsWith('SMART_HOME_ALLOWED_ID_')) continue;
-        const id = parseAdminId(value);
-        if (id) ids.add(id);
-    }
-
-    return ids;
-})();
-
-const SMART_HOME_DEVICES_FALLBACK: Record<string, string[]> = {
-    'свет': [
-        '20c0fb1b-f5e4-4daf-b121-0ee0fb326586',
-        '619facb9-4ce8-4ed6-b66a-923f01c8e0a4',
-        'e3d027ee-3ca4-4776-9e92-f23c7e6dc926'
-    ],
-    'увлажнитель': [
-        '65b9c366-cb0c-4dfd-8624-1473a811752f'
-    ]
-};
-
-const SMART_HOME_DEVICES: Record<string, string[]> = (() => {
-    const devices: Record<string, string[]> = {};
-    for (const [alias, ids] of Object.entries(SMART_HOME_DEVICES_FALLBACK)) {
-        devices[normalizeDeviceAlias(alias)] = ids.map(id => id.trim()).filter(Boolean);
-    }
-
-    const jsonRaw = process.env.SMART_HOME_DEVICES_JSON;
-    if (jsonRaw) {
-        try {
-            const parsed = JSON.parse(jsonRaw) as Record<string, string[] | string>;
-            for (const [alias, value] of Object.entries(parsed)) {
-                const ids = Array.isArray(value) ? value.map(v => `${v}`.trim()).filter(Boolean) : parseCsv(`${value}`);
-                if (!ids.length) continue;
-                devices[normalizeDeviceAlias(alias)] = ids;
-            }
-        } catch (err) {
-            console.warn('SMART_HOME_DEVICES_JSON имеет неверный JSON-формат');
-        }
-    }
-
-    for (const [key, value] of Object.entries(process.env)) {
-        if (!key.startsWith('SMART_HOME_DEVICE_')) continue;
-        const alias = normalizeDeviceAlias(key.replace('SMART_HOME_DEVICE_', '').replace(/__/g, '-').replace(/_/g, ' '));
-        const ids = parseCsv(value);
-        if (!ids.length) continue;
-        devices[alias] = ids;
-    }
-
-    return devices;
-})();
-const canUserControlSmartHome = (userId: number) => ADMIN_IDS.has(userId) || SMART_HOME_ALLOWED_IDS.has(userId);
 
 type ChatRole = 'user' | 'assistant';
 type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 type MailProvider = 'yandex' | 'google';
-type ChatMessage = { role: ChatRole; content: string };
 type UserHistoryRow = {
     id: number;
     chat_id: number | null;
@@ -977,181 +817,6 @@ const safeReply = async (ctx: any, text: string) => {
     }
 };
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const extractApiErrorInfo = (err: any) => {
-    const status = Number(err?.status || err?.response?.status || 0) || 0;
-    const code = `${err?.code || err?.error?.code || ''}`.trim();
-    const message = `${err?.message || err?.error?.message || ''}`.toLowerCase();
-    return { status, code, message };
-};
-
-const isRetryableModelError = (err: any) => {
-    const { status, code, message } = extractApiErrorInfo(err);
-    if (status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
-        return true;
-    }
-    if (code === '1305') return true;
-    return message.includes('temporarily overloaded')
-        || message.includes('overloaded')
-        || message.includes('try again later')
-        || message.includes('timeout')
-        || message.includes('timed out')
-        || message.includes('rate limit')
-        || message.includes('network');
-};
-
-const createChatCompletionWithFallback = async (
-    client: OpenAI,
-    modelChain: string[],
-    requestBody: Record<string, unknown>,
-    retriesPerModel = MODEL_RETRIES_PER_MODEL,
-    retrySeconds = MODEL_RETRY_SECONDS
-) => {
-    const failedModels: string[] = [];
-    let lastError: unknown = null;
-
-    for (const modelName of modelChain) {
-        const attempts = Math.max(1, retriesPerModel + 1);
-        for (let attempt = 1; attempt <= attempts; attempt++) {
-            try {
-                const response = await client.chat.completions.create({
-                    ...requestBody,
-                    model: modelName
-                } as any);
-                return {
-                    response,
-                    modelUsed: modelName,
-                    failedModels
-                };
-            } catch (err) {
-                lastError = err;
-                const retryable = isRetryableModelError(err);
-                const isLastAttempt = attempt >= attempts;
-                if (retryable && !isLastAttempt) {
-                    await sleep(Math.max(0, retrySeconds) * 1000);
-                    continue;
-                }
-                break;
-            }
-        }
-        failedModels.push(modelName);
-    }
-
-    throw Object.assign(new Error('Все модели из цепочки недоступны.'), {
-        cause: lastError,
-        failedModels
-    });
-};
-
-const runWebSearch = async (query: string) => {
-    try {
-        const response = await tvly.search(query, {
-            searchDepth: 'basic',
-            maxResults: 3,
-            includeAnswer: true
-        });
-
-        if (!response.results.length) {
-            return `По запросу "${query}" ничего не найдено.`;
-        }
-
-        let resultText = response.answer ? `Сводка: ${response.answer}\n\n` : '';
-
-        resultText += response.results.map((item, index) => {
-            return `${index + 1}. ${item.title}\n${item.content}\nИсточник: ${item.url}`;
-        }).join('\n\n');
-
-        return resultText;
-    } catch (err) {
-        console.error('Ошибка Tavily API:', err);
-        return 'Ошибка инструмента: поисковый сервис временно недоступен.';
-    }
-};
-
-const COLOR_NAME_TO_HEX: Record<string, string> = {
-    red: '#FF0000',
-    green: '#00FF00',
-    blue: '#0000FF',
-    white: '#FFFFFF',
-    black: '#000000',
-    yellow: '#FFFF00',
-    purple: '#800080',
-    violet: '#800080',
-    pink: '#FFC0CB',
-    orange: '#FFA500',
-    cyan: '#00FFFF',
-    teal: '#008080',
-    warmwhite: '#FFD8A8',
-    coolwhite: '#DCEBFF',
-    'красный': '#FF0000',
-    'зеленый': '#00FF00',
-    'зелёный': '#00FF00',
-    'синий': '#0000FF',
-    'белый': '#FFFFFF',
-    'черный': '#000000',
-    'чёрный': '#000000',
-    'желтый': '#FFFF00',
-    'жёлтый': '#FFFF00',
-    'фиолетовый': '#800080',
-    'розовый': '#FFC0CB',
-    'оранжевый': '#FFA500',
-    'голубой': '#00FFFF',
-    'бирюзовый': '#00FFFF',
-    'теплый белый': '#FFD8A8',
-    'тёплый белый': '#FFD8A8',
-    'холодный белый': '#DCEBFF'
-};
-
-const parseColorToHsv = (value: string) => {
-    const normalized = value.trim().toLowerCase();
-    const mapped = COLOR_NAME_TO_HEX[normalized] || normalized;
-    const compact = mapped.replace(/\s+/g, '');
-
-    if (!/^#?[0-9a-f]{6}$/i.test(compact)) return null;
-    const hex = compact.startsWith('#') ? compact.slice(1) : compact;
-
-    const r = Number.parseInt(hex.slice(0, 2), 16) / 255;
-    const g = Number.parseInt(hex.slice(2, 4), 16) / 255;
-    const b = Number.parseInt(hex.slice(4, 6), 16) / 255;
-
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const d = max - min;
-
-    let h = 0;
-    const s = max === 0 ? 0 : d / max;
-    const v = max;
-
-    if (max !== min) {
-        switch (max) {
-            case r:
-                h = (g - b) / d + (g < b ? 6 : 0);
-                break;
-            case g:
-                h = (b - r) / d + 2;
-                break;
-            case b:
-                h = (r - g) / d + 4;
-                break;
-        }
-        h /= 6;
-    }
-
-    return {
-        h: Math.round(h * 360),
-        s: Math.round(s * 100),
-        v: Math.round(v * 100)
-    };
-};
-
-type SmartHomeAction = 'on' | 'off' | 'set_color' | 'set_brightness';
-type SmartHomeArgs = {
-    device_name?: string;
-    action?: SmartHomeAction;
-    color?: string;
-    brightness?: number;
-};
 type SetTimezoneArgs = {
     timezone_offset?: number;
     location?: string;
@@ -1174,9 +839,6 @@ type ScheduleTaskArgs = {
     recurrence_weekday?: number;
     notify_mode?: TaskNotifyMode;
     notify_condition?: string;
-};
-type VoiceTranscribeResponse = {
-    text?: string;
 };
 
 const clampTimezoneOffset = (offset: number) => {
@@ -1332,64 +994,6 @@ const safeSendToUser = async (chatId: number, text: string) => {
         await bot.telegram.sendMessage(chatId, text, { parse_mode: 'Markdown' });
     } catch (err) {
         await bot.telegram.sendMessage(chatId, text);
-    }
-};
-
-const runScheduledWebSearchTask = async (task: TaskRecord) => {
-    const query = task.payload.trim();
-    if (!query) {
-        return 'Не получилось выполнить поиск: пустой запрос в задаче.';
-    }
-
-    const webLimitState = checkWebSearchLimit(task.user_id);
-    if (!webLimitState.allowed) {
-        return `Запрос: ${query}\n\n${webLimitState.reason}`;
-    }
-
-    incrementUserWebSearchUsage(task.user_id, 1);
-    const webResult = await runWebSearch(query);
-    const userRecord = getUser(task.user_id);
-
-    if (!userRecord) {
-        return `Запрос: ${query}\n\n${webResult}`;
-    }
-
-    const userName = userRecord.name || userRecord.tg_username || 'Пользователь';
-    const activePrompt = resolvePromptForUser(userRecord);
-    const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
-    const systemPrompt = `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}`;
-
-    try {
-        const completion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
-            messages: [
-                { role: 'system', content: systemPrompt },
-                {
-                    role: 'user',
-                    content: `Сработала отложенная задача веб-поиска.
-Запрос пользователя: "${query}".
-
-Результаты поиска:
-${webResult}
-
-Сформулируй итог для пользователя на русском языке: кратко и по делу, 3-6 пунктов, затем блок "Источники:" с ссылками, если они есть. Если данные неполные или есть ошибки, сообщи это честно.`
-                }
-            ]
-        });
-        const aiResponse = completion.response;
-        const totalTokens = extractTotalTokens(aiResponse);
-        if (totalTokens > 0) {
-            incrementUserTokenUsage(task.user_id, totalTokens);
-        }
-
-        const finalText = aiResponse.choices[0]?.message?.content?.trim();
-        if (!finalText) {
-            return `Запрос: ${query}\n\n${webResult}`;
-        }
-
-        return finalText;
-    } catch (err) {
-        console.error('Ошибка генерации ответа для запланированного web_search:', err);
-        return `Запрос: ${query}\n\n${webResult}`;
     }
 };
 
@@ -1561,69 +1165,6 @@ const computeExecuteAtFromScheduleArgs = (
     }
 
     throw new Error('Не указано время задачи. Передай local_time (HH:MM), delay_seconds или execute_at.');
-};
-
-const computeNextRecurringExecuteAt = (task: TaskRecord) => {
-    if (task.recurrence_type === 'once') return null;
-
-    const fallbackOffset = getUser(task.user_id)?.timezone_offset ?? 5;
-    const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
-    const localDate = new Date((task.execute_at + timezoneOffset * 3600) * 1000);
-    const nowUnix = Math.floor(Date.now() / 1000);
-
-    if (task.recurrence_type === 'daily') {
-        do {
-            localDate.setUTCDate(localDate.getUTCDate() + 1);
-        } while (Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600) <= nowUnix);
-        return Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600);
-    }
-
-    if (task.recurrence_type === 'weekly') {
-        const targetWeekday = task.recurrence_weekday;
-        if (!targetWeekday || targetWeekday < 1 || targetWeekday > 7) return null;
-        const currentWeekday = getIsoWeekday(localDate);
-        let deltaDays = (targetWeekday - currentWeekday + 7) % 7;
-        if (deltaDays === 0) deltaDays = 7;
-        localDate.setUTCDate(localDate.getUTCDate() + deltaDays);
-        while (Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600) <= nowUnix) {
-            localDate.setUTCDate(localDate.getUTCDate() + 7);
-        }
-        return Math.floor(localDate.getTime() / 1000 - timezoneOffset * 3600);
-    }
-
-    return null;
-};
-
-const shouldNotifyByAiCondition = async (task: TaskRecord, resultText: string) => {
-    const condition = (
-        task.notify_condition
-        || (task.task_type === 'ai_instruction' ? task.payload : '')
-    ).trim();
-    if (!condition) return false;
-    try {
-        const completion = await createChatCompletionWithFallback(ai, MODEL_CHAIN, {
-            messages: [
-                {
-                    role: 'system',
-                    content: 'Ты модуль принятия решения по уведомлению. Ответь строго одним словом: YES или NO.'
-                },
-                {
-                    role: 'user',
-                    content: `Условие уведомления:\n${condition}\n\nРезультат выполнения задачи:\n${resultText.slice(0, 6000)}\n\nНужно ли отправить уведомление пользователю? Ответь только YES или NO.`
-                }
-            ],
-            thinking: { type: 'disabled' }
-        });
-        const tokens = extractTotalTokens(completion.response);
-        if (tokens > 0) {
-            incrementUserTokenUsage(task.user_id, tokens);
-        }
-        const raw = `${completion.response?.choices?.[0]?.message?.content || ''}`.trim().toUpperCase();
-        return raw.startsWith('YES') || raw.startsWith('ДА');
-    } catch (err) {
-        console.warn(`Ошибка AI-проверки notify_condition для задачи #${task.id}:`, err);
-        return false;
-    }
 };
 
 const runBackendReadUrl = async (url: string) => {
@@ -1839,20 +1380,6 @@ type UserChatRecord = {
     updated_at: string;
 };
 
-const shouldNotifyTaskResult = async (task: TaskRecord, resultText: string) => {
-    if (task.notify_mode === 'never') return false;
-    if (task.notify_mode === 'always') return true;
-    const condition = (task.notify_condition || '').trim().toLowerCase();
-    if (task.notify_mode === 'on_match') {
-        if (!condition) return false;
-        return resultText.toLowerCase().includes(condition);
-    }
-    if (task.notify_mode === 'on_condition') {
-        return shouldNotifyByAiCondition(task, resultText);
-    }
-    return false;
-};
-
 const scheduleDailyCounterReset = () => {
     const now = new Date();
     const next = new Date(now);
@@ -1869,114 +1396,6 @@ const scheduleDailyCounterReset = () => {
             scheduleDailyCounterReset();
         }
     }, delay);
-};
-
-const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
-    if (!canUserControlSmartHome(userId)) {
-        return 'Ошибка доступа: у тебя нет прав на управление умным домом.';
-    }
-
-    if (!process.env.YANDEX_IOT_TOKEN) {
-        return 'Ошибка конфигурации: не задан YANDEX_IOT_TOKEN.';
-    }
-
-    const deviceName = normalizeDeviceAlias(args.device_name || '');
-    if (!deviceName) {
-        return 'Ошибка инструмента: не передано имя устройства.';
-    }
-
-    const deviceIds = SMART_HOME_DEVICES[deviceName];
-    if (!deviceIds?.length) {
-        return `Ошибка: устройство "${args.device_name}" не найдено.`;
-    }
-
-    const action = args.action;
-    if (!action || !['on', 'off', 'set_color', 'set_brightness'].includes(action)) {
-        return 'Ошибка инструмента: неизвестное действие.';
-    }
-
-    const onOffPayload = (value: boolean) => ({
-        type: 'devices.capabilities.on_off',
-        state: { instance: 'on', value }
-    });
-    const colorPayload = (hsv: { h: number; s: number; v: number }) => ({
-        type: 'devices.capabilities.color_setting',
-        state: { instance: 'hsv', value: hsv }
-    });
-    const brightnessPayload = (value: number) => ({
-        type: 'devices.capabilities.range',
-        state: { instance: 'brightness', value }
-    });
-
-    let actionsPayload: any[] = [];
-    let brightnessValue: number | null = null;
-    if (action === 'on') actionsPayload = [onOffPayload(true)];
-    if (action === 'off') actionsPayload = [onOffPayload(false)];
-    if (action === 'set_color') {
-        if (!args.color) return 'Ошибка инструмента: для set_color нужен параметр color.';
-        const hsv = parseColorToHsv(args.color);
-        if (hsv === null) return `Ошибка инструмента: не удалось распознать цвет "${args.color}".`;
-        actionsPayload = [onOffPayload(true), colorPayload(hsv)];
-    }
-    if (action === 'set_brightness') {
-        if (args.brightness === undefined) return 'Ошибка инструмента: для set_brightness нужен параметр brightness.';
-        let br = Number(args.brightness);
-        if (Number.isNaN(br)) br = 100;
-        if (br < 1) br = 1;
-        if (br > 100) br = 100;
-        brightnessValue = br;
-        actionsPayload = [onOffPayload(true), brightnessPayload(br)];
-    }
-
-    const devicesPayload = deviceIds.map(id => ({
-        id,
-        actions: actionsPayload
-    }));
-
-    try {
-        const response = await fetch('https://api.iot.yandex.net/v1.0/devices/actions', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${process.env.YANDEX_IOT_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ devices: devicesPayload })
-        });
-
-        const raw = await response.text();
-        let data: any = {};
-        try {
-            data = raw ? JSON.parse(raw) : {};
-        } catch (err) {
-            data = { raw };
-        }
-
-        if (!response.ok) {
-            return `Ошибка API Яндекса (${response.status}): ${raw || 'пустой ответ'}`;
-        }
-
-        const devices = Array.isArray(data?.devices) ? data.devices : [];
-        const failed = devices.filter((device: any) =>
-            Array.isArray(device?.capabilities)
-            && device.capabilities.some((cap: any) => cap?.state?.action_result?.status === 'ERROR')
-        );
-
-        if (failed.length) {
-            const failedIds = failed.map((item: any) => item?.id).filter(Boolean).join(', ');
-            return `Команда выполнена частично. Ошибка у устройств: ${failedIds || 'неизвестно'}.`;
-        }
-
-        const actionText = action === 'on'
-            ? 'включено'
-            : action === 'off'
-                ? 'выключено'
-                : action === 'set_color'
-                    ? `цвет изменен на ${args.color}`
-                    : `яркость установлена на ${brightnessValue ?? args.brightness}%`;
-        return `Успешно: "${args.device_name}" -> ${actionText}.`;
-    } catch (err) {
-        return `Техническая ошибка при управлении умным домом: ${err instanceof Error ? err.message : String(err)}`;
-    }
 };
 
 // Вспомогательные функции для БД
@@ -2220,45 +1639,6 @@ const getNoteStatsForUsers = (userIds: number[]) => {
     }
     return statsMap;
 };
-const sendVoiceResponse = async (ctx: any, text: string) => {
-    const safeText = (text || '').trim();
-    if (!safeText) {
-        await ctx.reply('❌ Пустой текст для озвучки.');
-        return;
-    }
-
-    try {
-        const synthesisUrl = getVoiceSynthesisUrl();
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json'
-        };
-        if (VOICE_TRANSCRIBE_TOKEN) {
-            headers.Authorization = `Bearer ${VOICE_TRANSCRIBE_TOKEN}`;
-        }
-
-        const response = await fetch(synthesisUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ text: safeText })
-        });
-
-        if (!response.ok) {
-            const details = await response.text().catch(() => '');
-            const extra = details ? ` | ${details.slice(0, 200)}` : '';
-            throw new Error(`VOICE_SYNTH ${response.status} ${response.statusText}${extra}`);
-        }
-
-        const audioBuffer = await response.arrayBuffer();
-        if (!audioBuffer.byteLength) {
-            throw new Error('TTS вернул пустой аудиофайл.');
-        }
-
-        await ctx.replyWithVoice({ source: Buffer.from(audioBuffer) });
-    } catch (err) {
-        console.error('Ошибка генерации голоса:', err);
-        await ctx.reply(`❌ Ошибка генерации голоса: ${safeText}`);
-    }
-};
 
 const detectImageMimeType = (url: string, fallback: string | null = null) => {
     const normalizedFallback = (fallback || '').trim().toLowerCase();
@@ -2282,9 +1662,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
     if (!Array.isArray(photos) || !photos.length) return;
 
     const caption = typeof ctx.message?.caption === 'string' ? ctx.message.caption.trim() : '';
-    const userPrompt = caption || 'Что на этой картинке?';
 
-    const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
     const userRecord = getUser(userId);
     if (!userRecord) {
         await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
@@ -2319,120 +1697,46 @@ const processUserPhotoThroughAi = async (ctx: any) => {
         }
 
         const mimeType = detectImageMimeType(fileLink.href, imageResponse.headers.get('content-type'));
-        const base64Image = Buffer.from(imageBuffer).toString('base64');
 
-        if (BOT_USE_BACKEND_PHOTO) {
-            const backend = await runBackendPhotoAnalyze(
-                userId,
-                Buffer.from(imageBuffer),
-                mimeType,
-                caption,
-                {
-                    chatId: undefined,
-                    userTelegramChatId: Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
-                    userTelegramMessageId: Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null
-                }
-            );
-
-            if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
-                await ctx.reply(backend.model_fallback_notice.trim());
-            }
-
-            const answer = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
-                ? backend.reply_text.trim()
-                : FALLBACK_ANSWER;
-            const sentMessage = await safeReply(ctx, answer);
-
-            const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
-                ? Math.floor(Number(backend?.message_id))
-                : null;
-            const assistantTgMessageId = Number.isFinite(Number(sentMessage?.message_id))
-                ? Math.floor(Number(sentMessage?.message_id))
-                : null;
-            if (backendAssistantMessageId) {
-                try {
-                    await runBackendBindTelegramMessage(
-                        userId,
-                        backendAssistantMessageId,
-                        Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
-                        assistantTgMessageId
-                    );
-                } catch (bindErr) {
-                    console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', bindErr);
-                }
-            }
-            return;
-        }
-
-        const activePrompt = resolvePromptForUser(userRecord);
-        const timezoneOffset = typeof userRecord.timezone_offset === 'number' ? userRecord.timezone_offset : 5;
-        const history = getUserHistory(userId);
-        const plan = parsePlanFromDb(userRecord.plan);
-        const useLiteVision = plan !== 'pro';
-        const visionClient = useLiteVision ? aiVisionLite : aiVision;
-        const visionModels = useLiteVision ? LITE_VISION_MODEL_CHAIN : VISION_MODEL_CHAIN;
-        const visionMessages = [
-            { role: 'system', content: `${buildSystemPrompt(activePrompt.content, userName, userRecord.core_memory || '')}${buildTimeContext(timezoneOffset)}\n\nЕсли пользователь прислал изображение, анализируй его и отвечай конкретно по запросу пользователя.` },
-            ...history,
+        const backend = await runBackendPhotoAnalyze(
+            userId,
+            Buffer.from(imageBuffer),
+            mimeType,
+            caption,
             {
-                role: 'user',
-                content: [
-                    { type: 'text', text: userPrompt },
-                    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } }
-                ]
+                chatId: undefined,
+                userTelegramChatId: Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
+                userTelegramMessageId: Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null
             }
-        ];
+        );
 
-        let response: any = null;
-        let usedVisionModel = '';
-        let lastVisionError: unknown = null;
-        for (const modelName of visionModels) {
-            try {
-                response = await visionClient.chat.completions.create({
-                    model: modelName,
-                    messages: visionMessages as any,
-                    max_tokens: 1024,
-                    thinking: useLiteVision ? { type: 'disabled' } : { type: 'enabled' },
-                    clear_thinking: false
-                } as any);
-                usedVisionModel = modelName;
-                break;
-            } catch (visionErr) {
-                lastVisionError = visionErr;
-                console.warn(`[VISION_FALLBACK] Модель ${modelName} вернула ошибку, пробую следующую...`, visionErr);
-            }
+        if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
+            await ctx.reply(backend.model_fallback_notice.trim());
         }
 
-        if (!response) {
-            throw (lastVisionError || new Error('Не удалось получить ответ от vision-моделей.'));
-        }
-
-        if (DEBUG_AI_RAW_MAIN_RESPONSE && !useLiteVision) {
-            try {
-                console.log(`[DEBUG_AI_RAW_MAIN_RESPONSE][vision][model=${usedVisionModel}]`, JSON.stringify(response, null, 2));
-            } catch (err) {
-                console.warn('[DEBUG_AI_RAW_MAIN_RESPONSE][vision] Не удалось сериализовать ответ:', err);
-            }
-        }
-        if (DEBUG_AI_RAW_LITE_RESPONSE && useLiteVision) {
-            try {
-                console.log(`[DEBUG_AI_RAW_LITE_RESPONSE][vision][model=${usedVisionModel}]`, JSON.stringify(response, null, 2));
-            } catch (err) {
-                console.warn('[DEBUG_AI_RAW_LITE_RESPONSE][vision] Не удалось сериализовать ответ:', err);
-            }
-        }
-
-        const answer = response.choices?.[0]?.message?.content || FALLBACK_ANSWER;
-        const userHistoryText = caption ? `[Фото] ${caption}` : '[Фото] Что на этой картинке?';
-        const totalTokens = extractTotalTokens(response);
-        const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
-        const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
-        incrementUserStats(userId, userHistoryText.length, totalTokens);
-        addHistoryMessage(userId, 'user', userHistoryText, { chatId: userChatId, messageId: userMessageId });
+        const answer = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
+            ? backend.reply_text.trim()
+            : FALLBACK_ANSWER;
         const sentMessage = await safeReply(ctx, answer);
-        const assistantMessageId = Number.isFinite(Number(sentMessage?.message_id)) ? Math.floor(Number(sentMessage?.message_id)) : null;
-        addHistoryMessage(userId, 'assistant', answer, { chatId: userChatId, messageId: assistantMessageId });
-        trimUserHistory(userId);
+
+        const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
+            ? Math.floor(Number(backend?.message_id))
+            : null;
+        const assistantTgMessageId = Number.isFinite(Number(sentMessage?.message_id))
+            ? Math.floor(Number(sentMessage?.message_id))
+            : null;
+        if (backendAssistantMessageId) {
+            try {
+                await runBackendBindTelegramMessage(
+                    userId,
+                    backendAssistantMessageId,
+                    Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
+                    assistantTgMessageId
+                );
+            } catch (bindErr) {
+                console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', bindErr);
+            }
+        }
     } catch (err) {
         console.error('Ошибка анализа изображения:', err);
         await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
@@ -2596,31 +1900,6 @@ const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
     if (!Number.isFinite(value)) return getPlanDailyWebSearchLimit(DEFAULT_USER_PLAN);
     return Math.max(0, Math.floor(value as number));
 };
-const checkWebSearchLimit = (userId: number) => {
-    const user = getUser(userId);
-    if (!user) {
-        return { allowed: false, count: 0, limit: 0, reason: 'Пользователь не найден.' };
-    }
-    const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
-    const count = Math.max(0, Math.floor(user.daily_web_search_count || 0));
-    if (limit <= 0) {
-        return {
-            allowed: false,
-            count,
-            limit,
-            reason: `По твоему плану (${getPlanLabel(parsePlanFromDb(user.plan))}) web-поиск отключен на сегодня.`
-        };
-    }
-    if (count >= limit) {
-        return {
-            allowed: false,
-            count,
-            limit,
-            reason: `Лимит web-поиска на сегодня исчерпан (${count}/${limit}).`
-        };
-    }
-    return { allowed: true, count, limit, reason: '' };
-};
 const applyUserPlan = (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
     closeCurrentPlanSubscriptions(userId);
     updateUserPlan(userId, plan);
@@ -2700,45 +1979,11 @@ const getMailAccountForUser = (userId: number, provider: MailProvider) => db.pre
 const deleteMailAccount = (userId: number, provider: MailProvider) => db
     .prepare(`DELETE FROM mail_accounts WHERE user_id = ? AND provider = ?`)
     .run(userId, provider);
-const resolveUserMailAccount = (user: UserRecord, preferredProviderRaw?: string | null) => {
-    const preferredProvider = normalizeMailProvider(preferredProviderRaw);
-    const activeProvider = normalizeMailProvider(user.imap_provider);
-
-    if (preferredProvider) {
-        const preferred = getMailAccountForUser(user.id, preferredProvider);
-        if (preferred) return preferred;
-    }
-
-    if (activeProvider) {
-        const active = getMailAccountForUser(user.id, activeProvider);
-        if (active) return active;
-    }
-
-    const all = getMailAccountsForUser(user.id);
-    if (all.length) return all[0];
-
-    if (user.imap_user && user.imap_pass && user.imap_host) {
-        const provider = normalizeMailProvider(user.imap_provider)
-            || (user.imap_host.includes('gmail') ? 'google' : 'yandex');
-        return {
-            user_id: user.id,
-            provider,
-            imap_user: user.imap_user,
-            imap_pass: user.imap_pass,
-            imap_host: user.imap_host,
-            imap_port: user.imap_port ?? 993,
-            imap_secure: user.imap_secure ?? 1
-        } satisfies MailAccountRecord;
-    }
-
-    return null;
-};
 const clearUserMailSettings = (id: number) => db.prepare(`
     UPDATE users
     SET imap_provider = NULL, imap_user = NULL, imap_pass = NULL, imap_host = NULL, imap_port = 993, imap_secure = 1
     WHERE id = ?
 `).run(id);
-const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;
 const formatTokenCountShort = (tokens: number) => {
     const safe = Math.max(0, Math.floor(tokens || 0));
     if (safe >= 1_000_000) return `${(safe / 1_000_000).toFixed(2)}M`;
@@ -2746,262 +1991,6 @@ const formatTokenCountShort = (tokens: number) => {
     return `${safe}`;
 };
 const formatRub = (value: number) => `${(Math.max(0, value || 0)).toFixed(2)}₽`;
-const extractTotalTokens = (response: any) => {
-    const total = Number(response?.usage?.total_tokens ?? 0);
-    if (!Number.isFinite(total) || total < 0) return 0;
-    return Math.floor(total);
-};
-const runEmailCheck = async (
-    userId: number,
-    searchQuery?: string,
-    limit = 5,
-    provider?: string,
-    offset = 0,
-    dateFrom?: string,
-    dateTo?: string
-) => {
-    const user = getUser(userId);
-    if (!user) {
-        return 'Ошибка: пользователь не найден.';
-    }
-    const account = resolveUserMailAccount(user, provider);
-    if (!account) {
-        return 'Ошибка: почта не настроена. Используй /mail_setup или кнопку "📬 Почта".';
-    }
-
-    const requestedLimitRaw = Number.isFinite(limit) ? Math.floor(limit) : 0;
-    const userDefaultLimit = Number.isFinite(user.mail_check_limit) && user.mail_check_limit > 0
-        ? Math.floor(user.mail_check_limit)
-        : DEFAULT_MAIL_CHECK_LIMIT;
-    const desiredLimit = requestedLimitRaw > 0 ? requestedLimitRaw : userDefaultLimit;
-    const safeLimit = user.role === 'admin'
-        ? Math.max(1, desiredLimit)
-        : Math.max(1, Math.min(10, desiredLimit));
-    const safeOffset = Math.max(0, Math.min(500, Math.floor(offset || 0)));
-    const fetchWindow = Math.min(500, safeLimit + safeOffset + 20);
-    const normalizedQuery = (searchQuery || '').trim();
-    const normalizeDateOnly = (value?: string) => {
-        if (!value) return null;
-        const raw = value.trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-        return raw;
-    };
-    const fromDate = normalizeDateOnly(dateFrom);
-    const toDate = normalizeDateOnly(dateTo);
-    const fromTs = fromDate ? Date.parse(`${fromDate}T00:00:00Z`) : null;
-    const toTs = toDate ? Date.parse(`${toDate}T23:59:59Z`) : null;
-    let decryptedPass = '';
-    try {
-        decryptedPass = decryptSecret(account.imap_pass);
-    } catch (err) {
-        return 'Ошибка: не удалось расшифровать пароль почты. Перепривяжи через /mail_setup.';
-    }
-
-    let ImapFlowCtor: any;
-    try {
-        const dynamicImporter = new Function('moduleName', 'return import(moduleName)') as (moduleName: string) => Promise<any>;
-        const mod = await dynamicImporter('imapflow');
-        ImapFlowCtor = mod?.ImapFlow;
-        if (!ImapFlowCtor) {
-            return 'Ошибка: библиотека imapflow не найдена. Установи её на сервере: npm install imapflow';
-        }
-    } catch (err) {
-        return 'Ошибка: библиотека imapflow не найдена. Установи её на сервере: npm install imapflow';
-    }
-
-    const client = new ImapFlowCtor({
-        host: account.imap_host,
-        port: Number(account.imap_port || 993),
-        secure: account.imap_secure !== 0,
-        logger: false,
-        auth: {
-            user: account.imap_user,
-            pass: decryptedPass
-        }
-    });
-
-    try {
-        await client.connect();
-        const emails: Array<{ from: string; subject: string; date: string; mailbox: string; ts: number }> = [];
-
-        const mailboxCandidates = normalizedQuery
-            ? ['INBOX', 'Archive', 'Sent', 'Spam', 'Junk', 'Отправленные', 'Архив', 'Спам']
-            : ['INBOX'];
-
-        for (const mailbox of [...new Set(mailboxCandidates)]) {
-            let lock: any = null;
-            try {
-                lock = await client.getMailboxLock(mailbox);
-            } catch {
-                continue;
-            }
-
-            try {
-                let resultIds: number[] = [];
-                if (normalizedQuery) {
-                    const byFrom = await client.search({ from: normalizedQuery }).catch(() => [] as number[]);
-                    const bySubject = await client.search({ subject: normalizedQuery }).catch(() => [] as number[]);
-                    const byText = await client.search({ text: normalizedQuery }).catch(() => [] as number[]);
-                    const merged = new Set<number>([...byFrom, ...bySubject, ...byText]);
-                    resultIds = [...merged].sort((a, b) => a - b);
-                } else {
-                    resultIds = await client.search({ all: true });
-                }
-
-                const targetIds = resultIds.slice(-fetchWindow);
-                if (!targetIds.length) {
-                    continue;
-                }
-
-                for await (const msg of client.fetch(targetIds, { envelope: true })) {
-                    const from = msg.envelope?.from?.[0]?.address || 'unknown';
-                    const subject = msg.envelope?.subject || '(без темы)';
-                    const dt = msg.envelope?.date ? new Date(msg.envelope.date) : null;
-                    const ts = dt ? dt.getTime() : 0;
-                    if (fromTs !== null && ts && ts < fromTs) continue;
-                    if (toTs !== null && ts && ts > toTs) continue;
-                    const date = dt ? dt.toLocaleString('ru-RU') : 'без даты';
-                    emails.push({ from, subject, date, mailbox, ts });
-                }
-            } finally {
-                lock.release();
-            }
-        }
-
-        await client.logout();
-        if (!emails.length) {
-            const dateHint = (fromDate || toDate)
-                ? ` c учетом диапазона ${fromDate || '...'}..${toDate || '...'}`
-                : '';
-            return normalizedQuery
-                ? `Писем по запросу "${normalizedQuery}"${dateHint} не найдено (проверил INBOX/Архив/Отправленные/Спам).`
-                : 'На почте пусто.';
-        }
-
-        const sorted = emails
-            .sort((a, b) => b.ts - a.ts)
-            .slice(safeOffset, safeOffset + safeLimit)
-            .map(({ ts, ...rest }) => rest);
-        if (!sorted.length) {
-            return `Писем больше нет для этой страницы (offset=${safeOffset}, limit=${safeLimit}).`;
-        }
-        return JSON.stringify({
-            page: {
-                offset: safeOffset,
-                limit: safeLimit,
-                returned: sorted.length
-            },
-            items: sorted
-        }, null, 2);
-    } catch (err) {
-        try { await client.logout(); } catch {}
-        return `Ошибка подключения к почте: ${err instanceof Error ? err.message : String(err)}`;
-    }
-};
-
-const runScheduledEmailCheckTask = async (task: TaskRecord) => {
-    let searchQuery = '';
-    let limit = 5;
-    let provider = '';
-    let offset = 0;
-    let dateFrom = '';
-    let dateTo = '';
-
-    const raw = task.payload.trim();
-    if (raw) {
-        if (raw.startsWith('{')) {
-            try {
-                const parsed = JSON.parse(raw) as { provider?: string; search_query?: string; limit?: number; offset?: number; date_from?: string; date_to?: string };
-                provider = typeof parsed.provider === 'string' ? parsed.provider : '';
-                searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
-                limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
-                offset = typeof parsed.offset === 'number' ? parsed.offset : 0;
-                dateFrom = typeof parsed.date_from === 'string' ? parsed.date_from : '';
-                dateTo = typeof parsed.date_to === 'string' ? parsed.date_to : '';
-            } catch {
-                searchQuery = raw;
-            }
-        } else {
-            searchQuery = raw;
-        }
-    }
-
-    const result = await runEmailCheck(task.user_id, searchQuery, limit, provider, offset, dateFrom, dateTo);
-    const title = searchQuery
-        ? `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''} (запрос: ${searchQuery})`
-        : `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''}`;
-    return `${title}\n\n${result}`;
-};
-const runScheduledAiInstructionTask = async (task: TaskRecord) => {
-    const instruction = task.payload.trim();
-    if (!instruction) {
-        return 'Не получилось выполнить AI-инструкцию: пустой payload задачи.';
-    }
-
-    const user = getUser(task.user_id);
-    if (!user) {
-        return 'Не получилось выполнить AI-инструкцию: пользователь не найден.';
-    }
-
-    const userName = user.name || user.tg_username || 'Пользователь';
-    const fakeCtx = {
-        from: { id: task.user_id },
-        state: { role: user.role === 'admin' ? 'admin' : 'user', userName },
-        chat: { id: task.user_id },
-        message: { message_id: 0, text: instruction },
-        sendChatAction: async () => undefined,
-        reply: async () => ({ message_id: 0 }),
-        replyWithPhoto: async () => ({ message_id: 0 }),
-        telegram: {}
-    };
-
-    const result = await processUserTextThroughAi(fakeCtx as any, instruction, {
-        forcePro: true,
-        ignoreDailyLimit: true,
-        countAsUserMessage: false,
-        skipHistory: true,
-        persistUserText: `[AI-инструкция по расписанию] ${instruction}`
-    });
-
-    return (result || '').trim();
-};
-const incrementUserStats = (id: number, messageLength: number, tokensUsed: number) => {
-    const safeLength = Math.max(0, messageLength);
-    const safeTokens = Math.max(0, Math.floor(tokensUsed));
-    const costRub = toRubFromTokens(safeTokens);
-    return db.prepare(`
-    UPDATE users
-    SET daily_message_count = COALESCE(daily_message_count, 0) + 1,
-        total_message_length = COALESCE(total_message_length, 0) + ?,
-        daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
-        total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
-        daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
-        total_cost_rub = COALESCE(total_cost_rub, 0) + ?
-    WHERE id = ?
-`).run(safeLength, safeTokens, safeTokens, costRub, costRub, id);
-};
-const incrementUserTokenUsage = (id: number, tokensUsed: number) => {
-    const safeTokens = Math.max(0, Math.floor(tokensUsed));
-    const costRub = toRubFromTokens(safeTokens);
-    return db.prepare(`
-    UPDATE users
-    SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
-        total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
-        daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
-        total_cost_rub = COALESCE(total_cost_rub, 0) + ?
-    WHERE id = ?
-`).run(safeTokens, safeTokens, costRub, costRub, id);
-};
-const incrementUserWebSearchUsage = (id: number, count = 1) => {
-    const safeCount = Math.max(0, Math.floor(count));
-    if (safeCount <= 0) return;
-    return db.prepare(`
-    UPDATE users
-    SET daily_web_search_count = COALESCE(daily_web_search_count, 0) + ?,
-        total_web_search_count = COALESCE(total_web_search_count, 0) + ?
-    WHERE id = ?
-`).run(safeCount, safeCount, id);
-};
 const resetDailyMessageCounters = () => db.prepare(`
     UPDATE users
     SET daily_message_count = 0,
@@ -3073,18 +2062,6 @@ const addTask = (
 const getPendingTaskCount = (userId: number) => (
     db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND status = 'pending'`).get(userId) as { count: number }
 ).count;
-const getDueTasks = (unixNow: number) => db.prepare(`
-    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
-    FROM tasks
-    WHERE status = 'pending' AND execute_at <= ?
-    ORDER BY execute_at ASC, id ASC
-`).all(unixNow) as TaskRecord[];
-const updateTaskStatus = (taskId: number, status: TaskStatus) => db
-    .prepare('UPDATE tasks SET status = ? WHERE id = ?')
-    .run(status, taskId);
-const updateTaskNextExecution = (taskId: number, nextExecuteAt: number) => db
-    .prepare('UPDATE tasks SET execute_at = ? WHERE id = ?')
-    .run(nextExecuteAt, taskId);
 const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
     SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
     FROM tasks
@@ -3178,46 +2155,6 @@ const ensureActiveChatForUser = (userId: number) => {
 const getActiveChatForUser = (userId: number) => {
     const activeChatId = ensureActiveChatForUser(userId);
     return getUserChatById(userId, activeChatId);
-};
-const getUserHistory = (userId: number) => {
-    const user = getUser(userId);
-    const contextWindow = resolveEffectiveContextWindow(user);
-    const activeChatId = ensureActiveChatForUser(userId);
-    const rows = db.prepare(`
-        SELECT role, content
-        FROM chat_messages
-        WHERE user_id = ? AND chat_id = ?
-        ORDER BY id DESC
-        LIMIT ?
-    `).all(userId, activeChatId, contextWindow) as ChatMessage[];
-
-    return rows.reverse();
-};
-const addHistoryMessage = (
-    userId: number,
-    role: ChatRole,
-    content: string,
-    telegramMeta?: { chatId?: number | null; messageId?: number | null; historyChatId?: number | null }
-) => {
-    const resolvedChatId = Number.isFinite(Number(telegramMeta?.historyChatId))
-        ? Math.floor(Number(telegramMeta?.historyChatId))
-        : ensureActiveChatForUser(userId);
-    const result = db
-        .prepare('INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(
-            userId,
-            role,
-            content,
-            resolvedChatId,
-            Number.isFinite(Number(telegramMeta?.chatId)) ? Math.floor(Number(telegramMeta?.chatId)) : null,
-            Number.isFinite(Number(telegramMeta?.messageId)) ? Math.floor(Number(telegramMeta?.messageId)) : null
-        );
-    db.prepare(`
-        UPDATE user_chats
-        SET updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ?
-    `).run(resolvedChatId, userId);
-    return result;
 };
 const getRecentHistoryRowsByUser = (userId: number, limit = 20) => {
     const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
@@ -5619,67 +4556,62 @@ const processUserTextThroughAi = async (
         }
     }
 
-    if (BOT_USE_BACKEND_AI) {
-        try {
-            await ctx.sendChatAction('typing');
-            const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
-            const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
-            const backend = await runBackendAiSend(userId, userText, {
-                forcePro: forceProRoute,
-                persistUserText: userTextForHistory,
-                ignoreDailyLimit: options?.ignoreDailyLimit,
-                countAsUserMessage: options?.countAsUserMessage,
-                skipHistory: options?.skipHistory,
-                userTelegramChatId: userChatId,
-                userTelegramMessageId: userMessageId,
-                assistantTelegramChatId: userChatId
-            });
-            if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length > 0 && !options?.suppressFinalReply) {
-                for (const msg of backend.tool_user_messages) {
-                    const trimmed = typeof msg === 'string' ? msg.trim() : '';
-                    if (trimmed) {
-                        await ctx.reply(trimmed);
-                    }
+    try {
+        await ctx.sendChatAction('typing');
+        const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
+        const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
+        const backend = await runBackendAiSend(userId, userText, {
+            forcePro: forceProRoute,
+            persistUserText: userTextForHistory,
+            ignoreDailyLimit: options?.ignoreDailyLimit,
+            countAsUserMessage: options?.countAsUserMessage,
+            skipHistory: options?.skipHistory,
+            userTelegramChatId: userChatId,
+            userTelegramMessageId: userMessageId,
+            assistantTelegramChatId: userChatId
+        });
+        if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length > 0 && !options?.suppressFinalReply) {
+            for (const msg of backend.tool_user_messages) {
+                const trimmed = typeof msg === 'string' ? msg.trim() : '';
+                if (trimmed) {
+                    await ctx.reply(trimmed);
                 }
             }
-            if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim() && !options?.suppressFinalReply) {
-                await ctx.reply(backend.model_fallback_notice.trim());
-            }
-            const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
-                ? backend.reply_text.trim()
-                : FALLBACK_ANSWER;
-            let sentMessage: any = null;
-            if (!options?.suppressFinalReply) {
-                sentMessage = await safeReply(ctx, assistantText);
-                const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
-                    ? Math.floor(Number(backend?.message_id))
-                    : null;
-                const assistantTgMessageId = Number.isFinite(Number(sentMessage?.message_id))
-                    ? Math.floor(Number(sentMessage?.message_id))
-                    : null;
-                if (backendAssistantMessageId && !options?.skipHistory) {
-                    try {
-                        await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
-                    } catch (bindErr) {
-                        console.warn('Не удалось привязать telegram_message_id к backend сообщению:', bindErr);
-                    }
-                }
-            }
-            if (options?.onAssistantReply) {
-                await options.onAssistantReply(assistantText);
-            }
-            return assistantText;
-        } catch (err) {
-            console.error('Ошибка backend-ai вызова:', err);
-            if (!options?.suppressFinalReply) {
-                await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи backend-api.');
-            }
-            return null;
         }
+        if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim() && !options?.suppressFinalReply) {
+            await ctx.reply(backend.model_fallback_notice.trim());
+        }
+        const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
+            ? backend.reply_text.trim()
+            : FALLBACK_ANSWER;
+        let sentMessage: any = null;
+        if (!options?.suppressFinalReply) {
+            sentMessage = await safeReply(ctx, assistantText);
+            const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
+                ? Math.floor(Number(backend?.message_id))
+                : null;
+            const assistantTgMessageId = Number.isFinite(Number(sentMessage?.message_id))
+                ? Math.floor(Number(sentMessage?.message_id))
+                : null;
+            if (backendAssistantMessageId && !options?.skipHistory) {
+                try {
+                    await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
+                } catch (bindErr) {
+                    console.warn('Не удалось привязать telegram_message_id к backend сообщению:', bindErr);
+                }
+            }
+        }
+        if (options?.onAssistantReply) {
+            await options.onAssistantReply(assistantText);
+        }
+        return assistantText;
+    } catch (err) {
+        console.error('Ошибка backend-ai вызова:', err);
+        if (!options?.suppressFinalReply) {
+            await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи backend-api.');
+        }
+        return null;
     }
-
-    // Старый локальный AI-путь удалён — всё идёт через backend-api
-    return null;
 };
 
 bot.on('text', async (ctx) => {
@@ -5957,105 +4889,66 @@ bot.on('voice', async (ctx) => {
 
         const audioBuffer = await response.arrayBuffer();
         const mimeType = voice.mime_type || 'audio/ogg';
-        if (BOT_USE_BACKEND_VOICE) {
-            const userId = Math.floor(Number(ctx.from.id));
-            const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
-            const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
+        const userId = Math.floor(Number(ctx.from.id));
+        const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
+        const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
 
-            const backend = await runBackendVoiceTurn(userId, Buffer.from(audioBuffer), mimeType, {
-                chatId: undefined,
-                userTelegramChatId: userChatId,
-                userTelegramMessageId: userMessageId,
-                assistantTelegramChatId: userChatId
-            });
-
-            const text = typeof backend?.recognized_text === 'string' ? backend.recognized_text.trim() : '';
-            if (!text) {
-                await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, '🗣 Ничего не расслышал.');
-                return;
-            }
-
-            await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, `🗣 Распознано:\n${text}`);
-
-            if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length) {
-                for (const message of backend.tool_user_messages) {
-                    const trimmed = typeof message === 'string' ? message.trim() : '';
-                    if (trimmed) {
-                        await ctx.reply(trimmed);
-                    }
-                }
-            }
-
-            if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
-                await ctx.reply(backend.model_fallback_notice.trim());
-            }
-
-            const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
-                ? backend.reply_text.trim()
-                : FALLBACK_ANSWER;
-            const sentTextMessage = await safeReply(ctx, assistantText);
-
-            const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
-                ? Math.floor(Number(backend?.message_id))
-                : null;
-            const assistantTgMessageId = Number.isFinite(Number(sentTextMessage?.message_id))
-                ? Math.floor(Number(sentTextMessage?.message_id))
-                : null;
-            if (backendAssistantMessageId) {
-                try {
-                    await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
-                } catch (bindErr) {
-                    console.warn('Не удалось привязать telegram_message_id к backend voice сообщению:', bindErr);
-                }
-            }
-
-            const voiceAudioBase64 = typeof backend?.voice_audio_base64 === 'string' ? backend.voice_audio_base64.trim() : '';
-            if (voiceAudioBase64) {
-                const voiceBuffer = Buffer.from(voiceAudioBase64, 'base64');
-                if (voiceBuffer.length) {
-                    await ctx.replyWithVoice({ source: voiceBuffer });
-                }
-            } else if (typeof backend?.voice_error === 'string' && backend.voice_error.trim()) {
-                console.warn('Ошибка генерации голоса на backend:', backend.voice_error);
-            }
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('audio', new Blob([audioBuffer], { type: mimeType }), 'voice.ogg');
-
-        const headers: Record<string, string> = {};
-        if (VOICE_TRANSCRIBE_TOKEN) {
-            headers.Authorization = `Bearer ${VOICE_TRANSCRIBE_TOKEN}`;
-        }
-
-        const kzResponse = await fetch(VOICE_TRANSCRIBE_URL, {
-            method: 'POST',
-            headers,
-            body: formData
+        const backend = await runBackendVoiceTurn(userId, Buffer.from(audioBuffer), mimeType, {
+            chatId: undefined,
+            userTelegramChatId: userChatId,
+            userTelegramMessageId: userMessageId,
+            assistantTelegramChatId: userChatId
         });
 
-        if (!kzResponse.ok) {
-            const details = await kzResponse.text().catch(() => '');
-            const extra = details ? ` | ${details.slice(0, 200)}` : '';
-            throw new Error(`Ошибка от микросервиса: ${kzResponse.status} ${kzResponse.statusText}${extra}`);
-        }
-
-        const payload = await kzResponse.json() as VoiceTranscribeResponse;
-        const text = typeof payload.text === 'string' ? payload.text.trim() : '';
-
+        const text = typeof backend?.recognized_text === 'string' ? backend.recognized_text.trim() : '';
         if (!text) {
             await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, '🗣 Ничего не расслышал.');
             return;
         }
 
         await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, `🗣 Распознано:\n${text}`);
-        await processUserTextThroughAi(ctx, text, {
-            persistUserText: text,
-            onAssistantReply: async (assistantText: string) => {
-                await sendVoiceResponse(ctx, assistantText);
+
+        if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length) {
+            for (const message of backend.tool_user_messages) {
+                const trimmed = typeof message === 'string' ? message.trim() : '';
+                if (trimmed) {
+                    await ctx.reply(trimmed);
+                }
             }
-        });
+        }
+
+        if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
+            await ctx.reply(backend.model_fallback_notice.trim());
+        }
+
+        const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
+            ? backend.reply_text.trim()
+            : FALLBACK_ANSWER;
+        const sentTextMessage = await safeReply(ctx, assistantText);
+
+        const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
+            ? Math.floor(Number(backend?.message_id))
+            : null;
+        const assistantTgMessageId = Number.isFinite(Number(sentTextMessage?.message_id))
+            ? Math.floor(Number(sentTextMessage?.message_id))
+            : null;
+        if (backendAssistantMessageId) {
+            try {
+                await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
+            } catch (bindErr) {
+                console.warn('Не удалось привязать telegram_message_id к backend voice сообщению:', bindErr);
+            }
+        }
+
+        const voiceAudioBase64 = typeof backend?.voice_audio_base64 === 'string' ? backend.voice_audio_base64.trim() : '';
+        if (voiceAudioBase64) {
+            const voiceBuffer = Buffer.from(voiceAudioBase64, 'base64');
+            if (voiceBuffer.length) {
+                await ctx.replyWithVoice({ source: voiceBuffer });
+            }
+        } else if (typeof backend?.voice_error === 'string' && backend.voice_error.trim()) {
+            console.warn('Ошибка генерации голоса на backend:', backend.voice_error);
+        }
     } catch (error) {
         console.error('Ошибка работы с голосовым:', error);
         try {
@@ -6075,55 +4968,6 @@ bot.on('photo', async (ctx) => {
     await processUserPhotoThroughAi(ctx);
 });
 
-if (BOT_TASK_SCHEDULER_ENABLED) {
-    setInterval(async () => {
-        const nowUnix = Math.floor(Date.now() / 1000);
-        const pendingTasks = getDueTasks(nowUnix);
-
-        for (const task of pendingTasks) {
-            try {
-                let successMessage = '';
-                if (task.task_type === 'message') {
-                    successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
-                } else if (task.task_type === 'smart_home') {
-                    const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
-                    const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
-                    successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
-                } else if (task.task_type === 'web_search') {
-                    const result = await runScheduledWebSearchTask(task);
-                    successMessage = `🔎 *Запланированный поиск выполнен:*\n\n${result}`;
-                } else if (task.task_type === 'email_check') {
-                    successMessage = await runScheduledEmailCheckTask(task);
-                } else if (task.task_type === 'ai_instruction') {
-                    const result = await runScheduledAiInstructionTask(task);
-                    successMessage = result
-                        ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}`
-                        : '';
-                }
-
-                if (successMessage && await shouldNotifyTaskResult(task, successMessage)) {
-                    console.log(`Планировщик: отправка уведомления по задаче #${task.id} (${task.task_type}, notify_mode=${task.notify_mode})`);
-                    await safeSendToUser(task.user_id, successMessage);
-                }
-
-                if (task.recurrence_type === 'once') {
-                    updateTaskStatus(task.id, 'done');
-                } else {
-                    const nextExecuteAt = computeNextRecurringExecuteAt(task);
-                    if (!nextExecuteAt) {
-                        throw new Error(`Не удалось вычислить следующий запуск для recurring-задачи #${task.id}`);
-                    }
-                    updateTaskNextExecution(task.id, nextExecuteAt);
-                }
-            } catch (err) {
-                console.error(`Ошибка при выполнении задачи ${task.id}:`, err);
-                updateTaskStatus(task.id, 'error');
-            }
-        }
-    }, 30000);
-} else {
-    console.log('Task scheduler в Telegram-боте отключен (BOT_TASK_SCHEDULER_ENABLED=0).');
-}
 
 setInterval(() => {
     try {
