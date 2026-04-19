@@ -6,7 +6,6 @@ import { tavily } from '@tavily/core';
 import crypto from 'crypto';
 import axios from 'axios';
 import { toolDefinitions } from './backend-api/src/services/ai.ts';
-import * as promptService from './backend-api/src/services/prompts.ts';
 
 dotenv.config();
 
@@ -638,7 +637,6 @@ const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim()
 const BOT_USE_BACKEND_AI = (process.env.BOT_USE_BACKEND_AI || '1').trim() !== '0';
 const BOT_USE_BACKEND_VOICE = (process.env.BOT_USE_BACKEND_VOICE || '0').trim() === '1';
 const BOT_USE_BACKEND_PHOTO = (process.env.BOT_USE_BACKEND_PHOTO || '0').trim() === '1';
-const BOT_USE_NEW_PROMPTS = (process.env.BOT_USE_NEW_PROMPTS || '0').trim() === '1';
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
@@ -2549,63 +2547,39 @@ const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
     }
 };
 
-// Вспомогательные функции для БД (промпты — роутер через BOT_USE_NEW_PROMPTS)
-const getPromptById = (id: number) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.getPromptById(id);
-    return db.prepare('SELECT * FROM prompts WHERE id = ?').get(id) as PromptRecord | undefined;
-};
-const getAllPrompts = () => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.getAllPrompts();
-    return db.prepare('SELECT * FROM prompts ORDER BY id').all() as PromptRecord[];
-};
-const getDefaultPrompt = () => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.getDefaultPrompt();
-    return db.prepare('SELECT * FROM prompts WHERE is_default = 1 LIMIT 1').get() as PromptRecord | undefined;
-};
+// Вспомогательные функции для БД
+const getPromptById = (id: number) => db.prepare('SELECT * FROM prompts WHERE id = ?').get(id) as PromptRecord | undefined;
+const getAllPrompts = () => db.prepare('SELECT * FROM prompts ORDER BY id').all() as PromptRecord[];
+const getDefaultPrompt = () => db.prepare('SELECT * FROM prompts WHERE is_default = 1 LIMIT 1').get() as PromptRecord | undefined;
 const createPrompt = (name: string, description: string, content: string, isDefault = false) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.createPrompt(name, description, content, isDefault);
     if (isDefault) db.prepare('UPDATE prompts SET is_default = 0').run();
     return db.prepare(`
         INSERT INTO prompts (name, description, content, is_default)
         VALUES (?, ?, ?, ?)
     `).run(name, description, content, isDefault ? 1 : 0);
 };
-const updatePromptName = (id: number, name: string) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.updatePromptName(id, name);
-    return db.prepare(`
-        UPDATE prompts
-        SET name = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `).run(name, id);
-};
-const updatePromptDescription = (id: number, description: string) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.updatePromptDescription(id, description);
-    return db.prepare(`
-        UPDATE prompts
-        SET description = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `).run(description, id);
-};
-const updatePromptContent = (id: number, content: string) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.updatePromptContent(id, content);
-    return db.prepare(`
-        UPDATE prompts
-        SET content = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `).run(content, id);
-};
+const updatePromptName = (id: number, name: string) => db.prepare(`
+    UPDATE prompts
+    SET name = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+`).run(name, id);
+const updatePromptDescription = (id: number, description: string) => db.prepare(`
+    UPDATE prompts
+    SET description = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+`).run(description, id);
+const updatePromptContent = (id: number, content: string) => db.prepare(`
+    UPDATE prompts
+    SET content = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+`).run(content, id);
 const setDefaultPrompt = (id: number) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.setDefaultPrompt(id);
     db.prepare('UPDATE prompts SET is_default = 0').run();
     return db.prepare('UPDATE prompts SET is_default = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
 };
-const deletePrompt = (id: number) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.deletePrompt(id);
-    return db.prepare('DELETE FROM prompts WHERE id = ?').run(id);
-};
+const deletePrompt = (id: number) => db.prepare('DELETE FROM prompts WHERE id = ?').run(id);
 
 const ensureDefaultPrompt = () => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.ensureDefaultPrompt();
     const defaultPrompt = getDefaultPrompt();
     if (defaultPrompt) return defaultPrompt;
 
@@ -4221,7 +4195,6 @@ const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messag
 ensureCurrentPlanSubscriptionsForAllUsers();
 
 const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.resolvePromptForUser(user);
     if (user.selected_prompt_id === CUSTOM_PROMPT_ID) {
         const custom = (user.custom_prompt_content || '').trim();
         if (custom) {
@@ -4454,7 +4427,6 @@ const getPromptDescription = (description: string) => {
 };
 
 const getCustomPromptPreview = (content: string | null | undefined, maxLen = 220) => {
-    if (BOT_USE_NEW_PROMPTS) return promptService.getCustomPromptPreview(content, maxLen);
     const normalized = (content || '').replace(/\s+/g, ' ').trim();
     if (!normalized) return 'Пока не задан.';
     return normalized.length > maxLen ? `${normalized.slice(0, maxLen)}...` : normalized;
