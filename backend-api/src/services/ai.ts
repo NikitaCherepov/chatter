@@ -2,7 +2,8 @@
 import dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
 import type { AiSendResult, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getPromptForUser, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { runSmartHomeControl, type SmartHomeArgs, SMART_HOME_DEVICE_OPTIONS_TEXT } from './smart-home.js';
@@ -164,7 +165,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
 };
 
 const buildSystemPrompt = (prompt: string, userName: string, coreMemory: string) => {
-  return `${prompt}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${coreMemory || 'Пока пусто.'}`;
+  return `${prompt}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${(coreMemory || '').trim() || 'Пока пусто.'}${COLD_MEMORY_PROMPT_HINT}`;
 };
 
 const buildTimeContext = (timezoneOffset: number) => {
@@ -1016,7 +1017,7 @@ export const sendMessageThroughAi = async (
   const contextWindow = resolveEffectiveContextWindow(user);
   const history = getHistoryForAi(userId, chatId, contextWindow);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
-  const proSystemPrompt = `${buildSystemPrompt(getPromptForUser(user), user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}`;
+  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(user).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}`;
 
   let executionMode: 'pro' | 'lite' = 'pro';
   let executionTools: any[] = [...toolDefinitions] as any[];
@@ -1030,7 +1031,6 @@ if (!forceProRoute) {
 
 [ПРОСТЫЕ КАТЕГОРИИ - не требуют истории чата]:
 - SMART_HOME (управление светом, розетками)
-- QUICK_SEARCH (узнать погоду, курс валют, быстрый факт из сети)
 - TIMEZONE (установить часовой пояс)
 - RANDOM (бросить кубик, монетку)
 
