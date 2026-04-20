@@ -1182,6 +1182,108 @@ const runBackendBindTelegramMessage = async (
         }
     );
 };
+// ── Backend API helpers for prompts, mail, timezone, context ─────────────
+
+const backendHeaders = () => ({
+    Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+});
+
+const runBackendGetPrompts = async () => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/prompts`, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { prompts: Array<{ id: number; name: string; description: string; content: string; is_default: number }> };
+};
+
+const runBackendGetPrompt = async (promptId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { prompt: { id: number; name: string; description: string; content: string; is_default: number } };
+};
+
+const runBackendCreatePrompt = async (name: string, description: string, content: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts`, { name, description, content }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; prompt_id: number };
+};
+
+const runBackendUpdatePromptName = async (promptId: number, name: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/name`, { name }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendUpdatePromptDescription = async (promptId: number, description: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/description`, { description }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendUpdatePromptContent = async (promptId: number, content: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/content`, { content }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendSetDefaultPrompt = async (promptId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/default`, {}, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendDeletePrompt = async (promptId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendSelectUserPrompt = async (userId: number, promptId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/prompt/select`, { user_id: userId, prompt_id: promptId }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendUpdateCustomPrompt = async (userId: number, content: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/user/prompt/custom`, { user_id: userId, content }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendSetTimezone = async (userId: number, offset: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/timezone`, { user_id: userId, timezone_offset: offset }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendSetContextWindow = async (userId: number, contextWindow: number, isAdmin: boolean) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/context-window`, { user_id: userId, context_window: contextWindow, is_admin: isAdmin }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendMailSetup = async (userId: number, provider: string, email: string, appPassword: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/setup`, { user_id: userId, provider, email, app_password: appPassword }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; accounts: Array<{ provider: string; imap_user: string }> };
+};
+
+const runBackendMailUse = async (userId: number, provider: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/use`, { user_id: userId, provider }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; provider: string; imap_user: string };
+};
+
+const runBackendMailLimit = async (userId: number, limit: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/mail/limit`, { user_id: userId, limit }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; limit: number };
+};
+
+const runBackendMailForget = async (userId: number, provider?: string | null) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/mail/account`, { data: { user_id: userId, provider: provider || undefined }, headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; deleted: string; remaining?: Array<{ provider: string; imap_user: string }>; new_active?: { provider: string; imap_user: string } };
+};
+
 type UserChatRecord = {
     id: number;
     user_id: number;
@@ -2704,7 +2806,7 @@ bot.command('start', async (ctx) => {
 bot.command('menu', (ctx) => showMenu(ctx));
 bot.hears(MAIN_MENU_TRIGGER_BUTTON, (ctx) => showMenu(ctx));
 
-bot.command('prompts', (ctx) => {
+bot.command('prompts', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
@@ -2715,10 +2817,21 @@ bot.command('prompts', (ctx) => {
         return renderPromptListInteractive(ctx, user, 'reply');
     }
 
-    return ctx.reply(formatPromptsList(user.selected_prompt_id, true));
+    try {
+        const data = await runBackendGetPrompts();
+        const prompts = data.prompts;
+        const lines = prompts.map(p => {
+            const marker = p.is_default ? ' [default]' : '';
+            const selected = user.selected_prompt_id === p.id ? ' <-- выбран' : '';
+            return `#${p.id} ${p.name}${marker}${selected}: ${normalizeTextPreview(p.description || p.content, 80)}`;
+        }).join('\n');
+        return ctx.reply(`Промпты:\n\n${lines || 'Нет промптов.'}`);
+    } catch {
+        return ctx.reply('Ошибка получения промптов из API.');
+    }
 });
 
-bot.command('prompt_use', (ctx) => {
+bot.command('prompt_use', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
@@ -2729,14 +2842,16 @@ bot.command('prompt_use', (ctx) => {
     const user = getUser(userId);
     if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
 
-    const prompt = getPromptById(promptId);
-    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
-
-    updateUserPrompt(userId, promptId);
-    return ctx.reply(`Промпт выбран: ${prompt.name}`);
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        await runBackendSelectUserPrompt(userId, promptId);
+        return ctx.reply(`Промпт выбран: ${data.prompt.name}`);
+    } catch {
+        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+    }
 });
 
-bot.command('prompt_add', (ctx) => {
+bot.command('prompt_add', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = parsePipeParts(ctx.message.text);
@@ -2747,30 +2862,35 @@ bot.command('prompt_add', (ctx) => {
     if (!content) return ctx.reply('Текст промпта не может быть пустым.');
 
     try {
-        const created = createPrompt(name, description, content, false);
-        const promptId = Number(created.lastInsertRowid);
-        return ctx.reply(`Промпт добавлен: ${name} (ID: ${promptId})`);
-    } catch (err) {
-        return ctx.reply('Не удалось добавить промпт. Возможно, имя уже занято.');
+        const result = await runBackendCreatePrompt(name, description, content);
+        return ctx.reply(`Промпт добавлен: ${name} (ID: ${result.prompt_id})`);
+    } catch (err: any) {
+        if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
+            return ctx.reply('Не удалось добавить промпт. Имя уже занято.');
+        }
+        return ctx.reply('Не удалось добавить промпт.');
     }
 });
 
-bot.command('prompt_show', (ctx) => {
+bot.command('prompt_show', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
     if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_show 3');
 
-    const prompt = getPromptById(promptId);
-    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
-
-    const defaultMark = prompt.is_default ? ' [default]' : '';
-    const text = `Промпт ${prompt.id}: ${prompt.name}${defaultMark}\nОписание: ${prompt.description || 'без описания'}\n\nТекст:\n${prompt.content}`;
-    return ctx.reply(text);
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        const p = data.prompt;
+        const defaultMark = p.is_default ? ' [default]' : '';
+        const text = `Промпт ${p.id}: ${p.name}${defaultMark}\nОписание: ${p.description || 'без описания'}\n\nТекст:\n${p.content}`;
+        return ctx.reply(text);
+    } catch {
+        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+    }
 });
 
-bot.command('prompt_set', (ctx) => {
+bot.command('prompt_set', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = parsePipeParts(ctx.message.text);
@@ -2781,14 +2901,16 @@ bot.command('prompt_set', (ctx) => {
     const content = parts.slice(1).join(' | ').trim();
     if (!content) return ctx.reply('Новый текст не может быть пустым.');
 
-    const prompt = getPromptById(promptId);
-    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
-
-    updatePromptContent(promptId, content);
-    return ctx.reply(`Текст промпта "${prompt.name}" обновлён.`);
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        await runBackendUpdatePromptContent(promptId, content);
+        return ctx.reply(`Текст промпта "${data.prompt.name}" обновлён.`);
+    } catch {
+        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+    }
 });
 
-bot.command('prompt_desc', (ctx) => {
+bot.command('prompt_desc', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = parsePipeParts(ctx.message.text);
@@ -2799,14 +2921,16 @@ bot.command('prompt_desc', (ctx) => {
     const description = parts.slice(1).join(' | ').trim();
     if (!description) return ctx.reply('Описание не может быть пустым.');
 
-    const prompt = getPromptById(promptId);
-    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
-
-    updatePromptDescription(promptId, description);
-    return ctx.reply(`Описание промпта "${prompt.name}" обновлено.`);
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        await runBackendUpdatePromptDescription(promptId, description);
+        return ctx.reply(`Описание промпта "${data.prompt.name}" обновлено.`);
+    } catch {
+        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+    }
 });
 
-bot.command('prompt_rename', (ctx) => {
+bot.command('prompt_rename', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -2816,48 +2940,54 @@ bot.command('prompt_rename', (ctx) => {
     if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_rename 3 НовоеИмя');
     if (!newName) return ctx.reply('Формат: /prompt_rename 3 НовоеИмя');
 
-    const prompt = getPromptById(promptId);
-    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
-
     try {
-        updatePromptName(promptId, newName);
-        return ctx.reply(`Промпт переименован: ${prompt.name} -> ${newName}`);
-    } catch (err) {
-        return ctx.reply('Не удалось переименовать промпт. Возможно, имя уже занято.');
+        const data = await runBackendGetPrompt(promptId);
+        await runBackendUpdatePromptName(promptId, newName);
+        return ctx.reply(`Промпт переименован: ${data.prompt.name} -> ${newName}`);
+    } catch (err: any) {
+        if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
+            return ctx.reply('Не удалось переименовать промпт. Имя уже занято.');
+        }
+        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
     }
 });
 
-bot.command('prompt_default', (ctx) => {
+bot.command('prompt_default', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
     if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_default 3');
 
-    const prompt = getPromptById(promptId);
-    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
-
-    setDefaultPrompt(promptId);
-    return ctx.reply(`Промпт по умолчанию обновлён: ${prompt.name}`);
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        await runBackendSetDefaultPrompt(promptId);
+        return ctx.reply(`Промпт по умолчанию обновлён: ${data.prompt.name}`);
+    } catch {
+        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+    }
 });
 
-bot.command('prompt_delete', (ctx) => {
+bot.command('prompt_delete', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
     if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_delete 3');
 
-    const prompt = getPromptById(promptId);
-    if (!prompt) return ctx.reply(`Промпт с ID ${promptId} не найден.`);
-
-    const prompts = getAllPrompts();
-    if (prompts.length <= 1) return ctx.reply('Нельзя удалить последний промпт.');
-    if (prompt.is_default) return ctx.reply('Нельзя удалить промпт по умолчанию. Сначала назначь другой через /prompt_default.');
-
-    deletePrompt(promptId);
-    resetUsersPromptIfDeleted(promptId);
-    return ctx.reply(`Промпт удалён: ${prompt.name}`);
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        const name = data.prompt.name;
+        await runBackendDeletePrompt(promptId);
+        return ctx.reply(`Промпт удалён: ${name}`);
+    } catch (err: any) {
+        if (axios.isAxiosError(err)) {
+            const code = err.response?.data?.error;
+            if (code === 'cannot_delete_last_prompt') return ctx.reply('Нельзя удалить последний промпт.');
+            if (code === 'cannot_delete_default_prompt') return ctx.reply('Нельзя удалить промпт по умолчанию. Сначала назначь другой через /prompt_default.');
+        }
+        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+    }
 });
 
 // Команда добавления пользователя (только для админов)
@@ -3068,7 +3198,7 @@ bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
 
-bot.command('tz', (ctx) => {
+bot.command('tz', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
@@ -3077,7 +3207,12 @@ bot.command('tz', (ctx) => {
         return ctx.reply('Использование: /tz <смещение_от_utc>. Например, для Города: /tz 7');
     }
 
-    updateUserTimezone(userId, offset);
+    try {
+        await runBackendSetTimezone(userId, offset);
+        updateUserTimezone(userId, offset);
+    } catch {
+        return ctx.reply('Ошибка при установке часового пояса.');
+    }
     timezoneSetupFlows.delete(userId);
     const sign = offset >= 0 ? '+' : '';
     return ctx.reply(`Часовой пояс успешно изменён на UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
@@ -3295,8 +3430,7 @@ bot.command('mail_setup', async (ctx) => {
         if (detected) providerInput = detected;
     }
 
-    const providerConfig = resolveImapProviderConfig(providerInput);
-    if (!providerConfig) {
+    if (!providerInput) {
         return ctx.reply('Не удалось определить провайдер. Укажи явно: yandex или google.');
     }
 
@@ -3304,33 +3438,20 @@ bot.command('mail_setup', async (ctx) => {
         return ctx.reply('Email и пароль приложения обязательны.');
     }
 
-    const encryptedPass = encryptSecret(appPassword);
-    upsertMailAccount(
-        userId,
-        providerConfig.provider as MailProvider,
-        email,
-        encryptedPass,
-        providerConfig.host,
-        providerConfig.port,
-        providerConfig.secure
-    );
-    setActiveMailProvider(userId, providerConfig.provider as MailProvider);
-    updateUserMailSettings(
-        userId,
-        providerConfig.provider,
-        email,
-        encryptedPass,
-        providerConfig.host,
-        providerConfig.port,
-        providerConfig.secure
-    );
-
-    const accounts = getMailAccountsForUser(userId);
-    const connected = accounts.map(a => `${a.provider}: ${a.imap_user}`).join('\n');
-    return ctx.reply(`✅ Почта привязана: ${email}\nПровайдер: ${providerConfig.provider} (активный)\n\nПодключенные ящики:\n${connected}\n\nПереключение: /mail_use <yandex|google>`);
+    try {
+        const result = await runBackendMailSetup(userId, providerInput, email, appPassword);
+        const connected = result.accounts.map(a => `${a.provider}: ${a.imap_user}`).join('\n');
+        return ctx.reply(`✅ Почта привязана: ${email}\nПровайдер: ${providerInput} (активный)\n\nПодключенные ящики:\n${connected}\n\nПереключение: /mail_use <yandex|google>`);
+    } catch (err: any) {
+        if (axios.isAxiosError(err)) {
+            const code = err.response?.data?.error;
+            if (code === 'bad_provider') return ctx.reply('Не удалось определить провайдер. Укажи явно: yandex или google.');
+        }
+        return ctx.reply('Ошибка при настройке почты.');
+    }
 });
 
-bot.command('mail_use', (ctx) => {
+bot.command('mail_use', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
@@ -3340,17 +3461,18 @@ bot.command('mail_use', (ctx) => {
         return ctx.reply('Использование: /mail_use <yandex|google>');
     }
 
-    const account = getMailAccountForUser(userId, provider);
-    if (!account) {
-        return ctx.reply(`У тебя не привязан ${provider}. Сначала: /mail_setup ${provider} <email> <пароль_приложения>`);
+    try {
+        const result = await runBackendMailUse(userId, provider);
+        return ctx.reply(`✅ Активный почтовый ящик: ${result.provider} (${result.imap_user})`);
+    } catch (err: any) {
+        if (axios.isAxiosError(err) && err.response?.data?.error === 'mail_account_not_found') {
+            return ctx.reply(`У тебя не привязан ${provider}. Сначала: /mail_setup ${provider} <email> <пароль_приложения>`);
+        }
+        return ctx.reply('Ошибка при переключении почты.');
     }
-
-    setActiveMailProvider(userId, provider);
-    updateUserMailSettings(userId, provider, account.imap_user, account.imap_pass, account.imap_host, account.imap_port, account.imap_secure);
-    return ctx.reply(`✅ Активный почтовый ящик: ${provider} (${account.imap_user})`);
 });
 
-bot.command('mail_limit', (ctx) => {
+bot.command('mail_limit', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     const user = getUser(userId);
@@ -3370,32 +3492,32 @@ bot.command('mail_limit', (ctx) => {
         return ctx.reply('Вам доступно максимум 10 писем за запрос.');
     }
 
-    updateUserMailCheckLimit(userId, parsed);
-    return ctx.reply(`✅ Лимит check_emails обновлён: ${parsed}.`);
+    try {
+        await runBackendMailLimit(userId, parsed);
+        return ctx.reply(`✅ Лимит check_emails обновлён: ${parsed}.`);
+    } catch {
+        return ctx.reply('Ошибка при обновлении лимита.');
+    }
 });
 
-bot.command('mail_forget', (ctx) => {
+bot.command('mail_forget', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const provider = normalizeMailProvider(parts[1]);
-    if (!provider) {
-        clearUserMailSettings(userId);
-        db.prepare('DELETE FROM mail_accounts WHERE user_id = ?').run(userId);
-        return ctx.reply('🗑 Данные всех почтовых ящиков удалены.');
-    }
 
-    deleteMailAccount(userId, provider);
-    const remaining = getMailAccountsForUser(userId);
-    if (!remaining.length) {
-        clearUserMailSettings(userId);
-        return ctx.reply(`🗑 ${provider} удалён. Больше привязанных ящиков нет.`);
+    try {
+        const result = await runBackendMailForget(userId, provider);
+        if (result.deleted === 'all') {
+            return ctx.reply('🗑 Данные всех почтовых ящиков удалены.');
+        }
+        if (result.new_active) {
+            return ctx.reply(`🗑 ${result.deleted} удалён. Активный ящик теперь: ${result.new_active.provider} (${result.new_active.imap_user})`);
+        }
+        return ctx.reply(`🗑 ${result.deleted} удалён. Больше привязанных ящиков нет.`);
+    } catch {
+        return ctx.reply('Ошибка при удалении почты.');
     }
-
-    const nextActive = remaining[0];
-    setActiveMailProvider(userId, nextActive.provider);
-    updateUserMailSettings(userId, nextActive.provider, nextActive.imap_user, nextActive.imap_pass, nextActive.imap_host, nextActive.imap_port, nextActive.imap_secure);
-    return ctx.reply(`🗑 ${provider} удалён. Активный ящик теперь: ${nextActive.provider} (${nextActive.imap_user})`);
 });
 
 bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
@@ -3405,7 +3527,7 @@ bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
     return ctx.reply('Окей, отправь смещение командой вида: /tz 7\nДопустимый диапазон: от -12 до +14.');
 });
 
-bot.on('location', (ctx) => {
+bot.on('location', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
@@ -3417,6 +3539,9 @@ bot.on('location', (ctx) => {
     if (offset < -12) offset = -12;
     if (offset > 14) offset = 14;
 
+    try {
+        await runBackendSetTimezone(userId, offset);
+    } catch {}
     updateUserTimezone(userId, offset);
     timezoneSetupFlows.delete(userId);
     const sign = offset >= 0 ? '+' : '';
@@ -3646,6 +3771,7 @@ bot.action('mail:instr:google', async (ctx) => {
 bot.action('mail:forget', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+    try { await runBackendMailForget(userId); } catch {}
     clearUserMailSettings(userId);
     await ctx.answerCbQuery('Почта удалена');
     await ctx.reply('🗑 Данные почты удалены.');
@@ -4208,6 +4334,7 @@ bot.action('prompt:custom:use', async (ctx) => {
     }
 
     selectUserCustomPrompt(userId);
+    await runBackendSelectUserPrompt(userId, -1);
     const refreshed = getUser(userId);
     if (!refreshed) {
         await ctx.answerCbQuery('Ошибка профиля');
@@ -4256,8 +4383,11 @@ bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
     }
 
     const promptId = Number.parseInt((ctx as any).match[1], 10);
-    const prompt = getPromptById(promptId);
-    if (!prompt) {
+    let prompt;
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        prompt = data.prompt;
+    } catch {
         await ctx.answerCbQuery('Промпт не найден');
         return;
     }
@@ -4282,12 +4412,16 @@ bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
     }
 
     const promptId = Number.parseInt((ctx as any).match[1], 10);
-    const prompt = getPromptById(promptId);
-    if (!prompt) {
+    let prompt;
+    try {
+        const data = await runBackendGetPrompt(promptId);
+        prompt = data.prompt;
+    } catch {
         await ctx.answerCbQuery('Промпт не найден');
         return;
     }
 
+    await runBackendSelectUserPrompt(userId, promptId);
     updateUserPrompt(userId, promptId);
     const refreshedUser = getUser(userId);
     if (!refreshedUser) {
@@ -4456,6 +4590,7 @@ bot.on('text', async (ctx) => {
         }
 
         const nextValue = Math.max(1, Math.floor(parsed));
+        try { await runBackendSetContextWindow(adminContextFlow.targetUserId, nextValue, true); } catch {}
         updateUserContextWindow(adminContextFlow.targetUserId, nextValue);
         trimUserHistory(adminContextFlow.targetUserId);
         adminUserContextLimitFlows.delete(userId);
@@ -4513,6 +4648,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Не понял смещение. Отправь число от -12 до +14, например: 7');
         }
 
+        try { await runBackendSetTimezone(userId, offset); } catch {}
         updateUserTimezone(userId, offset);
         timezoneSetupFlows.delete(userId);
         const sign = offset >= 0 ? '+' : '';
@@ -4574,6 +4710,8 @@ bot.on('text', async (ctx) => {
             }
 
             updateUserCustomPrompt(userId, userText.trim());
+            try { await runBackendUpdateCustomPrompt(userId, userText.trim()); } catch {}
+            try { await runBackendSelectUserPrompt(userId, -1); } catch {}
             selectUserCustomPrompt(userId);
             customPromptEditFlows.delete(userId);
             return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard());
@@ -4602,6 +4740,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Для вас доступно максимум 10. Введи число от 1 до 10.');
         }
 
+        try { await runBackendMailLimit(userId, parsed); } catch {}
         updateUserMailCheckLimit(userId, parsed);
         mailLimitFlows.delete(userId);
         return ctx.reply(`✅ Новое ограничение check_emails: ${parsed}.`);
@@ -4631,7 +4770,9 @@ bot.on('text', async (ctx) => {
             return ctx.reply(`Для тебя доступно максимум ${maxAllowed}. Введи число от 1 до ${maxAllowed}.`);
         }
 
-        updateUserContextWindow(userId, Math.floor(parsed));
+        const ctxValue = Math.floor(parsed);
+        try { await runBackendSetContextWindow(userId, ctxValue, false); } catch {}
+        updateUserContextWindow(userId, ctxValue);
         trimUserHistory(userId);
         contextLimitFlows.delete(userId);
         const refreshed = getUser(userId);

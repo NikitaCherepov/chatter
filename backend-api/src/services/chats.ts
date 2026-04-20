@@ -188,6 +188,53 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, limit: num
   `).run(userId, chatId, userId, chatId, safeLimit);
 };
 
+export const updateUserContextWindow = (userId: number, contextWindow: number) => {
+  const safeValue = Math.max(1, Math.floor(contextWindow));
+  return db.prepare(`
+    UPDATE users
+    SET context_window = ?
+    WHERE id = ?
+  `).run(safeValue, userId);
+};
+
+export const updateUserContextWindowMax = (userId: number, contextWindowMax: number) => {
+  const safeValue = Math.max(1, Math.floor(contextWindowMax));
+  return db.prepare(`
+    UPDATE users
+    SET context_window_max = ?,
+        context_window = CASE
+            WHEN COALESCE(context_window, 0) <= 0 THEN ?
+            WHEN context_window > ? THEN ?
+            ELSE context_window
+        END
+    WHERE id = ?
+  `).run(safeValue, safeValue, safeValue, safeValue, userId);
+};
+
+export const resetDailyMessageCounters = () => db.prepare(`
+  UPDATE users
+  SET daily_message_count = 0,
+      daily_tokens_used = 0,
+      daily_cost_rub = 0,
+      daily_web_search_count = 0
+`).run();
+
+export const updateUserPrompt = (userId: number, promptId: number) => db
+  .prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?')
+  .run(promptId, userId);
+
+export const selectUserCustomPrompt = (userId: number) => db
+  .prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?')
+  .run(-1, userId);
+
+export const updateUserCustomPrompt = (userId: number, content: string) => db
+  .prepare('UPDATE users SET custom_prompt_content = ? WHERE id = ?')
+  .run(content, userId);
+
+export const resetUsersPromptIfDeleted = (promptId: number) => db
+  .prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?')
+  .run(promptId);
+
 export const resolveEffectiveContextWindow = (user: UserRecord) => {
   const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0 ? Math.floor(user.context_window_max) : 10;
   const current = Number.isFinite(user.context_window) && user.context_window > 0 ? Math.floor(user.context_window) : maxWindow;

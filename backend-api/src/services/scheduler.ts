@@ -277,6 +277,90 @@ const tick = async () => {
 let timer: NodeJS.Timeout | null = null;
 let running = false;
 
+// ── Daily reset + plan expiry ──────────────────────────────────────────────
+
+const PLAN_CONTEXT_LIMITS: Record<string, number> = { free: 10, standart: 20, pro: 50 };
+const PLAN_DAILY_MESSAGE_LIMITS: Record<string, number> = { free: 10, standart: 20, pro: 50 };
+const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<string, number> = { free: 0, standart: 5, pro: 20 };
+
+const resetDailyMessageCounters = () => db.prepare(`
+  UPDATE users
+  SET daily_message_count = 0,
+      daily_tokens_used = 0,
+      daily_cost_rub = 0,
+      daily_web_search_count = 0
+`).run();
+
+const expireFinishedPlanSubscriptions = () => {
+  const expiredRows = db.prepare(`
+    SELECT id, user_id, plan, started_at, ends_at
+    FROM user_plan_subscriptions
+    WHERE is_current = 1 AND ends_at IS NOT NULL AND datetime(ends_at) <= CURRENT_TIMESTAMP
+    ORDER BY user_id ASC, id ASC
+  `).all() as Array<{ id: number; user_id: number; plan: string; started_at: string; ends_at: string | null }>;
+
+  const processedUsers = new Set<number>();
+  for (const row of expiredRows) {
+    if (processedUsers.has(row.user_id)) continue;
+    processedUsers.add(row.user_id);
+
+    const plan = 'free';
+    const limits = {
+      context_window_max: PLAN_CONTEXT_LIMITS[plan],
+      daily_message_limit: PLAN_DAILY_MESSAGE_LIMITS[plan],
+      daily_web_search_limit: PLAN_DAILY_WEB_SEARCH_LIMITS[plan]
+    };
+
+    db.prepare(`
+      UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ? AND is_current = 1
+    `).run(row.user_id);
+
+    db.prepare(`
+      INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
+      VALUES (?, ?, CURRENT_TIMESTAMP, NULL, 1, NULL)
+    `).run(row.user_id, plan);
+
+    db.prepare(`
+      UPDATE users
+      SET plan = ?,
+          context_window_max = ?,
+          daily_message_limit = ?,
+          daily_web_search_limit = ?,
+          context_window = CASE
+            WHEN COALESCE(context_window, 0) <= 0 THEN ?
+            WHEN context_window > ? THEN ?
+            ELSE context_window
+          END
+      WHERE id = ?
+    `).run(plan, limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit,
+           limits.context_window_max, limits.context_window_max, limits.context_window_max, row.user_id);
+  }
+
+  if (processedUsers.size > 0) {
+    console.log(`[backend-scheduler] expired ${processedUsers.size} plan subscription(s), reverted to free.`);
+  }
+};
+
+let dailyResetTimer: NodeJS.Timeout | null = null;
+
+const scheduleDailyCounterReset = () => {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  const delay = Math.max(1000, next.getTime() - now.getTime());
+
+  dailyResetTimer = setTimeout(() => {
+    try {
+      resetDailyMessageCounters();
+      console.log('[backend-scheduler] daily counters reset.');
+    } catch (err) {
+      console.error('[backend-scheduler] daily reset error:', err);
+    } finally {
+      scheduleDailyCounterReset();
+    }
+  }, delay);
+};
+
 export const startTaskScheduler = () => {
   const enabled = `${process.env.BACKEND_SCHEDULER_ENABLED || '0'}`.trim() === '1';
   if (!enabled) {
@@ -285,6 +369,8 @@ export const startTaskScheduler = () => {
   }
   if (timer) return;
   console.log(`[backend-scheduler] enabled, interval=${SCHEDULER_INTERVAL_MS}ms`);
+
+  // Start task tick
   timer = setInterval(async () => {
     if (running) return;
     running = true;
@@ -296,4 +382,16 @@ export const startTaskScheduler = () => {
       running = false;
     }
   }, SCHEDULER_INTERVAL_MS);
+
+  // Start daily counter reset + plan expiry check
+  scheduleDailyCounterReset();
+  try { expireFinishedPlanSubscriptions(); } catch (err) {
+    console.error('[backend-scheduler] plan expiry check error:', err);
+  }
+  // Run plan expiry check every 30 minutes
+  setInterval(() => {
+    try { expireFinishedPlanSubscriptions(); } catch (err) {
+      console.error('[backend-scheduler] plan expiry check error:', err);
+    }
+  }, 30 * 60 * 1000);
 };

@@ -1,7 +1,7 @@
 ﻿import express from 'express';
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
@@ -11,6 +11,9 @@ import { startTaskScheduler } from './services/scheduler.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { VectorMemoryService } from './services/vector-memory.js';
+import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt } from './services/prompts.js';
+import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret } from './services/mail.js';
+import type { MailProvider } from './services/mail.js';
 
 dotenv.config();
 
@@ -504,6 +507,260 @@ app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   if (!Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_task_id' });
   const ok = deletePendingTask(userId, taskId);
   if (!ok) return res.status(404).json({ error: 'task_not_found_or_not_pending' });
+  return res.json({ ok: true });
+});
+
+// ── Internal: Prompts CRUD ─────────────────────────────────────────────────
+
+app.get('/internal/prompts', internalAuth, (_req, res) => {
+  const prompts = getAllPrompts();
+  return res.json({ prompts });
+});
+
+app.get('/internal/prompts/:id', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  const prompt = getPromptById(promptId);
+  if (!prompt) return res.status(404).json({ error: 'prompt_not_found' });
+  return res.json({ prompt });
+});
+
+app.post('/internal/prompts', internalAuth, (req, res) => {
+  const name = `${req.body?.name || ''}`.trim();
+  const description = `${req.body?.description || ''}`.trim();
+  const content = `${req.body?.content || ''}`.trim();
+  const isDefault = Boolean(req.body?.is_default);
+
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  if (!content) return res.status(400).json({ error: 'content_required' });
+
+  try {
+    const result = createPrompt(name, description, content, isDefault);
+    return res.status(201).json({ ok: true, prompt_id: Number(result.lastInsertRowid) });
+  } catch (err: any) {
+    return res.status(409).json({ error: 'name_already_exists' });
+  }
+});
+
+app.put('/internal/prompts/:id/name', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  const name = `${req.body?.name || ''}`.trim();
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  if (!name) return res.status(400).json({ error: 'name_required' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  try {
+    updatePromptName(promptId, name);
+    return res.json({ ok: true });
+  } catch {
+    return res.status(409).json({ error: 'name_already_exists' });
+  }
+});
+
+app.put('/internal/prompts/:id/description', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  const description = `${req.body?.description || ''}`.trim();
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  updatePromptDescription(promptId, description);
+  return res.json({ ok: true });
+});
+
+app.put('/internal/prompts/:id/content', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  const content = `${req.body?.content || ''}`.trim();
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  if (!content) return res.status(400).json({ error: 'content_required' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  updatePromptContent(promptId, content);
+  return res.json({ ok: true });
+});
+
+app.put('/internal/prompts/:id/default', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  setDefaultPrompt(promptId);
+  return res.json({ ok: true });
+});
+
+app.delete('/internal/prompts/:id', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  const all = getAllPrompts();
+  if (all.length <= 1) return res.status(422).json({ error: 'cannot_delete_last_prompt' });
+  if (existing.is_default) return res.status(422).json({ error: 'cannot_delete_default_prompt' });
+
+  deletePrompt(promptId);
+  resetUsersPromptIfDeleted(promptId);
+  return res.json({ ok: true });
+});
+
+// ── Internal: User prompt selection ────────────────────────────────────────
+
+app.post('/internal/user/prompt/select', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const promptId = Number(req.body?.prompt_id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(promptId)) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  if (promptId === -1) {
+    selectUserCustomPrompt(userId);
+  } else {
+    const prompt = getPromptById(promptId);
+    if (!prompt) return res.status(404).json({ error: 'prompt_not_found' });
+    updateUserPrompt(userId, promptId);
+  }
+  return res.json({ ok: true });
+});
+
+app.put('/internal/user/prompt/custom', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const content = `${req.body?.content || ''}`;
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserCustomPrompt(userId, content);
+  return res.json({ ok: true });
+});
+
+// ── Internal: Timezone ────────────────────────────────────────────────────
+
+app.post('/internal/user/timezone', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const offset = Number(req.body?.timezone_offset);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(offset) || offset < -12 || offset > 14) return res.status(400).json({ error: 'bad_timezone_offset' });
+
+  setUserTimezone(userId, Math.floor(offset));
+  return res.json({ ok: true });
+});
+
+// ── Internal: Context Window ──────────────────────────────────────────────
+
+app.post('/internal/user/context-window', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const contextWindow = Number(req.body?.context_window);
+  const isAdmin = Boolean(req.body?.is_admin);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(contextWindow) || contextWindow <= 0) return res.status(400).json({ error: 'bad_context_window' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  if (!isAdmin) {
+    const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0
+      ? Math.floor(user.context_window_max) : 10;
+    if (contextWindow > maxWindow) return res.status(422).json({ error: 'exceeds_max_context_window', max: maxWindow });
+  }
+
+  updateUserContextWindow(userId, Math.floor(contextWindow));
+  return res.json({ ok: true });
+});
+
+// ── Internal: Mail Accounts Management ────────────────────────────────────
+
+app.post('/internal/mail/setup', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const provider = normalizeMailProvider(req.body?.provider);
+  const email = `${req.body?.email || ''}`.trim();
+  const appPassword = `${req.body?.app_password || ''}`;
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!provider) return res.status(400).json({ error: 'bad_provider' });
+  if (!email) return res.status(400).json({ error: 'email_required' });
+  if (!appPassword) return res.status(400).json({ error: 'app_password_required' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  const config = resolveImapProviderConfig(provider);
+  if (!config) return res.status(400).json({ error: 'bad_provider' });
+
+  const encryptedPass = encryptSecret(appPassword);
+  upsertMailAccount(userId, provider, email, encryptedPass, config.host, config.port, config.secure);
+  setActiveMailProvider(userId, provider);
+  updateUserMailSettings(userId, config.provider, email, encryptedPass, config.host, config.port, config.secure);
+
+  const accounts = getMailAccountsForUser(userId);
+  return res.json({ ok: true, accounts: accounts.map(a => ({ provider: a.provider, imap_user: a.imap_user })) });
+});
+
+app.post('/internal/mail/use', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const provider = normalizeMailProvider(req.body?.provider);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!provider) return res.status(400).json({ error: 'bad_provider' });
+
+  const account = getMailAccountForUser(userId, provider);
+  if (!account) return res.status(404).json({ error: 'mail_account_not_found' });
+
+  setActiveMailProvider(userId, provider);
+  updateUserMailSettings(userId, provider, account.imap_user, account.imap_pass, account.imap_host, account.imap_port, account.imap_secure);
+  return res.json({ ok: true, provider, imap_user: account.imap_user });
+});
+
+app.put('/internal/mail/limit', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const limit = Number(req.body?.limit);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(limit) || limit <= 0) return res.status(400).json({ error: 'bad_limit' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserMailCheckLimit(userId, Math.floor(limit));
+  return res.json({ ok: true, limit: Math.floor(limit) });
+});
+
+app.delete('/internal/mail/account', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const provider = normalizeMailProvider(req.body?.provider);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  if (!provider) {
+    clearUserMailSettings(userId);
+    deleteAllMailAccounts(userId);
+    return res.json({ ok: true, deleted: 'all' });
+  }
+
+  deleteMailAccount(userId, provider);
+  const remaining = getMailAccountsForUser(userId);
+  if (!remaining.length) {
+    clearUserMailSettings(userId);
+    return res.json({ ok: true, deleted: provider, remaining: [] });
+  }
+
+  const nextActive = remaining[0];
+  setActiveMailProvider(userId, nextActive.provider);
+  updateUserMailSettings(userId, nextActive.provider, nextActive.imap_user, nextActive.imap_pass, nextActive.imap_host, nextActive.imap_port, nextActive.imap_secure);
+  return res.json({ ok: true, deleted: provider, new_active: { provider: nextActive.provider, imap_user: nextActive.imap_user } });
+});
+
+// ── Internal: Daily Reset ─────────────────────────────────────────────────
+
+app.post('/internal/daily-reset', internalAuth, (_req, res) => {
+  resetDailyMessageCounters();
   return res.json({ ok: true });
 });
 

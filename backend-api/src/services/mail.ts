@@ -305,6 +305,93 @@ export const runEmailRead = async (userId: number, subjectPart: string, provider
   }
 };
 
+// ── Encryption helper for mail account management ──────────────────────────
+
+const encryptSecret = (text: string) => {
+  const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  return `${iv.toString('hex')}${EMAIL_PASSWORD_DELIMITER}${encrypted.toString('hex')}`;
+};
+
+export const resolveImapProviderConfig = (providerRaw: string) => {
+  const provider = (providerRaw || '').trim().toLowerCase();
+  if (['yandex', 'ya', 'яндекс'].includes(provider)) {
+    return { provider: 'yandex' as MailProvider, host: 'imap.yandex.ru', port: 993, secure: 1 };
+  }
+  if (['google', 'gmail', 'гугл', 'googlemail'].includes(provider)) {
+    return { provider: 'google' as MailProvider, host: 'imap.gmail.com', port: 993, secure: 1 };
+  }
+  return null;
+};
+
+export const detectMailProviderByEmail = (emailRaw: string): string | null => {
+  const domain = (emailRaw || '').trim().toLowerCase().split('@')[1] || '';
+  if (['gmail.com', 'googlemail.com', 'google.com'].includes(domain)) return 'google';
+  if (['yandex.ru', 'yandex.com', 'ya.ru', 'narod.ru'].includes(domain)) return 'yandex';
+  return null;
+};
+
+// ── Mail account CRUD (management) ────────────────────────────────────────
+
+export const upsertMailAccount = (
+  userId: number,
+  provider: MailProvider,
+  email: string,
+  encryptedPassword: string,
+  host: string,
+  port = 993,
+  secure = 1
+) => db.prepare(`
+  INSERT INTO mail_accounts (user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(user_id, provider) DO UPDATE SET
+    imap_user = excluded.imap_user,
+    imap_pass = excluded.imap_pass,
+    imap_host = excluded.imap_host,
+    imap_port = excluded.imap_port,
+    imap_secure = excluded.imap_secure,
+    updated_at = CURRENT_TIMESTAMP
+`).run(userId, provider, email, encryptedPassword, host, port, secure);
+
+export const setActiveMailProvider = (userId: number, provider: MailProvider) => db.prepare(`
+  UPDATE users SET imap_provider = ? WHERE id = ?
+`).run(provider, userId);
+
+export const updateUserMailSettings = (
+  userId: number,
+  provider: string,
+  email: string,
+  encryptedPassword: string,
+  host: string,
+  port = 993,
+  secure = 1
+) => db.prepare(`
+  UPDATE users
+  SET imap_provider = ?, imap_user = ?, imap_pass = ?, imap_host = ?, imap_port = ?, imap_secure = ?
+  WHERE id = ?
+`).run(provider, email, encryptedPassword, host, port, secure, userId);
+
+export const updateUserMailCheckLimit = (userId: number, limit: number) => db.prepare(`
+  UPDATE users SET mail_check_limit = ? WHERE id = ?
+`).run(limit, userId);
+
+export const deleteMailAccount = (userId: number, provider: MailProvider) => db
+  .prepare(`DELETE FROM mail_accounts WHERE user_id = ? AND provider = ?`)
+  .run(userId, provider);
+
+export const clearUserMailSettings = (userId: number) => db.prepare(`
+  UPDATE users
+  SET imap_provider = NULL, imap_user = NULL, imap_pass = NULL, imap_host = NULL, imap_port = 993, imap_secure = 1
+  WHERE id = ?
+`).run(userId);
+
+export const deleteAllMailAccounts = (userId: number) => db
+  .prepare('DELETE FROM mail_accounts WHERE user_id = ?')
+  .run(userId);
+
+export { encryptSecret, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider };
+
 export const runEmailSend = async (userId: number, to: string, subject: string, body: string, provider?: string ) => {
   const user = getUserById(userId);
   if (!user) return 'Ошибка: пользователь не найден.';
