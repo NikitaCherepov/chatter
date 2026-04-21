@@ -869,7 +869,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; prompt_used: string }>) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -985,7 +985,12 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     if (!prompt) return 'Ошибка: пустой промпт для генерации изображения.';
     const result = await runImageGeneration(user.id, prompt);
     if (!result.ok) return `Ошибка генерации изображения: ${(result as any).error || 'unknown'}`;
-    return JSON.stringify({ ok: true, image_base64: result.image_base64, prompt_used: result.prompt_used });
+    // base64 НЕ возвращаем в tool_content — он сохраняется в массив generatedImages
+    // LLM получает текстовую заглушку, чтобы не забивать контекст мегабайтами base64
+    if (Array.isArray(generatedImages)) {
+      generatedImages.push({ image_base64: result.image_base64, prompt_used: result.prompt_used });
+    }
+    return JSON.stringify({ status: 'success', message: 'Изображение успешно сгенерировано и будет отправлено пользователю. Опиши результат своими словами.' });
   }
 
   return `Ошибка: неизвестный инструмент ${toolName}`;
@@ -1247,7 +1252,8 @@ for (const toolCall of message.tool_calls) {
       timezone,
       toolName,
       toolCall.function?.arguments || '{}',
-      (payload) => runCompletion('pro', payload)
+      (payload) => runCompletion('pro', payload),
+      generatedImages
     );
   } catch (err: any) {
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
@@ -1261,21 +1267,6 @@ for (const toolCall of message.tool_calls) {
 
   if (toolContent.trim()) {
     toolOutputsForFallback.push(toolContent.trim());
-  }
-
-  // Извлекаем сгенерированные изображения из tool content
-  if (toolName === 'generate_image' && toolContent.trim()) {
-    try {
-      const parsedToolResult = JSON.parse(toolContent);
-      if (parsedToolResult?.ok && parsedToolResult.image_base64) {
-        generatedImages.push({
-          image_base64: parsedToolResult.image_base64,
-          prompt_used: parsedToolResult.prompt_used || ''
-        });
-      }
-    } catch {
-      // tool content is not JSON — probably an error message, skip
-    }
   }
 }
 
