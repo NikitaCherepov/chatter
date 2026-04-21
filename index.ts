@@ -953,8 +953,8 @@ const formatTaskForDisplay = async (task: TaskRecord) => {
     return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when.local} (${when.tzLabel})\nКогда (UTC): ${when.utc} UTC\nРасписание: ${recurrence}\nУведомления: ${notifyText}\nДанные: ${payloadPreview}`;
 };
 
-const formatTasksList = (tasks: TaskRecord[], emptyText = 'Задач не найдено.') => (
-    tasks.length ? tasks.map(formatTaskForDisplay).join('\n\n') : emptyText
+const formatTasksList = async (tasks: TaskRecord[], emptyText = 'Задач не найдено.') => (
+    tasks.length ? (await Promise.all(tasks.map(formatTaskForDisplay))).join('\n\n') : emptyText
 );
 
 const getIsoWeekday = (date: Date) => {
@@ -3319,7 +3319,7 @@ bot.command('tasks', async (ctx) => {
     const tasks = getUserTasks(userId, 'pending', 20);
     if (!tasks.length) return ctx.reply('У тебя нет активных напоминаний и расписаний.');
 
-    const text = `Твои активные задачи (${tasks.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${formatTasksList(tasks)}`;
+    const text = `Твои активные задачи (${tasks.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${await formatTasksList(tasks)}`;
     return ctx.reply(text);
 });
 
@@ -3345,7 +3345,7 @@ bot.command('task_delete', async (ctx) => {
     if (!result.changes) return ctx.reply(`Не удалось удалить задачу #${taskId}.`);
 
     const updated = getUserTasks(userId, 'pending', 20);
-    const updatedText = formatTasksList(updated, 'Активных задач больше нет.');
+    const updatedText = await formatTasksList(updated, 'Активных задач больше нет.');
     return ctx.reply(`Удалил задачу #${taskId}.\n\nТекущие задачи (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${updatedText}`);
 });
 
