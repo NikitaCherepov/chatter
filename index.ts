@@ -1288,8 +1288,13 @@ const runBackendCreatePendingUser = async (tgId: number, name: string | null, tg
 
 const runBackendGetUser = async (userId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: 15000 });
-    return response.data as { user: UserRecord };
+    try {
+        const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: 15000 });
+        return response.data as { user: UserRecord };
+    } catch (err: any) {
+        if (err?.response?.status === 404) return { user: undefined };
+        throw err;
+    }
 };
 
 const runBackendUpdateTgUsername = async (userId: number, tgUsername: string | null) => {
