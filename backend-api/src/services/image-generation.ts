@@ -74,8 +74,7 @@ export const runImageGeneration = async (
         model: IMAGE_GEN_MODEL,
         prompt: trimmedPrompt,
         quality: IMAGE_GEN_QUALITY,
-        size: IMAGE_GEN_SIZE,
-        response_format: 'b64_json'
+        size: IMAGE_GEN_SIZE
       },
       {
         headers: {
