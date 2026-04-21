@@ -1,7 +1,7 @@
 ﻿import express from 'express';
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
@@ -14,6 +14,7 @@ import { VectorMemoryService } from './services/vector-memory.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
+import { setBan, removeBan, getBanRecord } from './services/bans.js';
 
 dotenv.config();
 
@@ -764,14 +765,389 @@ app.post('/internal/daily-reset', internalAuth, (_req, res) => {
   return res.json({ ok: true });
 });
 
-app.get('/api/v1/admin/users', adminMiddleware, (_req: AuthedRequest, res) => {
-  const rows = db.prepare(`
-    SELECT id, name, role, is_admin, status, plan, tg_username
-    FROM users
-    ORDER BY id ASC
-    LIMIT 500
-  `).all();
-  res.json({ users: rows });
+// ── Internal: User management for bot ──────────────────────────────────────
+
+app.post('/internal/users/upsert-telegram', internalAuth, (req, res) => {
+  const tgId = Number(req.body?.tg_id);
+  const name = `${req.body?.name || ''}`.trim();
+  const role = `${req.body?.role || 'user'}`.trim();
+  const status = `${req.body?.status || 'none'}` as 'none' | 'approved' | 'disapproved' | 'banned';
+  const tgUsername = req.body?.tg_username ?? null;
+  const defaultPromptId = req.body?.default_prompt_id ?? null;
+
+  if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'bad_tg_id' });
+  if (!name) return res.status(400).json({ error: 'name_required' });
+
+  upsertTelegramUser(tgId, name, role, status, tgUsername, defaultPromptId);
+  const user = getUserById(tgId);
+  return res.json({ ok: true, user });
+});
+
+app.post('/internal/users/create-pending', internalAuth, (req, res) => {
+  const tgId = Number(req.body?.tg_id);
+  const name = req.body?.name ?? null;
+  const tgUsername = req.body?.tg_username ?? null;
+  const defaultPromptId = req.body?.default_prompt_id ?? null;
+
+  if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'bad_tg_id' });
+
+  createPendingTelegramUser(tgId, name, tgUsername, defaultPromptId);
+  const user = getUserById(tgId);
+  return res.json({ ok: true, user });
+});
+
+app.get('/internal/users/:id', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ user });
+});
+
+app.put('/internal/users/:id/tg-username', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id || req.params.id);
+  const tgUsername = req.body?.tg_username ?? null;
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  updateUserTelegramUsername(userId, tgUsername);
+  return res.json({ ok: true });
+});
+
+// ── Internal: User listing ────────────────────────────────────────────────
+
+app.get('/internal/users', internalAuth, (req, res) => {
+  const filter = `${req.query?.filter || 'all'}`.trim().toLowerCase();
+  const limit = Number.parseInt(`${req.query?.limit || 50}`, 10);
+  const offset = Number.parseInt(`${req.query?.offset || 0}`, 10);
+
+  if (filter === 'pending') {
+    const count = getPendingUsersCount();
+    const users = getPendingUsersPage(limit, offset);
+    return res.json({ users, total: count, filter, limit, offset });
+  }
+
+  if (filter === 'banned') {
+    const count = getBannedUsersCount();
+    const users = getBannedUsersPage(limit, offset);
+    return res.json({ users, total: count, filter, limit, offset });
+  }
+
+  const count = getUsersCount();
+  const users = getUsersPage(limit, offset);
+  return res.json({ users, total: count, filter: 'all', limit, offset });
+});
+
+// ── Internal: User status/role/name management ────────────────────────────
+
+app.put('/internal/users/:id/status', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const status = `${req.body?.status || ''}`.trim() as 'none' | 'approved' | 'disapproved' | 'banned';
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!['none', 'approved', 'disapproved', 'banned'].includes(status)) return res.status(400).json({ error: 'bad_status' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserStatus(userId, status);
+  return res.json({ ok: true, status });
+});
+
+app.put('/internal/users/:id/role', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const role = `${req.body?.role || ''}`.trim();
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'bad_role' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserRole(userId, role);
+  return res.json({ ok: true, role });
+});
+
+app.put('/internal/users/:id/name', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const name = `${req.body?.name || ''}`.trim();
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!name) return res.status(400).json({ error: 'name_required' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserName(userId, name);
+  return res.json({ ok: true, name });
+});
+
+app.delete('/internal/users/:id', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_delete_admin_from_env' });
+
+  removeUser(userId);
+  return res.json({ ok: true });
+});
+
+// ── Internal: User plan management ────────────────────────────────────────
+
+app.post('/internal/users/:id/plan', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const plan = `${req.body?.plan || ''}`.trim() as 'free' | 'standart' | 'pro';
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!['free', 'standart', 'pro'].includes(plan)) return res.status(400).json({ error: 'bad_plan' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserPlan(userId, plan);
+  return res.json({ ok: true, plan });
+});
+
+app.post('/internal/sync-plan-limits', internalAuth, (_req, res) => {
+  syncAllUsersPlanLimits();
+  return res.json({ ok: true });
+});
+
+// ── Internal: Ban management ──────────────────────────────────────────────
+
+app.post('/internal/users/:id/ban', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const reason = `${req.body?.reason || ''}`.trim() || 'Решение администратора';
+  const bannedBy = Number(req.body?.banned_by) || 0;
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_ban_admin_from_env' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  setBan(userId, bannedBy, reason);
+  updateUserStatus(userId, 'banned');
+  return res.json({ ok: true, reason });
+});
+
+app.delete('/internal/users/:id/ban', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  removeBan(userId);
+  updateUserStatus(userId, 'none');
+  return res.json({ ok: true, status: 'none' });
+});
+
+app.get('/internal/users/:id/ban', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const ban = getBanRecord(userId);
+  return res.json({ ban: ban || null });
+});
+
+// ── Internal: User prompt management (for index.ts) ───────────────────────
+
+app.post('/internal/users/:id/prompt/select', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const promptId = Number(req.body?.prompt_id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(promptId)) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  if (promptId === -1) {
+    selectUserCustomPrompt(userId);
+  } else {
+    const prompt = getPromptById(promptId);
+    if (!prompt) return res.status(404).json({ error: 'prompt_not_found' });
+    updateUserPrompt(userId, promptId);
+  }
+  return res.json({ ok: true });
+});
+
+app.put('/internal/users/:id/prompt/custom', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const content = `${req.body?.content || ''}`;
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserCustomPrompt(userId, content);
+  return res.json({ ok: true });
+});
+
+app.post('/internal/prompts/reset-users', internalAuth, (req, res) => {
+  const promptId = Number(req.body?.prompt_id);
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  resetUsersPromptIfDeleted(promptId);
+  return res.json({ ok: true });
+});
+
+// ── Admin JWT: User management ────────────────────────────────────────────
+
+app.get('/api/v1/admin/users', adminMiddleware, (req: AuthedRequest, res) => {
+  const filter = `${req.query?.filter || 'all'}`.trim().toLowerCase();
+  const limit = Number.parseInt(`${req.query?.limit || 50}`, 10);
+  const offset = Number.parseInt(`${req.query?.offset || 0}`, 10);
+
+  if (filter === 'pending') {
+    const count = getPendingUsersCount();
+    const users = getPendingUsersPage(limit, offset);
+    return res.json({ users, total: count, filter, limit, offset });
+  }
+
+  if (filter === 'banned') {
+    const count = getBannedUsersCount();
+    const users = getBannedUsersPage(limit, offset);
+    return res.json({ users, total: count, filter, limit, offset });
+  }
+
+  const count = getUsersCount();
+  const users = getUsersPage(limit, offset);
+  return res.json({ users, total: count, filter: 'all', limit, offset });
+});
+
+app.get('/api/v1/admin/users/:id', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  let ban = null;
+  if (user.status === 'banned') {
+    ban = getBanRecord(userId) || null;
+  }
+
+  return res.json({ user, ban });
+});
+
+app.put('/api/v1/admin/users/:id/status', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const status = `${req.body?.status || ''}`.trim() as 'none' | 'approved' | 'disapproved' | 'banned';
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!['none', 'approved', 'disapproved', 'banned'].includes(status)) return res.status(400).json({ error: 'bad_status' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserStatus(userId, status);
+  return res.json({ ok: true, status });
+});
+
+app.put('/api/v1/admin/users/:id/role', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const role = `${req.body?.role || ''}`.trim();
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'bad_role' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserRole(userId, role);
+  return res.json({ ok: true, role });
+});
+
+app.put('/api/v1/admin/users/:id/name', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const name = `${req.body?.name || ''}`.trim();
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!name) return res.status(400).json({ error: 'name_required' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  updateUserName(userId, name);
+  return res.json({ ok: true, name });
+});
+
+app.delete('/api/v1/admin/users/:id', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  // Prevent deleting ADMIN_IDS users
+  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_delete_admin_from_env' });
+
+  removeUser(userId);
+  return res.json({ ok: true });
+});
+
+app.post('/api/v1/admin/users/:id/plan', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const plan = `${req.body?.plan || ''}`.trim() as 'free' | 'standart' | 'pro';
+  const duration = `${req.body?.duration || 'forever'}`.trim();
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!['free', 'standart', 'pro'].includes(plan)) return res.status(400).json({ error: 'bad_plan' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  // Close current subscription
+  db.prepare('UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ? AND is_current = 1').run(userId);
+
+  // Calculate end date
+  let endsAt: string | null = null;
+  if (duration !== 'forever') {
+    const now = new Date();
+    switch (duration) {
+      case 'day': now.setDate(now.getDate() + 1); break;
+      case 'week': now.setDate(now.getDate() + 7); break;
+      case 'month': now.setMonth(now.getMonth() + 1); break;
+      case 'year': now.setFullYear(now.getFullYear() + 1); break;
+      default: break;
+    }
+    if (['day', 'week', 'month', 'year'].includes(duration)) {
+      endsAt = now.toISOString();
+    }
+  }
+
+  // Create new subscription
+  db.prepare(`
+    INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
+    VALUES (?, ?, CURRENT_TIMESTAMP, ?, 1, ?)
+  `).run(userId, plan, endsAt, req.authUserId!);
+
+  updateUserPlan(userId, plan);
+  return res.json({ ok: true, plan, ends_at: endsAt });
+});
+
+app.post('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const reason = `${req.body?.reason || ''}`.trim() || 'Решение администратора';
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_ban_admin_from_env' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  setBan(userId, req.authUserId!, reason);
+  updateUserStatus(userId, 'banned');
+  return res.json({ ok: true, reason });
+});
+
+app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  removeBan(userId);
+  updateUserStatus(userId, 'none');
+  return res.json({ ok: true, status: 'none' });
+});
+
+app.post('/api/v1/admin/sync-plan-limits', adminMiddleware, (_req: AuthedRequest, res) => {
+  syncAllUsersPlanLimits();
+  return res.json({ ok: true });
 });
 
 app.use((err: any, _req: any, res: any, _next: any) => {

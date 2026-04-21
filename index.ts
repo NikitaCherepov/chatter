@@ -1236,18 +1236,6 @@ const runBackendDeletePrompt = async (promptId: number) => {
     return response.data as { ok: boolean };
 };
 
-const runBackendSelectUserPrompt = async (userId: number, promptId: number) => {
-    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/prompt/select`, { user_id: userId, prompt_id: promptId }, { headers: backendHeaders(), timeout: 15000 });
-    return response.data as { ok: boolean };
-};
-
-const runBackendUpdateCustomPrompt = async (userId: number, content: string) => {
-    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/user/prompt/custom`, { user_id: userId, content }, { headers: backendHeaders(), timeout: 15000 });
-    return response.data as { ok: boolean };
-};
-
 const runBackendSetTimezone = async (userId: number, offset: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/timezone`, { user_id: userId, timezone_offset: offset }, { headers: backendHeaders(), timeout: 15000 });
@@ -1282,6 +1270,110 @@ const runBackendMailForget = async (userId: number, provider?: string | null) =>
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/mail/account`, { data: { user_id: userId, provider: provider || undefined }, headers: backendHeaders(), timeout: 15000 });
     return response.data as { ok: boolean; deleted: string; remaining?: Array<{ provider: string; imap_user: string }>; new_active?: { provider: string; imap_user: string } };
+};
+
+// ── Backend API helpers for user management ───────────────────────────────
+
+const runBackendUpsertTelegramUser = async (tgId: number, name: string, role: string, status: string, tgUsername: string | null, defaultPromptId: number | null) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/upsert-telegram`, { tg_id: tgId, name, role, status, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; user: UserRecord };
+};
+
+const runBackendCreatePendingUser = async (tgId: number, name: string | null, tgUsername: string | null, defaultPromptId: number | null) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/create-pending`, { tg_id: tgId, name, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; user: UserRecord };
+};
+
+const runBackendGetUser = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { user: UserRecord };
+};
+
+const runBackendUpdateTgUsername = async (userId: number, tgUsername: string | null) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tg-username`, { user_id: userId, tg_username: tgUsername }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendUpdateUserStatus = async (userId: number, status: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/status`, { status }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; status: string };
+};
+
+const runBackendUpdateUserRole = async (userId: number, role: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/role`, { role }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; role: string };
+};
+
+const runBackendUpdateUserName = async (userId: number, name: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/name`, { name }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; name: string };
+};
+
+const runBackendRemoveUser = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendGetUsersList = async (filter: string, limit: number, offset: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users`, { params: { filter, limit, offset }, headers: backendHeaders(), timeout: 15000 });
+    return response.data as { users: UserRecord[]; total: number; filter: string; limit: number; offset: number };
+};
+
+const runBackendUpdateUserPlan = async (userId: number, plan: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/plan`, { plan }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; plan: string };
+};
+
+const runBackendSyncPlanLimits = async () => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/sync-plan-limits`, {}, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendBanUser = async (userId: number, bannedBy: number, reason: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { reason, banned_by: bannedBy }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; reason: string };
+};
+
+const runBackendUnbanUser = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean; status: string };
+};
+
+const runBackendGetBanRecord = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ban: { user_id: number; reason: string; banned_at: string; banned_by: number | null } | null };
+};
+
+const runBackendSelectUserPrompt = async (userId: number, promptId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/select`, { prompt_id: promptId }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendUpdateCustomPrompt = async (userId: number, content: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/custom`, { content }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
+};
+
+const runBackendResetUsersPromptIfDeleted = async (promptId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts/reset-users`, { prompt_id: promptId }, { headers: backendHeaders(), timeout: 15000 });
+    return response.data as { ok: boolean };
 };
 
 type UserChatRecord = {
@@ -2169,21 +2261,24 @@ bot.use(async (ctx, next) => {
 
     if (isAdminByEnv || isAdminByDb) {
         const fallbackName = userRecord?.name || ctx.from?.first_name || 'Admin';
+        const defaultPrompt = ensureDefaultPrompt();
         if (!userRecord) {
             addUser(userId, fallbackName, 'admin', 'approved', telegramUsername);
+            try { await runBackendUpsertTelegramUser(userId, fallbackName, 'admin', 'approved', telegramUsername, defaultPrompt?.id ?? null); } catch {}
             userRecord = getUser(userId);
         } else {
             if (userRecord.role !== 'admin' || userRecord.status !== 'approved') {
                 addUser(userId, userRecord.name || fallbackName, 'admin', 'approved', telegramUsername);
+                try { await runBackendUpsertTelegramUser(userId, userRecord.name || fallbackName, 'admin', 'approved', telegramUsername, defaultPrompt?.id ?? null); } catch {}
                 userRecord = getUser(userId);
             } else if (userRecord.tg_username !== telegramUsername) {
                 updateUserTelegramUsername(userId, telegramUsername);
+                try { await runBackendUpdateTgUsername(userId, telegramUsername); } catch {}
                 userRecord = getUser(userId) || userRecord;
             }
         }
 
         if (userRecord && !userRecord.selected_prompt_id) {
-            const defaultPrompt = ensureDefaultPrompt();
             if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
         }
         if (userRecord) {
@@ -2203,7 +2298,9 @@ bot.use(async (ctx, next) => {
 
     if (!userRecord) {
         const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
+        const defaultPrompt = ensureDefaultPrompt();
         createPendingUser(userId, initialName, telegramUsername);
+        try { await runBackendCreatePendingUser(userId, initialName, telegramUsername, defaultPrompt?.id ?? null); } catch {}
         await syncCommandScopeForUser(userId, false);
 
         const freshUser = getUser(userId);
@@ -2218,6 +2315,7 @@ bot.use(async (ctx, next) => {
 
     if (userRecord.tg_username !== telegramUsername) {
         updateUserTelegramUsername(userId, telegramUsername);
+        try { await runBackendUpdateTgUsername(userId, telegramUsername); } catch {}
         userRecord = getUser(userId) || userRecord;
     }
 

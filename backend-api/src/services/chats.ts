@@ -252,3 +252,173 @@ export const getPromptForUser = (user: UserRecord) => {
   const defaultPrompt = db.prepare('SELECT content FROM prompts WHERE is_default = 1 LIMIT 1').get() as { content: string } | undefined;
   return defaultPrompt?.content || 'Ты полезный ассистент.';
 };
+
+// ── User management ────────────────────────────────────────────────────────
+
+export type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
+export type UserPlan = 'free' | 'standart' | 'pro';
+
+const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number }> = {
+  free: { context_window_max: 10, daily_message_limit: 10, daily_web_search_limit: 0 },
+  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5 },
+  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20 }
+};
+
+export const upsertTelegramUser = (
+  tgId: number,
+  name: string,
+  role: string,
+  status: UserStatus,
+  tgUsername: string | null,
+  defaultPromptId: number | null
+) => {
+  const isAdmin = ADMIN_IDS.has(tgId);
+  const effectiveRole = isAdmin ? 'admin' : role;
+  const effectiveIsAdmin = isAdmin ? 1 : 0;
+  const limits = PLAN_LIMITS['free'];
+
+  const result = db.prepare(`
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
+      context_window_max, daily_message_limit, daily_web_search_limit)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      role = excluded.role,
+      is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
+      status = excluded.status,
+      tg_username = COALESCE(excluded.tg_username, users.tg_username),
+      selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
+  `).run(tgId, name, effectiveRole, effectiveIsAdmin, status, tgUsername, defaultPromptId,
+    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit);
+
+  ensureActiveChat(tgId);
+  return result;
+};
+
+export const createPendingTelegramUser = (
+  tgId: number,
+  name: string | null,
+  tgUsername: string | null,
+  defaultPromptId: number | null
+) => {
+  const limits = PLAN_LIMITS['free'];
+  const result = db.prepare(`
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
+      context_window_max, daily_message_limit, daily_web_search_limit)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?)
+  `).run(tgId, name, tgUsername, defaultPromptId,
+    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit);
+
+  ensureActiveChat(tgId);
+  return result;
+};
+
+export const updateUserStatus = (userId: number, status: UserStatus) => db
+  .prepare('UPDATE users SET status = ? WHERE id = ?')
+  .run(status, userId);
+
+export const updateUserRole = (userId: number, role: string) => db
+  .prepare('UPDATE users SET role = ?, is_admin = ? WHERE id = ?')
+  .run(role, role === 'admin' ? 1 : 0, userId);
+
+export const updateUserName = (userId: number, name: string) => db
+  .prepare('UPDATE users SET name = ? WHERE id = ?')
+  .run(name, userId);
+
+export const updateUserTelegramUsername = (userId: number, tgUsername: string | null) => db
+  .prepare('UPDATE users SET tg_username = ? WHERE id = ?')
+  .run(tgUsername, userId);
+
+export const removeUser = (userId: number) => {
+  db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM user_chats WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM notes WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM tasks WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM mail_accounts WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM user_plan_subscriptions WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM api_accounts WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM bans WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+};
+
+export const getAllUsers = () => db
+  .prepare('SELECT * FROM users ORDER BY id ASC')
+  .all() as UserRecord[];
+
+export const getUsersCount = () => {
+  const row = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
+  return row.cnt;
+};
+
+export const getUsersPage = (limit: number, offset: number) => {
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  return db.prepare('SELECT * FROM users ORDER BY id ASC LIMIT ? OFFSET ?').all(safeLimit, safeOffset) as UserRecord[];
+};
+
+export const getPendingUsersCount = () => {
+  const row = db.prepare("SELECT COUNT(*) as cnt FROM users WHERE status = 'none'").get() as { cnt: number };
+  return row.cnt;
+};
+
+export const getPendingUsersPage = (limit: number, offset: number) => {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  return db.prepare("SELECT * FROM users WHERE status = 'none' ORDER BY id ASC LIMIT ? OFFSET ?").all(safeLimit, safeOffset) as UserRecord[];
+};
+
+export const getBannedUsersCount = () => {
+  const row = db.prepare("SELECT COUNT(*) as cnt FROM users WHERE status = 'banned'").get() as { cnt: number };
+  return row.cnt;
+};
+
+export const getBannedUsersPage = (limit: number, offset: number) => {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  return db.prepare(`
+    SELECT u.*, b.reason as ban_reason, b.banned_at as ban_date, b.banned_by as ban_admin_id
+    FROM users u
+    LEFT JOIN bans b ON b.user_id = u.id
+    WHERE u.status = 'banned'
+    ORDER BY u.id ASC
+    LIMIT ? OFFSET ?
+  `).all(safeLimit, safeOffset);
+};
+
+export const updateUserPlan = (userId: number, plan: UserPlan) => {
+  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['free'];
+  return db.prepare(`
+    UPDATE users
+    SET plan = ?,
+        context_window_max = ?,
+        daily_message_limit = ?,
+        daily_web_search_limit = ?,
+        context_window = CASE
+          WHEN COALESCE(context_window, 0) <= 0 THEN ?
+          WHEN context_window > ? THEN ?
+          ELSE context_window
+        END
+    WHERE id = ?
+  `).run(plan, limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit,
+    limits.context_window_max, limits.context_window_max, limits.context_window_max, userId);
+};
+
+export const syncAllUsersPlanLimits = () => {
+  for (const [plan, limits] of Object.entries(PLAN_LIMITS)) {
+    db.prepare(`
+      UPDATE users
+      SET context_window_max = ?,
+          daily_message_limit = ?,
+          daily_web_search_limit = ?,
+          context_window = CASE
+            WHEN COALESCE(context_window, 0) <= 0 THEN ?
+            WHEN context_window > ? THEN ?
+            ELSE context_window
+          END
+      WHERE plan = ?
+    `).run(limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit,
+      limits.context_window_max, limits.context_window_max, limits.context_window_max, plan);
+  }
+};
+
+export { ADMIN_IDS };
