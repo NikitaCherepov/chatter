@@ -838,7 +838,7 @@ const safeSendToUser = async (chatId: number, text: string) => {
 };
 
 const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction: string) => {
-    const targetUser = getUser(targetUserId);
+    const targetUser = await getUser(targetUserId);
     if (!targetUser) {
         await ctx.reply('Юзер не найден в базе.');
         return;
@@ -917,10 +917,10 @@ const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
     };
 };
 
-const formatTaskForDisplay = (task: TaskRecord) => {
+const formatTaskForDisplay = async (task: TaskRecord) => {
     const payloadPreview = task.payload.length > 140 ? `${task.payload.slice(0, 140)}...` : task.payload;
     const recurrence = formatRecurrenceForDisplay(task);
-    const fallbackOffset = getUser(task.user_id)?.timezone_offset ?? 5;
+    const fallbackOffset = (await getUser(task.user_id))?.timezone_offset ?? 5;
     const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
     const when = formatUnixForTimezone(task.execute_at, timezoneOffset);
     const notifyText = (task.notify_mode === 'on_match' || task.notify_mode === 'on_condition')
@@ -1667,7 +1667,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
 
     const caption = typeof ctx.message?.caption === 'string' ? ctx.message.caption.trim() : '';
 
-    const userRecord = getUser(userId);
+    const userRecord = await getUser(userId);
     if (!userRecord) {
         await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
         return;
@@ -1747,93 +1747,38 @@ const processUserPhotoThroughAi = async (ctx: any) => {
     }
 };
 
-const getUser = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRecord | undefined;
-const addUser = (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => {
-    const result = db.prepare(`
-        INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
-        VALUES (?, ?, ?, ?, ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
-        ON CONFLICT(id) DO UPDATE SET
-            name = excluded.name,
-            role = excluded.role,
-            status = excluded.status,
-            tg_username = COALESCE(excluded.tg_username, users.tg_username),
-            selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
-    `).run(id, name, role, status, tgUsername, defaultPromptSeed.id);
-    ensureActiveChatForUser(id);
-    return result;
+const getUser = async (id: number): Promise<UserRecord | undefined> => {
+    const data = await runBackendGetUser(id);
+    return data.user;
 };
-const createPendingUser = (id: number, name: string | null, tgUsername: string | null) => {
-    const result = db.prepare(`
-        INSERT INTO users (id, name, role, status, tg_username, selected_prompt_id)
-        VALUES (?, ?, 'user', 'none', ?, COALESCE((SELECT id FROM prompts WHERE is_default = 1 LIMIT 1), ?))
-    `).run(id, name, tgUsername, defaultPromptSeed.id);
+const addUser = async (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => {
+    const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
+    await runBackendUpsertTelegramUser(id, name, role, status, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
     ensureActiveChatForUser(id);
-    return result;
 };
-const updateUserName = (id: number, name: string) => db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
-const updateUserTelegramUsername = (id: number, tgUsername: string | null) => db.prepare('UPDATE users SET tg_username = ? WHERE id = ?').run(tgUsername, id);
-const updateUserRole = (id: number, role: string) => db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
-const updateUserStatus = (id: number, status: UserStatus) => db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
-const updateUserPlan = (id: number, plan: UserPlan) => db.prepare(`
-    UPDATE users
-    SET plan = ?, context_window_max = ?, daily_message_limit = ?, daily_web_search_limit = ?, context_window = CASE
-        WHEN COALESCE(context_window, 0) <= 0 THEN ?
-        WHEN context_window > ? THEN ?
-        ELSE context_window
-    END
-    WHERE id = ?
-`).run(
-    plan,
-    PLAN_CONTEXT_LIMITS[plan],
-    PLAN_DAILY_MESSAGE_LIMITS[plan],
-    PLAN_DAILY_WEB_SEARCH_LIMITS[plan],
-    PLAN_CONTEXT_LIMITS[plan],
-    PLAN_CONTEXT_LIMITS[plan],
-    PLAN_CONTEXT_LIMITS[plan],
-    id
-);
-const syncAllUsersPlanLimits = () => db.prepare(`
-    UPDATE users
-    SET context_window_max = CASE
-            WHEN plan = 'pro' THEN ?
-            WHEN plan = 'standart' THEN ?
-            ELSE ?
-        END,
-        daily_message_limit = CASE
-            WHEN plan = 'pro' THEN ?
-            WHEN plan = 'standart' THEN ?
-            ELSE ?
-        END,
-        daily_web_search_limit = CASE
-            WHEN plan = 'pro' THEN ?
-            WHEN plan = 'standart' THEN ?
-            ELSE ?
-        END,
-        context_window = CASE
-            WHEN COALESCE(context_window, 0) <= 0 THEN CASE
-                WHEN plan = 'pro' THEN ?
-                WHEN plan = 'standart' THEN ?
-                ELSE ?
-            END
-            WHEN context_window > CASE
-                WHEN plan = 'pro' THEN ?
-                WHEN plan = 'standart' THEN ?
-                ELSE ?
-            END THEN CASE
-                WHEN plan = 'pro' THEN ?
-                WHEN plan = 'standart' THEN ?
-                ELSE ?
-            END
-            ELSE context_window
-        END
-`).run(
-    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free,
-    PLAN_DAILY_MESSAGE_LIMITS.pro, PLAN_DAILY_MESSAGE_LIMITS.standart, PLAN_DAILY_MESSAGE_LIMITS.free,
-    PLAN_DAILY_WEB_SEARCH_LIMITS.pro, PLAN_DAILY_WEB_SEARCH_LIMITS.standart, PLAN_DAILY_WEB_SEARCH_LIMITS.free,
-    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free,
-    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free,
-    PLAN_CONTEXT_LIMITS.pro, PLAN_CONTEXT_LIMITS.standart, PLAN_CONTEXT_LIMITS.free
-);
+const createPendingUser = async (id: number, name: string | null, tgUsername: string | null) => {
+    const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
+    await runBackendCreatePendingUser(id, name, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
+    ensureActiveChatForUser(id);
+};
+const updateUserName = async (id: number, name: string) => {
+    await runBackendUpdateUserName(id, name);
+};
+const updateUserTelegramUsername = async (id: number, tgUsername: string | null) => {
+    await runBackendUpdateTgUsername(id, tgUsername);
+};
+const updateUserRole = async (id: number, role: string) => {
+    await runBackendUpdateUserRole(id, role);
+};
+const updateUserStatus = async (id: number, status: UserStatus) => {
+    await runBackendUpdateUserStatus(id, status);
+};
+const updateUserPlan = async (id: number, plan: UserPlan) => {
+    await runBackendUpdateUserPlan(id, plan);
+};
+const syncAllUsersPlanLimits = async () => {
+    await runBackendSyncPlanLimits();
+};
 const updateUserContextWindow = (id: number, contextWindow: number) => db.prepare(`
     UPDATE users
     SET context_window = ?
@@ -1904,24 +1849,24 @@ const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
     if (!Number.isFinite(value)) return getPlanDailyWebSearchLimit(DEFAULT_USER_PLAN);
     return Math.max(0, Math.floor(value as number));
 };
-const applyUserPlan = (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
+const applyUserPlan = async (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
     closeCurrentPlanSubscriptions(userId);
-    updateUserPlan(userId, plan);
+    await updateUserPlan(userId, plan);
     addPlanSubscription(userId, plan, endsAt, assignedBy);
 };
-const ensureUserCurrentPlanSubscription = (userId: number) => {
+const ensureUserCurrentPlanSubscription = async (userId: number) => {
     const current = getCurrentPlanSubscription(userId);
     if (current) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) return;
     const normalizedPlan = parsePlanFromDb(user.plan);
-    updateUserPlan(userId, normalizedPlan);
+    await updateUserPlan(userId, normalizedPlan);
     addPlanSubscription(userId, normalizedPlan, null, null);
 };
-const ensureCurrentPlanSubscriptionsForAllUsers = () => {
+const ensureCurrentPlanSubscriptionsForAllUsers = async () => {
     const users = getAllUsers();
     for (const user of users) {
-        ensureUserCurrentPlanSubscription(user.id);
+        await ensureUserCurrentPlanSubscription(user.id);
     }
 };
 const getEndsAtForDuration = (duration: PlanDurationCode) => {
@@ -1933,13 +1878,13 @@ const getEndsAtForDuration = (duration: PlanDurationCode) => {
     if (duration === 'year') dt.setFullYear(dt.getFullYear() + 1);
     return dt.toISOString().slice(0, 19).replace('T', ' ');
 };
-const expireFinishedPlanSubscriptions = () => {
+const expireFinishedPlanSubscriptions = async () => {
     const expiredRows = getExpiredCurrentSubscriptions();
     const processedUsers = new Set<number>();
     for (const row of expiredRows) {
         if (processedUsers.has(row.user_id)) continue;
         processedUsers.add(row.user_id);
-        applyUserPlan(row.user_id, DEFAULT_USER_PLAN, null, null);
+        await applyUserPlan(row.user_id, DEFAULT_USER_PLAN, null, null);
     }
 };
 const updateUserTimezone = (id: number, timezoneOffset: number) => db.prepare(`
@@ -2002,11 +1947,21 @@ const resetDailyMessageCounters = () => db.prepare(`
         daily_cost_rub = 0,
         daily_web_search_count = 0
 `).run();
-const updateUserPrompt = (id: number, promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, id);
-const selectUserCustomPrompt = (id: number) => db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(CUSTOM_PROMPT_ID, id);
-const updateUserCustomPrompt = (id: number, content: string) => db.prepare('UPDATE users SET custom_prompt_content = ? WHERE id = ?').run(content, id);
-const resetUsersPromptIfDeleted = (promptId: number) => db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
-const removeUser = (id: number) => db.prepare('DELETE FROM users WHERE id = ?').run(id);
+const updateUserPrompt = async (id: number, promptId: number) => {
+    await runBackendSelectUserPrompt(id, promptId);
+};
+const selectUserCustomPrompt = async (id: number) => {
+    await runBackendSelectUserPrompt(id, CUSTOM_PROMPT_ID);
+};
+const updateUserCustomPrompt = async (id: number, content: string) => {
+    await runBackendUpdateCustomPrompt(id, content);
+};
+const resetUsersPromptIfDeleted = async (promptId: number) => {
+    await runBackendResetUsersPromptIfDeleted(promptId);
+};
+const removeUser = async (id: number) => {
+    await runBackendRemoveUser(id);
+};
 const removeUserPlanSubscriptions = (id: number) => db.prepare('DELETE FROM user_plan_subscriptions WHERE user_id = ?').run(id);
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
@@ -2201,7 +2156,7 @@ const deleteHistoryMessageByUserAndTelegramMessageId = (userId: number, telegram
     DELETE FROM chat_messages
     WHERE user_id = ? AND telegram_message_id = ?
 `).run(userId, telegramMessageId);
-const trimUserHistory = (userId: number) => db.prepare(`
+const trimUserHistory = async (userId: number) => db.prepare(`
     DELETE FROM chat_messages
     WHERE user_id = ?
       AND chat_id = ?
@@ -2217,7 +2172,7 @@ const trimUserHistory = (userId: number) => db.prepare(`
     ensureActiveChatForUser(userId),
     userId,
     ensureActiveChatForUser(userId),
-    resolveEffectiveContextWindow(getUser(userId))
+    resolveEffectiveContextWindow(await getUser(userId))
 );
 const clearActiveUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
@@ -2225,7 +2180,9 @@ const clearActiveUserHistory = (userId: number) => db.prepare(`
 `).run(userId, ensureActiveChatForUser(userId));
 const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
 
-ensureCurrentPlanSubscriptionsForAllUsers();
+ensureCurrentPlanSubscriptionsForAllUsers().catch((err) => {
+    console.error('Ошибка первичной инициализации подписок:', err);
+});
 
 const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }) => {
     if (user.selected_prompt_id === CUSTOM_PROMPT_ID) {
@@ -2255,7 +2212,7 @@ bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     const telegramUsername = ctx.from?.username?.trim() || null;
-    let userRecord = getUser(userId);
+    let userRecord = await getUser(userId);
     const isAdminByEnv = ADMIN_IDS.has(userId);
     const isAdminByDb = userRecord?.role === 'admin';
 
@@ -2263,31 +2220,28 @@ bot.use(async (ctx, next) => {
         const fallbackName = userRecord?.name || ctx.from?.first_name || 'Admin';
         const defaultPrompt = ensureDefaultPrompt();
         if (!userRecord) {
-            addUser(userId, fallbackName, 'admin', 'approved', telegramUsername);
-            try { await runBackendUpsertTelegramUser(userId, fallbackName, 'admin', 'approved', telegramUsername, defaultPrompt?.id ?? null); } catch {}
-            userRecord = getUser(userId);
+            await addUser(userId, fallbackName, 'admin', 'approved', telegramUsername);
+            userRecord = await getUser(userId);
         } else {
             if (userRecord.role !== 'admin' || userRecord.status !== 'approved') {
-                addUser(userId, userRecord.name || fallbackName, 'admin', 'approved', telegramUsername);
-                try { await runBackendUpsertTelegramUser(userId, userRecord.name || fallbackName, 'admin', 'approved', telegramUsername, defaultPrompt?.id ?? null); } catch {}
-                userRecord = getUser(userId);
+                await addUser(userId, userRecord.name || fallbackName, 'admin', 'approved', telegramUsername);
+                userRecord = await getUser(userId);
             } else if (userRecord.tg_username !== telegramUsername) {
-                updateUserTelegramUsername(userId, telegramUsername);
-                try { await runBackendUpdateTgUsername(userId, telegramUsername); } catch {}
-                userRecord = getUser(userId) || userRecord;
+                await updateUserTelegramUsername(userId, telegramUsername);
+                userRecord = (await getUser(userId)) || userRecord;
             }
         }
 
         if (userRecord && !userRecord.selected_prompt_id) {
-            if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
+            if (defaultPrompt) await updateUserPrompt(userId, defaultPrompt.id);
         }
         if (userRecord) {
             const normalizedPlan = parsePlanFromDb(userRecord.plan);
             if (userRecord.plan !== normalizedPlan) {
-                updateUserPlan(userId, normalizedPlan);
-                userRecord = getUser(userId) || userRecord;
+                await updateUserPlan(userId, normalizedPlan);
+                userRecord = (await getUser(userId)) || userRecord;
             }
-            ensureUserCurrentPlanSubscription(userId);
+            await ensureUserCurrentPlanSubscription(userId);
         }
 
         await syncCommandScopeForUser(userId, true);
@@ -2298,12 +2252,10 @@ bot.use(async (ctx, next) => {
 
     if (!userRecord) {
         const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
-        const defaultPrompt = ensureDefaultPrompt();
-        createPendingUser(userId, initialName, telegramUsername);
-        try { await runBackendCreatePendingUser(userId, initialName, telegramUsername, defaultPrompt?.id ?? null); } catch {}
+        await createPendingUser(userId, initialName, telegramUsername);
         await syncCommandScopeForUser(userId, false);
 
-        const freshUser = getUser(userId);
+        const freshUser = await getUser(userId);
         if (freshUser) await notifyAdminsNewRequest(freshUser);
 
         if (!telegramUsername) {
@@ -2314,9 +2266,8 @@ bot.use(async (ctx, next) => {
     }
 
     if (userRecord.tg_username !== telegramUsername) {
-        updateUserTelegramUsername(userId, telegramUsername);
-        try { await runBackendUpdateTgUsername(userId, telegramUsername); } catch {}
-        userRecord = getUser(userId) || userRecord;
+        await updateUserTelegramUsername(userId, telegramUsername);
+        userRecord = (await getUser(userId)) || userRecord;
     }
 
     if (userRecord.status === 'banned') {
@@ -2329,7 +2280,7 @@ bot.use(async (ctx, next) => {
 
     if (userRecord.status === 'none') {
         const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
-        const savedName = maybeCapturePendingName(ctx, userRecord, text);
+        const savedName = await maybeCapturePendingName(ctx, userRecord, text);
         await syncCommandScopeForUser(userId, false);
 
         if (savedName) {
@@ -2349,20 +2300,20 @@ bot.use(async (ctx, next) => {
     }
 
     if (userRecord.role !== 'user') {
-        updateUserRole(userId, 'user');
-        userRecord = getUser(userId) || userRecord;
+        await updateUserRole(userId, 'user');
+        userRecord = (await getUser(userId)) || userRecord;
     }
     if (!userRecord.selected_prompt_id) {
         const defaultPrompt = ensureDefaultPrompt();
-        if (defaultPrompt) updateUserPrompt(userId, defaultPrompt.id);
+        if (defaultPrompt) await updateUserPrompt(userId, defaultPrompt.id);
     }
     {
         const normalizedPlan = parsePlanFromDb(userRecord.plan);
         if (userRecord.plan !== normalizedPlan) {
-            updateUserPlan(userId, normalizedPlan);
-            userRecord = getUser(userId) || userRecord;
+            await updateUserPlan(userId, normalizedPlan);
+            userRecord = (await getUser(userId)) || userRecord;
         }
-        ensureUserCurrentPlanSubscription(userId);
+        await ensureUserCurrentPlanSubscription(userId);
     }
 
     await syncCommandScopeForUser(userId, false);
@@ -2373,10 +2324,10 @@ bot.use(async (ctx, next) => {
 
 bot.telegram.setMyCommands(BASE_COMMANDS as any);
 
-const showMenu = (ctx: any) => {
+const showMenu = async (ctx: any) => {
     const isAdmin = ctx.state.role === 'admin';
     const userId = ctx.from?.id;
-    const userRecord = userId ? getUser(userId) : undefined;
+    const userRecord = userId ? await getUser(userId) : undefined;
     const activePrompt = userRecord ? resolvePromptForUser(userRecord) : ensureDefaultPrompt();
     const userName = (ctx.state.userName as string | undefined) || userRecord?.name || 'Пользователь';
     const roleLabel = isAdmin ? 'Админ' : 'Пользователь';
@@ -2595,14 +2546,14 @@ const getDurationLabel = (duration: PlanDurationCode) => {
     return 'Бессрочно';
 };
 
-const maybeCapturePendingName = (ctx: any, user: UserRecord, text: string) => {
+const maybeCapturePendingName = async (ctx: any, user: UserRecord, text: string) => {
     if (ctx.from?.username) return false;
     if (user.name && user.name.trim()) return false;
     if (!text || text.startsWith('/')) return false;
 
     const candidate = text.trim();
     if (!candidate || candidate.length > 64) return false;
-    updateUserName(user.id, candidate);
+    await updateUserName(user.id, candidate);
     return true;
 };
 
@@ -2841,39 +2792,39 @@ Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
     return ctx.reply(text, keyboard);
 };
 
-const approveUserAccess = (targetUserId: number) => {
-    const user = getUser(targetUserId);
+const approveUserAccess = async (targetUserId: number) => {
+    const user = await getUser(targetUserId);
     if (!user) return false;
-    updateUserStatus(targetUserId, 'approved');
+    await updateUserStatus(targetUserId, 'approved');
     if (!user.selected_prompt_id) {
         const defaultPrompt = ensureDefaultPrompt();
-        if (defaultPrompt) updateUserPrompt(targetUserId, defaultPrompt.id);
+        if (defaultPrompt) await updateUserPrompt(targetUserId, defaultPrompt.id);
     }
     removeBan(targetUserId);
     return true;
 };
 
-const disapproveUserAccess = (targetUserId: number) => {
-    const user = getUser(targetUserId);
+const disapproveUserAccess = async (targetUserId: number) => {
+    const user = await getUser(targetUserId);
     if (!user) return false;
-    updateUserStatus(targetUserId, 'disapproved');
+    await updateUserStatus(targetUserId, 'disapproved');
     removeBan(targetUserId);
     return true;
 };
 
-const banUserAccess = (targetUserId: number, bannedBy: number, reason: string) => {
-    const user = getUser(targetUserId);
+const banUserAccess = async (targetUserId: number, bannedBy: number, reason: string) => {
+    const user = await getUser(targetUserId);
     if (!user) return false;
-    updateUserStatus(targetUserId, 'banned');
+    await updateUserStatus(targetUserId, 'banned');
     setBan(targetUserId, reason, bannedBy);
     return true;
 };
 
-const unbanUserAccess = (targetUserId: number) => {
-    const user = getUser(targetUserId);
+const unbanUserAccess = async (targetUserId: number) => {
+    const user = await getUser(targetUserId);
     if (!user) return false;
     removeBan(targetUserId);
-    updateUserStatus(targetUserId, 'none');
+    await updateUserStatus(targetUserId, 'none');
     return true;
 };
 
@@ -2901,14 +2852,14 @@ bot.command('start', async (ctx) => {
     await ctx.reply('Кнопка меню закреплена внизу.', buildMenuTriggerKeyboard());
     return showMenu(ctx);
 });
-bot.command('menu', (ctx) => showMenu(ctx));
-bot.hears(MAIN_MENU_TRIGGER_BUTTON, (ctx) => showMenu(ctx));
+bot.command('menu', async (ctx) => { await showMenu(ctx); });
+bot.hears(MAIN_MENU_TRIGGER_BUTTON, async (ctx) => { await showMenu(ctx); });
 
 bot.command('prompts', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
 
     if (ctx.state.role !== 'admin') {
@@ -2937,7 +2888,7 @@ bot.command('prompt_use', async (ctx) => {
     const promptId = Number.parseInt(parts[1], 10);
     if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_use 1');
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
 
     try {
@@ -3089,7 +3040,7 @@ bot.command('prompt_delete', async (ctx) => {
 });
 
 // Команда добавления пользователя (только для админов)
-bot.command('add', (ctx) => {
+bot.command('add', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -3098,13 +3049,13 @@ bot.command('add', (ctx) => {
 
     if (!newUserId || Number.isNaN(newUserId)) return ctx.reply('Укажи правильный ID: /add 123456789 Имя');
 
-    addUser(newUserId, newUserName, 'user', 'approved', null);
+    await addUser(newUserId, newUserName, 'user', 'approved', null);
     removeBan(newUserId);
     ctx.reply(`Пользователь ${newUserName} (ID: ${newUserId}) успешно добавлен в базу.`);
 });
 
 // Команда удаления пользователя (только для админов)
-bot.command('remove', (ctx) => {
+bot.command('remove', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -3113,17 +3064,17 @@ bot.command('remove', (ctx) => {
     if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Укажи правильный ID: /remove 123456789');
     if (ADMIN_IDS.has(targetUserId)) return ctx.reply('Нельзя удалить пользователя из ADMIN_IDS. Сначала убери его из .env и перезапусти бота.');
 
-    const targetUser = getUser(targetUserId);
+    const targetUser = await getUser(targetUserId);
     if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
 
-    removeUser(targetUserId);
+    await removeUser(targetUserId);
     removeBan(targetUserId);
     removeUserPlanSubscriptions(targetUserId);
     clearUserHistory(targetUserId);
     ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) удалён из базы.`);
 });
 
-bot.command('ban', (ctx) => {
+bot.command('ban', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
     const adminId = ctx.from?.id;
     if (!adminId) return;
@@ -3133,35 +3084,35 @@ bot.command('ban', (ctx) => {
     if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Формат: /ban 123456789 [причина]');
     if (ADMIN_IDS.has(targetUserId)) return ctx.reply('Нельзя забанить пользователя из ADMIN_IDS.');
 
-    const targetUser = getUser(targetUserId);
+    const targetUser = await getUser(targetUserId);
     if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
 
     const reason = parts.slice(2).join(' ').trim() || 'Решение администратора';
-    banUserAccess(targetUserId, adminId, reason);
+    await banUserAccess(targetUserId, adminId, reason);
     ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) забанен.`);
 
     bot.telegram.sendMessage(targetUserId, `🚫 Доступ заблокирован администратором.\nПричина: ${reason}`).catch(() => undefined);
 });
 
-bot.command('unban', (ctx) => {
+bot.command('unban', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
     if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Формат: /unban 123456789');
 
-    const targetUser = getUser(targetUserId);
+    const targetUser = await getUser(targetUserId);
     if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
     if (targetUser.status !== 'banned') return ctx.reply('Этот пользователь не находится в бане.');
 
-    unbanUserAccess(targetUserId);
+    await unbanUserAccess(targetUserId);
     ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) разбанен и снова в ожидании.`);
 
     bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.').catch(() => undefined);
 });
 
 // Команда смены имени
-bot.command('rename', (ctx) => {
+bot.command('rename', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
@@ -3194,10 +3145,10 @@ bot.command('rename', (ctx) => {
         return ctx.reply('Укажи новое имя: /rename НовоеИмя');
     }
 
-    const targetUser = getUser(targetUserId);
+    const targetUser = await getUser(targetUserId);
     if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
 
-    updateUserName(targetUserId, newUserName);
+    await updateUserName(targetUserId, newUserName);
 
     if (targetUserId === userId) {
         ctx.state.userName = newUserName;
@@ -3213,10 +3164,10 @@ bot.command('users', (ctx) => {
     return renderAdminUsersList(ctx, 0, 'reply');
 });
 
-bot.command('sync_plan_limits', (ctx) => {
+bot.command('sync_plan_limits', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
-    const result = syncAllUsersPlanLimits();
-    return ctx.reply(`✅ Лимиты по планам синхронизированы. Обновлено записей: ${result.changes}.`);
+    await syncAllUsersPlanLimits();
+    return ctx.reply(`✅ Лимиты по планам синхронизированы.`);
 });
 
 bot.command('history_user', (ctx) => {
@@ -3316,11 +3267,11 @@ bot.command('tz', async (ctx) => {
     return ctx.reply(`Часовой пояс успешно изменён на UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
 });
 
-bot.command('tasks', (ctx) => {
+bot.command('tasks', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к задачам.');
     }
@@ -3332,11 +3283,11 @@ bot.command('tasks', (ctx) => {
     return ctx.reply(text);
 });
 
-bot.command('task_delete', (ctx) => {
+bot.command('task_delete', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к задачам.');
     }
@@ -3358,10 +3309,10 @@ bot.command('task_delete', (ctx) => {
     return ctx.reply(`Удалил задачу #${taskId}.\n\nТекущие задачи (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${updatedText}`);
 });
 
-bot.command('chats', (ctx) => {
+bot.command('chats', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к чатам.');
     }
@@ -3376,10 +3327,10 @@ bot.command('chats', (ctx) => {
     return ctx.reply(`Твои чаты (${chats.length}):\n\n${lines.join('\n')}\n\nКоманды:\n/chat_new <название>\n/chat_use <id>`);
 });
 
-bot.command('chat_new', (ctx) => {
+bot.command('chat_new', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к чатам.');
     }
@@ -3394,10 +3345,10 @@ bot.command('chat_new', (ctx) => {
     return ctx.reply(`Создал и активировал чат #${chatId}: ${title}`);
 });
 
-bot.command('chat_use', (ctx) => {
+bot.command('chat_use', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к чатам.');
     }
@@ -3415,10 +3366,10 @@ bot.command('chat_use', (ctx) => {
     return ctx.reply(`Активный чат переключен на #${chat.id}: ${chat.title}`);
 });
 
-bot.command('note_add', (ctx) => {
+bot.command('note_add', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к заметкам.');
     }
@@ -3441,10 +3392,10 @@ bot.command('note_add', (ctx) => {
     return ctx.reply(`✅ Заметка сохранена (ID: ${noteId}).`);
 });
 
-bot.command('notes', (ctx) => {
+bot.command('notes', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к заметкам.');
     }
@@ -3459,10 +3410,10 @@ bot.command('notes', (ctx) => {
     return ctx.reply(formatNotesPage(notes, page, total, listLimit));
 });
 
-bot.command('note_find', (ctx) => {
+bot.command('note_find', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к заметкам.');
     }
@@ -3479,10 +3430,10 @@ bot.command('note_find', (ctx) => {
     return ctx.reply(formatNotesPage(notes, 1, total, listLimit, query));
 });
 
-bot.command('note_delete', (ctx) => {
+bot.command('note_delete', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к заметкам.');
     }
@@ -3502,7 +3453,7 @@ bot.command('mail_setup', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к настройке почты.');
     }
@@ -3573,7 +3524,7 @@ bot.command('mail_use', async (ctx) => {
 bot.command('mail_limit', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         return ctx.reply('Нет доступа к настройке почты.');
     }
@@ -3629,7 +3580,7 @@ bot.on('location', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) return;
 
     const longitude = ctx.message.location.longitude;
@@ -3685,7 +3636,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
         const userId = ctx.from?.id;
         if (!userId) return;
 
-        const user = getUser(userId);
+        const user = await getUser(userId);
         if (!user) {
             await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
             return;
@@ -3704,7 +3655,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
         const userId = ctx.from?.id;
         if (!userId) return;
 
-        const user = getUser(userId);
+        const user = await getUser(userId);
         if (!user) {
             await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
             return;
@@ -3725,7 +3676,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
     if (actionId === 'context_size') {
         const userId = ctx.from?.id;
         if (!userId) return;
-        const user = getUser(userId);
+        const user = await getUser(userId);
         if (!user) {
             await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
             return;
@@ -3785,7 +3736,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
 bot.action('context:change', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -3824,7 +3775,7 @@ bot.action('mail:setup_help', async (ctx) => {
 bot.action('mail:settings', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -3838,7 +3789,7 @@ bot.action('mail:settings', async (ctx) => {
 bot.action('mail:limit:change', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -3878,7 +3829,7 @@ bot.action('mail:forget', async (ctx) => {
 bot.action(/^notes:list:(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -3891,7 +3842,7 @@ bot.action(/^notes:list:(\d+)$/, async (ctx) => {
 bot.action(/^notes:view:(\d+):(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -3909,7 +3860,7 @@ bot.action(/^notes:view:(\d+):(\d+)$/, async (ctx) => {
 bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -3933,7 +3884,7 @@ bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
 bot.action(/^notes:delete:(\d+):(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -3978,7 +3929,7 @@ bot.action(/^mod:pv:(\d+):(\d+)$/, async (ctx) => {
 
     const userId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || user.status !== 'none') {
         await ctx.answerCbQuery('Заявка уже обработана');
         await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -3997,7 +3948,7 @@ bot.action(/^mod:ok:(\d+):(\d+)$/, async (ctx) => {
 
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const ok = approveUserAccess(targetUserId);
+    const ok = await approveUserAccess(targetUserId);
     if (!ok) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4021,7 +3972,7 @@ bot.action(/^mod:no:(\d+):(\d+)$/, async (ctx) => {
 
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const ok = disapproveUserAccess(targetUserId);
+    const ok = await disapproveUserAccess(targetUserId);
     if (!ok) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4048,7 +3999,7 @@ bot.action(/^mod:ban:(\d+):(\d+)$/, async (ctx) => {
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
 
-    const ok = banUserAccess(targetUserId, adminId, 'Решение администратора');
+    const ok = await banUserAccess(targetUserId, adminId, 'Решение администратора');
     if (!ok) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4083,7 +4034,7 @@ bot.action(/^mod:bv:(\d+):(\d+)$/, async (ctx) => {
 
     const userId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user || user.status !== 'banned') {
         await ctx.answerCbQuery('Пользователь уже не в бане');
         await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4102,7 +4053,7 @@ bot.action(/^mod:unban:(\d+):(\d+)$/, async (ctx) => {
 
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const ok = unbanUserAccess(targetUserId);
+    const ok = await unbanUserAccess(targetUserId);
     if (!ok) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4137,7 +4088,7 @@ bot.action(/^usr:view:(\d+):(\d+)$/, async (ctx) => {
 
     const userId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4156,7 +4107,7 @@ bot.action(/^usr:plan:open:(\d+):(\d+)$/, async (ctx) => {
 
     const userId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4176,7 +4127,7 @@ bot.action(/^usr:plan:pick:(\d+):(\d+):(free|standart|pro)$/, async (ctx) => {
     const userId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
     const plan = (ctx as any).match[3] as UserPlan;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4199,7 +4150,7 @@ bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|f
     const page = Number.parseInt((ctx as any).match[2], 10);
     const plan = (ctx as any).match[3] as UserPlan;
     const duration = (ctx as any).match[4] as PlanDurationCode;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4207,9 +4158,9 @@ bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|f
     }
 
     const endsAt = getEndsAtForDuration(duration);
-    applyUserPlan(userId, plan, endsAt, adminId);
-    trimUserHistory(userId);
-    const refreshed = getUser(userId);
+    await applyUserPlan(userId, plan, endsAt, adminId);
+    await trimUserHistory(userId);
+    const refreshed = await getUser(userId);
     if (!refreshed) {
         await ctx.answerCbQuery('Ошибка обновления');
         return;
@@ -4229,7 +4180,7 @@ bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
     if (!adminId) return;
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(targetUserId);
+    const user = await getUser(targetUserId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4252,7 +4203,7 @@ bot.action(/^usr:msg:ask:(\d+):(\d+)$/, async (ctx) => {
     if (!adminId) return;
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(targetUserId);
+    const user = await getUser(targetUserId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4276,7 +4227,7 @@ bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
 
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(targetUserId);
+    const user = await getUser(targetUserId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4286,8 +4237,8 @@ bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    banUserAccess(targetUserId, adminId, 'Решение администратора');
-    const refreshed = getUser(targetUserId);
+    await banUserAccess(targetUserId, adminId, 'Решение администратора');
+    const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
     bot.telegram.sendMessage(targetUserId, '🚫 Доступ заблокирован администратором.').catch(() => undefined);
@@ -4302,7 +4253,7 @@ bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
 
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(targetUserId);
+    const user = await getUser(targetUserId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
@@ -4312,8 +4263,8 @@ bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    unbanUserAccess(targetUserId);
-    const refreshed = getUser(targetUserId);
+    await unbanUserAccess(targetUserId);
+    const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
     bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.').catch(() => undefined);
@@ -4328,7 +4279,7 @@ bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
 
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = getUser(targetUserId);
+    const user = await getUser(targetUserId);
     if (!user) {
         await ctx.answerCbQuery('Пользователь уже удален');
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4339,7 +4290,7 @@ bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    removeUser(targetUserId);
+    await removeUser(targetUserId);
     removeBan(targetUserId);
     clearUserHistory(targetUserId);
     await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4356,7 +4307,7 @@ bot.action(/^ai_send:(\d+)$/, async (ctx) => {
     if (!adminId) return;
 
     const targetId = Number.parseInt((ctx as any).match[1], 10);
-    const targetUser = getUser(targetId);
+    const targetUser = await getUser(targetId);
     if (!targetUser) {
         await ctx.answerCbQuery();
         await ctx.reply('Юзер не найден в базе.');
@@ -4375,7 +4326,7 @@ bot.action('prompt:list', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -4394,7 +4345,7 @@ bot.action('prompt:custom:view', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -4413,7 +4364,7 @@ bot.action('prompt:custom:use', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -4431,9 +4382,9 @@ bot.action('prompt:custom:use', async (ctx) => {
         return;
     }
 
-    selectUserCustomPrompt(userId);
+    await selectUserCustomPrompt(userId);
     await runBackendSelectUserPrompt(userId, -1);
-    const refreshed = getUser(userId);
+    const refreshed = await getUser(userId);
     if (!refreshed) {
         await ctx.answerCbQuery('Ошибка профиля');
         return;
@@ -4445,7 +4396,7 @@ bot.action('prompt:custom:use', async (ctx) => {
 bot.action('prompt:custom:edit', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -4469,7 +4420,7 @@ bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -4498,7 +4449,7 @@ bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const user = getUser(userId);
+    const user = await getUser(userId);
     if (!user) {
         await ctx.answerCbQuery('Нет доступа');
         return;
@@ -4520,8 +4471,8 @@ bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
     }
 
     await runBackendSelectUserPrompt(userId, promptId);
-    updateUserPrompt(userId, promptId);
-    const refreshedUser = getUser(userId);
+    await updateUserPrompt(userId, promptId);
+    const refreshedUser = await getUser(userId);
     if (!refreshedUser) {
         await ctx.answerCbQuery('Ошибка профиля');
         return;
@@ -4580,7 +4531,7 @@ const processUserTextThroughAi = async (
     const userTextForHistory = options?.persistUserText?.trim() || userText;
 
     const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
-    const userRecord = getUser(userId);
+    const userRecord = await getUser(userId);
     if (!userRecord) {
         if (!options?.suppressFinalReply) {
             await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
@@ -4681,7 +4632,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Нужно ввести положительное число. Например: 25. Для отмены: "отмена".');
         }
 
-        const targetUser = getUser(adminContextFlow.targetUserId);
+        const targetUser = await getUser(adminContextFlow.targetUserId);
         if (!targetUser) {
             adminUserContextLimitFlows.delete(userId);
             return ctx.reply('Пользователь не найден.');
@@ -4690,9 +4641,9 @@ bot.on('text', async (ctx) => {
         const nextValue = Math.max(1, Math.floor(parsed));
         try { await runBackendSetContextWindow(adminContextFlow.targetUserId, nextValue, true); } catch {}
         updateUserContextWindow(adminContextFlow.targetUserId, nextValue);
-        trimUserHistory(adminContextFlow.targetUserId);
+        await trimUserHistory(adminContextFlow.targetUserId);
         adminUserContextLimitFlows.delete(userId);
-        const refreshed = getUser(adminContextFlow.targetUserId);
+        const refreshed = await getUser(adminContextFlow.targetUserId);
         if (refreshed) {
             await ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${resolveEffectiveContextWindow(refreshed)} (макс: ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))})`);
             await renderAdminUserCard(ctx, refreshed, adminContextFlow.page, 'reply');
@@ -4714,7 +4665,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Нужно ввести число 0 или больше. 0 = безлимит. Для отмены: "отмена".');
         }
 
-        const targetUser = getUser(adminMessageLimitFlow.targetUserId);
+        const targetUser = await getUser(adminMessageLimitFlow.targetUserId);
         if (!targetUser) {
             adminUserMessageLimitFlows.delete(userId);
             return ctx.reply('Пользователь не найден.');
@@ -4723,7 +4674,7 @@ bot.on('text', async (ctx) => {
         const nextLimit = normalizeDailyMessageLimit(parsed);
         updateUserDailyMessageLimit(adminMessageLimitFlow.targetUserId, nextLimit);
         adminUserMessageLimitFlows.delete(userId);
-        const refreshed = getUser(adminMessageLimitFlow.targetUserId);
+        const refreshed = await getUser(adminMessageLimitFlow.targetUserId);
         if (refreshed) {
             await ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${normalizeDailyMessageLimit(refreshed.daily_message_limit)} (0 = безлимит).`);
             await renderAdminUserCard(ctx, refreshed, adminMessageLimitFlow.page, 'reply');
@@ -4780,13 +4731,13 @@ bot.on('text', async (ctx) => {
                 return ctx.reply('Слишком длинное имя. До 64 символов.');
             }
 
-            const userRecord = getUser(userId);
+            const userRecord = await getUser(userId);
             if (!userRecord) {
                 renameFlows.delete(userId);
                 return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
             }
 
-            updateUserName(userId, userText);
+            await updateUserName(userId, userText);
             ctx.state.userName = userText;
             renameFlows.delete(userId);
             return ctx.reply('Имя принято.', buildMenuTriggerKeyboard());
@@ -4801,16 +4752,16 @@ bot.on('text', async (ctx) => {
                 return ctx.reply(`Слишком длинно: ${userText.length} символов. Лимит: ${MAX_CUSTOM_PROMPT_LENGTH}.`);
             }
 
-            const userRecord = getUser(userId);
+            const userRecord = await getUser(userId);
             if (!userRecord) {
                 customPromptEditFlows.delete(userId);
                 return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
             }
 
-            updateUserCustomPrompt(userId, userText.trim());
+            await updateUserCustomPrompt(userId, userText.trim());
             try { await runBackendUpdateCustomPrompt(userId, userText.trim()); } catch {}
             try { await runBackendSelectUserPrompt(userId, -1); } catch {}
-            selectUserCustomPrompt(userId);
+            await selectUserCustomPrompt(userId);
             customPromptEditFlows.delete(userId);
             return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard());
         }
@@ -4829,7 +4780,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
         }
 
-        const userRecord = getUser(userId);
+        const userRecord = await getUser(userId);
         if (!userRecord) {
             mailLimitFlows.delete(userId);
             return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
@@ -4857,7 +4808,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
         }
 
-        const userRecord = getUser(userId);
+        const userRecord = await getUser(userId);
         if (!userRecord) {
             contextLimitFlows.delete(userId);
             return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
@@ -4871,9 +4822,9 @@ bot.on('text', async (ctx) => {
         const ctxValue = Math.floor(parsed);
         try { await runBackendSetContextWindow(userId, ctxValue, false); } catch {}
         updateUserContextWindow(userId, ctxValue);
-        trimUserHistory(userId);
+        await trimUserHistory(userId);
         contextLimitFlows.delete(userId);
-        const refreshed = getUser(userId);
+        const refreshed = await getUser(userId);
         if (refreshed) {
             return ctx.reply(
                 `✅ Размер контекста обновлён: ${resolveEffectiveContextWindow(refreshed)} из ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))}.`
@@ -4890,7 +4841,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Ок, редактирование заметки отменено.');
         }
 
-        const userRecord = getUser(userId);
+        const userRecord = await getUser(userId);
         if (!userRecord) {
             noteEditFlows.delete(userId);
             return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
@@ -5033,12 +4984,14 @@ try {
 }
 
 if (AUTO_SYNC_PLAN_LIMITS_ON_BOOT) {
-    try {
-        const syncResult = syncAllUsersPlanLimits();
-        console.log(`Автосинхронизация лимитов по планам выполнена. Обновлено записей: ${syncResult.changes}.`);
-    } catch (err) {
-        console.error('Ошибка автосинхронизации лимитов по планам:', err);
-    }
+    (async () => {
+        try {
+            await syncAllUsersPlanLimits();
+            console.log('Автосинхронизация лимитов по планам выполнена.');
+        } catch (err) {
+            console.error('Ошибка автосинхронизации лимитов по планам:', err);
+        }
+    })();
 }
 
 scheduleDailyCounterReset();
