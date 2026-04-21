@@ -887,6 +887,19 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
         }
 
         await safeSendToUser(targetUserId, finalMessage);
+
+        // Отправка сгенерированных изображений юзеру
+        if (Array.isArray(response.data?.generated_images) && response.data.generated_images.length > 0) {
+            for (const img of response.data.generated_images) {
+                try {
+                    const imageBuffer = Buffer.from(img.image_base64, 'base64');
+                    await bot.telegram.sendPhoto(targetUserId, { source: imageBuffer });
+                } catch (imgErr) {
+                    console.error('Ошибка отправки сгенерированного изображения юзеру:', imgErr);
+                }
+            }
+        }
+
         await ctx.reply(
             `✅ Сообщение отправлено пользователю ${targetUserName} (ID: ${targetUserId}).\n\nТекст, который отправила нейросеть:\n${finalMessage}`
         );

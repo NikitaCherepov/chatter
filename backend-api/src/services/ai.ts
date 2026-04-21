@@ -1354,6 +1354,7 @@ export const generateAdminOutreach = async (targetUserId: number, adminInstructi
 
   return {
     reply_text: result.reply_text,
+    generated_images: result.generated_images,
     tokens_used: result.usage.tokens_used,
     used_model: result.usage.used_model,
     used_provider: result.usage.used_provider
