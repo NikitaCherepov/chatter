@@ -47,6 +47,14 @@ const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
 const DEFAULT_USER_PLAN: UserPlan = 'free';
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
+bot.catch(async (err, ctx) => {
+    console.error('Telegraf update error:', err);
+    try {
+        await ctx.reply('Сервис временно недоступен. Попробуйте ещё раз через пару секунд.');
+    } catch {
+        // ignore reply failures inside error handler
+    }
+});
 // Инициализация базы данных
 const db = new Database('chatter.db');
 
@@ -1759,12 +1767,11 @@ const getUser = async (id: number): Promise<UserRecord | undefined> => {
 const addUser = async (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => {
     const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
     await runBackendUpsertTelegramUser(id, name, role, status, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
-    ensureActiveChatForUser(id);
 };
 const createPendingUser = async (id: number, name: string | null, tgUsername: string | null) => {
     const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
-    await runBackendCreatePendingUser(id, name, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
-    ensureActiveChatForUser(id);
+    const data = await runBackendCreatePendingUser(id, name, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
+    return data.user;
 };
 const updateUserName = async (id: number, name: string) => {
     await runBackendUpdateUserName(id, name);
@@ -2257,11 +2264,15 @@ bot.use(async (ctx, next) => {
 
     if (!userRecord) {
         const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
-        await createPendingUser(userId, initialName, telegramUsername);
+        const pendingUser = await createPendingUser(userId, initialName, telegramUsername);
         await syncCommandScopeForUser(userId, false);
 
-        const freshUser = await getUser(userId);
-        if (freshUser) await notifyAdminsNewRequest(freshUser);
+        if (pendingUser) {
+            await notifyAdminsNewRequest(pendingUser);
+        } else {
+            const freshUser = await getUser(userId);
+            if (freshUser) await notifyAdminsNewRequest(freshUser);
+        }
 
         if (!telegramUsername) {
             return ctx.reply('Отправили вашу заявку админу, ждём подтверждения.\nУ тебя нет @username, отправь сюда имя одним сообщением.');
@@ -4975,18 +4986,22 @@ bot.on('photo', async (ctx) => {
 
 
 setInterval(() => {
-    try {
-        expireFinishedPlanSubscriptions();
-    } catch (err) {
-        console.error('Ошибка проверки истекших подписок:', err);
-    }
+    void (async () => {
+        try {
+            await expireFinishedPlanSubscriptions();
+        } catch (err) {
+            console.error('Ошибка проверки истекших подписок:', err);
+        }
+    })();
 }, 60 * 60 * 1000);
 
-try {
-    expireFinishedPlanSubscriptions();
-} catch (err) {
-    console.error('Ошибка первичной проверки подписок:', err);
-}
+void (async () => {
+    try {
+        await expireFinishedPlanSubscriptions();
+    } catch (err) {
+        console.error('Ошибка первичной проверки подписок:', err);
+    }
+})();
 
 if (AUTO_SYNC_PLAN_LIMITS_ON_BOOT) {
     (async () => {

@@ -1,12 +1,14 @@
-﻿import path from 'node:path';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
+const backendApiRoot = path.resolve(__dirname, '..');
+const defaultDbPath = path.resolve(backendApiRoot, '../chatter.db');
 const resolvedDbPath = path.resolve(
   process.cwd(),
-  process.env.API_DB_PATH || process.env.NOTES_DB_PATH || '../chatter.db'
+  process.env.API_DB_PATH || process.env.NOTES_DB_PATH || defaultDbPath
 );
 
 export const db = new Database(resolvedDbPath);
@@ -78,3 +80,4 @@ export const toUnix = (value: unknown) => {
 };
 
 export const getNowUnix = () => Math.floor(Date.now() / 1000);
+

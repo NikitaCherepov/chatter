@@ -306,6 +306,10 @@ export const createPendingTelegramUser = (
     INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
       context_window_max, daily_message_limit, daily_web_search_limit)
     VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      tg_username = COALESCE(excluded.tg_username, users.tg_username),
+      name = COALESCE(excluded.name, users.name),
+      selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(tgId, name, tgUsername, defaultPromptId,
     limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit);
 
