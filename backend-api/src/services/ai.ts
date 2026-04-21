@@ -11,6 +11,7 @@ import { runEmailCheck, runEmailRead, runEmailSend } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
+import { runImageGeneration } from './image-generation.js';
 import { db } from '../db.js';
 
 dotenv.config();
@@ -783,6 +784,23 @@ export const toolDefinitions = [
         required: ['roll_type']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: 'Генерация изображения по текстовому описанию. Вызывай ТОЛЬКО если пользователь напрямую попросил "нарисуй", "создай изображение", "сгенерируй картинку" и т.п. Если пользователь пишет на русском — переведи промпт на английский для лучшего качества, но ответь пользователю на русском.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description: 'Детальное описание того, что нужно изобразить (на английском языке для лучшего качества генерации).'
+          }
+        },
+        required: ['prompt']
+      }
+    }
   }
 ] as const;
 const LITE_ROUTER_INSTRUCTIONS = `
@@ -842,6 +860,8 @@ const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string
 const hasSchedulingIntent = (text: string) => /\b(напомн|напоминани|таймер|по\s+расписанию|отложи|позже|завтра|послезавтра|ежедневно|еженедельно|кажд(ый|ую|ое|ые)|every\s+day|every\s+week)\b/i.test(text)
   || /\bв\s*\d{1,2}:\d{2}\b/i.test(text)
   || /через\s+[^.,!?]{0,24}\b(секунд|секунду|секунды|сек|минут|минуту|минута|мин|час|часа|часов|ч|день|дня|дней|сутк|недел|месяц|месяца|месяцев)\b/i.test(text);
+
+const hasImageGenIntent = (text: string) => /\b(нарисуй|сгенерируй\s*(картинк|изображен|фото|рисун)|создай\s*(изображен|картинк|рисун|фото|график)|generate\s*image|draw|paint|сделай\s*(картинк|изображен|рисун|фото)|придумай\s*(картинк|изображен|рисун)|покажи\s*(как|что)|изобрази|нарис|сгенерируй\s*изобр|сделай\s*мне\s*карт|сгенер[\w]*\s*карт|сгенер[\w]*\s*изобр|созд[\w]*\s*изобр|созд[\w]*\s*карт|draw\s*me|paint\s*me|make\s*a\s*picture|generate\s*a\s*picture|create\s*an?\s*image|create\s*a\s*picture)\b/i.test(text);
 
 const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   SELECT id, status
@@ -960,6 +980,14 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
   }
   if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
 
+  if (toolName === 'generate_image') {
+    const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
+    if (!prompt) return 'Ошибка: пустой промпт для генерации изображения.';
+    const result = await runImageGeneration(user.id, prompt);
+    if (!result.ok) return `Ошибка генерации изображения: ${(result as any).error || 'unknown'}`;
+    return JSON.stringify({ ok: true, image_base64: result.image_base64, prompt_used: result.prompt_used });
+  }
+
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
@@ -980,6 +1008,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
       return 'Подкидываем кубики...';
     }
   }
+  if (toolName === 'generate_image') return 'Генерирую изображение...';
   return null;
 };
 export const sendMessageThroughAi = async (
@@ -1066,7 +1095,7 @@ PRO
 
   let routeLabel: CheapRoute = 'PRO';
 
-  if (!hasSchedulingIntent(text)) {
+  if (!hasSchedulingIntent(text) && !hasImageGenIntent(text)) {
     try {
       const routed = await runCompletion('lite', {
         messages: [{ role: 'user', content: routerPrompt }],
@@ -1132,6 +1161,7 @@ PRO
   let loop = 0;
   const toolOutputsForFallback: string[] = [];
   const toolUserMessages: string[] = [];
+  const generatedImages: Array<{ image_base64: string; prompt_used: string }> = [];
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
 
@@ -1232,6 +1262,21 @@ for (const toolCall of message.tool_calls) {
   if (toolContent.trim()) {
     toolOutputsForFallback.push(toolContent.trim());
   }
+
+  // Извлекаем сгенерированные изображения из tool content
+  if (toolName === 'generate_image' && toolContent.trim()) {
+    try {
+      const parsedToolResult = JSON.parse(toolContent);
+      if (parsedToolResult?.ok && parsedToolResult.image_base64) {
+        generatedImages.push({
+          image_base64: parsedToolResult.image_base64,
+          prompt_used: parsedToolResult.prompt_used || ''
+        });
+      }
+    } catch {
+      // tool content is not JSON — probably an error message, skip
+    }
+  }
 }
 
 if (escalatedToPro) {
@@ -1289,6 +1334,7 @@ if (escalatedToPro) {
     message_id: assistantMessageId,
     model_fallback_notice: modelFallbackNotice,
     tool_user_messages: toolUserMessages,
+    generated_images: generatedImages.length > 0 ? generatedImages : undefined,
     usage: {
       tokens_used: totalTokens,
       used_model: usedModel,

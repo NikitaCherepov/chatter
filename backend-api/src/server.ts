@@ -5,6 +5,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, create
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
+import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
@@ -99,6 +100,28 @@ app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
     if (code === 'user_not_found') return res.status(404).json({ error: code });
     if (code === 'empty_instruction') return res.status(400).json({ error: code });
     if (code === 'empty_ai_response') return res.status(502).json({ error: code });
+    return res.status(500).json({ error: code });
+  }
+});
+
+app.post('/internal/ai/generate-image', internalAuth, async (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const prompt = `${req.body?.prompt || ''}`.trim();
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!prompt) return res.status(400).json({ error: 'empty_prompt' });
+
+  try {
+    const result = await runImageGeneration(Math.floor(userId), prompt);
+    if (!result.ok) {
+      const errMsg = (result as any).error || 'image_gen_failed';
+      if (errMsg === 'user_not_found') return res.status(404).json({ error: errMsg });
+      if (errMsg === 'user_not_approved') return res.status(403).json({ error: errMsg });
+      return res.status(422).json({ error: errMsg });
+    }
+    return res.json(result);
+  } catch (err: any) {
+    const code = `${err?.message || 'image_gen_failed'}`;
     return res.status(500).json({ error: code });
   }
 });

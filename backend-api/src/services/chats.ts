@@ -216,7 +216,8 @@ export const resetDailyMessageCounters = () => db.prepare(`
   SET daily_message_count = 0,
       daily_tokens_used = 0,
       daily_cost_rub = 0,
-      daily_web_search_count = 0
+      daily_web_search_count = 0,
+      daily_image_gen_count = 0
 `).run();
 
 export const updateUserPrompt = (userId: number, promptId: number) => db
@@ -258,10 +259,10 @@ export const getPromptForUser = (user: UserRecord) => {
 export type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 export type UserPlan = 'free' | 'standart' | 'pro';
 
-const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number }> = {
-  free: { context_window_max: 10, daily_message_limit: 10, daily_web_search_limit: 0 },
-  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5 },
-  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20 }
+const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number; daily_image_gen_limit: number }> = {
+  free: { context_window_max: 10, daily_message_limit: 10, daily_web_search_limit: 0, daily_image_gen_limit: 0 },
+  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5, daily_image_gen_limit: 3 },
+  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20, daily_image_gen_limit: 10 }
 };
 
 export const upsertTelegramUser = (
@@ -279,8 +280,8 @@ export const upsertTelegramUser = (
 
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
-      context_window_max, daily_message_limit, daily_web_search_limit)
-    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?)
+      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       role = excluded.role,
@@ -289,7 +290,7 @@ export const upsertTelegramUser = (
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(tgId, name, effectiveRole, effectiveIsAdmin, status, tgUsername, defaultPromptId,
-    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit);
+    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit);
 
   ensureActiveChat(tgId);
   return result;
@@ -304,14 +305,14 @@ export const createPendingTelegramUser = (
   const limits = PLAN_LIMITS['free'];
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
-      context_window_max, daily_message_limit, daily_web_search_limit)
-    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?)
+      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       name = COALESCE(excluded.name, users.name),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(tgId, name, tgUsername, defaultPromptId,
-    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit);
+    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit);
 
   ensureActiveChat(tgId);
   return result;
@@ -397,13 +398,14 @@ export const updateUserPlan = (userId: number, plan: UserPlan) => {
         context_window_max = ?,
         daily_message_limit = ?,
         daily_web_search_limit = ?,
+        daily_image_gen_limit = ?,
         context_window = CASE
           WHEN COALESCE(context_window, 0) <= 0 THEN ?
           WHEN context_window > ? THEN ?
           ELSE context_window
         END
     WHERE id = ?
-  `).run(plan, limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit,
+  `).run(plan, limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
     limits.context_window_max, limits.context_window_max, limits.context_window_max, userId);
 };
 
@@ -414,13 +416,14 @@ export const syncAllUsersPlanLimits = () => {
       SET context_window_max = ?,
           daily_message_limit = ?,
           daily_web_search_limit = ?,
+          daily_image_gen_limit = ?,
           context_window = CASE
             WHEN COALESCE(context_window, 0) <= 0 THEN ?
             WHEN context_window > ? THEN ?
             ELSE context_window
           END
       WHERE plan = ?
-    `).run(limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit,
+    `).run(limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
       limits.context_window_max, limits.context_window_max, limits.context_window_max, plan);
   }
 };

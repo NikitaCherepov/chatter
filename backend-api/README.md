@@ -27,6 +27,11 @@ npm run logs:api
 - `TIMEWEB_*` и другие AI ключи - для AI/voice/photo.
 - `ENCRYPTION_KEY` - для mail (шифрование паролей).
 - `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` опционально) - для `/internal/tools/read_url`.
+- `PROXYAPI_KEY` - ключ ProxyAPI для генерации изображений.
+- `PROXYAPI_BASE_URL` - базовый URL ProxyAPI (по умолчанию `https://api.proxyapi.ru/openai/v1`).
+- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1`).
+- `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`).
+- `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`).
 
 ## Типы авторизации
 
@@ -174,8 +179,9 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 - Все эндпоинты ниже требуют `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
 - AI:
-  - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options? }`
+  - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options? }` -> `{ reply_text, chat_id, message_id, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
   - `POST /internal/ai/admin-outreach` -> `{ target_user_id, admin_instruction }`
+  - `POST /internal/ai/generate-image` -> `{ user_id, prompt }` -> `{ ok: true, image_base64, prompt_used }` (требует `PROXYAPI_KEY`)
   - `POST /internal/messages/bind-telegram` -> `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)

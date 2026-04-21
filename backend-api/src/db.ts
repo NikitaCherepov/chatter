@@ -43,6 +43,9 @@ ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_w
 ensureUserColumn('daily_web_search_limit', 'ALTER TABLE users ADD COLUMN daily_web_search_limit INTEGER NOT NULL DEFAULT 10');
 ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
+ensureUserColumn('daily_image_gen_count', 'ALTER TABLE users ADD COLUMN daily_image_gen_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_image_gen_limit', 'ALTER TABLE users ADD COLUMN daily_image_gen_limit INTEGER NOT NULL DEFAULT 3');
+ensureUserColumn('total_image_gen_count', 'ALTER TABLE users ADD COLUMN total_image_gen_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER');
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');

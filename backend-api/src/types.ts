@@ -30,6 +30,9 @@ export type UserRecord = {
   daily_web_search_limit?: number;
   total_web_search_count?: number;
   mail_check_limit?: number;
+  daily_image_gen_count?: number;
+  daily_image_gen_limit?: number;
+  total_image_gen_count?: number;
 };
 
 export type ChatDto = {
@@ -77,11 +80,17 @@ export type UsageDto = {
   used_provider: string;
 };
 
+export type GeneratedImage = {
+  image_base64: string;
+  prompt_used: string;
+};
+
 export type AiSendResult = {
   reply_text: string;
   chat_id: number;
   message_id: number;
   model_fallback_notice?: string | null;
   tool_user_messages?: string[];
+  generated_images?: GeneratedImage[];
   usage: UsageDto;
 };

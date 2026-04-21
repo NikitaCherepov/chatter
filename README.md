@@ -56,6 +56,22 @@ npm run logs
 - `NOTES_WEBAPP_URL` - ссылка на WebApp заметок в меню.
 - `AUTO_SYNC_PLAN_LIMITS_ON_BOOT=1` - авто-синхронизация лимитов при старте.
 
+## AI-инструменты
+
+Бот получает список инструментов из backend и передаёт их AI. Доступные:
+
+- **search_web** - поиск в интернете (Tavily).
+- **read_webpage** - чтение и очистка текста веб-страницы.
+- **control_smart_home** - управление устройствами умного дома.
+- **schedule_task** / **get_my_tasks** / **delete_my_task** - планирование задач и напоминаний.
+- **set_user_timezone** - установка часового пояса.
+- **check_emails** / **read_email_content** / **send_email** - работа с почтой.
+- **save_note** / **list_my_notes** / **read_note** / **delete_note** - заметки.
+- **update_core_memory** - статический профиль пользователя.
+- **search_cold_memory** / **save_to_cold_memory** / **delete_from_cold_memory** - векторный архив памяти.
+- **random_roll** - бросок монетки/кубиков.
+- **generate_image** - генерация изображений по текстовому описанию. Вызывается при явном намерении ("нарисуй", "сгенерируй картинку"). Промпт автоматически переводится на английский. Изображение отправляется в Telegram как фото.
+
 ## Основные команды
 
 Пользователь:

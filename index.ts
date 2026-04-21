@@ -1062,6 +1062,7 @@ const runBackendAiSend = async (
         reply_text?: string;
         model_fallback_notice?: string | null;
         tool_user_messages?: string[];
+        generated_images?: Array<{ image_base64: string; prompt_used: string }>;
         usage?: {
             tokens_used?: number;
             used_model?: string;
@@ -4607,6 +4608,20 @@ const processUserTextThroughAi = async (
                     await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
                 } catch (bindErr) {
                     console.warn('Не удалось привязать telegram_message_id к backend сообщению:', bindErr);
+                }
+            }
+            // Отправка сгенерированных изображений
+            if (Array.isArray(backend?.generated_images) && backend.generated_images.length > 0) {
+                for (const img of backend.generated_images) {
+                    try {
+                        const imageBuffer = Buffer.from(img.image_base64, 'base64');
+                        await ctx.replyWithPhoto({ source: imageBuffer }, {
+                            caption: img.prompt_used ? `Промпт: ${img.prompt_used}` : undefined
+                        });
+                    } catch (imgErr) {
+                        console.error('Ошибка отправки сгенерированного изображения:', imgErr);
+                        await ctx.reply('Не удалось отправить сгенерированное изображение.').catch(() => {});
+                    }
                 }
             }
         }
