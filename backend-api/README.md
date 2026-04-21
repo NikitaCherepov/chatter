@@ -218,6 +218,46 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - Сервисные:
   - `POST /internal/daily-reset` -> `{ ok: true }`
 
+## Лимиты по планам
+
+Задаются в `PLAN_LIMITS` в `services/chats.ts`, применяются при создании пользователя, смене плана и `/sync_plan_limits`.
+
+| Параметр | free | standart | pro |
+|---|---|---|---|
+| `context_window_max` | 10 | 20 | 50 |
+| `daily_message_limit` | 10 | 20 | 50 |
+| `daily_web_search_limit` | 0 | 5 | 20 |
+| `daily_image_gen_limit` | 0 | 3 | 10 |
+
+Админы (`is_admin = 1`) обходят дневные лимиты.
+
+## AI-инструменты
+
+Инструменты доступны AI через tool calling. Определены в `services/ai.ts` в `toolDefinitions`.
+
+| Инструмент | Описание |
+|---|---|
+| `search_web` | Поиск в интернете (Tavily) |
+| `read_webpage` | Чтение текста веб-страницы по URL |
+| `control_smart_home` | Управление устройствами умного дома |
+| `schedule_task` | Создание задачи/напоминания |
+| `get_my_tasks` | Список задач пользователя |
+| `delete_my_task` | Удаление задачи |
+| `set_user_timezone` | Установка часового пояса |
+| `check_emails` | Поиск писем в почте |
+| `read_email_content` | Чтение содержимого письма |
+| `send_email` | Отправка письма |
+| `save_note` | Сохранение заметки |
+| `list_my_notes` | Список заметок |
+| `read_note` | Чтение заметки |
+| `delete_note` | Удаление заметки |
+| `update_core_memory` | Обновление статического профиля пользователя |
+| `search_cold_memory` | Поиск по векторному архиву |
+| `save_to_cold_memory` | Сохранение в векторный архив |
+| `delete_from_cold_memory` | Удаление из векторного архива |
+| `random_roll` | Бросок монетки/кубиков |
+| `generate_image` | Генерация изображения (ProxyAPI, `b64_json`). Автоматически маршрутизируется через PRO. |
+
 ## Типовые ошибки
 
 - `400` - плохой ввод (`bad_*`, `*_required`).
