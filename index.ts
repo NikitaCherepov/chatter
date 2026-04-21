@@ -4615,9 +4615,7 @@ const processUserTextThroughAi = async (
                 for (const img of backend.generated_images) {
                     try {
                         const imageBuffer = Buffer.from(img.image_base64, 'base64');
-                        await ctx.replyWithPhoto({ source: imageBuffer }, {
-                            caption: img.prompt_used ? `Промпт: ${img.prompt_used}` : undefined
-                        });
+                        await ctx.replyWithPhoto({ source: imageBuffer });
                     } catch (imgErr) {
                         console.error('Ошибка отправки сгенерированного изображения:', imgErr);
                         await ctx.reply('Не удалось отправить сгенерированное изображение.').catch(() => {});
