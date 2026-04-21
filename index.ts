@@ -640,6 +640,9 @@ type UserRecord = {
     daily_web_search_count: number;
     daily_web_search_limit: number;
     total_web_search_count: number;
+    daily_image_gen_count: number;
+    daily_image_gen_limit: number;
+    total_image_gen_count: number;
     context_window: number;
     context_window_max: number;
 };
@@ -1992,14 +1995,14 @@ const removeUserPlanSubscriptions = (id: number) => db.prepare('DELETE FROM user
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, daily_web_search_limit, total_web_search_count, context_window, context_window_max
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, daily_web_search_limit, total_web_search_count, daily_image_gen_count, daily_image_gen_limit, total_image_gen_count, context_window, context_window_max
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, daily_web_search_limit, context_window, context_window_max, created_at
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, daily_web_search_limit, daily_image_gen_limit, context_window, context_window_max, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -2007,7 +2010,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.daily_web_search_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.daily_web_search_limit, u.daily_image_gen_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -2609,7 +2612,7 @@ const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: nu
         const messageLimit = normalizeDailyMessageLimit(row.daily_message_limit);
         const webLimit = normalizeDailyWebSearchLimit(row.daily_web_search_limit);
         const notesStats = noteStatsMap.get(row.id) || { user_id: row.id, notes_count: 0, notes_chars: 0 };
-        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0}/${webLimit} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
+        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0}/${webLimit} img:${row.daily_image_gen_count ?? 0}/${row.daily_image_gen_limit ?? 0} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -2724,14 +2727,17 @@ Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
 Контекст (текущий/макс): ${getContextWindowText(user)}
 Сообщения в день: ${getDailyMessageLimitText(user)}
 Web-поиск в день: ${getDailyWebSearchLimitText(user)}
+Генерация картинок в день: ${user.daily_image_gen_count ?? 0}/${user.daily_image_gen_limit ?? 0}
 Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
 Сообщений сегодня: ${user.daily_message_count ?? 0}
 Токенов сегодня: ${user.daily_tokens_used ?? 0}
 Цена сегодня: ${formatRub(user.daily_cost_rub ?? 0)}
 Поисков web сегодня: ${user.daily_web_search_count ?? 0}
+Картинок сегодня: ${user.daily_image_gen_count ?? 0}/${user.daily_image_gen_limit ?? 0}
 Токенов всего: ${user.total_tokens_used ?? 0}
 Цена всего: ${formatRub(user.total_cost_rub ?? 0)}
 Поисков web всего: ${user.total_web_search_count ?? 0}
+Картинок всего: ${user.total_image_gen_count ?? 0}
 Заметок: ${notesStats.notes_count}/${notesLimit}
 Символов в заметках: ${notesStats.notes_chars}
 Лимит символов на заметку: ${noteContentLimit}
