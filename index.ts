@@ -2380,6 +2380,9 @@ const showMenu = async (ctx: any) => {
     const webLimitLine = userRecord
         ? `🌐 Web-поиск сегодня: ${getDailyWebSearchLimitText(userRecord)}`
         : `🌐 Web-поиск сегодня: 0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`;
+    const imageGenLine = userRecord
+        ? `🎨 Картинок сегодня: ${userRecord.daily_image_gen_count ?? 0}/${userRecord.daily_image_gen_limit ?? 0}`
+        : `🎨 Картинок сегодня: 0/0`;
     const notesLine = NOTES_WEBAPP_URL
         ? '📝 Заметки: доступны в кнопке WebApp'
         : '📝 Заметки: команды /note_add, /notes, /note_find, /note_delete';
@@ -2400,6 +2403,7 @@ ${planLine}
 ${contextLine}
 ${messageLimitLine}
 ${webLimitLine}
+${imageGenLine}
 ${chatLine}
 ${notesLine}
 ${promptLine}
