@@ -261,8 +261,8 @@ export type UserPlan = 'free' | 'standart' | 'pro';
 
 const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number; daily_image_gen_limit: number }> = {
   free: { context_window_max: 10, daily_message_limit: 10, daily_web_search_limit: 0, daily_image_gen_limit: 0 },
-  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5, daily_image_gen_limit: 3 },
-  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20, daily_image_gen_limit: 10 }
+  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5, daily_image_gen_limit: 2 },
+  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20, daily_image_gen_limit: 5 }
 };
 
 export const upsertTelegramUser = (
