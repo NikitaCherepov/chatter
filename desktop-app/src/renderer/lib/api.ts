@@ -159,6 +159,17 @@ export async function activateChat(chatId: number): Promise<{ ok: boolean; activ
   return apiFetch(`/api/v1/chats/${chatId}/activate`, { method: 'POST' });
 }
 
+export async function renameChat(chatId: number, title: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/chats/${chatId}/rename`, {
+    method: 'PUT',
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function deleteChat(chatId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' });
+}
+
 export async function getMessages(chatId: number, limit = 50, offset = 0): Promise<{ messages: Message[] }> {
   return apiFetch(`/api/v1/chats/${chatId}/messages?limit=${limit}&offset=${offset}`);
 }

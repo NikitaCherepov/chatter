@@ -114,6 +114,27 @@ export const activateUserChat = (userId: number, chatId: number) => {
   return true;
 };
 
+export const renameUserChat = (userId: number, chatId: number, title: string): boolean => {
+  const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
+  if (!exists) return false;
+  db.prepare('UPDATE user_chats SET title = ? WHERE id = ? AND user_id = ?').run(title.slice(0, 120), chatId, userId);
+  return true;
+};
+
+export const deleteUserChat = (userId: number, chatId: number): boolean => {
+  const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
+  if (!exists) return false;
+  db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
+  db.prepare('DELETE FROM user_chats WHERE id = ? AND user_id = ?').run(chatId, userId);
+  // If deleted chat was active, reset to another chat
+  const user = db.prepare('SELECT active_chat_id FROM users WHERE id = ?').get(userId) as { active_chat_id: number | null } | undefined;
+  if (user?.active_chat_id === chatId) {
+    const firstChat = db.prepare('SELECT id FROM user_chats WHERE user_id = ? ORDER BY id ASC LIMIT 1').get(userId) as { id: number } | undefined;
+    db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(firstChat?.id ?? null, userId);
+  }
+  return true;
+};
+
 export const getChatMessages = (userId: number, chatId: number, limit = 20, offset = 0): MessageDto[] => {
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));

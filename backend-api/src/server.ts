@@ -2,7 +2,7 @@
 import path from 'path';
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
@@ -473,6 +473,26 @@ app.post('/api/v1/chats/:id/activate', (req: AuthedRequest, res) => {
   const ok = activateUserChat(userId, chatId);
   if (!ok) return res.status(404).json({ error: 'chat_not_found' });
   return res.json({ ok: true, active_chat_id: chatId });
+});
+
+app.put('/api/v1/chats/:id/rename', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const title = `${req.body?.title || ''}`.trim();
+  if (!title) return res.status(400).json({ error: 'title_required' });
+  const ok = renameUserChat(userId, chatId, title);
+  if (!ok) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/chats/:id', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const ok = deleteUserChat(userId, chatId);
+  if (!ok) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ ok: true });
 });
 
 app.get('/api/v1/chats/:id/messages', (req: AuthedRequest, res) => {

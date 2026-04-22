@@ -73,7 +73,173 @@
   }
 }
 
+.chatItemRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kebabBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.1s;
+  padding: 0;
+
+  .chatItem:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+    color: var(--text-primary);
+  }
+}
+
+.renameInput {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background-color: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 8px;
+  outline: none;
+  min-width: 0;
+
+  &::placeholder {
+    color: var(--text-hint);
+  }
+}
+
+// ====== CONTEXT MENU ======
+
+.contextMenu {
+  position: fixed;
+  z-index: 100;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  padding: 4px 0;
+  min-width: 160px;
+}
+
+.contextMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 8px);
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.1s, color 0.1s;
+  border-radius: 4px;
+  margin: 0 4px;
+
+  &:hover {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  &Danger {
+    color: var(--color-error);
+
+    &:hover {
+      background-color: var(--bg-primary);
+      color: var(--color-error);
+    }
+  }
+}
+
+// ====== OVERLAY & CONFIRM DIALOG ======
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--overlay-bg);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirmDialog {
+  background-color: var(--bg-primary);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow-modal);
+  max-width: 360px;
+  width: 90%;
+}
+
+.confirmTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.confirmText {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.confirmBtns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirmCancel {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-medium);
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-bubble);
+  }
+}
+
+.confirmDanger {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--color-error);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.1s;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
 .chatItemTitle {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
