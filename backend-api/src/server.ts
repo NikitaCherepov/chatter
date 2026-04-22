@@ -1,4 +1,5 @@
 ﻿import express from 'express';
+import path from 'path';
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser } from './services/chats.js';
@@ -33,6 +34,16 @@ app.use((_req, res, next) => {
   if (_req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// Static updates for electron-updater
+const updatesPath = path.join(__dirname, '../updates');
+app.use('/updates', express.static(updatesPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.yml')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'backend-api', now: Math.floor(Date.now() / 1000) });

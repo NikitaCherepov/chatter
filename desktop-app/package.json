@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
@@ -13,6 +13,9 @@
     "build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.3",
+    "framer-motion": "^12.38.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.0"
@@ -29,13 +32,22 @@
     "vite": "^5.4.0"
   },
   "build": {
-    "appId": "com.chatter.desktop",
+    "appId": "com.ncherepov.chatter",
     "productName": "Chatter",
     "files": [
       "dist/**/*"
     ],
     "directories": {
       "output": "release"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://api.chatter.com/updates/win/"
+      }
+    ],
+    "win": {
+      "target": "nsis"
     }
   }
 }
