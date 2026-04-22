@@ -517,6 +517,7 @@ const BASE_COMMANDS = [
     { command: 'chats', description: 'Список чатов и активный чат' },
     { command: 'chat_new', description: 'Создать чат: /chat_new [название]' },
     { command: 'chat_use', description: 'Переключить чат: /chat_use <id>' },
+    { command: 'link', description: 'Привязать десктоп-приложение' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
