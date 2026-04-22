@@ -1,0 +1,40 @@
+{
+  "name": "chatter-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "tsc -p tsconfig.main.json && electron .",
+    "build": "tsc -p tsconfig.main.json && vite build",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^8.2.2",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  },
+  "build": {
+    "appId": "com.chatter.desktop",
+    "productName": "Chatter",
+    "files": [
+      "dist/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}

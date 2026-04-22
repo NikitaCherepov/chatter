@@ -4,3 +4,7 @@ node_modules/
 *.db-journal
 dist/
 backend-api/dist/
+
+desktop-app/release/
+desktop-app/dist/
+*.exe
