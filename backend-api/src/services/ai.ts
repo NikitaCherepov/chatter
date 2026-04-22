@@ -1288,9 +1288,13 @@ PRO
     currentMessages.push(message);
 
     if (!message.tool_calls?.length) {
+      const finishReason = response?.choices?.[0]?.finish_reason;
       const content = `${message.content || ''}`.trim();
       if (content) answer = content;
       else if (toolOutputsForFallback.length) answer = toolOutputsForFallback[toolOutputsForFallback.length - 1] || FALLBACK_ANSWER;
+      if (finishReason === 'length') {
+        console.warn(`[AI TRUNCATE] finish_reason=length, model=${completion.usedModel}, provider=${completion.usedProvider}, content_len=${content.length}`);
+      }
       break;
     }
 
