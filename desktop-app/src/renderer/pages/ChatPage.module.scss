@@ -219,6 +219,13 @@
   padding: 14px 18px;
 }
 
+.bubbleUser {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
 .bubbleText {
   font-size: 14px;
   color: var(--text-body);

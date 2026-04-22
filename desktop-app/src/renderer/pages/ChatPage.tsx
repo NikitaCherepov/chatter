@@ -190,7 +190,7 @@ export function ChatPage() {
                   <div className={s.metaRow}>
                     {msg.role === 'user' ? 'You' : 'Assistant'} &bull; {formatTime(msg.created_at)}
                   </div>
-                  <div className={s.bubble}>
+                  <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
                     <div className={s.bubbleText}>{msg.content}</div>
                   </div>
                 </div>
