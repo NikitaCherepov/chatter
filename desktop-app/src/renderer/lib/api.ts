@@ -159,7 +159,7 @@ export async function getMessages(chatId: number, limit = 50, offset = 0): Promi
 }
 
 export type ChatSendResponse = {
-  reply: string;
+  reply_text: string;
   message_id: number;
   chat_id: number;
 };

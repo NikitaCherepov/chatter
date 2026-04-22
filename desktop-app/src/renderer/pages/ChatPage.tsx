@@ -86,7 +86,7 @@ export function ChatPage() {
       const assistantMsg: api.Message = {
         id: res.message_id,
         role: 'assistant',
-        content: res.reply,
+        content: res.reply_text,
         created_at: Math.floor(Date.now() / 1000),
       };
       setMessages((prev) => [...prev, assistantMsg]);
