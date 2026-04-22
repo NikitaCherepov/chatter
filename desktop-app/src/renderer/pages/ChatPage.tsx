@@ -46,6 +46,7 @@ export function ChatPage() {
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [renamingChatId, setRenamingChatId] = useState<number | null>(null);
   const [renamingTitle, setRenamingTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
@@ -289,65 +290,95 @@ export function ChatPage() {
   return (
     <div className={s.layout}>
       {/* SIDEBAR */}
-      <aside className={s.sidebar}>
+      <motion.aside
+        className={`${s.sidebar} ${sidebarCollapsed ? s.sidebarCollapsed : ''}`}
+        animate={{ width: sidebarCollapsed ? 65 : 260 }}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
+      >
         <div className={s.sidebarHeader}>
-          <span className={s.sidebarTitle}>Чаты</span>
-          <button className={s.newChatBtn} onClick={handleCreateChat}>
+          <button className={s.burgerBtn} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? 'Развернуть' : 'Свернуть'}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <motion.span
+            className={s.sidebarTitle}
+            animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
+            transition={{ duration: 0.15 }}
+          >
+            Чаты
+          </motion.span>
+          <motion.button
+            className={s.newChatBtn}
+            onClick={handleCreateChat}
+            animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
+            transition={{ duration: 0.15 }}
+            style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
+          >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="7" y1="1" x2="7" y2="13" />
               <line x1="1" y1="7" x2="13" y2="7" />
             </svg>
-          </button>
+          </motion.button>
         </div>
 
-        <div className={s.chatList}>
-          {chats.map((chat) => (
-            <div
-              key={chat.id}
-              className={`${s.chatItem} ${chat.id === activeChatId ? s.chatItemActive : ''}`}
-              onClick={() => {
-                if (renamingChatId === chat.id) return;
-                selectChat(chat.id);
-              }}
-            >
-              <div className={s.chatItemRow}>
-                {renamingChatId === chat.id ? (
-                  <input
-                    className={s.renameInput}
-                    value={renamingTitle}
-                    onChange={(e) => setRenamingTitle(e.target.value)}
-                    onKeyDown={handleRenameKeyDown}
-                    onBlur={handleConfirmRename}
-                    autoFocus
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <div className={s.chatItemTitle}>{chat.title || 'Новый чат'}</div>
+        <motion.div
+          className={s.sidebarContentBody}
+          animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
+          transition={{ duration: 0.15 }}
+          style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
+        >
+          <div className={s.chatList}>
+            {chats.map((chat) => (
+              <div
+                key={chat.id}
+                className={`${s.chatItem} ${chat.id === activeChatId ? s.chatItemActive : ''}`}
+                onClick={() => {
+                  if (renamingChatId === chat.id) return;
+                  selectChat(chat.id);
+                }}
+              >
+                <div className={s.chatItemRow}>
+                  {renamingChatId === chat.id ? (
+                    <input
+                      className={s.renameInput}
+                      value={renamingTitle}
+                      onChange={(e) => setRenamingTitle(e.target.value)}
+                      onKeyDown={handleRenameKeyDown}
+                      onBlur={handleConfirmRename}
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div className={s.chatItemTitle}>{chat.title || 'Новый чат'}</div>
+                  )}
+                  <button
+                    className={s.kebabBtn}
+                    onClick={(e) => handleKebabClick(e, chat.id)}
+                    title="Действия"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <circle cx="8" cy="3" r="1.5" />
+                      <circle cx="8" cy="8" r="1.5" />
+                      <circle cx="8" cy="13" r="1.5" />
+                    </svg>
+                  </button>
+                </div>
+                {renamingChatId !== chat.id && (
+                  <div className={s.chatItemTime}>{formatTime(chat.created_at)}</div>
                 )}
-                <button
-                  className={s.kebabBtn}
-                  onClick={(e) => handleKebabClick(e, chat.id)}
-                  title="Actions"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <circle cx="8" cy="3" r="1.5" />
-                    <circle cx="8" cy="8" r="1.5" />
-                    <circle cx="8" cy="13" r="1.5" />
-                  </svg>
-                </button>
               </div>
-              {renamingChatId !== chat.id && (
-                <div className={s.chatItemTime}>{formatTime(chat.created_at)}</div>
-              )}
-            </div>
-          ))}
-          {chats.length === 0 && (
-            <div className={s.emptyChats}>Нет чатов</div>
-          )}
-        </div>
+            ))}
+            {chats.length === 0 && (
+              <div className={s.emptyChats}>Нет чатов</div>
+            )}
+          </div>
+        </motion.div>
 
         {/* Context menu */}
-        {contextMenuChatId !== null && (
+        {contextMenuChatId !== null && !sidebarCollapsed && (
           <div
             className={s.contextMenu}
             style={{ top: contextMenuPos.y, left: contextMenuPos.x }}
@@ -375,25 +406,36 @@ export function ChatPage() {
             <div className={s.avatar}>
               {(user?.name || user?.username || 'U')[0].toUpperCase()}
             </div>
-            <span className={s.userName}>{user?.name || user?.username || 'User'}</span>
+            <motion.span
+              className={s.userName}
+              animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
+              transition={{ duration: 0.15 }}
+            >
+              {user?.name || user?.username || 'User'}
+            </motion.span>
           </div>
-          <div className={s.footerBtns}>
-            <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title="Link Telegram">
+          <motion.div
+            className={s.footerBtns}
+            animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
+            transition={{ duration: 0.15 }}
+            style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
+          >
+            <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title="Привязать Telegram">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
               </svg>
             </button>
-            <button className={s.iconBtn} onClick={handleLogout} title="Logout">
+            <button className={s.iconBtn} onClick={handleLogout} title="Выйти">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
             </button>
-          </div>
+          </motion.div>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* MAIN */}
       <main className={s.main}>

@@ -8,24 +8,55 @@
 
 .sidebar {
   width: 260px;
-  min-width: 260px;
+  min-width: 0;
   background-color: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-light);
+  overflow: hidden;
+}
+
+.sidebarCollapsed {
+  // Nothing — burger and avatar stay in place, overflow:hidden clips the rest
+}
+
+.burgerBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s;
+  flex-shrink: 0;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+  }
 }
 
 .sidebarHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 24px 16px 16px;
 }
 
 .sidebarTitle {
+  flex: 1;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.sidebarContentBody {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .newChatBtn {
@@ -273,13 +304,13 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+  margin-top: auto;
 }
 
 .userInfo {
   display: flex;
   align-items: center;
   gap: 8px;
-  overflow: hidden;
   flex: 1;
   min-width: 0;
 }
