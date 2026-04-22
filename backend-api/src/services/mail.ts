@@ -1,4 +1,5 @@
 ﻿import crypto from 'node:crypto';
+import { simpleParser } from 'mailparser';
 import { db } from '../db.js';
 import { getUserById } from './chats.js';
 
@@ -279,22 +280,16 @@ export const runEmailRead = async (userId: number, subjectPart: string, provider
       candidates.sort((a, b) => b.dateUnix - a.dateUnix || b.uid - a.uid);
 
       const picked = candidates[0];
-      const msg = await client.fetchOne(picked.uid, { source: true, envelope: true });
-      const rawText = msg?.source ? msg.source.toString('utf8') : '';
-      if (!rawText.trim()) return 'Тело письма пустое.';
+      const msg = await client.fetchOne(picked.uid, { source: true, envelope: true }, { uid: true });
+      const rawSource = msg?.source;
+      if (!rawSource || !rawSource.length) return 'Тело письма пустое.';
 
-      const cleaned = rawText
-        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/\r/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
+      const parsed = await simpleParser(rawSource);
+      const cleanText = parsed.text || '';
 
-      const compact = cleaned.slice(0, 3500);
-      return `Письмо найдено: ${msg?.envelope?.subject || picked.subject}\n\n${compact || '(не удалось извлечь читаемый текст)'}`;
+      if (!cleanText.trim()) return 'Не удалось извлечь читаемый текст из письма.';
+      const compact = cleanText.slice(0, 3500);
+      return `Письмо найдено: ${msg?.envelope?.subject || picked.subject}\n\n${compact}`;
     } finally {
       lock.release();
     }
