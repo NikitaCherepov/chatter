@@ -1,10 +1,35 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { AttachModal } from '../components/AttachModal';
+import type { ImageItem } from '../components/AttachModal';
 import s from './ChatPage.module.scss';
+
+const ALLOWED_FORMATS: string[] = (() => {
+  const raw = import.meta.env.VITE_ALLOWED_IMAGE_FORMATS || '';
+  if (!raw.trim()) {
+    return ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+  }
+  return raw.split(',').map((f: string) => f.trim()).filter(Boolean);
+})();
+
+const MAX_IMAGES_FREE = 0;
+const MAX_IMAGES_STANDART = 5;
+const MAX_IMAGES_PRO = 10;
+const MAX_IMAGES_ADMIN = 20;
+
+function getMaxImagesForPlan(plan: string, isAdmin: number): number {
+  if (isAdmin === 1) return MAX_IMAGES_ADMIN;
+  switch (plan) {
+    case 'pro': return MAX_IMAGES_PRO;
+    case 'standart': return MAX_IMAGES_STANDART;
+    default: return MAX_IMAGES_FREE;
+  }
+}
 
 export function ChatPage() {
   const { user, logout } = useAuth();
@@ -17,8 +42,12 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
+  const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
   const loadChats = async () => {
     try {
@@ -67,19 +96,45 @@ export function ChatPage() {
     }
   };
 
+  const removeAttachedImage = useCallback((index: number) => {
+    setAttachedImages((prev) => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  const clearAttachedImages = useCallback(() => {
+    setAttachedImages((prev) => {
+      prev.forEach((img) => URL.revokeObjectURL(img.preview));
+      return [];
+    });
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    const hasImages = attachedImages.length > 0;
+    if ((!text && !hasImages) || sending) return;
     setInput('');
     setSending(true);
 
+    const imagesToSend = attachedImages.map((img) => ({
+      base64: img.base64,
+      mime_type: img.mime_type,
+    }));
+    const previewUrls = attachedImages.map((img) => img.preview);
+
+    // Clear attached images immediately
+    setAttachedImages([]);
+
+    const displayText = text || (hasImages ? '[Image]' : '');
     const tempUserMsg: api.Message = {
-      id: -Date.now(), role: 'user', content: text, created_at: Math.floor(Date.now() / 1000),
+      id: -Date.now(), role: 'user', content: displayText, created_at: Math.floor(Date.now() / 1000),
     };
     setMessages((prev) => [...prev, tempUserMsg]);
 
     try {
-      const res = await api.sendChatMessage(text);
+      const res = await api.sendChatMessage(text || ' ', activeChatId ?? undefined, imagesToSend.length > 0 ? imagesToSend : undefined);
       const assistantMsg: api.Message = {
         id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
       };
@@ -94,11 +149,60 @@ export function ChatPage() {
     } finally {
       setSending(false);
     }
-  }, [input, sending, activeChatId]);
+  }, [input, sending, activeChatId, attachedImages]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  // Ctrl+V / paste handler for images
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.type.startsWith('image/')) continue;
+      if (!ALLOWED_FORMATS.includes(item.type)) continue;
+
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      if (attachedImages.length >= maxImages) break;
+
+      e.preventDefault();
+
+      try {
+        const base64Full = await fileToBase64(file);
+        const base64 = base64Full.split(',')[1] || base64Full;
+        const newItem: ImageItem = {
+          file,
+          preview: URL.createObjectURL(file),
+          base64,
+          mime_type: file.type,
+        };
+        setAttachedImages((prev) => [...prev, newItem]);
+      } catch {
+        console.error('Failed to read pasted image');
+      }
+
+      // Only handle first image from paste
+      break;
+    }
+  }, [attachedImages.length, maxImages]);
+
+  const handleAttachFromModal = useCallback((images: ImageItem[]) => {
+    setAttachedImages((prev) => {
+      const combined = [...prev, ...images];
+      if (combined.length > maxImages) {
+        // Trim to max
+        const excess = combined.splice(maxImages);
+        excess.forEach((img) => URL.revokeObjectURL(img.preview));
+      }
+      return combined;
+    });
+    setShowAttachModal(false);
+  }, [maxImages]);
 
   const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
 
@@ -214,10 +318,38 @@ export function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Image previews above input */}
+            {attachedImages.length > 0 && (
+              <div className={s.imagePreviews}>
+                {attachedImages.map((img, i) => (
+                  <div key={i} className={s.imagePreviewItem}>
+                    <img className={s.imagePreviewImg} src={img.preview} alt="" />
+                    <button className={s.imagePreviewRemove} onClick={() => removeAttachedImage(i)}>
+                      &times;
+                    </button>
+                  </div>
+                ))}
+                <button className={s.imageClearAll} onClick={clearAttachedImages}>
+                  Очистить
+                </button>
+              </div>
+            )}
+
             <div className={s.inputArea}>
-              <svg className={s.inputIcon} viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-              </svg>
+              {maxImages > 0 ? (
+                <svg
+                  className={s.inputIcon}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setShowAttachModal(true)}
+                  viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                </svg>
+              ) : (
+                <svg className={s.inputIcon} viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                </svg>
+              )}
 
               <textarea
                 ref={textareaRef}
@@ -225,14 +357,15 @@ export function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 placeholder="Type your message..."
                 rows={1}
                 disabled={sending}
               />
 
               <svg
-                className={sending || !input.trim() ? s.sendIconDisabled : s.sendIcon}
-                onClick={() => { if (!sending && input.trim()) handleSend(); }}
+                className={sending || (!input.trim() && attachedImages.length === 0) ? s.sendIconDisabled : s.sendIcon}
+                onClick={() => { if (!sending && (input.trim() || attachedImages.length > 0)) handleSend(); }}
                 viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
               >
                 <line x1="22" y1="2" x2="11" y2="13" />
@@ -245,12 +378,34 @@ export function ChatPage() {
 
       <button className={s.fab}>?</button>
 
-      {showLinkModal && (
-        <LinkTelegramModal
-          onClose={() => setShowLinkModal(false)}
-          onLinked={() => { setShowLinkModal(false); loadChats(); }}
-        />
-      )}
+      <AnimatePresence>
+        {showLinkModal && (
+          <LinkTelegramModal
+            key="link-modal"
+            onClose={() => setShowLinkModal(false)}
+            onLinked={() => { setShowLinkModal(false); loadChats(); }}
+          />
+        )}
+
+        {showAttachModal && maxImages > 0 && (
+          <AttachModal
+            key="attach-modal"
+            onClose={() => setShowAttachModal(false)}
+            onAttach={handleAttachFromModal}
+            currentCount={attachedImages.length}
+            maxCount={maxImages}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }

@@ -158,15 +158,21 @@ export async function getMessages(chatId: number, limit = 50, offset = 0): Promi
   return apiFetch(`/api/v1/chats/${chatId}/messages?limit=${limit}&offset=${offset}`);
 }
 
+export type ChatSendImage = {
+  base64: string;
+  mime_type: string;
+};
+
 export type ChatSendResponse = {
   reply_text: string;
   message_id: number;
   chat_id: number;
 };
 
-export async function sendChatMessage(text: string, chatId?: number): Promise<ChatSendResponse> {
+export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[]): Promise<ChatSendResponse> {
   const body: Record<string, unknown> = { text };
   if (chatId) body.chat_id = chatId;
+  if (images && images.length > 0) body.images = images;
   return apiFetch('/api/v1/chat/send', {
     method: 'POST',
     body: JSON.stringify(body),

@@ -1,10 +1,23 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import * as api from '../lib/api';
 import s from './LinkTelegramModal.module.scss';
 
 type Props = {
   onClose: () => void;
   onLinked: () => void;
+};
+
+const overlayVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+  exit: { opacity: 0 },
+};
+
+const modalVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' as const } },
+  exit: { opacity: 0, y: 16, transition: { duration: 0.15 } },
 };
 
 export function LinkTelegramModal({ onClose, onLinked }: Props) {
@@ -61,8 +74,22 @@ export function LinkTelegramModal({ onClose, onLinked }: Props) {
   };
 
   return (
-    <div className={s.overlay} onClick={onClose}>
-      <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+    <motion.div
+      className={s.overlay}
+      onClick={onClose}
+      variants={overlayVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
+        <motion.div
+          className={s.modal}
+          onClick={(e) => e.stopPropagation()}
+          variants={modalVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+        >
         <button className={s.closeBtn} onClick={onClose}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -130,7 +157,7 @@ export function LinkTelegramModal({ onClose, onLinked }: Props) {
             <button className={s.actionBtn} onClick={generate}>Get new code</button>
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+      </motion.div>
   );
 }

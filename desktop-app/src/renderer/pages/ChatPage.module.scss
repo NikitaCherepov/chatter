@@ -102,7 +102,8 @@
   border-top: 1px solid var(--border-light);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .userInfo {
@@ -110,6 +111,8 @@
   align-items: center;
   gap: 8px;
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 
 .avatar {
@@ -258,6 +261,68 @@
 }
 
 // ====== INPUT AREA ======
+
+.imagePreviews {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10% 0;
+  overflow-x: auto;
+}
+
+.imagePreviewItem {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.imagePreviewImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imagePreviewRemove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background-color: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+}
+
+.imageClearAll {
+  border: none;
+  background: none;
+  color: var(--text-hint);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--color-error);
+  }
+}
 
 .inputArea {
   border-top: 1px solid var(--border-light);

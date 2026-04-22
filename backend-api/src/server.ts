@@ -483,8 +483,30 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   const chatIdRaw = req.body?.chat_id;
   const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
 
+  // Parse optional images array
+  const imagesRaw: Array<any> = Array.isArray(req.body?.images) ? req.body.images : [];
+  const MAX_IMAGE_BYTES_API = 20 * 1024 * 1024;
+  const images = imagesRaw
+    .map((img: any) => {
+      const base64 = `${img?.base64 || ''}`.trim();
+      const mimeType = `${img?.mime_type || 'image/jpeg'}`.trim() || 'image/jpeg';
+      return { base64, mimeType };
+    })
+    .filter(img => img.base64.length > 0);
+
+  // Validate image sizes
+  for (const img of images) {
+    const buf = Buffer.from(img.base64, 'base64');
+    if (!buf.length) continue;
+    if (buf.length > MAX_IMAGE_BYTES_API) {
+      return res.status(413).json({ error: 'image_too_large' });
+    }
+  }
+
   try {
-    const result = await sendMessageThroughAi(userId, text, chatId);
+    const result = await sendMessageThroughAi(userId, text, chatId, {
+      ...(images.length > 0 ? { images } : {}),
+    });
     res.json(result);
   } catch (err: any) {
     const code = `${err?.message || 'ai_send_failed'}`;
@@ -492,6 +514,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_text') return res.status(400).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
+    if (code.startsWith('too_many_images')) return res.status(400).json({ error: code });
+    if (code === 'images_not_allowed_for_plan') return res.status(403).json({ error: code });
+    if (code === 'image_too_large') return res.status(413).json({ error: code });
     return res.status(500).json({ error: code });
   }
 });
