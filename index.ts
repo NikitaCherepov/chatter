@@ -1145,6 +1145,7 @@ const runBackendPhotoAnalyze = async (
         chatId?: number;
         userTelegramChatId?: number | null;
         userTelegramMessageId?: number | null;
+        extraImages?: Array<{ base64: string; mimeType: string }>;
     }
 ) => {
     if (!BACKEND_INTERNAL_TOKEN) {
@@ -1158,6 +1159,7 @@ const runBackendPhotoAnalyze = async (
             image_mime_type: imageMimeType || 'image/jpeg',
             caption: caption || '',
             chat_id: Number.isFinite(Number(options?.chatId)) ? Math.floor(Number(options?.chatId)) : undefined,
+            extra_images: options?.extraImages?.map(img => ({ base64: img.base64, mime_type: img.mimeType })),
             options: {
                 userTelegramChatId: Number.isFinite(Number(options?.userTelegramChatId)) ? Math.floor(Number(options?.userTelegramChatId)) : null,
                 userTelegramMessageId: Number.isFinite(Number(options?.userTelegramMessageId)) ? Math.floor(Number(options?.userTelegramMessageId)) : null
@@ -1689,14 +1691,27 @@ const detectImageMimeType = (url: string, fallback: string | null = null) => {
     return 'image/jpeg';
 };
 
-const processUserPhotoThroughAi = async (ctx: any) => {
+const photoAlbumBuffer = new Map<string, { images: Array<{ buffer: Buffer; mimeType: string }>; caption: string; timer: ReturnType<typeof setTimeout>; ctx: any }>();
+
+const downloadTelegramPhoto = async (ctx: any, photos: any[]): Promise<{ buffer: Buffer; mimeType: string } | null> => {
+    const biggestPhoto = photos[photos.length - 1];
+    const fileLink = await ctx.telegram.getFileLink(biggestPhoto.file_id);
+    const imageResponse = await fetch(fileLink.href);
+    if (!imageResponse.ok) return null;
+    const imageBuffer = await imageResponse.arrayBuffer();
+    if (!imageBuffer.byteLength || imageBuffer.byteLength > MAX_TELEGRAM_PHOTO_BYTES) return null;
+    const mimeType = detectImageMimeType(fileLink.href, imageResponse.headers.get('content-type'));
+    return { buffer: Buffer.from(imageBuffer), mimeType };
+};
+
+const processPhotoAlbum = async (albumKey: string) => {
+    const album = photoAlbumBuffer.get(albumKey);
+    if (!album) return;
+    photoAlbumBuffer.delete(albumKey);
+
+    const { images, caption, ctx } = album;
     const userId = ctx.from?.id;
-    if (!userId) return;
-
-    const photos = ctx.message?.photo;
-    if (!Array.isArray(photos) || !photos.length) return;
-
-    const caption = typeof ctx.message?.caption === 'string' ? ctx.message.caption.trim() : '';
+    if (!userId || !images.length) return;
 
     const userRecord = await getUser(userId);
     if (!userRecord) {
@@ -1716,27 +1731,115 @@ const processUserPhotoThroughAi = async (ctx: any) => {
     try {
         await ctx.sendChatAction('typing');
 
-        const biggestPhoto = photos[photos.length - 1];
-        const fileLink = await ctx.telegram.getFileLink(biggestPhoto.file_id);
-        const imageResponse = await fetch(fileLink.href);
-        if (!imageResponse.ok) {
-            throw new Error(`Не удалось скачать фото из Telegram: ${imageResponse.status} ${imageResponse.statusText}`);
-        }
-
-        const imageBuffer = await imageResponse.arrayBuffer();
-        if (!imageBuffer.byteLength) {
-            throw new Error('Telegram вернул пустой файл изображения.');
-        }
-        if (imageBuffer.byteLength > MAX_TELEGRAM_PHOTO_BYTES) {
-            throw new Error(`Фото слишком большое (${Math.round(imageBuffer.byteLength / 1024 / 1024)}MB). Лимит: 20MB.`);
-        }
-
-        const mimeType = detectImageMimeType(fileLink.href, imageResponse.headers.get('content-type'));
+        const mainImage = images[0];
+        const extraImages = images.slice(1).map(img => ({
+            base64: img.buffer.toString('base64'),
+            mimeType: img.mimeType
+        }));
 
         const backend = await runBackendPhotoAnalyze(
             userId,
-            Buffer.from(imageBuffer),
-            mimeType,
+            mainImage.buffer,
+            mainImage.mimeType,
+            caption,
+            {
+                chatId: undefined,
+                userTelegramChatId: Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
+                userTelegramMessageId: Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null,
+                extraImages: extraImages.length ? extraImages : undefined
+            }
+        );
+
+        if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
+            await ctx.reply(backend.model_fallback_notice.trim());
+        }
+
+        const answer = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
+            ? backend.reply_text.trim()
+            : FALLBACK_ANSWER;
+        const sentMessage = await safeReply(ctx, answer);
+
+        const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
+            ? Math.floor(Number(backend?.message_id))
+            : null;
+        const assistantTgMessageId = Number.isFinite(Number(sentMessage?.message_id))
+            ? Math.floor(Number(sentMessage?.message_id))
+            : null;
+        if (backendAssistantMessageId) {
+            try {
+                await runBackendBindTelegramMessage(
+                    userId,
+                    backendAssistantMessageId,
+                    Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null,
+                    assistantTgMessageId
+                );
+            } catch (bindErr) {
+                console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', bindErr);
+            }
+        }
+    } catch (err) {
+        console.error('Ошибка анализа изображения:', err);
+        await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
+    }
+};
+
+const processUserPhotoThroughAi = async (ctx: any) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const photos = ctx.message?.photo;
+    if (!Array.isArray(photos) || !photos.length) return;
+
+    const caption = typeof ctx.message?.caption === 'string' ? ctx.message.caption.trim() : '';
+    const mediaGroupId = ctx.message?.media_group_id;
+
+    try {
+        const downloaded = await downloadTelegramPhoto(ctx, photos);
+        if (!downloaded) {
+            await ctx.reply('Не удалось скачать фото. Попробуй ещё раз.');
+            return;
+        }
+
+        // Альбом — собираем все фото, обрабатываем через задержку
+        if (mediaGroupId) {
+            const albumKey = `${userId}:${mediaGroupId}`;
+            const existing = photoAlbumBuffer.get(albumKey);
+            if (existing) {
+                existing.images.push(downloaded);
+                if (caption) existing.caption = caption;
+            } else {
+                photoAlbumBuffer.set(albumKey, {
+                    images: [downloaded],
+                    caption,
+                    timer: setTimeout(() => processPhotoAlbum(albumKey), 1500),
+                    ctx
+                });
+            }
+            return;
+        }
+
+        // Одиночное фото — обрабатываем сразу
+        const userRecord = await getUser(userId);
+        if (!userRecord) {
+            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            return;
+        }
+
+        if (ctx.state.role !== 'admin') {
+            const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
+            const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
+            if (dailyLimit > 0 && dailyCount >= dailyLimit) {
+                await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+                return;
+            }
+        }
+
+        await ctx.sendChatAction('typing');
+
+        const backend = await runBackendPhotoAnalyze(
+            userId,
+            downloaded.buffer,
+            downloaded.mimeType,
             caption,
             {
                 chatId: undefined,
