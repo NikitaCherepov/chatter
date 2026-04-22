@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import s from './ChatPage.module.scss';
 
 export function ChatPage() {
@@ -191,7 +192,10 @@ export function ChatPage() {
                     {msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}
                   </div>
                   <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
-                    <div className={s.bubbleText}>{msg.content}</div>
+                    {msg.role === 'assistant'
+                      ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
+                      : <div className={s.bubbleTextPlain}>{msg.content}</div>
+                    }
                   </div>
                 </div>
               ))}

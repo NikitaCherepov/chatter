@@ -230,8 +230,12 @@
   font-size: 14px;
   color: var(--text-body);
   line-height: 1.6;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.bubbleTextPlain {
+  composes: bubbleText;
+  white-space: pre-wrap;
 }
 
 .typingDots {
