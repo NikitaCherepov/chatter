@@ -36,7 +36,14 @@ app.use((_req, res, next) => {
 });
 
 // Static updates for electron-updater
+import fs from 'fs';
+
 const updatesPath = path.join(__dirname, '../updates');
+if (!fs.existsSync(updatesPath)) {
+  fs.mkdirSync(updatesPath, { recursive: true });
+  console.log(`[updates] created directory: ${updatesPath}`);
+}
+console.log(`[updates] serving from: ${updatesPath}`);
 app.use('/updates', express.static(updatesPath, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.yml')) {
