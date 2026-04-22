@@ -188,7 +188,7 @@ export function ChatPage() {
               {messages.map((msg) => (
                 <div key={msg.id} className={s.messageGroup}>
                   <div className={s.metaRow}>
-                    {msg.role === 'user' ? 'You' : 'Assistant'} &bull; {formatTime(msg.created_at)}
+                    {msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}
                   </div>
                   <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
                     <div className={s.bubbleText}>{msg.content}</div>
@@ -197,7 +197,7 @@ export function ChatPage() {
               ))}
               {sending && (
                 <div className={s.messageGroup}>
-                  <div className={s.metaRow}>Assistant &bull; typing...</div>
+                  <div className={s.metaRow}>Chatter &bull; typing...</div>
                   <div className={s.bubble}>
                     <div className={s.typingDots}>
                       <span className={s.dot} />
