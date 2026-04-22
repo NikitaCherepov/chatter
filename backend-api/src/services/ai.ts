@@ -130,6 +130,41 @@ const parseLiteProviders = (): LiteProvider[] => {
 };
 
 const LITE_PROVIDERS = parseLiteProviders();
+
+const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } => {
+  const proDefaultBase = (process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
+  const proDefaultKey = (process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
+  const proDefaultModels = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [PRO_MODEL_CHAIN[0] || 'glm-4v']);
+
+  const proProviders: LiteProvider[] = [];
+  if (proDefaultBase && proDefaultKey) {
+    proProviders.push({
+      name: 'vision-pro-1',
+      baseURL: proDefaultBase,
+      client: new OpenAI({ apiKey: proDefaultKey, baseURL: proDefaultBase }),
+      modelChain: proDefaultModels
+    });
+  }
+
+  const liteDefaultBase = (process.env.TIMEWEB_LITE_VISION_BASE_URL || process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
+  const liteDefaultKey = (process.env.TIMEWEB_LITE_VISION_API_KEY || process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
+  const liteDefaultModels = parseModelChain(process.env.TIMEWEB_LITE_VISION_MODEL, [...proDefaultModels, parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite'])[0] || 'glm-4v']);
+
+  const liteProviders: LiteProvider[] = [];
+  if (liteDefaultBase && liteDefaultKey) {
+    liteProviders.push({
+      name: 'vision-lite-1',
+      baseURL: liteDefaultBase,
+      client: new OpenAI({ apiKey: liteDefaultKey, baseURL: liteDefaultBase }),
+      modelChain: liteDefaultModels
+    });
+  }
+
+  return { pro: proProviders, lite: liteProviders };
+};
+
+const VISION_PROVIDERS = parseVisionProviders();
+
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
 
@@ -900,7 +935,37 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
-const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string, unknown>): Promise<CompletionMeta> => {
+const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>): Promise<CompletionMeta> => {
+  if (mode === 'vision-pro' || mode === 'vision-lite') {
+    const providers = mode === 'vision-pro' ? VISION_PROVIDERS.pro : VISION_PROVIDERS.lite;
+    if (!providers.length) {
+      return runCompletion(mode === 'vision-pro' ? 'pro' : 'lite', requestPayload);
+    }
+    const failedProviders: string[] = [];
+    const failedModels: string[] = [];
+    for (const provider of providers) {
+      try {
+        const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestPayload);
+        if (completion.failedModels.length) {
+          failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
+        }
+        return {
+          response: completion.response,
+          usedModel: completion.modelUsed,
+          usedProvider: provider.name,
+          baseURLUsed: provider.baseURL,
+          failedModels,
+          failedProviders
+        };
+      } catch (err: any) {
+        failedProviders.push(provider.name);
+        if (Array.isArray(err?.failedModels)) {
+          failedModels.push(...err.failedModels.map((m: string) => `${provider.name}:${m}`));
+        }
+      }
+    }
+    throw Object.assign(new Error('vision_providers_failed'), { failedProviders, failedModels });
+  }
   if (mode === 'pro') {
     if (PRO_PROVIDERS.length > 1) {
       const res = await createCompletionWithProProviderFallback(requestPayload);
@@ -1105,16 +1170,19 @@ export const sendMessageThroughAi = async (
     userTelegramChatId?: number | null;
     userTelegramMessageId?: number | null;
     assistantTelegramChatId?: number | null;
+    image?: { base64: string; mimeType: string };
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
   if (!user) throw new Error('user_not_found');
   if (user.status !== 'approved' && user.is_admin !== 1) throw new Error('user_not_approved');
 
+  const hasImage = Boolean(options?.image?.base64);
   let text = (inputText || '').trim();
-  if (!text) throw new Error('empty_text');
-  const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!');
-  if (forceProRoute && !options?.forcePro) {
+  if (!text && !hasImage) throw new Error('empty_text');
+  if (!text) text = 'Что на этой картинке?';
+  const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!') || hasImage;
+  if (forceProRoute && !options?.forcePro && !hasImage) {
     text = text.replace(/^!{3,}/, '').trim();
     if (!text) throw new Error('empty_text');
   }
@@ -1127,9 +1195,11 @@ export const sendMessageThroughAi = async (
   const contextWindow = resolveEffectiveContextWindow(user);
   const history = getHistoryForAi(userId, chatId, contextWindow);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
-  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(user).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}`;
+  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(user).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${hasImage ? '\n\nЕсли пользователь прислал изображение, анализируй его и отвечай конкретно по запросу пользователя.' : ''}`;
 
-  let executionMode: 'pro' | 'lite' = 'pro';
+  let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImage
+    ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
+    : 'pro';
   let executionTools: any[] = [...toolDefinitions] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
@@ -1230,10 +1300,17 @@ PRO
   }
 }
 
+  const userMessageContent: any = hasImage
+    ? [
+        { type: 'text', text },
+        { type: 'image_url', image_url: { url: `data:${options!.image!.mimeType};base64,${options!.image!.base64}` } }
+      ]
+    : text;
+
   const currentMessages: any[] = [
     { role: 'system', content: executionSystemPrompt },
     ...executionHistory,
-    { role: 'user', content: text }
+    { role: 'user', content: userMessageContent }
   ];
 
   let answer = FALLBACK_ANSWER;
