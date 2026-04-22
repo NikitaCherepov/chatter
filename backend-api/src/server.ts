@@ -556,9 +556,9 @@ app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
-  // Check if user already has tg_id linked
-  if (user.tg_username) {
-    return res.json({ linked: true, tg_username: user.tg_username, tg_id: user.id });
+  if (user.linked_tg_id) {
+    const tgUser = getUserById(user.linked_tg_id);
+    return res.json({ linked: true, tg_username: tgUser?.tg_username || tgUser?.name || null });
   }
 
   // Check if there's a pending code
@@ -586,35 +586,10 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
 
   const webUserId = result.userId!;
 
-  // Get the TG user record (created by bot via upsertUserFromTelegram)
-  const tgUser = getUserById(tgId);
+  // Simply write linked_tg_id to the web user
+  db.prepare('UPDATE users SET linked_tg_id = ? WHERE id = ?').run(tgId, webUserId);
 
-  // Transfer api_account from web user to TG user
-  // The TG user keeps their data (history, prompts, admin status)
-  // We just give the web API account access to the TG user's data
-  const account = db.prepare('SELECT * FROM api_accounts WHERE user_id = ?').get(webUserId) as any;
-  if (!account) return res.status(404).json({ error: 'no_api_account' });
-
-  // Re-link the api_account to point to the TG user instead
-  db.prepare('UPDATE api_accounts SET user_id = ? WHERE user_id = ?').run(tgId, webUserId);
-
-  // Copy name from TG user if web user had none
-  if (tgUser?.name) {
-    // TG user already has a name, keep it
-  }
-
-  // Issue new tokens for the TG user (so desktop app switches to TG identity)
-  const tokens = issueAuthTokens(tgId);
-
-  return res.json({
-    ok: true,
-    tg_id: tgId,
-    tg_username: tgUsername,
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    access_expires_in: tokens.access_expires_in,
-    refresh_expires_in: tokens.refresh_expires_in,
-  });
+  return res.json({ ok: true, tg_id: tgId, tg_username: tgUsername });
 });
 
 // ── Internal: Prompts CRUD ─────────────────────────────────────────────────

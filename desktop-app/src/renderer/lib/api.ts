@@ -183,7 +183,6 @@ export type LinkGenerateResponse = {
 export type LinkStatusResponse = {
   linked: boolean;
   tg_username?: string;
-  tg_id?: number;
   pending_code?: string;
   expires_in?: number;
 };

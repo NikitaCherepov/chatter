@@ -82,6 +82,9 @@ db.exec(`
 // Cleanup expired codes on startup
 db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
 
+// linked_tg_id column on users — stores TG user_id when linked
+ensureUserColumn('linked_tg_id', 'ALTER TABLE users ADD COLUMN linked_tg_id INTEGER');
+
 export const toUnix = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.floor(value);

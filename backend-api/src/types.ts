@@ -33,6 +33,7 @@ export type UserRecord = {
   daily_image_gen_count?: number;
   daily_image_gen_limit?: number;
   total_image_gen_count?: number;
+  linked_tg_id?: number | null;
 };
 
 export type ChatDto = {
