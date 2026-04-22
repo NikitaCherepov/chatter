@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
@@ -35,7 +35,8 @@
     "appId": "com.ncherepov.chatter",
     "productName": "Chatter",
     "files": [
-      "dist/**/*"
+      "dist/**/*",
+      ".env"
     ],
     "directories": {
       "output": "release"
@@ -43,7 +44,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://api.chatter.com/updates/win/"
+        "url": "http://***REMOVED_IP***:3050/updates/win/"
       }
     ],
     "win": {

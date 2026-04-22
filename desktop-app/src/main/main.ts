@@ -3,8 +3,11 @@ import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
 
-// Load .env from project root (for UPDATES_FEED_URL / VITE_API_BASE_URL)
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+// Load .env — in dev it's at project root, in packaged app it's bundled inside dist/main/
+const envPath = app.isPackaged
+  ? path.join(__dirname, '.env')        // packaged: dist/main/.env (bundled by electron-builder)
+  : path.join(__dirname, '../../.env'); // dev: desktop-app/.env
+dotenv.config({ path: envPath });
 
 let mainWindow: BrowserWindow | null = null;
 
