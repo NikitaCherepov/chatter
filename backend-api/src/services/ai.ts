@@ -1170,19 +1170,20 @@ export const sendMessageThroughAi = async (
     userTelegramChatId?: number | null;
     userTelegramMessageId?: number | null;
     assistantTelegramChatId?: number | null;
-    image?: { base64: string; mimeType: string };
+    images?: Array<{ base64: string; mimeType: string }>;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
   if (!user) throw new Error('user_not_found');
   if (user.status !== 'approved' && user.is_admin !== 1) throw new Error('user_not_approved');
 
-  const hasImage = Boolean(options?.image?.base64);
+  const images = options?.images?.filter(img => img.base64) ?? [];
+  const hasImages = images.length > 0;
   let text = (inputText || '').trim();
-  if (!text && !hasImage) throw new Error('empty_text');
-  if (!text) text = 'Что на этой картинке?';
-  const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!') || hasImage;
-  if (forceProRoute && !options?.forcePro && !hasImage) {
+  if (!text && !hasImages) throw new Error('empty_text');
+  if (!text) text = hasImages ? (images.length === 1 ? 'Что на этой картинке?' : `Что на этих ${images.length} картинках?`) : '';
+  const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!') || hasImages;
+  if (forceProRoute && !options?.forcePro && !hasImages) {
     text = text.replace(/^!{3,}/, '').trim();
     if (!text) throw new Error('empty_text');
   }
@@ -1195,9 +1196,9 @@ export const sendMessageThroughAi = async (
   const contextWindow = resolveEffectiveContextWindow(user);
   const history = getHistoryForAi(userId, chatId, contextWindow);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
-  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(user).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${hasImage ? '\n\nЕсли пользователь прислал изображение, анализируй его и отвечай конкретно по запросу пользователя.' : ''}`;
+  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(user).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
 
-  let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImage
+  let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
   let executionTools: any[] = [...toolDefinitions] as any[];
@@ -1300,10 +1301,13 @@ PRO
   }
 }
 
-  const userMessageContent: any = hasImage
+  const userMessageContent: any = hasImages
     ? [
         { type: 'text', text },
-        { type: 'image_url', image_url: { url: `data:${options!.image!.mimeType};base64,${options!.image!.base64}` } }
+        ...images.map(img => ({
+          type: 'image_url',
+          image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+        }))
       ]
     : text;
 

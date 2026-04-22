@@ -259,10 +259,14 @@ export const getPromptForUser = (user: UserRecord) => {
 export type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 export type UserPlan = 'free' | 'standart' | 'pro';
 
-const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number; daily_image_gen_limit: number }> = {
-  free: { context_window_max: 10, daily_message_limit: 10, daily_web_search_limit: 0, daily_image_gen_limit: 0 },
-  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5, daily_image_gen_limit: 2 },
-  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20, daily_image_gen_limit: 5 }
+const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number; daily_image_gen_limit: number; max_images_per_request: number }> = {
+  free: { context_window_max: 10, daily_message_limit: 10, daily_web_search_limit: 0, daily_image_gen_limit: 0, max_images_per_request: 0 },
+  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5, daily_image_gen_limit: 2, max_images_per_request: 5 },
+  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20, daily_image_gen_limit: 5, max_images_per_request: 10 }
+};
+
+export const getMaxImagesForPlan = (plan: string): number => {
+  return PLAN_LIMITS[plan]?.max_images_per_request ?? 0;
 };
 
 export const upsertTelegramUser = (

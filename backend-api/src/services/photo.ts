@@ -1,4 +1,5 @@
 import { sendMessageThroughAi } from './ai.js';
+import { getUserById, getMaxImagesForPlan } from './chats.js';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -11,8 +12,12 @@ export const runPhotoAnalyzeTurn = async (
   options?: {
     userTelegramChatId?: number | null;
     userTelegramMessageId?: number | null;
+    extraImages?: Array<{ base64: string; mimeType: string }>;
   }
 ) => {
+  const user = getUserById(userId);
+  if (!user) throw new Error('user_not_found');
+
   const normalizedImage = `${imageBase64 || ''}`.trim();
   if (!normalizedImage) throw new Error('empty_image');
 
@@ -20,13 +25,32 @@ export const runPhotoAnalyzeTurn = async (
   if (!imageBuffer.length) throw new Error('empty_image');
   if (imageBuffer.length > MAX_IMAGE_BYTES) throw new Error('image_too_large');
 
+  const maxImages = user.is_admin === 1 ? 20 : getMaxImagesForPlan(user.plan);
+  if (maxImages <= 0) throw new Error('images_not_allowed_for_plan');
+
+  const extraImages = (options?.extraImages ?? [])
+    .filter(img => img.base64)
+    .map(img => {
+      const buf = Buffer.from(img.base64, 'base64');
+      if (!buf.length || buf.length > MAX_IMAGE_BYTES) return null;
+      return { base64: img.base64, mimeType: img.mimeType || 'image/jpeg' };
+    })
+    .filter((img): img is { base64: string; mimeType: string } => img !== null);
+
+  const totalImages = 1 + extraImages.length;
+  if (totalImages > maxImages) {
+    throw new Error(`too_many_images_max_${maxImages}`);
+  }
+
+  const allImages = [
+    { base64: normalizedImage, mimeType: `${imageMimeType || 'image/jpeg'}`.trim() || 'image/jpeg' },
+    ...extraImages
+  ];
+
   const userPrompt = `${caption || ''}`.trim() || '';
   const result = await sendMessageThroughAi(userId, userPrompt, chatId, {
-    image: {
-      base64: normalizedImage,
-      mimeType: `${imageMimeType || 'image/jpeg'}`.trim() || 'image/jpeg'
-    },
-    persistUserText: caption ? `[Фото] ${caption}` : '[Фото]',
+    images: allImages,
+    persistUserText: caption ? `[Фото${allImages.length > 1 ? ` (${allImages.length} шт)` : ''}] ${caption}` : `[Фото${allImages.length > 1 ? ` (${allImages.length} шт)` : ''}]`,
     userTelegramChatId: options?.userTelegramChatId ?? null,
     userTelegramMessageId: options?.userTelegramMessageId ?? null
   });

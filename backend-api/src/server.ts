@@ -221,9 +221,17 @@ app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
   const chatIdRaw = req.body?.chat_id;
   const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
   const optionsRaw = req.body?.options || {};
+  const extraImagesRaw: Array<any> = Array.isArray(req.body?.extra_images) ? req.body.extra_images : [];
 
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!imageBase64.trim()) return res.status(400).json({ error: 'empty_image' });
+
+  const extraImages = extraImagesRaw
+    .filter((img: any) => typeof img?.base64 === 'string' && img.base64.trim())
+    .map((img: any) => ({
+      base64: img.base64.trim(),
+      mimeType: `${img.mime_type || 'image/jpeg'}`.trim() || 'image/jpeg'
+    }));
 
   try {
     const result = await runPhotoAnalyzeTurn(
@@ -234,7 +242,8 @@ app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
       chatId,
       {
         userTelegramChatId: Number.isFinite(Number(optionsRaw.userTelegramChatId)) ? Math.floor(Number(optionsRaw.userTelegramChatId)) : null,
-        userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null
+        userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null,
+        extraImages
       }
     );
     return res.json(result);
@@ -245,6 +254,8 @@ app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
     if (code === 'empty_image') return res.status(400).json({ error: code });
     if (code === 'image_too_large') return res.status(413).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
+    if (code.startsWith('too_many_images')) return res.status(400).json({ error: code });
+    if (code === 'images_not_allowed_for_plan') return res.status(403).json({ error: code });
     return res.status(500).json({ error: code });
   }
 });
