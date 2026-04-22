@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  // --- Base ---
+  --bg-primary: #ffffff;
+  --bg-secondary: #dfe6ef;
+  --bg-input: #dfe6ef;
+  --bg-bubble: #e8edf4;
+  --bg-modal-hover: #d6dee9;
+
+  // --- Borders ---
+  --border-light: #c4d0de;
+  --border-medium: #adbccf;
+  --border-input: #adbccf;
+
+  // --- Text ---
+  --text-primary: #080f1d;
+  --text-body: #0f1d30;
+  --text-secondary: #1a2d47;
+  --text-muted: #3d5a7a;
+  --text-hint: #6b8aaa;
+
+  // --- Accents ---
+  --accent: #122d4d;
+  --accent-contrast: #ffffff;
+  --accent-icon: #2f5580;
+  --accent-icon-light: #5482ae;
+  --accent-icon-placeholder: #8aacca;
+
+  // --- Status ---
+  --color-success: #15803d;
+  --color-error: #b91c1c;
+
+  // --- Scrollbar ---
+  --scrollbar-thumb: #8eaac2;
+  --scrollbar-hover: #6d90ad;
+
+  // --- Overlay ---
+  --overlay-bg: rgba(8, 15, 29, 0.3);
+
+  // --- Shadows ---
+  --shadow-card: 0 1px 3px rgba(8, 15, 29, 0.1), 0 8px 24px rgba(8, 15, 29, 0.08);
+  --shadow-fab: 0 2px 8px rgba(8, 15, 29, 0.3);
+  --shadow-modal: 0 8px 32px rgba(8, 15, 29, 0.18);
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--bg-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--text-body);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+// ---------- Scrollbar ----------
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+
+  &:hover {
+    background: var(--scrollbar-hover);
+  }
+}
+
+// ---------- Inputs ----------
+
+input, textarea, button {
+  font-family: inherit;
+}
+
+// ---------- Selection ----------
+
+::selection {
+  background: #c9d2df;
+  color: var(--text-primary);
+}
+
+// ---------- Links ----------
+
+a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+// ---------- Animations ----------
+
+@keyframes pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

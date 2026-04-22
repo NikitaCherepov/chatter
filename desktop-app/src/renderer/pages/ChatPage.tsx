@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
+import s from './ChatPage.module.scss';
 
 export function ChatPage() {
   const { user, logout } = useAuth();
@@ -16,6 +17,7 @@ export function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadChats = async () => {
     try {
@@ -31,9 +33,7 @@ export function ChatPage() {
     }
   };
 
-  useEffect(() => {
-    loadChats();
-  }, []);
+  useEffect(() => { loadChats(); }, []);
 
   useEffect(() => {
     if (activeChatId) loadMessages(activeChatId);
@@ -53,9 +53,7 @@ export function ChatPage() {
 
   const selectChat = async (chatId: number) => {
     setActiveChatId(chatId);
-    try {
-      await api.activateChat(chatId);
-    } catch {}
+    try { await api.activateChat(chatId); } catch {}
   };
 
   const handleCreateChat = async () => {
@@ -71,28 +69,20 @@ export function ChatPage() {
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
-
     setInput('');
     setSending(true);
 
     const tempUserMsg: api.Message = {
-      id: -Date.now(),
-      role: 'user',
-      content: text,
-      created_at: Math.floor(Date.now() / 1000),
+      id: -Date.now(), role: 'user', content: text, created_at: Math.floor(Date.now() / 1000),
     };
     setMessages((prev) => [...prev, tempUserMsg]);
 
     try {
       const res = await api.sendChatMessage(text);
       const assistantMsg: api.Message = {
-        id: res.message_id,
-        role: 'assistant',
-        content: res.reply_text,
-        created_at: Math.floor(Date.now() / 1000),
+        id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
       };
       setMessages((prev) => [...prev, assistantMsg]);
-
       if (!activeChatId || res.chat_id !== activeChatId) {
         setActiveChatId(res.chat_id);
         loadChats();
@@ -106,20 +96,19 @@ export function ChatPage() {
   }, [input, sending, activeChatId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
+  const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
+    }
+  }, [input]);
 
   const formatTime = (ts: number) => {
     const d = new Date(ts * 1000);
@@ -127,104 +116,130 @@ export function ChatPage() {
   };
 
   return (
-    <div style={styles.layout}>
-      {/* Sidebar */}
-      <div style={styles.sidebar}>
-        <div style={styles.sidebarHeader}>
-          <span style={styles.logo}>Chatter</span>
-          <button style={styles.newChatBtn} onClick={handleCreateChat}>+ New</button>
+    <div className={s.layout}>
+      {/* SIDEBAR */}
+      <aside className={s.sidebar}>
+        <div className={s.sidebarHeader}>
+          <span className={s.sidebarTitle}>Recent Chats</span>
+          <button className={s.newChatBtn} onClick={handleCreateChat}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="7" y1="1" x2="7" y2="13" />
+              <line x1="1" y1="7" x2="13" y2="7" />
+            </svg>
+          </button>
         </div>
 
-        <div style={styles.chatList}>
+        <div className={s.chatList}>
           {chats.map((chat) => (
             <div
               key={chat.id}
-              style={{
-                ...styles.chatItem,
-                ...(chat.id === activeChatId ? styles.chatItemActive : {}),
-              }}
+              className={`${s.chatItem} ${chat.id === activeChatId ? s.chatItemActive : ''}`}
               onClick={() => selectChat(chat.id)}
             >
-              {chat.title}
+              <div className={s.chatItemTitle}>{chat.title || 'New Chat'}</div>
+              <div className={s.chatItemTime}>{formatTime(chat.created_at)}</div>
             </div>
           ))}
           {chats.length === 0 && (
-            <div style={styles.emptyChats}>No chats yet</div>
+            <div className={s.emptyChats}>No chats yet</div>
           )}
         </div>
 
-        <div style={styles.sidebarFooter}>
-          <span style={styles.userName}>{user?.name || user?.username || 'User'}</span>
-          <div style={styles.footerBtns}>
-            <button style={styles.linkBtn} onClick={() => setShowLinkModal(true)}>Link TG</button>
-            <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+        <div className={s.sidebarFooter}>
+          <div className={s.userInfo}>
+            <div className={s.avatar}>
+              {(user?.name || user?.username || 'U')[0].toUpperCase()}
+            </div>
+            <span className={s.userName}>{user?.name || user?.username || 'User'}</span>
+          </div>
+          <div className={s.footerBtns}>
+            <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title="Link Telegram">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </button>
+            <button className={s.iconBtn} onClick={handleLogout} title="Logout">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
           </div>
         </div>
-      </div>
+      </aside>
 
-      {/* Chat area */}
-      <div style={styles.chatArea}>
+      {/* MAIN */}
+      <main className={s.main}>
         {!activeChatId ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyStateText}>Select a chat or create a new one</p>
+          <div className={s.emptyState}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-placeholder)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <p className={s.emptyStateText}>Select a chat or create a new one</p>
           </div>
         ) : (
           <>
-            <div style={styles.messages}>
-              {loadingMessages && <div style={styles.loading}>Loading...</div>}
+            <div className={s.messages}>
+              {loadingMessages && (
+                <div className={s.loadingRow}>Loading messages...</div>
+              )}
               {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    ...styles.messageRow,
-                    justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  }}
-                >
-                  <div
-                    style={{
-                      ...styles.bubble,
-                      ...(msg.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant),
-                    }}
-                  >
-                    <div style={styles.bubbleText}>{msg.content}</div>
-                    <div style={styles.bubbleTime}>{formatTime(msg.created_at)}</div>
+                <div key={msg.id} className={s.messageGroup}>
+                  <div className={s.metaRow}>
+                    {msg.role === 'user' ? 'You' : 'Assistant'} &bull; {formatTime(msg.created_at)}
+                  </div>
+                  <div className={s.bubble}>
+                    <div className={s.bubbleText}>{msg.content}</div>
                   </div>
                 </div>
               ))}
               {sending && (
-                <div style={{ ...styles.messageRow, justifyContent: 'flex-start' }}>
-                  <div style={{ ...styles.bubble, ...styles.bubbleAssistant }}>
-                    <div style={styles.typing}>Thinking...</div>
+                <div className={s.messageGroup}>
+                  <div className={s.metaRow}>Assistant &bull; typing...</div>
+                  <div className={s.bubble}>
+                    <div className={s.typingDots}>
+                      <span className={s.dot} />
+                      <span className={s.dot} />
+                      <span className={s.dot} />
+                    </div>
                   </div>
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
-            <div style={styles.inputArea}>
+            <div className={s.inputArea}>
+              <svg className={s.inputIcon} viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+              </svg>
+
               <textarea
-                style={styles.textarea}
+                ref={textareaRef}
+                className={s.textarea}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
+                placeholder="Type your message..."
                 rows={1}
                 disabled={sending}
               />
-              <button
-                style={{
-                  ...styles.sendBtn,
-                  opacity: sending ? 0.5 : 1,
-                }}
-                onClick={handleSend}
-                disabled={sending || !input.trim()}
+
+              <svg
+                className={sending || !input.trim() ? s.sendIconDisabled : s.sendIcon}
+                onClick={() => { if (!sending && input.trim()) handleSend(); }}
+                viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
               >
-                Send
-              </button>
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
             </div>
           </>
         )}
-      </div>
+      </main>
+
+      <button className={s.fab}>?</button>
 
       {showLinkModal && (
         <LinkTelegramModal
@@ -235,197 +250,3 @@ export function ChatPage() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  layout: {
-    display: 'flex',
-    height: '100vh',
-    backgroundColor: '#1a1a2e',
-    color: '#eee',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-  sidebar: {
-    width: 260,
-    minWidth: 260,
-    backgroundColor: '#0f3460',
-    display: 'flex',
-    flexDirection: 'column',
-    borderRight: '1px solid #1a3a6a',
-  },
-  sidebarHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '16px',
-    borderBottom: '1px solid #1a3a6a',
-  },
-  logo: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#e94560',
-  },
-  newChatBtn: {
-    padding: '4px 12px',
-    borderRadius: 6,
-    border: '1px solid #e94560',
-    backgroundColor: 'transparent',
-    color: '#e94560',
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-  chatList: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '8px',
-  },
-  chatItem: {
-    padding: '10px 12px',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontSize: 14,
-    color: '#ccc',
-    marginBottom: 2,
-    transition: 'background-color 0.15s',
-  },
-  chatItemActive: {
-    backgroundColor: '#1a3a6a',
-    color: '#fff',
-  },
-  emptyChats: {
-    padding: '16px',
-    color: '#667',
-    fontSize: 13,
-    textAlign: 'center' as const,
-  },
-  sidebarFooter: {
-    padding: '12px 16px',
-    borderTop: '1px solid #1a3a6a',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  userName: {
-    fontSize: 13,
-    color: '#8899aa',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  logoutBtn: {
-    padding: '4px 10px',
-    borderRadius: 6,
-    border: 'none',
-    backgroundColor: '#2a2a4a',
-    color: '#aaa',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  linkBtn: {
-    padding: '4px 10px',
-    borderRadius: 6,
-    border: '1px solid #e94560',
-    backgroundColor: 'transparent',
-    color: '#e94560',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  footerBtns: {
-    display: 'flex',
-    gap: 6,
-  },
-  chatArea: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    minWidth: 0,
-  },
-  emptyState: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyStateText: {
-    color: '#556',
-    fontSize: 16,
-  },
-  messages: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '20px 24px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  loading: {
-    color: '#667',
-    fontSize: 13,
-    textAlign: 'center' as const,
-    padding: 12,
-  },
-  messageRow: {
-    display: 'flex',
-  },
-  bubble: {
-    maxWidth: '70%',
-    padding: '10px 14px',
-    borderRadius: 12,
-    fontSize: 14,
-    lineHeight: 1.5,
-    wordBreak: 'break-word' as const,
-  },
-  bubbleUser: {
-    backgroundColor: '#e94560',
-    color: '#fff',
-    borderBottomRightRadius: 4,
-  },
-  bubbleAssistant: {
-    backgroundColor: '#16213e',
-    color: '#ddd',
-    borderBottomLeftRadius: 4,
-  },
-  bubbleText: {
-    whiteSpace: 'pre-wrap',
-  },
-  bubbleTime: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    marginTop: 4,
-    textAlign: 'right' as const,
-  },
-  typing: {
-    color: '#8899aa',
-    fontStyle: 'italic',
-  },
-  inputArea: {
-    display: 'flex',
-    gap: 8,
-    padding: '12px 20px 16px',
-    borderTop: '1px solid #1a3a6a',
-  },
-  textarea: {
-    flex: 1,
-    padding: '10px 14px',
-    borderRadius: 10,
-    border: '1px solid #2a3a5e',
-    backgroundColor: '#0f3460',
-    color: '#eee',
-    fontSize: 14,
-    fontFamily: 'inherit',
-    resize: 'none',
-    outline: 'none',
-    minHeight: 40,
-    maxHeight: 120,
-  },
-  sendBtn: {
-    padding: '10px 20px',
-    borderRadius: 10,
-    border: 'none',
-    backgroundColor: '#e94560',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-    alignSelf: 'flex-end',
-  },
-};

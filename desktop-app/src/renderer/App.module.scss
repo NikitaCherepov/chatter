@@ -1,0 +1,9 @@
+.loading {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-secondary);
+  color: var(--text-hint);
+  font-size: 14px;
+}

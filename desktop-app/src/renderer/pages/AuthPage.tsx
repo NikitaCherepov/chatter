@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import s from './AuthPage.module.scss';
 
 export function AuthPage() {
   const { loginAndSet, registerAndSet } = useAuth();
@@ -38,17 +39,23 @@ export function AuthPage() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>Chatter</h1>
-        <p style={styles.subtitle}>
+    <div className={s.container}>
+      <div className={s.card}>
+        <div className={s.logoRow}>
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="7" fill="var(--accent)" />
+            <path d="M8 14L12 18L20 10" stroke="var(--accent-contrast)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <h1 className={s.title}>Chatter</h1>
+        </div>
+        <p className={s.subtitle}>
           {mode === 'login' ? 'Sign in to continue' : 'Create an account'}
         </p>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
+        <form onSubmit={handleSubmit} className={s.form}>
           {mode === 'register' && (
             <input
-              style={styles.input}
+              className={s.input}
               type="text"
               placeholder="Name (optional)"
               value={name}
@@ -57,7 +64,7 @@ export function AuthPage() {
           )}
 
           <input
-            style={styles.input}
+            className={s.input}
             type="text"
             placeholder="Login"
             value={login}
@@ -67,7 +74,7 @@ export function AuthPage() {
           />
 
           <input
-            style={styles.input}
+            className={s.input}
             type="password"
             placeholder="Password"
             value={password}
@@ -76,16 +83,18 @@ export function AuthPage() {
             minLength={6}
           />
 
-          {error && <div style={styles.error}>{error}</div>}
+          {error && <div className={s.error}>{error}</div>}
 
-          <button style={styles.button} type="submit" disabled={loading}>
+          <button className={s.button} type="submit" disabled={loading}>
             {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Sign Up'}
           </button>
         </form>
 
-        <p style={styles.switchText}>
+        <div className={s.divider} />
+
+        <p className={s.switchText}>
           {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <a href="#" style={styles.link} onClick={(e) => { e.preventDefault(); toggleMode(); }}>
+          <a href="#" className={s.link} onClick={(e) => { e.preventDefault(); toggleMode(); }}>
             {mode === 'login' ? 'Sign Up' : 'Sign In'}
           </a>
         </p>
@@ -93,76 +102,3 @@ export function AuthPage() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
-    backgroundColor: '#1a1a2e',
-    color: '#eee',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-  card: {
-    backgroundColor: '#16213e',
-    borderRadius: 12,
-    padding: '40px 32px',
-    width: 360,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-  },
-  title: {
-    margin: 0,
-    fontSize: 28,
-    fontWeight: 700,
-    textAlign: 'center' as const,
-    color: '#e94560',
-  },
-  subtitle: {
-    margin: '8px 0 24px',
-    textAlign: 'center' as const,
-    color: '#8899aa',
-    fontSize: 14,
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 12,
-  },
-  input: {
-    padding: '10px 14px',
-    borderRadius: 8,
-    border: '1px solid #2a3a5e',
-    backgroundColor: '#0f3460',
-    color: '#eee',
-    fontSize: 14,
-    outline: 'none',
-  },
-  button: {
-    padding: '12px',
-    borderRadius: 8,
-    border: 'none',
-    backgroundColor: '#e94560',
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: 'pointer',
-    marginTop: 4,
-  },
-  error: {
-    color: '#ff6b6b',
-    fontSize: 13,
-    textAlign: 'center' as const,
-  },
-  switchText: {
-    marginTop: 20,
-    textAlign: 'center' as const,
-    fontSize: 13,
-    color: '#8899aa',
-  },
-  link: {
-    color: '#e94560',
-    textDecoration: 'none',
-    fontWeight: 600,
-  },
-};

@@ -1,18 +1,77 @@
-* {
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* --- Base --- */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f1f1f6;
+  --bg-input: #f6f4f1;
+  --bg-bubble: #f9f7f5;
+  --bg-modal-hover: #f5f5f5;
+
+  /* --- Borders --- */
+  --border-light: #eae7e3;
+  --border-medium: #ddd9d5;
+  --border-input: #ddd9d5;
+
+  /* --- Text --- */
+  --text-primary: #1a1a1a;
+  --text-body: #333333;
+  --text-secondary: #444444;
+  --text-muted: #8a8580;
+  --text-hint: #b0aaa4;
+
+  /* --- Accents --- */
+  --accent: #111111;
+  --accent-contrast: #ffffff;
+  --accent-icon: #7a7570;
+  --accent-icon-light: #9a9590;
+  --accent-icon-placeholder: #c5c0bb;
+
+  /* --- Status --- */
+  --color-success: #2e7d32;
+  --color-error: #d32f2f;
+
+  /* --- Scrollbar --- */
+  --scrollbar-thumb: #ccc8c3;
+  --scrollbar-hover: #b5b0ab;
+
+  /* --- Overlay --- */
+  --overlay-bg: rgba(0, 0, 0, 0.2);
+
+  /* --- Shadows --- */
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
+  --shadow-fab: 0 2px 8px rgba(0,0,0,0.15);
+  --shadow-modal: 0 8px 32px rgba(0,0,0,0.1);
+}
+
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  padding: 0;
+html, body, #root {
+  height: 100%;
+  width: 100%;
   overflow: hidden;
-  background-color: #1a1a2e;
 }
 
+body {
+  background-color: var(--bg-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--text-body);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---------- Scrollbar ---------- */
+
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -20,10 +79,51 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a3a5e;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a4a6e;
+  background: var(--scrollbar-hover);
+}
+
+/* ---------- Inputs ---------- */
+
+input, textarea, button {
+  font-family: inherit;
+}
+
+/* ---------- Selection ---------- */
+
+::selection {
+  background: #e0e0e0;
+  color: var(--text-primary);
+}
+
+/* ---------- Links ---------- */
+
+a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+/* ---------- Typing dots animation ---------- */
+
+@keyframes pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------- Spinner animation ---------- */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
