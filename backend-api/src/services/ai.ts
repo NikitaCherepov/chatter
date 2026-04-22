@@ -59,6 +59,42 @@ const PRO_CLIENT = new OpenAI({
   baseURL: process.env.TIMEWEB_BASE_URL
 });
 
+const parseProProviders = (): LiteProvider[] => {
+  const defaultBase = (process.env.TIMEWEB_BASE_URL || '').trim();
+  const defaultKey = (process.env.TIMEWEB_API_KEY || '').trim();
+  const defaultModels = PRO_MODEL_CHAIN;
+  const raw = (process.env.TIMEWEB_PRO_ENDPOINTS || '').trim();
+
+  if (!raw) {
+    if (!defaultBase || !defaultKey) return [];
+    return [{
+      name: 'pro-1',
+      baseURL: defaultBase,
+      client: PRO_CLIENT,
+      modelChain: defaultModels
+    }];
+  }
+
+  const chunks = raw.split(';').map(v => v.trim()).filter(Boolean);
+  const providers: LiteProvider[] = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    const [baseRaw, keyRaw, modelsRaw] = chunks[i].split('|').map(v => `${v || ''}`.trim());
+    const base = baseRaw || defaultBase;
+    const key = keyRaw || defaultKey;
+    const models = parseModelChain(modelsRaw, defaultModels);
+    if (!base || !key || !models.length) continue;
+    providers.push({
+      name: `pro-${i + 1}`,
+      baseURL: base,
+      client: new OpenAI({ apiKey: key, baseURL: base }),
+      modelChain: models
+    });
+  }
+  return providers;
+};
+
+const PRO_PROVIDERS = parseProProviders();
+
 const parseLiteProviders = (): LiteProvider[] => {
   const defaultBase = (process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
   const defaultKey = (process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
@@ -134,6 +170,35 @@ const createCompletionWithModelFallback = async (client: OpenAI, modelChain: str
   }
 
   throw Object.assign(new Error('model_chain_failed'), { failedModels, cause: lastError });
+};
+
+const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>) => {
+  const failedProviders: string[] = [];
+  const failedModels: string[] = [];
+
+  for (const provider of PRO_PROVIDERS) {
+    try {
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody);
+      if (completion.failedModels.length) {
+        failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
+      }
+      return {
+        response: completion.response,
+        modelUsed: completion.modelUsed,
+        providerUsed: provider.name,
+        baseURLUsed: provider.baseURL,
+        failedProviders,
+        failedModels
+      };
+    } catch (err: any) {
+      failedProviders.push(provider.name);
+      if (Array.isArray(err?.failedModels)) {
+        failedModels.push(...err.failedModels.map((m: string) => `${provider.name}:${m}`));
+      }
+    }
+  }
+
+  throw Object.assign(new Error('pro_providers_failed'), { failedProviders, failedModels });
 };
 
 const createCompletionWithLiteProviderFallback = async (requestBody: Record<string, unknown>) => {
@@ -837,6 +902,17 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
 };
 const runCompletion = async (mode: 'pro' | 'lite', requestPayload: Record<string, unknown>): Promise<CompletionMeta> => {
   if (mode === 'pro') {
+    if (PRO_PROVIDERS.length > 1) {
+      const res = await createCompletionWithProProviderFallback(requestPayload);
+      return {
+        response: res.response,
+        usedModel: res.modelUsed,
+        usedProvider: res.providerUsed,
+        baseURLUsed: res.baseURLUsed,
+        failedModels: res.failedModels,
+        failedProviders: res.failedProviders
+      };
+    }
     const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload);
     return {
       response: res.response,
@@ -1192,9 +1268,17 @@ PRO
         `[${completion.usedProvider.startsWith('lite-') ? 'LITE main fallback' : 'PRO main fallback'}] providers_failed=${completion.failedProviders?.join(',') || '-'} models_failed=${completion.failedModels?.join(',') || '-'} used=${completion.usedProvider}/${completion.usedModel} (${completion.baseURLUsed || '-'})`
       );
     }
-    if (!modelFallbackNoticeSent && executionMode === 'pro' && (completion.failedModels?.length || 0) > 0) {
+    if (!modelFallbackNoticeSent && executionMode === 'pro' && ((completion.failedModels?.length || 0) > 0 || (completion.failedProviders?.length || 0) > 0)) {
       modelFallbackNoticeSent = true;
-      modelFallbackNotice = `⚙️ Модель(и) ${completion.failedModels?.join(', ')} были недоступны. Ответ получен от ${completion.usedModel}.`;
+      const parts: string[] = [];
+      if (completion.failedProviders?.length) {
+        parts.push(`Провайдер(ы) ${completion.failedProviders.join(', ')} не ответил(и).`);
+      }
+      if (completion.failedModels?.length) {
+        parts.push(`Модель(и) ${completion.failedModels.join(', ')} были недоступны.`);
+      }
+      parts.push(`Ответ получен от ${completion.usedProvider}/${completion.usedModel}.`);
+      modelFallbackNotice = `⚙️ ${parts.join(' ')}`;
     }
     usedModel = completion.usedModel;
     usedProvider = completion.usedProvider;
