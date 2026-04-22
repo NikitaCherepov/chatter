@@ -21,21 +21,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const tokens = api.loadTokens();
     if (tokens?.access_token) {
-      // Validate token by making a request
-      api.getChats().then(() => {
-        // Token valid — but we don't have user info from this endpoint
-        // Store user info in localStorage on login, restore here
-        const stored = localStorage.getItem('chatter_user');
-        if (stored) {
-          try { setUser(JSON.parse(stored)); } catch {}
-        } else {
-          setUser({ id: 0, name: null, username: null, role: 'user', is_admin: 0, plan: 'free' });
-        }
-        setInitialized(true);
-      }).catch(() => {
-        api.clearTokens();
-        setInitialized(true);
-      });
+      api.fetchMe()
+        .then((user) => {
+          setUser(user);
+          localStorage.setItem('chatter_user', JSON.stringify(user));
+        })
+        .catch(() => {
+          // Token invalid or network error — fallback to cached
+          const stored = localStorage.getItem('chatter_user');
+          if (stored) {
+            try { setUser(JSON.parse(stored)); } catch {}
+          }
+        })
+        .finally(() => setInitialized(true));
     } else {
       setInitialized(true);
     }

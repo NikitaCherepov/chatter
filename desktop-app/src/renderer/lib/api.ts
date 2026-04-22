@@ -124,6 +124,11 @@ export function logout() {
   clearTokens();
 }
 
+export async function fetchMe(): Promise<User> {
+  const res = await apiFetch<{ user: User }>('/api/v1/auth/me');
+  return res.user;
+}
+
 // ---------- Chat ----------
 
 export type Message = {

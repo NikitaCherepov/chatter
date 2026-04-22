@@ -363,6 +363,14 @@ app.post('/api/v1/auth/refresh', (req, res) => {
 
 app.use('/api/v1', authMiddleware);
 
+// Return current authenticated user profile
+app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ user });
+});
+
 // Resolve effective user: if web user has linked_tg_id, act as TG user
 const effectiveUserId = (req: AuthedRequest): number => {
   const rawId = req.authUserId!;
