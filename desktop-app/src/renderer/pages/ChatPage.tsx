@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
@@ -291,7 +291,7 @@ export function ChatPage() {
       {/* SIDEBAR */}
       <aside className={s.sidebar}>
         <div className={s.sidebarHeader}>
-          <span className={s.sidebarTitle}>Recent Chats</span>
+          <span className={s.sidebarTitle}>Чаты</span>
           <button className={s.newChatBtn} onClick={handleCreateChat}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="7" y1="1" x2="7" y2="13" />
@@ -322,7 +322,7 @@ export function ChatPage() {
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
-                  <div className={s.chatItemTitle}>{chat.title || 'New Chat'}</div>
+                  <div className={s.chatItemTitle}>{chat.title || 'Новый чат'}</div>
                 )}
                 <button
                   className={s.kebabBtn}
@@ -342,7 +342,7 @@ export function ChatPage() {
             </div>
           ))}
           {chats.length === 0 && (
-            <div className={s.emptyChats}>No chats yet</div>
+            <div className={s.emptyChats}>Нет чатов</div>
           )}
         </div>
 
@@ -358,31 +358,15 @@ export function ChatPage() {
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
-              Rename
+              Изменить название
             </button>
             <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
-              Delete
+              Удалить
             </button>
-          </div>
-        )}
-
-        {/* Delete confirmation overlay */}
-        {deletingChatId !== null && (
-          <div className={s.overlay} onClick={() => setDeletingChatId(null)}>
-            <div className={s.confirmDialog} onClick={(e) => e.stopPropagation()}>
-              <div className={s.confirmTitle}>Delete chat?</div>
-              <div className={s.confirmText}>
-                This action cannot be undone. All messages will be permanently deleted.
-              </div>
-              <div className={s.confirmBtns}>
-                <button className={s.confirmCancel} onClick={() => setDeletingChatId(null)}>Cancel</button>
-                <button className={s.confirmDanger} onClick={handleConfirmDelete}>Delete</button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -418,13 +402,13 @@ export function ChatPage() {
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-placeholder)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-            <p className={s.emptyStateText}>Select a chat or create a new one</p>
+            <p className={s.emptyStateText}>Выберите чат или создайте новый</p>
           </div>
         ) : (
           <>
             <div className={s.messages}>
               {loadingMessages && (
-                <div className={s.loadingRow}>Loading messages...</div>
+                <div className={s.loadingRow}>Загрузка сообщений...</div>
               )}
               {messages.map((msg) => (
                 <div key={msg.id} className={s.messageGroup}>
@@ -494,7 +478,7 @@ export function ChatPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder="Type your message..."
+                placeholder="Введите сообщение..."
                 rows={1}
                 disabled={sending}
               />
@@ -531,6 +515,44 @@ export function ChatPage() {
             currentCount={attachedImages.length}
             maxCount={maxImages}
           />
+        )}
+
+        {deletingChatId !== null && (
+          <motion.div
+            key="delete-confirm"
+            className={s.overlay}
+            onClick={() => setDeletingChatId(null)}
+            variants={{
+              hidden: { opacity: 0 },
+              visible: { opacity: 1 },
+              exit: { opacity: 0 },
+            }}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            <motion.div
+              className={s.confirmDialog}
+              onClick={(e) => e.stopPropagation()}
+              variants={{
+                hidden: { opacity: 0, y: 16 },
+                visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' as const } },
+                exit: { opacity: 0, y: 16, transition: { duration: 0.15 } },
+              }}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
+              <div className={s.confirmTitle}>Удалить чат?</div>
+              <div className={s.confirmText}>
+                Это действие нельзя отменить. Все сообщения будут удалены безвозвратно.
+              </div>
+              <div className={s.confirmBtns}>
+                <button className={s.confirmCancel} onClick={() => setDeletingChatId(null)}>Отмена</button>
+                <button className={s.confirmDanger} onClick={handleConfirmDelete}>Удалить</button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
