@@ -1,7 +1,7 @@
 ﻿import express from 'express';
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
@@ -541,6 +541,80 @@ app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   const ok = deletePendingTask(userId, taskId);
   if (!ok) return res.status(404).json({ error: 'task_not_found_or_not_pending' });
   return res.json({ ok: true });
+});
+
+// ── Telegram Link (JWT) ──────────────────────────────────────────────────
+
+app.post('/api/v1/link/generate', authMiddleware, (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const result = generateLinkCode(userId);
+  return res.json(result);
+});
+
+app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  // Check if user already has tg_id linked
+  if (user.tg_username) {
+    return res.json({ linked: true, tg_username: user.tg_username, tg_id: user.id });
+  }
+
+  // Check if there's a pending code
+  const pending = getLinkCodeForUser(userId);
+  if (pending) {
+    const expiresIn = Math.max(0, pending.expires_at - Math.floor(Date.now() / 1000));
+    return res.json({ linked: false, pending_code: pending.code, expires_in: expiresIn });
+  }
+
+  return res.json({ linked: false });
+});
+
+// ── Internal: Telegram Link Verify (bot) ──────────────────────────────────
+
+app.post('/internal/link/verify', internalAuth, (req, res) => {
+  const code = `${req.body?.code || ''}`.trim();
+  const tgId = Number(req.body?.tg_id);
+  const tgUsername = `${req.body?.tg_username || ''}`.trim() || null;
+
+  if (!code) return res.status(400).json({ error: 'code_required' });
+  if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'tg_id_required' });
+
+  const result = verifyLinkCode(code);
+  if (!result.ok) return res.status(404).json({ error: 'invalid_or_expired_code' });
+
+  const webUserId = result.userId!;
+
+  // Get the TG user record (created by bot via upsertUserFromTelegram)
+  const tgUser = getUserById(tgId);
+
+  // Transfer api_account from web user to TG user
+  // The TG user keeps their data (history, prompts, admin status)
+  // We just give the web API account access to the TG user's data
+  const account = db.prepare('SELECT * FROM api_accounts WHERE user_id = ?').get(webUserId) as any;
+  if (!account) return res.status(404).json({ error: 'no_api_account' });
+
+  // Re-link the api_account to point to the TG user instead
+  db.prepare('UPDATE api_accounts SET user_id = ? WHERE user_id = ?').run(tgId, webUserId);
+
+  // Copy name from TG user if web user had none
+  if (tgUser?.name) {
+    // TG user already has a name, keep it
+  }
+
+  // Issue new tokens for the TG user (so desktop app switches to TG identity)
+  const tokens = issueAuthTokens(tgId);
+
+  return res.json({
+    ok: true,
+    tg_id: tgId,
+    tg_username: tgUsername,
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    access_expires_in: tokens.access_expires_in,
+    refresh_expires_in: tokens.refresh_expires_in,
+  });
 });
 
 // ── Internal: Prompts CRUD ─────────────────────────────────────────────────

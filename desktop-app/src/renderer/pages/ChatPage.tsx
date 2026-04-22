@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
+import { LinkTelegramModal } from '../components/LinkTelegramModal';
 
 export function ChatPage() {
   const { user, logout } = useAuth();
@@ -13,6 +14,7 @@ export function ChatPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadChats = async () => {
@@ -153,7 +155,10 @@ export function ChatPage() {
 
         <div style={styles.sidebarFooter}>
           <span style={styles.userName}>{user?.name || user?.username || 'User'}</span>
-          <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+          <div style={styles.footerBtns}>
+            <button style={styles.linkBtn} onClick={() => setShowLinkModal(true)}>Link TG</button>
+            <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+          </div>
         </div>
       </div>
 
@@ -220,6 +225,13 @@ export function ChatPage() {
           </>
         )}
       </div>
+
+      {showLinkModal && (
+        <LinkTelegramModal
+          onClose={() => setShowLinkModal(false)}
+          onLinked={() => { setShowLinkModal(false); loadChats(); }}
+        />
+      )}
     </div>
   );
 }
@@ -307,6 +319,19 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#aaa',
     cursor: 'pointer',
     fontSize: 12,
+  },
+  linkBtn: {
+    padding: '4px 10px',
+    borderRadius: 6,
+    border: '1px solid #e94560',
+    backgroundColor: 'transparent',
+    color: '#e94560',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
+  footerBtns: {
+    display: 'flex',
+    gap: 6,
   },
   chatArea: {
     flex: 1,

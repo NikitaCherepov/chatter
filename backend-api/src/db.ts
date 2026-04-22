@@ -69,6 +69,19 @@ db.exec(`
 
 db.exec("CREATE INDEX IF NOT EXISTS idx_api_accounts_login ON api_accounts(login)");
 
+// Telegram link codes
+db.exec(`
+  CREATE TABLE IF NOT EXISTS telegram_link_codes (
+    code TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  )
+`);
+
+// Cleanup expired codes on startup
+db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
+
 export const toUnix = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.floor(value);

@@ -172,3 +172,26 @@ export async function sendChatMessage(text: string, chatId?: number): Promise<Ch
     body: JSON.stringify(body),
   });
 }
+
+// ---------- Telegram Link ----------
+
+export type LinkGenerateResponse = {
+  code: string;
+  expires_in: number;
+};
+
+export type LinkStatusResponse = {
+  linked: boolean;
+  tg_username?: string;
+  tg_id?: number;
+  pending_code?: string;
+  expires_in?: number;
+};
+
+export async function generateLinkCodeApi(): Promise<LinkGenerateResponse> {
+  return apiFetch('/api/v1/link/generate', { method: 'POST' });
+}
+
+export async function getLinkStatus(): Promise<LinkStatusResponse> {
+  return apiFetch('/api/v1/link/status');
+}

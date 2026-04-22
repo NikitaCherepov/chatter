@@ -3287,6 +3287,31 @@ bot.command('clear', (ctx) => {
     return handleClear(ctx);
 });
 
+// ── /link — привязка к desktop-аккаунту ──
+const linkCodeFlows = new Map<number, 'await_code'>();
+
+bot.command('link', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const userRecord = await getUser(userId);
+    if (!userRecord) return ctx.reply('Сначала попроси админа добавить тебя.');
+    linkCodeFlows.set(userId, 'await_code');
+    return ctx.reply(
+        '🔗 Привязка к desktop-приложению.\n\n' +
+        'Введи 6-значный код, который отображается в десктоп-приложении.\n' +
+        'Код действует 10 минут.\n\n' +
+        'Для отмены: /cancellink',
+        Markup.keyboard([['/cancellink']]).resize().oneTime()
+    );
+});
+
+bot.command('cancellink', (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    linkCodeFlows.delete(userId);
+    return ctx.reply('Ок, привязка отменена.', buildMenuTriggerKeyboard());
+});
+
 bot.command('tz', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -4669,6 +4694,38 @@ bot.on('text', async (ctx) => {
         adminAiMessageFlow.delete(userId);
         await handleAiDirectMessage(ctx, directMessageTargetId, userText);
         return;
+    }
+
+    // ── Link code flow ──
+    const linkFlow = linkCodeFlows.get(userId);
+    if (linkFlow === 'await_code') {
+        linkCodeFlows.delete(userId);
+        const code = userText.replace(/\D/g, '');
+        if (code.length !== 6) {
+            linkCodeFlows.set(userId, 'await_code');
+            return ctx.reply('Нужно 6 цифр. Попробуй ещё раз или /cancellink для отмены.');
+        }
+        try {
+            const response = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/link/verify`,
+                { code, tg_id: userId, tg_username: ctx.from?.username || null },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` } }
+            );
+            if (response.data?.ok) {
+                return ctx.reply(
+                    '✅ Аккаунт привязан! Теперь можешь пользоваться десктоп-приложением с данными твоего Telegram-аккаунта.',
+                    buildMenuTriggerKeyboard()
+                );
+            }
+            return ctx.reply('Не удалось привязать. Возможно, код истёк. Попробуй получить новый код в приложении и снова /link.');
+        } catch (err: any) {
+            const msg = err?.response?.data?.error;
+            if (msg === 'invalid_or_expired_code') {
+                return ctx.reply('Код недействителен или истёк. Получи новый код в приложении и попробуй /link снова.');
+            }
+            console.error('Link verify error:', err?.message || err);
+            return ctx.reply('Ошибка при привязке. Попробуй позже.');
+        }
     }
 
     const adminContextFlow = adminUserContextLimitFlows.get(userId);

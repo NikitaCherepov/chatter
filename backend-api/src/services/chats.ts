@@ -429,3 +429,50 @@ export const syncAllUsersPlanLimits = () => {
 };
 
 export { ADMIN_IDS };
+
+// ---------- Telegram link codes ----------
+
+import crypto from 'node:crypto';
+
+export const generateLinkCode = (userId: number): { code: string; expires_in: number } => {
+  // Cleanup expired first
+  db.prepare('DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()').run();
+
+  // Invalidate any existing codes for this user
+  db.prepare('DELETE FROM telegram_link_codes WHERE user_id = ?').run(userId);
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const now = Math.floor(Date.now() / 1000);
+  const ttl = 600; // 10 minutes
+  const expiresAt = now + ttl;
+
+  db.prepare('INSERT INTO telegram_link_codes (code, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    .run(code, userId, now, expiresAt);
+
+  return { code, expires_in: ttl };
+};
+
+export const verifyLinkCode = (code: string): { ok: boolean; userId?: number } => {
+  // Cleanup expired
+  db.prepare('DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()').run();
+
+  const row = db.prepare('SELECT user_id, expires_at FROM telegram_link_codes WHERE code = ?')
+    .get(code) as { user_id: number; expires_at: number } | undefined;
+
+  if (!row) return { ok: false };
+  if (row.expires_at < Math.floor(Date.now() / 1000)) {
+    db.prepare('DELETE FROM telegram_link_codes WHERE code = ?').run(code);
+    return { ok: false };
+  }
+
+  // Code is valid — delete it (one-time use)
+  db.prepare('DELETE FROM telegram_link_codes WHERE code = ?').run(code);
+
+  return { ok: true, userId: row.user_id };
+};
+
+export const getLinkCodeForUser = (userId: number) => {
+  db.prepare('DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()').run();
+  return db.prepare('SELECT code, expires_at FROM telegram_link_codes WHERE user_id = ?')
+    .get(userId) as { code: string; expires_at: number } | undefined;
+};
