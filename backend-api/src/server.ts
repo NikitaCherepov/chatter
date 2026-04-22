@@ -334,11 +334,19 @@ app.post('/api/v1/auth/refresh', (req, res) => {
 
 app.use('/api/v1', authMiddleware);
 
+// Resolve effective user: if web user has linked_tg_id, act as TG user
+const effectiveUserId = (req: AuthedRequest): number => {
+  const rawId = req.authUserId!;
+  const user = getUserById(rawId);
+  if (user?.linked_tg_id) return user.linked_tg_id;
+  return rawId;
+};
+
 app.post('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
     return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   }
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const text = `${req.body?.text || ''}`;
   const source = `${req.body?.source || 'manual'}`;
 
@@ -357,7 +365,7 @@ app.post('/api/v1/vector-memory/search', async (req: AuthedRequest, res) => {
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
     return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   }
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const query = `${req.body?.query || ''}`;
   const topK = Number(req.body?.top_k);
 
@@ -376,7 +384,7 @@ app.delete('/api/v1/vector-memory/chunks/:id', async (req: AuthedRequest, res) =
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
     return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   }
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const chunkId = `${req.params.id || ''}`;
 
   try {
@@ -396,7 +404,7 @@ app.delete('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
   if (`${req.query.all || ''}` !== '1') {
     return res.status(400).json({ error: 'set_all_1_to_confirm' });
   }
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
 
   try {
     const out = await VectorMemoryService.deleteAll(userId);
@@ -408,21 +416,21 @@ app.delete('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/chats', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const chats = listUserChats(userId);
   const activeChatId = ensureActiveChat(userId);
   res.json({ chats, active_chat_id: activeChatId });
 });
 
 app.post('/api/v1/chats', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const title = `${req.body?.title || ''}`;
   const chatId = createUserChat(userId, title);
   res.status(201).json({ chat_id: chatId });
 });
 
 app.post('/api/v1/chats/:id/activate', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const ok = activateUserChat(userId, chatId);
@@ -431,7 +439,7 @@ app.post('/api/v1/chats/:id/activate', (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/chats/:id/messages', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
@@ -441,7 +449,7 @@ app.get('/api/v1/chats/:id/messages', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const text = `${req.body?.text || ''}`;
   const chatIdRaw = req.body?.chat_id;
   const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
@@ -460,7 +468,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/notes', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
   const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
   const query = `${req.query.query || ''}`;
@@ -470,7 +478,7 @@ app.get('/api/v1/notes', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/notes', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const title = `${req.body?.title || ''}`;
@@ -486,7 +494,7 @@ app.post('/api/v1/notes', (req: AuthedRequest, res) => {
 });
 
 app.delete('/api/v1/notes/:id', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const noteId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_note_id' });
   const ok = deleteNote(userId, noteId);
@@ -495,7 +503,7 @@ app.delete('/api/v1/notes/:id', (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/notes/:id', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const noteId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_note_id' });
   const note = getNoteById(userId, noteId);
@@ -504,7 +512,7 @@ app.get('/api/v1/notes/:id', (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const statusRaw = `${req.query.status || 'pending'}` as 'pending' | 'done' | 'error' | 'all';
   const status = ['pending', 'done', 'error', 'all'].includes(statusRaw) ? statusRaw : 'pending';
   const limit = Number.parseInt(`${req.query.limit || '50'}`, 10);
@@ -513,7 +521,7 @@ app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const executeAt = Number(req.body?.execute_at);
   const taskType = `${req.body?.task_type || ''}` as any;
   const payload = `${req.body?.payload || ''}`;
@@ -535,7 +543,7 @@ app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
 });
 
 app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const taskId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_task_id' });
   const ok = deletePendingTask(userId, taskId);
