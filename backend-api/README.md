@@ -33,6 +33,26 @@ npm run logs:api
 - `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`).
 - `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`).
 
+### AI-провайдеры (основные)
+
+- `TIMEWEB_BASE_URL` + `TIMEWEB_API_KEY` - PRO-провайдер (по умолчанию).
+- `TIMEWEB_MODEL` - цепочка моделей PRO (через запятую, fallback).
+- `TIMEWEB_LITE_BASE_URL` + `TIMEWEB_LITE_API_KEY` - LITE-провайдер.
+- `TIMEWEB_LITE_MODEL` - цепочка моделей LITE.
+- `TIMEWEB_PRO_ENDPOINTS` - дополнительные PRO-эндпоинты (формат: `base_url|api_key|models;...`).
+- `TIMEWEB_LITE_ENDPOINTS` - дополнительные LITE-эндпоинты (аналогично).
+
+### AI-провайдеры (vision, опционально)
+
+Vision-запросы (анализ фото) могут использовать отдельные модели/ключи. Если не заданы — fallback на основные PRO/LITE провайдеры.
+
+- `TIMEWEB_VISION_BASE_URL` - по умолчанию `TIMEWEB_BASE_URL`.
+- `TIMEWEB_VISION_API_KEY` - по умолчанию `TIMEWEB_API_KEY`.
+- `TIMEWEB_VISION_MODEL` - по умолчанию первая из `TIMEWEB_MODEL`.
+- `TIMEWEB_LITE_VISION_BASE_URL` - по умолчанию `TIMEWEB_LITE_BASE_URL`.
+- `TIMEWEB_LITE_VISION_API_KEY` - по умолчанию `TIMEWEB_LITE_API_KEY`.
+- `TIMEWEB_LITE_VISION_MODEL` - по умолчанию `TIMEWEB_VISION_MODEL`.
+
 ## Типы авторизации
 
 - JWT API: `Authorization: Bearer <access_token>` для `/api/v1/*` (кроме `/api/v1/auth/*`).
@@ -185,7 +205,11 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - `POST /internal/messages/bind-telegram` -> `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
-  - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`)
+  - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) -> `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` -> `{ reply_text, message_id, chat_id, usage, ... }`
+    - `extra_images` - массив дополнительных изображений (до лимита плана): `[{ base64, mime_type? }]`
+    - Первое изображение (обязательное) передаётся в `image_base64`, остальные через `extra_images`
+    - Лимит зависит от плана пользователя (см. таблицу ниже)
+    - Ошибки: `images_not_allowed_for_plan` (free), `too_many_images_max_N`
 - URL tool:
   - `POST /internal/tools/read_url` -> `{ url }` -> `{ ok, url, text }`
 - Prompts:
@@ -228,6 +252,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `daily_message_limit` | 10 | 20 | 50 |
 | `daily_web_search_limit` | 0 | 5 | 20 |
 | `daily_image_gen_limit` | 0 | 3 | 10 |
+| `max_images_per_request` | 0 | 5 | 10 |
 
 Админы (`is_admin = 1`) обходят дневные лимиты.
 
