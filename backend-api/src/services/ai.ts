@@ -1248,7 +1248,14 @@ PRO
 
   while (loop < MAX_TOOL_LOOPS) {
     loop += 1;
-    const completion = await runCompletion(executionMode, { messages: currentMessages, tools: executionTools, tool_choice: 'auto', thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' }, clear_thinking: false });
+    const completion = await runCompletion(executionMode, {
+      messages: currentMessages,
+      tools: executionTools,
+      tool_choice: 'auto',
+      max_tokens: 16384,
+      thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
+      clear_thinking: false
+    });
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
