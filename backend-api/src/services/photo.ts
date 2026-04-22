@@ -119,7 +119,7 @@ export const runPhotoAnalyzeTurn = async (
       response = await visionClient.chat.completions.create({
         model: modelName,
         messages: visionMessages as any,
-        max_tokens: 1024,
+        max_tokens: 16384,
         thinking: useLiteVision ? { type: 'disabled' } : { type: 'enabled' },
         clear_thinking: false
       } as any);
