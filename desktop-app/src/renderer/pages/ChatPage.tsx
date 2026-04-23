@@ -7,7 +7,7 @@ import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
-import { PixelAvatar, dispatchAvatarState } from '../components/PixelAvatar';
+import { PixelAvatar, dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import s from './ChatPage.module.scss';
 
@@ -142,11 +142,13 @@ export function ChatPage() {
     setMessages((prev) => [...prev, tempUserMsg]);
 
     try {
-      const res = await api.sendChatMessage(text || ' ', activeChatId ?? undefined, imagesToSend.length > 0 ? imagesToSend : undefined);
+      const res = await api.sendChatMessage(text || ' ', activeChatId ?? undefined, imagesToSend.length > 0 ? imagesToSend : undefined, getAvatarManifest());
       const assistantMsg: api.Message = {
         id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
       };
       setMessages((prev) => [...prev, assistantMsg]);
+      // Dispatch avatar display state from AI response
+      if (res.display_state) dispatchAvatarState(res.display_state);
       if (!activeChatId || res.chat_id !== activeChatId) {
         setActiveChatId(res.chat_id);
         loadChats();

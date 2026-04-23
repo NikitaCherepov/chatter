@@ -179,16 +179,25 @@ export type ChatSendImage = {
   mime_type: string;
 };
 
+export type DisplayStatePayload = {
+  mode?: 'face' | 'media';
+  base_mood?: string;
+  reactions?: string[];
+  media_url?: string;
+};
+
 export type ChatSendResponse = {
   reply_text: string;
   message_id: number;
   chat_id: number;
+  display_state?: DisplayStatePayload | null;
 };
 
-export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[]): Promise<ChatSendResponse> {
+export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[], displayManifest?: { moods: string[]; reactions: string[] }): Promise<ChatSendResponse> {
   const body: Record<string, unknown> = { text };
   if (chatId) body.chat_id = chatId;
   if (images && images.length > 0) body.images = images;
+  if (displayManifest) body.display_manifest = displayManifest;
   return apiFetch('/api/v1/chat/send', {
     method: 'POST',
     body: JSON.stringify(body),

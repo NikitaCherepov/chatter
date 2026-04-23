@@ -16,6 +16,8 @@ const BASE_FACES: Record<string, string> = {
   sad_blink:        new URL('../../assets/faces/sad_blink.gif',        import.meta.url).href,
   angry:      new URL('../../assets/faces/angry.png',      import.meta.url).href,
   angry_blink:      new URL('../../assets/faces/angry_blink.gif',      import.meta.url).href,
+  happy:      new URL('../../assets/faces/happy.png',      import.meta.url).href,
+  happy_blink:      new URL('../../assets/faces/happy_blink.gif',      import.meta.url).href,
   // ── Add more below as you create them ──
   // happy:      new URL('../../assets/faces/happy.png',      import.meta.url).href,
   // happy_blink: new URL('../../assets/faces/happy_blink.gif', import.meta.url).href,
@@ -53,6 +55,21 @@ const REACTION_DURATIONS: Record<string, number> = {
 
 export type BaseMood = string;
 export type ReactionKey = string;
+
+/** Returns mood keys (excluding *_blink variants) that have assets */
+export function getAvailableMoods(): string[] {
+  return Object.keys(BASE_FACES).filter(k => !k.endsWith('_blink'));
+}
+
+/** Returns reaction keys that have assets */
+export function getAvailableReactions(): string[] {
+  return Object.keys(REACTIONS);
+}
+
+/** Manifest for sending to backend so AI knows what's available */
+export function getAvatarManifest(): { moods: string[]; reactions: string[] } {
+  return { moods: getAvailableMoods(), reactions: getAvailableReactions() };
+}
 
 export function getBaseFace(mood: BaseMood, blinking = false): string {
   if (blinking) {

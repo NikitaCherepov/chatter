@@ -531,9 +531,13 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     }
   }
 
+  // Parse optional display manifest from desktop client
+  const displayManifest = req.body?.display_manifest;
+
   try {
     const result = await sendMessageThroughAi(userId, text, chatId, {
       ...(images.length > 0 ? { images } : {}),
+      displayManifest,
     });
     res.json(result);
   } catch (err: any) {

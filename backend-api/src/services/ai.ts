@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
-import type { AiSendResult, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
+import type { AiSendResult, DisplayStatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
@@ -903,6 +903,48 @@ export const toolDefinitions = [
     }
   }
 ] as const;
+
+/** Build set_display_state tool with dynamic enums from client manifest */
+const buildDisplayStateTool = (manifest?: { moods?: string[]; reactions?: string[] } | null) => {
+  const moods = manifest?.moods?.length ? manifest.moods : ['idle'];
+  const reactions = manifest?.reactions?.length ? manifest.reactions : [];
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'set_display_state',
+      description: 'Управление пиксельным аватаром на экране пользователя. Используй для эмоциональных реакций (удивление, радость, грусть и т.д.), смены базового настроения или включения медиа-режима (заставка lofi и т.п.). Вызывай проактивно, когда это уместно по контексту разговора.',
+      parameters: {
+        type: 'object',
+        properties: {
+          mode: {
+            type: 'string',
+            enum: ['face', 'media'],
+            description: 'face — обычный режим аватара (настроение + реакции). media — показать произвольное изображение/GIF по ссылке вместо лица.'
+          },
+          base_mood: {
+            type: 'string',
+            enum: moods,
+            description: `Базовое настроение аватара. Доступные: ${moods.join(', ')}. Работает только при mode=face.`
+          },
+          reactions: {
+            type: 'array',
+            items: {
+              type: 'string',
+              ...(reactions.length ? { enum: reactions } : {})
+            },
+            description: reactions.length
+              ? `Очередь временных анимаций-реакций. Доступные: ${reactions.join(', ')}. Проигрываются по порядку, затем аватар возвращается к base_mood.`
+              : 'Очередь временных анимаций-реакций. Сейчас нет доступных реакций.'
+          },
+          media_url: {
+            type: 'string',
+            description: 'Прямая ссылка на изображение/GIF для mode=media. Игнорируется при mode=face.'
+          }
+        }
+      }
+    }
+  };
+};
 const LITE_ROUTER_INSTRUCTIONS = `
 Ты — быстрый ассистент-диспетчер.
 Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
@@ -1010,7 +1052,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; prompt_used: string }>) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1134,6 +1176,26 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return JSON.stringify({ status: 'success', message: 'Изображение успешно сгенерировано и будет отправлено пользователю. Опиши результат своими словами.' });
   }
 
+  if (toolName === 'set_display_state') {
+    const state: DisplayStatePayload = {};
+    if (parsed.mode === 'face' || parsed.mode === 'media') state.mode = parsed.mode;
+    if (typeof parsed.base_mood === 'string' && parsed.base_mood.trim()) state.base_mood = parsed.base_mood.trim();
+    if (Array.isArray(parsed.reactions) && parsed.reactions.length > 0) state.reactions = parsed.reactions.filter((r: any) => typeof r === 'string');
+    if (typeof parsed.media_url === 'string' && parsed.media_url.trim()) state.media_url = parsed.media_url.trim();
+    if (displayStateSink) displayStateSink.value = state;
+    return JSON.stringify({ status: 'success', message: 'Состояние аватара обновлено.' });
+  }
+
+  if (toolName === 'set_display_state') {
+    const state: DisplayStatePayload = {};
+    if (parsed.mode === 'face' || parsed.mode === 'media') state.mode = parsed.mode;
+    if (typeof parsed.base_mood === 'string' && parsed.base_mood.trim()) state.base_mood = parsed.base_mood.trim();
+    if (Array.isArray(parsed.reactions) && parsed.reactions.length > 0) state.reactions = parsed.reactions.filter((r: any) => typeof r === 'string');
+    if (typeof parsed.media_url === 'string' && parsed.media_url.trim()) state.media_url = parsed.media_url.trim();
+    if (displayStateSink) displayStateSink.value = state;
+    return JSON.stringify({ status: 'success', message: 'Состояние аватара обновлено.' });
+  }
+
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
@@ -1170,6 +1232,7 @@ export const sendMessageThroughAi = async (
     userTelegramChatId?: number | null;
     userTelegramMessageId?: number | null;
     assistantTelegramChatId?: number | null;
+    displayManifest?: { moods?: string[]; reactions?: string[] } | null;
     images?: Array<{ base64: string; mimeType: string }>;
   }
 ): Promise<AiSendResult> => {
@@ -1201,7 +1264,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest)] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
@@ -1324,6 +1387,7 @@ PRO
   const toolOutputsForFallback: string[] = [];
   const toolUserMessages: string[] = [];
   const generatedImages: Array<{ image_base64: string; prompt_used: string }> = [];
+  const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
 
@@ -1406,7 +1470,8 @@ for (const toolCall of message.tool_calls) {
     }
 
     executionMode = 'pro';
-    executionTools = [...toolDefinitions] as any[];
+    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest)] as any[];
+    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest)] as any[];
     currentMessages.length = 0;
     currentMessages.push(
       { role: 'system', content: proSystemPrompt },
@@ -1429,7 +1494,8 @@ for (const toolCall of message.tool_calls) {
       toolName,
       toolCall.function?.arguments || '{}',
       (payload) => runCompletion('pro', payload),
-      generatedImages
+      generatedImages,
+      displayStateSink
     );
   } catch (err: any) {
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
@@ -1502,6 +1568,7 @@ if (escalatedToPro) {
     model_fallback_notice: modelFallbackNotice,
     tool_user_messages: toolUserMessages,
     generated_images: generatedImages.length > 0 ? generatedImages : undefined,
+    display_state: displayStateSink.value ?? undefined,
     usage: {
       tokens_used: totalTokens,
       used_model: usedModel,

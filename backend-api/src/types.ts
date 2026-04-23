@@ -93,5 +93,13 @@ export type AiSendResult = {
   model_fallback_notice?: string | null;
   tool_user_messages?: string[];
   generated_images?: GeneratedImage[];
+  display_state?: DisplayStatePayload | null;
   usage: UsageDto;
+};
+
+export type DisplayStatePayload = {
+  mode?: 'face' | 'media';
+  base_mood?: string;
+  reactions?: string[];
+  media_url?: string;
 };
