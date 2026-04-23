@@ -33,7 +33,7 @@ const REACTIONS: Record<string, string> = {
   // shock:    new URL('../../assets/reactions/shock.gif',    import.meta.url).href,
   // squint:   new URL('../../assets/reactions/squint.gif',   import.meta.url).href,
   // laugh:    new URL('../../assets/reactions/laugh.gif',    import.meta.url).href,
-  // think:    new URL('../../assets/reactions/think.gif',    import.meta.url).href,
+  think:    new URL('../../assets/reactions/thinking.gif',    import.meta.url).href,
   // search:   new URL('../../assets/reactions/search.gif',   import.meta.url).href,
   // wave:     new URL('../../assets/reactions/wave.gif',     import.meta.url).href,
   // confused: new URL('../../assets/reactions/confused.gif', import.meta.url).href,

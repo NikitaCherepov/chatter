@@ -576,21 +576,3 @@
     opacity: 0.35;
   }
 }
-
-// ====== PixelAvatar FAB ======
-
-.avatarFab {
-  position: absolute;
-  bottom: 24px;
-  right: 24px;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background-color: var(--accent);
-  box-shadow: var(--shadow-fab);
-  z-index: 10;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
