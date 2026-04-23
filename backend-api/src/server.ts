@@ -680,8 +680,15 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
 
   const webUserId = result.userId!;
 
-  // Simply write linked_tg_id to the web user
+  // Write linked_tg_id to the web user
   db.prepare('UPDATE users SET linked_tg_id = ? WHERE id = ?').run(tgId, webUserId);
+
+  // Sync plan and limits from TG user to web user so the desktop client
+  // sees updated feature flags (images, search, etc.) immediately.
+  const tgUser = getUserById(tgId);
+  if (tgUser) {
+    updateUserPlan(webUserId, tgUser.plan);
+  }
 
   return res.json({ ok: true, tg_id: tgId, tg_username: tgUsername });
 });

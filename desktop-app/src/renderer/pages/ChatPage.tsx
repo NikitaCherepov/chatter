@@ -34,7 +34,7 @@ function getMaxImagesForPlan(plan: string, isAdmin: number): number {
 }
 
 export function ChatPage() {
-  const { user, logout } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
 
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
@@ -564,7 +564,16 @@ export function ChatPage() {
           <LinkTelegramModal
             key="link-modal"
             onClose={() => setShowLinkModal(false)}
-            onLinked={() => { setShowLinkModal(false); loadChats(); }}
+            onLinked={async () => {
+              setShowLinkModal(false);
+              loadChats();
+              // Refresh user data so plan/limits update from the backend
+              try {
+                const freshUser = await api.fetchMe();
+                setUser(freshUser);
+                localStorage.setItem('chatter_user', JSON.stringify(freshUser));
+              } catch {}
+            }}
           />
         )}
 
