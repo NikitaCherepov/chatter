@@ -7,6 +7,8 @@ import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
+import { PixelAvatar, dispatchAvatarState } from '../components/PixelAvatar';
+import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -282,6 +284,21 @@ export function ChatPage() {
     }
   }, [input]);
 
+  // ── PixelAvatar: system reactions + IPC bridge ────────────────────────────
+
+  // Push "think" reaction while AI is generating
+  useEffect(() => {
+    if (sending) dispatchAvatarState({ reactions: ['think'] });
+  }, [sending]);
+
+  // Listen for avatar state from Electron main process (IPC)
+  useEffect(() => {
+    const unsub = window.electronAPI?.onAvatarState?.((payload) => {
+      dispatchAvatarState(payload as SetDisplayStatePayload);
+    });
+    return () => unsub?.();
+  }, []);
+
   const formatTime = (ts: number) => {
     const d = new Date(ts * 1000);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -538,7 +555,10 @@ export function ChatPage() {
         )}
       </main>
 
-      <button className={s.fab}>?</button>
+      {/* PixelAvatar — replaces old FAB */}
+      <div className={s.avatarFab}>
+        <PixelAvatar />
+      </div>
 
       <AnimatePresence>
         {showLinkModal && (

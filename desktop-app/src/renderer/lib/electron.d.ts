@@ -5,6 +5,7 @@ declare global {
     electronAPI: {
       platform: string;
       apiBaseUrl: string;
+      onAvatarState: (callback: (payload: unknown) => void) => () => void;
     };
   }
 }
