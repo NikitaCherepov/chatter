@@ -225,3 +225,7 @@ export async function generateLinkCodeApi(): Promise<LinkGenerateResponse> {
 export async function getLinkStatus(): Promise<LinkStatusResponse> {
   return apiFetch('/api/v1/link/status');
 }
+
+export async function unlinkTelegram(): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/link/unlink', { method: 'POST' });
+}

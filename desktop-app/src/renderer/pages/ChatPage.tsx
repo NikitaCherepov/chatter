@@ -44,6 +44,7 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [isLinked, setIsLinked] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
@@ -56,6 +57,13 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
+
+  const checkLinkStatus = async () => {
+    try {
+      const status = await api.getLinkStatus();
+      setIsLinked(status.linked);
+    } catch {}
+  };
 
   const loadChats = async () => {
     try {
@@ -71,7 +79,7 @@ export function ChatPage() {
     }
   };
 
-  useEffect(() => { loadChats(); }, []);
+  useEffect(() => { loadChats(); checkLinkStatus(); }, []);
 
   useEffect(() => {
     if (activeChatId) loadMessages(activeChatId);
@@ -439,12 +447,29 @@ export function ChatPage() {
             transition={{ duration: 0.15 }}
             style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
           >
-            <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title="Привязать Telegram">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-            </button>
+            {isLinked ? (
+              <button className={s.iconBtn} onClick={async () => {
+                try {
+                  await api.unlinkTelegram();
+                  setIsLinked(false);
+                  const freshUser = await api.fetchMe();
+                  setUser(freshUser);
+                  localStorage.setItem('chatter_user', JSON.stringify(freshUser));
+                } catch {}
+              }} title="Отвязать Telegram">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6L6 18" />
+                  <path d="M6 6l12 12" />
+                </svg>
+              </button>
+            ) : (
+              <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title="Привязать Telegram">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              </button>
+            )}
             <button className={s.iconBtn} onClick={handleLogout} title="Выйти">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -566,6 +591,7 @@ export function ChatPage() {
             onClose={() => setShowLinkModal(false)}
             onLinked={async () => {
               setShowLinkModal(false);
+              setIsLinked(true);
               loadChats();
               // Refresh user data so plan/limits update from the backend
               try {

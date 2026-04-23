@@ -518,6 +518,7 @@ const BASE_COMMANDS = [
     { command: 'chat_new', description: 'Создать чат: /chat_new [название]' },
     { command: 'chat_use', description: 'Переключить чат: /chat_use <id>' },
     { command: 'link', description: 'Привязать десктоп-приложение' },
+    { command: 'unlink', description: 'Отвязать десктоп-приложение' },
     { command: 'rename', description: 'Переименовать себя' },
     { command: 'prompts', description: 'Список доступных промптов' },
     { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
@@ -3414,6 +3415,29 @@ bot.command('cancellink', (ctx) => {
     if (!userId) return;
     linkCodeFlows.delete(userId);
     return ctx.reply('Ок, привязка отменена.', buildMenuTriggerKeyboard());
+});
+
+bot.command('unlink', async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    try {
+        const response = await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/link/unlink`,
+            { tg_id: userId },
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` } }
+        );
+        if (response.data?.ok) {
+            return ctx.reply('Аккаунт отвязан от десктоп-приложения.', buildMenuTriggerKeyboard());
+        }
+        return ctx.reply('Аккаунт не был привязан.', buildMenuTriggerKeyboard());
+    } catch (err: any) {
+        const msg = err?.response?.data?.error;
+        if (msg === 'not_linked') {
+            return ctx.reply('Аккаунт не был привязан к десктоп-приложению.', buildMenuTriggerKeyboard());
+        }
+        console.error('Unlink error:', err?.message || err);
+        return ctx.reply('Ошибка при отвязке. Попробуй позже.');
+    }
 });
 
 bot.command('tz', async (ctx) => {

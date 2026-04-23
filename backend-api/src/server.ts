@@ -665,6 +665,20 @@ app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
   return res.json({ linked: false });
 });
 
+app.post('/api/v1/link/unlink', authMiddleware, (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  if (!user.linked_tg_id) return res.status(400).json({ error: 'not_linked' });
+
+  db.prepare('UPDATE users SET linked_tg_id = NULL WHERE id = ?').run(userId);
+
+  // Reset plan back to free for the web user
+  updateUserPlan(userId, 'free');
+
+  return res.json({ ok: true });
+});
+
 // ── Internal: Telegram Link Verify (bot) ──────────────────────────────────
 
 app.post('/internal/link/verify', internalAuth, (req, res) => {
@@ -691,6 +705,20 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
   }
 
   return res.json({ ok: true, tg_id: tgId, tg_username: tgUsername });
+});
+
+app.post('/internal/link/unlink', internalAuth, (req, res) => {
+  const tgId = Number(req.body?.tg_id);
+  if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'tg_id_required' });
+
+  // Find web user linked to this TG account and clear the link
+  const webUser = db.prepare('SELECT id FROM users WHERE linked_tg_id = ?').get(tgId) as { id: number } | undefined;
+  if (!webUser) return res.status(404).json({ error: 'not_linked' });
+
+  db.prepare('UPDATE users SET linked_tg_id = NULL WHERE id = ?').run(webUser.id);
+  updateUserPlan(webUser.id, 'free');
+
+  return res.json({ ok: true });
 });
 
 // ── Internal: Prompts CRUD ─────────────────────────────────────────────────
