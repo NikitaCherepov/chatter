@@ -14,6 +14,24 @@ function randomBlinkDelay(): number {
   return BLINK_INTERVAL_MIN_MS + Math.random() * (BLINK_INTERVAL_MAX_MS - BLINK_INTERVAL_MIN_MS);
 }
 
+// ── Persistence ────────────────────────────────────────────────────────────
+
+const CACHE_KEY = 'pixel_avatar_mood';
+
+function loadCachedMood(): BaseMood {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) return raw;
+  } catch {}
+  return 'idle';
+}
+
+function cacheMood(mood: BaseMood) {
+  try {
+    localStorage.setItem(CACHE_KEY, mood);
+  } catch {}
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function PixelAvatar() {
@@ -28,7 +46,7 @@ export function PixelAvatar() {
   const [activeReaction, setActiveReaction] = useState<{ src: string; duration: number } | null>(null);
 
   // -- State: Base mood (lowest priority) --
-  const [baseMood, setBaseMood] = useState<BaseMood>('idle');
+  const [baseMood, setBaseMood] = useState<BaseMood>(loadCachedMood);
   const [blinking, setBlinking] = useState(false);
   const [blinkKey, setBlinkKey] = useState(0);
 
@@ -133,6 +151,7 @@ export function PixelAvatar() {
 
     if (payload.base_mood) {
       setBaseMood(payload.base_mood);
+      cacheMood(payload.base_mood);
     }
 
     // Start a looping reaction (replaces any current loop)
