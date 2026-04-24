@@ -1,4 +1,4 @@
-export { PixelAvatar, dispatchAvatarState, pushAvatarReaction } from './PixelAvatar';
+export { PixelAvatar, dispatchAvatarState, pushAvatarReaction, startAvatarLoop, stopAvatarLoop } from './PixelAvatar';
 export { SET_DISPLAY_STATE_SCHEMA } from './schema';
 export type { SetDisplayStatePayload } from './schema';
 export { getBaseFace, getReaction, getAvatarManifest } from './faces';

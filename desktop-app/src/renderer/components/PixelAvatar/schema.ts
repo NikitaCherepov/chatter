@@ -61,4 +61,8 @@ export type SetDisplayStatePayload = {
   base_mood?: string;
   reactions?: string[];
   media_url?: string;
+  /** Start a looping reaction that plays until explicitly stopped */
+  loop_reaction?: string;
+  /** Stop the currently playing loop reaction */
+  clear_loop?: boolean;
 };

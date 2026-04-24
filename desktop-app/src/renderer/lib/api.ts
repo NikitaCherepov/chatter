@@ -184,6 +184,8 @@ export type DisplayStatePayload = {
   base_mood?: string;
   reactions?: string[];
   media_url?: string;
+  loop_reaction?: string;
+  clear_loop?: boolean;
 };
 
 export type ChatSendResponse = {

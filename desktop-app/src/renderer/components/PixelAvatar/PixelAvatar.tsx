@@ -20,6 +20,9 @@ export function PixelAvatar() {
   // -- State: Media layer (highest priority) --
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
 
+  // -- State: Loop reaction (plays infinitely until explicitly stopped) --
+  const [loopReaction, setLoopReaction] = useState<string | null>(null);
+
   // -- State: Reaction queue --
   const [reactionQueue, setReactionQueue] = useState<ReactionKey[]>([]);
   const [activeReaction, setActiveReaction] = useState<{ src: string; duration: number } | null>(null);
@@ -80,8 +83,8 @@ export function PixelAvatar() {
   // ── Blink logic (only in base mood layer) ───────────────────────────────
 
   useEffect(() => {
-    // Blink only when: no media, no active reaction
-    const inBaseLayer = !mediaUrl && !activeReaction;
+    // Blink only when: no media, no loop reaction, no active reaction
+    const inBaseLayer = !mediaUrl && !loopReaction && !activeReaction;
     if (!inBaseLayer) {
       setBlinking(false);
       if (blinkTimerRef.current) clearTimeout(blinkTimerRef.current);
@@ -107,15 +110,21 @@ export function PixelAvatar() {
     return () => {
       if (blinkTimerRef.current) clearTimeout(blinkTimerRef.current);
     };
-  }, [mediaUrl, activeReaction]);
+  }, [mediaUrl, loopReaction, activeReaction]);
 
   // ── External control: apply a SetDisplayState payload ────────────────────
 
   const applyState = useCallback((payload: SetDisplayStatePayload) => {
+    // Stop loop if requested
+    if (payload.clear_loop) {
+      setLoopReaction(null);
+    }
+
     if (payload.mode === 'media' && payload.media_url) {
       setMediaUrl(payload.media_url);
       setReactionQueue([]);
       setActiveReaction(null);
+      setLoopReaction(null);
       return;
     }
     if (payload.mode === 'face') {
@@ -124,6 +133,12 @@ export function PixelAvatar() {
 
     if (payload.base_mood) {
       setBaseMood(payload.base_mood);
+    }
+
+    // Start a looping reaction (replaces any current loop)
+    if (payload.loop_reaction) {
+      const reaction = getReaction(payload.loop_reaction);
+      setLoopReaction(reaction.src);
     }
 
     if (payload.reactions && payload.reactions.length > 0) {
@@ -142,9 +157,10 @@ export function PixelAvatar() {
     return () => window.removeEventListener('pixel-avatar:state', handler);
   }, [applyState]);
 
-  // ── Determine what to render (priority: media > reaction > base + blink) ─
+  // ── Determine what to render (priority: media > loop > reaction queue > base + blink) ─
 
   const renderSrc = mediaUrl
+    ?? loopReaction
     ?? activeReaction?.src
     ?? getBaseFace(baseMood, blinking);
 
@@ -171,6 +187,24 @@ export function pushAvatarReaction(key: ReactionKey) {
   window.dispatchEvent(
     new CustomEvent<SetDisplayStatePayload>('pixel-avatar:state', {
       detail: { reactions: [key] },
+    }),
+  );
+}
+
+/** Start a looping reaction that plays until explicitly stopped. */
+export function startAvatarLoop(key: ReactionKey) {
+  window.dispatchEvent(
+    new CustomEvent<SetDisplayStatePayload>('pixel-avatar:state', {
+      detail: { loop_reaction: key },
+    }),
+  );
+}
+
+/** Stop the currently playing loop reaction. */
+export function stopAvatarLoop() {
+  window.dispatchEvent(
+    new CustomEvent<SetDisplayStatePayload>('pixel-avatar:state', {
+      detail: { clear_loop: true },
     }),
   );
 }

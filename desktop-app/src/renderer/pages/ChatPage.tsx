@@ -7,7 +7,7 @@ import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
-import { PixelAvatar, dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
+import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import s from './ChatPage.module.scss';
 
@@ -296,9 +296,13 @@ export function ChatPage() {
 
   // ── PixelAvatar: system reactions + IPC bridge ────────────────────────────
 
-  // Push "think" reaction while AI is generating
+  // Start looping "think" reaction while AI is generating, stop when response arrives
   useEffect(() => {
-    if (sending) dispatchAvatarState({ reactions: ['think'] });
+    if (sending) {
+      startAvatarLoop('think');
+    } else {
+      stopAvatarLoop();
+    }
   }, [sending]);
 
   // Listen for avatar state from Electron main process (IPC)

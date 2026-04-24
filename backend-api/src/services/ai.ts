@@ -939,6 +939,16 @@ const buildDisplayStateTool = (manifest?: { moods?: string[]; reactions?: string
           media_url: {
             type: 'string',
             description: 'Прямая ссылка на изображение/GIF для mode=media. Игнорируется при mode=face.'
+          },
+          loop_reaction: {
+            type: 'string',
+            description: reactions.length
+              ? `Запустить зацикленную реакцию, которая играет бесконечно пока не будет остановлена. Доступные: ${reactions.join(', ')}.`
+              : 'Запустить зацикленную реакцию. Сейчас нет доступных реакций.'
+          },
+          clear_loop: {
+            type: 'boolean',
+            description: 'Остановить текущую зацикленную реакцию (loop_reaction). Передай true чтобы остановить.'
           }
         }
       }
@@ -1182,16 +1192,8 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     if (typeof parsed.base_mood === 'string' && parsed.base_mood.trim()) state.base_mood = parsed.base_mood.trim();
     if (Array.isArray(parsed.reactions) && parsed.reactions.length > 0) state.reactions = parsed.reactions.filter((r: any) => typeof r === 'string');
     if (typeof parsed.media_url === 'string' && parsed.media_url.trim()) state.media_url = parsed.media_url.trim();
-    if (displayStateSink) displayStateSink.value = state;
-    return JSON.stringify({ status: 'success', message: 'Состояние аватара обновлено.' });
-  }
-
-  if (toolName === 'set_display_state') {
-    const state: DisplayStatePayload = {};
-    if (parsed.mode === 'face' || parsed.mode === 'media') state.mode = parsed.mode;
-    if (typeof parsed.base_mood === 'string' && parsed.base_mood.trim()) state.base_mood = parsed.base_mood.trim();
-    if (Array.isArray(parsed.reactions) && parsed.reactions.length > 0) state.reactions = parsed.reactions.filter((r: any) => typeof r === 'string');
-    if (typeof parsed.media_url === 'string' && parsed.media_url.trim()) state.media_url = parsed.media_url.trim();
+    if (typeof parsed.loop_reaction === 'string' && parsed.loop_reaction.trim()) state.loop_reaction = parsed.loop_reaction.trim();
+    if (parsed.clear_loop === true) state.clear_loop = true;
     if (displayStateSink) displayStateSink.value = state;
     return JSON.stringify({ status: 'success', message: 'Состояние аватара обновлено.' });
   }
