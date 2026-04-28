@@ -2341,6 +2341,8 @@ const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_
     return fallback!;
 };
 
+const linkCodeFlows = new Map<number, 'await_code'>();
+
 // Middleware для авторизации
 bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
@@ -2418,6 +2420,9 @@ bot.use(async (ctx, next) => {
 
     if (userRecord.status === 'none') {
         const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
+        if (text === '/link' || text === '/cancellink' || linkCodeFlows.has(userId)) {
+            return next();
+        }
         const savedName = await maybeCapturePendingName(ctx, userRecord, text);
         await syncCommandScopeForUser(userId, false);
 
@@ -2695,6 +2700,9 @@ const maybeCapturePendingName = async (ctx: any, user: UserRecord, text: string)
 
     const candidate = text.trim();
     if (!candidate || candidate.length > 64) return false;
+    if (/\d/.test(candidate)) return false;
+    if (!/^[\p{L}][\p{L}\s.'-]{0,63}$/u.test(candidate)) return false;
+    if (candidate.split(/\s+/).filter(Boolean).length > 3) return false;
     await updateUserName(user.id, candidate);
     return true;
 };
@@ -2975,7 +2983,7 @@ const unbanUserAccess = async (targetUserId: number) => {
 
 const notifyAdminsNewRequest = async (user: UserRecord) => {
     const usernameText = user.tg_username ? `@${user.tg_username}` : 'нет username';
-    const text = `🆕 Новая заявка\nID: ${user.id}\nИмя: ${user.name ?? 'не указано'}\nUsername: ${usernameText}`;
+    const text = `🆕 Новая заявка\nID: ${user.id}\nПрофиль: tg://user?id=${user.id}\nИмя: ${user.name ?? 'не указано'}\nUsername: ${usernameText}`;
     const keyboard = Markup.inlineKeyboard([
         [
             Markup.button.callback('✅ Подтвердить', `mod:ok:${user.id}:0`),
@@ -3393,8 +3401,6 @@ bot.command('clear', (ctx) => {
 });
 
 // ── /link — привязка к desktop-аккаунту ──
-const linkCodeFlows = new Map<number, 'await_code'>();
-
 bot.command('link', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -4850,6 +4856,12 @@ bot.on('text', async (ctx) => {
             const msg = err?.response?.data?.error;
             if (msg === 'invalid_or_expired_code') {
                 return ctx.reply('Код недействителен или истёк. Получи новый код в приложении и попробуй /link снова.');
+            }
+            if (msg === 'telegram_user_not_approved') {
+                return ctx.reply('Сначала админ должен подтвердить доступ к боту, потом можно привязывать desktop-приложение.');
+            }
+            if (msg === 'telegram_user_not_found') {
+                return ctx.reply('Не нашёл твой Telegram-аккаунт в базе. Напиши /start и дождись подтверждения админа.');
             }
             console.error('Link verify error:', err?.message || err);
             return ctx.reply('Ошибка при привязке. Попробуй позже.');

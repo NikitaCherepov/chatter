@@ -689,20 +689,29 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
   if (!code) return res.status(400).json({ error: 'code_required' });
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'tg_id_required' });
 
+  const tgUser = getUserById(tgId);
+  if (!tgUser) return res.status(404).json({ error: 'telegram_user_not_found' });
+  if (tgUser.status !== 'approved' && tgUser.is_admin !== 1) {
+    return res.status(403).json({ error: 'telegram_user_not_approved', status: tgUser.status });
+  }
+
   const result = verifyLinkCode(code);
   if (!result.ok) return res.status(404).json({ error: 'invalid_or_expired_code' });
 
   const webUserId = result.userId!;
+  const webUser = getUserById(webUserId);
+  if (!webUser) return res.status(404).json({ error: 'web_user_not_found' });
+
+  // A Telegram account is the canonical identity. Move the link instead of
+  // allowing several desktop accounts to consume one TG user's chats/limits.
+  db.prepare('UPDATE users SET linked_tg_id = NULL WHERE linked_tg_id = ? AND id <> ?').run(tgId, webUserId);
 
   // Write linked_tg_id to the web user
   db.prepare('UPDATE users SET linked_tg_id = ? WHERE id = ?').run(tgId, webUserId);
 
   // Sync plan and limits from TG user to web user so the desktop client
   // sees updated feature flags (images, search, etc.) immediately.
-  const tgUser = getUserById(tgId);
-  if (tgUser) {
-    updateUserPlan(webUserId, tgUser.plan);
-  }
+  updateUserPlan(webUserId, tgUser.plan);
 
   return res.json({ ok: true, tg_id: tgId, tg_username: tgUsername });
 });
