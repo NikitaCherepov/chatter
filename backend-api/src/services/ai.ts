@@ -198,7 +198,13 @@ const getProviderErrorSummary = (err: any) => {
   };
 };
 
-const createCompletionWithModelFallback = async (client: OpenAI, modelChain: string[], requestBody: Record<string, unknown>) => {
+const createCompletionWithModelFallback = async (
+  client: OpenAI,
+  modelChain: string[],
+  requestBody: Record<string, unknown>,
+  providerName = 'default',
+  baseURL = ''
+) => {
   const failedModels: string[] = [];
   let lastError: unknown = null;
 
@@ -212,6 +218,8 @@ const createCompletionWithModelFallback = async (client: OpenAI, modelChain: str
         lastError = err;
         const summary = getProviderErrorSummary(err);
         console.warn('[ai] model failed', {
+          provider: providerName,
+          baseURL,
           model,
           attempt,
           attempts,
@@ -241,10 +249,20 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
 
   for (const provider of PRO_PROVIDERS) {
     try {
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody);
+      console.warn('[ai] trying pro provider', {
+        provider: provider.name,
+        baseURL: provider.baseURL,
+        models: provider.modelChain
+      });
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
+      console.warn('[ai] pro provider succeeded', {
+        provider: provider.name,
+        baseURL: provider.baseURL,
+        model: completion.modelUsed
+      });
       return {
         response: completion.response,
         modelUsed: completion.modelUsed,
@@ -254,6 +272,13 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         failedModels
       };
     } catch (err: any) {
+      console.warn('[ai] pro provider failed', {
+        provider: provider.name,
+        baseURL: provider.baseURL,
+        models: provider.modelChain,
+        failedModels: Array.isArray(err?.failedModels) ? err.failedModels : [],
+        providerError: err?.providerError
+      });
       failedProviders.push(provider.name);
       if (Array.isArray(err?.failedModels)) {
         failedModels.push(...err.failedModels.map((m: string) => `${provider.name}:${m}`));
@@ -270,10 +295,20 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
 
   for (const provider of LITE_PROVIDERS) {
     try {
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody);
+      console.warn('[ai] trying lite provider', {
+        provider: provider.name,
+        baseURL: provider.baseURL,
+        models: provider.modelChain
+      });
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
+      console.warn('[ai] lite provider succeeded', {
+        provider: provider.name,
+        baseURL: provider.baseURL,
+        model: completion.modelUsed
+      });
       return {
         response: completion.response,
         modelUsed: completion.modelUsed,
@@ -283,6 +318,13 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         failedModels
       };
     } catch (err: any) {
+      console.warn('[ai] lite provider failed', {
+        provider: provider.name,
+        baseURL: provider.baseURL,
+        models: provider.modelChain,
+        failedModels: Array.isArray(err?.failedModels) ? err.failedModels : [],
+        providerError: err?.providerError
+      });
       failedProviders.push(provider.name);
       if (Array.isArray(err?.failedModels)) {
         failedModels.push(...err.failedModels.map((m: string) => `${provider.name}:${m}`));
@@ -1047,7 +1089,7 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
     throw Object.assign(new Error('vision_providers_failed'), { failedProviders, failedModels });
   }
   if (mode === 'pro') {
-    if (PRO_PROVIDERS.length > 1) {
+    if (PRO_PROVIDERS.length > 0) {
       const res = await createCompletionWithProProviderFallback(requestPayload);
       return {
         response: res.response,
