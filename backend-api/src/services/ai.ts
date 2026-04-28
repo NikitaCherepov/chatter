@@ -182,6 +182,22 @@ const isRetryable = (err: any) => {
   return message.includes('overloaded') || message.includes('try again later') || message.includes('timeout') || message.includes('rate limit');
 };
 
+const getProviderErrorSummary = (err: any) => {
+  const status = Number(err?.status || err?.response?.status || 0) || undefined;
+  const code = `${err?.code || err?.error?.code || err?.response?.data?.error?.code || ''}`.trim() || undefined;
+  const type = `${err?.type || err?.error?.type || err?.response?.data?.error?.type || ''}`.trim() || undefined;
+  const message = `${err?.message || err?.error?.message || err?.response?.data?.error?.message || ''}`.trim() || undefined;
+  const data = err?.response?.data;
+
+  return {
+    status,
+    code,
+    type,
+    message,
+    data: typeof data === 'object' && data ? JSON.stringify(data).slice(0, 1500) : undefined
+  };
+};
+
 const createCompletionWithModelFallback = async (client: OpenAI, modelChain: string[], requestBody: Record<string, unknown>) => {
   const failedModels: string[] = [];
   let lastError: unknown = null;
@@ -194,6 +210,14 @@ const createCompletionWithModelFallback = async (client: OpenAI, modelChain: str
         return { response, modelUsed: model, failedModels };
       } catch (err) {
         lastError = err;
+        const summary = getProviderErrorSummary(err);
+        console.warn('[ai] model failed', {
+          model,
+          attempt,
+          attempts,
+          retryable: isRetryable(err),
+          ...summary
+        });
         if (isRetryable(err) && attempt < attempts) {
           await sleep(RETRY_SECONDS * 1000);
           continue;
@@ -204,7 +228,11 @@ const createCompletionWithModelFallback = async (client: OpenAI, modelChain: str
     failedModels.push(model);
   }
 
-  throw Object.assign(new Error('model_chain_failed'), { failedModels, cause: lastError });
+  throw Object.assign(new Error('model_chain_failed'), {
+    failedModels,
+    cause: lastError,
+    providerError: getProviderErrorSummary(lastError)
+  });
 };
 
 const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>) => {
