@@ -85,7 +85,10 @@ export function ChatPage() {
   useEffect(() => { loadChats(); checkLinkStatus(); }, []);
 
   useEffect(() => {
-    if (activeChatId) loadMessages(activeChatId);
+    if (activeChatId) {
+      prevMsgCountRef.current = 0;
+      loadMessages(activeChatId);
+    }
   }, [activeChatId]);
 
   const loadMessages = async (chatId: number) => {
@@ -324,7 +327,13 @@ export function ChatPage() {
     }
   };
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  const prevMsgCountRef = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevMsgCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages]);
 
   useEffect(() => {
     if (textareaRef.current) {
