@@ -4,6 +4,8 @@ node_modules/
 *.db-journal
 dist/
 backend-api/dist/
+settings.local.json
+
 
 desktop-app/release/
 desktop-app/dist/

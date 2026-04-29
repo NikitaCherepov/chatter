@@ -407,12 +407,21 @@
   flex-direction: column;
   gap: 6px;
   max-width: 85%;
+  position: relative;
+
+  &:hover .msgKebabBtn {
+    opacity: 1;
+  }
 }
 
 .metaRow {
   font-size: 12px;
   color: var(--text-muted);
   padding-left: 2px;
+}
+
+.bubbleWrap {
+  position: relative;
 }
 
 .bubble {
@@ -427,6 +436,32 @@
   border: 1px solid var(--border-medium);
   border-radius: 8px;
   padding: 14px 18px;
+}
+
+.msgKebabBtn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.1s;
+  padding: 0;
+  z-index: 2;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+    color: var(--text-primary);
+  }
 }
 
 .bubbleText {

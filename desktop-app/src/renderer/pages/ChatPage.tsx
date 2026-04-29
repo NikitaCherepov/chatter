@@ -50,6 +50,9 @@ export function ChatPage() {
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
+  const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const msgMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [renamingChatId, setRenamingChatId] = useState<number | null>(null);
   const [renamingTitle, setRenamingTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
@@ -224,14 +227,19 @@ export function ChatPage() {
 
   const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
 
+  const closeMsgMenu = useCallback(() => {
+    setMsgMenuId(null);
+    if (msgMenuTimerRef.current) { clearTimeout(msgMenuTimerRef.current); msgMenuTimerRef.current = null; }
+  }, []);
+
   // Close context menu on outside click
   useEffect(() => {
-    const close = () => { setContextMenuChatId(null); };
-    if (contextMenuChatId !== null) {
+    const close = () => { setContextMenuChatId(null); closeMsgMenu(); };
+    if (contextMenuChatId !== null || msgMenuId !== null) {
       document.addEventListener('click', close);
       return () => document.removeEventListener('click', close);
     }
-  }, [contextMenuChatId]);
+  }, [contextMenuChatId, msgMenuId, closeMsgMenu]);
 
   const handleKebabClick = (e: React.MouseEvent, chatId: number) => {
     e.stopPropagation();
@@ -283,6 +291,37 @@ export function ChatPage() {
       console.error('Failed to delete chat:', err);
     }
     setDeletingChatId(null);
+  };
+
+  const startMsgMenuTimer = useCallback(() => {
+    if (msgMenuTimerRef.current) clearTimeout(msgMenuTimerRef.current);
+    msgMenuTimerRef.current = setTimeout(() => setMsgMenuId(null), 1000);
+  }, []);
+
+  const resetMsgMenuTimer = useCallback(() => {
+    if (msgMenuTimerRef.current) clearTimeout(msgMenuTimerRef.current);
+  }, []);
+
+  const handleMsgKebabClick = (e: React.MouseEvent, messageId: number) => {
+    e.stopPropagation();
+    if (msgMenuTimerRef.current) clearTimeout(msgMenuTimerRef.current);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMsgMenuPos({ x: rect.right + 4, y: rect.top });
+    setMsgMenuId(messageId);
+    msgMenuTimerRef.current = setTimeout(() => setMsgMenuId(null), 1000);
+  };
+
+  const handleDeleteMessage = async (messageId: number) => {
+    if (!activeChatId) return;
+    closeMsgMenu();
+    const snapshot = [...messages];
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+    try {
+      await api.deleteMessage(activeChatId, messageId);
+    } catch (err) {
+      console.error('Failed to delete message:', err);
+      setMessages(snapshot);
+    }
   };
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -505,11 +544,24 @@ export function ChatPage() {
                   <div className={s.metaRow}>
                     {msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}
                   </div>
-                  <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
-                    {msg.role === 'assistant'
-                      ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
-                      : <div className={s.bubbleTextPlain}>{msg.content}</div>
-                    }
+                  <div className={s.bubbleWrap}>
+                    <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
+                      {msg.role === 'assistant'
+                        ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
+                        : <div className={s.bubbleTextPlain}>{msg.content}</div>
+                      }
+                    </div>
+                    <button
+                      className={s.msgKebabBtn}
+                      onClick={(e) => handleMsgKebabClick(e, msg.id)}
+                      title="Действия"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <circle cx="8" cy="3" r="1.5" />
+                        <circle cx="8" cy="8" r="1.5" />
+                        <circle cx="8" cy="13" r="1.5" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -527,6 +579,25 @@ export function ChatPage() {
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Message context menu */}
+            {msgMenuId !== null && (
+              <div
+                className={s.contextMenu}
+                style={{ top: msgMenuPos.y, left: msgMenuPos.x }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseEnter={resetMsgMenuTimer}
+                onMouseLeave={startMsgMenuTimer}
+              >
+                <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleDeleteMessage(msgMenuId)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                  Удалить
+                </button>
+              </div>
+            )}
 
             {/* Image previews above input */}
             {attachedImages.length > 0 && (

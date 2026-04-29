@@ -174,6 +174,10 @@ export async function getMessages(chatId: number, limit = 50, offset = 0): Promi
   return apiFetch(`/api/v1/chats/${chatId}/messages?limit=${limit}&offset=${offset}`);
 }
 
+export async function deleteMessage(chatId: number, messageId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}`, { method: 'DELETE' });
+}
+
 export type ChatSendImage = {
   base64: string;
   mime_type: string;

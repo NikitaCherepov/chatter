@@ -135,6 +135,13 @@ export const deleteUserChat = (userId: number, chatId: number): boolean => {
   return true;
 };
 
+export const deleteUserMessage = (userId: number, chatId: number, messageId: number): boolean => {
+  const result = db.prepare(
+    'DELETE FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
+  ).run(messageId, userId, chatId);
+  return result.changes > 0;
+};
+
 export const getChatMessages = (userId: number, chatId: number, limit = 20, offset = 0): MessageDto[] => {
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
