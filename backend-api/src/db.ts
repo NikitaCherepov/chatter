@@ -92,23 +92,48 @@ const hasFtsTable = () => {
   return rows.length > 0;
 };
 
+// Check if existing FTS table is in content-sync mode (which we no longer use).
+// If so, drop it so it gets recreated as standalone.
+if (hasFtsTable()) {
+  try {
+    // Content-sync tables have a corresponding content table entry.
+    // Standalone tables allow direct SELECT COUNT(*).
+    // If this fails or returns 0 when chat_messages has data, recreate.
+    const ftsCount = (db.prepare('SELECT COUNT(*) as cnt FROM messages_fts').get() as { cnt: number }).cnt;
+    const msgCount = (db.prepare('SELECT COUNT(*) as cnt FROM chat_messages WHERE content IS NOT NULL AND content != ""').get() as { cnt: number }).cnt;
+    if (msgCount > 0 && ftsCount === 0) {
+      console.log(`[fts5] table exists but empty (${ftsCount} rows, ${msgCount} messages). Dropping and recreating.`);
+      db.exec('DROP TABLE IF EXISTS messages_fts');
+      // Drop old content-sync triggers too
+      db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ai");
+      db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ad");
+    }
+  } catch (e: any) {
+    console.log('[fts5] error checking table, dropping and recreating:', e.message);
+    db.exec('DROP TABLE IF EXISTS messages_fts');
+    db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ai");
+    db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ad");
+  }
+}
+
 if (!hasFtsTable()) {
+  // Standalone FTS5 table (stores its own copy of content for snippet() to work)
   db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
       content,
       user_id UNINDEXED,
       chat_id UNINDEXED,
       message_id UNINDEXED,
-      content='chat_messages',
-      content_rowid='id',
       tokenize="unicode61"
     )
   `);
 
   // Populate from existing messages
   db.exec(`
-    INSERT INTO messages_fts(rowid, content, user_id, chat_id, message_id)
-    SELECT id, content, user_id, chat_id, id FROM chat_messages WHERE content IS NOT NULL AND content != ''
+    INSERT INTO messages_fts(content, user_id, chat_id, message_id)
+    SELECT content, user_id, chat_id, id
+    FROM chat_messages
+    WHERE content IS NOT NULL AND content != ''
   `);
 
   console.log('[fts5] messages_fts created and populated');
@@ -123,8 +148,8 @@ const hasTrigger = (name: string) => {
 if (!hasTrigger('trg_chat_messages_fts_ai')) {
   db.exec(`
     CREATE TRIGGER trg_chat_messages_fts_ai AFTER INSERT ON chat_messages BEGIN
-      INSERT INTO messages_fts(rowid, content, user_id, chat_id, message_id)
-      VALUES (new.id, new.content, new.user_id, new.chat_id, new.id);
+      INSERT INTO messages_fts(content, user_id, chat_id, message_id)
+      VALUES (new.content, new.user_id, new.chat_id, new.id);
     END
   `);
 }
@@ -132,8 +157,7 @@ if (!hasTrigger('trg_chat_messages_fts_ai')) {
 if (!hasTrigger('trg_chat_messages_fts_ad')) {
   db.exec(`
     CREATE TRIGGER trg_chat_messages_fts_ad AFTER DELETE ON chat_messages BEGIN
-      INSERT INTO messages_fts(messages_fts, rowid, content, user_id, chat_id, message_id)
-      VALUES ('delete', old.id, old.content, old.user_id, old.chat_id, old.id);
+      DELETE FROM messages_fts WHERE message_id = old.id;
     END
   `);
 }
