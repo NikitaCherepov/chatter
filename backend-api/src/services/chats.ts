@@ -528,20 +528,39 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
   // Use MATCH with prefix search (trailing *) for partial word matches
   const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
 
-  const rows = db.prepare(`
-    SELECT
-      fts.chat_id,
-      COALESCE(uc.title, 'Чат') as chat_title,
-      snippet(messages_fts, 0, '<<', '>>', '...', 10) as snippet,
-      fts.rank
-    FROM messages_fts fts
-    JOIN user_chats uc ON uc.id = fts.chat_id AND uc.user_id = ?
-    WHERE fts.user_id = ?
-      AND messages_fts MATCH ?
-    GROUP BY fts.chat_id
-    ORDER BY fts.rank
+  // Step 1: get distinct chat_ids sorted by rank
+  const chatHits = db.prepare(`
+    SELECT chat_id, MIN(rank) as best_rank
+    FROM messages_fts
+    WHERE user_id = ? AND messages_fts MATCH ?
+    GROUP BY chat_id
+    ORDER BY best_rank
     LIMIT ?
-  `).all(userId, userId, ftsQuery, safeLimit) as Array<{ chat_id: number; chat_title: string; snippet: string; rank: number }>;
+  `).all(userId, ftsQuery, safeLimit) as Array<{ chat_id: number; best_rank: number }>;
 
-  return rows;
+  if (chatHits.length === 0) return [];
+
+  // Step 2: for each chat, get snippet from the best matching message
+  const snippetStmt = db.prepare(`
+    SELECT snippet(messages_fts, 0, '<<', '>>', '...', 10) as snippet
+    FROM messages_fts
+    WHERE user_id = ? AND chat_id = ? AND messages_fts MATCH ?
+    ORDER BY rank
+    LIMIT 1
+  `);
+
+  const results: SearchResult[] = [];
+  for (const hit of chatHits) {
+    const chat = db.prepare('SELECT title FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string } | undefined;
+    if (!chat) continue;
+    const snip = snippetStmt.get(userId, hit.chat_id, ftsQuery) as { snippet: string } | undefined;
+    results.push({
+      chat_id: hit.chat_id,
+      chat_title: chat.title || 'Чат',
+      snippet: snip?.snippet || '',
+      rank: hit.best_rank,
+    });
+  }
+
+  return results;
 };
