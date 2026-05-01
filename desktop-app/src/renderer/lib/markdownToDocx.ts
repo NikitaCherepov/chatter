@@ -299,3 +299,76 @@ export const generateDocxBlob = async (content: string, title?: string): Promise
 
   return Packer.toBlob(doc);
 };
+
+// ── Chat export: array of messages → docx ────────────────────────────────
+
+export type ChatMessageEntry = {
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: number; // unix timestamp
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  user: 'You',
+  assistant: 'Chatter',
+};
+
+export const generateChatDocxBlob = async (
+  messages: ChatMessageEntry[],
+  chatTitle?: string,
+): Promise<Blob> => {
+  const children: (Paragraph | Table)[] = [];
+
+  for (const msg of messages) {
+    const time = new Date(msg.created_at * 1000);
+    const timeStr = time.toLocaleString([], {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    });
+    const label = ROLE_LABEL[msg.role] || msg.role;
+
+    // Header line: "You — 01.05.2026, 14:30"
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: `${label}  `, bold: true, color: msg.role === 'assistant' ? '2F5580' : '122D4D' }),
+          new TextRun({ text: timeStr, color: '6B8AAA', size: 20 }),
+        ],
+        spacing: { before: 240, after: 60 },
+      }),
+    );
+
+    // Message body (markdown → docx elements)
+    const bodyElements = createElements(marked.lexer(msg.content) as Token[]);
+    children.push(...bodyElements);
+
+    // Separator
+    children.push(
+      new Paragraph({
+        children: [],
+        spacing: { after: 0 },
+        border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'C4D0DE', space: 4 } },
+      }),
+    );
+  }
+
+  const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: { font: FONT_BODY, size: SIZE_BODY },
+        },
+      },
+    },
+    sections: [
+      {
+        properties: {},
+        children: chatTitle
+          ? [new Paragraph({ children: [new TextRun({ text: chatTitle })], heading: HeadingLevel.TITLE, spacing: { after: 300 } }), ...children]
+          : children,
+      },
+    ],
+  });
+
+  return Packer.toBlob(doc);
+};

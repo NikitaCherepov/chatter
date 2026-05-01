@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
-import { generateDocxBlob } from '../lib/markdownToDocx';
+import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
@@ -298,6 +298,31 @@ export function ChatPage() {
     setDeletingChatId(null);
   };
 
+  const handleExportChat = async (chatId: number) => {
+    setContextMenuChatId(null);
+    const chat = chats.find(c => c.id === chatId);
+    const chatName = chat?.title || 'Чат';
+    try {
+      const res = await api.getMessages(chatId, 10000);
+      if (res.messages.length === 0) {
+        toast.error('Чат пуст');
+        return;
+      }
+      const blob = await generateChatDocxBlob(res.messages, chatName);
+      const buffer = await blob.arrayBuffer();
+      const d = new Date();
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const safeName = chatName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60);
+      const result = await window.electronAPI?.saveFile(`${safeName} ${dateStr}.docx`, buffer);
+      if (result && !result.canceled) {
+        toast.success('Чат сохранён');
+      }
+    } catch (err) {
+      console.error('Failed to export chat:', err);
+      toast.error('Не удалось экспортировать чат');
+    }
+  };
+
   const startMsgMenuTimer = useCallback(() => {
     if (msgMenuTimerRef.current) clearTimeout(msgMenuTimerRef.current);
     msgMenuTimerRef.current = setTimeout(() => setMsgMenuId(null), 1000);
@@ -500,6 +525,14 @@ export function ChatPage() {
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
               Изменить название
+            </button>
+            <button className={s.contextMenuItem} onClick={() => handleExportChat(contextMenuChatId)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Скачать docx
             </button>
             <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
