@@ -492,6 +492,9 @@ const NOTE_QUERY_MAX_LENGTH = 120;
 const NOTES_PAGE_SIZE_DEFAULT = 10;
 const NOTES_MENU_PAGE_SIZE = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
+const BACKEND_TIMEOUT_AI_MS = Math.max(10000, Number.parseInt(process.env.BACKEND_TIMEOUT_AI_MS || '120000', 10));
+const BACKEND_TIMEOUT_MEDIA_MS = Math.max(10000, Number.parseInt(process.env.BACKEND_TIMEOUT_MEDIA_MS || '180000', 10));
+const BACKEND_TIMEOUT_DEFAULT_MS = Math.max(5000, Number.parseInt(process.env.BACKEND_TIMEOUT_DEFAULT_MS || '15000', 10));
 const MAX_TELEGRAM_PHOTO_BYTES = 20 * 1024 * 1024;
 const EMAIL_PASSWORD_DELIMITER = '::';
 const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:3050').trim().replace(/\/$/, '');
@@ -881,7 +884,7 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
                 headers: {
                     Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
                 },
-                timeout: 120000
+                timeout: BACKEND_TIMEOUT_AI_MS
             }
         );
 
@@ -1071,7 +1074,7 @@ const runBackendAiSend = async (
             headers: {
                 Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
             },
-            timeout: 120000
+            timeout: BACKEND_TIMEOUT_AI_MS
         }
     );
 
@@ -1120,7 +1123,7 @@ const runBackendVoiceTurn = async (
             headers: {
                 Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
             },
-            timeout: 180000,
+            timeout: BACKEND_TIMEOUT_MEDIA_MS,
             maxBodyLength: Infinity
         }
     );
@@ -1170,7 +1173,7 @@ const runBackendPhotoAnalyze = async (
             headers: {
                 Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
             },
-            timeout: 180000,
+            timeout: BACKEND_TIMEOUT_MEDIA_MS,
             maxBodyLength: Infinity
         }
     );
@@ -1207,7 +1210,7 @@ const runBackendBindTelegramMessage = async (
             headers: {
                 Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
             },
-            timeout: 30000
+            timeout: BACKEND_TIMEOUT_DEFAULT_MS
         }
     );
 };
@@ -1219,85 +1222,85 @@ const backendHeaders = () => ({
 
 const runBackendGetPrompts = async () => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/prompts`, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/prompts`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { prompts: Array<{ id: number; name: string; description: string; content: string; is_default: number }> };
 };
 
 const runBackendGetPrompt = async (promptId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { prompt: { id: number; name: string; description: string; content: string; is_default: number } };
 };
 
 const runBackendCreatePrompt = async (name: string, description: string, content: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts`, { name, description, content }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts`, { name, description, content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; prompt_id: number };
 };
 
 const runBackendUpdatePromptName = async (promptId: number, name: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/name`, { name }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/name`, { name }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendUpdatePromptDescription = async (promptId: number, description: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/description`, { description }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/description`, { description }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendUpdatePromptContent = async (promptId: number, content: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/content`, { content }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/content`, { content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendSetDefaultPrompt = async (promptId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/default`, {}, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/default`, {}, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendDeletePrompt = async (promptId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendSetTimezone = async (userId: number, offset: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/timezone`, { user_id: userId, timezone_offset: offset }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/timezone`, { user_id: userId, timezone_offset: offset }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendSetContextWindow = async (userId: number, contextWindow: number, isAdmin: boolean) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/context-window`, { user_id: userId, context_window: contextWindow, is_admin: isAdmin }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/context-window`, { user_id: userId, context_window: contextWindow, is_admin: isAdmin }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendMailSetup = async (userId: number, provider: string, email: string, appPassword: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/setup`, { user_id: userId, provider, email, app_password: appPassword }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/setup`, { user_id: userId, provider, email, app_password: appPassword }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; accounts: Array<{ provider: string; imap_user: string }> };
 };
 
 const runBackendMailUse = async (userId: number, provider: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/use`, { user_id: userId, provider }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/use`, { user_id: userId, provider }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; provider: string; imap_user: string };
 };
 
 const runBackendMailLimit = async (userId: number, limit: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/mail/limit`, { user_id: userId, limit }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/mail/limit`, { user_id: userId, limit }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; limit: number };
 };
 
 const runBackendMailForget = async (userId: number, provider?: string | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/mail/account`, { data: { user_id: userId, provider: provider || undefined }, headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/mail/account`, { data: { user_id: userId, provider: provider || undefined }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; deleted: string; remaining?: Array<{ provider: string; imap_user: string }>; new_active?: { provider: string; imap_user: string } };
 };
 
@@ -1305,20 +1308,20 @@ const runBackendMailForget = async (userId: number, provider?: string | null) =>
 
 const runBackendUpsertTelegramUser = async (tgId: number, name: string, role: string, status: string, tgUsername: string | null, defaultPromptId: number | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/upsert-telegram`, { tg_id: tgId, name, role, status, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/upsert-telegram`, { tg_id: tgId, name, role, status, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; user: UserRecord };
 };
 
 const runBackendCreatePendingUser = async (tgId: number, name: string | null, tgUsername: string | null, defaultPromptId: number | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/create-pending`, { tg_id: tgId, name, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/create-pending`, { tg_id: tgId, name, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; user: UserRecord };
 };
 
 const runBackendGetUser = async (userId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     try {
-        const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: 15000 });
+        const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
         return response.data as { user: UserRecord };
     } catch (err: any) {
         if (err?.response?.status === 404) return { user: undefined };
@@ -1328,85 +1331,85 @@ const runBackendGetUser = async (userId: number) => {
 
 const runBackendUpdateTgUsername = async (userId: number, tgUsername: string | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tg-username`, { user_id: userId, tg_username: tgUsername }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tg-username`, { user_id: userId, tg_username: tgUsername }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendUpdateUserStatus = async (userId: number, status: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/status`, { status }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/status`, { status }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; status: string };
 };
 
 const runBackendUpdateUserRole = async (userId: number, role: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/role`, { role }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/role`, { role }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; role: string };
 };
 
 const runBackendUpdateUserName = async (userId: number, name: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/name`, { name }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/name`, { name }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; name: string };
 };
 
 const runBackendRemoveUser = async (userId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendGetUsersList = async (filter: string, limit: number, offset: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users`, { params: { filter, limit, offset }, headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users`, { params: { filter, limit, offset }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { users: UserRecord[]; total: number; filter: string; limit: number; offset: number };
 };
 
 const runBackendUpdateUserPlan = async (userId: number, plan: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/plan`, { plan }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/plan`, { plan }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; plan: string };
 };
 
 const runBackendSyncPlanLimits = async () => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/sync-plan-limits`, {}, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/sync-plan-limits`, {}, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendBanUser = async (userId: number, bannedBy: number, reason: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { reason, banned_by: bannedBy }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { reason, banned_by: bannedBy }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; reason: string };
 };
 
 const runBackendUnbanUser = async (userId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; status: string };
 };
 
 const runBackendGetBanRecord = async (userId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/ban`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ban: { user_id: number; reason: string; banned_at: string; banned_by: number | null } | null };
 };
 
 const runBackendSelectUserPrompt = async (userId: number, promptId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/select`, { prompt_id: promptId }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/select`, { prompt_id: promptId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendUpdateCustomPrompt = async (userId: number, content: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/custom`, { content }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/custom`, { content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
 const runBackendResetUsersPromptIfDeleted = async (promptId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts/reset-users`, { prompt_id: promptId }, { headers: backendHeaders(), timeout: 15000 });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts/reset-users`, { prompt_id: promptId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 

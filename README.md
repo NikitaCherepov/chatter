@@ -55,6 +55,9 @@ npm run logs
 - `ENCRYPTION_KEY` - ключ шифрования для mail-данных.
 - `NOTES_WEBAPP_URL` - ссылка на WebApp заметок в меню.
 - `AUTO_SYNC_PLAN_LIMITS_ON_BOOT=1` - авто-синхронизация лимитов при старте.
+- `BACKEND_TIMEOUT_AI_MS` - таймаут AI-запросов (ms), по умолчанию `120000` (2 мин).
+- `BACKEND_TIMEOUT_MEDIA_MS` - таймаут голоса/фото (ms), по умолчанию `180000` (3 мин).
+- `BACKEND_TIMEOUT_DEFAULT_MS` - таймаут прочих запросов к backend (ms), по умолчанию `15000` (15 сек).
 
 ## AI-инструменты
 
