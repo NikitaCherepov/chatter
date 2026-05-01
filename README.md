@@ -89,6 +89,11 @@ npm run logs
 - `/rename`
 - `/prompts`, `/prompt_use <id>`
 
+Desktop (дополнительно):
+
+- Полнотекстовый поиск по сообщениям в сайдбаре (FTS5, debounce 300 мс)
+- `GET /api/v1/chats/search?q=keyword` — возвращает чаты со сниппетами найденных сообщений
+
 Админ (дополнительно):
 
 - `/add`, `/remove`
