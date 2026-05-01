@@ -86,33 +86,33 @@ db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
 ensureUserColumn('linked_tg_id', 'ALTER TABLE users ADD COLUMN linked_tg_id INTEGER');
 
 // ── FTS5 full-text search index on chat_messages ────────────────────────────
-// Force recreate: drop old table + triggers, then create standalone FTS5.
-// TODO: remove the DROP block after first successful deploy.
 
-console.log('[fts5] dropping old table and triggers for recreation...');
-db.exec('DROP TABLE IF EXISTS messages_fts');
-db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ai");
-db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ad");
+const hasFtsTable = () => {
+  const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'").all() as Array<{ name: string }>;
+  return rows.length > 0;
+};
 
-db.exec(`
-  CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-    content,
-    user_id UNINDEXED,
-    chat_id UNINDEXED,
-    message_id UNINDEXED,
-    tokenize="unicode61"
-  )
-`);
+if (!hasFtsTable()) {
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+      content,
+      user_id UNINDEXED,
+      chat_id UNINDEXED,
+      message_id UNINDEXED,
+      tokenize="unicode61"
+    )
+  `);
 
-// Populate from existing messages
-db.exec(`
-  INSERT INTO messages_fts(content, user_id, chat_id, message_id)
-  SELECT content, user_id, chat_id, id
-  FROM chat_messages
-  WHERE content IS NOT NULL AND content != ''
-`);
+  // Populate from existing messages
+  db.exec(`
+    INSERT INTO messages_fts(content, user_id, chat_id, message_id)
+    SELECT content, user_id, chat_id, id
+    FROM chat_messages
+    WHERE content IS NOT NULL AND content != ''
+  `);
 
-console.log('[fts5] messages_fts created and populated');
+  console.log('[fts5] messages_fts created and populated');
+}
 
 // Triggers: keep FTS in sync with chat_messages
 const hasTrigger = (name: string) => {
@@ -120,21 +120,35 @@ const hasTrigger = (name: string) => {
   return rows.length > 0;
 };
 
-if (!hasTrigger('trg_chat_messages_fts_ai')) {
+if (!hasTrigger('trg_chat_messages_fts_ai') || !hasTrigger('trg_chat_messages_fts_ad')) {
+  // At least one trigger missing — recreate both and rebuild FTS to catch any missed messages
+  db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ai");
+  db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ad");
+
   db.exec(`
     CREATE TRIGGER trg_chat_messages_fts_ai AFTER INSERT ON chat_messages BEGIN
       INSERT INTO messages_fts(content, user_id, chat_id, message_id)
       VALUES (new.content, new.user_id, new.chat_id, new.id);
     END
   `);
-}
 
-if (!hasTrigger('trg_chat_messages_fts_ad')) {
   db.exec(`
     CREATE TRIGGER trg_chat_messages_fts_ad AFTER DELETE ON chat_messages BEGIN
       DELETE FROM messages_fts WHERE message_id = old.id;
     END
   `);
+
+  // Rebuild FTS from scratch to ensure consistency
+  if (hasFtsTable()) {
+    db.exec('DELETE FROM messages_fts');
+    db.exec(`
+      INSERT INTO messages_fts(content, user_id, chat_id, message_id)
+      SELECT content, user_id, chat_id, id
+      FROM chat_messages
+      WHERE content IS NOT NULL AND content != ''
+    `);
+    console.log('[fts5] triggers missing — recreated, FTS rebuilt from chat_messages');
+  }
 }
 
 export const toUnix = (value: unknown) => {
