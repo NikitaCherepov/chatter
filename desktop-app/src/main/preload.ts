@@ -9,4 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('pixel-avatar:state', handler);
     return () => ipcRenderer.removeListener('pixel-avatar:state', handler);
   },
+
+  // File save: shows save dialog, writes ArrayBuffer to chosen path
+  saveFile: (fileName: string, data: ArrayBuffer) =>
+    ipcRenderer.invoke('save-file', fileName, data),
 });

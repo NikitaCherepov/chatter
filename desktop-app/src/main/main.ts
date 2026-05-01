@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
@@ -36,6 +36,18 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // ── IPC: save-file (shows save dialog, writes blob to disk) ─────────────
+  ipcMain.handle('save-file', async (_event, fileName: string, data: ArrayBuffer) => {
+    if (!mainWindow) return { canceled: true };
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: fileName,
+      filters: [{ name: 'Documents', extensions: ['docx'] }],
+    });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    fs.writeFileSync(result.filePath, Buffer.from(data));
+    return { canceled: false, filePath: result.filePath };
   });
 }
 

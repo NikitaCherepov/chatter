@@ -13,16 +13,20 @@
     "build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "docx": "^9.6.1",
     "dotenv": "^17.4.2",
     "electron-updater": "^6.8.3",
+    "file-saver": "^2.0.5",
     "framer-motion": "^12.38.0",
     "highlight.js": "^11.11.1",
+    "marked": "^18.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.26.0",
     "rehype-highlight": "^7.0.2",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",

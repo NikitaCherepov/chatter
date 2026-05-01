@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
+import { generateDocxBlob } from '../lib/markdownToDocx';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
@@ -327,6 +329,33 @@ export function ChatPage() {
     }
   };
 
+  const handleCopyMessage = (messageId: number) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    navigator.clipboard.writeText(msg.content).then(
+      () => toast.success('Скопировано'),
+      () => toast.error('Не удалось скопировать'),
+    );
+    closeMsgMenu();
+  };
+
+  const handleDownloadDocx = async (messageId: number) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    closeMsgMenu();
+    try {
+      const blob = await generateDocxBlob(msg.content);
+      const buffer = await blob.arrayBuffer();
+      const result = await window.electronAPI?.saveFile('message.docx', buffer);
+      if (result && !result.canceled) {
+        toast.success('Файл сохранён');
+      }
+    } catch (err) {
+      console.error('Failed to export docx:', err);
+      toast.error('Не удалось сохранить файл');
+    }
+  };
+
   const prevMsgCountRef = useRef(0);
   useEffect(() => {
     if (messages.length > prevMsgCountRef.current) {
@@ -598,6 +627,21 @@ export function ChatPage() {
                 onMouseEnter={resetMsgMenuTimer}
                 onMouseLeave={startMsgMenuTimer}
               >
+                <button className={s.contextMenuItem} onClick={() => handleCopyMessage(msgMenuId)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Копировать
+                </button>
+                <button className={s.contextMenuItem} onClick={() => handleDownloadDocx(msgMenuId)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Скачать docx
+                </button>
                 <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleDeleteMessage(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6" />

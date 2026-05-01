@@ -1,5 +1,6 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthPage } from './pages/AuthPage';
 import { ChatPage } from './pages/ChatPage';
 import { useAuth, AuthProvider } from './lib/auth';
@@ -49,6 +50,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/chat" replace />} />
         </Routes>
       </HashRouter>
+      <Toaster position="top-right" richColors closeButton />
     </AuthProvider>
   );
 }
