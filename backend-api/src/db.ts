@@ -86,58 +86,33 @@ db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
 ensureUserColumn('linked_tg_id', 'ALTER TABLE users ADD COLUMN linked_tg_id INTEGER');
 
 // ── FTS5 full-text search index on chat_messages ────────────────────────────
+// Force recreate: drop old table + triggers, then create standalone FTS5.
+// TODO: remove the DROP block after first successful deploy.
 
-const hasFtsTable = () => {
-  const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'").all() as Array<{ name: string }>;
-  return rows.length > 0;
-};
+console.log('[fts5] dropping old table and triggers for recreation...');
+db.exec('DROP TABLE IF EXISTS messages_fts');
+db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ai");
+db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ad");
 
-// Check if existing FTS table is in content-sync mode (which we no longer use).
-// If so, drop it so it gets recreated as standalone.
-if (hasFtsTable()) {
-  try {
-    // Content-sync tables have a corresponding content table entry.
-    // Standalone tables allow direct SELECT COUNT(*).
-    // If this fails or returns 0 when chat_messages has data, recreate.
-    const ftsCount = (db.prepare('SELECT COUNT(*) as cnt FROM messages_fts').get() as { cnt: number }).cnt;
-    const msgCount = (db.prepare('SELECT COUNT(*) as cnt FROM chat_messages WHERE content IS NOT NULL AND content != ""').get() as { cnt: number }).cnt;
-    if (msgCount > 0 && ftsCount === 0) {
-      console.log(`[fts5] table exists but empty (${ftsCount} rows, ${msgCount} messages). Dropping and recreating.`);
-      db.exec('DROP TABLE IF EXISTS messages_fts');
-      // Drop old content-sync triggers too
-      db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ai");
-      db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ad");
-    }
-  } catch (e: any) {
-    console.log('[fts5] error checking table, dropping and recreating:', e.message);
-    db.exec('DROP TABLE IF EXISTS messages_fts');
-    db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ai");
-    db.exec("DROP TRIGGER IF EXISTS trg_chat_messages_fts_ad");
-  }
-}
+db.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content,
+    user_id UNINDEXED,
+    chat_id UNINDEXED,
+    message_id UNINDEXED,
+    tokenize="unicode61"
+  )
+`);
 
-if (!hasFtsTable()) {
-  // Standalone FTS5 table (stores its own copy of content for snippet() to work)
-  db.exec(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-      content,
-      user_id UNINDEXED,
-      chat_id UNINDEXED,
-      message_id UNINDEXED,
-      tokenize="unicode61"
-    )
-  `);
+// Populate from existing messages
+db.exec(`
+  INSERT INTO messages_fts(content, user_id, chat_id, message_id)
+  SELECT content, user_id, chat_id, id
+  FROM chat_messages
+  WHERE content IS NOT NULL AND content != ''
+`);
 
-  // Populate from existing messages
-  db.exec(`
-    INSERT INTO messages_fts(content, user_id, chat_id, message_id)
-    SELECT content, user_id, chat_id, id
-    FROM chat_messages
-    WHERE content IS NOT NULL AND content != ''
-  `);
-
-  console.log('[fts5] messages_fts created and populated');
-}
+console.log('[fts5] messages_fts created and populated');
 
 // Triggers: keep FTS in sync with chat_messages
 const hasTrigger = (name: string) => {
