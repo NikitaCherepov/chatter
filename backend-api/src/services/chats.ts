@@ -508,3 +508,40 @@ export const getLinkCodeForUser = (userId: number) => {
   return db.prepare('SELECT code, expires_at FROM telegram_link_codes WHERE user_id = ?')
     .get(userId) as { code: string; expires_at: number } | undefined;
 };
+
+// ── FTS5 full-text search ────────────────────────────────────────────────────
+
+export type SearchResult = {
+  chat_id: number;
+  chat_title: string;
+  snippet: string;
+  rank: number;
+};
+
+export const searchUserChats = (userId: number, query: string, limit = 20): SearchResult[] => {
+  // Sanitize: strip FTS5 special chars, keep word chars + cyrillic
+  const safeQuery = query.replace(/[^\w\sа-яА-ЯёЁ]/g, ' ').trim();
+  if (safeQuery.length < 3) return [];
+
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+
+  // Use MATCH with prefix search (trailing *) for partial word matches
+  const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+
+  const rows = db.prepare(`
+    SELECT
+      fts.chat_id,
+      COALESCE(uc.title, 'Чат') as chat_title,
+      snippet(messages_fts, 0, '<<', '>>', '...', 10) as snippet,
+      fts.rank
+    FROM messages_fts fts
+    JOIN user_chats uc ON uc.id = fts.chat_id AND uc.user_id = ?
+    WHERE fts.user_id = ?
+      AND messages_fts MATCH ?
+    GROUP BY fts.chat_id
+    ORDER BY fts.rank
+    LIMIT ?
+  `).all(userId, userId, ftsQuery, safeLimit) as Array<{ chat_id: number; chat_title: string; snippet: string; rank: number }>;
+
+  return rows;
+};

@@ -85,6 +85,59 @@ db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
 // linked_tg_id column on users — stores TG user_id when linked
 ensureUserColumn('linked_tg_id', 'ALTER TABLE users ADD COLUMN linked_tg_id INTEGER');
 
+// ── FTS5 full-text search index on chat_messages ────────────────────────────
+
+const hasFtsTable = () => {
+  const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'").all() as Array<{ name: string }>;
+  return rows.length > 0;
+};
+
+if (!hasFtsTable()) {
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+      content,
+      user_id UNINDEXED,
+      chat_id UNINDEXED,
+      message_id UNINDEXED,
+      content='chat_messages',
+      content_rowid='id',
+      tokenize="unicode61"
+    )
+  `);
+
+  // Populate from existing messages
+  db.exec(`
+    INSERT INTO messages_fts(rowid, content, user_id, chat_id, message_id)
+    SELECT id, content, user_id, chat_id, id FROM chat_messages WHERE content IS NOT NULL AND content != ''
+  `);
+
+  console.log('[fts5] messages_fts created and populated');
+}
+
+// Triggers: keep FTS in sync with chat_messages
+const hasTrigger = (name: string) => {
+  const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name=?").all(name) as Array<{ name: string }>;
+  return rows.length > 0;
+};
+
+if (!hasTrigger('trg_chat_messages_fts_ai')) {
+  db.exec(`
+    CREATE TRIGGER trg_chat_messages_fts_ai AFTER INSERT ON chat_messages BEGIN
+      INSERT INTO messages_fts(rowid, content, user_id, chat_id, message_id)
+      VALUES (new.id, new.content, new.user_id, new.chat_id, new.id);
+    END
+  `);
+}
+
+if (!hasTrigger('trg_chat_messages_fts_ad')) {
+  db.exec(`
+    CREATE TRIGGER trg_chat_messages_fts_ad AFTER DELETE ON chat_messages BEGIN
+      INSERT INTO messages_fts(messages_fts, rowid, content, user_id, chat_id, message_id)
+      VALUES ('delete', old.id, old.content, old.user_id, old.chat_id, old.id);
+    END
+  `);
+}
+
 export const toUnix = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.floor(value);

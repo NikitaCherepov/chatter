@@ -2,7 +2,7 @@
 import path from 'path';
 import dotenv from 'dotenv';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
@@ -457,6 +457,17 @@ app.get('/api/v1/chats', (req: AuthedRequest, res) => {
   const chats = listUserChats(userId);
   const activeChatId = ensureActiveChat(userId);
   res.json({ chats, active_chat_id: activeChatId });
+});
+
+app.get('/api/v1/chats/search', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const query = `${req.query.q || ''}`.trim();
+  const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
+
+  if (query.length < 3) return res.status(400).json({ error: 'query_too_short_min_3' });
+
+  const results = searchUserChats(userId, query, limit);
+  return res.json({ results });
 });
 
 app.post('/api/v1/chats', (req: AuthedRequest, res) => {

@@ -60,6 +60,10 @@ export function ChatPage() {
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<api.ChatSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
@@ -422,6 +426,63 @@ export function ChatPage() {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // ── Search ──────────────────────────────────────────────────────────────
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    if (value.trim().length < 3) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await api.searchChats(value.trim());
+        setSearchResults(res.results);
+      } catch (err) {
+        console.error('Search failed:', err);
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  const handleSearchClear = useCallback(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchLoading(false);
+  }, []);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
+  const renderSnippet = (snippet: string) => {
+    const parts = snippet.split(/(<<|>>)/);
+    const elements: React.ReactNode[] = [];
+    let inHighlight = false;
+    let key = 0;
+    for (const part of parts) {
+      if (part === '<<') { inHighlight = true; continue; }
+      if (part === '>>') { inHighlight = false; continue; }
+      if (inHighlight) {
+        elements.push(<b key={key++} className={s.snippetHighlight}>{part}</b>);
+      } else {
+        elements.push(<span key={key++}>{part}</span>);
+      }
+    }
+    return elements;
+  };
+
   return (
     <div className={s.layout}>
       {/* SIDEBAR */}
@@ -459,12 +520,65 @@ export function ChatPage() {
           </motion.button>
         </div>
 
+        {/* Search input */}
+        <motion.div
+          className={s.searchContainer}
+          animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
+          transition={{ duration: 0.15 }}
+          style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
+        >
+          <svg className={s.searchIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className={s.searchInput}
+            type="text"
+            placeholder="Поиск..."
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+          />
+          {searchQuery && (
+            <button className={s.searchClearBtn} onClick={handleSearchClear}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </motion.div>
+
         <motion.div
           className={s.sidebarContentBody}
           animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
           transition={{ duration: 0.15 }}
           style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
         >
+          {searchQuery.trim().length >= 3 ? (
+            <div className={s.chatList}>
+              {searchLoading && (
+                <div className={s.emptyChats}>Поиск...</div>
+              )}
+              {!searchLoading && searchResults.length === 0 && (
+                <div className={s.emptyChats}>Ничего не найдено</div>
+              )}
+              {!searchLoading && searchResults.map((result) => (
+                <div
+                  key={result.chat_id}
+                  className={`${s.chatItem} ${result.chat_id === activeChatId ? s.chatItemActive : ''}`}
+                  onClick={() => {
+                    selectChat(result.chat_id);
+                    handleSearchClear();
+                  }}
+                >
+                  <div className={s.chatItemRow}>
+                    <div className={s.chatItemTitle}>{result.chat_title}</div>
+                  </div>
+                  <div className={s.searchSnippet}>{renderSnippet(result.snippet)}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className={s.chatList}>
             {chats.map((chat) => (
               <div
@@ -510,6 +624,7 @@ export function ChatPage() {
               <div className={s.emptyChats}>Нет чатов</div>
             )}
           </div>
+          )}
         </motion.div>
 
         {/* Context menu */}
