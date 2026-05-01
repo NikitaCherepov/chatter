@@ -346,7 +346,9 @@ export function ChatPage() {
     try {
       const blob = await generateDocxBlob(msg.content);
       const buffer = await blob.arrayBuffer();
-      const result = await window.electronAPI?.saveFile('message.docx', buffer);
+      const d = new Date();
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const result = await window.electronAPI?.saveFile(`message ${dateStr}.docx`, buffer);
       if (result && !result.canceled) {
         toast.success('Файл сохранён');
       }
