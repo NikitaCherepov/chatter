@@ -14,9 +14,9 @@ type Section = 'account' | 'prompt' | 'app';
 
 const CUSTOM_PROMPT_ID = -1;
 
-const ZOOM_STEP = 0.05; // 5%
-const ZOOM_MIN = -0.6;  // 40%
-const ZOOM_MAX = 1.0;   // 200%
+const ZOOM_STEP_PCT = 5;
+const ZOOM_MIN_PCT = 40;
+const ZOOM_MAX_PCT = 200;
 
 const overlayVariants = {
   hidden: { opacity: 0 },
@@ -36,8 +36,18 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'app', label: 'Приложение' },
 ];
 
+// Electron uses logarithmic zoom: zoomFactor = 1.2^level
 function zoomLevelToPercent(level: number): number {
-  return Math.round((1 + level) * 100);
+  return Math.round(Math.pow(1.2, level) * 100);
+}
+
+function percentToZoomLevel(pct: number): number {
+  return Math.log(pct / 100) / Math.log(1.2);
+}
+
+function clampZoomPct(pct: number): number {
+  const snapped = Math.round(pct / ZOOM_STEP_PCT) * ZOOM_STEP_PCT;
+  return Math.min(ZOOM_MAX_PCT, Math.max(ZOOM_MIN_PCT, snapped));
 }
 
 export function SettingsModal({ onClose }: Props) {
@@ -55,8 +65,10 @@ export function SettingsModal({ onClose }: Props) {
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
 
-  // App zoom
-  const [zoomLevel, setZoomLevel] = useState(0);
+  // App zoom (stored as honest percentages)
+  const [zoomPct, setZoomPct] = useState(100);
+  const [zoomEditing, setZoomEditing] = useState(false);
+  const [zoomInputValue, setZoomInputValue] = useState('100');
 
   // Load account data
   useEffect(() => {
@@ -68,7 +80,11 @@ export function SettingsModal({ onClose }: Props) {
   // Load zoom level
   useEffect(() => {
     if (section !== 'app') return;
-    window.electronAPI?.getZoomLevel().then(setZoomLevel);
+    window.electronAPI?.getZoomLevel().then((level) => {
+      const pct = clampZoomPct(zoomLevelToPercent(level));
+      setZoomPct(pct);
+      setZoomInputValue(String(pct));
+    });
   }, [section]);
 
   // Load prompts when switching to prompt section
@@ -144,10 +160,30 @@ export function SettingsModal({ onClose }: Props) {
     }
   };
 
-  const handleZoomChange = async (delta: number) => {
-    const newLevel = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomLevel + delta)) * 10) / 10;
-    setZoomLevel(newLevel);
-    await window.electronAPI?.setZoomLevel(newLevel);
+  const applyZoom = async (newPct: number) => {
+    setZoomPct(newPct);
+    setZoomInputValue(String(newPct));
+    await window.electronAPI?.setZoomLevel(percentToZoomLevel(newPct));
+  };
+
+  const handleZoomChange = (deltaPct: number) => {
+    applyZoom(clampZoomPct(zoomPct + deltaPct));
+  };
+
+  const handleZoomInputBlur = () => {
+    setZoomEditing(false);
+    const num = Number(zoomInputValue.replace('%', '').trim());
+    if (!Number.isFinite(num)) {
+      setZoomInputValue(String(zoomPct));
+      return;
+    }
+    applyZoom(clampZoomPct(num));
+  };
+
+  const handleZoomInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
   };
 
   return (
@@ -269,19 +305,27 @@ export function SettingsModal({ onClose }: Props) {
                 <div className={s.zoomControl}>
                   <button
                     className={s.zoomBtn}
-                    onClick={() => handleZoomChange(-ZOOM_STEP)}
-                    disabled={zoomLevel <= ZOOM_MIN}
+                    onClick={() => handleZoomChange(-ZOOM_STEP_PCT)}
+                    disabled={zoomPct <= ZOOM_MIN_PCT}
                     type="button"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
                   </button>
-                  <span className={s.zoomValue}>{zoomLevelToPercent(zoomLevel)}%</span>
+                  <input
+                    className={s.zoomInput}
+                    type="text"
+                    value={zoomEditing ? zoomInputValue : `${zoomPct}%`}
+                    onFocus={() => { setZoomEditing(true); setZoomInputValue(String(zoomPct)); }}
+                    onChange={(e) => setZoomInputValue(e.target.value)}
+                    onBlur={handleZoomInputBlur}
+                    onKeyDown={handleZoomInputKeyDown}
+                  />
                   <button
                     className={s.zoomBtn}
-                    onClick={() => handleZoomChange(ZOOM_STEP)}
-                    disabled={zoomLevel >= ZOOM_MAX}
+                    onClick={() => handleZoomChange(ZOOM_STEP_PCT)}
+                    disabled={zoomPct >= ZOOM_MAX_PCT}
                     type="button"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

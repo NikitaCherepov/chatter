@@ -250,14 +250,24 @@
   }
 }
 
-.zoomValue {
-  padding: 0 12px;
+.zoomInput {
+  padding: 0 4px;
   font-size: 13px;
   font-weight: 500;
+  font-family: inherit;
   color: var(--text-primary);
-  min-width: 48px;
+  min-width: 60px;
+  width: 60px;
   text-align: center;
+  border: none;
   border-left: 1px solid var(--border-input);
   border-right: 1px solid var(--border-input);
-  line-height: 32px;
+  background: none;
+  outline: none;
+  height: 32px;
+  box-sizing: border-box;
+
+  &:focus {
+    background-color: var(--bg-modal-hover);
+  }
 }
