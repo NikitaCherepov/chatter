@@ -1,5 +1,6 @@
 import { sendMessageThroughAi } from './ai.js';
 import { getUserById, getMaxImagesForPlan } from './chats.js';
+import { saveUserImageThumbnail } from './image-storage.js';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -47,12 +48,26 @@ export const runPhotoAnalyzeTurn = async (
     ...extraImages
   ];
 
+  // Save thumbnails for all images
+  let userImages: Array<{ url: string; type: 'user_photo' }> | null = null;
+  try {
+    const saved: Array<{ url: string; type: 'user_photo' }> = [];
+    for (const img of allImages) {
+      const result = await saveUserImageThumbnail(img.base64, img.mimeType);
+      saved.push({ url: result.url, type: 'user_photo' });
+    }
+    userImages = saved;
+  } catch (err) {
+    console.error('[photo] failed to save image thumbnails:', err);
+  }
+
   const userPrompt = `${caption || ''}`.trim() || '';
   const result = await sendMessageThroughAi(userId, userPrompt, chatId, {
     images: allImages,
     persistUserText: caption ? `[Фото${allImages.length > 1 ? ` (${allImages.length} шт)` : ''}] ${caption}` : `[Фото${allImages.length > 1 ? ` (${allImages.length} шт)` : ''}]`,
     userTelegramChatId: options?.userTelegramChatId ?? null,
-    userTelegramMessageId: options?.userTelegramMessageId ?? null
+    userTelegramMessageId: options?.userTelegramMessageId ?? null,
+    userImages
   });
 
   return result;

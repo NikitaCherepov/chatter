@@ -44,11 +44,17 @@ export type ChatDto = {
   is_active: boolean;
 };
 
+export type MessageImage = {
+  url: string;
+  type: 'user_photo' | 'generated';
+};
+
 export type MessageDto = {
   id: number;
   chat_id: number;
   role: ChatRole;
   content: string;
+  images?: MessageImage[] | null;
   telegram_chat_id?: number | null;
   telegram_message_id?: number | null;
   created_at: number;
@@ -83,6 +89,7 @@ export type UsageDto = {
 
 export type GeneratedImage = {
   image_base64: string;
+  image_url?: string;
   prompt_used: string;
 };
 

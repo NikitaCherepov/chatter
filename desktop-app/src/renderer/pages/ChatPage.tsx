@@ -157,8 +157,13 @@ export function ChatPage() {
     setAttachedImages([]);
 
     const displayText = text || (hasImages ? '[Image]' : '');
+    // Build temporary images for user message (preview URLs from attached files)
+    const tempUserImages: api.MessageImage[] | undefined = hasImages
+      ? attachedImages.map((img) => ({ url: img.preview, type: 'user_photo' as const }))
+      : undefined;
     const tempUserMsg: api.Message = {
       id: -Date.now(), role: 'user', content: displayText, created_at: Math.floor(Date.now() / 1000),
+      images: tempUserImages,
     };
 
     setMessages((prev) => [...prev, tempUserMsg]);
@@ -199,13 +204,24 @@ export function ChatPage() {
           dispatchAvatarState(state);
         },
         onDone: (res) => {
+          // Build images array from generated_images
+          const genImages: api.MessageImage[] | undefined = res.generated_images?.length
+            ? res.generated_images.map(img => ({
+                url: img.image_url
+                  ? (img.image_url.startsWith('http') ? img.image_url : `${api.API_BASE}${img.image_url}`)
+                  : `data:image/png;base64,${img.image_base64}`,
+                type: 'generated' as const
+              }))
+            : undefined;
+
           if (assistantMsgCreated) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
                 ? {
                     ...m,
                     id: res.message_id,
-                    ...(res.reply_text ? { content: res.reply_text } : {})
+                    ...(res.reply_text ? { content: res.reply_text } : {}),
+                    ...(genImages ? { images: genImages } : {})
                   }
                 : m
             ));
@@ -214,6 +230,7 @@ export function ChatPage() {
             setSending(false);
             setMessages((prev) => [...prev, {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+              images: genImages,
             }]);
           }
           if (res.display_state) dispatchAvatarState(res.display_state);
@@ -788,6 +805,22 @@ export function ChatPage() {
                   </div>
                   <div className={s.bubbleWrap}>
                     <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
+                      {msg.images && msg.images.length > 0 && (
+                        <div className={s.messageImages}>
+                          {msg.images.map((img, i) => {
+                            const src = img.url.startsWith('/') ? `${api.API_BASE}${img.url}` : img.url;
+                            return (
+                              <img
+                                key={i}
+                                className={s.messageImage}
+                                src={src}
+                                alt={img.type === 'generated' ? 'Generated' : 'Photo'}
+                                loading="lazy"
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
                       {msg.role === 'assistant'
                         ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
                         : <div className={s.bubbleTextPlain}>{msg.content}</div>

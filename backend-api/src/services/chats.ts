@@ -1,5 +1,5 @@
 ﻿import { db, toUnix } from '../db.js';
-import type { ChatDto, MessageDto, ChatRole, UserRecord } from '../types.js';
+import type { ChatDto, MessageDto, MessageImage, ChatRole, UserRecord } from '../types.js';
 
 const parseAdminId = (raw: string | undefined) => {
   if (!raw) return null;
@@ -146,22 +146,29 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, telegram_chat_id, telegram_message_id, created_at
+    SELECT id, chat_id, role, content, images, telegram_chat_id, telegram_message_id, created_at
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; images: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string }>;
 
-  return rows.reverse().map(row => ({
-    id: row.id,
-    chat_id: row.chat_id,
-    role: row.role,
-    content: row.content,
-    telegram_chat_id: row.telegram_chat_id,
-    telegram_message_id: row.telegram_message_id,
-    created_at: toUnix(row.created_at)
-  }));
+  return rows.reverse().map(row => {
+    let parsedImages: MessageImage[] | null = null;
+    if (row.images) {
+      try { parsedImages = JSON.parse(row.images); } catch { parsedImages = null; }
+    }
+    return {
+      id: row.id,
+      chat_id: row.chat_id,
+      role: row.role,
+      content: row.content,
+      images: parsedImages,
+      telegram_chat_id: row.telegram_chat_id,
+      telegram_message_id: row.telegram_message_id,
+      created_at: toUnix(row.created_at)
+    };
+  });
 };
 
 export const appendChatMessage = (
@@ -170,12 +177,14 @@ export const appendChatMessage = (
   role: ChatRole,
   content: string,
   telegramChatId: number | null = null,
-  telegramMessageId: number | null = null
+  telegramMessageId: number | null = null,
+  images: MessageImage[] | null = null
 ) => {
+  const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
   const inserted = db.prepare(`
-    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId);
+    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson);
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return Number(inserted.lastInsertRowid);
 };

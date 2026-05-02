@@ -1,5 +1,7 @@
 const API_BASE: string = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3050';
 
+export { API_BASE };
+
 type Tokens = {
   access_token: string;
   refresh_token: string;
@@ -133,10 +135,16 @@ export async function fetchMe(): Promise<User> {
 
 // ---------- Chat ----------
 
+export type MessageImage = {
+  url: string;
+  type: 'user_photo' | 'generated';
+};
+
 export type Message = {
   id: number;
   role: 'user' | 'assistant';
   content: string;
+  images?: MessageImage[] | null;
   created_at: number;
 };
 
@@ -205,10 +213,17 @@ export type DisplayStatePayload = {
   clear_loop?: boolean;
 };
 
+export type GeneratedImage = {
+  image_base64: string;
+  image_url?: string;
+  prompt_used: string;
+};
+
 export type ChatSendResponse = {
   reply_text: string;
   message_id: number;
   chat_id: number;
+  generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;
 };
 

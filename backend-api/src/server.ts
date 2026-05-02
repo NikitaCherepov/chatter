@@ -17,6 +17,7 @@ import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePro
 import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
+import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 
 dotenv.config();
 
@@ -49,6 +50,16 @@ app.use('/updates', express.static(updatesPath, {
     if (filePath.endsWith('.yml')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
+  }
+}));
+
+// ── Static uploads for images ─────────────────────────────────────────────
+const uploadsDir = getUploadsDir();
+console.log(`[uploads] serving from: ${uploadsDir}`);
+app.use('/uploads', express.static(uploadsDir, {
+  maxAge: '30d',
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'public, max-age=2592000');
   }
 }));
 
@@ -379,6 +390,27 @@ const effectiveUserId = (req: AuthedRequest): number => {
   return rawId;
 };
 
+// ── Image download API (owner-only) ────────────────────────────────────────
+app.get('/api/v1/images/:filename', authMiddleware, (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const filename = path.basename(req.params.filename || '');
+  if (!filename) return res.status(400).json({ error: 'bad_filename' });
+
+  const filepath = resolveImageFile(filename);
+  if (!filepath) return res.status(404).json({ error: 'image_not_found' });
+
+  // Verify ownership: check that this image belongs to a message owned by this user
+  const row = db.prepare(`
+    SELECT 1 FROM chat_messages
+    WHERE user_id = ? AND images LIKE ?
+    LIMIT 1
+  `).get(userId, `%"${filename}"%`) as { 1: number } | undefined;
+
+  if (!row) return res.status(403).json({ error: 'access_denied' });
+
+  res.sendFile(filepath);
+});
+
 app.post('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
     return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
@@ -544,6 +576,22 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     }
   }
 
+  // Save thumbnails for user images (before SSE starts)
+  let savedUserImages: Array<{ url: string; type: 'user_photo' }> | null = null;
+  if (images.length > 0) {
+    try {
+      const { saveUserImageThumbnail } = await import('./services/image-storage.js');
+      const saved: Array<{ url: string; type: 'user_photo' }> = [];
+      for (const img of images) {
+        const result = await saveUserImageThumbnail(img.base64, img.mimeType);
+        saved.push({ url: result.url, type: 'user_photo' });
+      }
+      savedUserImages = saved;
+    } catch (err) {
+      console.error('[chat/send] failed to save image thumbnails:', err);
+    }
+  }
+
   // Parse optional display manifest from desktop client
   const displayManifest = req.body?.display_manifest;
 
@@ -557,6 +605,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   try {
     const result = await sendMessageThroughAi(userId, text, chatId, {
       ...(images.length > 0 ? { images } : {}),
+      userImages: savedUserImages,
       displayManifest,
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);

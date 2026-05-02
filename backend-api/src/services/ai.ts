@@ -1132,7 +1132,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1251,7 +1251,16 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     // base64 НЕ возвращаем в tool_content — он сохраняется в массив generatedImages
     // LLM получает текстовую заглушку, чтобы не забивать контекст мегабайтами base64
     if (Array.isArray(generatedImages)) {
-      generatedImages.push({ image_base64: result.image_base64, prompt_used: result.prompt_used });
+      // Save to disk and get URL
+      let imageUrl: string | undefined;
+      try {
+        const { saveGeneratedImage } = await import('./image-storage.js');
+        const saved = await saveGeneratedImage(result.image_base64);
+        imageUrl = saved.url;
+      } catch (err) {
+        console.error('[generate_image] failed to save generated image to disk:', err);
+      }
+      generatedImages.push({ image_base64: result.image_base64, image_url: imageUrl, prompt_used: result.prompt_used });
     }
     return JSON.stringify({ status: 'success', message: 'Изображение успешно сгенерировано и будет отправлено пользователю. Опиши результат своими словами.' });
   }
@@ -1306,6 +1315,7 @@ export const sendMessageThroughAi = async (
     assistantTelegramChatId?: number | null;
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
     images?: Array<{ base64: string; mimeType: string }>;
+    userImages?: Array<{ url: string; type: 'user_photo' }> | null;
     onIntermediateMessage?: (text: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
@@ -1462,7 +1472,7 @@ PRO
   let loop = 0;
   const toolOutputsForFallback: string[] = [];
   const toolUserMessages: string[] = [];
-  const generatedImages: Array<{ image_base64: string; prompt_used: string }> = [];
+  const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
   const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
@@ -1646,16 +1656,21 @@ if (escalatedToPro) {
     const userTelegramMessageId = Number.isFinite(Number(options?.userTelegramMessageId))
       ? Math.floor(Number(options?.userTelegramMessageId))
       : null;
-    appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId);
+    const userMessageImages = options?.userImages?.length ? options.userImages : null;
+    appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages);
   }
   const assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))
     : null;
   // Сохраняем в БД полную историю, даже если она ушла через коллбэк
   const textToSave = fullDbHistory || answer;
+  // Collect generated image URLs for assistant message
+  const assistantMessageImages = generatedImages.length > 0
+    ? generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const }))
+    : null;
   const assistantMessageId = options?.skipHistory
     ? 0
-    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null);
+    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages);
 
   const safeTokens = Math.max(0, Math.floor(totalTokens));
   const costRub = toRubFromTokens(safeTokens);

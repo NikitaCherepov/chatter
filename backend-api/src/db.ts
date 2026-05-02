@@ -52,6 +52,7 @@ ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_mes
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
+ensureChatMessageColumn('images', 'ALTER TABLE chat_messages ADD COLUMN images TEXT');
 
 db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
 

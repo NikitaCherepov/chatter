@@ -696,3 +696,25 @@
     opacity: 0.35;
   }
 }
+
+// ====== MESSAGE IMAGES ======
+
+.messageImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.messageImage {
+  max-width: 280px;
+  max-height: 280px;
+  border-radius: 8px;
+  object-fit: contain;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
