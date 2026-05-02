@@ -692,6 +692,40 @@ app.post('/api/v1/link/unlink', authMiddleware, (req: AuthedRequest, res) => {
   return res.json({ ok: true });
 });
 
+// ── Prompts (public, for desktop) ──────────────────────────────────────
+
+app.get('/api/v1/prompts', (req: AuthedRequest, res) => {
+  const prompts = getAllPrompts();
+  const user = getUserById(req.authUserId!);
+  return res.json({
+    prompts: prompts.map(p => ({ id: p.id, name: p.name, description: p.description, is_default: p.is_default })),
+    selected_prompt_id: user?.selected_prompt_id ?? null,
+    custom_prompt_content: user?.custom_prompt_content ?? null,
+  });
+});
+
+app.post('/api/v1/prompts/select', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const promptId = Number(req.body?.prompt_id);
+  if (!Number.isFinite(promptId)) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  if (promptId === -1) {
+    selectUserCustomPrompt(userId);
+  } else {
+    const prompt = getPromptById(promptId);
+    if (!prompt) return res.status(404).json({ error: 'prompt_not_found' });
+    updateUserPrompt(userId, promptId);
+  }
+  return res.json({ ok: true });
+});
+
+app.put('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const content = `${req.body?.content || ''}`;
+  updateUserCustomPrompt(userId, content);
+  return res.json({ ok: true });
+});
+
 // ── Internal: Telegram Link Verify (bot) ──────────────────────────────────
 
 app.post('/internal/link/verify', internalAuth, (req, res) => {

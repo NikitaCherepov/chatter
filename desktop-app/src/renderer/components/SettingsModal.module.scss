@@ -175,13 +175,53 @@
   }
 }
 
-// ====== EMPTY PROMPT PANEL ======
+// ====== PROMPT PANEL ======
 
-.promptEmpty {
+.promptLoading {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-hint);
   font-size: 13px;
+}
+
+.selectInput {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background-color: var(--bg-input);
+  color: var(--text-body);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.1s;
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
+
+.textareaInput {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background-color: var(--bg-input);
+  color: var(--text-body);
+  font-size: 13px;
+  outline: none;
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.5;
+  transition: border-color 0.1s;
+
+  &::placeholder {
+    color: var(--text-hint);
+  }
+
+  &:focus {
+    border-color: var(--accent);
+  }
 }

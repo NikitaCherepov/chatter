@@ -14,6 +14,8 @@ type User = {
   role: string;
   is_admin: number;
   plan: string;
+  selected_prompt_id: number | null;
+  custom_prompt_content: string | null;
 };
 
 // ---------- Token storage ----------
@@ -245,4 +247,37 @@ export async function getLinkStatus(): Promise<LinkStatusResponse> {
 
 export async function unlinkTelegram(): Promise<{ ok: boolean }> {
   return apiFetch('/api/v1/link/unlink', { method: 'POST' });
+}
+
+// ---------- Prompts ----------
+
+export type PromptInfo = {
+  id: number;
+  name: string;
+  description: string;
+  is_default: number;
+};
+
+export type PromptsResponse = {
+  prompts: PromptInfo[];
+  selected_prompt_id: number | null;
+  custom_prompt_content: string | null;
+};
+
+export async function getPrompts(): Promise<PromptsResponse> {
+  return apiFetch('/api/v1/prompts');
+}
+
+export async function selectPrompt(promptId: number): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/prompts/select', {
+    method: 'POST',
+    body: JSON.stringify({ prompt_id: promptId }),
+  });
+}
+
+export async function updateCustomPrompt(content: string): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/prompts/custom', {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  });
 }

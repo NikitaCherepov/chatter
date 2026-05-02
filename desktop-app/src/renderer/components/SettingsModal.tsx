@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
+import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
 
 type Props = {
@@ -9,6 +10,8 @@ type Props = {
 };
 
 type Section = 'account' | 'prompt';
+
+const CUSTOM_PROMPT_ID = -1;
 
 const overlayVariants = {
   hidden: { opacity: 0 },
@@ -30,22 +33,52 @@ const SECTIONS: { key: Section; label: string }[] = [
 export function SettingsModal({ onClose }: Props) {
   const { user, setUser } = useAuth();
   const [section, setSection] = useState<Section>('account');
+
+  // Account
   const [nameValue, setNameValue] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Prompt
+  const [prompts, setPrompts] = useState<api.PromptInfo[]>([]);
+  const [selectedPromptId, setSelectedPromptId] = useState<number | null>(null);
+  const [customContent, setCustomContent] = useState('');
+  const [promptsLoading, setPromptsLoading] = useState(false);
+  const [promptSaving, setPromptSaving] = useState(false);
+
+  // Load account data
   useEffect(() => {
     if (user) {
       setNameValue(user.name || '');
     }
   }, [user]);
 
+  // Load prompts when switching to prompt section
+  useEffect(() => {
+    if (section !== 'prompt') return;
+    let cancelled = false;
+    const load = async () => {
+      setPromptsLoading(true);
+      try {
+        const res = await api.getPrompts();
+        if (cancelled) return;
+        setPrompts(res.prompts);
+        setSelectedPromptId(res.selected_prompt_id);
+        setCustomContent(res.custom_prompt_content || '');
+      } catch (err) {
+        console.error('Failed to load prompts:', err);
+      } finally {
+        if (!cancelled) setPromptsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [section]);
+
   const handleSaveName = async () => {
     const trimmed = nameValue.trim();
     if (!trimmed) return;
     setSaving(true);
     try {
-      // TODO: add API endpoint when backend supports it
-      // For now, update locally
       const updated = { ...user!, name: trimmed };
       setUser(updated);
       localStorage.setItem('chatter_user', JSON.stringify(updated));
@@ -62,6 +95,33 @@ export function SettingsModal({ onClose }: Props) {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSaveName();
+    }
+  };
+
+  const handleSelectPrompt = async (promptId: number) => {
+    setSelectedPromptId(promptId);
+    setPromptSaving(true);
+    try {
+      await api.selectPrompt(promptId);
+      toast.success(promptId === CUSTOM_PROMPT_ID ? 'Выбран кастомный промпт' : 'Промпт выбран');
+    } catch (err) {
+      console.error('Failed to select prompt:', err);
+      toast.error('Не удалось выбрать промпт');
+    } finally {
+      setPromptSaving(false);
+    }
+  };
+
+  const handleSaveCustomPrompt = async () => {
+    setPromptSaving(true);
+    try {
+      await api.updateCustomPrompt(customContent);
+      toast.success('Кастомный промпт сохранён');
+    } catch (err) {
+      console.error('Failed to save custom prompt:', err);
+      toast.error('Не удалось сохранить промпт');
+    } finally {
+      setPromptSaving(false);
     }
   };
 
@@ -135,9 +195,50 @@ export function SettingsModal({ onClose }: Props) {
           {section === 'prompt' && (
             <div className={s.panel}>
               <div className={s.panelTitle}>Промпт</div>
-              <div className={s.promptEmpty}>
-                Пока ничего нет
-              </div>
+
+              {promptsLoading ? (
+                <div className={s.promptLoading}>Загрузка...</div>
+              ) : (
+                <>
+                  <div className={s.fieldGroup}>
+                    <label className={s.fieldLabel}>Стиль общения</label>
+                    <select
+                      className={s.selectInput}
+                      value={selectedPromptId ?? ''}
+                      onChange={(e) => handleSelectPrompt(Number(e.target.value))}
+                      disabled={promptSaving}
+                    >
+                      <option value="" disabled>Выберите промпт</option>
+                      <option value={CUSTOM_PROMPT_ID}>Кастомный</option>
+                      {prompts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} — {p.description}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedPromptId === CUSTOM_PROMPT_ID && (
+                    <div className={s.fieldGroup}>
+                      <label className={s.fieldLabel}>Ваш промпт</label>
+                      <textarea
+                        className={s.textareaInput}
+                        value={customContent}
+                        onChange={(e) => setCustomContent(e.target.value)}
+                        placeholder="Опишите стиль общения..."
+                        rows={6}
+                      />
+                      <button
+                        className={s.saveBtn}
+                        onClick={handleSaveCustomPrompt}
+                        disabled={promptSaving}
+                      >
+                        {promptSaving ? 'Сохранение...' : 'Сохранить промпт'}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
