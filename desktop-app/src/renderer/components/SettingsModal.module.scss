@@ -1,0 +1,187 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background-color: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-modal);
+  width: 560px;
+  max-width: 90vw;
+  height: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.closeBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+  }
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+// ====== LEFT MENU ======
+
+.menu {
+  width: 160px;
+  min-width: 160px;
+  border-right: 1px solid var(--border-light);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  text-align: left;
+  transition: background-color 0.1s, color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+    color: var(--text-primary);
+  }
+
+  &Active {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-weight: 600;
+
+    &:hover {
+      background-color: var(--bg-input);
+    }
+  }
+}
+
+// ====== RIGHT PANEL ======
+
+.panel {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.fieldInput {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background-color: var(--bg-input);
+  color: var(--text-body);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.1s;
+
+  &::placeholder {
+    color: var(--text-hint);
+  }
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
+
+.saveBtn {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  align-self: flex-start;
+
+  &:hover {
+    opacity: 0.85;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+// ====== EMPTY PROMPT PANEL ======
+
+.promptEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-hint);
+  font-size: 13px;
+}

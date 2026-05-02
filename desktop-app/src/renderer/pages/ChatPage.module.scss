@@ -390,6 +390,14 @@
   gap: 8px;
   flex: 1;
   min-width: 0;
+  border-radius: 6px;
+  padding: 4px;
+  margin: -4px;
+  transition: background-color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+  }
 }
 
 .avatar {
@@ -432,7 +440,7 @@
   transition: background-color 0.1s;
 
   &:hover {
-    background-color: var(--bg-bubble);
+    background-color: var(--bg-modal-hover);
   }
 }
 

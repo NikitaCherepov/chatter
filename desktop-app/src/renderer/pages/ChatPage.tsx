@@ -9,6 +9,7 @@ import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
+import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import s from './ChatPage.module.scss';
@@ -64,6 +65,7 @@ export function ChatPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<api.ChatSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
@@ -660,7 +662,7 @@ export function ChatPage() {
         )}
 
         <div className={s.sidebarFooter}>
-          <div className={s.userInfo}>
+          <div className={s.userInfo} style={{ cursor: 'pointer' }} onClick={() => setShowSettings(true)} title="Настройки">
             <div className={s.avatar}>
               {(user?.name || user?.username || 'U')[0].toUpperCase()}
             </div>
@@ -863,6 +865,13 @@ export function ChatPage() {
       </main>
 
       <AnimatePresence>
+        {showSettings && (
+          <SettingsModal
+            key="settings-modal"
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+
         {showLinkModal && (
           <LinkTelegramModal
             key="link-modal"
