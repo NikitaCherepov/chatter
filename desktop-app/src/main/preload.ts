@@ -13,4 +13,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File save: shows save dialog, writes ArrayBuffer to chosen path
   saveFile: (fileName: string, data: ArrayBuffer) =>
     ipcRenderer.invoke('save-file', fileName, data),
+
+  // Zoom
+  setZoomLevel: (level: number) =>
+    ipcRenderer.invoke('set-zoom-level', level),
+  getZoomLevel: () =>
+    ipcRenderer.invoke('get-zoom-level'),
 });

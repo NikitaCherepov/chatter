@@ -10,9 +10,13 @@ type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt';
+type Section = 'account' | 'prompt' | 'app';
 
 const CUSTOM_PROMPT_ID = -1;
+
+const ZOOM_STEP = 0.05; // 5%
+const ZOOM_MIN = -0.6;  // 40%
+const ZOOM_MAX = 1.0;   // 200%
 
 const overlayVariants = {
   hidden: { opacity: 0 },
@@ -29,7 +33,12 @@ const modalVariants = {
 const SECTIONS: { key: Section; label: string }[] = [
   { key: 'account', label: 'Аккаунт' },
   { key: 'prompt', label: 'Промпт' },
+  { key: 'app', label: 'Приложение' },
 ];
+
+function zoomLevelToPercent(level: number): number {
+  return Math.round((1 + level) * 100);
+}
 
 export function SettingsModal({ onClose }: Props) {
   const { user, setUser } = useAuth();
@@ -46,12 +55,21 @@ export function SettingsModal({ onClose }: Props) {
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
 
+  // App zoom
+  const [zoomLevel, setZoomLevel] = useState(0);
+
   // Load account data
   useEffect(() => {
     if (user) {
       setNameValue(user.name || '');
     }
   }, [user]);
+
+  // Load zoom level
+  useEffect(() => {
+    if (section !== 'app') return;
+    window.electronAPI?.getZoomLevel().then(setZoomLevel);
+  }, [section]);
 
   // Load prompts when switching to prompt section
   useEffect(() => {
@@ -124,6 +142,12 @@ export function SettingsModal({ onClose }: Props) {
     } finally {
       setPromptSaving(false);
     }
+  };
+
+  const handleZoomChange = async (delta: number) => {
+    const newLevel = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomLevel + delta)) * 10) / 10;
+    setZoomLevel(newLevel);
+    await window.electronAPI?.setZoomLevel(newLevel);
   };
 
   return (
@@ -233,6 +257,40 @@ export function SettingsModal({ onClose }: Props) {
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {section === 'app' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>Приложение</div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>Масштаб интерфейса</label>
+                <div className={s.zoomControl}>
+                  <button
+                    className={s.zoomBtn}
+                    onClick={() => handleZoomChange(-ZOOM_STEP)}
+                    disabled={zoomLevel <= ZOOM_MIN}
+                    type="button"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </button>
+                  <span className={s.zoomValue}>{zoomLevelToPercent(zoomLevel)}%</span>
+                  <button
+                    className={s.zoomBtn}
+                    onClick={() => handleZoomChange(ZOOM_STEP)}
+                    disabled={zoomLevel >= ZOOM_MAX}
+                    type="button"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

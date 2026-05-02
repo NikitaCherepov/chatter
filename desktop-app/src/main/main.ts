@@ -49,6 +49,17 @@ function createWindow() {
     fs.writeFileSync(result.filePath, Buffer.from(data));
     return { canceled: false, filePath: result.filePath };
   });
+
+  // ── IPC: zoom ──────────────────────────────────────────────────────────
+  ipcMain.handle('set-zoom-level', (_event, level: number) => {
+    if (!mainWindow) return;
+    mainWindow.webContents.setZoomLevel(level);
+  });
+
+  ipcMain.handle('get-zoom-level', () => {
+    if (!mainWindow) return 0;
+    return mainWindow.webContents.getZoomLevel();
+  });
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────
