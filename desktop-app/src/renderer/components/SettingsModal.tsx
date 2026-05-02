@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
+import { PromptSelector } from './PromptSelector';
 import s from './SettingsModal.module.scss';
 
 type Props = {
@@ -202,20 +203,13 @@ export function SettingsModal({ onClose }: Props) {
                 <>
                   <div className={s.fieldGroup}>
                     <label className={s.fieldLabel}>Стиль общения</label>
-                    <select
-                      className={s.selectInput}
-                      value={selectedPromptId ?? ''}
-                      onChange={(e) => handleSelectPrompt(Number(e.target.value))}
+                    <PromptSelector
+                      options={prompts}
+                      value={selectedPromptId}
+                      onChange={handleSelectPrompt}
                       disabled={promptSaving}
-                    >
-                      <option value="" disabled>Выберите промпт</option>
-                      <option value={CUSTOM_PROMPT_ID}>Кастомный</option>
-                      {prompts.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} — {p.description}
-                        </option>
-                      ))}
-                    </select>
+                      maxVisibleItems={3}
+                    />
                   </div>
 
                   {selectedPromptId === CUSTOM_PROMPT_ID && (

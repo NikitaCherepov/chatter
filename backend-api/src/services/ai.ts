@@ -1306,6 +1306,7 @@ export const sendMessageThroughAi = async (
     assistantTelegramChatId?: number | null;
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
     images?: Array<{ base64: string; mimeType: string }>;
+    onIntermediateMessage?: (text: string) => Promise<void> | void;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -1464,6 +1465,10 @@ PRO
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
 
+  // Буферы для корректной сборки ответа агентского цикла
+  let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
+  let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
+
   while (loop < MAX_TOOL_LOOPS) {
     loop += 1;
     const completion = await runCompletion(executionMode, {
@@ -1512,13 +1517,46 @@ PRO
     const message = response?.choices?.[0]?.message || {};
     currentMessages.push(message);
 
+    // --- УМНАЯ ОБРАБОТКА ТЕКСТА ---
+    const stepContent = `${message.content || ''}`.trim();
+
+    if (stepContent) {
+      // Всегда собираем полную историю для базы данных
+      fullDbHistory += (fullDbHistory ? '\n\n' : '') + stepContent;
+
+      if (message.tool_calls?.length) {
+        // Модель вызывает тулз + написала текст (промежуточное сообщение)
+        if (options?.onIntermediateMessage) {
+          // Если есть обработчик — отправляем юзеру прямо сейчас
+          await options.onIntermediateMessage(stepContent);
+        }
+        // Коллбэка нет — текст останется в fullDbHistory для финальной отправки
+      } else {
+        // Это финальный ответ (тулзов больше нет)
+        finalAnswer = stepContent;
+      }
+    }
+
     if (!message.tool_calls?.length) {
       const finishReason = response?.choices?.[0]?.finish_reason;
-      const content = `${message.content || ''}`.trim();
-      if (content) answer = content;
-      else if (toolOutputsForFallback.length) answer = toolOutputsForFallback[toolOutputsForFallback.length - 1] || FALLBACK_ANSWER;
+
+      // Формируем ответ на выход из функции
+      if (finalAnswer) {
+        // Был финальный текст — возвращаем его
+        answer = finalAnswer;
+      } else if (fullDbHistory && options?.onIntermediateMessage) {
+        // Текст ушел через коллбэк, но финального текста нет (наш баг с улыбкой),
+        // возвращаем пустоту, чтобы роутер не дублировал сообщение
+        answer = '';
+      } else if (fullDbHistory) {
+        // Коллбэка не было, отдаем юзеру всё склеенное разом
+        answer = fullDbHistory;
+      } else if (toolOutputsForFallback.length) {
+        answer = toolOutputsForFallback[toolOutputsForFallback.length - 1] || FALLBACK_ANSWER;
+      }
+
       if (finishReason === 'length') {
-        console.warn(`[AI TRUNCATE] finish_reason=length, model=${completion.usedModel}, provider=${completion.usedProvider}, content_len=${content.length}`);
+        console.warn(`[AI TRUNCATE] finish_reason=length, model=${completion.usedModel}, provider=${completion.usedProvider}, content_len=${stepContent.length}`);
       }
       break;
     }
@@ -1603,9 +1641,11 @@ if (escalatedToPro) {
   const assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))
     : null;
+  // Сохраняем в БД полную историю, даже если она ушла через коллбэк
+  const textToSave = fullDbHistory || answer;
   const assistantMessageId = options?.skipHistory
     ? 0
-    : appendChatMessage(userId, chatId, 'assistant', answer, assistantTelegramChatId, null);
+    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null);
 
   const safeTokens = Math.max(0, Math.floor(totalTokens));
   const costRub = toRubFromTokens(safeTokens);
