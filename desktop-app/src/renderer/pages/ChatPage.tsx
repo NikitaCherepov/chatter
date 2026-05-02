@@ -66,6 +66,7 @@ export function ChatPage() {
   const [searchResults, setSearchResults] = useState<api.ChatSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
@@ -537,6 +538,28 @@ export function ChatPage() {
     };
   }, []);
 
+  const resolveImageUrl = (url: string) => url.startsWith('/') ? `${api.API_BASE}${url}` : url;
+
+  const handleDownloadImage = async (src: string) => {
+    try {
+      const response = await fetch(src);
+      if (!response.ok) throw new Error('download failed');
+      const blob = await response.blob();
+      const buffer = await blob.arrayBuffer();
+      const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : blob.type.includes('gif') ? 'gif' : 'jpg';
+      const d = new Date();
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const fileName = `image_${dateStr}.${ext}`;
+      const result = await window.electronAPI?.saveFile(fileName, buffer);
+      if (result && !result.canceled) {
+        toast.success('Изображение сохранено');
+      }
+    } catch (err) {
+      console.error('Failed to download image:', err);
+      toast.error('Не удалось сохранить изображение');
+    }
+  };
+
   const renderSnippet = (snippet: string) => {
     const parts = snippet.split(/(<<|>>)/);
     const elements: React.ReactNode[] = [];
@@ -808,15 +831,28 @@ export function ChatPage() {
                       {msg.images && msg.images.length > 0 && (
                         <div className={s.messageImages}>
                           {msg.images.map((img, i) => {
-                            const src = img.url.startsWith('/') ? `${api.API_BASE}${img.url}` : img.url;
+                            const src = resolveImageUrl(img.url);
                             return (
-                              <img
-                                key={i}
-                                className={s.messageImage}
-                                src={src}
-                                alt={img.type === 'generated' ? 'Generated' : 'Photo'}
-                                loading="lazy"
-                              />
+                              <div key={i} className={s.messageImageWrap}>
+                                <img
+                                  className={s.messageImage}
+                                  src={src}
+                                  alt={img.type === 'generated' ? 'Generated' : 'Photo'}
+                                  loading="lazy"
+                                  onClick={() => setViewerImageSrc(src)}
+                                />
+                                <button
+                                  className={s.messageImageDownload}
+                                  onClick={(e) => { e.stopPropagation(); handleDownloadImage(src); }}
+                                  title="Скачать"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                </button>
+                              </div>
                             );
                           })}
                         </div>
@@ -1020,6 +1056,50 @@ export function ChatPage() {
                 <button className={s.confirmDanger} onClick={handleConfirmDelete}>Удалить</button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+
+        {viewerImageSrc && (
+          <motion.div
+            key="image-viewer"
+            className={s.imageViewerOverlay}
+            onClick={() => setViewerImageSrc(null)}
+            variants={{
+              hidden: { opacity: 0 },
+              visible: { opacity: 1 },
+              exit: { opacity: 0 },
+            }}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            <button
+              className={s.imageViewerDownload}
+              onClick={(e) => { e.stopPropagation(); handleDownloadImage(viewerImageSrc); }}
+              title="Скачать"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </button>
+            <button
+              className={s.imageViewerClose}
+              onClick={() => setViewerImageSrc(null)}
+              title="Закрыть"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <img
+              className={s.imageViewerImg}
+              src={viewerImageSrc}
+              alt=""
+              onClick={(e) => e.stopPropagation()}
+            />
           </motion.div>
         )}
       </AnimatePresence>

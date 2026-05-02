@@ -706,15 +706,104 @@
   margin-bottom: 10px;
 }
 
+.messageImageWrap {
+  position: relative;
+  display: inline-block;
+  border-radius: 8px;
+  overflow: hidden;
+
+  &:hover .messageImageDownload {
+    opacity: 1;
+  }
+}
+
 .messageImage {
   max-width: 280px;
   max-height: 280px;
   border-radius: 8px;
   object-fit: contain;
   cursor: pointer;
+  display: block;
   transition: opacity 0.15s;
 
   &:hover {
-    opacity: 0.9;
+    opacity: 0.85;
   }
+}
+
+.messageImageDownload {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background-color: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.1s;
+  padding: 0;
+  z-index: 2;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+}
+
+// ====== IMAGE VIEWER ======
+
+.imageViewerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background-color: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.imageViewerImg {
+  max-width: 85vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.imageViewerDownload,
+.imageViewerClose {
+  position: fixed;
+  z-index: 201;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s;
+  padding: 0;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+  }
+}
+
+.imageViewerDownload {
+  top: 20px;
+  right: 68px;
+}
+
+.imageViewerClose {
+  top: 20px;
+  right: 20px;
 }
