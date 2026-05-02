@@ -161,13 +161,27 @@ export function ChatPage() {
       id: -Date.now(), role: 'user', content: displayText, created_at: Math.floor(Date.now() / 1000),
     };
 
-    // Создаём пустой баббл для ассистента, который будет наполняться в реалтайме
-    const tempAssistantId = -Date.now() - 1;
-    const tempAssistantMsg: api.Message = {
-      id: tempAssistantId, role: 'assistant', content: '', created_at: Math.floor(Date.now() / 1000),
-    };
+    setMessages((prev) => [...prev, tempUserMsg]);
 
-    setMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
+    // ID для временного сообщения ассистента — создаётся лениво при первом контенте
+    let assistantMsgCreated = false;
+    const tempAssistantId = -Date.now() - 1;
+
+    const appendToAssistant = (text: string) => {
+      if (!assistantMsgCreated) {
+        assistantMsgCreated = true;
+        setSending(false); // убираем три точки — заменяем на реальный баббл
+        setMessages((prev) => [...prev, {
+          id: tempAssistantId, role: 'assistant', content: text, created_at: Math.floor(Date.now() / 1000),
+        }]);
+      } else {
+        setMessages((prev) => prev.map(m =>
+          m.id === tempAssistantId
+            ? { ...m, content: m.content + '\n\n' + text }
+            : m
+        ));
+      }
+    };
 
     await api.streamChatMessage(
       text || ' ',
@@ -176,42 +190,45 @@ export function ChatPage() {
       getAvatarManifest(),
       {
         onIntermediate: (stepText) => {
-          setMessages((prev) => prev.map(m =>
-            m.id === tempAssistantId
-              ? { ...m, content: m.content + (m.content ? '\n\n' : '') + stepText }
-              : m
-          ));
+          appendToAssistant(stepText);
         },
         onToolStatus: (statusText) => {
-          setMessages((prev) => prev.map(m =>
-            m.id === tempAssistantId
-              ? { ...m, content: m.content + (m.content ? '\n\n' : '') + `_${statusText}_` }
-              : m
-          ));
+          appendToAssistant(`_${statusText}_`);
         },
         onDisplayState: (state) => {
           dispatchAvatarState(state);
         },
         onDone: (res) => {
-          setMessages((prev) => prev.map(m =>
-            m.id === tempAssistantId
-              ? {
-                  ...m,
-                  id: res.message_id,
-                  ...(res.reply_text ? { content: res.reply_text } : {})
-                }
-              : m
-          ));
+          if (assistantMsgCreated) {
+            setMessages((prev) => prev.map(m =>
+              m.id === tempAssistantId
+                ? {
+                    ...m,
+                    id: res.message_id,
+                    ...(res.reply_text ? { content: res.reply_text } : {})
+                  }
+                : m
+            ));
+          } else {
+            // Ни одного промежуточного сообщения не было — добавляем финальный ответ
+            setSending(false);
+            setMessages((prev) => [...prev, {
+              id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+            }]);
+          }
           if (res.display_state) dispatchAvatarState(res.display_state);
           if (!activeChatId || res.chat_id !== activeChatId) {
             setActiveChatId(res.chat_id);
             loadChats();
           }
-          setSending(false);
         },
         onError: (err) => {
           console.error('Stream error:', err);
-          setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
+          if (assistantMsgCreated) {
+            setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
+          } else {
+            setMessages((prev) => prev.filter(m => m.id !== tempUserMsg.id));
+          }
           setSending(false);
         }
       }

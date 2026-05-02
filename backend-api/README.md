@@ -317,3 +317,24 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - Минимальная длина запроса: 3 символа.
 - Результаты ограничены `LIMIT` (по умолчанию 20, максимум 50).
 - Клиент использует debounce (300 мс) -- не более ~3 запросов/сек.
+
+## Changelog
+
+### 2025-05-03: Agent Loop Fix + SSE Streaming
+
+**Баг агентского цикла:**
+Когда AI-модель генерировала текст и одновременно вызывала tool call (например `set_display_state`), текст терялся. На следующем проходе модель возвращала `content: null` с `finish_reason: "stop"`, и код подхватывал JSON-ответ инструмента как финальный ответ юзеру.
+
+**Фикс в `services/ai.ts`:**
+- Добавлены переменные `fullDbHistory` (буфер всего текста для БД) и `finalAnswer` (последний текст для отправки).
+- `appendChatMessage` теперь получает `fullDbHistory || answer` — полная история сохраняется даже если текст ушёл через коллбэк.
+- Добавлены коллбэки в `sendMessageThroughAi`:
+  - `onIntermediateMessage` — текст, сгенерированный на промежуточных шагах (текст + tool call одновременно).
+  - `onStateChange` — мгновенная передача изменений аватара при вызове `set_display_state`.
+  - `onToolStatus` — статусы типа "Ищу информацию..." в реалтайме.
+
+**SSE Streaming для Desktop-клиента:**
+- Эндпоинт `POST /api/v1/chat/send` переведён с обычного JSON-ответа на SSE (Server-Sent Events).
+- Формат событий: `intermediate`, `tool_status`, `display_state`, `done`, `error`.
+- Валидация изображений остаётся обычной HTTP-ошибкой (до переключения на SSE).
+- Telegram-бот не затронут — он ходит через `/internal/ai/send`, который остался JSON.
