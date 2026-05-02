@@ -223,6 +223,100 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
   });
 }
 
+// ---------- SSE Streaming ----------
+
+export type StreamCallbacks = {
+  onIntermediate?: (text: string) => void;
+  onDisplayState?: (state: DisplayStatePayload) => void;
+  onToolStatus?: (text: string) => void;
+  onDone?: (result: ChatSendResponse) => void;
+  onError?: (err: string) => void;
+};
+
+export async function streamChatMessage(
+  text: string,
+  chatId?: number,
+  images?: ChatSendImage[],
+  displayManifest?: { moods: string[]; reactions: string[] },
+  callbacks?: StreamCallbacks
+) {
+  const attemptStream = async (isRetry = false): Promise<void> => {
+    const tokens = loadTokens();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
+
+    const body: Record<string, unknown> = { text };
+    if (chatId) body.chat_id = chatId;
+    if (images && images.length > 0) body.images = images;
+    if (displayManifest) body.display_manifest = displayManifest;
+
+    const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    // Refresh token при 401
+    if (res.status === 401 && !isRetry && tokens?.refresh_token) {
+      const refreshed = await refreshToken(tokens.refresh_token);
+      if (refreshed) {
+        saveTokens(refreshed);
+        return attemptStream(true);
+      }
+      clearTokens();
+      throw new Error('Session expired');
+    }
+
+    if (!res.ok) throw new Error(await res.text());
+    if (!res.body) throw new Error('ReadableStream not supported');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop() || '';
+
+      for (const chunk of chunks) {
+        if (!chunk.trim() || chunk.startsWith(':')) continue;
+
+        const lines = chunk.split('\n');
+        let eventName = 'message';
+        let dataStr = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) eventName = line.slice(6).trim();
+          if (line.startsWith('data:')) dataStr = line.slice(5).trim();
+        }
+
+        if (dataStr) {
+          try {
+            const data = JSON.parse(dataStr);
+            if (eventName === 'intermediate' && callbacks?.onIntermediate) callbacks.onIntermediate(data.text);
+            else if (eventName === 'display_state' && callbacks?.onDisplayState) callbacks.onDisplayState(data);
+            else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
+            else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
+            else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error);
+          } catch {
+            // ignore malformed JSON
+          }
+        }
+      }
+    }
+  };
+
+  try {
+    await attemptStream();
+  } catch (err: any) {
+    if (callbacks?.onError) callbacks.onError(err.message || 'stream_failed');
+  }
+}
+
 // ---------- Telegram Link ----------
 
 export type LinkGenerateResponse = {

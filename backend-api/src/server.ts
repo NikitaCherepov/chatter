@@ -535,7 +535,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     })
     .filter(img => img.base64.length > 0);
 
-  // Validate image sizes
+  // Validate image sizes — обычные HTTP-ошибки до переключения на SSE
   for (const img of images) {
     const buf = Buffer.from(img.base64, 'base64');
     if (!buf.length) continue;
@@ -547,22 +547,34 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   // Parse optional display manifest from desktop client
   const displayManifest = req.body?.display_manifest;
 
+  // SSE-заголовки
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // отключаем буферизацию nginx
+  res.write(': connected\n\n');
+
   try {
     const result = await sendMessageThroughAi(userId, text, chatId, {
       ...(images.length > 0 ? { images } : {}),
       displayManifest,
+      onIntermediateMessage: (stepText) => {
+        res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
+      },
+      onStateChange: (state) => {
+        res.write(`event: display_state\ndata: ${JSON.stringify(state)}\n\n`);
+      },
+      onToolStatus: (statusText) => {
+        res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);
+      }
     });
-    res.json(result);
+
+    res.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
+    res.end();
   } catch (err: any) {
     const code = `${err?.message || 'ai_send_failed'}`;
-    if (code === 'user_not_approved') return res.status(403).json({ error: code });
-    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
-    if (code === 'empty_text') return res.status(400).json({ error: code });
-    if (code === 'user_not_found') return res.status(404).json({ error: code });
-    if (code.startsWith('too_many_images')) return res.status(400).json({ error: code });
-    if (code === 'images_not_allowed_for_plan') return res.status(403).json({ error: code });
-    if (code === 'image_too_large') return res.status(413).json({ error: code });
-    return res.status(500).json({ error: code });
+    res.write(`event: error\ndata: ${JSON.stringify({ error: code })}\n\n`);
+    res.end();
   }
 });
 

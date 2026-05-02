@@ -152,7 +152,6 @@ export function ChatPage() {
       base64: img.base64,
       mime_type: img.mime_type,
     }));
-    const previewUrls = attachedImages.map((img) => img.preview);
 
     // Clear attached images immediately
     setAttachedImages([]);
@@ -161,26 +160,62 @@ export function ChatPage() {
     const tempUserMsg: api.Message = {
       id: -Date.now(), role: 'user', content: displayText, created_at: Math.floor(Date.now() / 1000),
     };
-    setMessages((prev) => [...prev, tempUserMsg]);
 
-    try {
-      const res = await api.sendChatMessage(text || ' ', activeChatId ?? undefined, imagesToSend.length > 0 ? imagesToSend : undefined, getAvatarManifest());
-      const assistantMsg: api.Message = {
-        id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
-      // Dispatch avatar display state from AI response
-      if (res.display_state) dispatchAvatarState(res.display_state);
-      if (!activeChatId || res.chat_id !== activeChatId) {
-        setActiveChatId(res.chat_id);
-        loadChats();
+    // Создаём пустой баббл для ассистента, который будет наполняться в реалтайме
+    const tempAssistantId = -Date.now() - 1;
+    const tempAssistantMsg: api.Message = {
+      id: tempAssistantId, role: 'assistant', content: '', created_at: Math.floor(Date.now() / 1000),
+    };
+
+    setMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
+
+    await api.streamChatMessage(
+      text || ' ',
+      activeChatId ?? undefined,
+      imagesToSend.length > 0 ? imagesToSend : undefined,
+      getAvatarManifest(),
+      {
+        onIntermediate: (stepText) => {
+          setMessages((prev) => prev.map(m =>
+            m.id === tempAssistantId
+              ? { ...m, content: m.content + (m.content ? '\n\n' : '') + stepText }
+              : m
+          ));
+        },
+        onToolStatus: (statusText) => {
+          setMessages((prev) => prev.map(m =>
+            m.id === tempAssistantId
+              ? { ...m, content: m.content + (m.content ? '\n\n' : '') + `_${statusText}_` }
+              : m
+          ));
+        },
+        onDisplayState: (state) => {
+          dispatchAvatarState(state);
+        },
+        onDone: (res) => {
+          setMessages((prev) => prev.map(m =>
+            m.id === tempAssistantId
+              ? {
+                  ...m,
+                  id: res.message_id,
+                  ...(res.reply_text ? { content: res.reply_text } : {})
+                }
+              : m
+          ));
+          if (res.display_state) dispatchAvatarState(res.display_state);
+          if (!activeChatId || res.chat_id !== activeChatId) {
+            setActiveChatId(res.chat_id);
+            loadChats();
+          }
+          setSending(false);
+        },
+        onError: (err) => {
+          console.error('Stream error:', err);
+          setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
+          setSending(false);
+        }
       }
-    } catch (err) {
-      console.error('Failed to send message:', err);
-      setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
-    } finally {
-      setSending(false);
-    }
+    );
   }, [input, sending, activeChatId, attachedImages]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

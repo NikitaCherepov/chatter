@@ -1307,6 +1307,8 @@ export const sendMessageThroughAi = async (
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
     images?: Array<{ base64: string; mimeType: string }>;
     onIntermediateMessage?: (text: string) => Promise<void> | void;
+    onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
+    onToolStatus?: (text: string) => Promise<void> | void;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -1595,7 +1597,10 @@ for (const toolCall of message.tool_calls) {
   }
 
   const toolUserMessage = getToolUserMessage(toolName, toolCall.function?.arguments || '{}');
-  if (toolUserMessage) toolUserMessages.push(toolUserMessage);
+  if (toolUserMessage) {
+    toolUserMessages.push(toolUserMessage);
+    if (options?.onToolStatus) await options.onToolStatus(toolUserMessage);
+  }
 
   let toolContent = '';
   try {
@@ -1608,6 +1613,11 @@ for (const toolCall of message.tool_calls) {
       generatedImages,
       displayStateSink
     );
+
+    // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
+    if (toolName === 'set_display_state' && displayStateSink.value && options?.onStateChange) {
+      await options.onStateChange(displayStateSink.value);
+    }
   } catch (err: any) {
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
   }
