@@ -77,19 +77,17 @@ export function SettingsModal({ onClose }: Props) {
     }
   }, [user]);
 
-  // Load zoom level
+  // Load zoom level on modal open
   useEffect(() => {
-    if (section !== 'app') return;
     window.electronAPI?.getZoomLevel().then((level) => {
       const pct = clampZoomPct(zoomLevelToPercent(level));
       setZoomPct(pct);
       setZoomInputValue(String(pct));
     });
-  }, [section]);
+  }, []);
 
-  // Load prompts when switching to prompt section
+  // Load prompts on modal open
   useEffect(() => {
-    if (section !== 'prompt') return;
     let cancelled = false;
     const load = async () => {
       setPromptsLoading(true);
@@ -97,7 +95,13 @@ export function SettingsModal({ onClose }: Props) {
         const res = await api.getPrompts();
         if (cancelled) return;
         setPrompts(res.prompts);
-        setSelectedPromptId(res.selected_prompt_id);
+        // If user hasn't chosen a prompt, fall back to the default one
+        if (res.selected_prompt_id !== null) {
+          setSelectedPromptId(res.selected_prompt_id);
+        } else {
+          const def = res.prompts.find(p => p.is_default === 1);
+          setSelectedPromptId(def ? def.id : null);
+        }
         setCustomContent(res.custom_prompt_content || '');
       } catch (err) {
         console.error('Failed to load prompts:', err);
@@ -107,7 +111,7 @@ export function SettingsModal({ onClose }: Props) {
     };
     load();
     return () => { cancelled = true; };
-  }, [section]);
+  }, []);
 
   const handleSaveName = async () => {
     const trimmed = nameValue.trim();

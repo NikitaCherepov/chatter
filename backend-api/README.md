@@ -320,6 +320,36 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 ## Changelog
 
+### 2025-05-03: Image Storage & Persistence
+
+**Проблема:** Пользовательские и сгенерированные изображения не сохранялись на сервере. После отправки картинки в AI vision или генерации через `generate_image` — base64 просто терялся. В истории чата (desktop/TG) картинки не отображались.
+
+**Решение — хранение изображений на сервере:**
+- Новый сервис `services/image-storage.ts` (зависимость `sharp`):
+  - `saveUserImageThumbnail()` — ресайзит до 512px, конвертирует в webp, сохраняет в `uploads/`.
+  - `saveGeneratedImage()` — сохраняет PNG без сжатия.
+- Статический сервер `/uploads/` с кешированием 30 дней.
+- API скачивания `GET /api/v1/images/:filename` — только для владельца (JWT + проверка `images` в `chat_messages`).
+
+**БД:**
+- Колонка `images TEXT` в `chat_messages` — JSON-массив `[{ "url": "/uploads/abc.webp", "type": "user_photo" | "generated" }]`.
+- `appendChatMessage` принимает параметр `images[]`.
+- `getChatMessages` парсит и возвращает `images` в ответе.
+
+**Токены AI:**
+- `getHistoryForAi()` **не тронут** — AI видит только текст `[Фото]caption`, картинки не отправляются повторно в контексте.
+- Разделение: "история для AI" = только текст, "история для отображения" = текст + images[].
+
+**Потоки данных:**
+- **Desktop отправляет фото:** base64 → сервер ресайзит + сохраняет thumbnail → оригинал в AI vision → в БД: `images: [{ url, type: "user_photo" }]`.
+- **Генерация изображения:** AI вызывает `generate_image` → b64 сохраняется на диск → возвращается `image_url` → в БД assistant-сообщения: `images: [{ url, type: "generated" }]`.
+- **Telegram фото:** бот скачивает фото → `/internal/photo/analyze` → thumbnail сохраняется → в БД user-сообщения.
+
+**Типы:**
+- `MessageImage` — `{ url: string; type: 'user_photo' | 'generated' }`.
+- `GeneratedImage` — добавлено поле `image_url`.
+- `ChatSendResponse` — добавлено поле `generated_images`.
+
 ### 2025-05-03: Agent Loop Fix + SSE Streaming
 
 **Баг агентского цикла:**
