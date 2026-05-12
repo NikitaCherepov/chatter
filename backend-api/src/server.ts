@@ -603,10 +603,12 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   res.write(': connected\n\n');
 
   try {
+    const apiUserId = req.authUserId!;
     const result = await sendMessageThroughAi(userId, text, chatId, {
       ...(images.length > 0 ? { images } : {}),
       userImages: savedUserImages,
       displayManifest,
+      ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
       },

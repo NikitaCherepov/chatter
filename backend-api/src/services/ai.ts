@@ -1316,6 +1316,7 @@ export const sendMessageThroughAi = async (
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
+    promptUserId?: number;
     onIntermediateMessage?: (text: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
@@ -1345,7 +1346,8 @@ export const sendMessageThroughAi = async (
   const history = getHistoryForAi(userId, chatId, contextWindow);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
-  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(user).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
+  const promptUser = options?.promptUserId ? getUserById(options.promptUserId) ?? user : user;
+  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
