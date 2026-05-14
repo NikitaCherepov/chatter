@@ -594,6 +594,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
   // Parse optional display manifest from desktop client
   const displayManifest = req.body?.display_manifest;
+  const isDesktop = Boolean(req.body?.is_desktop);
 
   // SSE-заголовки
   res.setHeader('Content-Type', 'text/event-stream');
@@ -608,12 +609,16 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       ...(images.length > 0 ? { images } : {}),
       userImages: savedUserImages,
       displayManifest,
+      isDesktop,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
       },
       onStateChange: (state) => {
         res.write(`event: display_state\ndata: ${JSON.stringify(state)}\n\n`);
+      },
+      onDesktopAction: (action) => {
+        res.write(`event: desktop_action\ndata: ${JSON.stringify(action)}\n\n`);
       },
       onToolStatus: (statusText) => {
         res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);

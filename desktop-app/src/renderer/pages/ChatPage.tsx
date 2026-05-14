@@ -13,7 +13,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
-import { openTool } from '../lib/tools';
+import { openTool, handleDesktopAction } from '../lib/tools';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -205,6 +205,9 @@ export function ChatPage() {
         },
         onDisplayState: (state) => {
           dispatchAvatarState(state);
+        },
+        onDesktopAction: (action) => {
+          handleDesktopAction(action);
         },
         onDone: (res) => {
           // Build images array from generated_images

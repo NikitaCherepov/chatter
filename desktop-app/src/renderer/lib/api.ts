@@ -240,9 +240,16 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
 
 // ---------- SSE Streaming ----------
 
+export type DesktopActionPayload = {
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'read_widget_state' | 'toggle_panel';
+  target?: string;
+  value?: { title?: string; content?: string };
+};
+
 export type StreamCallbacks = {
   onIntermediate?: (text: string) => void;
   onDisplayState?: (state: DisplayStatePayload) => void;
+  onDesktopAction?: (action: DesktopActionPayload) => void;
   onToolStatus?: (text: string) => void;
   onDone?: (result: ChatSendResponse) => void;
   onError?: (err: string) => void;
@@ -260,7 +267,7 @@ export async function streamChatMessage(
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
 
-    const body: Record<string, unknown> = { text };
+    const body: Record<string, unknown> = { text, is_desktop: true };
     if (chatId) body.chat_id = chatId;
     if (images && images.length > 0) body.images = images;
     if (displayManifest) body.display_manifest = displayManifest;
@@ -314,6 +321,7 @@ export async function streamChatMessage(
             const data = JSON.parse(dataStr);
             if (eventName === 'intermediate' && callbacks?.onIntermediate) callbacks.onIntermediate(data.text);
             else if (eventName === 'display_state' && callbacks?.onDisplayState) callbacks.onDisplayState(data);
+            else if (eventName === 'desktop_action' && callbacks?.onDesktopAction) callbacks.onDesktopAction(data);
             else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
             else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
             else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error);

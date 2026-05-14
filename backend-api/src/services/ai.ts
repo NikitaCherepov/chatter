@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
-import type { AiSendResult, DisplayStatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
+import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
@@ -1025,6 +1025,48 @@ const buildDisplayStateTool = (manifest?: { moods?: string[]; reactions?: string
     }
   };
 };
+
+/** Build desktop_action tool — only available on desktop client */
+const buildDesktopActionTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'desktop_action',
+      description: `Управление интерфейсом десктопного приложения Chatter. Позволяет открывать/закрывать виджеты, создавать черновики заметок, читать текущее состояние виджетов.
+Используй когда:
+- Пользователь просит создать черновик заметки (не сразу сохранить, а открыть для редактирования) — action=set_widget_data, target=notebook, value={title,content}
+- Нужно открыть блокнот чтобы показать что-то — action=open_widget, target=notebook
+- Нужно прочитать что сейчас написано в открытом черновике — action=read_widget_state, target=notebook
+- Нужно открыть/закрыть панель инструментов — action=toggle_panel
+- Нужно закрыть конкретный виджет — action=close_widget, target=notebook`,
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['open_widget', 'close_widget', 'set_widget_data', 'read_widget_state', 'toggle_panel'],
+            description: 'Тип действия. open_widget — открыть виджет, close_widget — закрыть, set_widget_data — передать данные в виджет (например текст черновика), read_widget_state — прочитать текущее состояние виджета, toggle_panel — открыть/закрыть панель инструментов.'
+          },
+          target: {
+            type: 'string',
+            enum: ['notebook'],
+            description: 'Целевой виджет. notebook — блокнот/заметки.'
+          },
+          value: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Заголовок (для блокнота)' },
+              content: { type: 'string', description: 'Текст содержимого (для блокнота)' }
+            },
+            description: 'Данные для передачи в виджет. Используется с action=set_widget_data.'
+          }
+        },
+        required: ['action']
+      }
+    }
+  };
+};
+
 const LITE_ROUTER_INSTRUCTIONS = `
 Ты — быстрый ассистент-диспетчер.
 Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
@@ -1132,7 +1174,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1277,6 +1319,22 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return JSON.stringify({ status: 'success', message: 'Состояние аватара обновлено.' });
   }
 
+  if (toolName === 'desktop_action') {
+    const action: string = typeof parsed.action === 'string' ? parsed.action : '';
+    const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
+    const value = parsed.value ?? undefined;
+
+    if (!action) return JSON.stringify({ status: 'error', message: 'action is required' });
+
+    const payload: DesktopActionPayload = { action: action as DesktopActionPayload['action'] };
+    if (target) payload.target = target;
+    if (value) payload.value = value;
+
+    if (desktopActionSink) desktopActionSink.value = payload;
+
+    return JSON.stringify({ status: 'success', message: `Команда ${action} выполнена.`, target });
+  }
+
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
@@ -1314,6 +1372,8 @@ export const sendMessageThroughAi = async (
     userTelegramMessageId?: number | null;
     assistantTelegramChatId?: number | null;
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
+    isDesktop?: boolean;
+    onDesktopAction?: (action: DesktopActionPayload) => Promise<void> | void;
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
     promptUserId?: number;
@@ -1352,7 +1412,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest)] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
@@ -1476,6 +1536,7 @@ PRO
   const toolUserMessages: string[] = [];
   const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
   const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
+  const desktopActionSink: { value: DesktopActionPayload | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
 
@@ -1595,8 +1656,8 @@ for (const toolCall of message.tool_calls) {
     }
 
     executionMode = 'pro';
-    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest)] as any[];
-    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest)] as any[];
+    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
+    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
     currentMessages.length = 0;
     currentMessages.push(
       { role: 'system', content: proSystemPrompt },
@@ -1623,12 +1684,18 @@ for (const toolCall of message.tool_calls) {
       toolCall.function?.arguments || '{}',
       (payload) => runCompletion('pro', payload),
       generatedImages,
-      displayStateSink
+      displayStateSink,
+      desktopActionSink
     );
 
     // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
     if (toolName === 'set_display_state' && displayStateSink.value && options?.onStateChange) {
       await options.onStateChange(displayStateSink.value);
+    }
+
+    // Если тулз вызвал desktop_action — прокидываем наружу в реалтайме
+    if (toolName === 'desktop_action' && desktopActionSink.value && options?.onDesktopAction) {
+      await options.onDesktopAction(desktopActionSink.value);
     }
   } catch (err: any) {
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
@@ -1709,6 +1776,7 @@ if (escalatedToPro) {
     tool_user_messages: toolUserMessages,
     generated_images: generatedImages.length > 0 ? generatedImages : undefined,
     display_state: displayStateSink.value ?? undefined,
+    desktop_action: desktopActionSink.value ?? undefined,
     usage: {
       tokens_used: totalTokens,
       used_model: usedModel,

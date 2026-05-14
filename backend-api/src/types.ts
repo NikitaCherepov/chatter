@@ -101,6 +101,7 @@ export type AiSendResult = {
   tool_user_messages?: string[];
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;
+  desktop_action?: DesktopActionPayload | null;
   usage: UsageDto;
 };
 
@@ -111,4 +112,16 @@ export type DisplayStatePayload = {
   media_url?: string;
   loop_reaction?: string;
   clear_loop?: boolean;
+};
+
+export type DesktopActionPayload = {
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'read_widget_state' | 'toggle_panel';
+  target?: 'notebook' | string;
+  value?: unknown;
+};
+
+export type DesktopActionResult = {
+  status: 'success' | 'error' | 'state';
+  message?: string;
+  state?: unknown;
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import { subscribeWidgetData, setNotebookDraftState } from '../lib/tools';
 import s from './NotebookTool.module.scss';
 
 const TITLE_MAX = 120;
@@ -54,6 +55,30 @@ export function NotebookTool({ contentMax }: Props) {
   };
 
   useEffect(() => { loadNotes(); }, []);
+
+  // Subscribe to widget data commands (from bot)
+  useEffect(() => {
+    const unsub = subscribeWidgetData('notebook', (cmd) => {
+      if (cmd.type === 'set_draft') {
+        setEditId(null);
+        setTitle(cmd.title || '');
+        setContent(cmd.content || '');
+        setOriginalTitle('');
+        setOriginalContent('');
+        setView('editor');
+      }
+    });
+    return unsub;
+  }, []);
+
+  // Expose draft state for bot to read
+  useEffect(() => {
+    setNotebookDraftState({
+      title,
+      content,
+      isOpen: view === 'editor',
+    });
+  }, [title, content, view]);
 
   const openEditor = (note?: api.NoteDto) => {
     if (note) {
