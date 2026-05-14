@@ -390,3 +390,36 @@ export async function updateCustomPrompt(content: string): Promise<{ ok: boolean
     body: JSON.stringify({ content }),
   });
 }
+
+// ---------- Notes ----------
+
+export type NoteDto = {
+  id: number;
+  title: string;
+  content: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export async function listNotes(limit = 20, offset = 0, query = ''): Promise<{ notes: NoteDto[]; total: number }> {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
+  if (query.trim()) params.set('query', query.trim());
+  return apiFetch(`/api/v1/notes?${params.toString()}`);
+}
+
+export async function getNoteById(noteId: number): Promise<{ note: NoteDto }> {
+  return apiFetch(`/api/v1/notes/${noteId}`);
+}
+
+export async function createNote(title: string, content: string): Promise<{ note_id?: number; error?: string }> {
+  return apiFetch('/api/v1/notes', {
+    method: 'POST',
+    body: JSON.stringify({ title, content }),
+  });
+}
+
+export async function deleteNote(noteId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/notes/${noteId}`, { method: 'DELETE' });
+}

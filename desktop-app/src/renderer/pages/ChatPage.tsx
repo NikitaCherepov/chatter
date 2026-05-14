@@ -12,6 +12,8 @@ import type { ImageItem } from '../components/AttachModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
+import { ToolsPanel } from '../components/ToolsPanel';
+import { openTool } from '../lib/tools';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -491,6 +493,16 @@ export function ChatPage() {
       dispatchAvatarState(payload as SetDisplayStatePayload);
     });
     return () => unsub?.();
+  }, []);
+
+  // Listen for external tool open requests (bot / IPC)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ toolId?: string }>).detail;
+      openTool(detail?.toolId);
+    };
+    window.addEventListener('chatter:open-tool', handler);
+    return () => window.removeEventListener('chatter:open-tool', handler);
   }, []);
 
   const formatTime = (ts: number) => {
@@ -984,6 +996,9 @@ export function ChatPage() {
           </>
         )}
       </main>
+
+      {/* RIGHT TOOLS PANEL */}
+      <ToolsPanel plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} />
 
       <AnimatePresence>
         {showSettings && (

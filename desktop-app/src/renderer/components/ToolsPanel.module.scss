@@ -1,0 +1,160 @@
+// ====== PANEL — always in DOM, animates width ======
+
+.panel {
+  width: 65px;
+  min-width: 0;
+  background-color: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border-light);
+  overflow: hidden;
+}
+
+// ====== HEADER ======
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 16px 16px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.backWrap {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.backBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+  }
+}
+
+.toolsIconBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+  }
+}
+
+// ====== PANEL BODY (fades in/out) ======
+
+.panelBody {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+// ====== TOOL LIST ======
+
+.toolList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.toolItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  text-align: left;
+  transition: background-color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-primary);
+  }
+}
+
+.toolIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  color: var(--accent-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.toolInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.toolItemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.toolItemDesc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+// ====== TOOL CONTENT ======
+
+.toolContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
