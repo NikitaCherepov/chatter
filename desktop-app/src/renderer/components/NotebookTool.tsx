@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
@@ -70,6 +70,17 @@ export function NotebookTool({ contentMax }: Props) {
     });
     return unsub;
   }, []);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 350)}px`;
+  }, []);
+
+  useEffect(() => { autoResize(); }, [content, autoResize]);
 
   // Expose draft state for bot to read
   useEffect(() => {
@@ -292,6 +303,7 @@ export function NotebookTool({ contentMax }: Props) {
               />
 
               <textarea
+                ref={textareaRef}
                 className={s.contentInput}
                 placeholder="Текст заметки..."
                 value={content}

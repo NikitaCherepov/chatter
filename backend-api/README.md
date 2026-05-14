@@ -289,6 +289,21 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `random_roll` | Бросок монетки/кубиков |
 | `generate_image` | Генерация изображения (ProxyAPI, `b64_json`). Автоматически маршрутизируется через PRO. |
 
+### Клиентские инструменты (desktop-only)
+
+Доступны только если в запросе передан `is_desktop: true`. Не показываются в Telegram.
+
+| Инструмент | Описание |
+|---|---|
+| `set_display_state` | Управление пиксельным аватаром. Enum-значения (moods/reactions) берутся из `display_manifest` — массива, который клиент передаёт в body. Если манифеста нет (Telegram) — tool не добавляется. |
+| `desktop_action` | Единый роутер управления интерфейсом десктопного приложения. Действия: `open_widget`, `close_widget`, `set_widget_data`, `read_widget_state`, `toggle_panel`. Цели: `notebook`. Позволяет боту открывать/закрывать виджеты, создавать черновики заметок, читать состояние. |
+
+**Поток `desktop_action`:**
+1. AI вызывает `desktop_action` tool → `runTool` парсит action/target/value → записывает в `desktopActionSink`
+2. Сервер отправляет SSE `event: desktop_action` с payload на клиент
+3. Клиент (`handleDesktopAction`) выполняет команду: открывает панель, переключает виджет, заполняет черновик и т.д.
+4. Результат также возвращается в `done` событии как `desktop_action`
+
 ## Типовые ошибки
 
 - `400` - плохой ввод (`bad_*`, `*_required`).
