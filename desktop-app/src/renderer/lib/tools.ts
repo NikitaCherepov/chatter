@@ -77,15 +77,30 @@ export type WidgetDataCommand = {
 type WidgetDataListener = (cmd: WidgetDataCommand) => void;
 
 const widgetListeners = new Map<string, Set<WidgetDataListener>>();
+// Pending commands that arrived before any listener subscribed
+const pendingCommands = new Map<string, WidgetDataCommand[]>();
 
 export function subscribeWidgetData(widgetId: string, fn: WidgetDataListener): () => void {
   if (!widgetListeners.has(widgetId)) widgetListeners.set(widgetId, new Set());
   widgetListeners.get(widgetId)!.add(fn);
+  // Drain pending commands
+  const pending = pendingCommands.get(widgetId);
+  if (pending) {
+    pendingCommands.delete(widgetId);
+    for (const cmd of pending) fn(cmd);
+  }
   return () => { widgetListeners.get(widgetId)?.delete(fn); };
 }
 
 export function dispatchWidgetData(widgetId: string, cmd: WidgetDataCommand) {
-  widgetListeners.get(widgetId)?.forEach((fn) => fn(cmd));
+  const listeners = widgetListeners.get(widgetId);
+  if (listeners && listeners.size > 0) {
+    listeners.forEach((fn) => fn(cmd));
+  } else {
+    // No listener yet — queue it
+    if (!pendingCommands.has(widgetId)) pendingCommands.set(widgetId, []);
+    pendingCommands.get(widgetId)!.push(cmd);
+  }
 }
 
 // ── Widget State Queries (bot reads widget state) ─────────────────────────
@@ -124,15 +139,12 @@ export function handleDesktopAction(action: { action: string; target?: string; v
   }
 
   if (a === 'set_widget_data' && action.target === 'notebook') {
-    // Open notebook first, then set draft
     openTool('notebook');
-    setTimeout(() => {
-      dispatchWidgetData('notebook', {
-        type: 'set_draft',
-        title: action.value?.title,
-        content: action.value?.content,
-      });
-    }, 50);
+    dispatchWidgetData('notebook', {
+      type: 'set_draft',
+      title: action.value?.title,
+      content: action.value?.content,
+    });
     return;
   }
 

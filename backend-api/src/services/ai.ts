@@ -1356,6 +1356,18 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
     }
   }
   if (toolName === 'generate_image') return 'Генерирую изображение...';
+  if (toolName === 'desktop_action') {
+    try {
+      const parsed = JSON.parse(argsRaw || '{}');
+      const a = parsed.action || '';
+      if (a === 'open_widget') return `Открываю ${parsed.target === 'notebook' ? 'блокнот' : 'виджет'}...`;
+      if (a === 'close_widget') return `Закрываю ${parsed.target === 'notebook' ? 'блокнот' : 'виджет'}...`;
+      if (a === 'set_widget_data') return `Готовлю черновик...`;
+      if (a === 'read_widget_state') return `Читаю состояние виджета...`;
+      if (a === 'toggle_panel') return 'Открываю панель инструментов...';
+    } catch { /* */ }
+    return 'Выполняю действие...';
+  }
   return null;
 };
 export const sendMessageThroughAi = async (

@@ -249,6 +249,8 @@
   flex-direction: column;
   padding: 12px 16px;
   gap: 10px;
+  flex: 1;
+  min-height: 0;
 }
 
 .titleInput {
@@ -282,8 +284,9 @@
   font-size: 13px;
   outline: none;
   resize: none;
-  min-height: 120px;
-  max-height: 300px;
+  min-height: 250px;
+  max-height: 100%;
+  flex: 1;
   line-height: 1.5;
   transition: border-color 0.1s;
 
