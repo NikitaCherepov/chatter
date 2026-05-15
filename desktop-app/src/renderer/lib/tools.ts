@@ -65,6 +65,40 @@ export function toggleToolsPanel() {
   }
 }
 
+// ── Tool Layout Mode ─────────────────────────────────────────────────────
+
+export type LayoutMode = 'sidebar' | 'fullscreen' | 'floating';
+
+export type ToolLayoutState = {
+  mode: LayoutMode;
+  floatingPos: { x: number; y: number };
+};
+
+type LayoutListener = (state: ToolLayoutState) => void;
+
+const layoutState = new Map<ToolId, ToolLayoutState>();
+const layoutListeners = new Map<ToolId, Set<LayoutListener>>();
+
+export function getToolLayout(toolId: ToolId): ToolLayoutState {
+  return layoutState.get(toolId) ?? { mode: 'sidebar', floatingPos: { x: 50, y: 50 } };
+}
+
+export function setToolLayout(toolId: ToolId, patch: Partial<ToolLayoutState>) {
+  const current = getToolLayout(toolId);
+  const next = { ...current, ...patch };
+  if (patch.floatingPos) {
+    next.floatingPos = { ...current.floatingPos, ...patch.floatingPos };
+  }
+  layoutState.set(toolId, next);
+  layoutListeners.get(toolId)?.forEach(fn => fn(next));
+}
+
+export function subscribeToolLayout(toolId: ToolId, fn: LayoutListener): () => void {
+  if (!layoutListeners.has(toolId)) layoutListeners.set(toolId, new Set());
+  layoutListeners.get(toolId)!.add(fn);
+  return () => { layoutListeners.get(toolId)?.delete(fn); };
+}
+
 // ── Tool Navigation (tool -> panel back button) ──────────────────────────
 
 type NavListener = () => void;

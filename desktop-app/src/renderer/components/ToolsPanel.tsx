@@ -1,7 +1,20 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { subscribeToolsPanel, getToolsPanelState, setToolsPanelState, getToolNav, type ToolId } from '../lib/tools';
+import { DndContext, type DragEndEvent } from '@dnd-kit/core';
+import { restrictToWindowEdges } from '@dnd-kit/modifiers';
+import {
+  subscribeToolsPanel,
+  getToolsPanelState,
+  setToolsPanelState,
+  getToolNav,
+  getToolLayout,
+  setToolLayout,
+  subscribeToolLayout,
+  type ToolId,
+  type LayoutMode,
+} from '../lib/tools';
 import { NotebookTool } from './NotebookTool';
+import { FloatingWidget } from './FloatingWidget';
 import s from './ToolsPanel.module.scss';
 
 // ── Tool definitions (registry) ──────────────────────────────────────────
@@ -50,22 +63,46 @@ const CONTENT_LIMITS: Record<string, number> = {
 export function ToolsPanel({ plan, isAdmin }: Props) {
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
   const [activeToolId, setActiveToolId] = useState<ToolId | null>(() => getToolsPanelState().activeToolId);
+  const [layoutState, setLayoutState] = useState(() => activeToolId ? getToolLayout(activeToolId) : { mode: 'sidebar' as LayoutMode, floatingPos: { x: 50, y: 50 } });
 
   useEffect(() => {
     const unsub = subscribeToolsPanel((state) => {
       setIsOpen(state.isOpen);
       setActiveToolId(state.activeToolId);
+      // Sync layout state when active tool changes
+      if (state.activeToolId) {
+        setLayoutState(getToolLayout(state.activeToolId));
+      }
     });
     return unsub;
   }, []);
 
+  // Subscribe to layout changes for the active tool
+  useEffect(() => {
+    if (!activeToolId) return;
+    const unsub = subscribeToolLayout(activeToolId, setLayoutState);
+    return unsub;
+  }, [activeToolId]);
+
   const contentMax = isAdmin === 1 ? 3000 : (CONTENT_LIMITS[plan] || 400);
   const tools = useMemo(() => buildTools(contentMax), [contentMax]);
 
-  const panelWidth = isOpen ? 260 : 65;
+  const layoutMode = layoutState.mode;
+  const isSidebar = layoutMode === 'sidebar';
+  // In sidebar mode, panel expands. In floating/fullscreen, panel is collapsed.
+  const panelWidth = (isOpen && isSidebar) ? 260 : 65;
   const activeTool = tools.find((t) => t.id === activeToolId);
 
+  // If floating or fullscreen, hide the tool from sidebar list
+  const sidebarTools = layoutMode !== 'sidebar' && activeToolId
+    ? tools.filter(t => t.id !== activeToolId)
+    : tools;
+
   const handleToggle = () => {
+    if (layoutMode !== 'sidebar' && activeToolId) {
+      // If in floating/fullscreen, clicking the icon goes back to sidebar
+      setToolLayout(activeToolId, { mode: 'sidebar' });
+    }
     setToolsPanelState({ isOpen: !isOpen });
   };
 
@@ -74,7 +111,6 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
   };
 
   const handleBack = () => {
-    // If the active tool registered an onBack (e.g. notebook editor → list), call it
     if (activeToolId) {
       const toolBack = getToolNav(activeToolId);
       if (toolBack) {
@@ -82,99 +118,165 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
         return;
       }
     }
-    // Default: go back to tool list
     setToolsPanelState({ activeToolId: null });
   };
 
+  const handleLayoutChange = useCallback((mode: LayoutMode) => {
+    if (!activeToolId) return;
+    setToolLayout(activeToolId, { mode });
+    if (mode === 'fullscreen' || mode === 'floating') {
+      // Collapse sidebar when going out of sidebar mode
+      setToolsPanelState({ isOpen: false });
+    } else {
+      setToolsPanelState({ isOpen: true });
+    }
+  }, [activeToolId]);
+
+  const handleFloatingPosChange = useCallback((pos: { x: number; y: number }) => {
+    if (!activeToolId) return;
+    setToolLayout(activeToolId, { floatingPos: pos });
+  }, [activeToolId]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    if (!activeToolId) return;
+    const current = getToolLayout(activeToolId);
+    setToolLayout(activeToolId, {
+      floatingPos: {
+        x: current.floatingPos.x + event.delta.x,
+        y: current.floatingPos.y + event.delta.y,
+      },
+    });
+  }, [activeToolId]);
+
+  const renderToolContent = (toolId: ToolId) => {
+    if (toolId === 'notebook') {
+      return <NotebookTool contentMax={activeTool?.contentMax ?? contentMax} />;
+    }
+    return null;
+  };
+
   return (
-    <motion.aside
-      className={s.panel}
-      animate={{ width: panelWidth }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
+    <DndContext
+      modifiers={[restrictToWindowEdges]}
+      onDragEnd={handleDragEnd}
     >
-      {/* Header */}
-      <div className={s.panelHeader}>
-        {/* Left group: back + title */}
-        <div className={s.headerLeft}>
-          <motion.div
-            className={s.backWrap}
-            animate={{ width: isOpen && activeToolId ? 28 : 0, marginRight: isOpen && activeToolId ? 8 : 0, opacity: isOpen && activeToolId ? 1 : 0 }}
-            transition={{ duration: 0.15 }}
-            style={{ pointerEvents: isOpen && activeToolId ? 'auto' : 'none' }}
-          >
-            <button className={s.backBtn} onClick={handleBack} title="Назад">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-          </motion.div>
-          <motion.span
-            className={s.panelTitle}
-            animate={{ opacity: isOpen ? 1 : 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            {activeToolId ? (activeTool?.title || '') : 'Инструменты'}
-          </motion.span>
-        </div>
-
-        {/* Tools icon — always visible */}
-        <button className={s.toolsIconBtn} onClick={handleToggle} title={isOpen ? 'Свернуть' : 'Инструменты'}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Body */}
-      <motion.div
-        className={s.panelBody}
-        animate={{ opacity: isOpen ? 1 : 0 }}
-        transition={{ duration: 0.15 }}
-        style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
+      {/* Sidebar (always rendered) */}
+      <motion.aside
+        className={s.panel}
+        animate={{ width: panelWidth }}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
       >
-        <AnimatePresence mode="wait">
-          {activeToolId && activeTool ? (
+        {/* Header */}
+        <div className={s.panelHeader}>
+          <div className={s.headerLeft}>
             <motion.div
-              key={activeToolId}
-              className={s.toolContent}
-              initial={{ x: 30, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 30, opacity: 0 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className={s.backWrap}
+              animate={{ width: isOpen && activeToolId && isSidebar ? 28 : 0, marginRight: isOpen && activeToolId && isSidebar ? 8 : 0, opacity: isOpen && activeToolId && isSidebar ? 1 : 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ pointerEvents: isOpen && activeToolId && isSidebar ? 'auto' : 'none' }}
             >
-              {activeTool.id === 'notebook' && (
-                <NotebookTool contentMax={activeTool.contentMax ?? contentMax} />
-              )}
+              <button className={s.backBtn} onClick={handleBack} title="Назад">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
             </motion.div>
-          ) : (
-            <motion.div
-              key="tool-list"
-              className={s.toolList}
-              initial={{ x: -30, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -30, opacity: 0 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+            <motion.span
+              className={s.panelTitle}
+              animate={{ opacity: isOpen ? 1 : 0 }}
+              transition={{ duration: 0.15 }}
             >
-              {tools.map((tool) => (
-                <button
-                  key={tool.id}
-                  className={s.toolItem}
-                  onClick={() => handleSelectTool(tool.id)}
-                >
-                  <div className={s.toolIcon}>{tool.icon}</div>
-                  <div className={s.toolInfo}>
-                    <div className={s.toolItemTitle}>{tool.title}</div>
-                    <div className={s.toolItemDesc}>{tool.description}</div>
-                  </div>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-hint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
+              {activeToolId && isSidebar ? (activeTool?.title || '') : 'Инструменты'}
+            </motion.span>
+            {/* Layout mode buttons — visible when a tool is active and sidebar is open */}
+            {isOpen && activeToolId && isSidebar && (
+              <div className={s.layoutBtns}>
+                <button className={s.layoutBtn} onClick={() => handleLayoutChange('floating')} title="Плавающее окно">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="5" y="5" width="14" height="14" rx="2" ry="2" />
                   </svg>
                 </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </motion.aside>
+                <button className={s.layoutBtn} onClick={() => handleLayoutChange('fullscreen')} title="На весь экран">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button className={s.toolsIconBtn} onClick={handleToggle} title={isOpen ? 'Свернуть' : 'Инструменты'}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body — only shows in sidebar mode */}
+        <motion.div
+          className={s.panelBody}
+          animate={{ opacity: isOpen ? 1 : 0 }}
+          transition={{ duration: 0.15 }}
+          style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
+        >
+          <AnimatePresence mode="wait">
+            {activeToolId && isSidebar && activeTool ? (
+              <motion.div
+                key={activeToolId}
+                className={s.toolContent}
+                initial={{ x: 30, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 30, opacity: 0 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
+                {renderToolContent(activeToolId)}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="tool-list"
+                className={s.toolList}
+                initial={{ x: -30, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -30, opacity: 0 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
+                {sidebarTools.map((tool) => (
+                  <button
+                    key={tool.id}
+                    className={s.toolItem}
+                    onClick={() => handleSelectTool(tool.id)}
+                  >
+                    <div className={s.toolIcon}>{tool.icon}</div>
+                    <div className={s.toolInfo}>
+                      <div className={s.toolItemTitle}>{tool.title}</div>
+                      <div className={s.toolItemDesc}>{tool.description}</div>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-hint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.aside>
+
+      {/* Floating / Fullscreen overlay */}
+      {activeToolId && !isSidebar && (
+        <FloatingWidget
+          layoutMode={layoutMode}
+          floatingPos={layoutState.floatingPos}
+          onFloatingPosChange={handleFloatingPosChange}
+          onLayoutChange={handleLayoutChange}
+          title={activeTool?.title || ''}
+        >
+          {renderToolContent(activeToolId)}
+        </FloatingWidget>
+      )}
+    </DndContext>
   );
 }
