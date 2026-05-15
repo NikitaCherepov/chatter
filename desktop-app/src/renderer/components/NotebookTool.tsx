@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
-import { subscribeWidgetData, setNotebookDraftState } from '../lib/tools';
+import { subscribeWidgetData, setNotebookDraftState, registerToolNav } from '../lib/tools';
 import s from './NotebookTool.module.scss';
 
 const TITLE_MAX = 120;
@@ -127,6 +127,12 @@ export function NotebookTool({ contentMax }: Props) {
   const backToList = () => {
     setView('list');
   };
+
+  // Register onBack with ToolsPanel so the header back button navigates within the tool
+  useEffect(() => {
+    registerToolNav('notebook', view === 'editor' ? backToList : null);
+    return () => { registerToolNav('notebook', null); };
+  }, [view]);
 
   const handleSelectNote = async (id: number) => {
     try {
@@ -288,11 +294,6 @@ export function NotebookTool({ contentMax }: Props) {
           >
             {/* Editor header */}
             <div className={s.editorHeader}>
-              <button className={s.backBtn} onClick={backToList} title="Назад">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </button>
               <span className={s.editorTitle}>
                 {isEditing ? `#${editId}` : 'Новая заметка'}
               </span>

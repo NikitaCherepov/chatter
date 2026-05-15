@@ -200,24 +200,6 @@
   border-bottom: 1px solid var(--border-light);
 }
 
-.backBtn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background-color: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.1s;
-
-  &:hover {
-    background-color: var(--bg-modal-hover);
-  }
-}
-
 .editorTitle {
   flex: 1;
   font-size: 13px;

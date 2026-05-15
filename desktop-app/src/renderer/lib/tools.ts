@@ -65,6 +65,27 @@ export function toggleToolsPanel() {
   }
 }
 
+// ── Tool Navigation (tool -> panel back button) ──────────────────────────
+
+type NavListener = () => void;
+
+const navCallbacks = new Map<ToolId, NavListener>();
+
+/** Register an onBack callback for a tool. Returns unsubscribe fn. */
+export function registerToolNav(toolId: ToolId, onBack: NavListener | null): () => void {
+  if (onBack) {
+    navCallbacks.set(toolId, onBack);
+  } else {
+    navCallbacks.delete(toolId);
+  }
+  return () => { navCallbacks.delete(toolId); };
+}
+
+/** Get the current onBack callback for a tool (or null). Used by ToolsPanel. */
+export function getToolNav(toolId: ToolId): NavListener | null {
+  return navCallbacks.get(toolId) ?? null;
+}
+
 // ── Widget Data Commands (bot -> widget) ─────────────────────────────────
 
 export type WidgetDataCommand = {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { subscribeToolsPanel, getToolsPanelState, setToolsPanelState, type ToolId } from '../lib/tools';
+import { subscribeToolsPanel, getToolsPanelState, setToolsPanelState, getToolNav, type ToolId } from '../lib/tools';
 import { NotebookTool } from './NotebookTool';
 import s from './ToolsPanel.module.scss';
 
@@ -74,6 +74,15 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
   };
 
   const handleBack = () => {
+    // If the active tool registered an onBack (e.g. notebook editor → list), call it
+    if (activeToolId) {
+      const toolBack = getToolNav(activeToolId);
+      if (toolBack) {
+        toolBack();
+        return;
+      }
+    }
+    // Default: go back to tool list
     setToolsPanelState({ activeToolId: null });
   };
 
