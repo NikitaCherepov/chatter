@@ -93,6 +93,39 @@ API: `GET/POST/DELETE /api/v1/notes`. Обновление = delete + create (н
 
 **Widget data dispatch:** `dispatchWidgetData()` ставит команду в очередь если виджет ещё не смонтирован (pending commands). При подписке — очередь дренируется.
 
+## SSE Streaming
+
+Desktop-клиент использует **SSE (Server-Sent Events)** для стриминга ответов AI в реальном времени. Реализация в `lib/api.ts`, функция `streamChatMessage()`.
+
+SSE — однонаправленный стрим от сервера к клиенту (в отличие от WebSocket, который двунаправленный). Клиент отправляет обычный POST-запрос на `/api/v1/chat/send` с `is_desktop: true`, сервер отвечает `Content-Type: text/event-stream` и стримит события.
+
+**Формат событий:**
+
+| Event | Описание |
+|---|---|
+| `intermediate` | Промежуточный текст AI (сгенерирован одновременно с tool call) |
+| `tool_status` | Статус выполнения инструмента ("Ищу информацию...") |
+| `display_state` | Изменение состояния пиксельного аватара |
+| `desktop_action` | Команда управления интерфейсом (открыть виджет, создать черновик) |
+| `done` | Финальный ответ с `reply_text`, `message_id`, `chat_id` |
+| `error` | Ошибка |
+
+Клиент парсит поток вручную через `ReadableStream` + `TextDecoder`, без `EventSource` (т.к. нужен POST с body).
+
+Telegram-бот ходит через обычный JSON-эндпоинт `/internal/ai/send` — SSE только для десктопа.
+
+## Tool Navigation
+
+Кнопка "назад" в хедере ToolsPanel — единая для всех инструментов. Инструменты регистрируют свой `onBack` коллбэк через `registerToolNav(toolId, callback)` из `lib/tools.ts`.
+
+| Контекст | Поведение кнопки назад |
+|---|---|
+| Инструмент с внутренним стеком (notebook editor) | Вызывает `tool.onBack()` → возврат к списку заметок |
+| Инструмент без стека (notebook list) | Возврат к списку инструментов |
+| Нет активного инструмента | Кнопка скрыта |
+
+Новый инструмент просто вызывает `registerToolNav('myTool', onBack)` в useEffect. Если callback не зарегистрирован — назад возвращает к списку инструментов.
+
 ## CSS Variables
 
 Все цвета/отступы через CSS-переменные в `global.scss`. Ключевые:
