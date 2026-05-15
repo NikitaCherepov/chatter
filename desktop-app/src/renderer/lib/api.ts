@@ -455,3 +455,7 @@ export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error'
   params.set('status', status);
   return apiFetch(`/api/v1/tasks?${params.toString()}`);
 }
+
+export async function deleteTask(taskId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/tasks/${taskId}`, { method: 'DELETE' });
+}
