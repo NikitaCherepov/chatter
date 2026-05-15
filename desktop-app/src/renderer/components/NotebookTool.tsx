@@ -79,16 +79,24 @@ export function NotebookTool({ contentMax }: Props) {
     return unsub;
   }, []);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaElRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const autoResize = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
+  const resizeTextarea = useCallback((el: HTMLTextAreaElement) => {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 350)}px`;
   }, []);
 
-  useEffect(() => { autoResize(); }, [content, autoResize]);
+  // callback-ref: fires when textarea mounts (list → editor transition)
+  const textareaRef = useCallback((node: HTMLTextAreaElement | null) => {
+    textareaElRef.current = node;
+    if (node) resizeTextarea(node);
+  }, [resizeTextarea]);
+
+  // Resize when content changes externally (openEditor, open_note from bot)
+  useEffect(() => {
+    const el = textareaElRef.current;
+    if (el && content) resizeTextarea(el);
+  }, [content, resizeTextarea]);
 
   // Expose draft state for bot to read
   useEffect(() => {
@@ -315,7 +323,12 @@ export function NotebookTool({ contentMax }: Props) {
                 className={s.contentInput}
                 placeholder="Текст заметки..."
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={(e) => {
+                  setContent(e.target.value);
+                  const el = e.currentTarget;
+                  el.style.height = 'auto';
+                  el.style.height = `${Math.min(el.scrollHeight, 350)}px`;
+                }}
                 maxLength={contentMax}
                 autoFocus={isEditing}
               />
