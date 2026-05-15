@@ -6,6 +6,8 @@ import type { LayoutMode } from '../lib/tools';
 import s from './FloatingWidget.module.scss';
 
 type Props = {
+  /** Unique id for @dnd-kit (e.g. "floating-notebook") */
+  dragId: string;
   layoutMode: LayoutMode;
   /** Current floating position (from tools.ts state) */
   floatingPos: { x: number; y: number };
@@ -13,6 +15,8 @@ type Props = {
   onFloatingPosChange: (pos: { x: number; y: number }) => void;
   /** Called when user changes layout mode via header buttons */
   onLayoutChange: (mode: LayoutMode) => void;
+  /** Called when user clicks close (X) button */
+  onClose: () => void;
   /** Header title (tool name) */
   title: string;
   children: React.ReactNode;
@@ -25,15 +29,17 @@ type Props = {
  * - 'floating' — position:fixed, draggable via @dnd-kit
  */
 export function FloatingWidget({
+  dragId,
   layoutMode,
   floatingPos,
   onFloatingPosChange,
   onLayoutChange,
+  onClose,
   title,
   children,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: 'floating-widget',
+    id: dragId,
   });
 
   const style: React.CSSProperties =
@@ -104,7 +110,7 @@ export function FloatingWidget({
           )}
           <button
             className={s.modeBtn}
-            onClick={() => onLayoutChange('sidebar')}
+            onClick={onClose}
             title="Закрыть"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

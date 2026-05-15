@@ -17,21 +17,22 @@ export type ToolDefinition = {
 
 type ToolsPanelState = {
   isOpen: boolean;
-  activeToolId: ToolId | null;
+  /** Ordered list of currently open tool IDs. First = sidebar tool, rest may be floating/fullscreen. */
+  openTools: ToolId[];
 };
 
 type Listener = (state: ToolsPanelState) => void;
 
 const listeners = new Set<Listener>();
-let currentState: ToolsPanelState = { isOpen: false, activeToolId: null };
+let currentState: ToolsPanelState = { isOpen: false, openTools: [] };
 
 export function getToolsPanelState(): ToolsPanelState {
-  return { ...currentState };
+  return { ...currentState, openTools: [...currentState.openTools] };
 }
 
 export function setToolsPanelState(patch: Partial<ToolsPanelState>) {
   currentState = { ...currentState, ...patch };
-  listeners.forEach((fn) => fn({ ...currentState }));
+  listeners.forEach((fn) => fn(getToolsPanelState()));
 }
 
 export function subscribeToolsPanel(fn: Listener): () => void {
@@ -40,15 +41,29 @@ export function subscribeToolsPanel(fn: Listener): () => void {
 }
 
 /**
- * Open the tools panel and optionally activate a specific tool.
+ * Open a tool — adds to openTools if not already there.
  * This is the primary API for external callers (e.g. bot).
  */
 export function openTool(toolId?: ToolId) {
-  setToolsPanelState({ isOpen: true, activeToolId: toolId ?? currentState.activeToolId });
+  if (!toolId) {
+    setToolsPanelState({ isOpen: true });
+    return;
+  }
+  const next = currentState.openTools.includes(toolId)
+    ? currentState.openTools
+    : [...currentState.openTools, toolId];
+  setToolsPanelState({ isOpen: true, openTools: next });
 }
 
 /**
- * Close the tools panel. Keeps activeToolId so reopening returns to same state.
+ * Close a specific tool — removes from openTools.
+ */
+export function closeTool(toolId: ToolId) {
+  setToolsPanelState({ openTools: currentState.openTools.filter(id => id !== toolId) });
+}
+
+/**
+ * Close the tools panel. Keeps openTools so reopening returns to same state.
  */
 export function closeToolsPanel() {
   setToolsPanelState({ isOpen: false });
@@ -187,8 +202,8 @@ export function handleDesktopAction(action: { action: string; target?: string; v
   }
 
   if (a === 'close_widget') {
-    if (action.target && currentState.activeToolId === action.target) {
-      setToolsPanelState({ activeToolId: null });
+    if (action.target) {
+      closeTool(action.target);
     }
     return;
   }

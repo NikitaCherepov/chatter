@@ -6,14 +6,17 @@ import {
   subscribeToolsPanel,
   getToolsPanelState,
   setToolsPanelState,
+  closeTool,
   getToolNav,
   getToolLayout,
   setToolLayout,
   subscribeToolLayout,
   type ToolId,
   type LayoutMode,
+  type ToolLayoutState,
 } from '../lib/tools';
 import { NotebookTool } from './NotebookTool';
+import { TasksTool } from './TasksTool';
 import { FloatingWidget } from './FloatingWidget';
 import s from './ToolsPanel.module.scss';
 
@@ -37,6 +40,13 @@ const TOOL_ICON_NOTEBOOK = (
   </svg>
 );
 
+const TOOL_ICON_TASKS = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+);
+
 const buildTools = (contentMax: number): ToolEntry[] => [
   {
     id: 'notebook',
@@ -44,6 +54,12 @@ const buildTools = (contentMax: number): ToolEntry[] => [
     description: 'Заметки',
     icon: TOOL_ICON_NOTEBOOK,
     contentMax,
+  },
+  {
+    id: 'tasks',
+    title: 'Задачи',
+    description: 'Запланированные',
+    icon: TOOL_ICON_TASKS,
   },
 ];
 
@@ -62,98 +78,109 @@ const CONTENT_LIMITS: Record<string, number> = {
 
 export function ToolsPanel({ plan, isAdmin }: Props) {
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
-  const [activeToolId, setActiveToolId] = useState<ToolId | null>(() => getToolsPanelState().activeToolId);
-  const [layoutState, setLayoutState] = useState(() => activeToolId ? getToolLayout(activeToolId) : { mode: 'sidebar' as LayoutMode, floatingPos: { x: 50, y: 50 } });
+  const [openTools, setOpenTools] = useState<ToolId[]>(() => getToolsPanelState().openTools);
+  // Per-tool layout states
+  const [toolLayouts, setToolLayouts] = useState<Record<string, ToolLayoutState>>({});
 
+  // Subscribe to panel state changes
   useEffect(() => {
     const unsub = subscribeToolsPanel((state) => {
       setIsOpen(state.isOpen);
-      setActiveToolId(state.activeToolId);
-      // Sync layout state when active tool changes
-      if (state.activeToolId) {
-        setLayoutState(getToolLayout(state.activeToolId));
-      }
+      setOpenTools(state.openTools);
     });
     return unsub;
   }, []);
 
-  // Subscribe to layout changes for the active tool
+  // Subscribe to layout changes for all open tools
   useEffect(() => {
-    if (!activeToolId) return;
-    const unsub = subscribeToolLayout(activeToolId, setLayoutState);
-    return unsub;
-  }, [activeToolId]);
+    const unsubs: (() => void)[] = [];
+    for (const toolId of openTools) {
+      const unsub = subscribeToolLayout(toolId, (layout) => {
+        setToolLayouts(prev => ({ ...prev, [toolId]: layout }));
+      });
+      unsubs.push(unsub);
+      // Initialize if not yet tracked
+      setToolLayouts(prev => {
+        if (prev[toolId]) return prev;
+        return { ...prev, [toolId]: getToolLayout(toolId) };
+      });
+    }
+    return () => { unsubs.forEach(fn => fn()); };
+  }, [openTools]);
 
   const contentMax = isAdmin === 1 ? 3000 : (CONTENT_LIMITS[plan] || 400);
   const tools = useMemo(() => buildTools(contentMax), [contentMax]);
 
-  const layoutMode = layoutState.mode;
-  const isSidebar = layoutMode === 'sidebar';
-  // In sidebar mode, panel expands. In floating/fullscreen, panel is collapsed.
-  const panelWidth = (isOpen && isSidebar) ? 260 : 65;
-  const activeTool = tools.find((t) => t.id === activeToolId);
+  // Find the first tool in sidebar mode (it occupies the sidebar slot)
+  const sidebarToolId = openTools.find(id => (toolLayouts[id]?.mode ?? 'sidebar') === 'sidebar') ?? null;
+  const sidebarTool = tools.find(t => t.id === sidebarToolId);
 
-  // If floating or fullscreen, hide the tool from sidebar list
-  const sidebarTools = layoutMode !== 'sidebar' && activeToolId
-    ? tools.filter(t => t.id !== activeToolId)
-    : tools;
+  // Sidebar panel width: expanded when open (regardless of whether a tool is active)
+  const panelWidth = isOpen ? 260 : 65;
 
   const handleToggle = () => {
-    if (layoutMode !== 'sidebar' && activeToolId) {
-      // If in floating/fullscreen, clicking the icon goes back to sidebar
-      setToolLayout(activeToolId, { mode: 'sidebar' });
-    }
     setToolsPanelState({ isOpen: !isOpen });
   };
 
   const handleSelectTool = (id: ToolId) => {
-    setToolsPanelState({ activeToolId: id });
+    setToolLayout(id, { mode: 'sidebar' });
+    setToolsPanelState({ isOpen: true, openTools: [...openTools.filter(tid => tid !== id), id] });
   };
 
   const handleBack = () => {
-    if (activeToolId) {
-      const toolBack = getToolNav(activeToolId);
+    if (sidebarToolId) {
+      const toolBack = getToolNav(sidebarToolId);
       if (toolBack) {
         toolBack();
         return;
       }
     }
-    setToolsPanelState({ activeToolId: null });
+    // No internal nav — close the sidebar tool
+    if (sidebarToolId) {
+      closeTool(sidebarToolId);
+    }
   };
 
-  const handleLayoutChange = useCallback((mode: LayoutMode) => {
-    if (!activeToolId) return;
-    setToolLayout(activeToolId, { mode });
+  const handleLayoutChange = useCallback((toolId: ToolId, mode: LayoutMode) => {
+    setToolLayout(toolId, { mode });
     if (mode === 'fullscreen' || mode === 'floating') {
       // Collapse sidebar when going out of sidebar mode
       setToolsPanelState({ isOpen: false });
     } else {
       setToolsPanelState({ isOpen: true });
     }
-  }, [activeToolId]);
+  }, []);
 
-  const handleFloatingPosChange = useCallback((pos: { x: number; y: number }) => {
-    if (!activeToolId) return;
-    setToolLayout(activeToolId, { floatingPos: pos });
-  }, [activeToolId]);
+  const handleFloatingPosChange = useCallback((toolId: ToolId, pos: { x: number; y: number }) => {
+    setToolLayout(toolId, { floatingPos: pos });
+  }, []);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    if (!activeToolId) return;
-    const current = getToolLayout(activeToolId);
-    setToolLayout(activeToolId, {
+    const id = event.active.id as string;
+    // id format: "floating-{toolId}"
+    const toolId = id.replace('floating-', '');
+    const current = getToolLayout(toolId);
+    setToolLayout(toolId, {
       floatingPos: {
         x: current.floatingPos.x + event.delta.x,
         y: current.floatingPos.y + event.delta.y,
       },
     });
-  }, [activeToolId]);
+  }, []);
 
   const renderToolContent = (toolId: ToolId) => {
+    const tool = tools.find(t => t.id === toolId);
     if (toolId === 'notebook') {
-      return <NotebookTool contentMax={activeTool?.contentMax ?? contentMax} />;
+      return <NotebookTool contentMax={tool?.contentMax ?? contentMax} />;
+    }
+    if (toolId === 'tasks') {
+      return <TasksTool />;
     }
     return null;
   };
+
+  // Non-sidebar open tools (for floating/fullscreen windows)
+  const floatingTools = openTools.filter(id => (toolLayouts[id]?.mode ?? 'sidebar') !== 'sidebar');
 
   return (
     <DndContext
@@ -171,9 +198,9 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
           <div className={s.headerLeft}>
             <motion.div
               className={s.backWrap}
-              animate={{ width: isOpen && activeToolId && isSidebar ? 28 : 0, marginRight: isOpen && activeToolId && isSidebar ? 8 : 0, opacity: isOpen && activeToolId && isSidebar ? 1 : 0 }}
+              animate={{ width: isOpen && sidebarToolId ? 28 : 0, marginRight: isOpen && sidebarToolId ? 8 : 0, opacity: isOpen && sidebarToolId ? 1 : 0 }}
               transition={{ duration: 0.15 }}
-              style={{ pointerEvents: isOpen && activeToolId && isSidebar ? 'auto' : 'none' }}
+              style={{ pointerEvents: isOpen && sidebarToolId ? 'auto' : 'none' }}
             >
               <button className={s.backBtn} onClick={handleBack} title="Назад">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -186,17 +213,17 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
               animate={{ opacity: isOpen ? 1 : 0 }}
               transition={{ duration: 0.15 }}
             >
-              {activeToolId && isSidebar ? (activeTool?.title || '') : 'Инструменты'}
+              {sidebarToolId && sidebarTool ? sidebarTool.title : 'Инструменты'}
             </motion.span>
-            {/* Layout mode buttons — visible when a tool is active and sidebar is open */}
-            {isOpen && activeToolId && isSidebar && (
+            {/* Layout mode buttons — visible when a tool is active in sidebar */}
+            {isOpen && sidebarToolId && (
               <div className={s.layoutBtns}>
-                <button className={s.layoutBtn} onClick={() => handleLayoutChange('floating')} title="Плавающее окно">
+                <button className={s.layoutBtn} onClick={() => handleLayoutChange(sidebarToolId, 'floating')} title="Плавающее окно">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="5" y="5" width="14" height="14" rx="2" ry="2" />
                   </svg>
                 </button>
-                <button className={s.layoutBtn} onClick={() => handleLayoutChange('fullscreen')} title="На весь экран">
+                <button className={s.layoutBtn} onClick={() => handleLayoutChange(sidebarToolId, 'fullscreen')} title="На весь экран">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 3 21 3 21 9" />
                     <polyline points="9 21 3 21 3 15" />
@@ -215,7 +242,7 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
           </button>
         </div>
 
-        {/* Body — only shows in sidebar mode */}
+        {/* Body */}
         <motion.div
           className={s.panelBody}
           animate={{ opacity: isOpen ? 1 : 0 }}
@@ -223,16 +250,16 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
           style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
         >
           <AnimatePresence mode="wait">
-            {activeToolId && isSidebar && activeTool ? (
+            {sidebarToolId && sidebarTool ? (
               <motion.div
-                key={activeToolId}
+                key={sidebarToolId}
                 className={s.toolContent}
                 initial={{ x: 30, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: 30, opacity: 0 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
               >
-                {renderToolContent(activeToolId)}
+                {renderToolContent(sidebarToolId)}
               </motion.div>
             ) : (
               <motion.div
@@ -243,7 +270,7 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
                 exit={{ x: -30, opacity: 0 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
               >
-                {sidebarTools.map((tool) => (
+                {tools.map((tool) => (
                   <button
                     key={tool.id}
                     className={s.toolItem}
@@ -265,18 +292,25 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
         </motion.div>
       </motion.aside>
 
-      {/* Floating / Fullscreen overlay */}
-      {activeToolId && !isSidebar && (
-        <FloatingWidget
-          layoutMode={layoutMode}
-          floatingPos={layoutState.floatingPos}
-          onFloatingPosChange={handleFloatingPosChange}
-          onLayoutChange={handleLayoutChange}
-          title={activeTool?.title || ''}
-        >
-          {renderToolContent(activeToolId)}
-        </FloatingWidget>
-      )}
+      {/* Floating / Fullscreen overlays — one per open non-sidebar tool */}
+      {floatingTools.map((toolId) => {
+        const layout = toolLayouts[toolId] ?? { mode: 'floating' as LayoutMode, floatingPos: { x: 50, y: 50 } };
+        const tool = tools.find(t => t.id === toolId);
+        return (
+          <FloatingWidget
+            key={toolId}
+            dragId={`floating-${toolId}`}
+            layoutMode={layout.mode}
+            floatingPos={layout.floatingPos}
+            onFloatingPosChange={(pos) => handleFloatingPosChange(toolId, pos)}
+            onLayoutChange={(mode) => handleLayoutChange(toolId, mode)}
+            onClose={() => closeTool(toolId)}
+            title={tool?.title || ''}
+          >
+            {renderToolContent(toolId)}
+          </FloatingWidget>
+        );
+      })}
     </DndContext>
   );
 }

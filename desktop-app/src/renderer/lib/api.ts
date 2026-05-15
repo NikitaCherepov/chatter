@@ -431,3 +431,27 @@ export async function createNote(title: string, content: string): Promise<{ note
 export async function deleteNote(noteId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/notes/${noteId}`, { method: 'DELETE' });
 }
+
+// ---------- Tasks ----------
+
+export type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check' | 'ai_instruction';
+export type TaskStatus = 'pending' | 'done' | 'error';
+export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
+
+export type TaskDto = {
+  id: number;
+  execute_at: number;
+  task_type: TaskType;
+  payload: string;
+  status: TaskStatus;
+  recurrence_type: TaskRecurrenceType;
+  recurrence_weekday: number | null;
+  timezone_offset: number | null;
+};
+
+export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending'): Promise<{ tasks: TaskDto[] }> {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.set('status', status);
+  return apiFetch(`/api/v1/tasks?${params.toString()}`);
+}
