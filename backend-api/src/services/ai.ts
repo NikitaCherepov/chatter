@@ -1039,7 +1039,8 @@ const buildDesktopActionTool = () => {
 - Нужно открыть конкретную запись в блокноте — action=open_note, target=notebook, value={note_id}
 - Нужно прочитать что сейчас написано в открытом черновике — action=read_widget_state, target=notebook
 - Нужно открыть/закрыть панель инструментов — action=toggle_panel
-- Нужно закрыть конкретный виджет — action=close_widget, target=notebook`,
+- Нужно закрыть конкретный виджет — action=close_widget, target=notebook
+- Нужно открыть задачи — action=open_widget, target=tasks`,
       parameters: {
         type: 'object',
         properties: {
@@ -1050,8 +1051,8 @@ const buildDesktopActionTool = () => {
           },
           target: {
             type: 'string',
-            enum: ['notebook'],
-            description: 'Целевой виджет. notebook — блокнот/заметки.'
+            enum: ['notebook', 'tasks'],
+            description: 'Целевой виджет. notebook — блокнот/заметки, tasks — задачи.'
           },
           value: {
             type: 'object',
@@ -1362,8 +1363,16 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
       const a = parsed.action || '';
-      if (a === 'open_widget') return `Открываю ${parsed.target === 'notebook' ? 'блокнот' : 'виджет'}...`;
-      if (a === 'close_widget') return `Закрываю ${parsed.target === 'notebook' ? 'блокнот' : 'виджет'}...`;
+      if (a === 'open_widget') {
+        const t = parsed.target;
+        const label = t === 'notebook' ? 'блокнот' : t === 'tasks' ? 'задачи' : 'виджет';
+        return `Открываю ${label}...`;
+      }
+      if (a === 'close_widget') {
+        const t = parsed.target;
+        const label = t === 'notebook' ? 'блокнот' : t === 'tasks' ? 'задачи' : 'виджет';
+        return `Закрываю ${label}...`;
+      }
       if (a === 'set_widget_data') return `Готовлю черновик...`;
       if (a === 'open_note') return `Открываю запись в блокноте...`;
       if (a === 'read_widget_state') return `Читаю состояние виджета...`;
