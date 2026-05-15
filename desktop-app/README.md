@@ -87,6 +87,7 @@ API: `GET/POST/DELETE /api/v1/notes`. Обновление = delete + create (н
 | `open_widget` | Открыть виджет (target: `notebook`) |
 | `close_widget` | Закрыть виджет |
 | `set_widget_data` | Передать данные в виджет (например текст черновика) |
+| `open_note` | Открыть конкретную запись по ID (value: `{ note_id }`) |
 | `read_widget_state` | Прочитать текущее состояние виджета |
 | `toggle_panel` | Открыть/закрыть панель инструментов |
 

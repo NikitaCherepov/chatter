@@ -241,9 +241,9 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
 // ---------- SSE Streaming ----------
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'read_widget_state' | 'toggle_panel';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel';
   target?: string;
-  value?: { title?: string; content?: string };
+  value?: { title?: string; content?: string; note_id?: number };
 };
 
 export type StreamCallbacks = {

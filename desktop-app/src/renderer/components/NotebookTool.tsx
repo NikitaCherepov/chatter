@@ -58,7 +58,7 @@ export function NotebookTool({ contentMax }: Props) {
 
   // Subscribe to widget data commands (from bot)
   useEffect(() => {
-    const unsub = subscribeWidgetData('notebook', (cmd) => {
+    const unsub = subscribeWidgetData('notebook', async (cmd) => {
       if (cmd.type === 'set_draft') {
         setEditId(null);
         setTitle(cmd.title || '');
@@ -66,6 +66,14 @@ export function NotebookTool({ contentMax }: Props) {
         setOriginalTitle('');
         setOriginalContent('');
         setView('editor');
+      }
+      if (cmd.type === 'open_note' && cmd.noteId) {
+        try {
+          const res = await api.getNoteById(cmd.noteId);
+          if (res?.note) openEditor(res.note);
+        } catch (err) {
+          console.error('Failed to open note by ID from bot:', err);
+        }
       }
     });
     return unsub;

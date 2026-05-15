@@ -1032,10 +1032,11 @@ const buildDesktopActionTool = () => {
     type: 'function' as const,
     function: {
       name: 'desktop_action',
-      description: `Управление интерфейсом десктопного приложения Chatter. Позволяет открывать/закрывать виджеты, создавать черновики заметок, читать текущее состояние виджетов.
+      description: `Управление интерфейсом десктопного приложения Chatter. Позволяет открывать/закрывать виджеты, создавать черновики заметок, открывать конкретные записи, читать текущее состояние виджетов.
 Используй когда:
 - Пользователь просит создать черновик заметки (не сразу сохранить, а открыть для редактирования) — action=set_widget_data, target=notebook, value={title,content}
 - Нужно открыть блокнот чтобы показать что-то — action=open_widget, target=notebook
+- Нужно открыть конкретную запись в блокноте — action=open_note, target=notebook, value={note_id}
 - Нужно прочитать что сейчас написано в открытом черновике — action=read_widget_state, target=notebook
 - Нужно открыть/закрыть панель инструментов — action=toggle_panel
 - Нужно закрыть конкретный виджет — action=close_widget, target=notebook`,
@@ -1044,8 +1045,8 @@ const buildDesktopActionTool = () => {
         properties: {
           action: {
             type: 'string',
-            enum: ['open_widget', 'close_widget', 'set_widget_data', 'read_widget_state', 'toggle_panel'],
-            description: 'Тип действия. open_widget — открыть виджет, close_widget — закрыть, set_widget_data — передать данные в виджет (например текст черновика), read_widget_state — прочитать текущее состояние виджета, toggle_panel — открыть/закрыть панель инструментов.'
+            enum: ['open_widget', 'close_widget', 'set_widget_data', 'open_note', 'read_widget_state', 'toggle_panel'],
+            description: 'Тип действия. open_widget — открыть виджет, close_widget — закрыть, set_widget_data — передать данные в виджет (например текст черновика), open_note — открыть конкретную запись в блокноте по ID, read_widget_state — прочитать текущее состояние виджета, toggle_panel — открыть/закрыть панель инструментов.'
           },
           target: {
             type: 'string',
@@ -1056,9 +1057,10 @@ const buildDesktopActionTool = () => {
             type: 'object',
             properties: {
               title: { type: 'string', description: 'Заголовок (для блокнота)' },
-              content: { type: 'string', description: 'Текст содержимого (для блокнота)' }
+              content: { type: 'string', description: 'Текст содержимого (для блокнота)' },
+              note_id: { type: 'number', description: 'ID записи для открытия (используется с action=open_note).' }
             },
-            description: 'Данные для передачи в виджет. Используется с action=set_widget_data.'
+            description: 'Данные для передачи в виджет. Используется с action=set_widget_data или action=open_note.'
           }
         },
         required: ['action']
@@ -1363,6 +1365,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
       if (a === 'open_widget') return `Открываю ${parsed.target === 'notebook' ? 'блокнот' : 'виджет'}...`;
       if (a === 'close_widget') return `Закрываю ${parsed.target === 'notebook' ? 'блокнот' : 'виджет'}...`;
       if (a === 'set_widget_data') return `Готовлю черновик...`;
+      if (a === 'open_note') return `Открываю запись в блокноте...`;
       if (a === 'read_widget_state') return `Читаю состояние виджета...`;
       if (a === 'toggle_panel') return 'Открываю панель инструментов...';
     } catch { /* */ }

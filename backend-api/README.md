@@ -296,7 +296,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | Инструмент | Описание |
 |---|---|
 | `set_display_state` | Управление пиксельным аватаром. Enum-значения (moods/reactions) берутся из `display_manifest` — массива, который клиент передаёт в body. Если манифеста нет (Telegram) — tool не добавляется. |
-| `desktop_action` | Единый роутер управления интерфейсом десктопного приложения. Действия: `open_widget`, `close_widget`, `set_widget_data`, `read_widget_state`, `toggle_panel`. Цели: `notebook`. Позволяет боту открывать/закрывать виджеты, создавать черновики заметок, читать состояние. |
+| `desktop_action` | Единый роутер управления интерфейсом десктопного приложения. Действия: `open_widget`, `close_widget`, `set_widget_data`, `open_note`, `read_widget_state`, `toggle_panel`. Цели: `notebook`. Позволяет боту открывать/закрывать виджеты, создавать черновики заметок, открывать конкретные записи по ID, читать состояние. |
 
 **Поток `desktop_action`:**
 1. AI вызывает `desktop_action` tool → `runTool` парсит action/target/value → записывает в `desktopActionSink`

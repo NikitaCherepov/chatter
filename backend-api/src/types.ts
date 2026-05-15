@@ -115,7 +115,7 @@ export type DisplayStatePayload = {
 };
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'read_widget_state' | 'toggle_panel';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel';
   target?: 'notebook' | string;
   value?: unknown;
 };

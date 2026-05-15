@@ -148,6 +148,20 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     return;
   }
 
+  if (a === 'open_note' && action.target === 'notebook') {
+    openTool('notebook');
+    const noteId = typeof action.value === 'object' && action.value !== null
+      ? (action.value as { note_id?: number }).note_id
+      : undefined;
+    if (noteId) {
+      dispatchWidgetData('notebook', {
+        type: 'open_note',
+        noteId,
+      });
+    }
+    return;
+  }
+
   if (a === 'read_widget_state' && action.target === 'notebook') {
     // This is a query -- the bot reads state from the tool result
     // The actual state is read server-side or from getNotebookDraftState
