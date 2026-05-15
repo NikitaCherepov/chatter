@@ -622,6 +622,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       },
       onToolStatus: (statusText) => {
         res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);
+      },
+      onMapUpdate: (data) => {
+        res.write(`event: map_update\ndata: ${JSON.stringify(data)}\n\n`);
       }
     });
 

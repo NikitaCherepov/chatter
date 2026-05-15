@@ -173,6 +173,29 @@ export function dispatchWidgetData(widgetId: string, cmd: WidgetDataCommand) {
   }
 }
 
+// ── Map Data (bot → map widget via SSE) ────────────────────────────────────
+
+export type MapData = {
+  action: 'show_place' | 'draw_route';
+  lat?: number;
+  lng?: number;
+  label?: string;
+  route?: [number, number][];
+};
+
+type MapDataListener = (data: MapData) => void;
+
+const mapListeners = new Set<MapDataListener>();
+
+export function dispatchMapData(data: MapData) {
+  mapListeners.forEach(fn => fn(data));
+}
+
+export function subscribeMapData(fn: MapDataListener): () => void {
+  mapListeners.add(fn);
+  return () => { mapListeners.delete(fn); };
+}
+
 // ── Widget State Queries (bot reads widget state) ─────────────────────────
 
 let notebookDraftState: { title: string; content: string; isOpen: boolean } = { title: '', content: '', isOpen: false };

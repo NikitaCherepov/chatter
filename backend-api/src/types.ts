@@ -125,3 +125,11 @@ export type DesktopActionResult = {
   message?: string;
   state?: unknown;
 };
+
+export type MapUpdatePayload = {
+  action: 'show_place' | 'draw_route';
+  lat?: number;
+  lng?: number;
+  label?: string;
+  route?: [number, number][]; // [lat, lng][]
+};

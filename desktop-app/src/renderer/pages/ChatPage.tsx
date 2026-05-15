@@ -13,7 +13,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
-import { openTool, handleDesktopAction } from '../lib/tools';
+import { openTool, handleDesktopAction, dispatchMapData } from '../lib/tools';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -208,6 +208,10 @@ export function ChatPage() {
         },
         onDesktopAction: (action) => {
           handleDesktopAction(action);
+        },
+        onMapUpdate: (data) => {
+          openTool('map');
+          dispatchMapData(data);
         },
         onDone: (res) => {
           // Build images array from generated_images

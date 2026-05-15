@@ -246,11 +246,20 @@ export type DesktopActionPayload = {
   value?: { title?: string; content?: string; note_id?: number };
 };
 
+export type MapUpdatePayload = {
+  action: 'show_place' | 'draw_route';
+  lat?: number;
+  lng?: number;
+  label?: string;
+  route?: [number, number][];
+};
+
 export type StreamCallbacks = {
   onIntermediate?: (text: string) => void;
   onDisplayState?: (state: DisplayStatePayload) => void;
   onDesktopAction?: (action: DesktopActionPayload) => void;
   onToolStatus?: (text: string) => void;
+  onMapUpdate?: (data: MapUpdatePayload) => void;
   onDone?: (result: ChatSendResponse) => void;
   onError?: (err: string) => void;
 };
@@ -322,6 +331,7 @@ export async function streamChatMessage(
             if (eventName === 'intermediate' && callbacks?.onIntermediate) callbacks.onIntermediate(data.text);
             else if (eventName === 'display_state' && callbacks?.onDisplayState) callbacks.onDisplayState(data);
             else if (eventName === 'desktop_action' && callbacks?.onDesktopAction) callbacks.onDesktopAction(data);
+            else if (eventName === 'map_update' && callbacks?.onMapUpdate) callbacks.onMapUpdate(data);
             else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
             else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
             else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error);

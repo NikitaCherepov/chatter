@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { tavily } from '@tavily/core';
-import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
+import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
@@ -1070,6 +1070,44 @@ const buildDesktopActionTool = () => {
   };
 };
 
+/** Build map_control tool — only available on desktop client */
+const buildMapControlTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'map_control',
+      description: `Управление картой в десктопном приложении. Показывает место на карте или прокладывает маршрут между двумя точками.
+Используй когда:
+- Пользователь просит показать место на карте — action=show_place, query="Город, улица"
+- Пользователь просит проложить маршрут — action=draw_route, from_query="откуда", to_query="куда"
+Важно: НЕ угадывай координаты сам. Передавай текстовые адреса — бэкенд сам геокодирует.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['show_place', 'draw_route'],
+            description: 'Показать точку на карте или проложить маршрут.'
+          },
+          query: {
+            type: 'string',
+            description: 'Название или адрес места (для action=show_place). Например "Москва, Красная площадь".'
+          },
+          from_query: {
+            type: 'string',
+            description: 'Адрес точки отправления (для action=draw_route).'
+          },
+          to_query: {
+            type: 'string',
+            description: 'Адрес точки назначения (для action=draw_route).'
+          }
+        },
+        required: ['action']
+      }
+    }
+  };
+};
+
 const LITE_ROUTER_INSTRUCTIONS = `
 Ты — быстрый ассистент-диспетчер.
 Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
@@ -1177,7 +1215,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1322,6 +1360,63 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return JSON.stringify({ status: 'success', message: 'Состояние аватара обновлено.' });
   }
 
+  if (toolName === 'map_control') {
+    const action: string = typeof parsed.action === 'string' ? parsed.action : '';
+    if (!action) return JSON.stringify({ status: 'error', message: 'action is required' });
+
+    try {
+      if (action === 'show_place') {
+        const query = `${parsed.query || ''}`.trim();
+        if (!query) return JSON.stringify({ status: 'error', message: 'query is required for show_place' });
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`, {
+          headers: { 'User-Agent': 'ChatterBot/1.0' },
+        });
+        const geoData = await geoRes.json() as any[];
+        if (!geoData.length) return JSON.stringify({ status: 'error', message: `Не удалось найти место: ${query}` });
+        const lat = parseFloat(geoData[0].lat);
+        const lng = parseFloat(geoData[0].lon);
+        if (mapUpdateSink) mapUpdateSink.value = { action: 'show_place', lat, lng, label: query };
+        return JSON.stringify({ status: 'success', lat, lng, label: query });
+      }
+
+      if (action === 'draw_route') {
+        const fromQuery = `${parsed.from_query || ''}`.trim();
+        const toQuery = `${parsed.to_query || ''}`.trim();
+        if (!fromQuery || !toQuery) return JSON.stringify({ status: 'error', message: 'from_query and to_query are required for draw_route' });
+
+        const [fromRes, toRes] = await Promise.all([
+          fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fromQuery)}&format=json&limit=1`, { headers: { 'User-Agent': 'ChatterBot/1.0' } }).then(r => r.json()).then(d => d as any[]),
+          fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(toQuery)}&format=json&limit=1`, { headers: { 'User-Agent': 'ChatterBot/1.0' } }).then(r => r.json()).then(d => d as any[]),
+        ]);
+        if (!fromRes.length) return JSON.stringify({ status: 'error', message: `Не удалось найти: ${fromQuery}` });
+        if (!toRes.length) return JSON.stringify({ status: 'error', message: `Не удалось найти: ${toQuery}` });
+
+        const fromLat = parseFloat(fromRes[0].lat);
+        const fromLng = parseFloat(fromRes[0].lon);
+        const toLat = parseFloat(toRes[0].lat);
+        const toLng = parseFloat(toRes[0].lon);
+
+        // OSRM expects [lng,lat] order
+        const routeUrl = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?geometries=geojson`;
+        const routeRes = await fetch(routeUrl);
+        const routeData = await routeRes.json() as any;
+        if (!routeData.routes?.length) return JSON.stringify({ status: 'error', message: 'Не удалось построить маршрут' });
+
+        // Convert [lng,lat] → [lat,lng] for Leaflet
+        const coords: [number, number][] = routeData.routes[0].geometry.coordinates.map(
+          (c: number[]) => [c[1], c[0]] as [number, number]
+        );
+
+        if (mapUpdateSink) mapUpdateSink.value = { action: 'draw_route', lat: toLat, lng: toLng, label: toQuery, route: coords };
+        return JSON.stringify({ status: 'success', from: fromQuery, to: toQuery, points: coords.length });
+      }
+
+      return JSON.stringify({ status: 'error', message: `Unknown action: ${action}` });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Map error: ${err?.message || String(err)}` });
+    }
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -1359,6 +1454,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
     }
   }
   if (toolName === 'generate_image') return 'Генерирую изображение...';
+  if (toolName === 'map_control') return 'Ищу на карте...';
   if (toolName === 'desktop_action') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
@@ -1404,6 +1500,7 @@ export const sendMessageThroughAi = async (
     onIntermediateMessage?: (text: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
+    onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -1436,7 +1533,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
@@ -1561,6 +1658,7 @@ PRO
   const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
   const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
   const desktopActionSink: { value: DesktopActionPayload | null } = { value: null };
+  const mapUpdateSink: { value: MapUpdatePayload | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
 
@@ -1709,7 +1807,8 @@ for (const toolCall of message.tool_calls) {
       (payload) => runCompletion('pro', payload),
       generatedImages,
       displayStateSink,
-      desktopActionSink
+      desktopActionSink,
+      mapUpdateSink
     );
 
     // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
@@ -1720,6 +1819,11 @@ for (const toolCall of message.tool_calls) {
     // Если тулз вызвал desktop_action — прокидываем наружу в реалтайме
     if (toolName === 'desktop_action' && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
+    }
+
+    // Если тулз вызвал map_control — прокидываем данные карты
+    if (toolName === 'map_control' && mapUpdateSink.value && options?.onMapUpdate) {
+      await options.onMapUpdate(mapUpdateSink.value);
     }
   } catch (err: any) {
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
