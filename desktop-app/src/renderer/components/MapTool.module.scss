@@ -3,11 +3,218 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
+
+// ── Shared control style ─────────────────────────────────────────────────
+
+$ctrl-bg: #e8f0fe;
+$ctrl-hover: #d2e3fc;
+$ctrl-text: #1a73e8;
+$ctrl-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+$ctrl-radius: 8px;
+$ctrl-size: 30px;
 
 .map {
   width: 100%;
   height: 100%;
-  background-color: #111;
+  background-color: #f0f0f0;
   min-height: 0;
+
+  // ── Zoom controls (top-left) ──────────────────────────────────────────
+  :global(.leaflet-control-zoom) {
+    border: none !important;
+    border-radius: $ctrl-radius !important;
+    overflow: hidden;
+    box-shadow: $ctrl-shadow !important;
+  }
+
+  :global(.leaflet-control-zoom a) {
+    width: $ctrl-size !important;
+    height: $ctrl-size !important;
+    line-height: $ctrl-size !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: $ctrl-text !important;
+    background-color: $ctrl-bg !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.6) !important;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background-color: $ctrl-hover !important;
+    }
+
+    &:last-child {
+      border-bottom: none !important;
+    }
+  }
+
+  // ── Layers control (bottom-left) ──────────────────────────────────────
+  :global(.leaflet-control-layers) {
+    border: none !important;
+    border-radius: $ctrl-radius !important;
+    box-shadow: $ctrl-shadow !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+  }
+
+  :global(.leaflet-control-layers-toggle) {
+    width: $ctrl-size !important;
+    height: $ctrl-size !important;
+    background-color: $ctrl-bg !important;
+    box-shadow: $ctrl-shadow !important;
+    border-radius: $ctrl-radius !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231a73e8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6'/%3E%3Cline x1='8' y1='2' x2='8' y2='18'/%3E%3Cline x1='16' y1='6' x2='16' y2='22'/%3E%3C/svg%3E") !important;
+    background-size: 15px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background-color: $ctrl-hover !important;
+    }
+  }
+
+  :global(.leaflet-control-layers-list) {
+    padding: 8px 12px !important;
+    font-size: 12px;
+    color: #333;
+    background-color: $ctrl-bg;
+    border-radius: $ctrl-radius;
+    box-shadow: $ctrl-shadow;
+  }
+
+  :global(.leaflet-control-layers-separator) {
+    border-color: rgba(255, 255, 255, 0.5) !important;
+  }
+
+  // ── Popups ─────────────────────────────────────────────────────────────
+  :global(.leaflet-popup-content-wrapper) {
+    border-radius: $ctrl-radius !important;
+    box-shadow: $ctrl-shadow !important;
+    font-size: 12px;
+  }
+
+  :global(.leaflet-popup-tip) {
+    box-shadow: $ctrl-shadow !important;
+  }
+
+  // ── Attribution ────────────────────────────────────────────────────────
+  :global(.leaflet-control-attribution) {
+    font-size: 9px !important;
+    background-color: rgba(232, 240, 254, 0.7) !important;
+    color: #888 !important;
+    border-radius: 4px 0 0 0;
+  }
+}
+
+// ── Pin placement button (top-right) ─────────────────────────────────────
+
+.pinBtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1000;
+  width: $ctrl-size;
+  height: $ctrl-size;
+  border-radius: $ctrl-radius;
+  border: none;
+  background-color: $ctrl-bg;
+  color: $ctrl-text;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: $ctrl-shadow;
+  transition: background-color 0.12s, color 0.12s;
+
+  &:hover {
+    background-color: $ctrl-hover;
+  }
+}
+
+.pinBtnActive {
+  background-color: $ctrl-text;
+  color: #fff;
+
+  &:hover {
+    background-color: $ctrl-text;
+    opacity: 0.9;
+  }
+}
+
+// ── User pin icon color tint ─────────────────────────────────────────────
+
+.userPinIcon {
+  filter: hue-rotate(100deg) saturate(1.5);
+}
+
+// ── Pin popup content ────────────────────────────────────────────────────
+
+.pinPopup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+
+  strong {
+    font-size: 12px;
+  }
+}
+
+.pinPopupCoords {
+  font-size: 10px;
+  color: #888;
+}
+
+.pinPopupActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.pinPopupBtn {
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: $ctrl-text;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.pinEditPopup {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pinEditInput {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  width: 120px;
+
+  &:focus {
+    border-color: $ctrl-text;
+  }
+}
+
+.pinEditSave {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background-color: $ctrl-text;
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
 }

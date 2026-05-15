@@ -188,9 +188,15 @@ export type MapData = {
 type MapDataListener = (data: MapData) => void;
 
 const mapListeners = new Set<MapDataListener>();
+let currentMapData: MapData | null = null;
 
 export function dispatchMapData(data: MapData) {
+  currentMapData = data;
   mapListeners.forEach(fn => fn(data));
+}
+
+export function getMapData(): MapData | null {
+  return currentMapData;
 }
 
 export function subscribeMapData(fn: MapDataListener): () => void {
