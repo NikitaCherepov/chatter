@@ -180,6 +180,8 @@ export type MapData = {
   lat?: number;
   lng?: number;
   label?: string;
+  from?: { lat: number; lng: number; label: string };
+  to?: { lat: number; lng: number; label: string };
   route?: [number, number][];
 };
 

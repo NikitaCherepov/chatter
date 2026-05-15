@@ -1407,7 +1407,14 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
           (c: number[]) => [c[1], c[0]] as [number, number]
         );
 
-        if (mapUpdateSink) mapUpdateSink.value = { action: 'draw_route', lat: toLat, lng: toLng, label: toQuery, route: coords };
+        if (mapUpdateSink) mapUpdateSink.value = {
+          action: 'draw_route',
+          lat: (fromLat + toLat) / 2,
+          lng: (fromLng + toLng) / 2,
+          from: { lat: fromLat, lng: fromLng, label: fromQuery },
+          to: { lat: toLat, lng: toLng, label: toQuery },
+          route: coords,
+        };
         return JSON.stringify({ status: 'success', from: fromQuery, to: toQuery, points: coords.length });
       }
 

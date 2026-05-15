@@ -131,5 +131,7 @@ export type MapUpdatePayload = {
   lat?: number;
   lng?: number;
   label?: string;
+  from?: { lat: number; lng: number; label: string };
+  to?: { lat: number; lng: number; label: string };
   route?: [number, number][]; // [lat, lng][]
 };
