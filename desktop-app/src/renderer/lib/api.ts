@@ -471,3 +471,36 @@ export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error'
 export async function deleteTask(taskId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/tasks/${taskId}`, { method: 'DELETE' });
 }
+
+// ---------- Map Pins ----------
+
+export type MapPinDto = {
+  id: number;
+  lat: number;
+  lng: number;
+  label: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export async function listMapPins(): Promise<{ pins: MapPinDto[] }> {
+  return apiFetch('/api/v1/map-pins');
+}
+
+export async function createMapPin(lat: number, lng: number, label = ''): Promise<{ pin_id: number }> {
+  return apiFetch('/api/v1/map-pins', {
+    method: 'POST',
+    body: JSON.stringify({ lat, lng, label }),
+  });
+}
+
+export async function updateMapPin(pinId: number, updates: { lat?: number; lng?: number; label?: string }): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/map-pins/${pinId}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function deleteMapPin(pinId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/map-pins/${pinId}`, { method: 'DELETE' });
+}

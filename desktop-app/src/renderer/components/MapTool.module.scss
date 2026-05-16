@@ -49,45 +49,6 @@ $ctrl-size: 30px;
     }
   }
 
-  // ── Layers control (bottom-left) ──────────────────────────────────────
-  :global(.leaflet-control-layers) {
-    border: none !important;
-    border-radius: $ctrl-radius !important;
-    box-shadow: $ctrl-shadow !important;
-    background-color: transparent !important;
-    padding: 0 !important;
-  }
-
-  :global(.leaflet-control-layers-toggle) {
-    width: $ctrl-size !important;
-    height: $ctrl-size !important;
-    background-color: $ctrl-bg !important;
-    box-shadow: $ctrl-shadow !important;
-    border-radius: $ctrl-radius !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231a73e8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6'/%3E%3Cline x1='8' y1='2' x2='8' y2='18'/%3E%3Cline x1='16' y1='6' x2='16' y2='22'/%3E%3C/svg%3E") !important;
-    background-size: 15px !important;
-    background-repeat: no-repeat !important;
-    background-position: center !important;
-    transition: background-color 0.12s;
-
-    &:hover {
-      background-color: $ctrl-hover !important;
-    }
-  }
-
-  :global(.leaflet-control-layers-list) {
-    padding: 8px 12px !important;
-    font-size: 12px;
-    color: #333;
-    background-color: $ctrl-bg;
-    border-radius: $ctrl-radius;
-    box-shadow: $ctrl-shadow;
-  }
-
-  :global(.leaflet-control-layers-separator) {
-    border-color: rgba(255, 255, 255, 0.5) !important;
-  }
-
   // ── Popups ─────────────────────────────────────────────────────────────
   :global(.leaflet-popup-content-wrapper) {
     border-radius: $ctrl-radius !important;
@@ -106,6 +67,15 @@ $ctrl-size: 30px;
     color: #888 !important;
     border-radius: 4px 0 0 0;
   }
+}
+
+// ── Tile layer selector (bottom-left) ────────────────────────────────────
+
+.tileSelect {
+  position: absolute;
+  bottom: 28px;
+  left: 8px;
+  z-index: 1000;
 }
 
 // ── Pin placement button (top-right) ─────────────────────────────────────

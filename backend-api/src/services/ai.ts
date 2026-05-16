@@ -6,6 +6,7 @@ import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, reso
 import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
+import { listMapPinsForBot } from './map-pins.js';
 import { runSmartHomeControl, type SmartHomeArgs, SMART_HOME_DEVICE_OPTIONS_TEXT } from './smart-home.js';
 import { runEmailCheck, runEmailRead, runEmailSend } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
@@ -1108,6 +1109,22 @@ const buildMapControlTool = () => {
   };
 };
 
+/** Build get_map_pins tool — bot reads user's saved map pins */
+const buildGetMapPinsTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'get_map_pins',
+      description: `Получить список сохранённых меток пользователя на карте. Возвращает массив меток с координатами и названиями. Используй, когда пользователь спрашивает про свои сохранённые места, точки, локации.`,
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [] as string[],
+      },
+    },
+  };
+};
+
 const LITE_ROUTER_INSTRUCTIONS = `
 Ты — быстрый ассистент-диспетчер.
 Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
@@ -1424,6 +1441,12 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
   }
 
+  if (toolName === 'get_map_pins') {
+    const pins = listMapPinsForBot(user.id);
+    if (pins.length === 0) return JSON.stringify({ status: 'success', pins: [], message: 'У пользователя нет сохранённых меток.' });
+    return JSON.stringify({ status: 'success', pins, count: pins.length });
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -1462,6 +1485,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   }
   if (toolName === 'generate_image') return 'Генерирую изображение...';
   if (toolName === 'map_control') return 'Ищу на карте...';
+  if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
   if (toolName === 'desktop_action') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
@@ -1540,7 +1564,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;

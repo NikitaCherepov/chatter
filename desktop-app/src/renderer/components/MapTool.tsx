@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, LayersControl, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { subscribeMapData, getMapData, type MapData } from '../lib/tools';
+import { listMapPins, createMapPin, updateMapPin, deleteMapPin, type MapPinDto } from '../lib/api';
+import { Select, type SelectOption } from './Select';
 import s from './MapTool.module.scss';
 
 // Fix Leaflet default icon bundling with Vite
@@ -32,8 +34,39 @@ const userPinIcon = new L.Icon({
 const DEFAULT_CENTER: [number, number] = [56.4977, 84.9744];
 const DEFAULT_ZOOM = 12;
 
+const TILE_LAYERS: Record<string, { url: string; attribution: string }> = {
+  light: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+  },
+  standard: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap',
+  },
+};
+
+const TILE_OPTIONS: SelectOption[] = [
+  { value: 'light', label: 'Светлая' },
+  { value: 'satellite', label: 'Спутник' },
+  { value: 'standard', label: 'Стандартная' },
+];
+
+const TILE_STORAGE_KEY = 'chatter-map-tile';
+
+function loadTile(): string {
+  try {
+    const saved = localStorage.getItem(TILE_STORAGE_KEY);
+    if (saved && TILE_LAYERS[saved]) return saved;
+  } catch { /* */ }
+  return 'light';
+}
+
 export type UserPin = {
-  id: string;
+  id: number;
   lat: number;
   lng: number;
   label: string;
@@ -80,7 +113,7 @@ function ClickHandler({ placingPin, onMapClick }: { placingPin: boolean; onMapCl
   return null;
 }
 
-/** Calls invalidateSize() when the map container resizes (sidebar → fullscreen etc.) */
+/** Calls invalidateSize() when the map container resizes (sidebar -> fullscreen etc.) */
 function ResizeHandler() {
   const map = useMap();
   useEffect(() => {
@@ -94,16 +127,36 @@ function ResizeHandler() {
   return null;
 }
 
+/** Syncs the tile layer url when user picks a different one */
+function TileSync({ tileKey }: { tileKey: string }) {
+  const map = useMap();
+  const layerRef = useRef<L.TileLayer | null>(null);
+
+  useEffect(() => {
+    const tile = TILE_LAYERS[tileKey];
+    if (!tile) return;
+    if (layerRef.current) {
+      layerRef.current.remove();
+    }
+    layerRef.current = L.tileLayer(tile.url, { attribution: tile.attribution }).addTo(map);
+    return () => {
+      if (layerRef.current) {
+        layerRef.current.remove();
+        layerRef.current = null;
+      }
+    };
+  }, [tileKey, map]);
+
+  return null;
+}
+
 export function MapTool() {
   const [mapData, setMapData] = useState<MapData | null>(() => getMapData());
-  const [pins, setPins] = useState<UserPin[]>(() => {
-    try {
-      const saved = localStorage.getItem('chatter-map-pins');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
+  const [tileKey, setTileKey] = useState<string>(loadTile);
+  const [pins, setPins] = useState<MapPinDto[]>([]);
+  const [pinsLoaded, setPinsLoaded] = useState(false);
   const [placingPin, setPlacingPin] = useState(false);
-  const [editingPinId, setEditingPinId] = useState<string | null>(null);
+  const [editingPinId, setEditingPinId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState('');
 
   useEffect(() => {
@@ -113,28 +166,52 @@ export function MapTool() {
     return unsub;
   }, []);
 
-  // Persist pins
+  // Load pins from API
   useEffect(() => {
-    localStorage.setItem('chatter-map-pins', JSON.stringify(pins));
-  }, [pins]);
+    listMapPins()
+      .then(res => setPins(res.pins))
+      .catch(() => {})
+      .finally(() => setPinsLoaded(true));
+  }, []);
 
-  const handleMapClick = useCallback((lat: number, lng: number) => {
-    const id = `pin-${Date.now()}`;
-    setPins(prev => [...prev, { id, lat, lng, label: '' }]);
-    setEditingPinId(id);
-    setEditLabel('');
+  // Persist tile choice
+  useEffect(() => {
+    localStorage.setItem(TILE_STORAGE_KEY, tileKey);
+  }, [tileKey]);
+
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    try {
+      const res = await createMapPin(lat, lng, '');
+      const newPin: MapPinDto = { id: res.pin_id, lat, lng, label: '', created_at: Math.floor(Date.now() / 1000), updated_at: Math.floor(Date.now() / 1000) };
+      setPins(prev => [...prev, newPin]);
+      setEditingPinId(res.pin_id);
+      setEditLabel('');
+    } catch { /* */ }
     setPlacingPin(false);
   }, []);
 
-  const handlePinLabelSave = (pinId: string) => {
-    setPins(prev => prev.map(p => p.id === pinId ? { ...p, label: editLabel } : p));
+  const handlePinLabelSave = useCallback(async (pinId: number) => {
+    try {
+      await updateMapPin(pinId, { label: editLabel });
+      setPins(prev => prev.map(p => p.id === pinId ? { ...p, label: editLabel } : p));
+    } catch { /* */ }
     setEditingPinId(null);
-  };
+  }, [editLabel]);
 
-  const handlePinDelete = (pinId: string) => {
-    setPins(prev => prev.filter(p => p.id !== pinId));
+  const handlePinDelete = useCallback(async (pinId: number) => {
+    try {
+      await deleteMapPin(pinId);
+      setPins(prev => prev.filter(p => p.id !== pinId));
+    } catch { /* */ }
     if (editingPinId === pinId) setEditingPinId(null);
-  };
+  }, [editingPinId]);
+
+  const handlePinDragEnd = useCallback(async (pinId: number, lat: number, lng: number) => {
+    try {
+      await updateMapPin(pinId, { lat, lng });
+    } catch { /* */ }
+    setPins(prev => prev.map(p => p.id === pinId ? { ...p, lat, lng } : p));
+  }, []);
 
   const center: [number, number] =
     mapData?.lat != null && mapData?.lng != null
@@ -157,6 +234,15 @@ export function MapTool() {
         </svg>
       </button>
 
+      {/* Tile layer selector */}
+      <div className={s.tileSelect}>
+        <Select
+          options={TILE_OPTIONS}
+          value={tileKey}
+          onChange={setTileKey}
+        />
+      </div>
+
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -166,28 +252,7 @@ export function MapTool() {
         doubleClickZoom={true}
         dragging={true}
       >
-        <LayersControl position="bottomleft">
-          <LayersControl.BaseLayer checked name="Светлая">
-            <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-            />
-          </LayersControl.BaseLayer>
-
-          <LayersControl.BaseLayer name="Спутник">
-            <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              attribution="Tiles &copy; Esri"
-            />
-          </LayersControl.BaseLayer>
-
-          <LayersControl.BaseLayer name="Стандартная">
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; OpenStreetMap'
-            />
-          </LayersControl.BaseLayer>
-        </LayersControl>
+        <TileSync tileKey={tileKey} />
 
         <ClickHandler placingPin={placingPin} onMapClick={handleMapClick} />
         <ResizeHandler />
@@ -234,7 +299,19 @@ export function MapTool() {
 
         {/* User pins */}
         {pins.map(pin => (
-          <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={userPinIcon}>
+          <Marker
+            key={pin.id}
+            position={[pin.lat, pin.lng]}
+            icon={userPinIcon}
+            draggable={true}
+            eventHandlers={{
+              dragend: (e) => {
+                const marker = e.target as L.Marker;
+                const pos = marker.getLatLng();
+                handlePinDragEnd(pin.id, pos.lat, pos.lng);
+              },
+            }}
+          >
             <Popup>
               {editingPinId === pin.id ? (
                 <div className={s.pinEditPopup}>

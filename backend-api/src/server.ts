@@ -5,6 +5,7 @@ import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, ref
 import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
+import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
@@ -718,6 +719,49 @@ app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   if (!Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_task_id' });
   const ok = deletePendingTask(userId, taskId);
   if (!ok) return res.status(404).json({ error: 'task_not_found_or_not_pending' });
+  return res.json({ ok: true });
+});
+
+// ── Map Pins (JWT) ─────────────────────────────────────────────────────────
+
+app.get('/api/v1/map-pins', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const pins = listMapPins(userId);
+  return res.json({ pins });
+});
+
+app.post('/api/v1/map-pins', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const lat = typeof req.body?.lat === 'number' ? req.body.lat : NaN;
+  const lng = typeof req.body?.lng === 'number' ? req.body.lng : NaN;
+  const label = `${req.body?.label || ''}`;
+  const result = createMapPin(userId, lat, lng, label);
+  if (result.ok === false) return res.status(400).json({ error: result.error });
+  return res.status(201).json({ pin_id: result.id });
+});
+
+app.put('/api/v1/map-pins/:id', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const pinId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(pinId) || pinId <= 0) return res.status(400).json({ error: 'bad_pin_id' });
+  const updates: { lat?: number; lng?: number; label?: string } = {};
+  if (typeof req.body?.lat === 'number' && typeof req.body?.lng === 'number') {
+    updates.lat = req.body.lat;
+    updates.lng = req.body.lng;
+  }
+  if (typeof req.body?.label === 'string') updates.label = req.body.label;
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
+  const ok = updateMapPin(userId, pinId, updates);
+  if (!ok) return res.status(404).json({ error: 'pin_not_found' });
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/map-pins/:id', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const pinId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(pinId) || pinId <= 0) return res.status(400).json({ error: 'bad_pin_id' });
+  const ok = deleteMapPin(userId, pinId);
+  if (!ok) return res.status(404).json({ error: 'pin_not_found' });
   return res.json({ ok: true });
 });
 
