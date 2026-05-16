@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import type { LayoutMode } from '../lib/tools';
 import s from './FloatingWidget.module.scss';
@@ -38,9 +37,20 @@ export function FloatingWidget({
   title,
   children,
 }: Props) {
+  const [exiting, setExiting] = useState(false);
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: dragId,
   });
+
+  const handleClose = useCallback(() => {
+    setExiting(true);
+  }, []);
+
+  const handleAnimationEnd = useCallback(() => {
+    if (exiting) {
+      onClose();
+    }
+  }, [exiting, onClose]);
 
   const style: React.CSSProperties =
     layoutMode === 'floating'
@@ -65,8 +75,15 @@ export function FloatingWidget({
     return <>{children}</>;
   }
 
+  const cls = exiting ? `${s[layoutMode]} ${s.exiting}` : s[layoutMode];
+
   return (
-    <div ref={setNodeRef} className={s[layoutMode]} style={style}>
+    <div
+      ref={setNodeRef}
+      className={cls}
+      style={style}
+      onAnimationEnd={handleAnimationEnd}
+    >
       {/* Header — buttons are outside drag zone */}
       <div className={s.header}>
         {/* Drag handle — only this area triggers drag */}
@@ -110,7 +127,7 @@ export function FloatingWidget({
           )}
           <button
             className={s.modeBtn}
-            onClick={onClose}
+            onClick={handleClose}
             title="Закрыть"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
