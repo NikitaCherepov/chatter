@@ -312,6 +312,8 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `desktop_action` | Единый роутер управления интерфейсом десктопного приложения. Действия: `open_widget`, `close_widget`, `set_widget_data`, `open_note`, `read_widget_state`, `toggle_panel`. Цели: `notebook`, `tasks`. Позволяет боту открывать/закрывать виджеты, создавать черновики заметок, открывать конкретные записи по ID, читать состояние. |
 | `map_control` | Управление картой в десктопе. Действия: `show_place` (геокодирование через Nominatim), `draw_route` (маршрут через OSRM). Результат отправляется как SSE `event: map_update`. |
 | `get_map_pins` | Получить список сохранённых меток пользователя на карте. Возвращает расшифрованные координаты + названия. |
+| `find_transit_route` | Поиск маршрутов общественного транспорта (автобус, маршрутка, троллейбус, трамвай) через Overpass API. Принимает координаты точки А и Б, опционально `radius_meters` (по умолчанию 500). Auto-retry с расширением радиуса если ничего не найдено. Возвращает текстовое описание маршрутов (доступно всем клиентам) + отправляет визуал на карту через SSE (desktop-only). |
+| `search_nearby` | Поиск заведений и объектов (POI) рядом с точкой по названию через Overpass API. Принимает координаты, текст запроса (`query`) и `radius_meters` (по умолчанию 3000). Ищет по `name` (regex, case-insensitive) среди nodes и ways. Возвращает список мест с адресом/часами (доступно всем клиентам) + отправляет маркеры на карту через SSE (desktop-only). Auto-retry с расширением радиуса. |
 
 **Поток `desktop_action`:**
 1. AI вызывает `desktop_action` tool → `runTool` парсит action/target/value → записывает в `desktopActionSink`
@@ -324,6 +326,23 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 2. Результат записывается в `mapUpdateSink` → сервер отправляет SSE `event: map_update` с `{ action, lat, lng, label, from?, to?, route? }`
 3. Клиент ловит `onMapUpdate` → открывает MapTool, обновляет карту (flyTo / fitBounds / polyline)
 4. Координаты маршрута конвертируются из OSRM [lng,lat] в Leaflet [lat,lng]
+
+**Поток `find_transit_route`:**
+1. AI вызывает `find_transit_route` tool с координатами `from_lat, from_lon, to_lat, to_lon`
+2. `runTool` вызывает `services/transit.ts` → Overpass API запрос находит OSM route relations (bus, share_taxi, trolleybus, tram) в радиусе 500м от обеих точек
+3. Парсинг ответа: `members` с `role=stop|platform` → остановки, `type=way` → геометрия маршрута (polyline)
+4. Результат записывается в `mapUpdateSink` с `action: 'transit_route'` → SSE `event: map_update` с `{ action, routeName, path, stops }`
+5. Инструмент возвращает текстовый JSON со списком найденных маршрутов — AI формулирует ответ пользователю (доступно для всех клиентов, не только desktop)
+6. На desktop-клиенте MapTool рендерит зелёную polyline + оранжевые маркеры остановок + fitBounds
+
+**Поток `search_nearby`:**
+1. AI вызывает `search_nearby` с `latitude, longitude, query, radius_meters?`
+2. `runTool` вызывает `services/transit.ts` → Overpass ищет nodes/ways с `name~"query"` в указанном радиусе
+3. Ответ парсится: извлекаются координаты, название, адрес, часы работы, категория
+4. Результат записывается в `mapUpdateSink` с `action: 'poi_search'` → SSE `event: map_update` с `{ action, lat, lng, query, places }`
+5. Инструмент возвращает текстовый JSON со списком найденных мест — AI формулирует ответ (доступно для всех клиентов)
+6. На desktop-клиенте MapTool рендерит фиолетовые маркеры POI + flyTo к первому результату
+7. Auto-retry: если поиск в указанном радиусе пуст, бэкенд расширяет радиус и повторяет запрос
 
 **Хранение меток:**
 - Таблица `map_pins`: `id, user_id, lat_enc, lng_enc, label, created_at, updated_at`

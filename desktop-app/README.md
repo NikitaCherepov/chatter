@@ -118,12 +118,23 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 
 **Возможности:**
 - Бот показывает места на карте (`map_control` → `show_place`) через Nominatim геокодирование
-- Бот прокладывает маршруты (`draw_route`) через OSRM
-- SSE-событие `map_update` доставляет данные на клиент
+- Бот прокладывает маршруты (`draw_route`) через OSRM — синяя polyline
+- Бот ищет маршруты общественного транспорта (`find_transit_route`) через Overpass API — зелёная polyline + оранжевые маркеры остановок
+- Бот ищет заведения и объекты рядом (`search_nearby`) через Overpass API — фиолетовые маркеры POI (рестораны, аптеки, магазины и т.д.)
+- SSE-событие `map_update` доставляет данные на клиент (четыре типа action: `show_place`, `draw_route`, `transit_route`, `poi_search`)
 - Пользователь ставит свои метки (pin placement mode) — сохраняются на бэкенде (шифрованные координаты)
 - Drag & drop для перемещения меток
 - Бот может читать метки пользователя через `get_map_pins` tool
 - `ResizeHandler` вызывает `invalidateSize()` при смене layout (sidebar ↔ floating)
+
+**Типы `map_update` payload:**
+
+| Action | Поля | Рендеринг |
+|---|---|---|
+| `show_place` | `lat, lng, label` | Один маркер + `flyTo` |
+| `draw_route` | `from, to, route` | Два маркера + синяя Polyline + `fitBounds` |
+| `transit_route` | `routeName, path, stops` | Зелёная Polyline + оранжевые маркеры остановок + `fitBounds` |
+| `poi_search` | `places[], query` | Фиолетовые маркеры POI (имя, адрес, часы) + `flyTo` к первому |
 
 **API пинов:** `GET/POST/PUT/DELETE /api/v1/map-pins[/:id]`. Координаты шифруются на бэкенде через `MAP_PINS_ENCRYPTION_KEY`.
 

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { subscribeMapData, getMapData, type MapData } from '../lib/tools';
+import { subscribeMapData, getMapData, type MapData, type NearbyPlace } from '../lib/tools';
 import { listMapPins, createMapPin, updateMapPin, deleteMapPin, type MapPinDto } from '../lib/api';
 import { RadioGroup, type RadioOption } from './RadioGroup';
 import s from './MapTool.module.scss';
@@ -29,6 +29,30 @@ const userPinIcon = new L.Icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
   className: s.userPinIcon,
+});
+
+// Custom orange circle icon for transit stops
+const stopIcon = L.divIcon({
+  html: `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="10" r="8" fill="#f97316" stroke="#fff" stroke-width="2"/>
+    <circle cx="10" cy="10" r="3" fill="#fff"/>
+  </svg>`,
+  className: s.stopIcon,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+  popupAnchor: [0, -12],
+});
+
+// Custom purple pin icon for POI search results
+const poiIcon = L.divIcon({
+  html: `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#8b5cf6" stroke="#fff" stroke-width="1.5"/>
+    <circle cx="12" cy="9" r="2.5" fill="#fff"/>
+  </svg>`,
+  className: s.poiIcon,
+  iconSize: [24, 24],
+  iconAnchor: [12, 24],
+  popupAnchor: [0, -24],
 });
 
 const DEFAULT_CENTER: [number, number] = [56.4977, 84.9744];
@@ -292,6 +316,52 @@ export function MapTool() {
         {/* Route line */}
         {mapData?.route && (
           <Polyline positions={mapData.route} color="#3b82f6" weight={4} opacity={0.8} />
+        )}
+
+        {/* Transit route: polyline + stops */}
+        {mapData?.action === 'transit_route' && mapData.path && (
+          <>
+            <FitBounds route={mapData.path} />
+            <Polyline positions={mapData.path} color="#22c55e" weight={4} opacity={0.85} />
+          </>
+        )}
+        {mapData?.action === 'transit_route' && mapData.stops?.map((stop, i) => (
+          <Marker key={`stop-${i}-${stop.coords[0]}-${stop.coords[1]}`} position={stop.coords} icon={stopIcon}>
+            <Popup>
+              <strong>{stop.name}</strong><br />
+              <span style={{ color: '#888', fontSize: '12px' }}>
+                {stop.coords[0].toFixed(4)}, {stop.coords[1].toFixed(4)}
+              </span>
+            </Popup>
+          </Marker>
+        ))}
+        {mapData?.action === 'transit_route' && mapData.routeName && (
+          <Marker position={center}>
+            <Popup>
+              <strong>{mapData.routeName}</strong>
+            </Popup>
+          </Marker>
+        )}
+
+        {/* POI search results: markers for each found place */}
+        {mapData?.action === 'poi_search' && mapData.places && mapData.places.length > 0 && (
+          <>
+            <FlyTo center={[mapData.places[0].lat, mapData.places[0].lng]} zoom={14} />
+            {mapData.places.map((place) => (
+              <Marker
+                key={`poi-${place.id}`}
+                position={[place.lat, place.lng]}
+                icon={poiIcon}
+              >
+                <Popup>
+                  <strong>{place.name}</strong>
+                  {place.address && <><br /><span style={{ color: '#666', fontSize: '11px' }}>{place.address}</span></>}
+                  {place.hours && <><br /><span style={{ color: '#888', fontSize: '11px' }}>{place.hours}</span></>}
+                  {place.category && <><br /><span style={{ color: '#aaa', fontSize: '10px' }}>{place.category}</span></>}
+                </Popup>
+              </Marker>
+            ))}
+          </>
         )}
 
         {/* User pins */}

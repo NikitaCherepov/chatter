@@ -13,6 +13,7 @@ import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
 import { runImageGeneration } from './image-generation.js';
+import { findTransitRoute, searchNearby } from './transit.js';
 import { db } from '../db.js';
 
 dotenv.config();
@@ -1125,6 +1126,84 @@ const buildGetMapPinsTool = () => {
   };
 };
 
+/** Build find_transit_route tool — searches public transit routes via Overpass API */
+const buildFindTransitRouteTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'find_transit_route',
+      description: `Поиск маршрутов общественного транспорта (автобусы, маршрутки, троллейбусы, трамваи) между двумя точками. Находит маршруты OSM через Overpass API.
+Используй когда:
+- Пользователь спрашивает как добраться на общественном транспорте
+- Нужно найти автобус/маршрутку от точки А до точки Б
+Важно: передавай точные координаты (lat, lon) обеих точек. Если пользователь дал адреса — сначала геокодируй через map_control(show_place) или используй уже известные координаты.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          from_lat: {
+            type: 'number',
+            description: 'Широта точки отправления (например 56.4977)',
+          },
+          from_lon: {
+            type: 'number',
+            description: 'Долгота точки отправления (например 84.9744)',
+          },
+          to_lat: {
+            type: 'number',
+            description: 'Широта точки назначения',
+          },
+          to_lon: {
+            type: 'number',
+            description: 'Долгота точки назначения',
+          },
+          radius_meters: {
+            type: 'integer',
+            description: 'Радиус поиска маршрутов в метрах. По умолчанию 500. Если точка на окраине/за городом — используй 1000-1500.',
+          },
+        },
+        required: ['from_lat', 'from_lon', 'to_lat', 'to_lon'] as string[],
+      },
+    },
+  };
+};
+
+/** Build search_nearby tool — searches named POIs via Overpass API */
+const buildSearchNearbyTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'search_nearby',
+      description: `Поиск заведений, организаций и объектов рядом с указанной точкой. Находит любые POI (Points of Interest) по названию через OpenStreetMap: рестораны, аптеки, магазины, заправки, банки, аэропорты и т.д.
+Используй когда:
+- Пользователь спрашивает "найди все KFC рядом", "где ближайшая аптека", "покажи заправки в радиусе 2км"
+- Нужно найти конкретную сеть или тип заведения по названию
+Важно: query — это текст для поиска по названию (KFC, Аптека, Вкусно и точка). Для поиска по типу (аптеки вообще) тоже используй название — "Аптека".`,
+      parameters: {
+        type: 'object',
+        properties: {
+          latitude: {
+            type: 'number',
+            description: 'Широта центра поиска',
+          },
+          longitude: {
+            type: 'number',
+            description: 'Долгота центра поиска',
+          },
+          query: {
+            type: 'string',
+            description: 'Что искать по названию. Например: "KFC", "Аэропорт", "Аптека", "Вкусно и точка", "Сбербанк".',
+          },
+          radius_meters: {
+            type: 'integer',
+            description: 'Радиус поиска в метрах. Для городских заведений: 2000-5000. Для крупных объектов за городом (аэропорты): 50000.',
+          },
+        },
+        required: ['latitude', 'longitude', 'query'] as string[],
+      },
+    },
+  };
+};
+
 const LITE_ROUTER_INSTRUCTIONS = `
 Ты — быстрый ассистент-диспетчер.
 Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
@@ -1447,6 +1526,123 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return JSON.stringify({ status: 'success', pins, count: pins.length });
   }
 
+  if (toolName === 'find_transit_route') {
+    const fromLat = typeof parsed.from_lat === 'number' ? parsed.from_lat : NaN;
+    const fromLon = typeof parsed.from_lon === 'number' ? parsed.from_lon : NaN;
+    const toLat = typeof parsed.to_lat === 'number' ? parsed.to_lat : NaN;
+    const toLon = typeof parsed.to_lon === 'number' ? parsed.to_lon : NaN;
+
+    if ([fromLat, fromLon, toLat, toLon].some(isNaN)) {
+      return JSON.stringify({ status: 'error', message: 'from_lat, from_lon, to_lat, to_lon — обязательные числовые координаты' });
+    }
+
+    const radius = typeof parsed.radius_meters === 'number' ? parsed.radius_meters : 500;
+
+    try {
+      const variants = await findTransitRoute(fromLat, fromLon, toLat, toLon, radius);
+
+      if (variants.length === 0) {
+        return JSON.stringify({
+          status: 'success',
+          message: 'Общественный транспорт не найден в этом районе. Попробуйте указать более точные координаты или другой район.',
+          variants: [],
+        });
+      }
+
+      // Send the first (best) variant to the map via SSE for desktop
+      if (mapUpdateSink && variants[0]) {
+        const best = variants[0];
+        const midIdx = Math.floor(best.path.length / 2);
+        mapUpdateSink.value = {
+          action: 'transit_route',
+          lat: best.path[midIdx]?.[0] ?? (fromLat + toLat) / 2,
+          lng: best.path[midIdx]?.[1] ?? (fromLon + toLon) / 2,
+          routeName: best.routeName,
+          path: best.path,
+          stops: best.stops,
+        };
+      }
+
+      // Return text description of all variants for the AI to formulate a response
+      const descriptions = variants.map((v, i) => ({
+        index: i + 1,
+        routeName: v.routeName,
+        routeType: v.routeType,
+        stopCount: v.stops.length,
+        stops: v.stops.map(s => s.name),
+        pathPoints: v.path.length,
+      }));
+
+      return JSON.stringify({
+        status: 'success',
+        variantsFound: variants.length,
+        variants: descriptions,
+        message: `Найдено ${variants.length} маршрут(ов). Лучший: ${variants[0].routeName} (${variants[0].stops.length} остановок).`,
+      });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Ошибка поиска транспорта: ${err?.message || String(err)}` });
+    }
+  }
+
+  if (toolName === 'search_nearby') {
+    const lat = typeof parsed.latitude === 'number' ? parsed.latitude : NaN;
+    const lng = typeof parsed.longitude === 'number' ? parsed.longitude : NaN;
+    const query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
+    const radius = typeof parsed.radius_meters === 'number' ? parsed.radius_meters : 3000;
+
+    if (isNaN(lat) || isNaN(lng)) {
+      return JSON.stringify({ status: 'error', message: 'latitude и longitude — обязательные числовые координаты' });
+    }
+    if (!query) {
+      return JSON.stringify({ status: 'error', message: 'query — обязательный параметр (что искать)' });
+    }
+
+    try {
+      const places = await searchNearby(lat, lng, query, radius);
+
+      if (places.length === 0) {
+        return JSON.stringify({
+          status: 'success',
+          message: `Ничего не найдено по запросу "${query}" в радиусе ${radius}м. Попробуйте увеличить радиус или изменить запрос.`,
+          places: [],
+        });
+      }
+
+      // Send places to the map via SSE for desktop
+      if (mapUpdateSink) {
+        mapUpdateSink.value = {
+          action: 'poi_search',
+          lat,
+          lng,
+          query,
+          places,
+        };
+      }
+
+      // Return text description for the AI
+      const descriptions = places.map((p, i) => ({
+        index: i + 1,
+        name: p.name,
+        address: p.address,
+        hours: p.hours,
+        category: p.category,
+        lat: Math.round(p.lat * 10000) / 10000,
+        lng: Math.round(p.lng * 10000) / 10000,
+      }));
+
+      return JSON.stringify({
+        status: 'success',
+        query,
+        radius,
+        placesFound: places.length,
+        places: descriptions,
+        message: `Найдено ${places.length} объектов по запросу "${query}".`,
+      });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Ошибка поиска: ${err?.message || String(err)}` });
+    }
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -1486,6 +1682,8 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'generate_image') return 'Генерирую изображение...';
   if (toolName === 'map_control') return 'Ищу на карте...';
   if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
+  if (toolName === 'find_transit_route') return 'Ищу маршруты общественного транспорта...';
+  if (toolName === 'search_nearby') return 'Ищу места поблизости...';
   if (toolName === 'desktop_action') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
@@ -1564,7 +1762,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
@@ -1852,8 +2050,8 @@ for (const toolCall of message.tool_calls) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 
-    // Если тулз вызвал map_control — прокидываем данные карты
-    if (toolName === 'map_control' && mapUpdateSink.value && options?.onMapUpdate) {
+    // Если тулз вызвал map_control или find_transit_route — прокидываем данные карты
+    if ((toolName === 'map_control' || toolName === 'find_transit_route' || toolName === 'search_nearby') && mapUpdateSink.value && options?.onMapUpdate) {
       await options.onMapUpdate(mapUpdateSink.value);
     }
   } catch (err: any) {

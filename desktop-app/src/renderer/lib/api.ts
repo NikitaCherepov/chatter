@@ -246,14 +246,36 @@ export type DesktopActionPayload = {
   value?: { title?: string; content?: string; note_id?: number };
 };
 
+export type TransitStop = {
+  coords: [number, number]; // [lat, lng]
+  name: string;
+};
+
+export type NearbyPlace = {
+  id: number;
+  lat: number;
+  lng: number;
+  name: string;
+  address?: string;
+  hours?: string;
+  category?: string;
+};
+
 export type MapUpdatePayload = {
-  action: 'show_place' | 'draw_route';
+  action: 'show_place' | 'draw_route' | 'transit_route' | 'poi_search';
   lat?: number;
   lng?: number;
   label?: string;
   from?: { lat: number; lng: number; label: string };
   to?: { lat: number; lng: number; label: string };
   route?: [number, number][];
+  // transit_route fields
+  routeName?: string;
+  path?: [number, number][]; // [lat, lng][] — full route polyline
+  stops?: TransitStop[];
+  // poi_search fields
+  places?: NearbyPlace[];
+  query?: string;
 };
 
 export type StreamCallbacks = {

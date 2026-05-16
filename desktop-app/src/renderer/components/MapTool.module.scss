@@ -119,6 +119,20 @@ $ctrl-size: 30px;
   filter: hue-rotate(100deg) saturate(1.5);
 }
 
+// ── Transit stop icon (divIcon reset) ────────────────────────────────────
+
+.stopIcon {
+  background: none !important;
+  border: none !important;
+}
+
+// ── POI search result icon (divIcon reset) ───────────────────────────────
+
+.poiIcon {
+  background: none !important;
+  border: none !important;
+}
+
 // ── Pin popup content ────────────────────────────────────────────────────
 
 .pinPopup {
