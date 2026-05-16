@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, LayersControl, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { subscribeMapData, getMapData, type MapData } from '../lib/tools';
 import { listMapPins, createMapPin, updateMapPin, deleteMapPin, type MapPinDto } from '../lib/api';
-import { Select, type SelectOption } from './Select';
 import s from './MapTool.module.scss';
 
 // Fix Leaflet default icon bundling with Vite
@@ -34,33 +33,12 @@ const userPinIcon = new L.Icon({
 const DEFAULT_CENTER: [number, number] = [56.4977, 84.9744];
 const DEFAULT_ZOOM = 12;
 
-const TILE_LAYERS: Record<string, { url: string; attribution: string }> = {
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri',
-  },
-  standard: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap',
-  },
-};
-
-const TILE_OPTIONS: SelectOption[] = [
-  { value: 'light', label: 'Светлая' },
-  { value: 'satellite', label: 'Спутник' },
-  { value: 'standard', label: 'Стандартная' },
-];
-
 const TILE_STORAGE_KEY = 'chatter-map-tile';
 
 function loadTile(): string {
   try {
     const saved = localStorage.getItem(TILE_STORAGE_KEY);
-    if (saved && TILE_LAYERS[saved]) return saved;
+    if (saved && ['light', 'satellite', 'standard'].includes(saved)) return saved;
   } catch { /* */ }
   return 'light';
 }
@@ -127,34 +105,25 @@ function ResizeHandler() {
   return null;
 }
 
-/** Syncs the tile layer url when user picks a different one */
-function TileSync({ tileKey }: { tileKey: string }) {
+/** Listens for baselayerchange events and persists the choice to localStorage */
+function TilePersistHandler(): null {
   const map = useMap();
-  const layerRef = useRef<L.TileLayer | null>(null);
-
   useEffect(() => {
-    const tile = TILE_LAYERS[tileKey];
-    if (!tile) return;
-    if (layerRef.current) {
-      layerRef.current.remove();
-    }
-    layerRef.current = L.tileLayer(tile.url, { attribution: tile.attribution }).addTo(map);
-    return () => {
-      if (layerRef.current) {
-        layerRef.current.remove();
-        layerRef.current = null;
-      }
+    const handler = (e: any) => {
+      const name = e.name as string;
+      const map: Record<string, string> = { 'Светлая': 'light', 'Спутник': 'satellite', 'Стандартная': 'standard' };
+      if (map[name]) localStorage.setItem(TILE_STORAGE_KEY, map[name]);
     };
-  }, [tileKey, map]);
-
+    map.on('baselayerchange', handler);
+    return () => { map.off('baselayerchange', handler); };
+  }, [map]);
   return null;
 }
 
 export function MapTool() {
   const [mapData, setMapData] = useState<MapData | null>(() => getMapData());
-  const [tileKey, setTileKey] = useState<string>(loadTile);
+  const savedTile = useRef(loadTile());
   const [pins, setPins] = useState<MapPinDto[]>([]);
-  const [pinsLoaded, setPinsLoaded] = useState(false);
   const [placingPin, setPlacingPin] = useState(false);
   const [editingPinId, setEditingPinId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState('');
@@ -170,14 +139,8 @@ export function MapTool() {
   useEffect(() => {
     listMapPins()
       .then(res => setPins(res.pins))
-      .catch(() => {})
-      .finally(() => setPinsLoaded(true));
+      .catch(() => {});
   }, []);
-
-  // Persist tile choice
-  useEffect(() => {
-    localStorage.setItem(TILE_STORAGE_KEY, tileKey);
-  }, [tileKey]);
 
   const handleMapClick = useCallback(async (lat: number, lng: number) => {
     try {
@@ -220,6 +183,8 @@ export function MapTool() {
 
   const zoom = mapData ? 14 : DEFAULT_ZOOM;
 
+  const defaultTile = savedTile.current;
+
   return (
     <div className={s.root}>
       {/* Pin placement button */}
@@ -234,15 +199,6 @@ export function MapTool() {
         </svg>
       </button>
 
-      {/* Tile layer selector */}
-      <div className={s.tileSelect}>
-        <Select
-          options={TILE_OPTIONS}
-          value={tileKey}
-          onChange={setTileKey}
-        />
-      </div>
-
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -252,8 +208,30 @@ export function MapTool() {
         doubleClickZoom={true}
         dragging={true}
       >
-        <TileSync tileKey={tileKey} />
+        <LayersControl position="bottomleft">
+          <LayersControl.BaseLayer checked={defaultTile === 'light'} name="Светлая">
+            <TileLayer
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+            />
+          </LayersControl.BaseLayer>
 
+          <LayersControl.BaseLayer checked={defaultTile === 'satellite'} name="Спутник">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution="Tiles &copy; Esri"
+            />
+          </LayersControl.BaseLayer>
+
+          <LayersControl.BaseLayer checked={defaultTile === 'standard'} name="Стандартная">
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; OpenStreetMap'
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+
+        <TilePersistHandler />
         <ClickHandler placingPin={placingPin} onMapClick={handleMapClick} />
         <ResizeHandler />
 
