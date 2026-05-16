@@ -1544,40 +1544,49 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
       if (variants.length === 0) {
         return JSON.stringify({
           status: 'success',
-          message: 'Общественный транспорт не найден в этом районе. Попробуйте указать более точные координаты или другой район.',
+          message: 'Общественный транспорт не найден в этом районе. Попробуйте указать более точные координаты, увеличить радиус или другой район.',
           variants: [],
         });
       }
 
-      // Send the first (best) variant to the map via SSE for desktop
+      // Send the best variant (sliced segment) to the map via SSE for desktop
       if (mapUpdateSink && variants[0]) {
         const best = variants[0];
-        const midIdx = Math.floor(best.path.length / 2);
+        const midIdx = Math.floor(best.slicedPath.length / 2);
         mapUpdateSink.value = {
           action: 'transit_route',
-          lat: best.path[midIdx]?.[0] ?? (fromLat + toLat) / 2,
-          lng: best.path[midIdx]?.[1] ?? (fromLon + toLon) / 2,
+          lat: best.slicedPath[midIdx]?.[0] ?? (fromLat + toLat) / 2,
+          lng: best.slicedPath[midIdx]?.[1] ?? (fromLon + toLon) / 2,
           routeName: best.routeName,
-          path: best.path,
-          stops: best.stops,
+          path: best.slicedPath,
+          stops: best.slicedStops,
         };
       }
 
-      // Return text description of all variants for the AI to formulate a response
-      const descriptions = variants.map((v, i) => ({
-        index: i + 1,
+      // Return enriched description for the AI — just the ride segment, not the whole route
+      const descriptions = variants.map((v) => ({
         routeName: v.routeName,
         routeType: v.routeType,
-        stopCount: v.stops.length,
-        stops: v.stops.map(s => s.name),
-        pathPoints: v.path.length,
+        totalWalkingDistanceMeters: v.totalWalkingMeters,
+        pickupStop: {
+          name: v.pickupStop.name,
+          distanceFromUserMeters: v.pickupStop.distanceMeters,
+        },
+        dropoffStop: {
+          name: v.dropoffStop.name,
+          distanceToDestinationMeters: v.dropoffStop.distanceMeters,
+        },
+        stopsToRideCount: v.stopsToRideCount,
+        stopsToRideList: v.stopsToRideList,
+        direction: v.direction === 1 ? 'forward' : 'reverse',
       }));
 
+      const best = variants[0];
       return JSON.stringify({
         status: 'success',
         variantsFound: variants.length,
         variants: descriptions,
-        message: `Найдено ${variants.length} маршрут(ов). Лучший: ${variants[0].routeName} (${variants[0].stops.length} остановок).`,
+        message: `Найдено ${variants.length} маршрут(ов). Лучший: ${best.routeName} — идти пешком ${best.totalWalkingMeters}м, ехать ${best.stopsToRideCount} остановок от "${best.pickupStop.name}" до "${best.dropoffStop.name}".`,
       });
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Ошибка поиска транспорта: ${err?.message || String(err)}` });
