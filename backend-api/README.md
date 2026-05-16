@@ -26,6 +26,7 @@ npm run logs:api
 - `API_DB_PATH` или `NOTES_DB_PATH` - опционально. По умолчанию используется `chatter.db` в корне проекта.
 - `TIMEWEB_*` и другие AI ключи - для AI/voice/photo.
 - `ENCRYPTION_KEY` - для mail (шифрование паролей).
+- `MAP_PINS_ENCRYPTION_KEY` - для шифрования координат меток карты (fallback на `ENCRYPTION_KEY`).
 - `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` опционально) - для `/internal/tools/read_url`.
 - `PROXYAPI_KEY` - ключ ProxyAPI для генерации изображений.
 - `PROXYAPI_BASE_URL` - базовый URL ProxyAPI (по умолчанию `https://api.proxyapi.ru/openai/v1`).
@@ -179,6 +180,18 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - `DELETE /api/v1/tasks/:id`
   - Ввод: path `:id`
   - Вывод: `{ ok: true }`
+- `GET /api/v1/map-pins`
+  - Ввод: без body
+  - Вывод: `{ pins: [{ id, lat, lng, label, created_at, updated_at }] }` (координаты расшифровываются)
+- `POST /api/v1/map-pins`
+  - Ввод: `{ lat, lng, label? }`
+  - Вывод: `{ pin_id }` (координаты шифруются перед сохранением)
+- `PUT /api/v1/map-pins/:id`
+  - Ввод: `{ lat?, lng?, label? }` (lat+lng только вместе)
+  - Вывод: `{ ok: true }`
+- `DELETE /api/v1/map-pins/:id`
+  - Ввод: path `:id`
+  - Вывод: `{ ok: true }`
 
 ### Vector Memory (JWT, feature-flag)
 
@@ -296,13 +309,27 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | Инструмент | Описание |
 |---|---|
 | `set_display_state` | Управление пиксельным аватаром. Enum-значения (moods/reactions) берутся из `display_manifest` — массива, который клиент передаёт в body. Если манифеста нет (Telegram) — tool не добавляется. |
-| `desktop_action` | Единый роутер управления интерфейсом десктопного приложения. Действия: `open_widget`, `close_widget`, `set_widget_data`, `open_note`, `read_widget_state`, `toggle_panel`. Цели: `notebook`. Позволяет боту открывать/закрывать виджеты, создавать черновики заметок, открывать конкретные записи по ID, читать состояние. |
+| `desktop_action` | Единый роутер управления интерфейсом десктопного приложения. Действия: `open_widget`, `close_widget`, `set_widget_data`, `open_note`, `read_widget_state`, `toggle_panel`. Цели: `notebook`, `tasks`. Позволяет боту открывать/закрывать виджеты, создавать черновики заметок, открывать конкретные записи по ID, читать состояние. |
+| `map_control` | Управление картой в десктопе. Действия: `show_place` (геокодирование через Nominatim), `draw_route` (маршрут через OSRM). Результат отправляется как SSE `event: map_update`. |
+| `get_map_pins` | Получить список сохранённых меток пользователя на карте. Возвращает расшифрованные координаты + названия. |
 
 **Поток `desktop_action`:**
 1. AI вызывает `desktop_action` tool → `runTool` парсит action/target/value → записывает в `desktopActionSink`
 2. Сервер отправляет SSE `event: desktop_action` с payload на клиент
 3. Клиент (`handleDesktopAction`) выполняет команду: открывает панель, переключает виджет, заполняет черновик и т.д.
 4. Результат также возвращается в `done` событии как `desktop_action`
+
+**Поток `map_control`:**
+1. AI вызывает `map_control` tool → `runTool` геокодирует адрес (Nominatim) или строит маршрут (OSRM)
+2. Результат записывается в `mapUpdateSink` → сервер отправляет SSE `event: map_update` с `{ action, lat, lng, label, from?, to?, route? }`
+3. Клиент ловит `onMapUpdate` → открывает MapTool, обновляет карту (flyTo / fitBounds / polyline)
+4. Координаты маршрута конвертируются из OSRM [lng,lat] в Leaflet [lat,lng]
+
+**Хранение меток:**
+- Таблица `map_pins`: `id, user_id, lat_enc, lng_enc, label, created_at, updated_at`
+- Координаты шифруются через `aes-256-cbc` с ключом из `MAP_PINS_ENCRYPTION_KEY` (fallback на `ENCRYPTION_KEY`)
+- Бот получает расшифрованные координаты через `get_map_pins` tool
+- Клиент управляет через REST API `/api/v1/map-pins`
 
 ## Типовые ошибки
 

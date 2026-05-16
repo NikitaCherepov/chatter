@@ -29,7 +29,11 @@ src/
     ├── components/
     │   ├── PixelAvatar/   # Пиксельный аватар (canvas)
     │   ├── ToolsPanel     # Правая панель инструментов
+    │   ├── FloatingWidget # Обёртка для floating/fullscreen режимов
     │   ├── NotebookTool   # Виджет блокнота
+    │   ├── TasksTool      # Просмотр задач
+    │   ├── MapTool        # Карта (Leaflet + react-leaflet)
+    │   ├── RadioGroup     # Переиспользуемый радио-селектор
     │   ├── SettingsModal  # Настройки
     │   ├── PromptSelector # Выбор промпта
     │   ├── MarkdownRenderer
@@ -82,9 +86,15 @@ src/
 
 **Хедер:** назад (fade) | заголовок (fade) | иконка инструментов (всегда видна)
 
-**Внутри:** список инструментов → конкретный инструмент (AnimatePresence slide). Сейчас один инструмент — Блокнот.
+**Внутри:** список инструментов → конкретный инструмент (AnimatePresence slide).
 
 **Реестр инструментов:** массив в `buildTools()` внутри ToolsPanel.tsx. Чтобы добавить новый — добавить entry в массив + компонент.
+
+### Мульти-окно
+
+Инструменты хранятся в массиве `openTools[]` (а не один `activeToolId`). Несколько инструментов могут быть открыты одновременно — каждый в своём floating/fullscreen окне. Sidebar отображает первый инструмент в режиме sidebar.
+
+Управление: `openTool(id)` / `closeTool(id)` из `lib/tools.ts`.
 
 ## Блокнот (NotebookTool)
 
@@ -93,6 +103,33 @@ src/
 - **Редактор** — создание/редактирование одной заметки (title + textarea + save)
 
 API: `GET/POST/DELETE /api/v1/notes`. Обновление = delete + create (нет PUT на бэкенде).
+
+## Задачи (TasksTool)
+
+Read-only просмотр задач с фильтрами по статусу (pending/done/all). Каждая карточка показывает статус, тип, дату, payload preview, recurrence badge. Кнопка удаления (появляется при наведении).
+
+API: `GET /api/v1/tasks?status=&limit=`, `DELETE /api/v1/tasks/:id`.
+
+Бот может открывать задачи через `desktop_action` с `action: open_widget, target: tasks`.
+
+## Карта (MapTool)
+
+Leaflet-карта с тремя слоями (светлая/спутник/стандартная), управляемая через кастомный `RadioGroup` компонент. Выбор слоя сохраняется в `localStorage`.
+
+**Возможности:**
+- Бот показывает места на карте (`map_control` → `show_place`) через Nominatim геокодирование
+- Бот прокладывает маршруты (`draw_route`) через OSRM
+- SSE-событие `map_update` доставляет данные на клиент
+- Пользователь ставит свои метки (pin placement mode) — сохраняются на бэкенде (шифрованные координаты)
+- Drag & drop для перемещения меток
+- Бот может читать метки пользователя через `get_map_pins` tool
+- `ResizeHandler` вызывает `invalidateSize()` при смене layout (sidebar ↔ floating)
+
+**API пинов:** `GET/POST/PUT/DELETE /api/v1/map-pins[/:id]`. Координаты шифруются на бэкенде через `MAP_PINS_ENCRYPTION_KEY`.
+
+## RadioGroup
+
+Переиспользуемый компонент (`components/RadioGroup.tsx`) — кнопка-триггер, при нажатии раскрывается список радио-кнопок. Оформление идентично другим контролам карты (`#e8f0fe` / `#1a73e8`, 30x30px, `border-radius: 8px`). Принимает `options`, `value`, `onChange`, опционально `icon`.
 
 ## Desktop Action (bot → UI)
 
@@ -106,7 +143,7 @@ API: `GET/POST/DELETE /api/v1/notes`. Обновление = delete + create (н
 
 | Action | Описание |
 |---|---|
-| `open_widget` | Открыть виджет (target: `notebook`) |
+| `open_widget` | Открыть виджет (target: `notebook`, `tasks`) |
 | `close_widget` | Закрыть виджет |
 | `set_widget_data` | Передать данные в виджет (например текст черновика) |
 | `open_note` | Открыть конкретную запись по ID (value: `{ note_id }`) |
@@ -129,6 +166,7 @@ SSE — однонаправленный стрим от сервера к кл�
 | `tool_status` | Статус выполнения инструмента ("Ищу информацию...") |
 | `display_state` | Изменение состояния пиксельного аватара |
 | `desktop_action` | Команда управления интерфейсом (открыть виджет, создать черновик) |
+| `map_update` | Данные карты (место/маршрут) — открывает MapTool, обновляет состояние |
 | `done` | Финальный ответ с `reply_text`, `message_id`, `chat_id` |
 | `error` | Ошибка |
 
