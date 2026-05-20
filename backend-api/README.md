@@ -328,12 +328,13 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 4. Координаты маршрута конвертируются из OSRM [lng,lat] в Leaflet [lat,lng]
 
 **Поток `find_transit_route`:**
-1. AI вызывает `find_transit_route` tool с координатами `from_lat, from_lon, to_lat, to_lon`
-2. `runTool` вызывает `services/transit.ts` → Overpass API запрос находит OSM route relations (bus, share_taxi, trolleybus, tram) в радиусе 500м от обеих точек
+1. AI вызывает `find_transit_route` tool с координатами `from_lat, from_lon, to_lat, to_lon`, опционально `radius_meters` (default 500)
+2. `runTool` вызывает `services/transit.ts` → Overpass API запрос находит OSM route relations (bus, share_taxi, trolleybus, tram). Auto-retry с расширением радиуса если ничего не найдено
 3. Парсинг ответа: `members` с `role=stop|platform` → остановки, `type=way` → геометрия маршрута (polyline)
-4. Результат записывается в `mapUpdateSink` с `action: 'transit_route'` → SSE `event: map_update` с `{ action, routeName, path, stops }`
-5. Инструмент возвращает текстовый JSON со списком найденных маршрутов — AI формулирует ответ пользователю (доступно для всех клиентов, не только desktop)
-6. На desktop-клиенте MapTool рендерит зелёную polyline + оранжевые маркеры остановок + fitBounds
+4. Для каждого маршрута: haversine distance → ближайшие остановки к точке А (pickup) и Б (dropoff) → обрезка stops/path до сегмента между ними → scoring по мин. пешему расстоянию
+5. Лучший вариант отправляется в `mapUpdateSink` с `action: 'transit_route'` → SSE `event: map_update` с `{ action, routeName, path (sliced), stops (sliced) }`
+6. AI получает JSON с `pickupStop`, `dropoffStop`, `stopsToRideList`, `totalWalkingMeters` — формулирует ответ (доступно для всех клиентов)
+7. На desktop-клиенте MapTool рендерит зелёную polyline (только сегмент поездки) + оранжевые маркеры остановок + fitBounds
 
 **Поток `search_nearby`:**
 1. AI вызывает `search_nearby` с `latitude, longitude, query, radius_meters?`

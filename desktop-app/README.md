@@ -133,7 +133,7 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 |---|---|---|
 | `show_place` | `lat, lng, label` | Один маркер + `flyTo` |
 | `draw_route` | `from, to, route` | Два маркера + синяя Polyline + `fitBounds` |
-| `transit_route` | `routeName, path, stops` | Зелёная Polyline + оранжевые маркеры остановок + `fitBounds` |
+| `transit_route` | `routeName, path, stops` | Зелёная Polyline (сегмент между pickup/dropoff) + оранжевые маркеры остановок + `fitBounds` |
 | `poi_search` | `places[], query` | Фиолетовые маркеры POI (имя, адрес, часы) + `flyTo` к первому |
 
 **API пинов:** `GET/POST/PUT/DELETE /api/v1/map-pins[/:id]`. Координаты шифруются на бэкенде через `MAP_PINS_ENCRYPTION_KEY`.
