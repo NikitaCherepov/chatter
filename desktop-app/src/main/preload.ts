@@ -19,4 +19,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('set-zoom-level', level),
   getZoomLevel: () =>
     ipcRenderer.invoke('get-zoom-level'),
+
+  // Voice transcription: send audio buffer → get text back
+  transcribeAudio: (arrayBuffer: ArrayBuffer) =>
+    ipcRenderer.invoke('transcribe-audio', arrayBuffer),
 });

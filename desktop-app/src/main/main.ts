@@ -3,6 +3,34 @@ import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
+import { execFile } from 'child_process';
+import util from 'util';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+
+const execFileAsync = util.promisify(execFile);
+
+// Set ffmpeg binary path
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
+
+// Dynamic model path: dev vs packaged
+const getModelPath = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'models', 'ggml-small.bin');
+  }
+  return path.join(__dirname, '..', '..', 'models', 'ggml-small.bin');
+};
+
+// Dynamic whisper.exe path: dev vs packaged
+const getWhisperExePath = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'models', 'whisper.exe');
+  }
+  return path.join(__dirname, '..', '..', 'models', 'whisper.exe');
+};
 
 // Load .env — in dev it's at project root, in packaged app it's bundled inside dist/main/
 const envPath = app.isPackaged
@@ -59,6 +87,67 @@ function createWindow() {
   ipcMain.handle('get-zoom-level', () => {
     if (!mainWindow) return 0;
     return mainWindow.webContents.getZoomLevel();
+  });
+
+  // ── IPC: transcribe-audio (voice → wav → whisper.exe → text) ──────────
+  ipcMain.handle('transcribe-audio', async (_event, arrayBuffer: ArrayBuffer) => {
+    const tempDir = os.tmpdir();
+    const inputPath = path.join(tempDir, `voice_input_${Date.now()}.webm`);
+    const outputPath = path.join(tempDir, `voice_output_${Date.now()}.wav`);
+
+    try {
+      // 1. Save raw webm from browser
+      console.log('[transcribe] 1. Saving webm, size:', arrayBuffer.byteLength);
+      fs.writeFileSync(inputPath, Buffer.from(arrayBuffer));
+
+      // 2. Convert to 16kHz mono wav
+      console.log('[transcribe] 2. Converting to wav...');
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(inputPath)
+          .outputOptions([
+            '-ar 16000',
+            '-ac 1',
+            '-c:a pcm_s16le',
+          ])
+          .save(outputPath)
+          .on('end', resolve)
+          .on('error', reject);
+      });
+
+      // 3. Run whisper.exe directly
+      const whisperExe = getWhisperExePath();
+      const modelPath = getModelPath();
+
+      console.log('[transcribe] 3. Running whisper.exe...');
+
+      await execFileAsync(whisperExe, [
+        '-m', modelPath,
+        '-f', outputPath,
+        '-l', 'ru',
+        '-otxt',
+      ]);
+
+      // whisper creates {outputPath}.txt
+      const txtFilePath = `${outputPath}.txt`;
+      const fullText = fs.readFileSync(txtFilePath, 'utf-8').trim();
+
+      // 4. Clean up
+      fs.unlinkSync(inputPath);
+      fs.unlinkSync(outputPath);
+      if (fs.existsSync(txtFilePath)) {
+        fs.unlinkSync(txtFilePath);
+      }
+
+      console.log('[transcribe] 4. Success:', fullText);
+      return fullText;
+    } catch (error) {
+      console.error('[transcribe-audio] Error:', error);
+      try { fs.unlinkSync(inputPath); } catch { /* ignore */ }
+      try { fs.unlinkSync(outputPath); } catch { /* ignore */ }
+      const txtFilePath = `${outputPath}.txt`;
+      try { fs.unlinkSync(txtFilePath); } catch { /* ignore */ }
+      throw error;
+    }
   });
 }
 

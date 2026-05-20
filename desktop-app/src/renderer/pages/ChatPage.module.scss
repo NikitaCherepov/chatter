@@ -711,6 +711,16 @@
   }
 }
 
+.micIconRecording {
+  composes: micIcon;
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 // ====== MESSAGE IMAGES ======
 
 .messageImages {

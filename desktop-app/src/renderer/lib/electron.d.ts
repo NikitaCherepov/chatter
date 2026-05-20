@@ -9,6 +9,7 @@ declare global {
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;
       getZoomLevel: () => Promise<number>;
+      transcribeAudio: (arrayBuffer: ArrayBuffer) => Promise<string>;
     };
   }
 }

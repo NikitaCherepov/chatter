@@ -33,8 +33,7 @@
     "react-router-dom": "^6.26.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "sonner": "^2.0.7",
-    "whisper-node": "^1.1.1"
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",
@@ -58,6 +57,15 @@
     "directories": {
       "output": "release"
     },
+    "extraResources": [
+      {
+        "from": "models",
+        "to": "models",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "publish": [
       {
         "provider": "generic",

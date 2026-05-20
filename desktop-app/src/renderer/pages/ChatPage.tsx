@@ -53,6 +53,9 @@ export function ChatPage() {
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
@@ -265,6 +268,55 @@ export function ChatPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  // ── Voice recording ───────────────────────────────────────────────────
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const arrayBuffer = await blob.arrayBuffer();
+
+        try {
+          const text = await window.electronAPI.transcribeAudio(arrayBuffer);
+          if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
+        } catch (err) {
+          console.error('[voice] Transcription failed:', err);
+          toast.error('Ошибка распознавания голоса');
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('[voice] Microphone access denied:', err);
+      toast.error('Нет доступа к микрофону');
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  }, []);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
 
   // Ctrl+V / paste handler for images
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
@@ -999,10 +1051,11 @@ export function ChatPage() {
               </svg>
 
               <svg
-                className={s.micIcon}
+                className={isRecording ? s.micIconRecording : s.micIcon}
+                onClick={toggleRecording}
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="var(--accent-icon-light)"
+                stroke={isRecording ? '#e53935' : 'var(--accent-icon-light)'}
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
