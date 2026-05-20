@@ -697,6 +697,20 @@
   }
 }
 
+.micIcon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-bottom: 10px;
+  margin-left: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.7;
+  }
+}
+
 // ====== MESSAGE IMAGES ======
 
 .messageImages {
