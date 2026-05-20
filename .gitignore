@@ -9,4 +9,5 @@ settings.local.json
 
 desktop-app/release/
 desktop-app/dist/
+desktop-app/models/
 *.exe
