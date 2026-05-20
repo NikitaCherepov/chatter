@@ -54,6 +54,7 @@ export function ChatPage() {
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -286,12 +287,15 @@ export function ChatPage() {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         const arrayBuffer = await blob.arrayBuffer();
 
+        setIsTranscribing(true);
         try {
           const text = await window.electronAPI.transcribeAudio(arrayBuffer);
           if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
         } catch (err) {
           console.error('[voice] Transcription failed:', err);
           toast.error('Ошибка распознавания голоса');
+        } finally {
+          setIsTranscribing(false);
         }
       };
 
@@ -1051,11 +1055,11 @@ export function ChatPage() {
               </svg>
 
               <svg
-                className={isRecording ? s.micIconRecording : s.micIcon}
-                onClick={toggleRecording}
+                className={isTranscribing ? s.micIconTranscribing : isRecording ? s.micIconRecording : s.micIcon}
+                onClick={isTranscribing ? undefined : toggleRecording}
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke={isRecording ? '#e53935' : 'var(--accent-icon-light)'}
+                stroke={isRecording ? '#e53935' : isTranscribing ? 'var(--accent)' : 'var(--accent-icon-light)'}
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"

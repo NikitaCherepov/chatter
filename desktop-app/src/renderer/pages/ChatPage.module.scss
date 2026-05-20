@@ -716,9 +716,20 @@
   animation: mic-pulse 1s ease-in-out infinite;
 }
 
+.micIconTranscribing {
+  composes: micIcon;
+  cursor: default;
+  animation: mic-spin 1.5s linear infinite;
+}
+
 @keyframes mic-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
+}
+
+@keyframes mic-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 // ====== MESSAGE IMAGES ======
