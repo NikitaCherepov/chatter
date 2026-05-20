@@ -13,6 +13,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
+import { PassiveListener } from '../components/PassiveListener';
 import { openTool, handleDesktopAction, dispatchMapData } from '../lib/tools';
 import s from './ChatPage.module.scss';
 
@@ -269,6 +270,90 @@ export function ChatPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  // ── Passive voice command (from PassiveListener) ───────────────────────
+  const handleVoiceCommand = useCallback((text: string) => {
+    const sendText = text.trim();
+    if (!sendText) return;
+
+    console.log('[VoiceCommand] Sending:', sendText, '| activeChatId:', activeChatId);
+
+    setSending(true);
+    const tempUserMsg: api.Message = {
+      id: -Date.now(), role: 'user', content: sendText, created_at: Math.floor(Date.now() / 1000),
+    };
+    setMessages((prev) => [...prev, tempUserMsg]);
+
+    let assistantMsgCreated = false;
+    const tempAssistantId = -Date.now() - 1;
+
+    const appendToAssistant = (t: string) => {
+      if (!assistantMsgCreated) {
+        assistantMsgCreated = true;
+        setSending(false);
+        setMessages((prev) => [...prev, {
+          id: tempAssistantId, role: 'assistant', content: t, created_at: Math.floor(Date.now() / 1000),
+        }]);
+      } else {
+        setMessages((prev) => prev.map(m =>
+          m.id === tempAssistantId
+            ? { ...m, content: m.content + '\n\n' + t }
+            : m
+        ));
+      }
+    };
+
+    api.streamChatMessage(
+      sendText,
+      activeChatId ?? undefined,
+      undefined,
+      getAvatarManifest(),
+      {
+        onIntermediate: (stepText) => appendToAssistant(stepText),
+        onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
+        onDisplayState: (state) => dispatchAvatarState(state),
+        onDesktopAction: (action) => handleDesktopAction(action),
+        onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
+        onDone: (res) => {
+          const genImages: api.MessageImage[] | undefined = res.generated_images?.length
+            ? res.generated_images.map(img => ({
+                url: img.image_url
+                  ? (img.image_url.startsWith('http') ? img.image_url : `${api.API_BASE}${img.image_url}`)
+                  : `data:image/png;base64,${img.image_base64}`,
+                type: 'generated' as const
+              }))
+            : undefined;
+          if (assistantMsgCreated) {
+            setMessages((prev) => prev.map(m =>
+              m.id === tempAssistantId
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), ...(genImages ? { images: genImages } : {}) }
+                : m
+            ));
+          } else {
+            setSending(false);
+            setMessages((prev) => [...prev, {
+              id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+              images: genImages,
+            }]);
+          }
+          if (res.display_state) dispatchAvatarState(res.display_state);
+          if (!activeChatId || res.chat_id !== activeChatId) {
+            setActiveChatId(res.chat_id);
+            loadChats();
+          }
+        },
+        onError: (err: string) => {
+          console.error('Voice command stream error:', err);
+          if (assistantMsgCreated) {
+            setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
+          } else {
+            setMessages((prev) => prev.filter(m => m.id !== tempUserMsg.id));
+          }
+          setSending(false);
+        },
+      }
+    );
+  }, [activeChatId, loadChats]);
 
   // ── Voice recording ───────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
@@ -1197,6 +1282,7 @@ export function ChatPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      <PassiveListener onCommand={handleVoiceCommand} />
     </div>
   );
 }
