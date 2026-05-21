@@ -14,6 +14,7 @@ import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getA
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { openTool, handleDesktopAction, dispatchMapData } from '../lib/tools';
+import { createSpeechRecorder } from '../lib/speechRecorder';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -559,21 +560,67 @@ export function ChatPage() {
   }, []);
 
   // ── Wake word: start Python listener, react to detections ───────────────
+  const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);
+
   useEffect(() => {
     window.electronAPI.startWakeWord();
 
-    const unsubscribe = window.electronAPI.onWakeWordDetected((payload) => {
+    const unsubscribe = window.electronAPI.onWakeWordDetected(async (payload) => {
       console.log('[wakeword] detected:', payload);
 
-      // Auto-start voice recording when wake word fires
-      if (!isRecording && !isTranscribing && !sending) {
-        startRecording();
-      }
+      // Don't start if already busy
+      if (isRecording || isTranscribing || sending) return;
+      if (speechRecorderRef.current?.isActive()) return;
+
+      // Create a fresh speech recorder for this session
+      const recorder = createSpeechRecorder({
+        silenceDelayMs: 900,
+        harkThreshold: -55,
+
+        onSpeechStart: () => {
+          setIsRecording(true);
+          console.log('[speech] speaking started');
+        },
+
+        onSpeechEnd: async (audioBlob) => {
+          setIsRecording(false);
+          console.log('[speech] speaking ended, transcribing...');
+
+          setIsTranscribing(true);
+          try {
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const text = await window.electronAPI.transcribeAudio(arrayBuffer);
+            if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
+          } catch (err) {
+            console.error('[speech] Transcription failed:', err);
+            toast.error('Ошибка распознавания голоса');
+          } finally {
+            setIsTranscribing(false);
+          }
+
+          // Stop recorder and clean up
+          recorder.stop();
+          speechRecorderRef.current = null;
+        },
+
+        onError: (error) => {
+          console.error('[speech] Recorder error:', error);
+          toast.error('Ошибка записи голоса');
+          recorder.stop();
+          speechRecorderRef.current = null;
+          setIsRecording(false);
+        },
+      });
+
+      speechRecorderRef.current = recorder;
+      await recorder.start();
     });
 
     return () => {
       unsubscribe();
       window.electronAPI.stopWakeWord();
+      speechRecorderRef.current?.stop();
+      speechRecorderRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
