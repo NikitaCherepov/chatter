@@ -1,7 +1,23 @@
 import argparse
 import json
+import os
 import sys
 import time
+
+if getattr(sys, "frozen", False):
+    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    dll_dirs = [
+        base_dir,
+        os.path.join(base_dir, "onnxruntime", "capi"),
+        os.path.join(base_dir, "_internal"),
+        os.path.join(base_dir, "_internal", "onnxruntime", "capi"),
+    ]
+
+    for dll_dir in dll_dirs:
+        if os.path.isdir(dll_dir):
+            os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(dll_dir)
 
 import numpy as np
 import sounddevice as sd

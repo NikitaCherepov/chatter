@@ -10,7 +10,7 @@ declare global {
       setZoomLevel: (level: number) => Promise<void>;
       getZoomLevel: () => Promise<number>;
       transcribeAudio: (arrayBuffer: ArrayBuffer) => Promise<string>;
-      startWakeWord: () => Promise<{ ok: boolean; alreadyRunning?: boolean }>;
+      startWakeWord: () => Promise<{ ok: boolean; alreadyRunning?: boolean; error?: string }>;
       stopWakeWord: () => Promise<{ ok: boolean; alreadyStopped?: boolean }>;
       onWakeWordDetected: (callback: (payload: unknown) => void) => () => void;
     };

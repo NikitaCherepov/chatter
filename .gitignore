@@ -8,7 +8,9 @@ settings.local.json
 
 
 desktop-app/release/
+desktop-app/build/
 desktop-app/dist/
 desktop-app/models/
 desktop-app/.venv-wakeword/
+desktop-app/*.spec
 *.exe

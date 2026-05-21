@@ -567,7 +567,15 @@ export function ChatPage() {
   const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);
 
   useEffect(() => {
-    window.electronAPI.startWakeWord();
+    void window.electronAPI.startWakeWord().then((result) => {
+      if (!result.ok) {
+        console.error('[wakeword] failed to start:', result.error);
+        toast.error('Не удалось запустить wake word');
+      }
+    }).catch((error) => {
+      console.error('[wakeword] failed to start:', error);
+      toast.error('Не удалось запустить wake word');
+    });
 
     const unsubscribe = window.electronAPI.onWakeWordDetected(async (payload) => {
       console.log('[wakeword] detected:', payload);

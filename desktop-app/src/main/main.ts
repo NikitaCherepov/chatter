@@ -11,25 +11,98 @@ import ffmpegStatic from 'ffmpeg-static';
 
 const execFileAsync = util.promisify(execFile);
 
-// Set ffmpeg binary path
-if (ffmpegStatic) {
-  ffmpeg.setFfmpegPath(ffmpegStatic);
+function asarUnpackedPath(filePath: string) {
+  return app.isPackaged ? filePath.replace('app.asar', 'app.asar.unpacked') : filePath;
+}
+
+function firstExistingPath(paths: string[]) {
+  return paths.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+function requireExistingPath(label: string, paths: string[]) {
+  const found = firstExistingPath(paths);
+  if (!found) {
+    throw new Error(`${label} not found. Checked: ${paths.join('; ')}`);
+  }
+  return found;
+}
+
+const getFfmpegPath = () => {
+  if (!ffmpegStatic) {
+    throw new Error('ffmpeg-static did not resolve an ffmpeg binary');
+  }
+
+  return requireExistingPath('ffmpeg binary', [
+    asarUnpackedPath(ffmpegStatic),
+    ffmpegStatic,
+  ]);
+};
+
+try {
+  ffmpeg.setFfmpegPath(getFfmpegPath());
+} catch (error) {
+  console.error('[ffmpeg] failed to resolve binary:', error);
 }
 
 // ── Wakeword (openWakeWord Python process) ────────────────────────────────
 
-const getWakewordPythonPath = () => {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'wakeword', 'python.exe');
-  }
-  return path.join(__dirname, '..', '..', '.venv-wakeword', 'Scripts', 'python.exe');
+type WakewordCommand = {
+  command: string;
+  args: string[];
+  cwd: string;
 };
 
-const getWakewordScriptPath = () => {
+const getWakewordCommand = (): WakewordCommand => {
+  const listenerArgs = [
+    '--threshold', '0.55',
+    '--debounce', '2.0',
+    '--vad-threshold', '0.45',
+  ];
+
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'wakeword', 'listener.py');
+    const packagedPythonPath = firstExistingPath([
+      path.join(process.resourcesPath, '.venv-wakeword', 'Scripts', 'python.exe'),
+      path.join(process.resourcesPath, 'wakeword', 'python.exe'),
+    ]);
+    const packagedScriptPath = firstExistingPath([
+      path.join(process.resourcesPath, 'wakeword', 'listener.py'),
+    ]);
+
+    if (packagedPythonPath && packagedScriptPath) {
+      return {
+        command: packagedPythonPath,
+        args: [packagedScriptPath, ...listenerArgs],
+        cwd: path.dirname(packagedScriptPath),
+      };
+    }
+
+    const bundledExe = path.join(process.resourcesPath, 'wakeword', 'wakeword-listener.exe');
+    if (fs.existsSync(bundledExe)) {
+      return {
+        command: bundledExe,
+        args: listenerArgs,
+        cwd: path.dirname(bundledExe),
+      };
+    }
+
+    throw new Error(`wakeword runtime not found. Checked Python: ${[
+      path.join(process.resourcesPath, '.venv-wakeword', 'Scripts', 'python.exe'),
+      path.join(process.resourcesPath, 'wakeword', 'python.exe'),
+    ].join('; ')}. Checked script: ${path.join(process.resourcesPath, 'wakeword', 'listener.py')}. Checked exe: ${bundledExe}`);
   }
-  return path.join(__dirname, '..', '..', 'wakeword', 'listener.py');
+
+  const pythonPath = requireExistingPath('wakeword Python', [
+    path.join(__dirname, '..', '..', '.venv-wakeword', 'Scripts', 'python.exe'),
+  ]);
+  const scriptPath = requireExistingPath('wakeword listener script', [
+    path.join(__dirname, '..', '..', 'wakeword', 'listener.py'),
+  ]);
+
+  return {
+    command: pythonPath,
+    args: [scriptPath, ...listenerArgs],
+    cwd: path.dirname(scriptPath),
+  };
 };
 
 let wakewordProcess: ChildProcessWithoutNullStreams | null = null;
@@ -39,15 +112,20 @@ function startWakewordListener() {
     return { ok: true, alreadyRunning: true };
   }
 
-  const pythonPath = getWakewordPythonPath();
-  const scriptPath = getWakewordScriptPath();
+  let wakewordCommand: WakewordCommand;
+  try {
+    wakewordCommand = getWakewordCommand();
+  } catch (error) {
+    console.error('[wakeword] failed to resolve listener:', error);
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 
-  wakewordProcess = spawn(pythonPath, [
-    scriptPath,
-    '--threshold', '0.55',
-    '--debounce', '2.0',
-    '--vad-threshold', '0.45',
-  ]);
+  console.log('[wakeword] starting:', wakewordCommand.command);
+
+  wakewordProcess = spawn(wakewordCommand.command, wakewordCommand.args, {
+    cwd: wakewordCommand.cwd,
+    windowsHide: true,
+  });
 
   wakewordProcess.stdout.on('data', (chunk: Buffer) => {
     const lines = chunk.toString('utf-8').split(/\r?\n/).filter(Boolean);
@@ -107,25 +185,39 @@ function stopWakewordListener() {
 
 // Dynamic model path: dev vs packaged
 const getModelPath = () => {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'models', 'ggml-small.bin');
-  }
-  return path.join(__dirname, '..', '..', 'models', 'ggml-small.bin');
+  return requireExistingPath('whisper model', [
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'models', 'ggml-small.bin')
+      : path.join(__dirname, '..', '..', 'models', 'ggml-small.bin'),
+  ]);
 };
 
 // Dynamic whisper.exe path: dev vs packaged
 const getWhisperExePath = () => {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'models', 'whisper.exe');
-  }
-  return path.join(__dirname, '..', '..', 'models', 'whisper.exe');
+  return requireExistingPath('whisper executable', [
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'models', 'whisper.exe')
+      : path.join(__dirname, '..', '..', 'models', 'whisper.exe'),
+  ]);
 };
 
 // Load .env — in dev it's at project root, in packaged app it's bundled inside dist/main/
-const envPath = app.isPackaged
-  ? path.join(__dirname, '.env')        // packaged: dist/main/.env (bundled by electron-builder)
-  : path.join(__dirname, '../../.env'); // dev: desktop-app/.env
-dotenv.config({ path: envPath });
+const envPath = firstExistingPath(app.isPackaged
+  ? [
+      path.join(process.resourcesPath, 'app.asar', '.env'),
+      path.join(process.resourcesPath, 'app', '.env'),
+      path.join(__dirname, '..', '..', '.env'),
+      path.join(__dirname, '.env'),
+    ]
+  : [
+      path.join(__dirname, '..', '..', '.env'),
+    ]);
+
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  console.warn('[env] .env file not found');
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -207,14 +299,17 @@ function createWindow() {
       const whisperExe = getWhisperExePath();
       const modelPath = getModelPath();
 
-      console.log('[transcribe] 3. Running whisper.exe...');
+      console.log('[transcribe] 3. Running whisper.exe:', whisperExe);
 
       await execFileAsync(whisperExe, [
         '-m', modelPath,
         '-f', outputPath,
         '-l', 'ru',
         '-otxt',
-      ]);
+      ], {
+        cwd: path.dirname(whisperExe),
+        windowsHide: true,
+      });
 
       // whisper creates {outputPath}.txt
       const txtFilePath = `${outputPath}.txt`;

@@ -54,7 +54,12 @@
     "productName": "Chatter",
     "files": [
       "dist/**/*",
+      "!dist/wakeword-listener.exe",
+      "!dist/wakeword-listener/**/*",
       ".env"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*"
     ],
     "directories": {
       "output": "release"
@@ -63,6 +68,20 @@
       {
         "from": "models",
         "to": "models",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "wakeword",
+        "to": "wakeword",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": ".venv-wakeword",
+        "to": ".venv-wakeword",
         "filter": [
           "**/*"
         ]
