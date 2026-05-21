@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { execFile } from 'child_process';
+import { execFile, spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import util from 'util';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
@@ -14,6 +14,95 @@ const execFileAsync = util.promisify(execFile);
 // Set ffmpeg binary path
 if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
+}
+
+// ── Wakeword (openWakeWord Python process) ────────────────────────────────
+
+const getWakewordPythonPath = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'wakeword', 'python.exe');
+  }
+  return path.join(__dirname, '..', '..', '.venv-wakeword', 'Scripts', 'python.exe');
+};
+
+const getWakewordScriptPath = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'wakeword', 'listener.py');
+  }
+  return path.join(__dirname, '..', '..', 'wakeword', 'listener.py');
+};
+
+let wakewordProcess: ChildProcessWithoutNullStreams | null = null;
+
+function startWakewordListener() {
+  if (wakewordProcess) {
+    return { ok: true, alreadyRunning: true };
+  }
+
+  const pythonPath = getWakewordPythonPath();
+  const scriptPath = getWakewordScriptPath();
+
+  wakewordProcess = spawn(pythonPath, [
+    scriptPath,
+    '--threshold', '0.55',
+    '--debounce', '2.0',
+    '--vad-threshold', '0.45',
+  ]);
+
+  wakewordProcess.stdout.on('data', (chunk: Buffer) => {
+    const lines = chunk.toString('utf-8').split(/\r?\n/).filter(Boolean);
+
+    for (const line of lines) {
+      try {
+        const payload = JSON.parse(line);
+
+        if (payload.type === 'wakeword') {
+          console.log('[wakeword] detected:', payload);
+
+          mainWindow?.webContents.send('wakeword:detected', payload);
+
+          // Visually wake up the avatar
+          mainWindow?.webContents.send('pixel-avatar:state', {
+            state: 'listening',
+            source: 'wakeword',
+          });
+        }
+
+        if (payload.type === 'error') {
+          console.error('[wakeword] listener error:', payload.message);
+        }
+      } catch {
+        console.log('[wakeword stdout]', line);
+      }
+    }
+  });
+
+  wakewordProcess.stderr.on('data', (chunk: Buffer) => {
+    console.log('[wakeword stderr]', chunk.toString('utf-8'));
+  });
+
+  wakewordProcess.on('close', (code) => {
+    console.log('[wakeword] process closed:', code);
+    wakewordProcess = null;
+  });
+
+  wakewordProcess.on('error', (error) => {
+    console.error('[wakeword] process error:', error);
+    wakewordProcess = null;
+  });
+
+  return { ok: true, alreadyRunning: false };
+}
+
+function stopWakewordListener() {
+  if (!wakewordProcess) {
+    return { ok: true, alreadyStopped: true };
+  }
+
+  wakewordProcess.kill();
+  wakewordProcess = null;
+
+  return { ok: true, alreadyStopped: false };
 }
 
 // Dynamic model path: dev vs packaged
@@ -148,6 +237,15 @@ function createWindow() {
       try { fs.unlinkSync(txtFilePath); } catch { /* ignore */ }
       throw error;
     }
+  });
+
+  // ── IPC: wakeword start/stop ─────────────────────────────────────────────
+  ipcMain.handle('wakeword:start', () => {
+    return startWakewordListener();
+  });
+
+  ipcMain.handle('wakeword:stop', () => {
+    return stopWakewordListener();
   });
 }
 

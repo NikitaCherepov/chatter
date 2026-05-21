@@ -558,6 +558,25 @@ export function ChatPage() {
     return () => unsub?.();
   }, []);
 
+  // ── Wake word: start Python listener, react to detections ───────────────
+  useEffect(() => {
+    window.electronAPI.startWakeWord();
+
+    const unsubscribe = window.electronAPI.onWakeWordDetected((payload) => {
+      console.log('[wakeword] detected:', payload);
+
+      // Auto-start voice recording when wake word fires
+      if (!isRecording && !isTranscribing && !sending) {
+        startRecording();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      window.electronAPI.stopWakeWord();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Listen for external tool open requests (bot / IPC)
   useEffect(() => {
     const handler = (e: Event) => {

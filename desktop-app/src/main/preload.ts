@@ -23,4 +23,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Voice transcription: send audio buffer → get text back
   transcribeAudio: (arrayBuffer: ArrayBuffer) =>
     ipcRenderer.invoke('transcribe-audio', arrayBuffer),
+
+  // Wakeword: start/stop Python openWakeWord listener process
+  startWakeWord: () =>
+    ipcRenderer.invoke('wakeword:start'),
+
+  stopWakeWord: () =>
+    ipcRenderer.invoke('wakeword:stop'),
+
+  onWakeWordDetected: (callback: (payload: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('wakeword:detected', handler);
+    return () => ipcRenderer.removeListener('wakeword:detected', handler);
+  },
 });
