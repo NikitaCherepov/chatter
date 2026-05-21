@@ -603,6 +603,13 @@ export function ChatPage() {
           speechRecorderRef.current = null;
         },
 
+        onNoSpeech: () => {
+          console.log('[speech] no speech detected, cancelling');
+          setIsRecording(false);
+          recorder.stop();
+          speechRecorderRef.current = null;
+        },
+
         onError: (error) => {
           console.error('[speech] Recorder error:', error);
           toast.error('Ошибка записи голоса');

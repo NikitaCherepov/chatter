@@ -4,9 +4,12 @@ type SpeechRecorderOptions = {
   silenceDelayMs?: number;
   harkThreshold?: number;
   harkInterval?: number;
+  maxRecordingMs?: number;
   mimeType?: string;
   onSpeechStart?: () => void;
   onSpeechEnd?: (audioBlob: Blob) => void | Promise<void>;
+  /** Called when recording stopped without detecting any speech (timeout) */
+  onNoSpeech?: () => void;
   onVolumeChange?: (volume: number, threshold: number) => void;
   onError?: (error: unknown) => void;
 };
@@ -24,9 +27,11 @@ export function createSpeechRecorder(
     silenceDelayMs = 900,
     harkThreshold = -55,
     harkInterval = 100,
+    maxRecordingMs = 8000,
     mimeType = 'audio/webm',
     onSpeechStart,
     onSpeechEnd,
+    onNoSpeech,
     onVolumeChange,
     onError,
   } = options;
@@ -37,7 +42,9 @@ export function createSpeechRecorder(
 
   let chunks: BlobPart[] = [];
   let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  let maxRecordingTimer: ReturnType<typeof setTimeout> | null = null;
   let active = false;
+  let hadSpeech = false;
 
   const clearSilenceTimer = () => {
     if (silenceTimer) {
@@ -46,10 +53,20 @@ export function createSpeechRecorder(
     }
   };
 
+  const clearMaxRecordingTimer = () => {
+    if (maxRecordingTimer) {
+      clearTimeout(maxRecordingTimer);
+      maxRecordingTimer = null;
+    }
+  };
+
   const stopCurrentRecording = async () => {
     if (!mediaRecorder || mediaRecorder.state === 'inactive') {
       return;
     }
+
+    // Cancel max recording timer — recording is stopping for another reason
+    clearMaxRecordingTimer();
 
     mediaRecorder.stop();
   };
@@ -76,6 +93,13 @@ export function createSpeechRecorder(
     };
 
     mediaRecorder.onstop = async () => {
+      // No speech detected — skip transcription, notify caller
+      if (!hadSpeech) {
+        chunks = [];
+        onNoSpeech?.();
+        return;
+      }
+
       const audioBlob = new Blob(chunks, {
         type: mimeType,
       });
@@ -110,6 +134,13 @@ export function createSpeechRecorder(
       // Wake word already confirmed the user is speaking.
       startCurrentRecording();
 
+      // Hard limit: force stop if recording runs too long
+      // (e.g. user said wake word but stayed silent)
+      maxRecordingTimer = setTimeout(() => {
+        console.log('[speechRecorder] max recording time reached, stopping');
+        stopCurrentRecording();
+      }, maxRecordingMs);
+
       // hark runs in parallel, only used for silence detection (auto-stop)
       speechEvents = hark(stream, {
         threshold: harkThreshold,
@@ -122,7 +153,9 @@ export function createSpeechRecorder(
       setTimeout(() => { gracePeriod = false; }, 1500);
 
       speechEvents.on('speaking', () => {
+        hadSpeech = true;
         clearSilenceTimer();
+        clearMaxRecordingTimer();
       });
 
       speechEvents.on('stopped_speaking', () => {
@@ -148,6 +181,7 @@ export function createSpeechRecorder(
     active = false;
 
     clearSilenceTimer();
+    clearMaxRecordingTimer();
 
     if (speechEvents) {
       speechEvents.stop();
@@ -164,6 +198,7 @@ export function createSpeechRecorder(
     }
 
     mediaRecorder = null;
+    hadSpeech = false;
     chunks = [];
   };
 
