@@ -271,6 +271,10 @@ export function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  // Keep handleSend in ref so wake word callback can call the latest version
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
   // ── Voice recording ───────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
     try {
@@ -590,7 +594,15 @@ export function ChatPage() {
           try {
             const arrayBuffer = await audioBlob.arrayBuffer();
             const text = await window.electronAPI.transcribeAudio(arrayBuffer);
-            if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
+            if (!text) return;
+
+            // Send immediately if bot is idle, otherwise fall back to textarea
+            if (!sending) {
+              setInput(text);
+              setTimeout(() => handleSendRef.current(), 0);
+            } else {
+              setInput((prev) => prev ? `${prev} ${text}` : text);
+            }
           } catch (err) {
             console.error('[speech] Transcription failed:', err);
             toast.error('Ошибка распознавания голоса');
