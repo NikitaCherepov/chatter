@@ -2106,6 +2106,22 @@ if (escalatedToPro) {
       content: 'Лимит вызовов инструментов исчерпан. НЕ вызывай больше инструменты. Сформулируй финальный ответ пользователю прямо сейчас на основе имеющихся данных.'
     });
 
+    // --- Sanitary block: clean up last assistant message ---
+    // If the last assistant message has dangling tool_calls (no tool response),
+    // the API will reject it. Strip them + clean any leaked pseudo-XML artifacts.
+    for (let i = currentMessages.length - 1; i >= 0; i--) {
+      if (currentMessages[i].role === 'assistant') {
+        const lastAsst = currentMessages[i];
+        if (lastAsst.tool_calls) {
+          delete lastAsst.tool_calls;
+        }
+        if (typeof lastAsst.content === 'string') {
+          lastAsst.content = lastAsst.content.split('<｜｜DSML｜｜')[0].trim();
+        }
+        break;
+      }
+    }
+
     try {
       const finalCompletion = await runCompletion(executionMode, {
         messages: currentMessages,
