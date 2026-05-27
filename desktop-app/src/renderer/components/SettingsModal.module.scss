@@ -271,3 +271,42 @@
     background-color: var(--bg-modal-hover);
   }
 }
+
+// ====== VOICE PANEL ======
+
+.voiceRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.voiceSelect {
+  flex: 1;
+  min-width: 0;
+}
+
+.previewBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background-color: var(--bg-input);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.1s, background-color 0.1s, border-color 0.1s;
+
+  &:hover {
+    color: var(--accent-icon);
+    border-color: var(--accent);
+    background-color: var(--bg-modal-hover);
+  }
+
+  &Playing {
+    color: var(--accent-icon);
+    border-color: var(--accent);
+  }
+}

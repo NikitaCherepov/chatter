@@ -1,16 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { PromptSelector } from './PromptSelector';
+import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel } from '../lib/tts';
+import type { TtsSettings } from '../lib/tts';
+import { Select } from './Select';
+import type { SelectOption } from './Select';
 import s from './SettingsModal.module.scss';
 
 type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'app';
+type Section = 'account' | 'prompt' | 'voice' | 'app';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -33,6 +37,7 @@ const modalVariants = {
 const SECTIONS: { key: Section; label: string }[] = [
   { key: 'account', label: 'Аккаунт' },
   { key: 'prompt', label: 'Промпт' },
+  { key: 'voice', label: 'Голос' },
   { key: 'app', label: 'Приложение' },
 ];
 
@@ -69,6 +74,11 @@ export function SettingsModal({ onClose }: Props) {
   const [zoomPct, setZoomPct] = useState(100);
   const [zoomEditing, setZoomEditing] = useState(false);
   const [zoomInputValue, setZoomInputValue] = useState('100');
+
+  // Voice / TTS
+  const [ttsModels] = useState(() => getTtsModels());
+  const [ttsSettings, setTtsSettingsState] = useState<TtsSettings>(() => getTtsSettings());
+  const [previewPlaying, setPreviewPlaying] = useState(false);
 
   // Load account data
   useEffect(() => {
@@ -190,6 +200,51 @@ export function SettingsModal({ onClose }: Props) {
     }
   };
 
+  // ── Voice handlers ──
+
+  const voiceOptions: SelectOption[] = useMemo(() => {
+    return getVoicesForModel(ttsSettings.modelId).map((v) => ({
+      value: v.id,
+      label: v.name,
+      hint: v.lang,
+    }));
+  }, [ttsSettings.modelId]);
+
+  const modelOptions: SelectOption[] = useMemo(() => {
+    return ttsModels.map((m) => ({
+      value: m.id,
+      label: m.name,
+    }));
+  }, [ttsModels]);
+
+  const handleModelChange = (modelId: string) => {
+    const voices = getVoicesForModel(modelId);
+    const newSettings: TtsSettings = {
+      modelId,
+      voiceId: voices.length > 0 ? voices[0].id : '',
+    };
+    setTtsSettingsState(newSettings);
+    setTtsSettings(newSettings);
+    setPreviewPlaying(false);
+  };
+
+  const handleVoiceChange = (voiceId: string) => {
+    const newSettings = { ...ttsSettings, voiceId };
+    setTtsSettingsState(newSettings);
+    setTtsSettings(newSettings);
+    setPreviewPlaying(false);
+  };
+
+  const handlePreview = () => {
+    ttsStopPreview();
+    setPreviewPlaying(false);
+    setTimeout(() => {
+      setPreviewPlaying(true);
+      ttsPreview(ttsSettings.modelId, ttsSettings.voiceId);
+      setTimeout(() => setPreviewPlaying(false), 3000);
+    }, 50);
+  };
+
   return (
     <motion.div
       className={s.overlay}
@@ -297,6 +352,50 @@ export function SettingsModal({ onClose }: Props) {
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {section === 'voice' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>Голос</div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>Модель озвучки</label>
+                <Select
+                  options={modelOptions}
+                  value={ttsSettings.modelId}
+                  onChange={handleModelChange}
+                  placeholder="Выберите модель..."
+                />
+              </div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>Голос</label>
+                <div className={s.voiceRow}>
+                  <div className={s.voiceSelect}>
+                    <Select
+                      options={voiceOptions}
+                      value={ttsSettings.voiceId}
+                      onChange={handleVoiceChange}
+                      placeholder="Выберите голос..."
+                      searchable
+                      maxVisibleItems={6}
+                    />
+                  </div>
+                  <button
+                    className={`${s.previewBtn} ${previewPlaying ? s.previewBtnPlaying : ''}`}
+                    onClick={handlePreview}
+                    title="Прослушать"
+                    type="button"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
