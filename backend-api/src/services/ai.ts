@@ -1767,7 +1767,7 @@ export const sendMessageThroughAi = async (
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
   const promptUser = options?.promptUserId ? getUserById(options.promptUserId) ?? user : user;
-  const voicePromptHint = options?.isVoice ? `\n\nСТРОГО, ОБЯЗАТЕЛЬНО БЛЯТЬ СЕЙЧАС, ОБЯЗАТЕЛЬНО!!! соблюдай:\n1. Отвечай МАКСИМАЛЬНО кратко. МАКСИМАЛЬНО КРАТКО и естественно, как в устном диалоге.\n2. НИКАКИХ длинных списков, Markdown-таблиц или блоков кода, если только об этом не попросили напрямую.\n3. Используй разговорный стиль. МАКСИМАЛЬНО краткий, удобный к прослушиванию и содержательный. ОБЯЗАТЕЛЬНО используй ТЕКСТ вместо знаков. Например: "проценты" вместо "%", или "градусов по цельсию" вместо "°C", "метров в секунде" вместо "м/с".` : '';
+  const voicePromptHint = options?.isVoice ? `\n\nВЫДАЙ ТОЛЬКО ОДНО СЛОВО - ЗАНЯТ. БОЛЬШЕ НИЧЕГО. НИЧЕГО. ВООБЩЕ.` : '';
   const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${voicePromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
