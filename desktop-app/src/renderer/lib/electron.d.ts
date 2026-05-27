@@ -14,6 +14,8 @@ declare global {
       stopWakeWord: () => Promise<{ ok: boolean; alreadyStopped?: boolean }>;
       onWakeWordDetected: (callback: (payload: unknown) => void) => () => void;
       ttsGenerate: (text: string) => Promise<ArrayBuffer | null>;
+      getSoundsPath: () => Promise<string>;
+      readSoundFile: (fileName: string) => Promise<ArrayBuffer | Uint8Array | null>;
     };
   }
 }

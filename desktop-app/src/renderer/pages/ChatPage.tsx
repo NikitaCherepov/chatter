@@ -15,7 +15,7 @@ import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { openTool, handleDesktopAction, dispatchMapData } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
-import { ttsSpeak, ttsStop, ttsSubscribe } from '../lib/tts';
+import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -604,6 +604,9 @@ export function ChatPage() {
       if (isRecording || isTranscribing || sending) return;
       if (speechRecorderRef.current?.isActive()) return;
 
+      // Play notification sound — recording is starting
+      playSfx('Voice Recording Sound.mp3');
+
       // Create a fresh speech recorder for this session
       const recorder = createSpeechRecorder({
         silenceDelayMs: 900,
@@ -628,7 +631,10 @@ export function ChatPage() {
             if (!sending) {
               isVoiceInputRef.current = true;
               setInput(text);
-              setTimeout(() => handleSendRef.current(), 0);
+              setTimeout(() => {
+                void playSfx('voice_end.mp3');
+                handleSendRef.current();
+              }, 0);
             } else {
               setInput((prev) => prev ? `${prev} ${text}` : text);
             }

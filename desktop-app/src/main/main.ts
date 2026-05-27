@@ -413,6 +413,34 @@ function createWindow() {
       });
     });
   });
+
+  // ── IPC: get sounds path ────────────────────────────────────────────────
+  ipcMain.handle('get-sounds-path', () => {
+    const soundsDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'sounds')
+      : path.join(__dirname, '..', '..', 'sounds');
+    return soundsDir;
+  });
+
+  ipcMain.handle('read-sound-file', (_event, fileName: string) => {
+    const safeName = path.basename(fileName);
+    if (safeName !== fileName || !/\.(mp3|wav|ogg)$/i.test(safeName)) {
+      console.error('[sounds] rejected unsafe file name:', fileName);
+      return null;
+    }
+
+    const soundsDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'sounds')
+      : path.join(__dirname, '..', '..', 'sounds');
+    const soundPath = path.join(soundsDir, safeName);
+
+    if (!fs.existsSync(soundPath)) {
+      console.error('[sounds] file not found:', soundPath);
+      return null;
+    }
+
+    return fs.readFileSync(soundPath);
+  });
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────

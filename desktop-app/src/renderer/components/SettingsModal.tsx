@@ -223,6 +223,7 @@ export function SettingsModal({ onClose }: Props) {
       modelId,
       voiceId: voices.length > 0 ? voices[0].id : '',
       volume: ttsSettings.volume,
+      sfxVolume: ttsSettings.sfxVolume,
     };
     setTtsSettingsState(newSettings);
     setTtsSettings(newSettings);
@@ -238,6 +239,12 @@ export function SettingsModal({ onClose }: Props) {
 
   const handleVolumeChange = (volume: number) => {
     const newSettings = { ...ttsSettings, volume };
+    setTtsSettingsState(newSettings);
+    setTtsSettings(newSettings);
+  };
+
+  const handleSfxVolumeChange = (sfxVolume: number) => {
+    const newSettings = { ...ttsSettings, sfxVolume };
     setTtsSettingsState(newSettings);
     setTtsSettings(newSettings);
   };
@@ -406,7 +413,7 @@ export function SettingsModal({ onClose }: Props) {
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Громкость</label>
+                <label className={s.fieldLabel}>Громкость озвучки</label>
                 <div className={s.volumeRow}>
                   <input
                     type="range"
@@ -418,6 +425,22 @@ export function SettingsModal({ onClose }: Props) {
                     onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                   />
                   <span className={s.volumeValue}>{Math.round(ttsSettings.volume * 100)}%</span>
+                </div>
+              </div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>Громкость звуков</label>
+                <div className={s.volumeRow}>
+                  <input
+                    type="range"
+                    className={s.volumeSlider}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={ttsSettings.sfxVolume}
+                    onChange={(e) => handleSfxVolumeChange(parseFloat(e.target.value))}
+                  />
+                  <span className={s.volumeValue}>{Math.round(ttsSettings.sfxVolume * 100)}%</span>
                 </div>
               </div>
             </div>

@@ -40,4 +40,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // TTS: generate audio via Piper (local TTS engine)
   ttsGenerate: (text: string) =>
     ipcRenderer.invoke('tts:generate', text),
+
+  // Get path to sounds directory
+  getSoundsPath: () =>
+    ipcRenderer.invoke('get-sounds-path'),
+
+  // Read sound file bytes for renderer playback
+  readSoundFile: (fileName: string) =>
+    ipcRenderer.invoke('read-sound-file', fileName),
 });

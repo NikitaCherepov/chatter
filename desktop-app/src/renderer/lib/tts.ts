@@ -38,6 +38,7 @@ export interface TtsSettings {
   modelId: string;
   voiceId: string;
   volume: number;
+  sfxVolume: number;
 }
 
 function loadSettings(): TtsSettings {
@@ -45,10 +46,10 @@ function loadSettings(): TtsSettings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { ...{ modelId: 'piper', voiceId: 'ruslan', volume: 0.3 }, ...parsed };
+      return { ...{ modelId: 'piper', voiceId: 'ruslan', volume: 0.3, sfxVolume: 0.3 }, ...parsed };
     }
   } catch {}
-  return { modelId: 'piper', voiceId: 'ruslan', volume: 0.3 };
+  return { modelId: 'piper', voiceId: 'ruslan', volume: 0.3, sfxVolume: 0.3 };
 }
 
 function saveSettings(s: TtsSettings): void {
@@ -305,6 +306,41 @@ export function ttsStopPreview(): void {
 
 export function ttsIsPreviewPlaying(): boolean {
   return previewPlaying;
+}
+
+// ── Sound effects (notification beeps etc.) ──────────────────────────────
+
+function getAudioMimeType(filename: string): string {
+  if (/\.wav$/i.test(filename)) return 'audio/wav';
+  if (/\.ogg$/i.test(filename)) return 'audio/ogg';
+  return 'audio/mpeg';
+}
+
+export async function playSfx(filename: string): Promise<void> {
+  try {
+    const buffer = await window.electronAPI.readSoundFile(filename);
+    if (!buffer) {
+      console.error('[SFX] sound file not found:', filename);
+      return;
+    }
+
+    const raw = buffer instanceof ArrayBuffer
+      ? buffer
+      : new Uint8Array(buffer as unknown as Iterable<number>).buffer as ArrayBuffer;
+    const blob = new Blob([raw], { type: getAudioMimeType(filename) });
+    const url = URL.createObjectURL(blob);
+    const { sfxVolume } = loadSettings();
+    const audio = new Audio(url);
+    audio.volume = sfxVolume;
+
+    const revoke = () => URL.revokeObjectURL(url);
+    audio.addEventListener('ended', revoke, { once: true });
+    audio.addEventListener('error', revoke, { once: true });
+
+    await audio.play();
+  } catch (err) {
+    console.error('[SFX] play error:', err);
+  }
 }
 
 // ── Settings helpers ───────────────────────────────────────────────────
