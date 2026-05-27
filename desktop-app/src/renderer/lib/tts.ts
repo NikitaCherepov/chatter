@@ -71,9 +71,12 @@ function getBuiltinVoices(): TtsVoice[] {
   return cachedBuiltinVoices!;
 }
 
-// Currently available Piper voices — static list, will be dynamic later
+// Currently available Piper voices
 const PIPER_VOICES: TtsVoice[] = [
-  { id: 'ruslan', name: 'Ruslan (ru)', lang: 'ru-RU' },
+  { id: 'ruslan', name: 'Ruslan', lang: 'ru-RU' },
+  { id: 'denis', name: 'Denis', lang: 'ru-RU' },
+  { id: 'dmitri', name: 'Dmitri', lang: 'ru-RU' },
+  { id: 'irina', name: 'Irina', lang: 'ru-RU' },
 ];
 
 export function getTtsModels(): TtsModel[] {
@@ -158,7 +161,7 @@ async function piperSpeak(messageId: number, text: string): Promise<void> {
   const settings = loadSettings();
 
   try {
-    const buffer = await window.electronAPI.ttsGenerate(text);
+    const buffer = await window.electronAPI.ttsGenerate(text, settings.voiceId);
 
     // Generation was cancelled while we waited for IPC
     if (ticket !== generationTicket) return;
@@ -265,7 +268,7 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
   if (modelId === 'piper') {
     try {
       const text = 'Привет, я Чаттер!';
-      const buffer = await window.electronAPI.ttsGenerate(text);
+      const buffer = await window.electronAPI.ttsGenerate(text, voiceId);
       if (!buffer) { previewPlaying = false; return; }
 
       // Electron IPC returns Uint8Array, but decodeAudioData needs ArrayBuffer

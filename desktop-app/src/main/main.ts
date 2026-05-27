@@ -219,6 +219,57 @@ if (envPath) {
   console.warn('[env] .env file not found');
 }
 
+const getPiperDir = () => {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'models', 'piper')
+    : path.join(__dirname, '..', '..', 'models', 'piper');
+};
+
+const getPiperVoicesDir = () => {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'models', 'piper-voices')
+    : path.join(__dirname, '..', '..', 'models', 'piper-voices');
+};
+
+function findPiperModelInFolder(folderPath: string) {
+  if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) return null;
+
+  const files = fs.readdirSync(folderPath).filter((file) => file.endsWith('.onnx'));
+  for (const file of files) {
+    const modelFile = path.join(folderPath, file);
+    const configFile = `${modelFile}.json`;
+    if (!fs.existsSync(configFile)) {
+      console.error('[tts:piper] config not found for model:', modelFile);
+      continue;
+    }
+    if (fs.statSync(configFile).size === 0) {
+      console.error('[tts:piper] config is empty for model:', modelFile);
+      continue;
+    }
+    return modelFile;
+  }
+
+  return null;
+}
+
+function resolvePiperModel(voicesDir: string, voiceId?: string) {
+  if (voiceId && /^[a-z0-9_-]+$/i.test(voiceId)) {
+    const selected = findPiperModelInFolder(path.join(voicesDir, voiceId));
+    if (selected) return selected;
+
+    console.error('[tts:piper] selected voice is unavailable or invalid:', voiceId);
+    return null;
+  }
+
+  const voiceFolders = fs.readdirSync(voicesDir).sort();
+  for (const folder of voiceFolders) {
+    const modelFile = findPiperModelInFolder(path.join(voicesDir, folder));
+    if (modelFile) return modelFile;
+  }
+
+  return null;
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
@@ -344,10 +395,8 @@ function createWindow() {
   });
 
   // ── IPC: tts:generate (text → piper.exe → WAV buffer) ──────────────────
-  ipcMain.handle('tts:generate', async (_event, text: string) => {
-    const piperDir = app.isPackaged
-      ? path.join(process.resourcesPath, 'models', 'piper')
-      : path.join(__dirname, '..', '..', 'models', 'piper');
+  ipcMain.handle('tts:generate', async (_event, text: string, voiceId?: string) => {
+    const piperDir = getPiperDir();
 
     const piperExe = path.join(piperDir, 'piper.exe');
     if (!fs.existsSync(piperExe)) {
@@ -355,33 +404,21 @@ function createWindow() {
       return null;
     }
 
-    // Find available voice models
-    const voicesDir = app.isPackaged
-      ? path.join(process.resourcesPath, 'models', 'piper-voices')
-      : path.join(__dirname, '..', '..', 'models', 'piper-voices');
+    const voicesDir = getPiperVoicesDir();
 
     if (!fs.existsSync(voicesDir)) {
       console.error('[tts:piper] voices dir not found at:', voicesDir);
       return null;
     }
 
-    // Find first .onnx model file (any subfolder)
-    let modelFile: string | null = null;
-    const voiceFolders = fs.readdirSync(voicesDir);
-    for (const folder of voiceFolders) {
-      const folderPath = path.join(voicesDir, folder);
-      if (!fs.statSync(folderPath).isDirectory()) continue;
-      const files = fs.readdirSync(folderPath).filter(f => f.endsWith('.onnx'));
-      if (files.length > 0) {
-        modelFile = path.join(folderPath, files[0]);
-        break;
-      }
-    }
+    const modelFile = resolvePiperModel(voicesDir, voiceId);
 
     if (!modelFile) {
-      console.error('[tts:piper] no .onnx voice model found in:', voicesDir);
+      console.error('[tts:piper] no valid .onnx voice model found in:', voicesDir);
       return null;
     }
+
+    console.log('[tts:piper] using voice model:', modelFile);
 
     const outPath = path.join(os.tmpdir(), `chatter_tts_${Date.now()}.wav`);
 
