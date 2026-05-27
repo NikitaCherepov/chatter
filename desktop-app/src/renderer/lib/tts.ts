@@ -3,13 +3,16 @@
  *
  * Architecture:
  *   - TTS models: abstraction layer. Supports:
- *     1. "builtin" — Chromium SpeechSynthesis (0 deps)
- *     2. "piper"   — local Piper TTS via Electron IPC → piper.exe → WAV → Audio
+ *     1. "piper"   — local Piper TTS via Electron IPC → piper.exe → WAV → Web Audio API
+ *     2. "builtin" — Chromium SpeechSynthesis (0 deps)
  *   - Each model has its own list of voices.
- *   - User selection (model + voice) persisted in localStorage.
+ *   - User selection (model + voice + volume) persisted in localStorage.
+ *   - Piper playback uses ChatterAudioManager for smooth fade-in/fade-out.
  *
  * Single global state — only one utterance plays at a time.
  */
+
+import { audioManager } from './audioManager';
 
 type Listener = (playingId: number | null) => void;
 
@@ -99,7 +102,6 @@ export function getVoicesForModel(modelId: string): TtsVoice[] {
 
 let playingId: number | null = null;
 const listeners = new Set<Listener>();
-let currentAudio: HTMLAudioElement | null = null;
 
 function notify() {
   listeners.forEach((fn) => fn(playingId));
@@ -131,12 +133,9 @@ function cleanText(raw: string): string {
 
 // ── Stop all playback ──────────────────────────────────────────────────
 
-export function ttsStop(): void {
+export async function ttsStop(): Promise<void> {
   speechSynthesis.cancel();
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
+  await audioManager.stopWithFade(150);
   playingId = null;
   notify();
 }
@@ -144,7 +143,7 @@ export function ttsStop(): void {
 // ── Piper: generate via IPC and play ───────────────────────────────────
 
 async function piperSpeak(messageId: number, text: string): Promise<void> {
-  ttsStop();
+  await audioManager.stopWithFade(150);
   playingId = messageId;
   notify();
 
@@ -157,25 +156,15 @@ async function piperSpeak(messageId: number, text: string): Promise<void> {
       return;
     }
 
-    const blob = new Blob([buffer], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.volume = settings.volume;
-    currentAudio = audio;
+    // Electron IPC returns Uint8Array, but decodeAudioData needs ArrayBuffer
+    const raw = buffer instanceof ArrayBuffer
+      ? buffer
+      : new Uint8Array(buffer as unknown as Iterable<number>).buffer as ArrayBuffer;
 
-    audio.onended = () => {
-      URL.revokeObjectURL(url);
-      currentAudio = null;
-      if (playingId === messageId) { playingId = null; notify(); }
-    };
+    // playBuffer now awaits until audio physically finishes
+    await audioManager.playBuffer(raw, settings.volume);
 
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      currentAudio = null;
-      if (playingId === messageId) { playingId = null; notify(); }
-    };
-
-    await audio.play();
+    if (playingId === messageId) { playingId = null; notify(); }
   } catch (err) {
     console.error('[TTS:piper] error:', err);
     if (playingId === messageId) { playingId = null; notify(); }
@@ -202,7 +191,8 @@ export function ttsSpeak(messageId: number, rawText: string): void {
   }
 
   // Builtin (SpeechSynthesis) — synchronous API
-  ttsStop();
+  audioManager.abort();
+  speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'ru-RU';
@@ -240,14 +230,10 @@ function pickBuiltinVoice(voiceId: string): SpeechSynthesisVoice | null {
 // ── Preview (for settings) ─────────────────────────────────────────────
 
 let previewPlaying = false;
-let previewAudio: HTMLAudioElement | null = null;
 
 function stopPreviewPlayback(): void {
   speechSynthesis.cancel();
-  if (previewAudio) {
-    previewAudio.pause();
-    previewAudio = null;
-  }
+  audioManager.abort();
   previewPlaying = false;
 }
 
@@ -263,16 +249,13 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
       const buffer = await window.electronAPI.ttsGenerate(text);
       if (!buffer) { previewPlaying = false; return; }
 
-      const blob = new Blob([buffer], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.volume = volume;
-      previewAudio = audio;
+      // Electron IPC returns Uint8Array, but decodeAudioData needs ArrayBuffer
+      const raw = buffer instanceof ArrayBuffer
+        ? buffer
+        : new Uint8Array(buffer as unknown as Iterable<number>).buffer as ArrayBuffer;
 
-      audio.onended = () => { URL.revokeObjectURL(url); previewAudio = null; previewPlaying = false; };
-      audio.onerror = () => { URL.revokeObjectURL(url); previewAudio = null; previewPlaying = false; };
-
-      await audio.play();
+      await audioManager.playBuffer(raw, volume);
+      previewPlaying = false;
     } catch (err) {
       console.error('[TTS:piper] preview error:', err);
       previewPlaying = false;
