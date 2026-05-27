@@ -13,6 +13,53 @@ npm run dev
 npm run build
 ```
 
+## Голос, Whisper, Wake Word
+
+Голосовой сценарий в desktop-приложении в основном живет в Electron main process и в renderer-странице `ChatPage`.
+
+### Ручная расшифровка голоса
+
+- Renderer записывает звук с микрофона через `MediaRecorder` и отправляет аудиобуфер в main process через IPC `transcribe-audio`.
+- Main process сохраняет браузерный звук во временный `.webm`, конвертирует его в mono WAV 16 kHz через `fluent-ffmpeg`, а затем запускает локальный `whisper.exe`.
+- Ресурсы Whisper ожидаются в `models/` в dev-режиме и в `resources/models/` в packaged-сборке:
+  - `whisper.exe`
+  - `ggml-small.bin`
+  - нужные whisper/ggml DLL
+- `ffmpeg-static` должен быть распакован из `app.asar`; в `package.json` для этого используется `asarUnpack` на `node_modules/ffmpeg-static/**/*`.
+
+### Wake word
+
+Wake word обрабатывается отдельным Python-listener:
+
+- Исходник: `wakeword/listener.py`
+- Dev-запуск: `.venv-wakeword/Scripts/python.exe wakeword/listener.py`
+- Packaged-запуск: `resources/.venv-wakeword/Scripts/python.exe resources/wakeword/listener.py`
+
+В packaged-приложении намеренно используется встроенный `.venv-wakeword`, а не собранный через PyInstaller `wakeword-listener.exe`. PyInstaller проверялся, но frozen-exe падал при загрузке `onnxruntime_pybind11_state`; тот же listener, запущенный через Python из venv, работает стабильно и доходит до состояния `listening`.
+
+Electron main запускает listener через IPC `wakeword:start`. Listener пишет JSON-строки в stdout:
+
+```json
+{"type":"wakeword","name":"...","score":0.9,"ts":1710000000}
+```
+
+Main process парсит эти строки и отправляет события:
+
+- `wakeword:detected` в renderer
+- `pixel-avatar:state` со `state: "listening"`
+
+После этого renderer запускает `createSpeechRecorder()`, записывает фразу пользователя после wake word, отправляет ее в `transcribe-audio` и отправляет распознанный текст в чат.
+
+### Особенности упаковки
+
+`npm run build:win` должен включать:
+
+- `models/` как `resources/models`
+- `wakeword/` как `resources/wakeword`
+- `.venv-wakeword/` как `resources/.venv-wakeword`
+
+Не стоит полагаться на `dist/wakeword-listener.exe` для production wake word, пока проблема PyInstaller/onnxruntime не решена. Текущий `files` config явно исключает старые wakeword listener binaries из `dist`.
+
 ## Архитектура
 
 ```
