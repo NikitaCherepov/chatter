@@ -267,6 +267,11 @@ export function ChatPage() {
             setActiveChatId(res.chat_id);
             loadChats();
           }
+
+          // Auto-speak response when triggered by voice input
+          if (isVoice && res.reply_text) {
+            ttsSpeak(res.message_id, res.reply_text);
+          }
         },
         onError: (err) => {
           console.error('Stream error:', err);
