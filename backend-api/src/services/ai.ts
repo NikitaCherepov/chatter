@@ -19,7 +19,8 @@ import { db } from '../db.js';
 dotenv.config();
 
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
-const MAX_TOOL_LOOPS = 6;
+const MAX_TOOL_LOOPS = 12;
+const MAX_TOOL_LOOPS_VOICE = 4;
 const MAX_PENDING_TASKS_PER_USER = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
@@ -1895,6 +1896,7 @@ PRO
   let usedModel = '';
   let usedProvider = '';
   let loop = 0;
+  const effectiveMaxLoops = options?.isVoice ? MAX_TOOL_LOOPS_VOICE : MAX_TOOL_LOOPS;
   const toolOutputsForFallback: string[] = [];
   const toolUserMessages: string[] = [];
   const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
@@ -1908,8 +1910,16 @@ PRO
   let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
   let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
 
-  while (loop < MAX_TOOL_LOOPS) {
+  while (loop < effectiveMaxLoops) {
     loop += 1;
+
+    // Hint when approaching limit — nudge the model to wrap up
+    if (loop === effectiveMaxLoops - 1) {
+      currentMessages.push({
+        role: 'system',
+        content: `Внимание: это предпоследний вызов инструментов. На следующей итерации лимит будет исчерпан — формулируй финальный ответ пользователю.`
+      });
+    }
     const completion = await runCompletion(executionMode, {
       messages: currentMessages,
       tools: executionTools,
@@ -2085,6 +2095,41 @@ for (const toolCall of message.tool_calls) {
 if (escalatedToPro) {
   continue;
 }
+  }
+
+  // ── Tool loops exhausted — force a final answer ───────────────────────
+  // If we exited the while loop without break, the model still wants to call tools.
+  // Inject a message telling it to answer now, then do one final completion.
+  if (loop >= effectiveMaxLoops && !finalAnswer) {
+    currentMessages.push({
+      role: 'system',
+      content: 'Лимит вызовов инструментов исчерпан. НЕ вызывай больше инструменты. Сформулируй финальный ответ пользователю прямо сейчас на основе имеющихся данных.'
+    });
+
+    try {
+      const finalCompletion = await runCompletion(executionMode, {
+        messages: currentMessages,
+        tools: [],  // no tools — force text-only response
+        max_tokens: 8192,
+        thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
+        clear_thinking: false
+      });
+      const finalMessage = finalCompletion.response?.choices?.[0]?.message;
+      if (finalMessage) {
+        currentMessages.push(finalMessage);
+        const finalText = `${finalMessage.content || ''}`.trim();
+        if (finalText) {
+          fullDbHistory += (fullDbHistory ? '\n\n' : '') + finalText;
+          finalAnswer = finalText;
+          answer = finalAnswer;
+        }
+      }
+      usedModel = finalCompletion.usedModel;
+      usedProvider = finalCompletion.usedProvider;
+      totalTokens += extractTokens(finalCompletion.response);
+    } catch (err: any) {
+      console.error('[AI] Final answer after tool limit failed:', err?.message);
+    }
   }
 
   const userTextForHistory = options?.persistUserText?.trim() || text;

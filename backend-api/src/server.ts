@@ -1538,7 +1538,7 @@ app.use((err: any, _req: any, res: any, _next: any) => {
   res.status(500).json({ error: 'internal_error' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[backend-api] started on :${PORT}`);
   if (BACKEND_VOICE_API_ENABLED) {
     console.log('[backend-voice] enabled (BACKEND_VOICE_API_ENABLED=1), endpoint: POST /internal/voice/turn');
@@ -1557,3 +1557,8 @@ app.listen(PORT, () => {
   }
   startTaskScheduler();
 });
+
+// Increase timeout for long-running AI requests (tool loops, streaming)
+server.timeout = 5 * 60 * 1000;       // 5 minutes
+server.keepAliveTimeout = 5 * 60 * 1000;
+server.headersTimeout = 5 * 60 * 1000 + 1000;
