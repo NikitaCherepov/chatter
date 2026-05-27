@@ -60,6 +60,53 @@ Main process парсит эти строки и отправляет событ
 
 Не стоит полагаться на `dist/wakeword-listener.exe` для production wake word, пока проблема PyInstaller/onnxruntime не решена. Текущий `files` config явно исключает старые wakeword listener binaries из `dist`.
 
+## TTS (Text-to-Speech)
+
+Озвучка сообщений бота — две модели, единый стейт, плавные переходы.
+
+### Модели
+
+| Модель | Движок | Голоса |
+|---|---|---|
+| **Piper** (по умолчанию) | Локальный `piper.exe` через IPC → WAV → Web Audio API | `ruslan` (ru), расширяемо |
+| **Встроенный (Chromium)** | `window.speechSynthesis` — системные голосы Windows | Все голоса ОС |
+
+### Архитектура
+
+```
+Renderer (tts.ts)          Main (main.ts)          FileSystem
+─────────────────          ──────────────          ──────────
+ttsSpeak(msgId, text)
+  │
+  ├─ Piper? ──► IPC tts:generate ──► spawn piper.exe ──► models/piper-voices/*/
+  │              (text)              -m model.onnx -f out.wav
+  │                                  ◄── WAV buffer ──── temp file
+  │
+  ├─ Builtin? ► SpeechSynthesisUtterance (Chromium API, 0 IPC)
+  │
+  ▼
+AudioManager (Web Audio API)
+  Source ► GainNode (fade-in/out) ► Destination
+```
+
+### Ключевые файлы
+
+- `lib/tts.ts` — единый TTS-сервис: модели, голоса, подписки на стейт, `generationTicket` для отмены
+- `lib/audioManager.ts` — Web Audio API плеер: `playBuffer()` с fade-in 40ms / fade-out 15ms до конца буфера, `stopWithFade()` 150ms
+- `ChatPage.tsx` — play/stop кнопка в metaRow каждого сообщения
+- `SettingsModal.tsx` — вкладка "Голос": модель, голос, громкость, прослушивание
+
+### Управление воспроизведением
+
+- **Единый стейт** — `ttsSubscribe(fn)` → только одно сообщение играет одновременно
+- **Generation ticket** — `ttsStop()` инвалидирует in-flight IPC-запросы, буфер отбрасывается
+- **Настройки** — модель + голос + громкость (0–1) в `localStorage` (`chatter_tts_settings`)
+
+### Ресурсы Piper
+
+Dev: `models/piper/piper.exe` + `models/piper-voices/<voice>/*.onnx`
+Packaged: `resources/models/piper/` + `resources/models/piper-voices/`
+
 ## Архитектура
 
 ```
@@ -81,15 +128,18 @@ src/
     │   ├── TasksTool      # Просмотр задач
     │   ├── MapTool        # Карта (Leaflet + react-leaflet)
     │   ├── RadioGroup     # Переиспользуемый радио-селектор
-    │   ├── SettingsModal  # Настройки
+    │   ├── SettingsModal  # Настройки (аккаунт, промпт, голос, приложение)
+    │   ├── Select         # Универсальный select-компонент
     │   ├── PromptSelector # Выбор промпта
     │   ├── MarkdownRenderer
     │   ├── AttachModal
     │   └── LinkTelegramModal
     └── lib/
-        ├── api.ts     # API + SSE streaming
-        ├── auth.tsx   # Auth context
-        └── tools.ts   # Tools panel state + desktop_action роутер
+        ├── api.ts         # API + SSE streaming
+        ├── auth.tsx       # Auth context
+        ├── tts.ts         # TTS-сервис (Piper + Chromium SpeechSynthesis)
+        ├── audioManager.ts # Web Audio API плеер с fade-in/out
+        └── tools.ts       # Tools panel state + desktop_action роутер
 ```
 
 ## Layout
