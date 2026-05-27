@@ -15,6 +15,7 @@ import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { openTool, handleDesktopAction, dispatchMapData } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
+import { ttsSpeak, ttsStop, ttsSubscribe } from '../lib/tts';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -74,6 +75,12 @@ export function ChatPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
+  const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
+
+  // Subscribe to TTS state
+  useEffect(() => {
+    return ttsSubscribe((id) => setTtsPlayingId(id));
+  }, []);
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
@@ -992,7 +999,23 @@ export function ChatPage() {
               {messages.map((msg) => (
                 <div key={msg.id} className={s.messageGroup}>
                   <div className={s.metaRow}>
-                    {msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}
+                    <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}</span>
+                    <button
+                      className={`${s.playBtn} ${ttsPlayingId === msg.id ? s.playBtnPlaying : ''}`}
+                      onClick={(e) => { e.stopPropagation(); ttsSpeak(msg.id, msg.content); }}
+                      title={ttsPlayingId === msg.id ? 'Остановить' : 'Озвучить'}
+                    >
+                      {ttsPlayingId === msg.id ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <rect x="6" y="4" width="4" height="16" rx="1" />
+                          <rect x="14" y="4" width="4" height="16" rx="1" />
+                        </svg>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                   <div className={s.bubbleWrap}>
                     <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
