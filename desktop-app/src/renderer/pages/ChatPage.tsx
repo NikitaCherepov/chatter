@@ -82,6 +82,9 @@ export function ChatPage() {
     return ttsSubscribe((id) => setTtsPlayingId(id));
   }, []);
 
+  // Ref flag: when true, the next handleSend() call originated from voice input (wake word)
+  const isVoiceInputRef = useRef(false);
+
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
   const checkLinkStatus = async () => {
@@ -160,6 +163,10 @@ export function ChatPage() {
     const text = input.trim();
     const hasImages = attachedImages.length > 0;
     if ((!text && !hasImages) || sending) return;
+
+    const isVoice = isVoiceInputRef.current;
+    isVoiceInputRef.current = false;
+
     setInput('');
     setSending(true);
 
@@ -270,7 +277,8 @@ export function ChatPage() {
           }
           setSending(false);
         }
-      }
+      },
+      isVoice ? { isVoice: true } : undefined
     );
   }, [input, sending, activeChatId, attachedImages]);
 
@@ -613,6 +621,7 @@ export function ChatPage() {
 
             // Send immediately if bot is idle, otherwise fall back to textarea
             if (!sending) {
+              isVoiceInputRef.current = true;
               setInput(text);
               setTimeout(() => handleSendRef.current(), 0);
             } else {

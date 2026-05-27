@@ -293,7 +293,8 @@ export async function streamChatMessage(
   chatId?: number,
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
-  callbacks?: StreamCallbacks
+  callbacks?: StreamCallbacks,
+  options?: { isVoice?: boolean }
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
@@ -304,6 +305,7 @@ export async function streamChatMessage(
     if (chatId) body.chat_id = chatId;
     if (images && images.length > 0) body.images = images;
     if (displayManifest) body.display_manifest = displayManifest;
+    if (options?.isVoice) body.is_voice = true;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',

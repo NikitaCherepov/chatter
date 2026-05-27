@@ -1731,6 +1731,7 @@ export const sendMessageThroughAi = async (
     assistantTelegramChatId?: number | null;
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
     isDesktop?: boolean;
+    isVoice?: boolean;
     onDesktopAction?: (action: DesktopActionPayload) => Promise<void> | void;
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
@@ -1766,7 +1767,8 @@ export const sendMessageThroughAi = async (
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
   const promptUser = options?.promptUserId ? getUserById(options.promptUserId) ?? user : user;
-  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
+  const voicePromptHint = options?.isVoice ? `\n\n[ГОЛОСОВОЙ РЕЖИМ]\nТекущее сообщение пользователя введено голосом, и твой ответ будет озвучен через TTS. Строго соблюдай:\n1. Отвечай максимально кратко и естественно, как в устном диалоге.\n2. Никаких длинных списков, Markdown-таблиц или блоков кода, если только об этом не попросили напрямую.\n3. Используй разговорный стиль.` : '';
+  const proSystemPrompt = `${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${voicePromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
