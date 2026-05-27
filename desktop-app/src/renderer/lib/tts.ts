@@ -101,6 +101,8 @@ export function getVoicesForModel(modelId: string): TtsVoice[] {
 // ── Playback state ──────────────────────────────────────────────────────
 
 let playingId: number | null = null;
+/** Generation ticket — incremented on every stop, so stale generation results are discarded. */
+let generationTicket = 0;
 const listeners = new Set<Listener>();
 
 function notify() {
@@ -134,6 +136,7 @@ function cleanText(raw: string): string {
 // ── Stop all playback ──────────────────────────────────────────────────
 
 export async function ttsStop(): Promise<void> {
+  generationTicket++; // invalidate any in-flight generation
   speechSynthesis.cancel();
   await audioManager.stopWithFade(150);
   playingId = null;
@@ -144,6 +147,10 @@ export async function ttsStop(): Promise<void> {
 
 async function piperSpeak(messageId: number, text: string): Promise<void> {
   await audioManager.stopWithFade(150);
+
+  // Capture ticket — if stop() is called during generation, ticket will differ
+  const ticket = ++generationTicket;
+
   playingId = messageId;
   notify();
 
@@ -151,6 +158,10 @@ async function piperSpeak(messageId: number, text: string): Promise<void> {
 
   try {
     const buffer = await window.electronAPI.ttsGenerate(text);
+
+    // Generation was cancelled while we waited for IPC
+    if (ticket !== generationTicket) return;
+
     if (!buffer) {
       if (playingId === messageId) { playingId = null; notify(); }
       return;
@@ -161,13 +172,20 @@ async function piperSpeak(messageId: number, text: string): Promise<void> {
       ? buffer
       : new Uint8Array(buffer as unknown as Iterable<number>).buffer as ArrayBuffer;
 
-    // playBuffer now awaits until audio physically finishes
+    // playBuffer awaits until audio physically finishes
     await audioManager.playBuffer(raw, settings.volume);
 
-    if (playingId === messageId) { playingId = null; notify(); }
+    // Check ticket again — stop may have been called during playback
+    if (ticket === generationTicket && playingId === messageId) {
+      playingId = null;
+      notify();
+    }
   } catch (err) {
     console.error('[TTS:piper] error:', err);
-    if (playingId === messageId) { playingId = null; notify(); }
+    if (ticket === generationTicket && playingId === messageId) {
+      playingId = null;
+      notify();
+    }
   }
 }
 
