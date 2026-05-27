@@ -36,4 +36,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('wakeword:detected', handler);
     return () => ipcRenderer.removeListener('wakeword:detected', handler);
   },
+
+  // TTS: generate audio via Piper (local TTS engine)
+  ttsGenerate: (text: string) =>
+    ipcRenderer.invoke('tts:generate', text),
 });

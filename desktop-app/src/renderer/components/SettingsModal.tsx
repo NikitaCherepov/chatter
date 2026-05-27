@@ -222,6 +222,7 @@ export function SettingsModal({ onClose }: Props) {
     const newSettings: TtsSettings = {
       modelId,
       voiceId: voices.length > 0 ? voices[0].id : '',
+      volume: ttsSettings.volume,
     };
     setTtsSettingsState(newSettings);
     setTtsSettings(newSettings);
@@ -235,13 +236,20 @@ export function SettingsModal({ onClose }: Props) {
     setPreviewPlaying(false);
   };
 
+  const handleVolumeChange = (volume: number) => {
+    const newSettings = { ...ttsSettings, volume };
+    setTtsSettingsState(newSettings);
+    setTtsSettings(newSettings);
+  };
+
   const handlePreview = () => {
     ttsStopPreview();
     setPreviewPlaying(false);
     setTimeout(() => {
       setPreviewPlaying(true);
       ttsPreview(ttsSettings.modelId, ttsSettings.voiceId);
-      setTimeout(() => setPreviewPlaying(false), 3000);
+      // Auto-reset after 5s safety net (piper generation can be slow)
+      setTimeout(() => setPreviewPlaying(false), 5000);
     }, 50);
   };
 
@@ -394,6 +402,22 @@ export function SettingsModal({ onClose }: Props) {
                       <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
                     </svg>
                   </button>
+                </div>
+              </div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>Громкость</label>
+                <div className={s.volumeRow}>
+                  <input
+                    type="range"
+                    className={s.volumeSlider}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={ttsSettings.volume}
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                  />
+                  <span className={s.volumeValue}>{Math.round(ttsSettings.volume * 100)}%</span>
                 </div>
               </div>
             </div>

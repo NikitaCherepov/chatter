@@ -310,3 +310,47 @@
     border-color: var(--accent);
   }
 }
+
+// ====== VOLUME SLIDER ======
+
+.volumeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.volumeSlider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--border-medium);
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    border: 2px solid var(--bg-primary);
+    box-shadow: 0 0 0 1px var(--border-medium);
+    cursor: pointer;
+    transition: box-shadow 0.1s;
+
+    &:hover {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+  }
+}
+
+.volumeValue {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: right;
+}

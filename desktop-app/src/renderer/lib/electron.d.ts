@@ -13,6 +13,7 @@ declare global {
       startWakeWord: () => Promise<{ ok: boolean; alreadyRunning?: boolean; error?: string }>;
       stopWakeWord: () => Promise<{ ok: boolean; alreadyStopped?: boolean }>;
       onWakeWordDetected: (callback: (payload: unknown) => void) => () => void;
+      ttsGenerate: (text: string) => Promise<ArrayBuffer | null>;
     };
   }
 }

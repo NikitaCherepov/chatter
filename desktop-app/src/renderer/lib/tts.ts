@@ -1,9 +1,10 @@
 /**
- * Text-to-Speech service using Web Speech API (SpeechSynthesis).
+ * Text-to-Speech service.
  *
  * Architecture:
- *   - TTS models: abstraction layer. Currently only "builtin" (Chromium SpeechSynthesis).
- *     In the future can add cloud TTS models (e.g. server-side).
+ *   - TTS models: abstraction layer. Supports:
+ *     1. "builtin" — Chromium SpeechSynthesis (0 deps)
+ *     2. "piper"   — local Piper TTS via Electron IPC → piper.exe → WAV → Audio
  *   - Each model has its own list of voices.
  *   - User selection (model + voice) persisted in localStorage.
  *
@@ -15,20 +16,14 @@ type Listener = (playingId: number | null) => void;
 // ── TTS Model / Voice types ────────────────────────────────────────────
 
 export interface TtsVoice {
-  /** Unique identifier (for builtin: SpeechSynthesisVoice.voiceURI) */
   id: string;
-  /** Human-readable name */
   name: string;
-  /** Language tag */
   lang: string;
 }
 
 export interface TtsModel {
-  /** Unique model id */
   id: string;
-  /** Display name */
   name: string;
-  /** Available voices for this model */
   voices: TtsVoice[];
 }
 
@@ -39,14 +34,18 @@ const STORAGE_KEY = 'chatter_tts_settings';
 export interface TtsSettings {
   modelId: string;
   voiceId: string;
+  volume: number;
 }
 
 function loadSettings(): TtsSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...{ modelId: 'piper', voiceId: 'ruslan', volume: 0.3 }, ...parsed };
+    }
   } catch {}
-  return { modelId: 'builtin', voiceId: '' };
+  return { modelId: 'piper', voiceId: 'ruslan', volume: 0.3 };
 }
 
 function saveSettings(s: TtsSettings): void {
@@ -55,32 +54,32 @@ function saveSettings(s: TtsSettings): void {
 
 // ── Model registry ──────────────────────────────────────────────────────
 
-let cachedVoices: TtsVoice[] | null = null;
+let cachedBuiltinVoices: TtsVoice[] | null = null;
 
 function getBuiltinVoices(): TtsVoice[] {
-  if (cachedVoices) return cachedVoices;
+  if (cachedBuiltinVoices) return cachedBuiltinVoices;
   const sv = speechSynthesis.getVoices();
-  cachedVoices = sv.map((v) => ({
+  cachedBuiltinVoices = sv.map((v) => ({
     id: v.voiceURI,
     name: v.name,
     lang: v.lang,
   }));
-  return cachedVoices!;
+  return cachedBuiltinVoices!;
 }
 
-/** Call when voiceschanged fires — invalidates cache. */
-function invalidateVoiceCache(): void {
-  cachedVoices = null;
-}
+// Currently available Piper voices — static list, will be dynamic later
+const PIPER_VOICES: TtsVoice[] = [
+  { id: 'ruslan', name: 'Ruslan (ru)', lang: 'ru-RU' },
+];
 
-/**
- * Returns available TTS models with their voices.
- * The builtin model's voices come from SpeechSynthesis.getVoices().
- * More models can be added here later.
- */
 export function getTtsModels(): TtsModel[] {
   const builtinVoices = getBuiltinVoices();
   return [
+    {
+      id: 'piper',
+      name: 'Piper (локальный)',
+      voices: PIPER_VOICES,
+    },
     {
       id: 'builtin',
       name: 'Встроенный (Chromium)',
@@ -91,7 +90,6 @@ export function getTtsModels(): TtsModel[] {
   ];
 }
 
-/** Get voices for a specific model. */
 export function getVoicesForModel(modelId: string): TtsVoice[] {
   const model = getTtsModels().find((m) => m.id === modelId);
   return model?.voices ?? [];
@@ -101,6 +99,7 @@ export function getVoicesForModel(modelId: string): TtsVoice[] {
 
 let playingId: number | null = null;
 const listeners = new Set<Listener>();
+let currentAudio: HTMLAudioElement | null = null;
 
 function notify() {
   listeners.forEach((fn) => fn(playingId));
@@ -130,19 +129,60 @@ function cleanText(raw: string): string {
   return t;
 }
 
-// ── Core speak / stop ──────────────────────────────────────────────────
+// ── Stop all playback ──────────────────────────────────────────────────
 
-function pickVoice(modelId: string, voiceId: string): SpeechSynthesisVoice | null {
-  if (modelId !== 'builtin') return null;
-  const sv = speechSynthesis.getVoices();
-  if (voiceId) {
-    const found = sv.find((v) => v.voiceURI === voiceId);
-    if (found) return found;
+export function ttsStop(): void {
+  speechSynthesis.cancel();
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
   }
-  // Fallback: first Russian voice
-  const ru = sv.find((v) => v.lang.startsWith('ru'));
-  return ru ?? null;
+  playingId = null;
+  notify();
 }
+
+// ── Piper: generate via IPC and play ───────────────────────────────────
+
+async function piperSpeak(messageId: number, text: string): Promise<void> {
+  ttsStop();
+  playingId = messageId;
+  notify();
+
+  const settings = loadSettings();
+
+  try {
+    const buffer = await window.electronAPI.ttsGenerate(text);
+    if (!buffer) {
+      if (playingId === messageId) { playingId = null; notify(); }
+      return;
+    }
+
+    const blob = new Blob([buffer], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.volume = settings.volume;
+    currentAudio = audio;
+
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      currentAudio = null;
+      if (playingId === messageId) { playingId = null; notify(); }
+    };
+
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      currentAudio = null;
+      if (playingId === messageId) { playingId = null; notify(); }
+    };
+
+    await audio.play();
+  } catch (err) {
+    console.error('[TTS:piper] error:', err);
+    if (playingId === messageId) { playingId = null; notify(); }
+  }
+}
+
+// ── Core speak ─────────────────────────────────────────────────────────
 
 export function ttsSpeak(messageId: number, rawText: string): void {
   if (playingId === messageId) {
@@ -150,21 +190,26 @@ export function ttsSpeak(messageId: number, rawText: string): void {
     return;
   }
 
-  if (playingId !== null) {
-    speechSynthesis.cancel();
-  }
-
   const text = cleanText(rawText);
   if (!text) return;
 
   const settings = loadSettings();
+
+  if (settings.modelId === 'piper') {
+    // Piper is async — fire and forget
+    piperSpeak(messageId, text);
+    return;
+  }
+
+  // Builtin (SpeechSynthesis) — synchronous API
+  ttsStop();
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'ru-RU';
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
 
-  const voice = pickVoice(settings.modelId, settings.voiceId);
+  const voice = pickBuiltinVoice(settings.voiceId);
   if (voice) utterance.voice = voice;
 
   utterance.onend = () => {
@@ -182,21 +227,61 @@ export function ttsSpeak(messageId: number, rawText: string): void {
   speechSynthesis.speak(utterance);
 }
 
-export function ttsStop(): void {
-  speechSynthesis.cancel();
-  playingId = null;
-  notify();
+function pickBuiltinVoice(voiceId: string): SpeechSynthesisVoice | null {
+  const sv = speechSynthesis.getVoices();
+  if (voiceId) {
+    const found = sv.find((v) => v.voiceURI === voiceId);
+    if (found) return found;
+  }
+  const ru = sv.find((v) => v.lang.startsWith('ru'));
+  return ru ?? null;
 }
 
 // ── Preview (for settings) ─────────────────────────────────────────────
 
 let previewPlaying = false;
+let previewAudio: HTMLAudioElement | null = null;
 
-export function ttsPreview(modelId: string, voiceId: string): void {
+function stopPreviewPlayback(): void {
   speechSynthesis.cancel();
+  if (previewAudio) {
+    previewAudio.pause();
+    previewAudio = null;
+  }
   previewPlaying = false;
+}
 
-  const voice = pickVoice(modelId, voiceId);
+export async function ttsPreview(modelId: string, voiceId: string): Promise<void> {
+  stopPreviewPlayback();
+  previewPlaying = true;
+
+  const { volume } = loadSettings();
+
+  if (modelId === 'piper') {
+    try {
+      const text = 'Привет, я Чаттер!';
+      const buffer = await window.electronAPI.ttsGenerate(text);
+      if (!buffer) { previewPlaying = false; return; }
+
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.volume = volume;
+      previewAudio = audio;
+
+      audio.onended = () => { URL.revokeObjectURL(url); previewAudio = null; previewPlaying = false; };
+      audio.onerror = () => { URL.revokeObjectURL(url); previewAudio = null; previewPlaying = false; };
+
+      await audio.play();
+    } catch (err) {
+      console.error('[TTS:piper] preview error:', err);
+      previewPlaying = false;
+    }
+    return;
+  }
+
+  // Builtin
+  const voice = pickBuiltinVoice(voiceId);
   const isRu = voice?.lang?.startsWith('ru') ?? true;
   const text = isRu ? 'Привет, я Чаттер!' : 'Hello, I am Chatter!';
 
@@ -204,7 +289,6 @@ export function ttsPreview(modelId: string, voiceId: string): void {
   utterance.lang = isRu ? 'ru-RU' : 'en-US';
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
-
   if (voice) utterance.voice = voice;
 
   utterance.onstart = () => { previewPlaying = true; };
@@ -215,8 +299,7 @@ export function ttsPreview(modelId: string, voiceId: string): void {
 }
 
 export function ttsStopPreview(): void {
-  speechSynthesis.cancel();
-  previewPlaying = false;
+  stopPreviewPlayback();
 }
 
 export function ttsIsPreviewPlaying(): boolean {
@@ -231,7 +314,6 @@ export function getTtsSettings(): TtsSettings {
 
 export function setTtsSettings(s: TtsSettings): void {
   saveSettings(s);
-  // Stop current playback if voice changed
   ttsStop();
 }
 
@@ -239,6 +321,6 @@ export function setTtsSettings(s: TtsSettings): void {
 
 if (typeof speechSynthesis !== 'undefined' && speechSynthesis.addEventListener) {
   speechSynthesis.addEventListener('voiceschanged', () => {
-    invalidateVoiceCache();
+    cachedBuiltinVoices = null;
   });
 }

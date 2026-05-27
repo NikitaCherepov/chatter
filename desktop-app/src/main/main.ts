@@ -342,6 +342,77 @@ function createWindow() {
   ipcMain.handle('wakeword:stop', () => {
     return stopWakewordListener();
   });
+
+  // ── IPC: tts:generate (text → piper.exe → WAV buffer) ──────────────────
+  ipcMain.handle('tts:generate', async (_event, text: string) => {
+    const piperDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'models', 'piper')
+      : path.join(__dirname, '..', '..', 'models', 'piper');
+
+    const piperExe = path.join(piperDir, 'piper.exe');
+    if (!fs.existsSync(piperExe)) {
+      console.error('[tts:piper] piper.exe not found at:', piperExe);
+      return null;
+    }
+
+    // Find available voice models
+    const voicesDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'models', 'piper-voices')
+      : path.join(__dirname, '..', '..', 'models', 'piper-voices');
+
+    if (!fs.existsSync(voicesDir)) {
+      console.error('[tts:piper] voices dir not found at:', voicesDir);
+      return null;
+    }
+
+    // Find first .onnx model file (any subfolder)
+    let modelFile: string | null = null;
+    const voiceFolders = fs.readdirSync(voicesDir);
+    for (const folder of voiceFolders) {
+      const folderPath = path.join(voicesDir, folder);
+      if (!fs.statSync(folderPath).isDirectory()) continue;
+      const files = fs.readdirSync(folderPath).filter(f => f.endsWith('.onnx'));
+      if (files.length > 0) {
+        modelFile = path.join(folderPath, files[0]);
+        break;
+      }
+    }
+
+    if (!modelFile) {
+      console.error('[tts:piper] no .onnx voice model found in:', voicesDir);
+      return null;
+    }
+
+    const outPath = path.join(os.tmpdir(), `chatter_tts_${Date.now()}.wav`);
+
+    return new Promise((resolve) => {
+      const piper = spawn(piperExe, ['-m', modelFile, '-f', outPath], {
+        cwd: piperDir,
+        windowsHide: true,
+      });
+
+      piper.stdin.write(text + '\n');
+      piper.stdin.end();
+
+      piper.on('close', (code) => {
+        if (code === 0 && fs.existsSync(outPath)) {
+          const buffer = fs.readFileSync(outPath);
+          try { fs.unlinkSync(outPath); } catch { /* ignore */ }
+          resolve(buffer);
+        } else {
+          console.error(`[tts:piper] exited with code ${code}`);
+          try { fs.unlinkSync(outPath); } catch { /* ignore */ }
+          resolve(null);
+        }
+      });
+
+      piper.on('error', (err) => {
+        console.error('[tts:piper] process error:', err);
+        try { fs.unlinkSync(outPath); } catch { /* ignore */ }
+        resolve(null);
+      });
+    });
+  });
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────
