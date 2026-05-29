@@ -201,6 +201,18 @@ const getProviderErrorSummary = (err: any) => {
   };
 };
 
+const adaptRequestBodyForProvider = (requestBody: Record<string, unknown>, baseURL: string, model: string) => {
+  if (!baseURL.toLowerCase().includes('cerebras.ai')) return requestBody;
+
+  const { thinking, clear_thinking: _clearThinking, ...body } = requestBody as any;
+
+  if (model === 'gpt-oss-120b' && !body.reasoning_effort) {
+    body.reasoning_effort = thinking?.type === 'disabled' ? 'low' : 'medium';
+  }
+
+  return body;
+};
+
 const createCompletionWithModelFallback = async (
   client: OpenAI,
   modelChain: string[],
@@ -215,7 +227,8 @@ const createCompletionWithModelFallback = async (
     const attempts = RETRIES_PER_MODEL + 1;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const response = await client.chat.completions.create({ ...requestBody, model } as any);
+        const providerRequestBody = adaptRequestBodyForProvider(requestBody, baseURL, model);
+        const response = await client.chat.completions.create({ ...providerRequestBody, model } as any);
         return { response, modelUsed: model, failedModels };
       } catch (err) {
         lastError = err;
