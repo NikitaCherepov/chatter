@@ -40,6 +40,7 @@ npm run logs:api
 - `TIMEWEB_MODEL` - цепочка моделей PRO (через запятую, fallback).
 - `TIMEWEB_LITE_BASE_URL` + `TIMEWEB_LITE_API_KEY` - LITE-провайдер.
 - `TIMEWEB_LITE_MODEL` - цепочка моделей LITE.
+- `TIMEWEB_LITE_ROUTER_ENABLED` - `0`, чтобы не вызывать LITE-router и сразу отправлять все текстовые запросы в PRO (по умолчанию включен).
 - `TIMEWEB_PRO_ENDPOINTS` - дополнительные PRO-эндпоинты (формат: `base_url|api_key|models;...`).
 - `TIMEWEB_LITE_ENDPOINTS` - дополнительные LITE-эндпоинты (аналогично).
 

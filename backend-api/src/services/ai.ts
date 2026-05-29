@@ -170,6 +170,7 @@ const VISION_PROVIDERS = parseVisionProviders();
 
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
+const LITE_ROUTER_ENABLED = process.env.TIMEWEB_LITE_ROUTER_ENABLED !== '0';
 
 const extractTokens = (response: any) => Number(response?.usage?.total_tokens || 0);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -1794,7 +1795,7 @@ export const sendMessageThroughAi = async (
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
 
-if (!forceProRoute) {
+if (!forceProRoute && LITE_ROUTER_ENABLED) {
   const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
 Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
 
