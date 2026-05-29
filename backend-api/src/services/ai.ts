@@ -181,7 +181,7 @@ const isRetryable = (err: any) => {
   const status = Number(err?.status || err?.response?.status || 0) || 0;
   const code = `${err?.code || err?.error?.code || ''}`;
   const message = `${err?.message || err?.error?.message || ''}`.toLowerCase();
-  if ([408, 409, 425, 429, 500, 502, 503, 504].includes(status)) return true;
+  if ([408, 409, 425, 500, 502, 503, 504].includes(status)) return true;
   if (code === '1305') return true;
   return message.includes('overloaded') || message.includes('try again later') || message.includes('timeout') || message.includes('rate limit');
 };
