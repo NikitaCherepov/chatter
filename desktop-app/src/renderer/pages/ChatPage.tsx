@@ -10,6 +10,7 @@ import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
 import { SettingsModal } from '../components/SettingsModal';
+import { loadMacros, saveMacros } from '../components/MacroSettings';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
@@ -1138,7 +1139,6 @@ export function ChatPage() {
                     <button
                       className={s.suggestMacroSaveBtn}
                       onClick={() => {
-                        const { loadMacros, saveMacros } = require('../components/MacroSettings') as typeof import('../components/MacroSettings');
                         const macros = loadMacros();
                         saveMacros([...macros, {
                           id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
