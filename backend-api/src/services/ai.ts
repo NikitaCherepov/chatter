@@ -367,8 +367,10 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
   };
 
   const meta = await createCompletionWithLiteProviderFallback(requestBody);
-  const content = meta.response?.choices?.[0]?.message?.content;
+  const msg = meta.response?.choices?.[0]?.message;
+  const content = msg?.content;
   if (typeof content !== 'string' || !content.trim()) {
+    console.warn('[callLiteAi] empty response', { content: msg?.content, reasoning: (msg as any)?.reasoning, model: meta.modelUsed, provider: meta.providerUsed });
     throw new Error('empty_lite_response');
   }
   return content.trim();
