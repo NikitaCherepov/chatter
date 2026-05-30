@@ -598,6 +598,12 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   const isDesktop = Boolean(req.body?.is_desktop);
   const isVoice = Boolean(req.body?.is_voice);
 
+  // Parse optional active macros from desktop client
+  const activeMacrosRaw: Array<any> = Array.isArray(req.body?.active_macros) ? req.body.active_macros : [];
+  const activeMacros = activeMacrosRaw.filter((m: any) =>
+    typeof m?.id === 'string' && typeof m?.title === 'string' && Array.isArray(m?.commands)
+  );
+
   // SSE-заголовки
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -613,6 +619,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       displayManifest,
       isDesktop,
       isVoice,
+      activeMacros,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);

@@ -11,6 +11,7 @@ import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { loadMacros, saveMacros } from '../components/MacroSettings';
+import type { Macro } from '../components/MacroSettings';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
@@ -291,7 +292,13 @@ export function ChatPage() {
           setSending(false);
         }
       },
-      isVoice ? { isVoice: true } : undefined
+      (() => {
+        const macros = loadMacros().filter((m: Macro) => m.enabled);
+        const opts: { isVoice?: boolean; activeMacros?: api.ActiveMacro[] } = {};
+        if (isVoice) opts.isVoice = true;
+        if (macros.length > 0) opts.activeMacros = macros.map((m: Macro) => ({ id: m.id, title: m.title, description: m.description, commands: m.commands }));
+        return Object.keys(opts).length > 0 ? opts : undefined;
+      })()
     );
   }, [input, sending, activeChatId, attachedImages]);
 

@@ -1903,6 +1903,7 @@ export const sendMessageThroughAi = async (
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
+    activeMacros?: Array<{ id: string; title: string; description?: string; commands: string[] }>;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -1933,7 +1934,7 @@ export const sendMessageThroughAi = async (
   const voicePromptHint = options?.isVoice ? `\n\nСТРОГО, ОБЯЗАТЕЛЬНО СЕЙЧАС, ОБЯЗАТЕЛЬНО!!! соблюдай:\n1. Отвечай МАКСИМАЛЬНО кратко. МАКСИМАЛЬНО КРАТКО и естественно, как в устном диалоге.\n2. НИКАКИХ длинных списков, Markdown-таблиц или блоков кода, если только об этом не попросили напрямую.\n3. Используй разговорный стиль. МАКСИМАЛЬНО краткий, УДОБНЫЙ к прослушиванию и содержательный. 4. Замена символов словами: Заменяй любые технические знаки, аббревиатуры и единицы измерения их полными словесными названиями. 
    - Запрещено: "%", "°C", "м/с", "км/ч", "$", "руб."
    - Обязательно писать: "процентов", "градусов Цельсия", "метров в секунду", "километров в час", "долларов", "рублей".` : '';
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${options?.activeMacros?.length ? `\n\n[МАКРОСЫ ПОЛЬЗОВАТЕЛЯ]\nУ пользователя есть следующие макросы (наборы консольных команд). Ты можешь запускать их через инструмент execute_macro по названию (macro_name) или ID (macro_id).\n${options.activeMacros.map(m => `- "${m.title}" (id: ${m.id})${m.description ? ` — ${m.description}` : ''}\n  Команды: ${m.commands.join('; ')}`).join('\n')}` : ''}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
