@@ -1566,10 +1566,18 @@ app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'commands_required_array_of_strings' });
   }
 
+  const currentTitle = typeof req.body?.current_title === 'string' ? req.body.current_title : '';
+  const currentDescription = typeof req.body?.current_description === 'string' ? req.body.current_description : '';
+
   try {
+    const commandList = commands.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n');
+    const currentInfo = currentTitle || currentDescription
+      ? `\n\nТекущее название: "${currentTitle}"\nТекущее описание: "${currentDescription}"\nУлучши их — сделай более точными и ёмкими, но сохрани смысл если он верный.`
+      : '';
+
     const raw = await callLiteAi(
       'Ты — системный администратор. Придумай короткое, ёмкое название (до 5 слов) и описание (1-2 предложения) для этого скрипта. Ответь СТРОГО JSON-объектом: { "title": "...", "description": "..." }. Без markdown, без пояснений, только JSON.',
-      commands.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')
+      `${commandList}${currentInfo}`
     );
 
     // Try to extract JSON from the response (AI might wrap it in ```json ... ```)

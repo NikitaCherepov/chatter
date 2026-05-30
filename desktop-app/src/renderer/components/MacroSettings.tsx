@@ -196,7 +196,7 @@ export function MacroSettings({ onChange }: Props) {
     try {
       const res = await api.apiFetch<{ title: string; description: string }>('/api/v1/macro/describe', {
         method: 'POST',
-        body: JSON.stringify({ commands: macro.commands }),
+        body: JSON.stringify({ commands: macro.commands, current_title: macro.title, current_description: macro.description }),
       });
       const next = macros.map(m =>
         m.id === macro.id
