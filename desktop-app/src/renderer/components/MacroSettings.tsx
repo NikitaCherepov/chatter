@@ -11,6 +11,7 @@ export type Macro = {
   description: string;
   commands: string[];
   enabled: boolean;
+  pinned: boolean;
 };
 
 const STORAGE_KEY = 'chatter_macros';
@@ -62,6 +63,7 @@ export function MacroSettings({ onChange }: Props) {
   const [formDescription, setFormDescription] = useState('');
   const [formCommands, setFormCommands] = useState<string[]>(['']);
   const [formEnabled, setFormEnabled] = useState(true);
+  const [formPinned, setFormPinned] = useState(false);
 
   // AI request states
   const [explaining, setExplaining] = useState<string | null>(null);
@@ -91,6 +93,7 @@ export function MacroSettings({ onChange }: Props) {
     setFormDescription('');
     setFormCommands(['']);
     setFormEnabled(true);
+    setFormPinned(false);
     setEditingId(null);
   };
 
@@ -100,6 +103,7 @@ export function MacroSettings({ onChange }: Props) {
     setFormDescription(macro.description);
     setFormCommands(macro.commands.length > 0 ? [...macro.commands] : ['']);
     setFormEnabled(macro.enabled);
+    setFormPinned(macro.pinned);
   };
 
   const addCommandField = () => {
@@ -130,7 +134,7 @@ export function MacroSettings({ onChange }: Props) {
     if (editingId) {
       const next = macros.map(m =>
         m.id === editingId
-          ? { ...m, title, description: formDescription.trim(), commands, enabled: formEnabled }
+          ? { ...m, title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned }
           : m
       );
       updateMacros(next);
@@ -142,6 +146,7 @@ export function MacroSettings({ onChange }: Props) {
         description: formDescription.trim(),
         commands,
         enabled: formEnabled,
+        pinned: formPinned,
       };
       updateMacros([...macros, newMacro]);
       toast.success('Макрос создан');
@@ -403,6 +408,15 @@ export function MacroSettings({ onChange }: Props) {
             className={s.macroCheckbox}
           />
           <span className={s.fieldLabel}>Включён</span>
+        </label>
+        <label className={s.macroToggleLabel}>
+          <input
+            type="checkbox"
+            checked={formPinned}
+            onChange={(e) => setFormPinned(e.target.checked)}
+            className={s.macroCheckbox}
+          />
+          <span className={s.fieldLabel}>Закреплён (AI всегда видит название)</span>
         </label>
       </div>
 

@@ -296,7 +296,7 @@ export function ChatPage() {
         const macros = loadMacros().filter((m: Macro) => m.enabled);
         const opts: { isVoice?: boolean; activeMacros?: api.ActiveMacro[] } = {};
         if (isVoice) opts.isVoice = true;
-        if (macros.length > 0) opts.activeMacros = macros.map((m: Macro) => ({ id: m.id, title: m.title, description: m.description, commands: m.commands }));
+        if (macros.length > 0) opts.activeMacros = macros.map((m: Macro) => ({ id: m.id, title: m.title, description: m.description, commands: m.commands, pinned: m.pinned }));
         return Object.keys(opts).length > 0 ? opts : undefined;
       })()
     );
@@ -1153,6 +1153,7 @@ export function ChatPage() {
                           description: pendingMacro.description || '',
                           commands: pendingMacro.commands,
                           enabled: true,
+                          pinned: false,
                         }]);
                         toast.success('Макрос сохранён в настройки');
                         setPendingMacro(null);

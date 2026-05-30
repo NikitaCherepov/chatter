@@ -293,6 +293,7 @@ export type ActiveMacro = {
   title: string;
   description: string;
   commands: string[];
+  pinned?: boolean;
 };
 
 export async function streamChatMessage(
