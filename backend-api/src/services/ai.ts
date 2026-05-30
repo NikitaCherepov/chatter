@@ -1109,6 +1109,22 @@ const buildDesktopActionTool = () => {
   };
 };
 
+/** Build list_my_macros tool — lets AI discover user's available macros */
+const buildListMyMacrosTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'list_my_macros',
+      description: `Показывает список макросов пользователя (наборов консольных команд). Вызывай когда пользователь просит выполнить макрос, спрашивает какие макросы есть, или когда нужно выяснить есть ли подходящий макрос для задачи. После получения списка используй execute_macro для запуска конкретного макроса.`,
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  };
+};
+
 /** Build execute_macro tool — lets AI run a user-defined macro via desktop_action SSE */
 const buildExecuteMacroTool = () => {
   return {
@@ -1424,7 +1440,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: string; title: string; description?: string; commands: string[] }>) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1767,6 +1783,21 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
 
   // ── Macro tools (desktop-only) ──
 
+  if (toolName === 'list_my_macros') {
+    if (!activeMacros || activeMacros.length === 0) {
+      return JSON.stringify({ macros: [], message: 'У пользователя нет активных макросов.' });
+    }
+    return JSON.stringify({
+      macros: activeMacros.map(m => ({
+        id: m.id,
+        title: m.title,
+        description: m.description || '',
+        commands: m.commands,
+      })),
+      message: `Найдено ${activeMacros.length} макросов. Используй execute_macro чтобы запустить нужный.`
+    });
+  }
+
   if (toolName === 'execute_macro') {
     const macroId: string | undefined = typeof parsed.macro_id === 'string' ? parsed.macro_id : undefined;
     const macroName: string | undefined = typeof parsed.macro_name === 'string' ? parsed.macro_name : undefined;
@@ -1853,6 +1884,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
   if (toolName === 'find_transit_route') return 'Ищу маршруты общественного транспорта...';
   if (toolName === 'search_nearby') return 'Ищу места поблизости...';
+  if (toolName === 'list_my_macros') return 'Ищу ваши макросы...';
   if (toolName === 'execute_macro') return 'Запускаю макрос...';
   if (toolName === 'explore_fs') return 'Читаю директорию...';
   if (toolName === 'suggest_macro') return 'Предлагаю сохранить макрос...';
@@ -1934,12 +1966,12 @@ export const sendMessageThroughAi = async (
   const voicePromptHint = options?.isVoice ? `\n\nСТРОГО, ОБЯЗАТЕЛЬНО СЕЙЧАС, ОБЯЗАТЕЛЬНО!!! соблюдай:\n1. Отвечай МАКСИМАЛЬНО кратко. МАКСИМАЛЬНО КРАТКО и естественно, как в устном диалоге.\n2. НИКАКИХ длинных списков, Markdown-таблиц или блоков кода, если только об этом не попросили напрямую.\n3. Используй разговорный стиль. МАКСИМАЛЬНО краткий, УДОБНЫЙ к прослушиванию и содержательный. 4. Замена символов словами: Заменяй любые технические знаки, аббревиатуры и единицы измерения их полными словесными названиями. 
    - Запрещено: "%", "°C", "м/с", "км/ч", "$", "руб."
    - Обязательно писать: "процентов", "градусов Цельсия", "метров в секунду", "километров в час", "долларов", "рублей".` : '';
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${options?.activeMacros?.length ? `\n\n[МАКРОСЫ ПОЛЬЗОВАТЕЛЯ]\nУ пользователя есть следующие макросы (наборы консольных команд). Ты можешь запускать их через инструмент execute_macro по названию (macro_name) или ID (macro_id).\n${options.activeMacros.map(m => `- "${m.title}" (id: ${m.id})${m.description ? ` — ${m.description}` : ''}\n  Команды: ${m.commands.join('; ')}`).join('\n')}` : ''}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
@@ -2223,7 +2255,8 @@ for (const toolCall of message.tool_calls) {
       generatedImages,
       displayStateSink,
       desktopActionSink,
-      mapUpdateSink
+      mapUpdateSink,
+      options?.activeMacros
     );
 
     // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
