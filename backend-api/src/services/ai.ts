@@ -1138,7 +1138,7 @@ const buildExecuteMacroTool = () => {
         type: 'object',
         properties: {
           macro_id: {
-            type: 'string',
+            type: 'number',
             description: 'Идентификатор макроса (если известен).'
           },
           macro_name: {
@@ -1442,7 +1442,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: string; title: string; description?: string; commands: string[]; pinned?: boolean }>) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean }>) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1801,20 +1801,30 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
   }
 
   if (toolName === 'execute_macro') {
-    const macroId: string | undefined = typeof parsed.macro_id === 'string' ? parsed.macro_id : undefined;
+    const macroId: number | undefined = typeof parsed.macro_id === 'number' ? parsed.macro_id : (typeof parsed.macro_id === 'string' ? Number(parsed.macro_id) : undefined);
     const macroName: string | undefined = typeof parsed.macro_name === 'string' ? parsed.macro_name : undefined;
 
     if (!macroId && !macroName) {
       return JSON.stringify({ status: 'error', message: 'macro_id или macro_name обязателен' });
     }
 
+    // Find the macro to include its commands in the payload
+    let matchedMacro = activeMacros?.find(m => m.id === macroId);
+    if (!matchedMacro && macroName) {
+      matchedMacro = activeMacros?.find(m => m.title?.toLowerCase() === macroName?.toLowerCase());
+    }
+
+    if (!matchedMacro) {
+      return JSON.stringify({ status: 'error', message: `Макрос не найден${macroId ? ` (id=${macroId})` : macroName ? ` (${macroName})` : ''}` });
+    }
+
     const payload: DesktopActionPayload = { action: 'execute_macro' };
-    if (macroId) payload.target = macroId;
-    if (macroName) payload.value = { macro_name: macroName };
+    payload.target = String(matchedMacro.id);
+    payload.value = { macro_name: matchedMacro.title, commands: matchedMacro.commands };
 
     if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Макрос отправлен на выполнение.`, macro_id: macroId, macro_name: macroName });
+    return JSON.stringify({ status: 'success', message: `Макрос "${matchedMacro.title}" отправлен на выполнение.`, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
   }
 
   if (toolName === 'explore_fs') {
@@ -1937,7 +1947,7 @@ export const sendMessageThroughAi = async (
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
-    activeMacros?: Array<{ id: string; title: string; description?: string; commands: string[]; pinned?: boolean }>;
+    activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean }>;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);

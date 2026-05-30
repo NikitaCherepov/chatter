@@ -306,25 +306,15 @@ export function handleDesktopAction(action: { action: string; target?: string; v
       return;
     }
 
-    // Normal macro execution — find macro by id or name and execute
-    const macroId = action.target;
-    const macroName = (action.value as { macro_name?: string } | undefined)?.macro_name;
-    if (window.electronAPI?.executeCommands) {
-      try {
-        const macrosRaw = localStorage.getItem('chatter_macros');
-        const macros = macrosRaw ? JSON.parse(macrosRaw) : [];
-        let macro = macros.find((m: any) => m.id === macroId);
-        if (!macro && macroName) {
-          macro = macros.find((m: any) => m.title?.toLowerCase() === macroName?.toLowerCase());
-        }
-        if (macro?.commands?.length) {
-          window.electronAPI.executeCommands(macro.commands).catch(err => {
-            console.error('[macro] execute failed:', err);
-          });
-        }
-      } catch {
-        // ignore parse errors
-      }
+    // Normal macro execution — commands are included in the payload from server
+    const val = action.value as { macro_name?: string; commands?: string[] } | undefined;
+    const commands = val?.commands;
+    if (commands?.length && window.electronAPI?.executeCommands) {
+      window.electronAPI.executeCommands(commands).catch(err => {
+        console.error('[macro] execute failed:', err);
+      });
+    } else {
+      console.warn('[macro] execute_macro: no commands in payload', action);
     }
     return;
   }

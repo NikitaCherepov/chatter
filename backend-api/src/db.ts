@@ -167,3 +167,21 @@ export const toUnix = (value: unknown) => {
 
 export const getNowUnix = () => Math.floor(Date.now() / 1000);
 
+// ── Macros table ──────────────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS macros (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    commands TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+db.exec("CREATE INDEX IF NOT EXISTS idx_macros_user_id ON macros(user_id)");
+

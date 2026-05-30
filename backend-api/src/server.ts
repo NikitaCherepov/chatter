@@ -7,6 +7,7 @@ import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './se
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi } from './services/ai.js';
+import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -598,11 +599,8 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   const isDesktop = Boolean(req.body?.is_desktop);
   const isVoice = Boolean(req.body?.is_voice);
 
-  // Parse optional active macros from desktop client
-  const activeMacrosRaw: Array<any> = Array.isArray(req.body?.active_macros) ? req.body.active_macros : [];
-  const activeMacros = activeMacrosRaw.filter((m: any) =>
-    typeof m?.id === 'string' && typeof m?.title === 'string' && Array.isArray(m?.commands)
-  );
+  // Load enabled macros from DB
+  const enabledMacros = getEnabledMacros(userId);
 
   // SSE-заголовки
   res.setHeader('Content-Type', 'text/event-stream');
@@ -619,7 +617,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       displayManifest,
       isDesktop,
       isVoice,
-      activeMacros,
+      activeMacros: enabledMacros,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
@@ -1537,6 +1535,70 @@ app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, 
 
 app.post('/api/v1/admin/sync-plan-limits', adminMiddleware, (_req: AuthedRequest, res) => {
   syncAllUsersPlanLimits();
+  return res.json({ ok: true });
+});
+
+// ─── Macros CRUD ────────────────────────────────────────────────────────────
+
+app.get('/api/v1/macros', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  return res.json({ macros: listMacros(userId) });
+});
+
+app.post('/api/v1/macros', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const title = `${req.body?.title || ''}`.trim();
+  const description = `${req.body?.description || ''}`.trim();
+  const commands: unknown = req.body?.commands;
+  const enabled = req.body?.enabled !== false;
+  const pinned = req.body?.pinned === true;
+
+  if (!Array.isArray(commands) || commands.some(c => typeof c !== 'string')) {
+    return res.status(400).json({ error: 'commands_required' });
+  }
+
+  const result = createMacro(userId, title, description, commands, enabled, pinned);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    if (code === 'title_required' || code === 'commands_required') return res.status(400).json({ error: code });
+    if (code === 'macros_limit') return res.status(429).json({ error: code });
+    return res.status(422).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
+});
+
+app.put('/api/v1/macros/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const macroId = Number(req.params.id);
+  if (!Number.isFinite(macroId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const updates: Record<string, unknown> = {};
+  if (req.body?.title !== undefined) updates.title = `${req.body.title}`.trim();
+  if (req.body?.description !== undefined) updates.description = `${req.body.description}`.trim();
+  if (Array.isArray(req.body?.commands)) updates.commands = req.body.commands;
+  if (req.body?.enabled !== undefined) updates.enabled = Boolean(req.body.enabled);
+  if (req.body?.pinned !== undefined) updates.pinned = Boolean(req.body.pinned);
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'no_fields_to_update' });
+  }
+
+  const result = updateMacro(userId, macroId, updates);
+  if (!result.ok) {
+    const err = (result as { ok: false; error: string }).error;
+    if (err === 'not_found') return res.status(404).json({ error: err });
+    return res.status(422).json({ error: err });
+  }
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/macros/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const macroId = Number(req.params.id);
+  if (!Number.isFinite(macroId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const deleted = deleteMacro(userId, macroId);
+  if (!deleted) return res.status(404).json({ error: 'not_found' });
   return res.json({ ok: true });
 });
 

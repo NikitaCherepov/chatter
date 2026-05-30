@@ -6,7 +6,7 @@ import s from './SettingsModal.module.scss';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type Macro = {
-  id: string;
+  id: number;
   title: string;
   description: string;
   commands: string[];
@@ -14,27 +14,7 @@ export type Macro = {
   pinned: boolean;
 };
 
-const STORAGE_KEY = 'chatter_macros';
 const FS_SCAN_KEY = 'chatter_macro_fs_scan_enabled';
-
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-
-// ─── Persistence ─────────────────────────────────────────────────────────────
-
-export function loadMacros(): Macro[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveMacros(macros: Macro[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(macros));
-}
 
 export function loadFsScanEnabled(): boolean {
   return localStorage.getItem(FS_SCAN_KEY) === '1';
@@ -52,11 +32,12 @@ type Props = {
 };
 
 export function MacroSettings({ onChange }: Props) {
-  const [macros, setMacros] = useState<Macro[]>(() => loadMacros());
+  const [macros, setMacros] = useState<Macro[]>([]);
+  const [loading, setLoading] = useState(true);
   const [fsScanEnabled, setFsScanEnabled] = useState(() => loadFsScanEnabled());
 
-  // Editing state — null = not editing, string = macro id being edited
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Editing state — null = not editing, number = macro id being edited
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   // New macro form state
   const [formTitle, setFormTitle] = useState('');
@@ -66,19 +47,28 @@ export function MacroSettings({ onChange }: Props) {
   const [formPinned, setFormPinned] = useState(false);
 
   // AI request states
-  const [explaining, setExplaining] = useState<string | null>(null);
+  const [explaining, setExplaining] = useState<number | null>(null);
   const [explainResult, setExplainResult] = useState<string | null>(null);
-  const [describing, setDescribing] = useState<string | null>(null);
+  const [describing, setDescribing] = useState<number | null>(null);
 
   // Execution state
-  const [executing, setExecuting] = useState<string | null>(null);
+  const [executing, setExecuting] = useState<number | null>(null);
 
-  // Persist macros on change
-  const updateMacros = useCallback((next: Macro[]) => {
-    setMacros(next);
-    saveMacros(next);
-    onChange?.(next);
+  // ── Load macros from server ──
+
+  const fetchMacros = useCallback(async () => {
+    try {
+      const res = await api.apiFetch<{ macros: Macro[] }>('/api/v1/macros');
+      setMacros(res.macros);
+      onChange?.(res.macros);
+    } catch (err) {
+      console.error('[macros] failed to load:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [onChange]);
+
+  useEffect(() => { fetchMacros(); }, [fetchMacros]);
 
   // Persist fs scan toggle
   const updateFsScan = (enabled: boolean) => {
@@ -122,7 +112,7 @@ export function MacroSettings({ onChange }: Props) {
 
   // ── Save (create / update) ──
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const commands = formCommands.map(c => c.trim()).filter(Boolean);
     if (commands.length === 0) {
       toast.error('Добавьте хотя бы одну команду');
@@ -131,43 +121,56 @@ export function MacroSettings({ onChange }: Props) {
 
     const title = formTitle.trim() || `Макрос #${macros.length + 1}`;
 
-    if (editingId) {
-      const next = macros.map(m =>
-        m.id === editingId
-          ? { ...m, title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned }
-          : m
-      );
-      updateMacros(next);
-      toast.success('Макрос обновлён');
-    } else {
-      const newMacro: Macro = {
-        id: generateId(),
-        title,
-        description: formDescription.trim(),
-        commands,
-        enabled: formEnabled,
-        pinned: formPinned,
-      };
-      updateMacros([...macros, newMacro]);
-      toast.success('Макрос создан');
+    try {
+      if (editingId) {
+        await api.apiFetch('/api/v1/macros/' + editingId, {
+          method: 'PUT',
+          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned }),
+        });
+        toast.success('Макрос обновлён');
+      } else {
+        await api.apiFetch('/api/v1/macros', {
+          method: 'POST',
+          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned }),
+        });
+        toast.success('Макрос создан');
+      }
+      resetForm();
+      fetchMacros();
+    } catch (err) {
+      toast.error('Ошибка сохранения макроса');
+      console.error(err);
     }
-    resetForm();
   };
 
   // ── Delete ──
 
-  const handleDelete = (id: string) => {
-    updateMacros(macros.filter(m => m.id !== id));
-    if (editingId === id) resetForm();
+  const handleDelete = async (id: number) => {
+    try {
+      await api.apiFetch('/api/v1/macros/' + id, { method: 'DELETE' });
+      if (editingId === id) resetForm();
+      fetchMacros();
+    } catch (err) {
+      toast.error('Ошибка удаления');
+      console.error(err);
+    }
   };
 
   // ── Toggle enabled ──
 
-  const handleToggle = (id: string) => {
-    const next = macros.map(m =>
-      m.id === id ? { ...m, enabled: !m.enabled } : m
-    );
-    updateMacros(next);
+  const handleToggle = async (id: number) => {
+    const macro = macros.find(m => m.id === id);
+    if (!macro) return;
+    try {
+      await api.apiFetch('/api/v1/macros/' + id, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: !macro.enabled }),
+      });
+      fetchMacros();
+    } catch (err) {
+      toast.error('Ошибка');
+      console.error(err);
+    }
   };
 
   // ── AI: Explain ──
@@ -198,12 +201,12 @@ export function MacroSettings({ onChange }: Props) {
         method: 'POST',
         body: JSON.stringify({ commands: macro.commands, current_title: macro.title, current_description: macro.description }),
       });
-      const next = macros.map(m =>
-        m.id === macro.id
-          ? { ...m, title: res.title || m.title, description: res.description || m.description }
-          : m
-      );
-      updateMacros(next);
+      // Update on server
+      await api.apiFetch('/api/v1/macros/' + macro.id, {
+        method: 'PUT',
+        body: JSON.stringify({ title: res.title || macro.title, description: res.description || macro.description }),
+      });
+      fetchMacros();
       toast.success('Описание обновлено через ИИ');
     } catch (err) {
       toast.error('Не удалось сгенерировать описание');
@@ -233,6 +236,10 @@ export function MacroSettings({ onChange }: Props) {
   };
 
   // ── Render ──
+
+  if (loading) {
+    return <div className={s.panel}><div className={s.panelTitle}>Макросы</div><div style={{ color: 'var(--text-hint)', fontSize: 13 }}>Загрузка...</div></div>;
+  }
 
   return (
     <div className={s.panel}>

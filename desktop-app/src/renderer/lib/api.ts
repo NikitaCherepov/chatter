@@ -288,21 +288,13 @@ export type StreamCallbacks = {
   onError?: (err: string) => void;
 };
 
-export type ActiveMacro = {
-  id: string;
-  title: string;
-  description: string;
-  commands: string[];
-  pinned?: boolean;
-};
-
 export async function streamChatMessage(
   text: string,
   chatId?: number,
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; activeMacros?: ActiveMacro[] }
+  options?: { isVoice?: boolean }
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
@@ -314,7 +306,6 @@ export async function streamChatMessage(
     if (images && images.length > 0) body.images = images;
     if (displayManifest) body.display_manifest = displayManifest;
     if (options?.isVoice) body.is_voice = true;
-    if (options?.activeMacros && options.activeMacros.length > 0) body.active_macros = options.activeMacros;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',
