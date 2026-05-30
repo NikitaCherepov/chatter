@@ -6,7 +6,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, create
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi } from './services/ai.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -1531,6 +1531,57 @@ app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, 
 app.post('/api/v1/admin/sync-plan-limits', adminMiddleware, (_req: AuthedRequest, res) => {
   syncAllUsersPlanLimits();
   return res.json({ ok: true });
+});
+
+// ─── Macro helpers (lightweight AI, no DB) ────────────────────────────────────
+
+app.post('/api/v1/macro/explain', async (req: AuthedRequest, res) => {
+  const commands: unknown = req.body?.commands;
+  if (!Array.isArray(commands) || commands.length === 0 || commands.some(c => typeof c !== 'string')) {
+    return res.status(400).json({ error: 'commands_required_array_of_strings' });
+  }
+
+  try {
+    const text = await callLiteAi(
+      'Ты — системный администратор. Кратко (2-4 предложения) объясни, что делает этот набор команд в консоли Windows/Linux. Отвечай на русском, без лишних вводных слов.',
+      commands.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')
+    );
+    return res.json({ explanation: text });
+  } catch (err) {
+    console.error('[macro/explain]', err);
+    return res.status(500).json({ error: 'ai_call_failed' });
+  }
+});
+
+app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
+  const commands: unknown = req.body?.commands;
+  if (!Array.isArray(commands) || commands.length === 0 || commands.some(c => typeof c !== 'string')) {
+    return res.status(400).json({ error: 'commands_required_array_of_strings' });
+  }
+
+  try {
+    const raw = await callLiteAi(
+      'Ты — системный администратор. Придумай короткое, ёмкое название (до 5 слов) и описание (1-2 предложения) для этого скрипта. Ответь СТРОГО JSON-объектом: { "title": "...", "description": "..." }. Без markdown, без пояснений, только JSON.',
+      commands.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')
+    );
+
+    // Try to extract JSON from the response (AI might wrap it in ```json ... ```)
+    let parsed: { title?: string; description?: string };
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { title: '', description: '' };
+    } catch {
+      parsed = { title: '', description: raw };
+    }
+
+    return res.json({
+      title: parsed.title || '',
+      description: parsed.description || ''
+    });
+  } catch (err) {
+    console.error('[macro/describe]', err);
+    return res.status(500).json({ error: 'ai_call_failed' });
+  }
 });
 
 app.use((err: any, _req: any, res: any, _next: any) => {

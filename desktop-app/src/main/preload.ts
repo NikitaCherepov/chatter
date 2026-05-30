@@ -48,4 +48,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Read sound file bytes for renderer playback
   readSoundFile: (fileName: string) =>
     ipcRenderer.invoke('read-sound-file', fileName),
+
+  // Macro: execute an array of shell commands sequentially
+  executeCommands: (commands: string[]) =>
+    ipcRenderer.invoke('execute-commands', commands),
+
+  // Macro: read directory listing (read-only, ls-like)
+  readDirectory: (targetPath: string) =>
+    ipcRenderer.invoke('read-directory', targetPath),
 });

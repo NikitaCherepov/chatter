@@ -43,7 +43,7 @@ export function clearTokens() {
 
 // ---------- Fetch wrapper ----------
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const tokens = loadTokens();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -241,9 +241,9 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
 // ---------- SSE Streaming ----------
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro';
   target?: string;
-  value?: { title?: string; content?: string; note_id?: number };
+  value?: { title?: string; content?: string; note_id?: number; macro_name?: string; target_path?: string; description?: string; commands?: string[] };
 };
 
 export type TransitStop = {

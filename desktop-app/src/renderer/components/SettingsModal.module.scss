@@ -354,3 +354,218 @@
   min-width: 32px;
   text-align: right;
 }
+
+// ====== MACROS PANEL ======
+
+.macroCard {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background-color: var(--bg-secondary);
+  transition: border-color 0.15s;
+
+  &:hover {
+    border-color: var(--border-medium);
+  }
+}
+
+.macroHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.macroToggleLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.macroCheckbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.macroTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.macroActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.macroActionBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s, color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  &Danger:hover {
+    color: #e74c3c;
+  }
+}
+
+.macroDescription {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.macroCommands {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.macroCmd {
+  font-size: 12px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--text-body);
+  background-color: var(--bg-input);
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.commandRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  > input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.removeCmdBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.1s, color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+    color: #e74c3c;
+  }
+}
+
+.addCmdBtn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px dashed var(--border-medium);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.1s, color 0.1s;
+  align-self: flex-start;
+  margin-top: 4px;
+
+  &:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+
+.macroFormDivider {
+  height: 1px;
+  background-color: var(--border-light);
+  margin: 16px 0;
+}
+
+.macroFormButtons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cancelBtn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+  }
+}
+
+.explainOverlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.explainBox {
+  background-color: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-modal);
+  padding: 24px;
+  max-width: 440px;
+  width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.explainTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.explainText {
+  font-size: 13px;
+  color: var(--text-body);
+  line-height: 1.6;
+}

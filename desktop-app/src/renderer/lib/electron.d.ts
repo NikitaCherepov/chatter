@@ -16,6 +16,8 @@ declare global {
       ttsGenerate: (text: string, voiceId?: string) => Promise<ArrayBuffer | null>;
       getSoundsPath: () => Promise<string>;
       readSoundFile: (fileName: string) => Promise<ArrayBuffer | Uint8Array | null>;
+      executeCommands: (commands: string[]) => Promise<string>;
+      readDirectory: (targetPath: string) => Promise<{ name: string; isDirectory: boolean; size?: number }[]>;
     };
   }
 }

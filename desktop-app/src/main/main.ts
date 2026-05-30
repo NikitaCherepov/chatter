@@ -478,6 +478,79 @@ function createWindow() {
 
     return fs.readFileSync(soundPath);
   });
+
+  // ── Macro IPC: execute commands ──
+
+  ipcMain.handle('execute-commands', async (_event, commands: string[]) => {
+    if (!Array.isArray(commands) || commands.length === 0) {
+      throw new Error('commands_required');
+    }
+
+    const results: string[] = [];
+    for (const cmd of commands) {
+      if (typeof cmd !== 'string' || !cmd.trim()) {
+        results.push('[skip] empty command');
+        continue;
+      }
+
+      // Block dangerous commands
+      const lowerCmd = cmd.toLowerCase().trim();
+      const dangerousPatterns = ['rm -rf /', 'format ', 'del /f /s /q c:', 'rd /s /q c:', 'shutdown', 'rmdir /s /q'];
+      if (dangerousPatterns.some(p => lowerCmd.includes(p))) {
+        results.push(`[blocked] potentially dangerous command: ${cmd}`);
+        continue;
+      }
+
+      try {
+        const { exec } = require('child_process');
+        const execAsync = util.promisify(exec);
+        const { stdout, stderr } = await execAsync(cmd, {
+          timeout: 30000,
+          maxBuffer: 1024 * 1024,
+          windowsHide: true,
+        });
+        results.push(stdout || stderr || '[no output]');
+      } catch (err: any) {
+        results.push(`[error] ${err?.message || String(err)}`);
+      }
+    }
+
+    return results.join('\n---\n');
+  });
+
+  // ── Macro IPC: read directory (read-only) ──
+
+  ipcMain.handle('read-directory', async (_event, targetPath: string) => {
+    if (typeof targetPath !== 'string' || !targetPath.trim()) {
+      throw new Error('target_path_required');
+    }
+
+    const resolved = path.resolve(targetPath);
+
+    // Verify path exists and is a directory
+    const stat = fs.statSync(resolved);
+    if (!stat.isDirectory()) {
+      throw new Error('not_a_directory');
+    }
+
+    const entries = fs.readdirSync(resolved, { withFileTypes: true });
+    return entries.map(entry => {
+      try {
+        const fullPath = path.join(resolved, entry.name);
+        const entryStat = fs.statSync(fullPath);
+        return {
+          name: entry.name,
+          isDirectory: entry.isDirectory(),
+          size: entry.isDirectory() ? undefined : entryStat.size,
+        };
+      } catch {
+        return {
+          name: entry.name,
+          isDirectory: entry.isDirectory(),
+        };
+      }
+    });
+  });
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────

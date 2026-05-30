@@ -352,6 +352,28 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
   throw Object.assign(new Error('lite_providers_failed'), { failedProviders, failedModels });
 };
 
+/**
+ * Lightweight AI call — single-turn, no tools, no DB, no streaming.
+ * Uses LITE providers for speed. Returns the text content of the first choice.
+ */
+export const callLiteAi = async (systemPrompt: string, userPrompt: string): Promise<string> => {
+  const requestBody: Record<string, unknown> = {
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    max_tokens: 1024,
+    temperature: 0.7
+  };
+
+  const meta = await createCompletionWithLiteProviderFallback(requestBody);
+  const content = meta.response?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('empty_lite_response');
+  }
+  return content.trim();
+};
+
 const buildSystemPrompt = (prompt: string, userName: string, coreMemory: string) => {
   return `${prompt}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${(coreMemory || '').trim() || 'Пока пусто.'}${COLD_MEMORY_PROMPT_HINT}`;
 };
@@ -1087,6 +1109,82 @@ const buildDesktopActionTool = () => {
   };
 };
 
+/** Build execute_macro tool — lets AI run a user-defined macro via desktop_action SSE */
+const buildExecuteMacroTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'execute_macro',
+      description: `Запускает пользовательский макрос (набор консольных команд) по его названию или идентификатору. Макрос выполняется на стороне десктоп-клиента. Используй, когда пользователь просит выполнить ранее сохранённый макрос или серию команд.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          macro_id: {
+            type: 'string',
+            description: 'Идентификатор макроса (если известен).'
+          },
+          macro_name: {
+            type: 'string',
+            description: 'Название макроса для поиска.'
+          }
+        },
+        required: []
+      }
+    }
+  };
+};
+
+/** Build explore_fs tool — lets AI request directory listing from desktop */
+const buildExploreFsTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'explore_fs',
+      description: `Читает содержимое директории на компьютере пользователя. Возвращает список файлов и папок с информацией о размере. Используй когда нужно узнать структуру каталога, найти файл или помочь пользователю с навигацией по файловой системе. Работает только в режиме чтения (ls).`,
+      parameters: {
+        type: 'object',
+        properties: {
+          target_path: {
+            type: 'string',
+            description: 'Абсолютный путь к директории для чтения (например, "C:\\Users" или "/home/user").'
+          }
+        },
+        required: ['target_path']
+      }
+    }
+  };
+};
+
+/** Build suggest_macro tool — lets AI offer user to save a new macro */
+const buildSuggestMacroTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'suggest_macro',
+      description: `Предлагает пользователю сохранить новый макрос (набор команд). Используй когда помогаешь пользователю составить скрипт/серию команд и хочешь предложить сохранить это как макрос для повторного использования.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Предлагаемое название макроса (короткое, до 5 слов).'
+          },
+          description: {
+            type: 'string',
+            description: 'Описание макроса (1-2 предложения).'
+          },
+          commands: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Массив команд макроса.'
+          }
+        },
+        required: ['title', 'commands']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -1667,6 +1765,53 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
   }
 
+  // ── Macro tools (desktop-only) ──
+
+  if (toolName === 'execute_macro') {
+    const macroId: string | undefined = typeof parsed.macro_id === 'string' ? parsed.macro_id : undefined;
+    const macroName: string | undefined = typeof parsed.macro_name === 'string' ? parsed.macro_name : undefined;
+
+    if (!macroId && !macroName) {
+      return JSON.stringify({ status: 'error', message: 'macro_id или macro_name обязателен' });
+    }
+
+    const payload: DesktopActionPayload = { action: 'execute_macro' };
+    if (macroId) payload.target = macroId;
+    if (macroName) payload.value = { macro_name: macroName };
+
+    if (desktopActionSink) desktopActionSink.value = payload;
+
+    return JSON.stringify({ status: 'success', message: `Макрос отправлен на выполнение.`, macro_id: macroId, macro_name: macroName });
+  }
+
+  if (toolName === 'explore_fs') {
+    const targetPath: string = typeof parsed.target_path === 'string' ? parsed.target_path : '';
+    if (!targetPath) return JSON.stringify({ status: 'error', message: 'target_path обязателен' });
+
+    const payload: DesktopActionPayload = { action: 'execute_macro', target: '__explore_fs__', value: { target_path: targetPath } };
+    if (desktopActionSink) desktopActionSink.value = payload;
+
+    return JSON.stringify({ status: 'success', message: `Запрос на чтение директории "${targetPath}" отправлен.`, target_path: targetPath });
+  }
+
+  if (toolName === 'suggest_macro') {
+    const title: string = typeof parsed.title === 'string' ? parsed.title : '';
+    const description: string = typeof parsed.description === 'string' ? parsed.description : '';
+    const commands: string[] = Array.isArray(parsed.commands) ? parsed.commands.filter((c: unknown) => typeof c === 'string') : [];
+
+    if (!title || commands.length === 0) {
+      return JSON.stringify({ status: 'error', message: 'title и commands обязательны' });
+    }
+
+    const payload: DesktopActionPayload = {
+      action: 'suggest_macro',
+      value: { title, description, commands }
+    };
+    if (desktopActionSink) desktopActionSink.value = payload;
+
+    return JSON.stringify({ status: 'success', message: `Предложение макроса "${title}" отправлено.`, title, commands });
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -1708,6 +1853,9 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
   if (toolName === 'find_transit_route') return 'Ищу маршруты общественного транспорта...';
   if (toolName === 'search_nearby') return 'Ищу места поблизости...';
+  if (toolName === 'execute_macro') return 'Запускаю макрос...';
+  if (toolName === 'explore_fs') return 'Читаю директорию...';
+  if (toolName === 'suggest_macro') return 'Предлагаю сохранить макрос...';
   if (toolName === 'desktop_action') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
@@ -1790,7 +1938,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
@@ -2082,8 +2230,8 @@ for (const toolCall of message.tool_calls) {
       await options.onStateChange(displayStateSink.value);
     }
 
-    // Если тулз вызвал desktop_action — прокидываем наружу в реалтайме
-    if (toolName === 'desktop_action' && desktopActionSink.value && options?.onDesktopAction) {
+    // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 

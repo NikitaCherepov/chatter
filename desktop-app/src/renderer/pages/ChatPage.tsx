@@ -13,7 +13,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
-import { openTool, handleDesktopAction, dispatchMapData } from '../lib/tools';
+import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import s from './ChatPage.module.scss';
@@ -76,6 +76,7 @@ export function ChatPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
+  const [pendingMacro, setPendingMacro] = useState<{ title: string; description?: string; commands: string[] } | null>(null);
 
   // Subscribe to TTS state
   useEffect(() => {
@@ -226,6 +227,12 @@ export function ChatPage() {
           dispatchAvatarState(state);
         },
         onDesktopAction: (action) => {
+          if (action.action === 'suggest_macro' && action.value) {
+            const val = action.value as { title?: string; description?: string; commands?: string[] };
+            if (val.title && val.commands?.length) {
+              setPendingMacro({ title: val.title, description: val.description, commands: val.commands });
+            }
+          }
           handleDesktopAction(action);
         },
         onMapUpdate: (data) => {
@@ -1099,6 +1106,63 @@ export function ChatPage() {
                   </div>
                 </div>
               )}
+              {/* Suggest Macro card */}
+              {pendingMacro && (
+                <div className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="16 18 22 12 16 6" />
+                      <polyline points="8 6 2 12 8 18" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>Предложение макроса</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setPendingMacro(null)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroName}>{pendingMacro.title}</div>
+                  {pendingMacro.description && (
+                    <div className={s.suggestMacroDesc}>{pendingMacro.description}</div>
+                  )}
+                  <div className={s.suggestMacroCommands}>
+                    {pendingMacro.commands.map((cmd, i) => (
+                      <code key={i} className={s.suggestMacroCmd}>{cmd}</code>
+                    ))}
+                  </div>
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={() => {
+                        const { loadMacros, saveMacros } = require('../components/MacroSettings') as typeof import('../components/MacroSettings');
+                        const macros = loadMacros();
+                        saveMacros([...macros, {
+                          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                          title: pendingMacro.title,
+                          description: pendingMacro.description || '',
+                          commands: pendingMacro.commands,
+                          enabled: true,
+                        }]);
+                        toast.success('Макрос сохранён в настройки');
+                        setPendingMacro(null);
+                      }}
+                    >
+                      Сохранить в настройки
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={() => setPendingMacro(null)}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 

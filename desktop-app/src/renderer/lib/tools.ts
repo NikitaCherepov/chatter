@@ -291,4 +291,69 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     // For now this is informational
     return;
   }
+
+  // ── Macro actions ──
+
+  if (a === 'execute_macro') {
+    // target === '__explore_fs__' means AI requested directory listing
+    if (action.target === '__explore_fs__') {
+      const val = action.value as { target_path?: string } | undefined;
+      if (val?.target_path && window.electronAPI?.readDirectory) {
+        window.electronAPI.readDirectory(val.target_path).catch(err => {
+          console.error('[macro] read-directory failed:', err);
+        });
+      }
+      return;
+    }
+
+    // Normal macro execution — find macro by id or name and execute
+    const macroId = action.target;
+    const macroName = (action.value as { macro_name?: string } | undefined)?.macro_name;
+    if (window.electronAPI?.executeCommands) {
+      try {
+        const macrosRaw = localStorage.getItem('chatter_macros');
+        const macros = macrosRaw ? JSON.parse(macrosRaw) : [];
+        let macro = macros.find((m: any) => m.id === macroId);
+        if (!macro && macroName) {
+          macro = macros.find((m: any) => m.title?.toLowerCase() === macroName?.toLowerCase());
+        }
+        if (macro?.commands?.length) {
+          window.electronAPI.executeCommands(macro.commands).catch(err => {
+            console.error('[macro] execute failed:', err);
+          });
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+    return;
+  }
+
+  if (a === 'suggest_macro') {
+    // This action is handled by ChatPage via the suggest_macro callback
+    // The payload is forwarded through the SSE desktop_action event
+    // ChatPage will render a special card for it
+    return;
+  }
+}
+
+// ── Suggest Macro callback ──────────────────────────────────────────────────
+
+type SuggestMacroPayload = {
+  title: string;
+  description?: string;
+  commands: string[];
+};
+
+type SuggestMacroListener = (payload: SuggestMacroPayload) => void;
+
+const suggestMacroListeners = new Set<SuggestMacroListener>();
+
+export function subscribeSuggestMacro(listener: SuggestMacroListener): () => void {
+  suggestMacroListeners.add(listener);
+  return () => suggestMacroListeners.delete(listener);
+}
+
+export function emitSuggestMacro(payload: SuggestMacroPayload) {
+  suggestMacroListeners.forEach(fn => fn(payload));
 }
