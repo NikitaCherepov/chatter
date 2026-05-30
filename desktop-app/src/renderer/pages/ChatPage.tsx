@@ -76,7 +76,7 @@ export function ChatPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
-  const [pendingMacro, setPendingMacro] = useState<{ title: string; description?: string; commands: string[] } | null>(null);
+  const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
 
   // Subscribe to TTS state
   useEffect(() => {
@@ -230,7 +230,7 @@ export function ChatPage() {
           if (action.action === 'suggest_macro' && action.value) {
             const val = action.value as { title?: string; description?: string; commands?: string[] };
             if (val.title && val.commands?.length) {
-              setPendingMacro({ title: val.title, description: val.description, commands: val.commands });
+              setPendingMacros(prev => [...prev, { title: val.title!, description: val.description, commands: val.commands! }]);
             }
           }
           handleDesktopAction(action);
@@ -1106,9 +1106,9 @@ export function ChatPage() {
                   </div>
                 </div>
               )}
-              {/* Suggest Macro card */}
-              {pendingMacro && (
-                <div className={s.suggestMacroCard}>
+              {/* Suggest Macro cards */}
+              {pendingMacros.map((macro, macroIdx) => (
+                <div key={macroIdx} className={s.suggestMacroCard}>
                   <div className={s.suggestMacroHeader}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="16 18 22 12 16 6" />
@@ -1117,7 +1117,7 @@ export function ChatPage() {
                     <span className={s.suggestMacroTitle}>Предложение макроса</span>
                     <button
                       className={s.suggestMacroClose}
-                      onClick={() => setPendingMacro(null)}
+                      onClick={() => setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx))}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -1125,12 +1125,12 @@ export function ChatPage() {
                       </svg>
                     </button>
                   </div>
-                  <div className={s.suggestMacroName}>{pendingMacro.title}</div>
-                  {pendingMacro.description && (
-                    <div className={s.suggestMacroDesc}>{pendingMacro.description}</div>
+                  <div className={s.suggestMacroName}>{macro.title}</div>
+                  {macro.description && (
+                    <div className={s.suggestMacroDesc}>{macro.description}</div>
                   )}
                   <div className={s.suggestMacroCommands}>
-                    {pendingMacro.commands.map((cmd, i) => (
+                    {macro.commands.map((cmd: string, i: number) => (
                       <code key={i} className={s.suggestMacroCmd}>{cmd}</code>
                     ))}
                   </div>
@@ -1142,15 +1142,15 @@ export function ChatPage() {
                           await api.apiFetch('/api/v1/macros', {
                             method: 'POST',
                             body: JSON.stringify({
-                              title: pendingMacro.title,
-                              description: pendingMacro.description || '',
-                              commands: pendingMacro.commands,
+                              title: macro.title,
+                              description: macro.description || '',
+                              commands: macro.commands,
                               enabled: true,
                               pinned: false,
                             }),
                           });
                           toast.success('Макрос сохранён в настройки');
-                          setPendingMacro(null);
+                          setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx));
                         } catch {
                           toast.error('Не удалось сохранить макрос');
                         }
@@ -1160,13 +1160,13 @@ export function ChatPage() {
                     </button>
                     <button
                       className={s.suggestMacroDismissBtn}
-                      onClick={() => setPendingMacro(null)}
+                      onClick={() => setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx))}
                     >
                       Отклонить
                     </button>
                   </div>
                 </div>
-              )}
+              ))}
 
               <div ref={messagesEndRef} />
             </div>
