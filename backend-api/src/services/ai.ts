@@ -1443,7 +1443,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean }>) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1820,7 +1820,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
 
     // If macro has return_output and desktop is connected via WS — wait for result
-    if ((matchedMacro as any).return_output && isDesktopOnline(user.id)) {
+    if (matchedMacro.return_output && isDesktopOnline(user.id)) {
       try {
         const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: matchedMacro.commands });
         const safeOutput = String(result || '').slice(-3000);
@@ -1971,7 +1971,7 @@ export const sendMessageThroughAi = async (
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
-    activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean }>;
+    activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
