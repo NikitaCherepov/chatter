@@ -330,7 +330,14 @@ export function initWebSocket(callbacks?: WsCallbacks) {
       switch (msg.type) {
         case 'intermediate': wsCallbacks.onIntermediate?.(msg.text); break;
         case 'display_state': wsCallbacks.onDisplayState?.(msg); break;
-        case 'desktop_action': wsCallbacks.onDesktopAction?.(msg); break;
+        case 'desktop_action':
+          // If it's a macro — execute it via Electron in the background
+          if (msg.action === 'execute_macro' && msg.value?.commands) {
+            (window as any).electronAPI?.executeCommands(msg.value.commands).catch(console.error);
+          }
+          // Pass to React (e.g. UI toast "Macro launched")
+          wsCallbacks.onDesktopAction?.(msg);
+          break;
         case 'tool_status': wsCallbacks.onToolStatus?.(msg.text); break;
         case 'map_update': wsCallbacks.onMapUpdate?.(msg); break;
         case 'done': wsCallbacks.onDone?.(msg); break;
