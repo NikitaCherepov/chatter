@@ -334,8 +334,8 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `find_transit_route` | Поиск маршрутов общественного транспорта (автобус, маршрутка, троллейбус, трамвай) через Overpass API. Принимает координаты точки А и Б, опционально `radius_meters` (по умолчанию 500). Auto-retry с расширением радиуса если ничего не найдено. Возвращает текстовое описание маршрутов (доступно всем клиентам) + отправляет визуал на карту через SSE (desktop-only). |
 | `search_nearby` | Поиск заведений и объектов (POI) рядом с точкой по названию через Overpass API. Принимает координаты, текст запроса (`query`) и `radius_meters` (по умолчанию 3000). Ищет по `name` (regex, case-insensitive) среди nodes и ways. Возвращает список мест с адресом/часами (доступно всем клиентам) + отправляет маркеры на карту через SSE (desktop-only). Auto-retry с расширением радиуса. |
 | `list_my_macros` | Показывает список включённых макросов пользователя (id, title, description, commands). Lazy loading — AI вызывает инструмент, когда упоминается закреплённый макрос или пользователь просит выполнить макрос. |
-| `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Бэкенд находит макрос в `activeMacros` (загружаются из БД через `getEnabledMacros`), включает команды в SSE payload `desktop_action` с `action: execute_macro`. Десктоп-клиент выполняет команды через IPC `execute-commands`. |
-| `explore_fs` | Запрос на чтение директории на ПК пользователя. Отправляет SSE `desktop_action` с `action: execute_macro, target: '__explore_fs__'`. Десктоп-клиент выполняет `readDirectory` IPC. **Ограничение:** SSE однонаправленный — результат чтения не возвращается AI (требуется WebSocket для полного функционала). |
+| `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). |
+| `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). |
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
 
 ### Система макросов
@@ -355,7 +355,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `commands` | string[] | Массив консольных команд |
 | `enabled` | boolean | Включён/выключен |
 | `pinned` | boolean | Закреплён — название попадает в системный промпт как подсказка для AI |
-| `return_output` | boolean | (Зарезервировано) Вернуть вывод команд AI. Пока не реализовано — требует WebSocket для обратного канала |
+| `return_output` | boolean | Если `true` — бот ожидает stdout команд от десктопа (требует WS-подключение). Если десктоп не подключён — fire-and-forget |
 
 **Архитектура видимости макросов для AI:**
 1. **Pinned-подсказка** — если у макроса `pinned: true`, его название добавляется в системный промпт: `[ЗАКРЕПЛЁННЫЕ МАКРОСЫ] У пользователя есть ... "Макрос 1", "Макрос 2". Если запрос совпадает — вызови list_my_macros.`
@@ -382,9 +382,8 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 4. Может быть несколько карточек одновременно (массив `pendingMacros`)
 
 **Ограничения (текущие):**
-- SSE однонаправленный — `explore_fs` не может вернуть результат чтения директории AI
-- `return_output` не реализован — для возврата stdout команд AI требуется WebSocket
 - Опасные команды блокируются на уровне IPC (`rm -rf /`, `format`, `shutdown` и т.д.)
+- `return_output` и `explore_fs` требуют WS-подключение десктопа; без WS — fire-and-forget
 1. AI вызывает `desktop_action` tool → `runTool` парсит action/target/value → записывает в `desktopActionSink`
 2. Сервер отправляет SSE `event: desktop_action` с payload на клиент
 3. Клиент (`handleDesktopAction`) выполняет команду: открывает панель, переключает виджет, заполняет черновик и т.д.
@@ -499,3 +498,40 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - Формат событий: `intermediate`, `tool_status`, `display_state`, `done`, `error`.
 - Валидация изображений остаётся обычной HTTP-ошибкой (до переключения на SSE).
 - Telegram-бот не затронут — он ходит через `/internal/ai/send`, который остался JSON.
+
+### 2025-05-31: WebSocket Transport
+
+**Миграция SSE → WebSocket для десктоп-клиента:**
+- WebSocket сервер на том же порту (3050), путь `/ws`, аутентификация через JWT access token в query-параметре.
+- Десктоп-клиент подключается при старте приложения, auto-reconnect (exponential backoff 1s → 30s).
+- SSE endpoint `POST /api/v1/chat/send` сохранён как fallback (если WS не подключён).
+
+**Разблокированные функции:**
+- `explore_fs` — AI получает листинг директории как tool response (ранее fire-and-forget).
+- `execute_macro` с `return_output: true` — AI получает stdout команд (ранее не работало).
+- Обратный канал: сервер шлёт `execute_ipc` с `request_id` → десктоп выполняет IPC → отвечает `ipc_result`.
+
+**Архитектура:**
+- `ws-clients.ts` — общий реестр подключений (`wsClients` Map), `sendIpcToDesktop()`, `isDesktopOnline()`. Импортируется и server.ts (регистрация), и ai.ts (IPC).
+- `server.ts` — `WebSocketServer` на `/ws`, обработчики `chat_send` / `ipc_result` / `ping`.
+- `ai.ts` — `execute_macro` и `explore_fs` используют `sendIpcToDesktop()` для запросов с ожиданием результата.
+
+**Протокол WS-сообщений (JSON `{ type, ...data }`):**
+
+| Клиент → Сервер | Описание |
+|---|---|
+| `chat_send` | Отправить сообщение AI |
+| `ipc_result` | Результат IPC-команды |
+| `ping` | Keepalive |
+
+| Сервер → Клиент | Описание |
+|---|---|
+| `intermediate` | Промежуточный текст AI |
+| `display_state` | Состояние аватара |
+| `desktop_action` | Команда UI / макрос |
+| `tool_status` | Статус выполнения инструмента |
+| `map_update` | Данные карты |
+| `done` | Финальный ответ |
+| `error` | Ошибка |
+| `execute_ipc` | Запрос выполнить IPC и вернуть результат |
+| `pong` | Ответ на ping |

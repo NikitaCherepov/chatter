@@ -136,8 +136,8 @@ src/
     │   ├── AttachModal
     │   └── LinkTelegramModal
     └── lib/
-        ├── api.ts         # API + SSE streaming
-        ├── auth.tsx       # Auth context
+        ├── api.ts         # API + WebSocket streaming (SSE fallback)
+        ├── auth.tsx       # Auth context + WS lifecycle
         ├── tts.ts         # TTS-сервис (Piper + Chromium SpeechSynthesis)
         ├── audioManager.ts # Web Audio API плеер с fade-in/out
         └── tools.ts       # Tools panel state + desktop_action роутер
@@ -245,7 +245,7 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 Бот может управлять интерфейсом через tool `desktop_action`. Паттерн как у `set_display_state`:
 
 1. Бэкенд получает `is_desktop: true` в body → добавляет `desktop_action` tool в AI
-2. AI вызывает tool → бэкенд отправляет SSE `event: desktop_action`
+2. AI вызывает tool → бэкенд отправляет WS `desktop_action` (или SSE fallback)
 3. Фронтенд ловит через `onDesktopAction` → `handleDesktopAction()` в `lib/tools.ts`
 
 **Actions:**
@@ -285,20 +285,41 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 
 ### Поток выполнения
 
+**Обычный макрос (fire-and-forget):**
 ```
 AI: execute_macro(macro_id)
-  → Backend: находит макрос в БД, формирует SSE payload с commands
-  → SSE event: desktop_action { action: 'execute_macro', value: { commands } }
+  → Backend: находит макрос в БД, формирует WS/SSE payload
+  → WS/SSE: desktop_action { action: 'execute_macro', value: { commands } }
   → tools.ts handleDesktopAction()
   → IPC executeCommands(commands)
   → main.ts: exec() для каждой команды
+```
+
+**Макрос с return_output (через WS):**
+```
+AI: execute_macro(macro_id) — return_output: true
+  → Backend: sendIpcToDesktop('execute_commands', { commands })
+  → WS: execute_ipc { request_id, ipc_type: 'execute_commands', payload }
+  → IPC executeCommands(commands) → stdout
+  → WS: ipc_result { request_id, data: stdout }
+  → Backend резолвит Promise → AI получает stdout как tool response
+```
+
+**Чтение директории (explore_fs, через WS):**
+```
+AI: explore_fs(target_path)
+  → Backend: sendIpcToDesktop('read_directory', { target_path })
+  → WS: execute_ipc { request_id, ipc_type: 'read_directory', payload }
+  → IPC readDirectory(target_path) → entries[]
+  → WS: ipc_result { request_id, data: entries }
+  → Backend резолвит Promise → AI получает listing как tool response
 ```
 
 ### Предложение макроса
 
 ```
 AI: suggest_macro(title, description, commands)
-  → SSE event: desktop_action { action: 'suggest_macro', value: { title, description, commands } }
+  → WS/SSE: desktop_action { action: 'suggest_macro', value: { title, description, commands } }
   → ChatPage: setPendingMacros(prev => [...prev, newMacro])
   → Рендер карточки с кнопками «Сохранить»/«Отклонить»
   → Сохранение: POST /api/v1/macros → БД
@@ -306,27 +327,43 @@ AI: suggest_macro(title, description, commands)
 
 **Widget data dispatch:** `dispatchWidgetData()` ставит команду в очередь если виджет ещё не смонтирован (pending commands). При подписке — очередь дренируется.
 
-## SSE Streaming
+## WebSocket Transport
 
-Desktop-клиент использует **SSE (Server-Sent Events)** для стриминга ответов AI в реальном времени. Реализация в `lib/api.ts`, функция `streamChatMessage()`.
+Desktop-клиент использует **WebSocket** для двунаправленного обмена с сервером. Реализация в `lib/api.ts`.
 
-SSE — однонаправленный стрим от сервера к клиенту (в отличие от WebSocket, который двунаправленный). Клиент отправляет обычный POST-запрос на `/api/v1/chat/send` с `is_desktop: true`, сервер отвечает `Content-Type: text/event-stream` и стримит события.
+**Подключение:**
+- `initWebSocket()` — вызывается в `auth.tsx` после успешного логина/регистрации
+- WS подключается к `ws://host:3050/ws?token=jwt`, JWT валидируется сервером
+- Auto-reconnect с exponential backoff (1s → 2s → 4s → ... → 30s)
+- При refresh токена (401 в apiFetch) → `reconnectWebSocket()` с новым токеном
+- При logout → `closeWebSocket()` (code 1000, без реконнекта)
 
-**Формат событий:**
+**Отправка сообщений:**
+- `streamChatMessage()` при подключённом WS отправляет `{ type: 'chat_send', text, ... }`
+- Если WS не подключён — fallback на SSE (POST + ReadableStream)
 
-| Event | Описание |
+**Входящие сообщения (WS → клиент):**
+
+| type | Описание |
 |---|---|
-| `intermediate` | Промежуточный текст AI (сгенерирован одновременно с tool call) |
+| `intermediate` | Промежуточный текст AI |
 | `tool_status` | Статус выполнения инструмента ("Ищу информацию...") |
-| `display_state` | Изменение состояния пиксельного аватара |
-| `desktop_action` | Команда управления интерфейсом (открыть виджет, создать черновик, выполнить/предложить макрос) |
-| `map_update` | Данные карты (место/маршрут) — открывает MapTool, обновляет состояние |
-| `done` | Финальный ответ с `reply_text`, `message_id`, `chat_id` |
+| `display_state` | Изменение состояния аватара |
+| `desktop_action` | Команда управления UI / макрос |
+| `map_update` | Данные карты |
+| `done` | Финальный ответ |
 | `error` | Ошибка |
+| `execute_ipc` | Запрос сервера выполнить IPC и вернуть результат |
+| `pong` | Ответ на ping |
 
-Клиент парсит поток вручную через `ReadableStream` + `TextDecoder`, без `EventSource` (т.к. нужен POST с body).
+**Обратный канал (execute_ipc):**
+Сервер может запросить десктоп выполнить IPC-команду и вернуть результат. Используется для `return_output` макросов и `explore_fs`:
+1. Сервер шлёт `{ type: 'execute_ipc', request_id, ipc_type, payload }`
+2. Десктоп выполняет IPC (`executeCommands` / `readDirectory`)
+3. Десктоп отвечает `{ type: 'ipc_result', request_id, data }` или `{ error }`
+4. Сервер резолвит pending Promise → AI получает результат как tool response
 
-Telegram-бот ходит через обычный JSON-эндпоинт `/internal/ai/send` — SSE только для десктопа.
+**SSE fallback** — если WS не подключён, `streamChatMessage` использует обычный POST + SSE. SSE — однонаправленный, обратный канал (`execute_ipc`) недоступен.
 
 ## Tool Navigation
 
