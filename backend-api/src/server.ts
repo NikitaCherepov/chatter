@@ -2,7 +2,7 @@
 import path from 'path';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
-import { wsClients, registerWsClient, unregisterWsClient, type WsClient } from './ws-clients.js';
+import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
@@ -116,6 +116,13 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
 
   try {
     const result = await sendMessageThroughAi(Math.floor(userId), text, chatId, options);
+
+    // If AI triggered a desktop_action and desktop is online — push via WS
+    if (result.desktop_action && isDesktopOnline(userId)) {
+      const client = wsClients.get(userId);
+      client!.ws.send(JSON.stringify({ type: 'desktop_action', ...result.desktop_action }));
+    }
+
     return res.json(result);
   } catch (err: any) {
     const code = `${err?.message || 'ai_send_failed'}`;
