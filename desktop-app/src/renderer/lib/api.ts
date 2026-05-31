@@ -60,6 +60,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     const refreshed = await refreshToken(tokens.refresh_token);
     if (refreshed) {
       saveTokens(refreshed);
+      // Reconnect WebSocket with new token
+      reconnectWebSocket();
       headers['Authorization'] = `Bearer ${refreshed.access_token}`;
       const retry = await fetch(`${API_BASE}${path}`, { ...options, headers });
       return retry.json();
@@ -238,7 +240,7 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
   });
 }
 
-// ---------- SSE Streaming ----------
+// ---------- SSE Streaming (fallback, kept for reference) ----------
 
 export type DesktopActionPayload = {
   action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro';
@@ -288,7 +290,117 @@ export type StreamCallbacks = {
   onError?: (err: string) => void;
 };
 
+// ---------- WebSocket ----------
+
+let ws: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 1000;
+const MAX_RECONNECT_DELAY = 30000;
+
+type WsCallbacks = StreamCallbacks & {
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+};
+
+let wsCallbacks: WsCallbacks = {};
+
+export function initWebSocket(callbacks?: WsCallbacks) {
+  if (callbacks) wsCallbacks = callbacks;
+
+  const tokens = loadTokens();
+  if (!tokens?.access_token) return;
+
+  const wsBase = API_BASE.replace(/^http/, 'ws');
+  ws = new WebSocket(`${wsBase}/ws?token=${tokens.access_token}`);
+
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+    wsCallbacks.onConnect?.();
+  };
+
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data as string);
+
+      switch (msg.type) {
+        case 'intermediate': wsCallbacks.onIntermediate?.(msg.text); break;
+        case 'display_state': wsCallbacks.onDisplayState?.(msg); break;
+        case 'desktop_action': wsCallbacks.onDesktopAction?.(msg); break;
+        case 'tool_status': wsCallbacks.onToolStatus?.(msg.text); break;
+        case 'map_update': wsCallbacks.onMapUpdate?.(msg); break;
+        case 'done': wsCallbacks.onDone?.(msg); break;
+        case 'error': wsCallbacks.onError?.(msg.error); break;
+        case 'execute_ipc': handleExecuteIpc(msg); break;
+        case 'pong': break;
+      }
+    } catch { /* ignore malformed JSON */ }
+  };
+
+  ws.onclose = (ev) => {
+    ws = null;
+    wsCallbacks.onDisconnect?.();
+
+    // Auto-reconnect if not intentional close
+    if (ev.code !== 1000) {
+      reconnectTimer = setTimeout(() => {
+        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+        initWebSocket();
+      }, reconnectDelay);
+    }
+  };
+
+  ws.onerror = () => { /* onclose will fire */ };
+}
+
+export function closeWebSocket() {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  ws?.close(1000);
+  ws = null;
+}
+
+export function reconnectWebSocket() {
+  closeWebSocket();
+  reconnectDelay = 1000;
+  initWebSocket();
+}
+
+export function isWsConnected(): boolean {
+  return ws !== null && ws.readyState === WebSocket.OPEN;
+}
+
+// ── Send chat_send via WS ──
+
 export async function streamChatMessage(
+  text: string,
+  chatId?: number,
+  images?: ChatSendImage[],
+  displayManifest?: { moods: string[]; reactions: string[] },
+  callbacks?: StreamCallbacks,
+  options?: { isVoice?: boolean }
+) {
+  // Update callbacks for this request
+  if (callbacks) {
+    wsCallbacks = { ...wsCallbacks, ...callbacks };
+  }
+
+  // If WS is connected — send through WS
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    const msg: Record<string, unknown> = { type: 'chat_send', text };
+    if (chatId) msg.chat_id = chatId;
+    if (images?.length) msg.images = images;
+    if (displayManifest) msg.display_manifest = displayManifest;
+    if (options?.isVoice) msg.is_voice = true;
+    ws.send(JSON.stringify(msg));
+    return;
+  }
+
+  // Fallback: SSE
+  await streamChatMessageSSE(text, chatId, images, displayManifest, callbacks, options);
+}
+
+// ── SSE fallback (kept for when WS is not connected) ──
+
+async function streamChatMessageSSE(
   text: string,
   chatId?: number,
   images?: ChatSendImage[],
@@ -313,7 +425,6 @@ export async function streamChatMessage(
       body: JSON.stringify(body),
     });
 
-    // Refresh token при 401
     if (res.status === 401 && !isRetry && tokens?.refresh_token) {
       const refreshed = await refreshToken(tokens.refresh_token);
       if (refreshed) {
@@ -373,6 +484,28 @@ export async function streamChatMessage(
     await attemptStream();
   } catch (err: any) {
     if (callbacks?.onError) callbacks.onError(err.message || 'stream_failed');
+  }
+}
+
+// ── Handle execute_ipc from server ──
+
+async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; payload: any }) {
+  const { request_id, ipc_type, payload } = msg;
+
+  try {
+    let result: any;
+
+    if (ipc_type === 'execute_commands') {
+      result = await (window as any).electronAPI?.executeCommands(payload.commands);
+    } else if (ipc_type === 'read_directory') {
+      result = await (window as any).electronAPI?.readDirectory(payload.target_path);
+    } else {
+      throw new Error(`unknown ipc_type: ${ipc_type}`);
+    }
+
+    ws?.send(JSON.stringify({ type: 'ipc_result', request_id, data: result }));
+  } catch (err: any) {
+    ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: err?.message || String(err) }));
   }
 }
 

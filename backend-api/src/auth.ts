@@ -36,7 +36,7 @@ const signPayload = (payload: TokenPayload) => {
   return `${content}.${sig}`;
 };
 
-const verifyToken = (token: string, expectedType: 'access' | 'refresh') => {
+export const verifyToken = (token: string, expectedType: 'access' | 'refresh') => {
   const [header, payload, signature] = token.split('.');
   if (!header || !payload || !signature) return null;
   const content = `${header}.${payload}`;

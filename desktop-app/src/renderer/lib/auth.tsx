@@ -25,6 +25,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((user) => {
           setUser(user);
           localStorage.setItem('chatter_user', JSON.stringify(user));
+          // Initialize WebSocket after successful auth
+          api.initWebSocket();
         })
         .catch(() => {
           // Token invalid or network error — fallback to cached
@@ -37,12 +39,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       setInitialized(true);
     }
+
+    // Close WebSocket on unmount
+    return () => {
+      api.closeWebSocket();
+    };
   }, []);
 
   const loginAndSet = useCallback(async (login: string, password: string) => {
     const res = await api.login(login, password);
     setUser(res.user);
     localStorage.setItem('chatter_user', JSON.stringify(res.user));
+    // Initialize WebSocket after login
+    api.initWebSocket();
     return res;
   }, []);
 
@@ -50,10 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.register(login, password, name);
     setUser(res.user);
     localStorage.setItem('chatter_user', JSON.stringify(res.user));
+    // Initialize WebSocket after registration
+    api.initWebSocket();
     return res;
   }, []);
 
   const logoutFn = useCallback(() => {
+    api.closeWebSocket();
     api.logout();
     setUser(null);
     localStorage.removeItem('chatter_user');

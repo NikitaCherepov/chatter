@@ -13,6 +13,7 @@ import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
 import { runImageGeneration } from './image-generation.js';
+import { sendIpcToDesktop, isDesktopOnline } from '../ws-clients.js';
 import { findTransitRoute, searchNearby } from './transit.js';
 import { db } from '../db.js';
 
@@ -1818,6 +1819,18 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
       return JSON.stringify({ status: 'error', message: `Макрос не найден${macroId ? ` (id=${macroId})` : macroName ? ` (${macroName})` : ''}` });
     }
 
+    // If macro has return_output and desktop is connected via WS — wait for result
+    if ((matchedMacro as any).return_output && isDesktopOnline(user.id)) {
+      try {
+        const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: matchedMacro.commands });
+        const safeOutput = String(result || '').slice(-3000);
+        return JSON.stringify({ status: 'success', logs: safeOutput, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
+      } catch (err: any) {
+        return JSON.stringify({ status: 'error', message: err.message, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
+      }
+    }
+
+    // Fire-and-forget — send via desktopActionSink (SSE or WS callback)
     const payload: DesktopActionPayload = { action: 'execute_macro' };
     payload.target = String(matchedMacro.id);
     payload.value = { macro_name: matchedMacro.title, commands: matchedMacro.commands };
@@ -1831,10 +1844,21 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const targetPath: string = typeof parsed.target_path === 'string' ? parsed.target_path : '';
     if (!targetPath) return JSON.stringify({ status: 'error', message: 'target_path обязателен' });
 
+    // If desktop is connected via WS — wait for result
+    if (isDesktopOnline(user.id)) {
+      try {
+        const result = await sendIpcToDesktop(user.id, 'read_directory', { target_path: targetPath });
+        return JSON.stringify({ status: 'success', entries: result, target_path: targetPath });
+      } catch (err: any) {
+        return JSON.stringify({ status: 'error', message: err.message, target_path: targetPath });
+      }
+    }
+
+    // Fallback: fire-and-forget via desktopActionSink (SSE)
     const payload: DesktopActionPayload = { action: 'execute_macro', target: '__explore_fs__', value: { target_path: targetPath } };
     if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Запрос на чтение директории "${targetPath}" отправлен.`, target_path: targetPath });
+    return JSON.stringify({ status: 'success', message: `Запрос на чтение директории "${targetPath}" отправлен. Результат чтения будет доступен после подключения десктопа через WebSocket.`, target_path: targetPath });
   }
 
   if (toolName === 'suggest_macro') {

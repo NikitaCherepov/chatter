@@ -1,7 +1,9 @@
 ﻿import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
-import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, type AuthedRequest } from './auth.js';
+import { WebSocketServer, WebSocket } from 'ws';
+import { wsClients, type WsClient } from './ws-clients.js';
+import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
@@ -1690,3 +1692,161 @@ const server = app.listen(PORT, () => {
 server.timeout = 5 * 60 * 1000;       // 5 minutes
 server.keepAliveTimeout = 5 * 60 * 1000;
 server.headersTimeout = 5 * 60 * 1000 + 1000;
+
+// ── WebSocket Server ─────────────────────────────────────────────────────────
+
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+wss.on('connection', (ws, req) => {
+  // 1. Authenticate via query param
+  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  const token = url.searchParams.get('token');
+  if (!token) { ws.close(4001, 'no_token'); return; }
+
+  const payload = verifyToken(token, 'access');
+  if (!payload) { ws.close(4001, 'invalid_token'); return; }
+
+  const userId = payload.sub;
+
+  // 2. Kick existing connection for this user
+  const existing = wsClients.get(userId);
+  if (existing) {
+    existing.ws.removeAllListeners();
+    existing.ws.close(4002, 'replaced');
+  }
+
+  // 3. Register client
+  const client: WsClient = { ws, userId, pendingIpc: new Map() };
+  wsClients.set(userId, client);
+  console.log(`[ws] user ${userId} connected, total: ${wsClients.size}`);
+
+  // 4. Handle incoming messages
+  ws.on('message', async (raw) => {
+    try {
+      const msg = JSON.parse(raw.toString());
+
+      if (msg.type === 'chat_send') {
+        await handleWsChatSend(client, msg);
+      } else if (msg.type === 'ipc_result') {
+        handleIpcResult(client, msg);
+      } else if (msg.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
+      }
+    } catch (err) {
+      console.error('[ws] message error:', err);
+    }
+  });
+
+  ws.on('close', () => {
+    if (wsClients.get(userId) === client) {
+      wsClients.delete(userId);
+      // Reject all pending IPC requests
+      for (const [, pending] of client.pendingIpc) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error('ws_disconnected'));
+      }
+    }
+    console.log(`[ws] user ${userId} disconnected, total: ${wsClients.size}`);
+  });
+});
+
+// ── WS chat_send handler ────────────────────────────────────────────────────
+
+async function handleWsChatSend(client: WsClient, msg: any) {
+  const { text, chat_id, images, display_manifest, is_voice } = msg;
+  if (!text?.trim()) {
+    client.ws.send(JSON.stringify({ type: 'error', error: 'empty_text' }));
+    return;
+  }
+
+  // Resolve effective user (linked TG account)
+  const rawUser = getUserById(client.userId);
+  const userId = rawUser?.linked_tg_id || client.userId;
+  const apiUserId = client.userId;
+
+  // Parse & validate images
+  const MAX_IMAGE_BYTES_API = 20 * 1024 * 1024;
+  const imagesRaw: Array<any> = Array.isArray(images) ? images : [];
+  const parsedImages = imagesRaw
+    .map((img: any) => ({
+      base64: `${img?.base64 || ''}`.trim(),
+      mimeType: `${img?.mime_type || 'image/jpeg'}`.trim() || 'image/jpeg',
+    }))
+    .filter(img => img.base64.length > 0);
+
+  for (const img of parsedImages) {
+    const buf = Buffer.from(img.base64, 'base64');
+    if (!buf.length) continue;
+    if (buf.length > MAX_IMAGE_BYTES_API) {
+      client.ws.send(JSON.stringify({ type: 'error', error: 'image_too_large' }));
+      return;
+    }
+  }
+
+  // Save thumbnails for user images
+  let savedUserImages: Array<{ url: string; type: 'user_photo' }> | null = null;
+  if (parsedImages.length > 0) {
+    try {
+      const { saveUserImageThumbnail } = await import('./services/image-storage.js');
+      const saved: Array<{ url: string; type: 'user_photo' }> = [];
+      for (const img of parsedImages) {
+        const result = await saveUserImageThumbnail(img.base64, img.mimeType);
+        saved.push({ url: result.url, type: 'user_photo' });
+      }
+      savedUserImages = saved;
+    } catch (err) {
+      console.error('[ws] failed to save image thumbnails:', err);
+    }
+  }
+
+  const enabledMacros = getEnabledMacros(userId);
+
+  try {
+    const result = await sendMessageThroughAi(userId, text, chat_id, {
+      ...(parsedImages.length > 0 ? { images: parsedImages } : {}),
+      userImages: savedUserImages,
+      displayManifest: display_manifest,
+      isDesktop: true,
+      isVoice: Boolean(is_voice),
+      activeMacros: enabledMacros,
+      ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
+      onIntermediateMessage: (stepText) => {
+        client.ws.send(JSON.stringify({ type: 'intermediate', text: stepText }));
+      },
+      onStateChange: (state) => {
+        client.ws.send(JSON.stringify({ type: 'display_state', ...state }));
+      },
+      onDesktopAction: (action) => {
+        client.ws.send(JSON.stringify({ type: 'desktop_action', ...action }));
+      },
+      onToolStatus: (statusText) => {
+        client.ws.send(JSON.stringify({ type: 'tool_status', text: statusText }));
+      },
+      onMapUpdate: (data) => {
+        client.ws.send(JSON.stringify({ type: 'map_update', ...data }));
+      },
+    });
+
+    client.ws.send(JSON.stringify({ type: 'done', ...result }));
+  } catch (err: any) {
+    const code = `${err?.message || 'ai_send_failed'}`;
+    client.ws.send(JSON.stringify({ type: 'error', error: code }));
+  }
+}
+
+// ── WS ipc_result handler ────────────────────────────────────────────────────
+
+function handleIpcResult(client: WsClient, msg: any) {
+  const { request_id, data, error } = msg;
+  const pending = client.pendingIpc.get(request_id);
+  if (!pending) return;
+
+  clearTimeout(pending.timer);
+  client.pendingIpc.delete(request_id);
+
+  if (error) {
+    pending.reject(new Error(error));
+  } else {
+    pending.resolve(data);
+  }
+}
