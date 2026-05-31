@@ -122,9 +122,14 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
     });
 
     // If AI triggered a desktop_action and desktop is online — push via WS
+    console.log(`[TG→WS] result.desktop_action=${JSON.stringify(result.desktop_action)}, isDesktopOnline=${isDesktopOnline(userId)}`);
     if (result.desktop_action && isDesktopOnline(userId)) {
       const client = wsClients.get(userId);
-      client!.ws.send(JSON.stringify({ type: 'desktop_action', ...result.desktop_action }));
+      const payload = JSON.stringify({ type: 'desktop_action', ...result.desktop_action });
+      console.log(`[TG→WS] PUSHING to user ${userId}: ${payload}`);
+      client!.ws.send(payload);
+    } else {
+      console.log(`[TG→WS] SKIPPED: desktop_action=${!!result.desktop_action}, online=${isDesktopOnline(userId)}`);
     }
 
     return res.json(result);
