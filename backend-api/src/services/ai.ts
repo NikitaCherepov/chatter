@@ -1819,23 +1819,18 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
       return JSON.stringify({ status: 'error', message: `Макрос не найден${macroId ? ` (id=${macroId})` : macroName ? ` (${macroName})` : ''}` });
     }
 
-    // If macro has return_output and desktop is connected via WS — wait for result
-    console.log('[execute_macro]', {
-      macro_id: matchedMacro.id,
-      title: matchedMacro.title,
-      return_output: matchedMacro.return_output,
-      desktop_online: isDesktopOnline(user.id),
-    });
-    if (matchedMacro.return_output && isDesktopOnline(user.id)) {
-      console.log('[execute_macro] sending IPC to desktop, waiting for result...');
-      try {
-        const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: matchedMacro.commands });
-        console.log('[execute_macro] IPC result received:', String(result || '').slice(0, 200));
-        const safeOutput = String(result || '').slice(-3000);
-        return JSON.stringify({ status: 'success', logs: safeOutput, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
-      } catch (err: any) {
-        console.error('[execute_macro] IPC error:', err.message);
-        return JSON.stringify({ status: 'error', message: err.message, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
+    // If macro requires output — must have desktop online via WS
+    if (matchedMacro.return_output) {
+      if (isDesktopOnline(user.id)) {
+        try {
+          const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: matchedMacro.commands });
+          const safeOutput = String(result || '').slice(-3000);
+          return JSON.stringify({ status: 'success', logs: safeOutput, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
+        } catch (err: any) {
+          return JSON.stringify({ status: 'error', message: err.message, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
+        }
+      } else {
+        return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Невозможно выполнить макрос с возвратом вывода — попроси пользователя запустить приложение на ПК.', macro_id: matchedMacro.id, macro_name: matchedMacro.title });
       }
     }
 
