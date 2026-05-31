@@ -178,6 +178,7 @@ db.exec(`
     commands TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
     pinned INTEGER NOT NULL DEFAULT 0,
+    return_output INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )

@@ -7,6 +7,7 @@ export type MacroRow = {
   commands: string[];
   enabled: boolean;
   pinned: boolean;
+  return_output: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -18,6 +19,7 @@ type MacroDbRow = {
   commands: string; // JSON string
   enabled: number;
   pinned: number;
+  return_output: number;
   created_at: number;
   updated_at: number;
 };
@@ -31,13 +33,14 @@ const parseMacroRow = (row: MacroDbRow): MacroRow => ({
   commands: JSON.parse(row.commands || '[]'),
   enabled: row.enabled === 1,
   pinned: row.pinned === 1,
+  return_output: row.return_output === 1,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
 
 export const listMacros = (userId: number): MacroRow[] => {
   const rows = db.prepare(`
-    SELECT id, title, description, commands, enabled, pinned, created_at, updated_at
+    SELECT id, title, description, commands, enabled, pinned, return_output, created_at, updated_at
     FROM macros
     WHERE user_id = ?
     ORDER BY pinned DESC, updated_at DESC
@@ -48,7 +51,7 @@ export const listMacros = (userId: number): MacroRow[] => {
 
 export const getEnabledMacros = (userId: number): MacroRow[] => {
   const rows = db.prepare(`
-    SELECT id, title, description, commands, enabled, pinned, created_at, updated_at
+    SELECT id, title, description, commands, enabled, pinned, return_output, created_at, updated_at
     FROM macros
     WHERE user_id = ? AND enabled = 1
     ORDER BY pinned DESC, updated_at DESC
@@ -58,7 +61,7 @@ export const getEnabledMacros = (userId: number): MacroRow[] => {
 
 export const getMacroById = (userId: number, macroId: number): MacroRow | null => {
   const row = db.prepare(`
-    SELECT id, title, description, commands, enabled, pinned, created_at, updated_at
+    SELECT id, title, description, commands, enabled, pinned, return_output, created_at, updated_at
     FROM macros
     WHERE user_id = ? AND id = ?
   `).get(userId, macroId) as MacroDbRow | undefined;
@@ -72,6 +75,7 @@ export const createMacro = (
   commands: string[],
   enabled: boolean,
   pinned: boolean,
+  return_output: boolean,
 ): { ok: true; id: number } | { ok: false; error: string } => {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) return { ok: false, error: 'title_required' };
@@ -88,9 +92,9 @@ export const createMacro = (
   const commandsJson = JSON.stringify(commands);
 
   const result = db.prepare(`
-    INSERT INTO macros (user_id, title, description, commands, enabled, pinned, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, trimmedTitle, description.trim(), commandsJson, enabled ? 1 : 0, pinned ? 1 : 0, now, now);
+    INSERT INTO macros (user_id, title, description, commands, enabled, pinned, return_output, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, trimmedTitle, description.trim(), commandsJson, enabled ? 1 : 0, pinned ? 1 : 0, return_output ? 1 : 0, now, now);
 
   return { ok: true, id: Number(result.lastInsertRowid) };
 };
@@ -98,7 +102,7 @@ export const createMacro = (
 export const updateMacro = (
   userId: number,
   macroId: number,
-  updates: { title?: string; description?: string; commands?: string[]; enabled?: boolean; pinned?: boolean },
+  updates: { title?: string; description?: string; commands?: string[]; enabled?: boolean; pinned?: boolean; return_output?: boolean },
 ): { ok: true } | { ok: false; error: string } => {
   const existing = getMacroById(userId, macroId);
   if (!existing) return { ok: false, error: 'not_found' };
@@ -108,6 +112,7 @@ export const updateMacro = (
   const commands = updates.commands !== undefined ? updates.commands : existing.commands;
   const enabled = updates.enabled !== undefined ? updates.enabled : existing.enabled;
   const pinned = updates.pinned !== undefined ? updates.pinned : existing.pinned;
+  const return_output = updates.return_output !== undefined ? updates.return_output : existing.return_output;
 
   if (!title) return { ok: false, error: 'title_required' };
   if (title.length > 100) return { ok: false, error: 'title_too_long' };
@@ -116,9 +121,9 @@ export const updateMacro = (
 
   const now = getNowUnix();
   db.prepare(`
-    UPDATE macros SET title = ?, description = ?, commands = ?, enabled = ?, pinned = ?, updated_at = ?
+    UPDATE macros SET title = ?, description = ?, commands = ?, enabled = ?, pinned = ?, return_output = ?, updated_at = ?
     WHERE user_id = ? AND id = ?
-  `).run(title, description, JSON.stringify(commands), enabled ? 1 : 0, pinned ? 1 : 0, now, userId, macroId);
+  `).run(title, description, JSON.stringify(commands), enabled ? 1 : 0, pinned ? 1 : 0, return_output ? 1 : 0, now, userId, macroId);
 
   return { ok: true };
 };

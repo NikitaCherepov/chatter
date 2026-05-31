@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import { Select } from './Select';
+import type { SelectOption } from './Select';
 import s from './SettingsModal.module.scss';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -12,6 +14,7 @@ export type Macro = {
   commands: string[];
   enabled: boolean;
   pinned: boolean;
+  return_output: boolean;
 };
 
 const FS_SCAN_KEY = 'chatter_macro_fs_scan_enabled';
@@ -45,6 +48,13 @@ export function MacroSettings({ onChange }: Props) {
   const [formCommands, setFormCommands] = useState<string[]>(['']);
   const [formEnabled, setFormEnabled] = useState(true);
   const [formPinned, setFormPinned] = useState(false);
+  const [formReturnOutput, setFormReturnOutput] = useState(false);
+
+  // Execution mode select options
+  const execModeOptions: SelectOption[] = [
+    { value: 'execute', label: 'Исполнение', hint: 'Запустить и забыть' },
+    { value: 'output', label: 'С выводом', hint: 'AI увидит результат в консоли' },
+  ];
 
   // AI request states
   const [explaining, setExplaining] = useState<number | null>(null);
@@ -84,6 +94,7 @@ export function MacroSettings({ onChange }: Props) {
     setFormCommands(['']);
     setFormEnabled(true);
     setFormPinned(false);
+    setFormReturnOutput(false);
     setEditingId(null);
   };
 
@@ -94,6 +105,7 @@ export function MacroSettings({ onChange }: Props) {
     setFormCommands(macro.commands.length > 0 ? [...macro.commands] : ['']);
     setFormEnabled(macro.enabled);
     setFormPinned(macro.pinned);
+    setFormReturnOutput(macro.return_output);
   };
 
   const addCommandField = () => {
@@ -125,13 +137,13 @@ export function MacroSettings({ onChange }: Props) {
       if (editingId) {
         await api.apiFetch('/api/v1/macros/' + editingId, {
           method: 'PUT',
-          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned }),
+          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned, return_output: formReturnOutput }),
         });
         toast.success('Макрос обновлён');
       } else {
         await api.apiFetch('/api/v1/macros', {
           method: 'POST',
-          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned }),
+          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned, return_output: formReturnOutput }),
         });
         toast.success('Макрос создан');
       }
@@ -328,6 +340,15 @@ export function MacroSettings({ onChange }: Props) {
             {macro.commands.map((cmd, i) => (
               <code key={i} className={s.macroCmd}>{cmd}</code>
             ))}
+            {macro.return_output && (
+              <span className={s.macroModeBadge} title="AI видит вывод команд">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="4 17 10 11 4 5" />
+                  <line x1="12" y1="19" x2="20" y2="19" />
+                </svg>
+                вывод
+              </span>
+            )}
           </div>
         </div>
       ))}
@@ -425,6 +446,15 @@ export function MacroSettings({ onChange }: Props) {
           />
           <span className={s.fieldLabel}>Закреплён (AI всегда видит название)</span>
         </label>
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Режим выполнения</label>
+        <Select
+          options={execModeOptions}
+          value={formReturnOutput ? 'output' : 'execute'}
+          onChange={(val) => setFormReturnOutput(val === 'output')}
+        />
       </div>
 
       <div className={s.macroFormButtons}>

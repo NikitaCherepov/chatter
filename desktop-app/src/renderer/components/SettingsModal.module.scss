@@ -459,6 +459,18 @@
   word-break: break-all;
 }
 
+.macroModeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--accent-icon);
+  background-color: rgba(26, 115, 232, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
 .commandRow {
   display: flex;
   align-items: center;

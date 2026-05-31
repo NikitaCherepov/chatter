@@ -1554,12 +1554,13 @@ app.post('/api/v1/macros', (req: AuthedRequest, res: any) => {
   const commands: unknown = req.body?.commands;
   const enabled = req.body?.enabled !== false;
   const pinned = req.body?.pinned === true;
+  const return_output = req.body?.return_output === true;
 
   if (!Array.isArray(commands) || commands.some(c => typeof c !== 'string')) {
     return res.status(400).json({ error: 'commands_required' });
   }
 
-  const result = createMacro(userId, title, description, commands, enabled, pinned);
+  const result = createMacro(userId, title, description, commands, enabled, pinned, return_output);
   if (!result.ok) {
     const code = (result as { ok: false; error: string }).error;
     if (code === 'title_required' || code === 'commands_required') return res.status(400).json({ error: code });
@@ -1580,6 +1581,7 @@ app.put('/api/v1/macros/:id', (req: AuthedRequest, res: any) => {
   if (Array.isArray(req.body?.commands)) updates.commands = req.body.commands;
   if (req.body?.enabled !== undefined) updates.enabled = Boolean(req.body.enabled);
   if (req.body?.pinned !== undefined) updates.pinned = Boolean(req.body.pinned);
+  if (req.body?.return_output !== undefined) updates.return_output = Boolean(req.body.return_output);
 
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'no_fields_to_update' });
