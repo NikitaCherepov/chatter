@@ -307,6 +307,11 @@ let wsCallbacks: WsCallbacks = {};
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = callbacks;
 
+  // Already connecting or open — skip
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+    return;
+  }
+
   const tokens = loadTokens();
   if (!tokens?.access_token) return;
 
@@ -340,8 +345,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     ws = null;
     wsCallbacks.onDisconnect?.();
 
-    // Auto-reconnect if not intentional close
-    if (ev.code !== 1000) {
+    // Auto-reconnect if not intentional close and not replaced by a newer connection
+    if (ev.code !== 1000 && ev.code !== 4002) {
       reconnectTimer = setTimeout(() => {
         reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
         initWebSocket();

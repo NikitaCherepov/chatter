@@ -115,7 +115,11 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
   if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
 
   try {
-    const result = await sendMessageThroughAi(Math.floor(userId), text, chatId, options);
+    const enabledMacros = getEnabledMacros(userId);
+    const result = await sendMessageThroughAi(Math.floor(userId), text, chatId, {
+      ...options,
+      activeMacros: enabledMacros,
+    });
 
     // If AI triggered a desktop_action and desktop is online — push via WS
     if (result.desktop_action && isDesktopOnline(userId)) {
