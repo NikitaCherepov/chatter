@@ -6,15 +6,23 @@ import { WebSocket } from 'ws';
 
 export type WsClient = {
   ws: WebSocket;
-  userId: number;
+  apiUserId: number;        // JWT subject — the API account that connected
+  effectiveUserId: number;  // linked_tg_id || apiUserId — the user AI operates on
   pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>;
 };
 
+// Keyed by BOTH apiUserId and effectiveUserId (they can differ when TG account is linked).
+// When looking up, ai.ts passes effectiveUserId — which is what sendMessageThroughAi uses.
 export const wsClients = new Map<number, WsClient>();
 
 export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000): Promise<any> {
   const client = wsClients.get(userId);
-  if (!client) throw new Error('desktop_not_connected');
+  if (!client) {
+    console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} NOT FOUND in wsClients (keys: [${[...wsClients.keys()].join(',')}])`);
+    throw new Error('desktop_not_connected');
+  }
+
+  console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} FOUND, apiUserId=${client.apiUserId}, effectiveUserId=${client.effectiveUserId}`);
 
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
@@ -29,5 +37,25 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
 }
 
 export function isDesktopOnline(userId: number): boolean {
-  return wsClients.has(userId);
+  const client = wsClients.get(userId);
+  console.log(`[DEBUG] isDesktopOnline(${userId}): ${client ? 'FOUND (apiUserId=' + client.apiUserId + ', effectiveUserId=' + client.effectiveUserId + ')' : 'NOT FOUND'} (wsClients keys: [${[...wsClients.keys()].join(',')}])`);
+  return !!client;
+}
+
+/** Register a WS client under both apiUserId and effectiveUserId keys. */
+export function registerWsClient(client: WsClient) {
+  wsClients.set(client.apiUserId, client);
+  if (client.effectiveUserId !== client.apiUserId) {
+    wsClients.set(client.effectiveUserId, client);
+  }
+}
+
+/** Unregister a WS client from both keys. Only removes if the stored client matches. */
+export function unregisterWsClient(client: WsClient) {
+  if (wsClients.get(client.apiUserId) === client) {
+    wsClients.delete(client.apiUserId);
+  }
+  if (client.effectiveUserId !== client.apiUserId && wsClients.get(client.effectiveUserId) === client) {
+    wsClients.delete(client.effectiveUserId);
+  }
 }

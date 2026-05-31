@@ -2,7 +2,7 @@
 import path from 'path';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
-import { wsClients, type WsClient } from './ws-clients.js';
+import { wsClients, registerWsClient, unregisterWsClient, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
@@ -1700,27 +1700,35 @@ server.headersTimeout = 5 * 60 * 1000 + 1000;
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws, req) => {
+  console.log(`[WS] New connection! URL: ${req.url}, host: ${req.headers.host}`);
+
   // 1. Authenticate via query param
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const token = url.searchParams.get('token');
-  if (!token) { ws.close(4001, 'no_token'); return; }
+  if (!token) { console.log('[WS] REJECTED: no token'); ws.close(4001, 'no_token'); return; }
 
   const payload = verifyToken(token, 'access');
-  if (!payload) { ws.close(4001, 'invalid_token'); return; }
+  if (!payload) { console.log('[WS] REJECTED: invalid token'); ws.close(4001, 'invalid_token'); return; }
 
-  const userId = payload.sub;
+  const apiUserId = payload.sub;
+  console.log(`[WS] Token valid, apiUserId=${apiUserId}`);
+
+  // Resolve effective user (linked TG account)
+  const rawUser = getUserById(apiUserId);
+  const effectiveUserId = rawUser?.linked_tg_id || apiUserId;
+  console.log(`[WS] rawUser linked_tg_id=${rawUser?.linked_tg_id}, effectiveUserId=${effectiveUserId}`);
 
   // 2. Kick existing connection for this user
-  const existing = wsClients.get(userId);
+  const existing = wsClients.get(apiUserId);
   if (existing) {
     existing.ws.removeAllListeners();
     existing.ws.close(4002, 'replaced');
   }
 
-  // 3. Register client
-  const client: WsClient = { ws, userId, pendingIpc: new Map() };
-  wsClients.set(userId, client);
-  console.log(`[ws] user ${userId} connected, total: ${wsClients.size}`);
+  // 3. Register client (under both apiUserId and effectiveUserId)
+  const client: WsClient = { ws, apiUserId, effectiveUserId, pendingIpc: new Map() };
+  registerWsClient(client);
+  console.log(`[ws] user ${apiUserId} (effective: ${effectiveUserId}) connected, total: ${wsClients.size}`);
 
   // 4. Handle incoming messages
   ws.on('message', async (raw) => {
@@ -1740,15 +1748,13 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
-    if (wsClients.get(userId) === client) {
-      wsClients.delete(userId);
-      // Reject all pending IPC requests
-      for (const [, pending] of client.pendingIpc) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error('ws_disconnected'));
-      }
+    unregisterWsClient(client);
+    // Reject all pending IPC requests
+    for (const [, pending] of client.pendingIpc) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('ws_disconnected'));
     }
-    console.log(`[ws] user ${userId} disconnected, total: ${wsClients.size}`);
+    console.log(`[ws] user ${apiUserId} (effective: ${effectiveUserId}) disconnected, total: ${wsClients.size}`);
   });
 });
 
@@ -1762,9 +1768,8 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   }
 
   // Resolve effective user (linked TG account)
-  const rawUser = getUserById(client.userId);
-  const userId = rawUser?.linked_tg_id || client.userId;
-  const apiUserId = client.userId;
+  const userId = client.effectiveUserId;
+  const apiUserId = client.apiUserId;
 
   // Parse & validate images
   const MAX_IMAGE_BYTES_API = 20 * 1024 * 1024;
