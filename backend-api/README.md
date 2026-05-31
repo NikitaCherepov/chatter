@@ -193,6 +193,24 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - `DELETE /api/v1/map-pins/:id`
   - Ввод: path `:id`
   - Вывод: `{ ok: true }`
+- `GET /api/v1/macros`
+  - Ввод: без body
+  - Вывод: `{ macros: [{ id, title, description, commands, enabled, pinned, return_output, created_at, updated_at }] }`
+- `POST /api/v1/macros`
+  - Ввод: `{ title, description?, commands: string[], enabled?, pinned?, return_output? }`
+  - Вывод: `{ id }` (201) или ошибка (400/429/422)
+- `PUT /api/v1/macros/:id`
+  - Ввод: `{ title?, description?, commands?, enabled?, pinned?, return_output? }`
+  - Вывод: `{ ok: true }`
+- `DELETE /api/v1/macros/:id`
+  - Ввод: path `:id`
+  - Вывод: `{ ok: true }`
+- `POST /api/v1/macro/explain`
+  - Ввод: `{ commands: string[] }`
+  - Вывод: `{ explanation: string }` — ИИ объясняет что делают команды (лёгкий LITE-запрос)
+- `POST /api/v1/macro/describe`
+  - Ввод: `{ commands: string[], current_title?, current_description? }`
+  - Вывод: `{ title: string, description: string }` — ИИ предлагает название/описание (лёгкий LITE-запрос)
 
 ### Vector Memory (JWT, feature-flag)
 
@@ -315,8 +333,58 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `get_map_pins` | Получить список сохранённых меток пользователя на карте. Возвращает расшифрованные координаты + названия. |
 | `find_transit_route` | Поиск маршрутов общественного транспорта (автобус, маршрутка, троллейбус, трамвай) через Overpass API. Принимает координаты точки А и Б, опционально `radius_meters` (по умолчанию 500). Auto-retry с расширением радиуса если ничего не найдено. Возвращает текстовое описание маршрутов (доступно всем клиентам) + отправляет визуал на карту через SSE (desktop-only). |
 | `search_nearby` | Поиск заведений и объектов (POI) рядом с точкой по названию через Overpass API. Принимает координаты, текст запроса (`query`) и `radius_meters` (по умолчанию 3000). Ищет по `name` (regex, case-insensitive) среди nodes и ways. Возвращает список мест с адресом/часами (доступно всем клиентам) + отправляет маркеры на карту через SSE (desktop-only). Auto-retry с расширением радиуса. |
+| `list_my_macros` | Показывает список включённых макросов пользователя (id, title, description, commands). Lazy loading — AI вызывает инструмент, когда упоминается закреплённый макрос или пользователь просит выполнить макрос. |
+| `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Бэкенд находит макрос в `activeMacros` (загружаются из БД через `getEnabledMacros`), включает команды в SSE payload `desktop_action` с `action: execute_macro`. Десктоп-клиент выполняет команды через IPC `execute-commands`. |
+| `explore_fs` | Запрос на чтение директории на ПК пользователя. Отправляет SSE `desktop_action` с `action: execute_macro, target: '__explore_fs__'`. Десктоп-клиент выполняет `readDirectory` IPC. **Ограничение:** SSE однонаправленный — результат чтения не возвращается AI (требуется WebSocket для полного функционала). |
+| `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
 
-**Поток `desktop_action`:**
+### Система макросов
+
+Макросы — пользовательские наборы консольных команд, которые AI может запускать на десктоп-клиенте.
+
+**Хранение:** таблица `macros` в SQLite (`services/macros.ts`):
+- `id INTEGER` (автоинкремент), `user_id`, `title`, `description`, `commands` (JSON), `enabled`, `pinned`, `return_output`, `created_at`, `updated_at`
+- Лимит: 50 макросов на пользователя
+- Команды хранятся как JSON-массив строк, максимум 30 команд на макрос
+
+**Поля макроса:**
+| Поле | Тип | Описание |
+|---|---|---|
+| `title` | string | Название (до 100 символов) |
+| `description` | string | Описание (до 500 символов), может генерироваться ИИ |
+| `commands` | string[] | Массив консольных команд |
+| `enabled` | boolean | Включён/выключен |
+| `pinned` | boolean | Закреплён — название попадает в системный промпт как подсказка для AI |
+| `return_output` | boolean | (Зарезервировано) Вернуть вывод команд AI. Пока не реализовано — требует WebSocket для обратного канала |
+
+**Архитектура видимости макросов для AI:**
+1. **Pinned-подсказка** — если у макроса `pinned: true`, его название добавляется в системный промпт: `[ЗАКРЕПЛЁННЫЕ МАКРОСЫ] У пользователя есть ... "Макрос 1", "Макрос 2". Если запрос совпадает — вызови list_my_macros.`
+2. **Lazy loading** — AI вызывает `list_my_macros` чтобы увидеть полный список с командами, затем `execute_macro` для запуска конкретного макроса
+3. Макросы загружаются из БД (`getEnabledMacros(userId)`) при каждом запросе, не передаются клиентом
+
+**Поток выполнения макроса:**
+1. AI видит pinned-подсказку или пользователь просит запустить макрос
+2. AI вызывает `list_my_macros` → получает список (id, title, description, commands)
+3. AI вызывает `execute_macro` с `macro_id` или `macro_name`
+4. Бэкенд находит макрос в `activeMacros`, формирует SSE payload: `{ action: 'execute_macro', target: '<macro_id>', value: { macro_name, commands } }`
+5. Сервер отправляет SSE `event: desktop_action` → десктоп-клиент получает payload
+6. `handleDesktopAction()` в `tools.ts` извлекает `commands` из payload и вызывает `window.electronAPI.executeCommands(commands)`
+7. Electron IPC `execute-commands` выполняет команды последовательно через `child_process.exec` с блокировкой опасных команд
+
+**AI-помощники для макросов (лёгкие LITE-запросы через `callLiteAi`):**
+- `POST /api/v1/macro/explain` — ИИ объясняет, что делают команды
+- `POST /api/v1/macro/describe` — ИИ предлагает лучшее название и описание (отправляет текущие `current_title`/`current_description` для улучшения)
+
+**Предложение макроса (`suggest_macro`):**
+1. AI решает предложить пользователю сохранить макрос → вызывает `suggest_macro` с `title, description, commands`
+2. SSE `desktop_action` с `action: 'suggest_macro'` → клиент рендерит карточку
+3. Пользователь нажимает «Сохранить» → POST `/api/v1/macros` → макрос сохраняется в БД
+4. Может быть несколько карточек одновременно (массив `pendingMacros`)
+
+**Ограничения (текущие):**
+- SSE однонаправленный — `explore_fs` не может вернуть результат чтения директории AI
+- `return_output` не реализован — для возврата stdout команд AI требуется WebSocket
+- Опасные команды блокируются на уровне IPC (`rm -rf /`, `format`, `shutdown` и т.д.)
 1. AI вызывает `desktop_action` tool → `runTool` парсит action/target/value → записывает в `desktopActionSink`
 2. Сервер отправляет SSE `event: desktop_action` с payload на клиент
 3. Клиент (`handleDesktopAction`) выполняет команду: открывает панель, переключает виджет, заполняет черновик и т.д.

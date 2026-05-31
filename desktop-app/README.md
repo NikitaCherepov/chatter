@@ -128,7 +128,8 @@ src/
     │   ├── TasksTool      # Просмотр задач
     │   ├── MapTool        # Карта (Leaflet + react-leaflet)
     │   ├── RadioGroup     # Переиспользуемый радио-селектор
-    │   ├── SettingsModal  # Настройки (аккаунт, промпт, голос, приложение)
+    │   ├── SettingsModal  # Настройки (аккаунт, промпт, голос, приложение, макросы)
+    │   ├── MacroSettings  # Управление макросами (CRUD + AI explain/describe)
     │   ├── Select         # Универсальный select-компонент
     │   ├── PromptSelector # Выбор промпта
     │   ├── MarkdownRenderer
@@ -257,6 +258,51 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 | `open_note` | Открыть конкретную запись по ID (value: `{ note_id }`) |
 | `read_widget_state` | Прочитать текущее состояние виджета |
 | `toggle_panel` | Открыть/закрыть панель инструментов |
+| `execute_macro` | Выполнить макрос — команды приходят в `value.commands` из SSE payload. Если `target === '__explore_fs__'` — чтение директории через `readDirectory` IPC |
+| `suggest_macro` | Предложить макрос — рендерит карточку «Сохранить/Отклонить» в ChatPage |
+
+## Макросы
+
+Пользовательские наборы консольных команд, которые AI может запускать на десктопе. Хранятся на сервере (SQLite), не в localStorage.
+
+### Компоненты
+
+- **MacroSettings** (`components/MacroSettings.tsx`) — UI управления макросами во вкладке настроек «Макросы»
+  - Список макросов с чекбоксами (enabled, pinned)
+  - Кнопки: редактировать, выполнить, AI-объяснение, AI-описание, удалить
+  - Форма создания/редактирования: название, описание, команды (динамический список), чекбоксы enabled/pinned
+  - AI-помощники: explain (что делают команды) и describe (предложить название/описание) через `/api/v1/macro/explain` и `/api/v1/macro/describe`
+- **ChatPage** — карточка `suggest_macro` (массив `pendingMacros`, может быть несколько одновременно)
+  - Кнопка «Сохранить» → POST `/api/v1/macros`
+  - Кнопка «Отклонить» → удаление из массива
+
+### IPC-обработчики
+
+| IPC | Описание |
+|---|---|
+| `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. |
+| `read-directory` | Чтение содержимого директории (read-only). Возвращает `{ name, isDirectory, size, modifiedAt }[]`. |
+
+### Поток выполнения
+
+```
+AI: execute_macro(macro_id)
+  → Backend: находит макрос в БД, формирует SSE payload с commands
+  → SSE event: desktop_action { action: 'execute_macro', value: { commands } }
+  → tools.ts handleDesktopAction()
+  → IPC executeCommands(commands)
+  → main.ts: exec() для каждой команды
+```
+
+### Предложение макроса
+
+```
+AI: suggest_macro(title, description, commands)
+  → SSE event: desktop_action { action: 'suggest_macro', value: { title, description, commands } }
+  → ChatPage: setPendingMacros(prev => [...prev, newMacro])
+  → Рендер карточки с кнопками «Сохранить»/«Отклонить»
+  → Сохранение: POST /api/v1/macros → БД
+```
 
 **Widget data dispatch:** `dispatchWidgetData()` ставит команду в очередь если виджет ещё не смонтирован (pending commands). При подписке — очередь дренируется.
 
@@ -273,7 +319,7 @@ SSE — однонаправленный стрим от сервера к кл�
 | `intermediate` | Промежуточный текст AI (сгенерирован одновременно с tool call) |
 | `tool_status` | Статус выполнения инструмента ("Ищу информацию...") |
 | `display_state` | Изменение состояния пиксельного аватара |
-| `desktop_action` | Команда управления интерфейсом (открыть виджет, создать черновик) |
+| `desktop_action` | Команда управления интерфейсом (открыть виджет, создать черновик, выполнить/предложить макрос) |
 | `map_update` | Данные карты (место/маршрут) — открывает MapTool, обновляет состояние |
 | `done` | Финальный ответ с `reply_text`, `message_id`, `chat_id` |
 | `error` | Ошибка |
