@@ -10,7 +10,7 @@ interface UpdateInfo {
   size: number;
 }
 
-type UpdateStatus = 'available' | 'downloading' | 'downloaded' | 'error';
+type UpdateStatus = 'available' | 'downloading' | 'downloaded' | 'installing' | 'error';
 
 interface Props {
   info: UpdateInfo;
@@ -76,10 +76,16 @@ export function UpdateModal({ info, onClose }: Props) {
   const handleInstall = useCallback(async () => {
     if (!electronAPI || !tempPath) return;
 
-    if (info.type === 'minor') {
-      await electronAPI.updateInstallMinor(tempPath);
-    } else {
-      await electronAPI.updateInstallMajor(tempPath);
+    setStatus('installing');
+    setErrorMsg('');
+
+    const result = info.type === 'minor'
+      ? await electronAPI.updateInstallMinor(tempPath)
+      : await electronAPI.updateInstallMajor(tempPath);
+
+    if (result?.error) {
+      setStatus('error');
+      setErrorMsg(result.error);
     }
   }, [info.type, tempPath]);
 
@@ -133,7 +139,7 @@ export function UpdateModal({ info, onClose }: Props) {
           )}
 
           {/* Progress */}
-          {(status === 'downloading' || status === 'downloaded') && (
+          {(status === 'downloading' || status === 'downloaded' || status === 'installing') && (
             <div className={s.progressSection}>
               <div className={s.progressBar}>
                 <div
@@ -145,7 +151,9 @@ export function UpdateModal({ info, onClose }: Props) {
                 <span>
                   {status === 'downloaded'
                     ? 'Загрузка завершена'
-                    : `${progress}% • ${formatBytes(transferred)} / ${formatBytes(total || info.size)}`}
+                    : status === 'installing'
+                      ? 'Перезапуск...'
+                      : `${progress}% • ${formatBytes(transferred)} / ${formatBytes(total || info.size)}`}
                 </span>
               </div>
             </div>
@@ -174,6 +182,12 @@ export function UpdateModal({ info, onClose }: Props) {
             {status === 'downloading' && (
               <button className={`${s.btn} ${s.btnSecondary}`} disabled>
                 Загрузка...
+              </button>
+            )}
+
+            {status === 'installing' && (
+              <button className={`${s.btn} ${s.btnSecondary}`} disabled>
+                Перезапуск...
               </button>
             )}
 

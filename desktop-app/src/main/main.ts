@@ -8,6 +8,7 @@ import util from 'util';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 
+const originalFs = require('original-fs') as typeof fs;
 const execFileAsync = util.promisify(execFile);
 
 function asarUnpackedPath(filePath: string) {
@@ -595,10 +596,10 @@ function getUpdateTempExtension(downloadUrl: string): string {
   try {
     const parsed = new URL(downloadUrl);
     const ext = path.extname(parsed.pathname).toLowerCase();
-    if (ext === '.asar' || ext === '.exe') return ext;
+    if (ext === '.exe') return ext;
   } catch {
     const ext = path.extname(downloadUrl).toLowerCase();
-    if (ext === '.asar' || ext === '.exe') return ext;
+    if (ext === '.exe') return ext;
   }
 
   return '.tmp';
@@ -670,6 +671,9 @@ function setupCustomUpdater() {
       const tempDir = app.getPath('temp');
       const tempPath = path.join(tempDir, `chatter_update_${Date.now()}${getUpdateTempExtension(downloadUrl)}`);
       const fileStream = fs.createWriteStream(tempPath);
+      const streamError = new Promise<never>((_resolve, reject) => {
+        fileStream.once('error', reject);
+      });
 
       let downloadedBytes = 0;
 
@@ -684,7 +688,12 @@ function setupCustomUpdater() {
         const { done, value } = await reader.read();
         if (done) break;
 
-        fileStream.write(value);
+        if (!fileStream.write(value)) {
+          await Promise.race([
+            new Promise<void>((resolve) => fileStream.once('drain', resolve)),
+            streamError,
+          ]);
+        }
         downloadedBytes += value.length;
 
         mainWindow?.webContents.send('update:progress', {
@@ -695,10 +704,10 @@ function setupCustomUpdater() {
       }
 
       fileStream.end();
-      await new Promise<void>((resolve, reject) => {
-        fileStream.on('finish', resolve);
-        fileStream.on('error', reject);
-      });
+      await Promise.race([
+        new Promise<void>((resolve) => fileStream.once('finish', resolve)),
+        streamError,
+      ]);
 
       log(`download complete: ${downloadedBytes} bytes -> ${tempPath}`);
       return { success: true, tempPath };
@@ -720,35 +729,69 @@ function setupCustomUpdater() {
 
       log(`installing minor update: ${tempPath} -> ${asarPath}`);
 
-      // Backup current app.asar
-      if (fs.existsSync(asarPath)) {
-        fs.copyFileSync(asarPath, backupPath);
-        log(`backup created: ${backupPath}`);
+      // Electron patches fs for .asar paths; original-fs accesses the real archive file.
+      if (!originalFs.existsSync(asarPath)) {
+        return { error: `app_asar_not_found: ${asarPath}` };
       }
+      originalFs.copyFileSync(asarPath, backupPath);
+      log(`backup created: ${backupPath}`);
 
-      // Write bat script for hot-swap (file is locked while app is running)
+      // Write helper script for hot-swap (file is locked while app is running).
       const exePath = app.getPath('exe');
-      const batPath = path.join(app.getPath('temp'), `chatter_hotswap_${Date.now()}.bat`);
+      const scriptPath = path.join(app.getPath('temp'), `chatter_hotswap_${Date.now()}.ps1`);
+      const launcherPath = path.join(app.getPath('temp'), `chatter_hotswap_${Date.now()}.vbs`);
+      const hotswapLogPath = path.join(app.getPath('userData'), 'updater-hotswap.log');
+      const currentPid = process.pid;
 
-      // Quote paths to handle spaces
-      const batContent = [
-        '@echo off',
-        'timeout /t 2 /nobreak > NUL',
-        `copy /Y "${tempPath}" "${asarPath}"`,
-        `del "${tempPath}"`,
-        `start "" "${exePath}"`,
-        'del "%~f0"',
+      const psString = (value: string) => `'${value.replace(/'/g, "''")}'`;
+      const scriptContent = [
+        '$ErrorActionPreference = "Stop"',
+        `$tempFile = ${psString(tempPath)}`,
+        `$asarFile = ${psString(asarPath)}`,
+        `$exeFile = ${psString(exePath)}`,
+        `$logFile = ${psString(hotswapLogPath)}`,
+        `$scriptFile = ${psString(scriptPath)}`,
+        `$launcherFile = ${psString(launcherPath)}`,
+        'try {',
+        `  Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] hotswap started, waiting for pid ${currentPid}"`,
+        `  while (Get-Process -Id ${currentPid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }`,
+        '  Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] copying update"',
+        '  Copy-Item -LiteralPath $tempFile -Destination $asarFile -Force',
+        '  Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue',
+        '  Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] restart app"',
+        '  Start-Process -FilePath $exeFile -WorkingDirectory (Split-Path -Parent $exeFile)',
+        '} catch {',
+        '  try { Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] hotswap failed: $($_.Exception.Message)" } catch {}',
+        '  try { Start-Process -FilePath $exeFile -WorkingDirectory (Split-Path -Parent $exeFile) } catch {}',
+        '  exit 1',
+        '} finally {',
+        '  Start-Sleep -Milliseconds 250',
+        '  Remove-Item -LiteralPath $launcherFile -Force -ErrorAction SilentlyContinue',
+        '  Remove-Item -LiteralPath $scriptFile -Force -ErrorAction SilentlyContinue',
+        '}',
       ].join('\r\n');
 
-      fs.writeFileSync(batPath, batContent, 'utf-8');
-      log(`hotswap script: ${batPath}`);
+      fs.writeFileSync(scriptPath, scriptContent, 'utf-8');
+      const vbsCommand = `"powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${scriptPath}"`;
+      const vbsString = (value: string) => `"${value.replace(/"/g, '""')}"`;
+      const launcherContent = [
+        'Set shell = CreateObject("WScript.Shell")',
+        `shell.Run ${vbsString(vbsCommand)}, 0, False`,
+        'Set shell = Nothing',
+      ].join('\r\n');
+      fs.writeFileSync(launcherPath, launcherContent, 'utf-8');
+      log(`hotswap script: ${scriptPath}`);
+      log(`hotswap launcher: ${launcherPath}`);
 
-      spawn('cmd.exe', ['/c', batPath], {
+      const child = spawn('wscript.exe', [launcherPath], {
         detached: true,
         windowsHide: true,
-      }).unref();
+        stdio: 'ignore',
+      });
+      child.unref();
+      log(`hotswap launcher pid: ${child.pid || 'unknown'}`);
 
-      app.quit();
+      setTimeout(() => app.exit(0), 250);
       return { success: true };
     } catch (err: any) {
       log(`install-minor error: ${err?.message || err}`);
