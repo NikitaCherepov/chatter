@@ -41,6 +41,15 @@ type LiteProvider = {
   modelChain: string[];
 };
 
+type ManualModelEntry = {
+  id: string;
+  apiModelName: string;
+  name: string;
+  description: string;
+  client: OpenAI;
+  baseURL: string;
+};
+
 type CompletionMeta = {
   response: any;
   usedModel: string;
@@ -168,6 +177,41 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
 };
 
 const VISION_PROVIDERS = parseVisionProviders();
+
+// ── MODELS_MANUAL: ручной выбор модели пользователем ──────────────────────────
+// Формат env: base_url|api_key|api_model_name|display_name|description|unique_id;...
+const parseManualModels = (): ManualModelEntry[] => {
+  const raw = (process.env.MODELS_MANUAL || '').trim();
+  if (!raw) return [];
+  const chunks = raw.split(';').map(v => v.trim()).filter(Boolean);
+  const models: ManualModelEntry[] = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    const parts = chunks[i].split('|').map(v => `${v || ''}`.trim());
+    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId] = parts;
+    if (!baseURL || !apiKey || !apiModelName || !uniqueId) continue;
+    models.push({
+      id: uniqueId,
+      apiModelName,
+      name: displayName || apiModelName,
+      description: description || '',
+      client: new OpenAI({ apiKey, baseURL }),
+      baseURL,
+    });
+  }
+  return models;
+};
+
+const MANUAL_MODELS = parseManualModels();
+const MANUAL_MODELS_MAP = new Map(MANUAL_MODELS.map(m => [m.id, m]));
+
+export const getModelsCatalog = () => MANUAL_MODELS.map(m => ({
+  id: m.id,
+  name: m.name,
+  description: m.description,
+}));
+
+export const resolveManualModel = (modelId: string): ManualModelEntry | undefined =>
+  MANUAL_MODELS_MAP.get(modelId);
 
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
@@ -1368,7 +1412,26 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
-const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>): Promise<CompletionMeta> => {
+const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry): Promise<CompletionMeta> => {
+  // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
+  if (manualModel) {
+    try {
+      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL);
+      return {
+        response: completion.response,
+        usedModel: completion.modelUsed,
+        usedProvider: 'manual',
+        baseURLUsed: manualModel.baseURL,
+        failedModels: completion.failedModels,
+      };
+    } catch (err: any) {
+      throw Object.assign(new Error('manual_model_failed'), {
+        failedModels: [manualModel.apiModelName],
+        cause: err,
+      });
+    }
+  }
+
   if (mode === 'vision-pro' || mode === 'vision-lite') {
     const providers = mode === 'vision-pro' ? VISION_PROVIDERS.pro : VISION_PROVIDERS.lite;
     if (!providers.length) {
@@ -1976,6 +2039,7 @@ export const sendMessageThroughAi = async (
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>;
+    preferredModel?: string | null;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -1991,6 +2055,13 @@ export const sendMessageThroughAi = async (
   if (forceProRoute && !options?.forcePro && !hasImages) {
     text = text.replace(/^!{3,}/, '').trim();
     if (!text) throw new Error('empty_text');
+  }
+
+  // Резолв preferred model: из options (явный запрос) или из профиля юзера
+  const preferredModelId = options?.preferredModel || user.preferred_model || null;
+  const manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
+  if (preferredModelId && !manualModel) {
+    console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
 
   const dailyLimit = normalizeDailyMessageLimit(user.daily_message_limit);
@@ -2020,7 +2091,7 @@ export const sendMessageThroughAi = async (
   let executionSystemPrompt = proSystemPrompt;
   let totalTokens = 0;
 
-if (!forceProRoute && LITE_ROUTER_ENABLED) {
+if (!forceProRoute && LITE_ROUTER_ENABLED && !manualModel) {
   const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
 Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
 
@@ -2166,7 +2237,7 @@ PRO
       max_tokens: 16384,
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
-    });
+    }, manualModel);
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
@@ -2369,7 +2440,7 @@ if (escalatedToPro) {
         max_tokens: 8192,
         thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
         clear_thinking: false
-      });
+      }, manualModel);
       const finalMessage = finalCompletion.response?.choices?.[0]?.message;
       if (finalMessage) {
         currentMessages.push(finalMessage);

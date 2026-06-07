@@ -9,6 +9,7 @@ import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
+import { Select } from '../components/Select';
 import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
@@ -77,10 +78,23 @@ export function ChatPage() {
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
+  const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
+  const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
   // Subscribe to TTS state
   useEffect(() => {
     return ttsSubscribe((id) => setTtsPlayingId(id));
+  }, []);
+
+  // Load models catalog
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.getModels();
+        setModelsCatalog(res.models);
+        setPreferredModel(res.preferred_model);
+      } catch {}
+    })();
   }, []);
 
   // Ref flag: when true, the next handleSend() call originated from voice input (wake word)
@@ -290,9 +304,9 @@ export function ChatPage() {
           setSending(false);
         }
       },
-      isVoice ? { isVoice: true } : undefined
+      isVoice ? { isVoice: true, preferredModel: preferredModel } : { preferredModel: preferredModel }
     );
-  }, [input, sending, activeChatId, attachedImages]);
+  }, [input, sending, activeChatId, attachedImages, preferredModel]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1019,6 +1033,34 @@ export function ChatPage() {
           </div>
         ) : (
           <>
+            {modelsCatalog.length > 0 && (
+              <div className={s.chatTopBar}>
+                <div className={s.modelSelector}>
+                  <span className={s.modelLabel}>Модель:</span>
+                  <Select
+                    options={[
+                      { value: '', label: 'Авто', hint: 'Автоматический выбор' },
+                      ...modelsCatalog.map(m => ({
+                        value: m.id,
+                        label: m.name,
+                        hint: m.description || undefined,
+                      })),
+                    ]}
+                    value={preferredModel || ''}
+                    onChange={async (val) => {
+                      const modelId = val || null;
+                      try {
+                        await api.setPreferredModel(modelId);
+                        setPreferredModel(modelId);
+                      } catch {
+                        toast.error('Не удалось сменить модель');
+                      }
+                    }}
+                    placeholder="Авто"
+                  />
+                </div>
+              </div>
+            )}
             <div className={s.messages}>
               {loadingMessages && (
                 <div className={s.loadingRow}>Загрузка сообщений...</div>

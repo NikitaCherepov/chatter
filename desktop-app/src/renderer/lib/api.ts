@@ -388,7 +388,7 @@ export async function streamChatMessage(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean }
+  options?: { isVoice?: boolean; preferredModel?: string | null }
 ) {
   // Update callbacks for this request
   if (callbacks) {
@@ -402,6 +402,7 @@ export async function streamChatMessage(
     if (images?.length) msg.images = images;
     if (displayManifest) msg.display_manifest = displayManifest;
     if (options?.isVoice) msg.is_voice = true;
+    if (options?.preferredModel) msg.preferred_model = options.preferredModel;
     ws.send(JSON.stringify(msg));
     return;
   }
@@ -418,7 +419,7 @@ async function streamChatMessageSSE(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean }
+  options?: { isVoice?: boolean; preferredModel?: string | null }
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
@@ -430,6 +431,7 @@ async function streamChatMessageSSE(
     if (images && images.length > 0) body.images = images;
     if (displayManifest) body.display_manifest = displayManifest;
     if (options?.isVoice) body.is_voice = true;
+    if (options?.preferredModel) body.preferred_model = options.preferredModel;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',
@@ -672,4 +674,24 @@ export async function updateMapPin(pinId: number, updates: { lat?: number; lng?:
 
 export async function deleteMapPin(pinId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/map-pins/${pinId}`, { method: 'DELETE' });
+}
+
+// ── Models ──
+
+export type ModelCatalogEntry = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null }> {
+  return apiFetch('/api/v1/models');
+}
+
+export async function setPreferredModel(modelId: string | null): Promise<{ ok: boolean; preferred_model: string | null }> {
+  return apiFetch('/api/v1/user/preferred-model', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: modelId }),
+  });
 }

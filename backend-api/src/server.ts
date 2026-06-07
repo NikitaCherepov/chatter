@@ -8,7 +8,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, create
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
@@ -108,7 +108,8 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
     persistUserText: typeof optionsRaw.persistUserText === 'string' ? optionsRaw.persistUserText : undefined,
     userTelegramChatId: Number.isFinite(Number(optionsRaw.userTelegramChatId)) ? Math.floor(Number(optionsRaw.userTelegramChatId)) : null,
     userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null,
-    assistantTelegramChatId: Number.isFinite(Number(optionsRaw.assistantTelegramChatId)) ? Math.floor(Number(optionsRaw.assistantTelegramChatId)) : null
+    assistantTelegramChatId: Number.isFinite(Number(optionsRaw.assistantTelegramChatId)) ? Math.floor(Number(optionsRaw.assistantTelegramChatId)) : null,
+    preferredModel: typeof optionsRaw.preferredModel === 'string' ? optionsRaw.preferredModel : undefined,
   };
 
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -636,6 +637,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       isDesktop,
       isVoice,
       activeMacros: enabledMacros,
+      preferredModel: req.body?.preferred_model || undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
@@ -1556,6 +1558,35 @@ app.post('/api/v1/admin/sync-plan-limits', adminMiddleware, (_req: AuthedRequest
   return res.json({ ok: true });
 });
 
+// ─── Models catalog & preferred model ────────────────────────────────────────
+
+app.get('/api/v1/models', (req: AuthedRequest, res) => {
+  const catalog = getModelsCatalog();
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  return res.json({
+    models: catalog,
+    preferred_model: user?.preferred_model || null,
+  });
+});
+
+app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const modelId = req.body?.model_id ?? null; // null = auto
+  if (modelId !== null && typeof modelId !== 'string') {
+    return res.status(400).json({ error: 'bad_model_id' });
+  }
+  // Валидация: если не null, модель должна быть в каталоге
+  if (modelId !== null) {
+    const catalog = getModelsCatalog();
+    if (!catalog.some(m => m.id === modelId)) {
+      return res.status(400).json({ error: 'model_not_found' });
+    }
+  }
+  db.prepare('UPDATE users SET preferred_model = ? WHERE id = ?').run(modelId, userId);
+  return res.json({ ok: true, preferred_model: modelId });
+});
+
 // ─── Macros CRUD ────────────────────────────────────────────────────────────
 
 app.get('/api/v1/macros', (req: AuthedRequest, res: any) => {
@@ -1777,7 +1808,7 @@ wss.on('connection', (ws, req) => {
 // ── WS chat_send handler ────────────────────────────────────────────────────
 
 async function handleWsChatSend(client: WsClient, msg: any) {
-  const { text, chat_id, images, display_manifest, is_voice } = msg;
+  const { text, chat_id, images, display_manifest, is_voice, preferred_model } = msg;
   if (!text?.trim()) {
     client.ws.send(JSON.stringify({ type: 'error', error: 'empty_text' }));
     return;
@@ -1832,6 +1863,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       isDesktop: true,
       isVoice: Boolean(is_voice),
       activeMacros: enabledMacros,
+      preferredModel: preferred_model || undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         client.ws.send(JSON.stringify({ type: 'intermediate', text: stepText }));
