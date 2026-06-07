@@ -281,6 +281,7 @@ export function SettingsModal({ onClose }: Props) {
       >
         <div className={s.header}>
           <span className={s.title}>Настройки</span>
+          <span className={s.versionLabel}>v{(window as any).electronAPI?.appVersion || ''}</span>
           <button className={s.closeBtn} onClick={onClose}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" />

@@ -272,6 +272,11 @@ function resolvePiperModel(voicesDir: string, voiceId?: string) {
 
 let mainWindow: BrowserWindow | null = null;
 
+// Register sync IPC handlers before createWindow (preload calls these at load time)
+ipcMain.on('get-app-version', (event) => {
+  event.returnValue = app.getVersion();
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,

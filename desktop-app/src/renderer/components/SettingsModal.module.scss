@@ -581,3 +581,12 @@
   color: var(--text-body);
   line-height: 1.6;
 }
+
+.versionLabel {
+  font-size: 11px;
+  color: var(--text-hint);
+  flex: 1;
+  text-align: right;
+  padding-right: 8px;
+  align-self: center;
+}

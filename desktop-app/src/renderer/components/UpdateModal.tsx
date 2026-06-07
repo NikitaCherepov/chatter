@@ -208,6 +208,11 @@ export function UpdateModal({ info, onClose }: Props) {
               </button>
             )}
           </div>
+
+          {/* Current version */}
+          <div className={s.versionInfo}>
+            Текущая версия: {electronAPI?.appVersion || '—'}
+          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>
