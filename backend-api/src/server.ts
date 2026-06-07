@@ -2094,7 +2094,12 @@ function api(method, path, body) {
     opts.body = body;
   }
   return fetch(API + path, opts).then(r => {
-    if (r.status === 401 || r.status === 403) { token = ''; localStorage.removeItem('admin_update_token'); showLogin('Session expired'); throw new Error('auth'); }
+    if (r.status === 401 || r.status === 403) {
+      console.warn('[admin] auth failed:', r.status, path);
+      token = ''; localStorage.removeItem('admin_update_token');
+      showLogin(r.status === 403 ? 'Access denied (not admin)' : 'Session expired');
+      throw new Error('auth');
+    }
     return r.json().then(j => ({ ok: r.ok, status: r.status, ...j }));
   });
 }
@@ -2128,7 +2133,7 @@ async function doLogin() {
       localStorage.setItem('admin_update_token', token);
       loadDashboard();
     } else {
-      showLogin(r.error || 'Login failed');
+      showLogin(r.error || 'Login failed (is_admin: ' + (r.user?.is_admin ?? '?') + ')');
     }
   } catch(e) { showLogin('Network error'); }
 }
