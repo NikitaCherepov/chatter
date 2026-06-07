@@ -130,6 +130,10 @@ export const adminMiddleware = (req: AuthedRequest, res: any, next: any) => {
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
   const user = getUserById(userId);
   if (!user) return res.status(401).json({ error: 'unauthorized' });
-  if (user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
-  next();
+  if (user.is_admin === 1) return next();
+
+  const linkedTelegramUser = user.linked_tg_id ? getUserById(user.linked_tg_id) : null;
+  if (linkedTelegramUser?.is_admin === 1) return next();
+
+  return res.status(403).json({ error: 'forbidden_admin_only' });
 };

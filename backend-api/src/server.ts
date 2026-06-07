@@ -22,6 +22,7 @@ import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updat
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
+import type { UserRecord } from './types.js';
 
 dotenv.config();
 
@@ -357,6 +358,26 @@ app.post('/api/v1/auth/register', (req, res) => {
   });
 });
 
+const getLinkedTelegramUser = (user: UserRecord) => {
+  return user.linked_tg_id ? getUserById(user.linked_tg_id) : null;
+};
+
+const toAuthUserDto = (user: UserRecord) => {
+  const linkedTelegramUser = getLinkedTelegramUser(user);
+  const effectiveUser = linkedTelegramUser || user;
+
+  return {
+    id: user.id,
+    name: effectiveUser.name,
+    username: effectiveUser.tg_username,
+    role: effectiveUser.role,
+    is_admin: effectiveUser.is_admin,
+    plan: effectiveUser.plan,
+    selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
+    custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
+  };
+};
+
 app.post('/api/v1/auth/login', (req, res) => {
   const login = `${req.body?.login || ''}`.trim().toLowerCase();
   const password = `${req.body?.password || ''}`;
@@ -377,14 +398,7 @@ app.post('/api/v1/auth/login', (req, res) => {
   const tokens = issueAuthTokens(user.id);
   return res.json({
     ...tokens,
-    user: {
-      id: user.id,
-      name: user.name,
-      username: user.tg_username,
-      role: user.role,
-      is_admin: user.is_admin,
-      plan: user.plan
-    }
+    user: toAuthUserDto(user)
   });
 });
 
@@ -434,7 +448,7 @@ app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
   const userId = req.authUserId!;
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ user });
+  return res.json({ user: toAuthUserDto(user) });
 });
 
 // Resolve effective user: if web user has linked_tg_id, act as TG user
