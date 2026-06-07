@@ -566,3 +566,46 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `error` | Ошибка |
 | `execute_ipc` | Запрос выполнить IPC и вернуть результат |
 | `pong` | Ответ на ping |
+
+## Система обновлений (Admin)
+
+Кастомный механизм обновлений desktop-клиента. Два типа: **minor** (ASAR Hot-Swap, ~15-30 МБ) и **major** (полный NSIS-инсталлер, ~1 ГБ).
+
+### Файловая структура
+
+```
+backend-api/updates/
+  version.json          ← манифест (создаётся админкой или вручную)
+  app.asar              ← minor-обновление (код приложения)
+  chatter-update*.exe   ← major-обновление (опционально)
+```
+
+### version.json
+
+```json
+{
+  "version": "1.4.0",
+  "type": "minor",
+  "downloadUrl": "app.asar",
+  "releaseNotes": "Что нового",
+  "size": 15728640
+}
+```
+
+- `downloadUrl` — относительный путь от `/updates/` или полный URL (для внешнего хостинга, например Яндекс.Диск)
+- `type`: `minor` (подмена app.asar через .bat) или `major` (запуск NSIS-инсталлера)
+
+### Статические файлы
+
+Папка `updates/` раздаётся через `express.static` на `/updates/`. Автоматически создаётся при старте.
+
+### Админка обновлений
+
+HTML-страница с формой для публикации обновлений. Авторизация — логин/пароль от desktop-приложения (JWT + проверка `is_admin`).
+
+- `GET /admin/updates` — HTML-страница (login → dashboard)
+- `GET /admin/updates/status` — текущий манифест + список файлов (admin JWT)
+- `POST /admin/updates/upload` — загрузка файла + генерация `version.json` (multipart/form-data, admin JWT)
+- `DELETE /admin/updates/file/:name` — удаление файла (admin JWT)
+
+Форма позволяет: загрузить файл (app.asar / .exe), указать версию, тип, release notes, либо указать внешний URL вместо файла.

@@ -82,6 +82,8 @@
   font-size: 13px;
   color: var(--text-muted);
   line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .sizeInfo {

@@ -395,3 +395,108 @@ Desktop-клиент использует **WebSocket** для двунапра�
 Все цвета/отступы через CSS-переменные в `global.scss`. Ключевые:
 - `--bg-primary/secondary`, `--border-light/medium`, `--text-primary/body/muted/hint`
 - `--accent`, `--accent-icon`, `--bg-input`, `--bg-bubble`, `--bg-modal-hover`
+
+## Система обновлений
+
+Кастомный механизм обновлений без `electron-updater`. Работает только в packaged-сборке (`app.isPackaged`).
+
+| Тип | Что скачивается | Размер | Когда использовать |
+|---|---|---|---|
+| **Minor** | новый `app.asar` | ~15-50 МБ | Код, renderer assets внутри `app.asar`, стили, main/preload |
+| **Major** | полный NSIS-инсталлер `.exe` | зависит от сборки | Electron, `extraResources`, модели, DLL, wakeword/env/runtime-ресурсы |
+
+### Архитектура
+
+```
+backend-api/updates/
+  version.json                 # manifest: version/type/downloadUrl/releaseNotes/size
+  chatter-update-<ts>.asar      # minor payload, имя генерирует админка
+  chatter-update-<ts>.exe       # major payload, если exe загружен на сервер
+
+desktop-app
+  main.ts: setupCustomUpdater()
+    3 сек после старта
+    GET /updates/version.json
+    показываем UpdateModal только если manifest.version > app.getVersion()
+    update:download -> net.fetch + update:progress -> temp file
+    update:install-minor -> backup app.asar -> hidden helper -> copy -> restart
+    update:install-major -> run downloaded .exe /S -> quit
+```
+
+Minor-обновление скачивается во временный файл с расширением `.tmp`, даже если payload на сервере называется `.asar`. Это важно: Electron патчит `fs` для `.asar`-путей, поэтому недокачанный временный файл нельзя хранить как `*.asar`.
+
+Для операций с установленным `resources/app.asar` используется `original-fs`, иначе Electron воспринимает путь как виртуальный ASAR-пакет.
+
+Hot-swap helper:
+- создаётся `.ps1` с логикой ожидания текущего PID, копирования и рестарта;
+- создаётся `.vbs` launcher, который скрыто запускает PowerShell;
+- логи пишет в `app.getPath('userData')/updater-hotswap.log`;
+- основной лог апдейтера: `app.getPath('userData')/updater.log`.
+
+### Ключевые файлы
+
+- `src/main/main.ts` — `setupCustomUpdater()`: проверка, скачивание, установка (4 IPC-хендлера)
+- `src/main/preload.ts` — `updateCheck`, `updateDownload`, `updateInstallMinor/Major`, `onUpdateAvailable`, `onUpdateProgress`
+- `src/renderer/components/UpdateModal.tsx` — модалка с прогресс-баром, бейджами minor/major, release notes
+- `src/renderer/App.tsx` — `UpdateListener`: подписка на `update:available` при старте
+- `backend-api/src/server.ts` — `/admin/updates*`, upload через `busboy`, генерация `version.json`
+
+### Версия приложения
+
+- `package.json` → `version` → `app.getVersion()`
+- Manifest считается обновлением только если `version` строго новее текущей версии.
+- Если на сервере лежит та же или более старая версия, модалка не показывается.
+
+### Публикация обновления
+
+**Minor:**
+1. `package.json` → `"version": "1.4.0"`
+2. `npm run build:win`
+3. Из `release/*.zip` достать `resources/app.asar`
+4. Через админку `http://server:3050/admin/updates` загрузить этот `app.asar`, выбрать `type: minor`, указать версию и release notes.
+
+Админка сохранит файл как `chatter-update-<timestamp>.asar` и создаст `version.json`:
+
+```json
+{
+  "version": "1.4.0",
+  "type": "minor",
+  "downloadUrl": "chatter-update-1780866466318.asar",
+  "releaseNotes": "...",
+  "size": 49467302
+}
+```
+
+Вручную можно сделать то же самое: положить `.asar` в `backend-api/updates/` и прописать его имя в `downloadUrl`.
+
+**Major:**
+1. `package.json` → `"version": "2.0.0"`
+2. `npm run build:win`
+3. Через админку загрузить NSIS `.exe` + `type: major`, либо указать внешний URL.
+
+Для major нужна прямая ссылка на `.exe`. Публичная страница облака/Яндекс.Диска не подходит: клиент скачает HTML-страницу вместо инсталлера. URL должен заканчиваться на `.exe`, иначе клиент сохранит файл как `.tmp` и `update:install-major` вернёт `installer_must_be_exe`.
+
+### Админка обновлений (backend-api)
+
+- `GET /admin/updates` — HTML-страница с формой (логин/пароль desktop/API-аккаунта)
+- `GET /admin/updates/status` — текущий манифест + список файлов (admin JWT)
+- `POST /admin/updates/upload` — загрузка файла + генерация `version.json` (multipart/form-data)
+- `DELETE /admin/updates/file/:name` — удаление файла
+
+Админ-доступ проходит, если `is_admin = 1` у самого desktop/API user или у привязанного Telegram user (`linked_tg_id`).
+
+`version.json` не показывается в списке удаляемых файлов: его содержимое отображается наверху как `Current`.
+
+### Что можно обновлять minor-ом
+
+Minor подходит для всего, что живёт внутри `app.asar`:
+- React/renderer code;
+- main/preload code;
+- CSS/SCSS;
+- assets, импортируемые Vite, например `src/renderer/assets/faces`.
+
+Major нужен для всего, что лежит вне `app.asar`:
+- `extraResources` (`models`, `wakeword`, `.venv-wakeword`, `sounds`);
+- новые exe/dll/native/runtime-файлы;
+- изменения installer/electron-builder config;
+- обновление Electron или зависимостей, требующих новой unpacked/native структуры.
