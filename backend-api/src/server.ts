@@ -163,6 +163,35 @@ app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
   }
 });
 
+// ── Internal: Models ─────────────────────────────────────────────────────────
+
+app.get('/internal/models', internalAuth, (_req, res) => {
+  const catalog = getModelsCatalog();
+  return res.json({ models: catalog });
+});
+
+app.get('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const catalog = getModelsCatalog();
+  return res.json({ models: catalog, preferred_model: user.preferred_model || null });
+});
+
+app.put('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const modelId = req.body?.model_id ?? null;
+  if (modelId !== null && typeof modelId !== 'string') return res.status(400).json({ error: 'bad_model_id' });
+  if (modelId !== null) {
+    const catalog = getModelsCatalog();
+    if (!catalog.some(m => m.id === modelId)) return res.status(400).json({ error: 'model_not_found' });
+  }
+  db.prepare('UPDATE users SET preferred_model = ? WHERE id = ?').run(modelId, userId);
+  return res.json({ ok: true, preferred_model: modelId });
+});
+
 app.post('/internal/ai/generate-image', internalAuth, async (req, res) => {
   const userId = Number(req.body?.user_id);
   const prompt = `${req.body?.prompt || ''}`.trim();

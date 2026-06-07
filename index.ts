@@ -650,6 +650,7 @@ type UserRecord = {
     total_image_gen_count: number;
     context_window: number;
     context_window_max: number;
+    preferred_model?: string | null;
 };
 type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
@@ -700,7 +701,7 @@ type NoteStatsRecord = {
     notes_count: number;
     notes_chars: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'help';
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
     label: string;
@@ -715,6 +716,7 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'rename', label: '✏️ Переименовать себя', adminOnly: false, row: 2 },
     { id: 'prompts', label: '🧠 Промпты', adminOnly: false, row: 2 },
     { id: 'current_prompt', label: '✅ Мой промпт', adminOnly: false, row: 3 },
+    { id: 'model', label: '🤖 Сменить модель', adminOnly: false, row: 3 },
     { id: 'context_size', label: '🗂 Размер контекста', adminOnly: false, row: 3 },
     { id: 'add', label: '➕ Добавить пользователя', adminOnly: true, row: 3 },
     { id: 'remove', label: '➖ Удалить пользователя', adminOnly: true, row: 4 },
@@ -1405,6 +1407,20 @@ const runBackendUpdateCustomPrompt = async (userId: number, content: string) => 
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/custom`, { content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
+};
+
+type ModelsCatalogEntry = { id: string; name: string; description: string };
+
+const runBackendGetModels = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/preferred-model`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { models: ModelsCatalogEntry[]; preferred_model: string | null };
+};
+
+const runBackendSetPreferredModel = async (userId: number, modelId: string | null) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/preferred-model`, { model_id: modelId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: boolean; preferred_model: string | null };
 };
 
 const runBackendResetUsersPromptIfDeleted = async (promptId: number) => {
@@ -2496,6 +2512,9 @@ const showMenu = async (ctx: any) => {
     const imageGenLine = userRecord
         ? `🎨 Картинок сегодня: ${userRecord.daily_image_gen_count ?? 0}/${userRecord.daily_image_gen_limit ?? 0}`
         : `🎨 Картинок сегодня: 0/0`;
+    const modelLine = userRecord?.preferred_model
+        ? `🤖 Модель: ${userRecord.preferred_model}`
+        : '🤖 Модель: Авто';
     const notesLine = NOTES_WEBAPP_URL
         ? '📝 Заметки: доступны в кнопке WebApp'
         : '📝 Заметки: команды /note_add, /notes, /note_find, /note_delete';
@@ -2517,6 +2536,7 @@ ${contextLine}
 ${messageLimitLine}
 ${webLimitLine}
 ${imageGenLine}
+${modelLine}
 ${chatLine}
 ${notesLine}
 ${promptLine}
@@ -2627,6 +2647,38 @@ const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id:
 
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
+};
+
+// ── Model selector (TG) ──────────────────────────────────────────────────────
+
+const buildModelListKeyboard = (models: ModelsCatalogEntry[], currentModelId: string | null) => {
+    const rows: any[] = [];
+    // Авто — всегда первый
+    const autoLabel = !currentModelId ? '✅ Авто' : 'Авто';
+    rows.push([Markup.button.callback(autoLabel, 'model:select:auto')]);
+    // Модели из каталога
+    for (const m of models) {
+        const label = m.id === currentModelId ? `✅ ${m.name}` : m.name;
+        rows.push([Markup.button.callback(label, `model:select:${m.id}`)]);
+    }
+    rows.push([Markup.button.callback('❌ Отмена', 'model:cancel')]);
+    return Markup.inlineKeyboard(rows);
+};
+
+const handleModelList = async (ctx: any) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    try {
+        const data = await runBackendGetModels(userId);
+        if (!data.models.length) {
+            await ctx.reply('Ручной выбор моделей недоступен. Используется автоматический режим.');
+            return;
+        }
+        const text = `🤖 Текущая модель: ${data.preferred_model || 'Авто'}\n\nВыберите модель:`;
+        await ctx.reply(text, buildModelListKeyboard(data.models, data.preferred_model));
+    } catch {
+        await ctx.reply('Не удалось загрузить список моделей.');
+    }
 };
 
 const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, prompt: PromptRecord) => {
@@ -3799,7 +3851,7 @@ bot.on('location', async (ctx) => {
     return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_size|prompt_admin|pending|banned|mail|notes|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -3872,6 +3924,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|context_
 
         const isDefault = activePrompt.is_default === 1 ? ' (default)' : '';
         await ctx.reply(`Текущий промпт: ${activePrompt.name}${isDefault}\nID: ${activePrompt.id}`);
+        return;
+    }
+
+    if (actionId === 'model') {
+        await handleModelList(ctx);
         return;
     }
 
@@ -4694,6 +4751,28 @@ bot.action('prompt:cancel', async (ctx) => {
         customPromptEditFlows.delete(userId);
     }
     await ctx.editMessageText('Выбор промпта отменён.');
+    await ctx.answerCbQuery();
+});
+
+// ── Model selector callbacks ─────────────────────────────────────────────────
+
+bot.action(/^model:select:(.+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    const rawId = (ctx as any).match[1] as string;
+    const modelId = rawId === 'auto' ? null : rawId;
+    try {
+        await runBackendSetPreferredModel(userId, modelId);
+        const label = modelId || 'Авто';
+        await ctx.editMessageText(`🤖 Модель изменена на: ${label}`);
+        await ctx.answerCbQuery(`Модель: ${label}`);
+    } catch {
+        await ctx.answerCbQuery('Ошибка при смене модели');
+    }
+});
+
+bot.action('model:cancel', async (ctx) => {
+    await ctx.editMessageText('Выбор модели отменён.');
     await ctx.answerCbQuery();
 });
 
