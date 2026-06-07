@@ -569,16 +569,25 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 ## Система обновлений (Admin)
 
-Кастомный механизм обновлений desktop-клиента. Два типа: **minor** (ASAR Hot-Swap, ~15-30 МБ) и **major** (полный NSIS-инсталлер, ~1 ГБ).
+Кастомный механизм обновлений desktop-клиента. Сервер хранит `version.json` и payload-файлы, а desktop-клиент сам проверяет манифест и устанавливает обновление.
+
+Типы обновлений:
+
+| Тип | Payload | Когда использовать |
+|---|---|---|
+| `minor` | новый `app.asar` | Код приложения и assets внутри `app.asar` |
+| `major` | NSIS `.exe` | Electron, native/unpacked files, `extraResources`, модели, DLL |
 
 ### Файловая структура
 
 ```
 backend-api/updates/
-  version.json          ← манифест (создаётся админкой или вручную)
-  app.asar              ← minor-обновление (код приложения)
-  chatter-update*.exe   ← major-обновление (опционально)
+  version.json                 # манифест, создаётся админкой или вручную
+  chatter-update-<ts>.asar      # minor payload, имя генерирует админка
+  chatter-update-<ts>.exe       # major payload, если exe загружен на сервер
 ```
+
+Папка `updates/` раздаётся через `express.static` на `/updates/` и автоматически создаётся при старте.
 
 ### version.json
 
@@ -586,26 +595,49 @@ backend-api/updates/
 {
   "version": "1.4.0",
   "type": "minor",
-  "downloadUrl": "app.asar",
+  "downloadUrl": "chatter-update-1780866466318.asar",
   "releaseNotes": "Что нового",
-  "size": 15728640
+  "size": 49467302
 }
 ```
 
-- `downloadUrl` — относительный путь от `/updates/` или полный URL (для внешнего хостинга, например Яндекс.Диск)
-- `type`: `minor` (подмена app.asar через .bat) или `major` (запуск NSIS-инсталлера)
+- `version` — версия, с которой desktop сравнивает `app.getVersion()`. Обновление показывается только если manifest version новее текущей.
+- `type` — `minor` или `major`.
+- `downloadUrl` — имя файла внутри `/updates/` или полный прямой URL.
+- `releaseNotes` — текст в модалке обновления.
+- `size` — размер payload в байтах, используется для отображения.
 
-### Статические файлы
-
-Папка `updates/` раздаётся через `express.static` на `/updates/`. Автоматически создаётся при старте.
+Для `major` внешний URL должен быть прямой ссылкой на `.exe`. Публичная страница облака не подходит: клиент скачает HTML вместо инсталлера. Если URL не заканчивается на `.exe`, desktop сохранит файл как `.tmp` и откажется устанавливать major.
 
 ### Админка обновлений
 
-HTML-страница с формой для публикации обновлений. Авторизация — логин/пароль от desktop-приложения (JWT + проверка `is_admin`).
+HTML-страница с формой для публикации обновлений.
 
 - `GET /admin/updates` — HTML-страница (login → dashboard)
 - `GET /admin/updates/status` — текущий манифест + список файлов (admin JWT)
 - `POST /admin/updates/upload` — загрузка файла + генерация `version.json` (multipart/form-data, admin JWT)
 - `DELETE /admin/updates/file/:name` — удаление файла (admin JWT)
 
-Форма позволяет: загрузить файл (app.asar / .exe), указать версию, тип, release notes, либо указать внешний URL вместо файла.
+Форма позволяет загрузить файл (`.asar`, `.exe`, `.zip`), указать версию, тип, release notes, либо указать внешний URL вместо файла.
+
+Upload реализован через `busboy`: файл пишется потоково в `updates/`, после завершения записи создаётся `version.json`.
+
+Админ-доступ:
+- пользователь логинится логином/паролем desktop/API-аккаунта через `/api/v1/auth/login`;
+- доступ разрешён, если `is_admin = 1` у самого desktop/API user или у привязанного Telegram user (`linked_tg_id`);
+- `version.json` не показывается в списке файлов для удаления, его содержимое отображается наверху как `Current`.
+
+### Публикация minor
+
+1. В `desktop-app/package.json` поднять `version`.
+2. Собрать desktop: `npm run build:win`.
+3. Достать `resources/app.asar` из release zip/unpacked-сборки.
+4. Открыть `/admin/updates`, выбрать `type: minor`, загрузить `app.asar`.
+5. Админка сохранит файл как `chatter-update-<timestamp>.asar` и обновит `version.json`.
+
+### Публикация major
+
+1. В `desktop-app/package.json` поднять `version`.
+2. Собрать desktop: `npm run build:win`.
+3. В `/admin/updates` выбрать `type: major`.
+4. Загрузить NSIS `.exe` или указать прямой `.exe` URL.
