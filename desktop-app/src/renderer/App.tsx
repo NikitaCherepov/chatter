@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthPage } from './pages/AuthPage';
 import { ChatPage } from './pages/ChatPage';
 import { useAuth, AuthProvider } from './lib/auth';
+import { UpdateModal } from './components/UpdateModal';
 import s from './App.module.scss';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -51,6 +52,36 @@ export function App() {
         </Routes>
       </HashRouter>
       <Toaster position="top-right" richColors closeButton />
+      <UpdateListener />
     </AuthProvider>
+  );
+}
+
+/** Listens for auto-check updates from main process and shows modal */
+function UpdateListener() {
+  const [updateInfo, setUpdateInfo] = useState<{
+    version: string;
+    type: 'minor' | 'major';
+    downloadUrl: string;
+    releaseNotes: string;
+    size: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api) return;
+
+    return api.onUpdateAvailable((info: any) => {
+      setUpdateInfo(info);
+    });
+  }, []);
+
+  if (!updateInfo) return null;
+
+  return (
+    <UpdateModal
+      info={updateInfo}
+      onClose={() => setUpdateInfo(null)}
+    />
   );
 }

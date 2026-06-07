@@ -56,4 +56,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Macro: read directory listing (read-only, ls-like)
   readDirectory: (targetPath: string) =>
     ipcRenderer.invoke('read-directory', targetPath),
+
+  // ── Custom Updater ──────────────────────────────────────────────────────
+
+  // Check server for available update
+  updateCheck: () =>
+    ipcRenderer.invoke('update:check'),
+
+  // Download update file (asar or exe) with progress events
+  updateDownload: (downloadUrl: string) =>
+    ipcRenderer.invoke('update:download', downloadUrl),
+
+  // Install minor update (ASAR hot-swap via bat script + restart)
+  updateInstallMinor: (tempPath: string) =>
+    ipcRenderer.invoke('update:install-minor', tempPath),
+
+  // Install major update (run full NSIS installer + quit)
+  updateInstallMajor: (tempPath: string) =>
+    ipcRenderer.invoke('update:install-major', tempPath),
+
+  // Listen for auto-check result on startup
+  onUpdateAvailable: (callback: (info: { version: string; type: string; downloadUrl: string; releaseNotes: string; size: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, info: unknown) => callback(info as any);
+    ipcRenderer.on('update:available', handler);
+    return () => ipcRenderer.removeListener('update:available', handler);
+  },
+
+  // Listen for download progress
+  onUpdateProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: unknown) => callback(progress as any);
+    ipcRenderer.on('update:progress', handler);
+    return () => ipcRenderer.removeListener('update:progress', handler);
+  },
 });

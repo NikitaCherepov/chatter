@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
@@ -18,7 +18,6 @@
     "@dnd-kit/utilities": "^3.2.2",
     "docx": "^9.6.1",
     "dotenv": "^17.4.2",
-    "electron-updater": "^6.8.3",
     "ffmpeg-static": "^5.3.0",
     "file-saver": "^2.0.5",
     "fluent-ffmpeg": "^2.1.3",
@@ -94,14 +93,8 @@
         ]
       }
     ],
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "http://***REMOVED_IP***:3050/updates/win/"
-      }
-    ],
     "win": {
-      "target": "nsis"
+      "target": ["nsis", "zip"]
     }
   }
 }
