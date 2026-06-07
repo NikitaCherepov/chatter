@@ -15,6 +15,7 @@ import { getCleanTextFromUrl } from './web-reader.js';
 import { runImageGeneration } from './image-generation.js';
 import { sendIpcToDesktop, isDesktopOnline } from '../ws-clients.js';
 import { findTransitRoute, searchNearby } from './transit.js';
+import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
 
 dotenv.config();
@@ -1057,6 +1058,23 @@ export const toolDefinitions = [
         required: ['prompt']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_exchange_rates',
+      description: 'Получить актуальный курс валют ЦБ РФ (доллар, евро, юань и т.д.) и динамику изменения по сравнению с предыдущим днём. Используй когда пользователь спрашивает про курс валют, конвертацию, стоимость доллара/евро и т.п.',
+      parameters: {
+        type: 'object',
+        properties: {
+          currency_codes: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Массив трехбуквенных кодов валют: USD, EUR, CNY, KZT и т.д. Если пользователь не указал конкретную валюту — верни USD и EUR.'
+          }
+        }
+      }
+    }
   }
 ] as const;
 
@@ -1962,6 +1980,24 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return JSON.stringify({ status: 'success', message: `Команда ${action} выполнена.`, target });
   }
 
+  if (toolName === 'get_exchange_rates') {
+    const codes: string[] = Array.isArray(parsed.currency_codes)
+      ? parsed.currency_codes.filter((c: any) => typeof c === 'string' && c.trim())
+      : [];
+    const requestedCodes = codes.length > 0 ? codes.map((c: string) => c.toUpperCase().trim()) : ['USD', 'EUR'];
+    const rows = getCurrencyRates(requestedCodes);
+    if (rows.length === 0) {
+      return 'Курсы валют пока недоступны. Данные ещё не загружены с ЦБ РФ — попробуй позже.';
+    }
+    const lines = rows.map(formatRateForAi);
+    const missingCodes = requestedCodes.filter(c => !rows.some(r => r.code === c));
+    const parts = [`Курсы ЦБ РФ на сегодня:`, ...lines];
+    if (missingCodes.length > 0) {
+      parts.push(`Валюта не найдена: ${missingCodes.join(', ')}`);
+    }
+    return parts.join('\n');
+  }
+
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
@@ -1991,6 +2027,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'execute_macro') return 'Запускаю макрос...';
   if (toolName === 'explore_fs') return 'Читаю директорию...';
   if (toolName === 'suggest_macro') return 'Предлагаю сохранить макрос...';
+  if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');

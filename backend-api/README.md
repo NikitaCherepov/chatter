@@ -342,6 +342,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `delete_from_cold_memory` | Удаление из векторного архива |
 | `random_roll` | Бросок монетки/кубиков |
 | `generate_image` | Генерация изображения (ProxyAPI, `b64_json`). Автоматически маршрутизируется через PRO. |
+| `get_exchange_rates` | Курсы валют ЦБ РФ с динамикой изменения. По умолчанию возвращает USD и EUR. |
 
 ### Клиентские инструменты (desktop-only)
 
@@ -478,6 +479,23 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - Минимальная длина запроса: 3 символа.
 - Результаты ограничены `LIMIT` (по умолчанию 20, максимум 50).
 - Клиент использует debounce (300 мс) -- не более ~3 запросов/сек.
+
+## Курсы валют (ЦБ РФ)
+
+Автоматическое обновление курсов валют с ЦБ РФ. Бесплатно, без ключей авторизации.
+
+### Архитектура
+
+- **Источник:** `https://www.cbr.ru/scripts/XML_daily.asp` — XML с курсами всех валют.
+- **Парсер:** `fast-xml-parser`. Нюанс: ЦБ отдаёт значения с запятой (`89,1234`) → `.replace(',', '.')` → `parseFloat`.
+- **Хранение:** таблица `currency_rates` — `code` (PK), `name`, `value`, `prev_value`, `nominal`, `updated_at`. При обновлении старое `value` перетекает в `prev_value`.
+- **Обновление:** scheduler дергает API при старте, затем каждый день в ~14:00 МСК (11:00 UTC) — ЦБ обновляет курсы примерно в это время.
+- **Сервис:** `services/currency.ts` — `fetchAndSaveCurrencyRates()`, `getCurrencyRates()`, `formatRateForAi()`.
+
+### AI-инструмент
+
+- `get_exchange_rates` — возвращает курсы с динамикой. Если код не указан — по умолчанию USD и EUR.
+- Формат ответа: `USD (Доллар США): 89.5000 RUB (-0.5000)`
 
 ## Changelog
 

@@ -190,3 +190,16 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_macros_user_id ON macros(user_id)");
 // ── Safe migrations (add columns if missing) ──
 try { db.exec("ALTER TABLE macros ADD COLUMN return_output INTEGER NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
 
+// ── Currency rates (CBR) ──────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS currency_rates (
+    code TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    value REAL NOT NULL,
+    prev_value REAL,
+    nominal INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL
+  )
+`);
+

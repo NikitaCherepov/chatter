@@ -7,6 +7,7 @@ import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
 import { getDueTasks, updateTaskNextExecution, updateTaskStatus } from './tasks.js';
 import { sendMessageThroughAi } from './ai.js';
 import { db } from '../db.js';
+import { fetchAndSaveCurrencyRates } from './currency.js';
 
 const PRO_MODEL_CHAIN = (process.env.TIMEWEB_MODEL || 'gemini/gemini-3.1-flash-lite-preview')
   .split(',')
@@ -395,4 +396,30 @@ export const startTaskScheduler = () => {
       console.error('[backend-scheduler] plan expiry check error:', err);
     }
   }, 30 * 60 * 1000);
+
+  // ── Currency rates (CBR) ── Fetch on startup, then daily at ~14:00 MSK (11:00 UTC)
+  const scheduleCurrencyFetch = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(11, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) {
+      next.setUTCDate(next.getUTCDate() + 1);
+    }
+    const delay = Math.max(60_000, next.getTime() - now.getTime());
+
+    setTimeout(async () => {
+      try {
+        await fetchAndSaveCurrencyRates();
+      } catch (err) {
+        console.error('[backend-scheduler] currency fetch error:', err);
+      }
+      scheduleCurrencyFetch();
+    }, delay);
+  };
+
+  // Initial fetch on startup (don't wait until 14:00)
+  fetchAndSaveCurrencyRates().catch(err => {
+    console.error('[backend-scheduler] initial currency fetch error:', err);
+  });
+  scheduleCurrencyFetch();
 };
