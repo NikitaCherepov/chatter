@@ -44,6 +44,18 @@ npm run logs:api
 - `TIMEWEB_PRO_ENDPOINTS` - дополнительные PRO-эндпоинты (формат: `base_url|api_key|models;...`).
 - `TIMEWEB_LITE_ENDPOINTS` - дополнительные LITE-эндпоинты (аналогично).
 
+### Ручной выбор модели (опционально)
+
+Позволяет юзеру выбирать конкретную модель вместо авто-роутинга. Независимо от PRO/LITE провайдеров.
+
+- `MODELS_MANUAL` - список моделей для ручного выбора. Формат: `base_url|api_key|api_model_name|display_name|description|unique_id;...`
+  - Пример: `https://api.timeweb.com|sk-xxx|gpt-4o|GPT-4o (Timeweb)|Надёжная и быстрая|tw-gpt4o;https://api.deepseek.com|sk-yyy|deepseek-chat|DeepSeek|Дешёвая, но медленная|ds-chat`
+  - `api_model_name` — реальное имя модели для API-запроса
+  - `unique_id` — уникальный идентификатор для клиента (может не совпадать с api_model_name)
+  - Если не задан — селектор моделей не отображается
+- `preferred_model` (в таблице `users`) — `NULL` = авто, `"tw-gpt4o"` = конкретная модель
+- Если выбранная модель недоступна — fallback на авто-роутинг + уведомление юзеру
+
 ### AI-провайдеры (vision, опционально)
 
 Vision-запросы (анализ фото) могут использовать отдельные модели/ключи. Если не заданы — fallback на основные PRO/LITE провайдеры.
@@ -211,6 +223,11 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - `POST /api/v1/macro/describe`
   - Ввод: `{ commands: string[], current_title?, current_description? }`
   - Вывод: `{ title: string, description: string }` — ИИ предлагает название/описание (лёгкий LITE-запрос)
+- `GET /api/v1/models`
+  - Вывод: `{ models: [{ id, name, description }], preferred_model }` — каталог моделей для ручного выбора + текущая модель юзера
+- `PUT /api/v1/user/preferred-model`
+  - Ввод: `{ model_id: string | null }` (null = авто)
+  - Вывод: `{ ok, preferred_model }`
 
 ### Vector Memory (JWT, feature-flag)
 
@@ -279,6 +296,11 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - `PUT /internal/users/:id/prompt/custom`
 - Сервисные:
   - `POST /internal/daily-reset` -> `{ ok: true }`
+  - `POST /internal/reset-daily-counters` -> `{ ok: true }` — ручной сброс дневных счётчиков всех пользователей
+- Models (ручной выбор):
+  - `GET /internal/models` -> `{ models: [{ id, name, description }] }`
+  - `GET /internal/users/:id/preferred-model` -> `{ models, preferred_model }`
+  - `PUT /internal/users/:id/preferred-model` -> `{ model_id: string | null }` -> `{ ok, preferred_model }`
 
 ## Лимиты по планам
 
