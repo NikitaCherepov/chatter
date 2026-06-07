@@ -334,8 +334,8 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `find_transit_route` | Поиск маршрутов общественного транспорта (автобус, маршрутка, троллейбус, трамвай) через Overpass API. Принимает координаты точки А и Б, опционально `radius_meters` (по умолчанию 500). Auto-retry с расширением радиуса если ничего не найдено. Возвращает текстовое описание маршрутов (доступно всем клиентам) + отправляет визуал на карту через SSE (desktop-only). |
 | `search_nearby` | Поиск заведений и объектов (POI) рядом с точкой по названию через Overpass API. Принимает координаты, текст запроса (`query`) и `radius_meters` (по умолчанию 3000). Ищет по `name` (regex, case-insensitive) среди nodes и ways. Возвращает список мест с адресом/часами (доступно всем клиентам) + отправляет маркеры на карту через SSE (desktop-only). Auto-retry с расширением радиуса. |
 | `list_my_macros` | Показывает список включённых макросов пользователя (id, title, description, commands). Lazy loading — AI вызывает инструмент, когда упоминается закреплённый макрос или пользователь просит выполнить макрос. |
-| `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). |
-| `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). |
+| `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). Доступен и из Telegram: если десктоп онлайн — команды пушатся через WS. |
+| `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). Доступен и из Telegram при подключённом десктопе. |
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
 
 ### Система макросов
@@ -361,6 +361,15 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 1. **Pinned-подсказка** — если у макроса `pinned: true`, его название добавляется в системный промпт: `[ЗАКРЕПЛЁННЫЕ МАКРОСЫ] У пользователя есть ... "Макрос 1", "Макрос 2". Если запрос совпадает — вызови list_my_macros.`
 2. **Lazy loading** — AI вызывает `list_my_macros` чтобы увидеть полный список с командами, затем `execute_macro` для запуска конкретного макроса
 3. Макросы загружаются из БД (`getEnabledMacros(userId)`) при каждом запросе, не передаются клиентом
+4. Макросы доступны из всех клиентов (desktop, Telegram), а не только из desktop
+
+**TG→Desktop push (запуск макроса из Telegram):**
+- Эндпоинт `/internal/ai/send` передаёт `activeMacros` в `sendMessageThroughAi`
+- Если AI вызывает `execute_macro` (fire-and-forget), результат записывается в `desktopActionSink`
+- После возврата `sendMessageThroughAi`, server.ts проверяет `result.desktop_action` и `isDesktopOnline(userId)`
+- Если десктоп подключён через WS — `desktop_action` пушится через WebSocket
+- Десктоп-клиент при получении `desktop_action` с `action === 'execute_macro'` выполняет команды через `electronAPI.executeCommands()`
+- Условие: TG-аккаунт должен быть привязан к desktop-аккаунту (через `linked_tg_id`)
 
 **Поток выполнения макроса:**
 1. AI видит pinned-подсказку или пользователь просит запустить макрос

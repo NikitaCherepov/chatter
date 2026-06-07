@@ -290,10 +290,21 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 AI: execute_macro(macro_id)
   → Backend: находит макрос в БД, формирует WS/SSE payload
   → WS/SSE: desktop_action { action: 'execute_macro', value: { commands } }
-  → tools.ts handleDesktopAction()
-  → IPC executeCommands(commands)
+  → api.ts onmessage: electronAPI.executeCommands(commands) + callback в React
   → main.ts: exec() для каждой команды
 ```
+
+**Макрос из Telegram (TG→Desktop push):**
+```
+TG пользователь: "Запусти макрос X"
+  → Backend /internal/ai/send → sendMessageThroughAi (с activeMacros)
+  → AI: execute_macro → desktopActionSink.value = payload
+  → result.desktop_action возвращается в server.ts
+  → server.ts: isDesktopOnline(userId) → WS push { type: 'desktop_action', action: 'execute_macro', value: { commands } }
+  → api.ts onmessage: electronAPI.executeCommands(commands)
+  → main.ts: exec() для каждой команды
+```
+Условие: десктоп-клиент должен быть подключён через WS, а TG-аккаунт — привязан к аккаунту desktop. Если десктоп не подключён — макрос не выполнится (fire-and-forget без получателя).
 
 **Макрос с return_output (через WS):**
 ```
