@@ -474,7 +474,6 @@
 .chatTopBar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   padding: 8px 10%;
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
@@ -490,6 +489,10 @@
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.modelSelectWrap {
+  width: 220px;
 }
 
 // ====== MESSAGES ======

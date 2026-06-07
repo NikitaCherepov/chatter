@@ -227,6 +227,7 @@ export type ChatSendResponse = {
   chat_id: number;
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;
+  model_fallback_notice?: string | null;
 };
 
 export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[], displayManifest?: { moods: string[]; reactions: string[] }): Promise<ChatSendResponse> {

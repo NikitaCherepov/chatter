@@ -254,6 +254,9 @@ export function ChatPage() {
           dispatchMapData(data);
         },
         onDone: (res) => {
+          if (res.model_fallback_notice) {
+            toast.warning(res.model_fallback_notice, { duration: 5000 });
+          }
           // Build images array from generated_images
           const genImages: api.MessageImage[] | undefined = res.generated_images?.length
             ? res.generated_images.map(img => ({
@@ -1036,28 +1039,30 @@ export function ChatPage() {
             {modelsCatalog.length > 0 && (
               <div className={s.chatTopBar}>
                 <div className={s.modelSelector}>
-                  <span className={s.modelLabel}>Модель:</span>
-                  <Select
-                    options={[
-                      { value: '', label: 'Авто', hint: 'Автоматический выбор' },
-                      ...modelsCatalog.map(m => ({
-                        value: m.id,
-                        label: m.name,
-                        hint: m.description || undefined,
-                      })),
-                    ]}
-                    value={preferredModel || ''}
-                    onChange={async (val) => {
-                      const modelId = val || null;
-                      try {
-                        await api.setPreferredModel(modelId);
-                        setPreferredModel(modelId);
-                      } catch {
-                        toast.error('Не удалось сменить модель');
-                      }
-                    }}
-                    placeholder="Авто"
-                  />
+                  <label className={s.modelLabel}>Модель:</label>
+                  <div className={s.modelSelectWrap}>
+                    <Select
+                      options={[
+                        { value: '', label: 'Авто', hint: 'Автоматический выбор' },
+                        ...modelsCatalog.map(m => ({
+                          value: m.id,
+                          label: m.name,
+                          hint: m.description || undefined,
+                        })),
+                      ]}
+                      value={preferredModel || ''}
+                      onChange={async (val) => {
+                        const modelId = val || null;
+                        try {
+                          await api.setPreferredModel(modelId);
+                          setPreferredModel(modelId);
+                        } catch {
+                          toast.error('Не удалось сменить модель');
+                        }
+                      }}
+                      placeholder="Авто"
+                    />
+                  </div>
                 </div>
               </div>
             )}

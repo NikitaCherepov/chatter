@@ -1412,7 +1412,7 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
-const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry): Promise<CompletionMeta> => {
+const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry): Promise<CompletionMeta & { manualFallback?: boolean }> => {
   // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
   if (manualModel) {
     try {
@@ -1423,12 +1423,12 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
         usedProvider: 'manual',
         baseURLUsed: manualModel.baseURL,
         failedModels: completion.failedModels,
+        manualFallback: false,
       };
     } catch (err: any) {
-      throw Object.assign(new Error('manual_model_failed'), {
-        failedModels: [manualModel.apiModelName],
-        cause: err,
-      });
+      console.warn(`[ai] manual model "${manualModel.apiModelName}" failed, falling back to auto`, err?.message || err);
+      // Не бросаем ошибку — fallback на обычный роутинг
+      // Продолжаем выполнение ниже как будто manualModel не задан
     }
   }
 
@@ -2059,7 +2059,7 @@ export const sendMessageThroughAi = async (
 
   // Резолв preferred model: из options (явный запрос) или из профиля юзера
   const preferredModelId = options?.preferredModel || user.preferred_model || null;
-  const manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
+  let manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
   if (preferredModelId && !manualModel) {
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
@@ -2268,6 +2268,12 @@ PRO
       }
       parts.push(`Ответ получен от ${completion.usedProvider}/${completion.usedModel}.`);
       modelFallbackNotice = `⚙️ ${parts.join(' ')}`;
+    }
+    if (completion.manualFallback && !modelFallbackNoticeSent) {
+      modelFallbackNoticeSent = true;
+      modelFallbackNotice = `⚙️ Выбранная модель недоступна. Ответ получен автоматически от ${completion.usedProvider}/${completion.usedModel}.`;
+      // Не пытаться снова стучаться в упавшую модель в последующих итерациях
+      manualModel = undefined;
     }
     usedModel = completion.usedModel;
     usedProvider = completion.usedProvider;
