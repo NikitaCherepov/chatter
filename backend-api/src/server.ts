@@ -1592,6 +1592,108 @@ app.post('/api/v1/admin/sync-plan-limits', adminMiddleware, (_req: AuthedRequest
   return res.json({ ok: true });
 });
 
+// ── Admin Update Manager ───────────────────────────────────────────────────
+
+// Serve admin page
+app.get('/admin/updates', (_req: any, res: any) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(ADMIN_UPDATES_HTML);
+});
+
+// Get current version.json status
+app.get('/admin/updates/status', authMiddleware, adminMiddleware, (_req: AuthedRequest, res: any) => {
+  const versionPath = path.join(updatesPath, 'version.json');
+  if (!fs.existsSync(versionPath)) {
+    return res.json({ current: null, files: [] });
+  }
+  try {
+    const current = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
+    const files = fs.readdirSync(updatesPath).filter(f => f !== 'version.json');
+    return res.json({ current, files });
+  } catch {
+    return res.json({ current: null, files: [] });
+  }
+});
+
+// Delete a file from updates
+app.delete('/admin/updates/file/:name', authMiddleware, adminMiddleware, (req: AuthedRequest, res: any) => {
+  const fileName = path.basename(req.params.name);
+  const filePath = path.join(updatesPath, fileName);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'file_not_found' });
+  }
+  fs.unlinkSync(filePath);
+  return res.json({ ok: true });
+});
+
+// Upload update file + metadata using built-in busboy
+app.post('/admin/updates/upload', authMiddleware, adminMiddleware, (req: AuthedRequest, res: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const createBusboy = require('busboy');
+  const bb = createBusboy({ headers: req.headers as any, highWaterMark: 1024 * 1024 * 2 });
+
+  const fields: Record<string, string> = {};
+  let savedFileName = '';
+  let savedFileSize = 0;
+
+  bb.on('field', (name: string, value: string) => {
+    fields[name] = value;
+  });
+
+  bb.on('file', (_name: string, file: any, info: { filename: string }) => {
+    const ext = path.extname(info.filename).toLowerCase();
+    if (!['.asar', '.exe', '.zip'].includes(ext)) {
+      file.resume();
+      return;
+    }
+
+    const safeName = `chatter-update-${Date.now()}${ext}`;
+    const savePath = path.join(updatesPath, safeName);
+    const stream = fs.createWriteStream(savePath);
+
+    file.on('data', (chunk: Buffer) => { savedFileSize += chunk.length; });
+    file.pipe(stream);
+
+    stream.on('close', () => {
+      savedFileName = safeName;
+      console.log(`[updates] uploaded: ${safeName} (${savedFileSize} bytes)`);
+    });
+  });
+
+  bb.on('close', () => {
+    const version = (fields.version || '').trim();
+    const type = (fields.type || 'minor').trim();
+    const releaseNotes = (fields.releaseNotes || '').trim();
+
+    if (!version) {
+      if (savedFileName) {
+        try { fs.unlinkSync(path.join(updatesPath, savedFileName)); } catch { /* ignore */ }
+      }
+      return res.status(400).json({ error: 'version_required' });
+    }
+
+    const downloadUrl = savedFileName || (fields.downloadUrl || '').trim();
+    if (!downloadUrl) {
+      return res.status(400).json({ error: 'file_or_url_required' });
+    }
+
+    const manifest = {
+      version,
+      type: type === 'major' ? 'major' : 'minor',
+      downloadUrl,
+      releaseNotes,
+      size: savedFileSize || 0,
+    };
+
+    fs.writeFileSync(path.join(updatesPath, 'version.json'), JSON.stringify(manifest, null, 2));
+    console.log(`[updates] version.json updated: v${version} (${type})`);
+
+    return res.json({ ok: true, manifest });
+  });
+
+  req.pipe(bb);
+});
+
 // ─── Models catalog & preferred model ────────────────────────────────────────
 
 app.get('/api/v1/models', (req: AuthedRequest, res) => {
@@ -1939,3 +2041,166 @@ function handleIpcResult(client: WsClient, msg: any) {
     pending.resolve(data);
   }
 }
+
+// ── Admin Updates HTML Page ────────────────────────────────────────────────
+
+const ADMIN_UPDATES_HTML = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chatter — Updates Admin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Inter,-apple-system,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);width:520px;max-width:95vw;padding:28px}
+h1{font-size:18px;font-weight:600;margin-bottom:20px}
+label{display:block;font-size:13px;font-weight:500;color:#555;margin-bottom:4px;margin-top:14px}
+input,select,textarea{width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;font-family:inherit}
+textarea{resize:vertical;min-height:60px}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;margin-top:16px;transition:background .15s}
+.btn-primary{background:#122d4d;color:#fff}
+.btn-primary:hover{background:#1a3a60}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-danger{background:#b91c1c;color:#fff;font-size:12px;padding:4px 10px;margin-top:0}
+.btn-danger:hover{background:#991b1b}
+.login-form{display:flex;flex-direction:column;gap:10px}
+.error{color:#b91c1c;font-size:13px;margin-top:8px}
+.success{color:#15803d;font-size:13px;margin-top:8px}
+.status{background:#f8f9fa;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px}
+.status b{font-weight:600}
+.file-list{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.file-row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#f8f9fa;border-radius:6px;font-size:13px}
+.hint{font-size:11px;color:#888;margin-top:4px}
+.or-divider{text-align:center;color:#aaa;font-size:12px;margin:10px 0}
+</style>
+</head>
+<body>
+<div class="card" id="app"></div>
+<script>
+const API = location.origin;
+let token = localStorage.getItem('admin_update_token') || '';
+
+function $(sel) { return document.querySelector(sel); }
+function render(html) { document.getElementById('app').innerHTML = html; }
+
+function api(method, path, body) {
+  const opts = { method, headers: { 'Authorization': 'Bearer ' + token } };
+  if (body && !(body instanceof FormData)) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  } else if (body) {
+    delete opts.headers['Content-Type'];
+    opts.body = body;
+  }
+  return fetch(API + path, opts).then(r => {
+    if (r.status === 401 || r.status === 403) { token = ''; localStorage.removeItem('admin_update_token'); showLogin('Session expired'); throw new Error('auth'); }
+    return r.json().then(j => ({ ok: r.ok, status: r.status, ...j }));
+  });
+}
+
+function showLogin(err) {
+  render(\`
+    <h1>Chatter Updates Admin</h1>
+    <div class="login-form">
+      <label>Login</label>
+      <input id="login" type="text" autocomplete="username">
+      <label>Password</label>
+      <input id="password" type="password" autocomplete="current-password">
+      <button class="btn btn-primary" onclick="doLogin()">Login</button>
+      \${err ? '<div class="error">' + err + '</div>' : ''}
+    </div>
+  \`);
+}
+
+async function doLogin() {
+  const login = $('#login').value.trim();
+  const password = $('#password').value;
+  if (!login || !password) return;
+  try {
+    const r = await fetch(API + '/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password })
+    }).then(r => r.json());
+    if (r.access_token) {
+      token = r.access_token;
+      localStorage.setItem('admin_update_token', token);
+      loadDashboard();
+    } else {
+      showLogin(r.error || 'Login failed');
+    }
+  } catch(e) { showLogin('Network error'); }
+}
+
+async function loadDashboard() {
+  try {
+    const status = await api('GET', '/admin/updates/status');
+    if (status.error && !status.ok) { showLogin(status.error); return; }
+    const cur = status.current;
+    const files = status.files || [];
+    render(\`
+      <h1>Publish Update</h1>
+      \${cur ? '<div class="status"><b>Current:</b> v' + cur.version + ' (' + cur.type + ') &mdash; ' + (cur.releaseNotes || 'no notes') + '</div>' : '<div class="status">No version.json published yet</div>'}
+      <label>Version *</label>
+      <input id="version" type="text" placeholder="1.4.0" value="">
+      <label>Type</label>
+      <select id="type">
+        <option value="minor">Minor (ASAR hot-swap, ~15-30 MB)</option>
+        <option value="major">Major (Full installer, ~1 GB)</option>
+      </select>
+      <label>Release Notes</label>
+      <textarea id="notes" placeholder="What changed..."></textarea>
+      <label>Upload file (app.asar or .exe)</label>
+      <input id="file" type="file" accept=".asar,.exe,.zip">
+      <div class="or-divider">— or use external URL —</div>
+      <label>Download URL (external)</label>
+      <input id="url" type="text" placeholder="https://disk.yandex.ru/...">
+      <div class="hint">Leave file empty and provide URL for major updates hosted externally</div>
+      <button class="btn btn-primary" id="publishBtn" onclick="doPublish()">Publish</button>
+      <div id="result"></div>
+      \${files.length ? '<label style="margin-top:20px">Files on server</label><div class="file-list">' + files.map(f => '<div class="file-row"><span>' + f + '</span><button class="btn btn-danger" onclick="doDelete(\\''+f+'\\')">Delete</button></div>').join('') + '</div>' : ''}
+    \`);
+  } catch(e) { if (e.message !== 'auth') showLogin('Failed to load'); }
+}
+
+async function doPublish() {
+  const version = $('#version').value.trim();
+  const type = $('#type').value;
+  const notes = $('#notes').value.trim();
+  const fileInput = $('#file');
+  const url = $('#url').value.trim();
+  if (!version) { $('#result').innerHTML = '<div class="error">Version is required</div>'; return; }
+  if (!fileInput.files.length && !url) { $('#result').innerHTML = '<div class="error">Upload file or provide URL</div>'; return; }
+  const fd = new FormData();
+  fd.append('version', version);
+  fd.append('type', type);
+  fd.append('releaseNotes', notes);
+  if (fileInput.files.length) fd.append('file', fileInput.files[0]);
+  if (url) fd.append('downloadUrl', url);
+  const btn = $('#publishBtn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+  try {
+    const r = await api('POST', '/admin/updates/upload', fd);
+    if (r.ok) {
+      $('#result').innerHTML = '<div class="success">Published v' + r.manifest.version + ' (' + r.manifest.type + ')</div>';
+      setTimeout(loadDashboard, 1000);
+    } else {
+      $('#result').innerHTML = '<div class="error">' + (r.error || 'Upload failed') + '</div>';
+    }
+  } catch(e) {}
+  btn.disabled = false;
+  btn.textContent = 'Publish';
+}
+
+async function doDelete(name) {
+  if (!confirm('Delete ' + name + '?')) return;
+  await api('DELETE', '/admin/updates/file/' + encodeURIComponent(name));
+  loadDashboard();
+}
+
+token ? loadDashboard() : showLogin();
+</script>
+</body>
+</html>`;
