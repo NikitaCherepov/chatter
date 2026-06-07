@@ -1649,6 +1649,7 @@ app.post('/admin/updates/upload', authMiddleware, adminMiddleware, (req: AuthedR
   const fields: Record<string, string> = {};
   let savedFileName = '';
   let savedFileSize = 0;
+  const fileWrites: Promise<void>[] = [];
 
   bb.on('field', (name: string, value: string) => {
     fields[name] = value;
@@ -1664,17 +1665,30 @@ app.post('/admin/updates/upload', authMiddleware, adminMiddleware, (req: AuthedR
     const safeName = `chatter-update-${Date.now()}${ext}`;
     const savePath = path.join(updatesPath, safeName);
     const stream = fs.createWriteStream(savePath);
+    let currentFileSize = 0;
 
-    file.on('data', (chunk: Buffer) => { savedFileSize += chunk.length; });
+    file.on('data', (chunk: Buffer) => { currentFileSize += chunk.length; });
     file.pipe(stream);
 
-    stream.on('close', () => {
-      savedFileName = safeName;
-      console.log(`[updates] uploaded: ${safeName} (${savedFileSize} bytes)`);
-    });
+    fileWrites.push(new Promise<void>((resolve, reject) => {
+      stream.on('close', () => {
+        savedFileName = safeName;
+        savedFileSize = currentFileSize;
+        console.log(`[updates] uploaded: ${safeName} (${savedFileSize} bytes)`);
+        resolve();
+      });
+      stream.on('error', reject);
+      file.on('error', reject);
+    }));
   });
 
-  bb.on('close', () => {
+  bb.on('close', async () => {
+    try {
+      await Promise.all(fileWrites);
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || 'file_write_failed' });
+    }
+
     const version = (fields.version || '').trim();
     const type = (fields.type || 'minor').trim();
     const releaseNotes = (fields.releaseNotes || '').trim();
