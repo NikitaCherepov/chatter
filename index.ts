@@ -1438,21 +1438,9 @@ type UserChatRecord = {
 };
 
 const scheduleDailyCounterReset = () => {
-    const now = new Date();
-    const next = new Date(now);
-    next.setHours(24, 0, 0, 0);
-    const delay = Math.max(1000, next.getTime() - now.getTime());
-
-    setTimeout(() => {
-        try {
-            resetDailyMessageCounters();
-            console.log('Дневные счётчики (сообщения/токены/стоимость) обнулены.');
-        } catch (err) {
-            console.error('Ошибка ежедневного сброса счётчиков:', err);
-        } finally {
-            scheduleDailyCounterReset();
-        }
-    }, delay);
+    // Сброс делегирован на backend-api (scheduler.ts)
+    // TG бот больше не сбрасывает daily counters самостоятельно
+    console.log('[daily-reset] Сброс счётчиков делегирован на backend-api.');
 };
 
 // Вспомогательные функции для БД
@@ -2093,13 +2081,6 @@ const formatTokenCountShort = (tokens: number) => {
     return `${safe}`;
 };
 const formatRub = (value: number) => `${(Math.max(0, value || 0)).toFixed(2)}₽`;
-const resetDailyMessageCounters = () => db.prepare(`
-    UPDATE users
-    SET daily_message_count = 0,
-        daily_tokens_used = 0,
-        daily_cost_rub = 0,
-        daily_web_search_count = 0
-`).run();
 const updateUserPrompt = async (id: number, promptId: number) => {
     await runBackendSelectUserPrompt(id, promptId);
 };
@@ -3376,6 +3357,16 @@ bot.command('sync_plan_limits', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
     await syncAllUsersPlanLimits();
     return ctx.reply(`✅ Лимиты по планам синхронизированы.`);
+});
+
+bot.command('reset_counters', async (ctx) => {
+    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    try {
+        await axios.post(`${BACKEND_API_BASE_URL}/internal/reset-daily-counters`, {}, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+        return ctx.reply('✅ Дневные счётчики всех пользователей обнулены.');
+    } catch {
+        return ctx.reply('❌ Ошибка при сбросе счётчиков.');
+    }
 });
 
 bot.command('history_user', (ctx) => {

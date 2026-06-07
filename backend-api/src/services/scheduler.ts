@@ -288,7 +288,8 @@ const resetDailyMessageCounters = () => db.prepare(`
   SET daily_message_count = 0,
       daily_tokens_used = 0,
       daily_cost_rub = 0,
-      daily_web_search_count = 0
+      daily_web_search_count = 0,
+      daily_image_gen_count = 0
 `).run();
 
 const expireFinishedPlanSubscriptions = () => {

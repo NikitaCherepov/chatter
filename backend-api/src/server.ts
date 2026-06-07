@@ -192,6 +192,11 @@ app.put('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
   return res.json({ ok: true, preferred_model: modelId });
 });
 
+app.post('/internal/reset-daily-counters', internalAuth, (_req, res) => {
+  resetDailyMessageCounters();
+  return res.json({ ok: true });
+});
+
 app.post('/internal/ai/generate-image', internalAuth, async (req, res) => {
   const userId = Number(req.body?.user_id);
   const prompt = `${req.body?.prompt || ''}`.trim();
