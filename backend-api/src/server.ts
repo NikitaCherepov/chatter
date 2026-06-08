@@ -2151,6 +2151,28 @@ app.post('/api/v1/devops/runbooks/extract-commands', async (req: AuthedRequest, 
   }
 });
 
+app.post('/api/v1/devops/runbooks/review-commands', async (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+  const commands: string[] = req.body?.commands;
+  if (!Array.isArray(commands) || commands.length === 0) {
+    return res.status(400).json({ error: 'commands_required' });
+  }
+
+  try {
+    const cmdList = commands.map((c, i) => `${i + 1}. ${c}`).join('\n');
+    const verdict = await callLiteAi(
+      'Ты — DevOps-инженер по безопасности. Проанализируй каждую команду из списка на предмет рисков: удаление данных, остановка критичных сервисов, необратимые изменения, утечка данных. Для каждой команды напиши краткий вердикт (безопасно/рискованно) и причину если есть риски. В конце напиши общий вывод. Отвечай на русском языке кратко и по делу.',
+      cmdList
+    );
+    return res.json({ verdict });
+  } catch (err) {
+    console.error('[runbooks/review-commands]', err);
+    return res.status(500).json({ error: 'ai_call_failed' });
+  }
+});
+
 // ─── DevOps: Approve/reject pending command (from desktop via WS) ───────────
 
 app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
