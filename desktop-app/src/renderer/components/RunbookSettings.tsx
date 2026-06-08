@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 type Runbook = {
   id: number;
@@ -23,6 +24,8 @@ export function RunbookSettings() {
   const [formCommands, setFormCommands] = useState<string[]>(['']);
   const [formSaving, setFormSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [reviewResult, setReviewResult] = useState<string | null>(null);
 
   const resetForm = () => {
     setEditingId(null);
@@ -132,6 +135,26 @@ export function RunbookSettings() {
     }
   };
 
+  const handleReview = async (runbook: Runbook) => {
+    if (runbook.commands.length === 0) {
+      toast.info('В инструкции нет команд для проверки');
+      return;
+    }
+    setReviewingId(runbook.id);
+    setReviewResult(null);
+    try {
+      const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
+        method: 'POST',
+        body: JSON.stringify({ commands: runbook.commands }),
+      });
+      setReviewResult(res.verdict);
+    } catch {
+      toast.error('Не удалось проверить команды');
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   if (loading) return <div className={s.panel}><div className={s.promptLoading}>Загрузка...</div></div>;
 
   return (
@@ -228,6 +251,18 @@ export function RunbookSettings() {
                   </svg>
                 </button>
                 <button
+                  className={s.macroActionBtn}
+                  onClick={() => handleReview(runbook)}
+                  disabled={reviewingId === runbook.id}
+                  title="Спросить ИИ, безопасные ли команды"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </button>
+                <button
                   className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
                   onClick={() => handleDelete(runbook.id)}
                   title="Удалить"
@@ -240,6 +275,19 @@ export function RunbookSettings() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* AI review modal */}
+      {reviewResult !== null && (
+        <div className={s.explainOverlay} onClick={() => setReviewResult(null)}>
+          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
+            <div className={s.explainTitle}>Проверка безопасности ИИ</div>
+            <div className={s.explainText}><MarkdownRenderer content={reviewResult} /></div>
+            <button className={s.saveBtn} onClick={() => setReviewResult(null)}>
+              Закрыть
+            </button>
+          </div>
         </div>
       )}
     </div>
