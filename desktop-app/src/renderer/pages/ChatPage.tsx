@@ -80,6 +80,7 @@ export function ChatPage() {
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string }>>([]);
+  const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[] }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
@@ -260,6 +261,12 @@ export function ChatPage() {
                 host: val.host || '',
                 command: val.command!
               }]);
+            }
+          }
+          if (action.action === 'suggest_devops_runbook' && action.value) {
+            const val = action.value as { title?: string; content?: string; commands?: string[] };
+            if (val.title && val.content) {
+              setPendingRunbooks(prev => [...prev, { title: val.title!, content: val.content!, commands: val.commands || [] }]);
             }
           }
           handleDesktopAction(action);
@@ -1320,6 +1327,65 @@ export function ChatPage() {
                         } catch {}
                         setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Suggest DevOps Runbook cards */}
+              {pendingRunbooks.map((rb, rbIdx) => (
+                <div key={rbIdx} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>Предложение инструкции</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroName}>{rb.title}</div>
+                  {rb.commands.length > 0 && (
+                    <div className={s.suggestMacroCommands}>
+                      {rb.commands.map((cmd: string, i: number) => (
+                        <code key={i} className={s.suggestMacroCmd}>{cmd}</code>
+                      ))}
+                    </div>
+                  )}
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/devops/runbooks', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              title: rb.title,
+                              content: rb.content,
+                              commands: rb.commands,
+                            }),
+                          });
+                          toast.success('Инструкция сохранена');
+                          setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx));
+                        } catch {
+                          toast.error('Не удалось сохранить инструкцию');
+                        }
+                      }}
+                    >
+                      Сохранить
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}
                     >
                       Отклонить
                     </button>

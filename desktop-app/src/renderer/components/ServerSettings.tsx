@@ -23,9 +23,16 @@ type Policy = {
   created_at: number;
 };
 
+type Runbook = {
+  id: number;
+  title: string;
+  commands: string[];
+};
+
 export function ServerSettings() {
   const [servers, setServers] = useState<Server[]>([]);
   const [policies, setPolicies] = useState<Record<number, Policy[]>>({});
+  const [runbooks, setRunbooks] = useState<Runbook[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
@@ -72,6 +79,11 @@ export function ServerSettings() {
         } catch { policyMap[server.id] = []; }
       }
       setPolicies(policyMap);
+      // Load available runbooks
+      try {
+        const rRes = await api.apiFetch<{ runbooks: Runbook[] }>('/api/v1/devops/runbooks');
+        setRunbooks(rRes.runbooks);
+      } catch {}
     } catch (err) {
       console.error('Failed to load servers:', err);
     } finally {
@@ -146,6 +158,23 @@ export function ServerSettings() {
       toast.success('Политика удалена');
     } catch {
       toast.error('Ошибка удаления политики');
+    }
+  };
+
+  const handleAttachRunbook = async (serverId: number, runbookId: number) => {
+    try {
+      const res = await api.apiFetch<{ ok: boolean; created: number }>(`/api/v1/devops/servers/${serverId}/attach-runbook`, {
+        method: 'POST',
+        body: JSON.stringify({ runbook_id: runbookId }),
+      });
+      toast.success(`Привязано: ${res.created} новых политик`);
+      // Reload policies for this server
+      try {
+        const pRes = await api.apiFetch<{ policies: Policy[] }>(`/api/v1/devops/servers/${serverId}/policies`);
+        setPolicies(prev => ({ ...prev, [serverId]: pRes.policies }));
+      } catch {}
+    } catch {
+      toast.error('Ошибка привязки инструкции');
     }
   };
 
@@ -338,6 +367,25 @@ export function ServerSettings() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+              {/* Attach runbook */}
+              {runbooks.length > 0 && (
+                <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Привязать инструкцию</div>
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                    {runbooks.map((rb) => (
+                      <button
+                        key={rb.id}
+                        className={s.cancelBtn}
+                        style={{ fontSize: '10px', padding: '3px 8px' }}
+                        onClick={() => handleAttachRunbook(server.id, rb.id)}
+                        title={`${rb.commands.length} команд: ${rb.commands.slice(0, 3).join(', ')}`}
+                      >
+                        {rb.title}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

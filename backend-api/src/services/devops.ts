@@ -339,6 +339,7 @@ export type DevopsRunbook = {
   user_id: number;
   title: string;
   content: string;
+  commands: string[];
   created_at: number;
   updated_at: number;
 };
@@ -348,6 +349,7 @@ type DevopsRunbookRow = {
   user_id: number;
   title: string;
   content: string;
+  commands: string;
   created_at: number;
   updated_at: number;
 };
@@ -358,10 +360,14 @@ db.exec(`
     user_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
+    commands TEXT NOT NULL DEFAULT '[]',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )
 `);
+
+// Safe migration for existing tables
+try { db.exec("ALTER TABLE devops_runbooks ADD COLUMN commands TEXT NOT NULL DEFAULT '[]'"); } catch {}
 
 db.exec('CREATE INDEX IF NOT EXISTS idx_devops_runbooks_user ON devops_runbooks(user_id)');
 
@@ -372,6 +378,7 @@ const runbookRowToDto = (row: DevopsRunbookRow): DevopsRunbook => ({
   user_id: row.user_id,
   title: row.title,
   content: row.content,
+  commands: JSON.parse(row.commands || '[]'),
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -392,6 +399,7 @@ export const createRunbook = (
   userId: number,
   title: string,
   content: string,
+  commands: string[] = [],
 ): { ok: true; id: number } | { ok: false; error: string } => {
   const trimmedTitle = title.trim();
   const trimmedContent = content.trim();
@@ -405,8 +413,8 @@ export const createRunbook = (
 
   const now = getNowUnix();
   const result = db.prepare(
-    'INSERT INTO devops_runbooks (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(userId, trimmedTitle, trimmedContent, now, now);
+    'INSERT INTO devops_runbooks (user_id, title, content, commands, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(userId, trimmedTitle, trimmedContent, JSON.stringify(commands), now, now);
 
   return { ok: true, id: Number(result.lastInsertRowid) };
 };
@@ -414,7 +422,7 @@ export const createRunbook = (
 export const updateRunbook = (
   userId: number,
   runbookId: number,
-  updates: { title?: string; content?: string },
+  updates: { title?: string; content?: string; commands?: string[] },
 ): { ok: true } | { ok: false; error: string } => {
   const existing = db.prepare('SELECT * FROM devops_runbooks WHERE user_id = ? AND id = ?')
     .get(userId, runbookId) as DevopsRunbookRow | undefined;
@@ -423,12 +431,13 @@ export const updateRunbook = (
   const now = getNowUnix();
   const title = updates.title !== undefined ? updates.title.trim() : existing.title;
   const content = updates.content !== undefined ? updates.content.trim() : existing.content;
+  const commands = updates.commands !== undefined ? JSON.stringify(updates.commands) : existing.commands;
 
   if (!title) return { ok: false, error: 'title_required' };
   if (!content) return { ok: false, error: 'content_required' };
 
-  db.prepare('UPDATE devops_runbooks SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?')
-    .run(title, content, now, runbookId, userId);
+  db.prepare('UPDATE devops_runbooks SET title = ?, content = ?, commands = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .run(title, content, commands, now, runbookId, userId);
 
   return { ok: true };
 };
@@ -436,4 +445,46 @@ export const updateRunbook = (
 export const deleteRunbook = (userId: number, runbookId: number): boolean => {
   return db.prepare('DELETE FROM devops_runbooks WHERE user_id = ? AND id = ?')
     .run(userId, runbookId).changes > 0;
+};
+
+/** Attach a runbook to a server — creates auto-approve policies for each command */
+export const attachRunbookToServer = (
+  userId: number,
+  serverId: number,
+  runbookId: number,
+): { ok: true; created: number } | { ok: false; error: string } => {
+  // Verify server ownership
+  const server = db.prepare('SELECT id FROM devops_servers WHERE user_id = ? AND id = ?')
+    .get(userId, serverId) as { id: number } | undefined;
+  if (!server) return { ok: false, error: 'server_not_found' };
+
+  const runbook = db.prepare('SELECT * FROM devops_runbooks WHERE user_id = ? AND id = ?')
+    .get(userId, runbookId) as DevopsRunbookRow | undefined;
+  if (!runbook) return { ok: false, error: 'runbook_not_found' };
+
+  const commands: string[] = JSON.parse(runbook.commands || '[]');
+  const now = getNowUnix();
+  let created = 0;
+
+  for (const cmd of commands) {
+    const trimmed = cmd.trim();
+    if (!trimmed) continue;
+
+    // Create safe pattern: escape special chars, allow arguments
+    const pattern = `^${trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\.\\\*/g, '[^&;|\\n]+')}[^&;|\\n]*$`;
+
+    // Check if this pattern already exists for this server
+    const existing = db.prepare(
+      'SELECT id FROM devops_policies WHERE server_id = ? AND pattern = ?'
+    ).get(serverId, pattern) as { id: number } | undefined;
+
+    if (!existing) {
+      db.prepare(
+        'INSERT INTO devops_policies (server_id, pattern, auto_approve, created_at) VALUES (?, ?, 1, ?)'
+      ).run(serverId, pattern, now);
+      created++;
+    }
+  }
+
+  return { ok: true, created };
 };

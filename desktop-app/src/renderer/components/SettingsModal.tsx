@@ -10,13 +10,14 @@ import { Select } from './Select';
 import type { SelectOption } from './Select';
 import { MacroSettings } from './MacroSettings';
 import { ServerSettings } from './ServerSettings';
+import { RunbookSettings } from './RunbookSettings';
 import s from './SettingsModal.module.scss';
 
 type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'servers';
+type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'servers' | 'runbooks';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -42,6 +43,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'voice', label: 'Голос' },
   { key: 'macros', label: 'Макросы' },
   { key: 'servers', label: 'Серверы' },
+  { key: 'runbooks', label: 'Инструкции' },
   { key: 'app', label: 'Приложение' },
 ];
 
@@ -457,6 +459,10 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'servers' && (
             <ServerSettings />
+          )}
+
+          {section === 'runbooks' && (
+            <RunbookSettings />
           )}
 
           {section === 'app' && (

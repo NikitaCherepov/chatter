@@ -1414,6 +1414,35 @@ const buildReadRunbookTool = () => {
   };
 };
 
+const buildSuggestRunbookTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'suggest_devops_runbook',
+      description: `Предлагает пользователю сохранить DevOps-инструкцию (runbook). Используй когда составил план действий на сервере — последовательность команд для типовой задачи. Пользователь может сохранить её и привязать к серверу.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Название инструкции (короткое, до 5 слов).'
+          },
+          content: {
+            type: 'string',
+            description: 'Текст инструкции в Markdown с пошаговым описанием.'
+          },
+          commands: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Массив shell-команд из инструкции.'
+          }
+        },
+        required: ['title', 'content', 'commands']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -2246,6 +2275,26 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     });
   }
 
+  // ── DevOps: suggest runbook ──────────────────────────────────────────────────
+
+  if (toolName === 'suggest_devops_runbook') {
+    const title: string = typeof parsed.title === 'string' ? parsed.title : '';
+    const content: string = typeof parsed.content === 'string' ? parsed.content : '';
+    const commands: string[] = Array.isArray(parsed.commands) ? parsed.commands.filter((c: unknown) => typeof c === 'string') : [];
+
+    if (!title || !content) {
+      return JSON.stringify({ status: 'error', message: 'title и content обязательны' });
+    }
+
+    const payload: DesktopActionPayload = {
+      action: 'suggest_devops_runbook',
+      value: { title, content, commands }
+    };
+    if (desktopActionSink) desktopActionSink.value = payload;
+
+    return JSON.stringify({ status: 'success', message: `Предложение инструкции "${title}" отправлено.` });
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -2313,6 +2362,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
+  if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
     try {
@@ -2423,7 +2473,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
@@ -2726,7 +2776,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'suggest_devops_runbook') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 

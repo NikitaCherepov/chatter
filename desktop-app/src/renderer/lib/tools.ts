@@ -326,6 +326,11 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     return;
   }
 
+  if (a === 'suggest_devops_runbook') {
+    // Handled by ChatPage via the suggestDevopsRunbook callback
+    return;
+  }
+
   // ── DevOps confirmation ──
 
   if (a === 'devops_confirmation') {
@@ -377,4 +382,25 @@ export function subscribeDevopsConfirmation(listener: DevopsConfirmationListener
 
 export function emitDevopsConfirmation(payload: DevopsConfirmationPayload) {
   devopsConfirmationListeners.forEach(fn => fn(payload));
+}
+
+// ── Suggest DevOps Runbook callback ────────────────────────────────────────
+
+export type SuggestDevopsRunbookPayload = {
+  title: string;
+  content: string;
+  commands: string[];
+};
+
+type SuggestDevopsRunbookListener = (payload: SuggestDevopsRunbookPayload) => void;
+
+const suggestDevopsRunbookListeners = new Set<SuggestDevopsRunbookListener>();
+
+export function subscribeSuggestDevopsRunbook(listener: SuggestDevopsRunbookListener): () => void {
+  suggestDevopsRunbookListeners.add(listener);
+  return () => suggestDevopsRunbookListeners.delete(listener);
+}
+
+export function emitSuggestDevopsRunbook(payload: SuggestDevopsRunbookPayload) {
+  suggestDevopsRunbookListeners.forEach(fn => fn(payload));
 }

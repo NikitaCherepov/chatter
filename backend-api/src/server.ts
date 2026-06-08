@@ -10,7 +10,7 @@ import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
-import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook } from './services/devops.js';
+import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
@@ -2062,8 +2062,9 @@ app.post('/api/v1/devops/runbooks', (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
   const title = `${req.body?.title || ''}`;
   const content = `${req.body?.content || ''}`;
+  const commands: string[] = Array.isArray(req.body?.commands) ? req.body.commands.filter((c: unknown) => typeof c === 'string') : [];
 
-  const result = createRunbook(userId, title, content);
+  const result = createRunbook(userId, title, content, commands);
   if (!result.ok) {
     const code = (result as { ok: false; error: string }).error;
     if (code === 'title_required' || code === 'content_required') return res.status(400).json({ error: code });
@@ -2078,9 +2079,10 @@ app.put('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
   const runbookId = Number(req.params.id);
   if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
 
-  const updates: Record<string, string> = {};
+  const updates: Record<string, any> = {};
   if (req.body?.title !== undefined) updates.title = `${req.body.title}`;
   if (req.body?.content !== undefined) updates.content = `${req.body.content}`;
+  if (Array.isArray(req.body?.commands)) updates.commands = req.body.commands.filter((c: unknown) => typeof c === 'string');
 
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
 
@@ -2101,6 +2103,52 @@ app.delete('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
   const deleted = deleteRunbook(userId, runbookId);
   if (!deleted) return res.status(404).json({ error: 'not_found' });
   return res.json({ ok: true });
+});
+
+// ─── DevOps: Attach runbook to server (creates auto-approve policies) ────────
+
+app.post('/api/v1/devops/servers/:id/attach-runbook', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const runbookId = Number(req.body?.runbook_id);
+  if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'runbook_id_required' });
+
+  const result = attachRunbookToServer(userId, serverId, runbookId);
+  if (!result.ok) {
+    const err = (result as { ok: false; error: string }).error;
+    if (err === 'server_not_found' || err === 'runbook_not_found') return res.status(404).json({ error: err });
+    return res.status(422).json({ error: err });
+  }
+  return res.json({ ok: true, created: (result as { ok: true; created: number }).created });
+});
+
+// ─── DevOps: AI extract commands from runbook text ───────────────────────────
+
+app.post('/api/v1/devops/runbooks/extract-commands', async (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+  const content = `${req.body?.content || ''}`.trim();
+  if (!content) return res.status(400).json({ error: 'content_required' });
+
+  try {
+    const text = await callLiteAi(
+      'Ты — системный администратор. Извлеки все shell-команды из текста инструкции. Верни СТРОГО JSON-массив строк: ["command1", "command2"]. Без markdown, без пояснений, только JSON. Каждая команда — готовая к выполнению в терминале Linux.',
+      content
+    );
+    try {
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      const commands: string[] = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      return res.json({ commands: commands.filter(c => typeof c === 'string' && c.trim()) });
+    } catch {
+      return res.json({ commands: [] });
+    }
+  } catch (err) {
+    console.error('[runbooks/extract-commands]', err);
+    return res.status(500).json({ error: 'ai_call_failed' });
+  }
 });
 
 // ─── DevOps: Approve/reject pending command (from desktop via WS) ───────────
