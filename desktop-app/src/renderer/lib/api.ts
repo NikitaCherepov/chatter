@@ -418,13 +418,12 @@ export async function streamChatMessage(
 export function stopChatStream() {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'chat_stop' }));
-  } else {
-    // SSE fallback — POST to /stop endpoint
-    const tokens = loadTokens();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
-    fetch(`${API_BASE}/api/v1/chat/stop`, { method: 'POST', headers }).catch(() => {});
   }
+  // POST is also used as a fallback/backup for WS stop.
+  const tokens = loadTokens();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
+  fetch(`${API_BASE}/api/v1/chat/stop`, { method: 'POST', headers }).catch(() => {});
 }
 
 // ── SSE fallback (kept for when WS is not connected) ──

@@ -1,6 +1,5 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import { tavily } from '@tavily/core';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT, AVATAR_PROMPT_HINT } from './prompts.js';
@@ -31,7 +30,8 @@ const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
-const tvly = process.env.TAVILY_API_KEY ? tavily({ apiKey: process.env.TAVILY_API_KEY }) : null;
+const TAVILY_API_KEY = `${process.env.TAVILY_API_KEY || ''}`.trim();
+const TAVILY_API_BASE_URL = `${process.env.TAVILY_API_BASE_URL || 'https://api.tavily.com'}`.replace(/\/+$/, '');
 
 const parseModelChain = (raw: string | undefined, fallback: string[]) => {
   const parsed = (raw || '').split(',').map(v => v.trim()).filter(Boolean);
@@ -222,7 +222,44 @@ const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1
 const LITE_ROUTER_ENABLED = process.env.TIMEWEB_LITE_ROUTER_ENABLED !== '0';
 
 const extractTokens = (response: any) => Number(response?.usage?.total_tokens || 0);
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const createAbortError = () => new DOMException('The user aborted a request.', 'AbortError');
+
+const isAbortError = (err: any) =>
+  err?.name === 'AbortError' || err?.code === 'ABORT_ERR' || `${err?.message || ''}` === 'AbortError';
+
+const throwIfAborted = (signal?: AbortSignal) => {
+  if (signal?.aborted) throw createAbortError();
+};
+
+const abortableSleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  throwIfAborted(signal);
+  const timer = setTimeout(() => {
+    signal?.removeEventListener('abort', onAbort);
+    resolve();
+  }, ms);
+  const onAbort = () => {
+    clearTimeout(timer);
+    reject(createAbortError());
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
+});
+
+const withAbort = async <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  throwIfAborted(signal);
+  if (!signal) return promise;
+
+  let onAbort: (() => void) | null = null;
+  const abortPromise = new Promise<never>((_, reject) => {
+    onAbort = () => reject(createAbortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+
+  try {
+    return await Promise.race([promise, abortPromise]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+};
 const RETRY_SECONDS = Math.max(0, Number.parseInt(process.env.TIMEWEB_MODEL_RETRY_SECONDS || '3', 10) || 3);
 const RETRIES_PER_MODEL = Math.max(0, Number.parseInt(process.env.TIMEWEB_MODEL_RETRIES_PER_MODEL || '1', 10) || 1);
 
@@ -282,6 +319,7 @@ const createCompletionWithModelFallback = async (
         const response = await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
         return { response, modelUsed: model, failedModels };
       } catch (err) {
+        if (isAbortError(err)) throw err;
         lastError = err;
         const summary = getProviderErrorSummary(err);
         console.warn('[ai] model failed', {
@@ -294,7 +332,7 @@ const createCompletionWithModelFallback = async (
           ...summary
         });
         if (isRetryable(err) && attempt < attempts) {
-          await sleep(RETRY_SECONDS * 1000);
+          await abortableSleep(RETRY_SECONDS * 1000, signal);
           continue;
         }
         break;
@@ -339,6 +377,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         failedModels
       };
     } catch (err: any) {
+      if (isAbortError(err)) throw err;
       console.warn('[ai] pro provider failed', {
         provider: provider.name,
         baseURL: provider.baseURL,
@@ -385,6 +424,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         failedModels
       };
     } catch (err: any) {
+      if (isAbortError(err)) throw err;
       console.warn('[ai] lite provider failed', {
         provider: provider.name,
         baseURL: provider.baseURL,
@@ -670,24 +710,46 @@ const incrementUserWebSearchUsage = (userId: number, count = 1) => {
   `).run(safeCount, safeCount, userId);
 };
 
-const runWebSearch = async (query: string) => {
-  if (!tvly) return 'Ошибка инструмента: поисковый сервис временно недоступен.';
+const runWebSearch = async (query: string, signal?: AbortSignal) => {
+  if (!TAVILY_API_KEY) return 'Ошибка инструмента: поисковый сервис временно недоступен.';
 
   try {
-    const response = await tvly.search(query, {
-      searchDepth: 'basic',
-      maxResults: 3,
-      includeAnswer: true
+    throwIfAborted(signal);
+    const response = await fetch(`${TAVILY_API_BASE_URL}/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TAVILY_API_KEY}`,
+        'X-Client-Source': 'chatter-backend'
+      },
+      body: JSON.stringify({
+        query,
+        search_depth: 'basic',
+        max_results: 3,
+        include_answer: true
+      }),
+      signal
     });
 
-    if (!response.results.length) {
+    if (!response.ok) {
+      throw new Error(`tavily_http_${response.status}`);
+    }
+
+    const data = await response.json() as {
+      answer?: string;
+      results?: Array<{ title?: string; content?: string; url?: string }>;
+    };
+    const results = Array.isArray(data.results) ? data.results : [];
+
+    if (!results.length) {
       return `По запросу "${query}" ничего не найдено.`;
     }
 
-    let resultText = response.answer ? `Сводка: ${response.answer}\n\n` : '';
-    resultText += response.results.map((item: any, index: number) => `${index + 1}. ${item.title}\n${item.content}\nИсточник: ${item.url}`).join('\n\n');
+    let resultText = data.answer ? `Сводка: ${data.answer}\n\n` : '';
+    resultText += results.map((item, index) => `${index + 1}. ${item.title || 'Без названия'}\n${item.content || ''}\nИсточник: ${item.url || '-'}`).join('\n\n');
     return resultText;
-  } catch {
+  } catch (err) {
+    if (isAbortError(err)) throw err;
     return 'Ошибка инструмента: поисковый сервис временно недоступен.';
   }
 };
@@ -1448,6 +1510,7 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
         manualFallback: false,
       };
     } catch (err: any) {
+      if (isAbortError(err)) throw err;
       console.warn(`[ai] manual model "${manualModel.apiModelName}" failed, falling back to auto`, err?.message || err);
       // Не бросаем ошибку — fallback на обычный роутинг
       // Продолжаем выполнение ниже как будто manualModel не задан
@@ -1476,6 +1539,7 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
           failedProviders
         };
       } catch (err: any) {
+        if (isAbortError(err)) throw err;
         failedProviders.push(provider.name);
         if (Array.isArray(err?.failedModels)) {
           failedModels.push(...err.failedModels.map((m: string) => `${provider.name}:${m}`));
@@ -1529,6 +1593,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
 const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal) => {
+  throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1537,7 +1602,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const webLimit = checkWebSearchLimit(user);
     if (!webLimit.allowed) return webLimit.reason;
     incrementUserWebSearchUsage(user.id, 1);
-    return runWebSearch(query);
+    return runWebSearch(query, signal);
   }
 
   if (toolName === 'read_webpage') {
@@ -2109,7 +2174,21 @@ export const sendMessageThroughAi = async (
   const dailyCount = Math.max(0, Math.floor(Number(user.daily_message_count || 0)));
   if (!options?.ignoreDailyLimit && user.is_admin !== 1 && dailyLimit > 0 && dailyCount >= dailyLimit) throw new Error('daily_message_limit_reached');
 
-  const chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
+  const previousController = activeGenerations.get(userId);
+  if (previousController && !previousController.signal.aborted) {
+    previousController.abort();
+  }
+
+  const abortController = new AbortController();
+  activeGenerations.set(userId, abortController);
+
+  let chatId = 0;
+  let totalTokens = 0;
+  let usedModel = '';
+  let usedProvider = '';
+
+  try {
+  chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
   const contextWindow = resolveEffectiveContextWindow(user);
   const history = getHistoryForAi(userId, chatId, contextWindow);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
@@ -2130,7 +2209,6 @@ export const sendMessageThroughAi = async (
   let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
-  let totalTokens = 0;
 
 if (!forceProRoute && LITE_ROUTER_ENABLED && !manualModel) {
   const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
@@ -2180,7 +2258,7 @@ PRO
         temperature: 0,
         max_tokens: 8,
         thinking: { type: 'disabled' }
-      });
+      }, undefined, abortController.signal);
 
       totalTokens += extractTokens(routed.response);
 
@@ -2210,7 +2288,8 @@ PRO
       ) {
         routeLabel = matchedRoute[1];
       }
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) throw err;
       routeLabel = 'PRO';
     }
   }
@@ -2244,8 +2323,6 @@ PRO
   ];
 
   let answer = FALLBACK_ANSWER;
-  let usedModel = '';
-  let usedProvider = '';
   let loop = 0;
   const effectiveMaxLoops = options?.isVoice ? MAX_TOOL_LOOPS_VOICE : MAX_TOOL_LOOPS;
   const toolOutputsForFallback: string[] = [];
@@ -2261,11 +2338,6 @@ PRO
   let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
   let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
 
-  // AbortController для остановки генерации пользователем
-  const abortController = new AbortController();
-  activeGenerations.set(userId, abortController);
-
-  try {
   while (loop < effectiveMaxLoops) {
     loop += 1;
 
@@ -2374,12 +2446,6 @@ PRO
 
 let escalatedToPro = false;
 
-// Promise, который резолвится при abort — для Promise.race с runTool
-const abortPromise = new Promise<never>((_, reject) => {
-  if (abortController.signal.aborted) { reject(new DOMException('The user aborted a request.', 'AbortError')); return; }
-  abortController.signal.addEventListener('abort', () => reject(new DOMException('The user aborted a request.', 'AbortError')), { once: true });
-});
-
 for (const toolCall of message.tool_calls) {
   if (abortController.signal.aborted) break;
   if (toolCall.type !== 'function') continue;
@@ -2420,13 +2486,13 @@ for (const toolCall of message.tool_calls) {
 
   let toolContent = '';
   try {
-    toolContent = await Promise.race([
+    toolContent = await withAbort(
       runTool(
         user,
         timezone,
         toolName,
         toolCall.function?.arguments || '{}',
-        (payload) => runCompletion('pro', payload),
+        (payload) => runCompletion('pro', payload, undefined, abortController.signal),
         generatedImages,
         displayStateSink,
         desktopActionSink,
@@ -2434,8 +2500,8 @@ for (const toolCall of message.tool_calls) {
         options?.activeMacros,
         abortController.signal
       ),
-      abortPromise,
-    ]);
+      abortController.signal
+    );
 
     // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
     if (toolName === 'set_display_state' && displayStateSink.value && options?.onStateChange) {
@@ -2452,7 +2518,7 @@ for (const toolCall of message.tool_calls) {
       await options.onMapUpdate(mapUpdateSink.value);
     }
   } catch (err: any) {
-    if (err?.name === 'AbortError') break; // Прерываем цикл tool_calls
+    if (isAbortError(err)) break; // Прерываем цикл tool_calls
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
   }
 
@@ -2471,6 +2537,11 @@ for (const toolCall of message.tool_calls) {
 
 if (escalatedToPro) {
   continue;
+}
+
+// Если были прерваны во время tool_calls — сразу выходим, не продолжаем while
+if (abortController.signal.aborted) {
+  throw createAbortError();
 }
   }
 
@@ -2521,6 +2592,7 @@ if (escalatedToPro) {
       usedProvider = finalCompletion.usedProvider;
       totalTokens += extractTokens(finalCompletion.response);
     } catch (err: any) {
+      if (isAbortError(err)) throw err;
       console.error('[AI] Final answer after tool limit failed:', err?.message);
     }
   }
@@ -2592,7 +2664,7 @@ if (escalatedToPro) {
     }
   };
   } catch (err: any) {
-    if (err?.name === 'AbortError') {
+    if (isAbortError(err)) {
       // Генерация остановлена пользователем
       console.log(`[AI] Generation aborted by user ${userId}`);
       return {
@@ -2605,7 +2677,9 @@ if (escalatedToPro) {
     }
     throw err;
   } finally {
-    activeGenerations.delete(userId);
+    if (activeGenerations.get(userId) === abortController) {
+      activeGenerations.delete(userId);
+    }
   }
 };
 

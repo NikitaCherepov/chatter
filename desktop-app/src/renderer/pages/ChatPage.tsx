@@ -1309,7 +1309,7 @@ export function ChatPage() {
               {sending ? (
                 <svg
                   className={s.sendIcon}
-                  onClick={() => { api.stopChatStream(); setSending(false); }}
+                  onClick={() => { api.stopChatStream(); }}
                   viewBox="0 0 24 24" fill="var(--accent-icon-light)" stroke="none"
                 >
                   <rect x="6" y="6" width="12" height="12" rx="2" />
