@@ -378,6 +378,12 @@ Desktop-клиент использует **WebSocket** для двунапра�
 
 **SSE fallback** — если WS не подключён, `streamChatMessage` использует обычный POST + SSE. SSE — однонаправленный, обратный канал (`execute_ipc`) недоступен.
 
+### Stop generation
+
+- `stopChatStream()` sends `{ type: 'chat_stop' }` over WS when connected and also calls `POST /api/v1/chat/stop` as a fallback/backup.
+- In `ChatPage`, `sending` means "there is an active chat request" and keeps the stop button visible until `done`, `error`, or aborted `done`.
+- `showTyping` is separate from `sending`: it only controls the temporary typing bubble. The first `tool_status` or `intermediate` event hides typing and appends content to the same temporary assistant message.
+
 ## Tool Navigation
 
 Кнопка "назад" в хедере ToolsPanel — единая для всех инструментов. Инструменты регистрируют свой `onBack` коллбэк через `registerToolNav(toolId, callback)` из `lib/tools.ts`.

@@ -570,6 +570,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | Клиент → Сервер | Описание |
 |---|---|
 | `chat_send` | Отправить сообщение AI |
+| `chat_stop` | Остановить текущую генерацию AI для пользователя |
 | `ipc_result` | Результат IPC-команды |
 | `ping` | Keepalive |
 
@@ -584,6 +585,13 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `error` | Ошибка |
 | `execute_ipc` | Запрос выполнить IPC и вернуть результат |
 | `pong` | Ответ на ping |
+
+**Остановка генерации (`chat_stop` / `/api/v1/chat/stop`):**
+- На каждый `sendMessageThroughAi` создаётся один `AbortController`, который сразу регистрируется в `activeGenerations` по `userId`.
+- `chat_stop` по WS и `POST /api/v1/chat/stop` делают одно и то же: находят controller пользователя и вызывают `abort()`.
+- Обычный маршрут запроса не меняется: `sendMessageThroughAi` → `runCompletion` → `runTool` → финальный `runCompletion`. `AbortSignal` только прокидывается в места ожидания.
+- Signal слушают OpenAI-запросы, retry-паузы, ожидание tool через `withAbort`, desktop IPC (`sendIpcToDesktop`) и web-search транспорт Tavily через `fetch(..., { signal })`.
+- `finally` удаляет controller из `activeGenerations` только если это тот же controller, чтобы старый завершившийся запрос не снёс controller нового запроса.
 
 ## Система обновлений (Admin)
 
