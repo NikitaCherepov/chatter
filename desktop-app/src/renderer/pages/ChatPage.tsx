@@ -79,6 +79,7 @@ export function ChatPage() {
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
+  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
@@ -247,6 +248,18 @@ export function ChatPage() {
             const val = action.value as { title?: string; description?: string; commands?: string[] };
             if (val.title && val.commands?.length) {
               setPendingMacros(prev => [...prev, { title: val.title!, description: val.description, commands: val.commands! }]);
+            }
+          }
+          if (action.action === 'devops_confirmation' && action.value) {
+            const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string };
+            if (val.confirmation_id && val.command) {
+              setDevopsConfirmations(prev => [...prev, {
+                confirmation_id: val.confirmation_id!,
+                server_name: val.server_name || 'Unknown',
+                server_id: val.server_id || 0,
+                host: val.host || '',
+                command: val.command!
+              }]);
             }
           }
           handleDesktopAction(action);
@@ -1222,6 +1235,66 @@ export function ChatPage() {
                     <button
                       className={s.suggestMacroDismissBtn}
                       onClick={() => setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx))}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* DevOps Confirmation cards */}
+              {devopsConfirmations.map((conf, confIdx) => (
+                <div key={confIdx} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
+                      <path d="M7 15h0M12 15h0M17 15h0" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>Подтверждение команды</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroName}>{conf.server_name}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>{conf.host}</div>
+                  <div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.command}</code>
+                  </div>
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/devops/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success('Команда подтверждена');
+                          setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка подтверждения');
+                        }
+                      }}
+                    >
+                      Разрешить
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/devops/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                          });
+                        } catch {}
+                        setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                      }}
                     >
                       Отклонить
                     </button>

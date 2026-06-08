@@ -9,13 +9,14 @@ import type { TtsSettings } from '../lib/tts';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
 import { MacroSettings } from './MacroSettings';
+import { ServerSettings } from './ServerSettings';
 import s from './SettingsModal.module.scss';
 
 type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros';
+type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'servers';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -40,6 +41,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'prompt', label: 'Промпт' },
   { key: 'voice', label: 'Голос' },
   { key: 'macros', label: 'Макросы' },
+  { key: 'servers', label: 'Серверы' },
   { key: 'app', label: 'Приложение' },
 ];
 
@@ -451,6 +453,10 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'macros' && (
             <MacroSettings />
+          )}
+
+          {section === 'servers' && (
+            <ServerSettings />
           )}
 
           {section === 'app' && (

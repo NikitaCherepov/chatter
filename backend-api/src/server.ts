@@ -10,6 +10,9 @@ import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
+import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved } from './services/devops.js';
+import { execSshCommand, testSshConnection } from './services/ssh.js';
+import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -1884,6 +1887,189 @@ app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
   } catch (err) {
     console.error('[macro/describe]', err);
     return res.status(500).json({ error: 'ai_call_failed' });
+  }
+});
+
+// ─── DevOps: Pending confirmations (shared with ai.ts) ─────────────────────
+// (handled by services/devops-confirmations.ts — auto-cleanup included)
+
+// ─── DevOps Servers CRUD ────────────────────────────────────────────────────
+
+app.get('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  return res.json({ servers: listServers(userId) });
+});
+
+app.get('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const server = getServerById(userId, serverId);
+  if (!server) return res.status(404).json({ error: 'not_found' });
+  return res.json({ server });
+});
+
+app.post('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const name = `${req.body?.name || ''}`;
+  const host = `${req.body?.host || ''}`;
+  const port = Number(req.body?.port || 22);
+  const username = `${req.body?.username || ''}`;
+  const password = typeof req.body?.password === 'string' ? req.body.password : undefined;
+  const privateKey = typeof req.body?.private_key === 'string' ? req.body.private_key : undefined;
+
+  const result = createServer(userId, name, host, port, username, password, privateKey);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    if (code === 'name_required' || code === 'host_required' || code === 'username_required' || code === 'invalid_port' || code === 'auth_required') return res.status(400).json({ error: code });
+    if (code === 'servers_limit') return res.status(429).json({ error: code });
+    return res.status(422).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
+});
+
+app.put('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const updates: Record<string, unknown> = {};
+  if (req.body?.name !== undefined) updates.name = `${req.body.name}`;
+  if (req.body?.host !== undefined) updates.host = `${req.body.host}`;
+  if (req.body?.port !== undefined) updates.port = Number(req.body.port);
+  if (req.body?.username !== undefined) updates.username = `${req.body.username}`;
+  if (req.body?.password !== undefined) updates.password = `${req.body.password}`;
+  if (req.body?.private_key !== undefined) updates.privateKey = `${req.body.private_key}`;
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
+
+  const result = updateServer(userId, serverId, updates);
+  if (!result.ok) {
+    const err = (result as { ok: false; error: string }).error;
+    if (err === 'not_found') return res.status(404).json({ error: err });
+    return res.status(422).json({ error: err });
+  }
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const deleted = deleteServer(userId, serverId);
+  if (!deleted) return res.status(404).json({ error: 'not_found' });
+  return res.json({ ok: true });
+});
+
+// ─── DevOps: Test SSH connection ────────────────────────────────────────────
+
+app.post('/api/v1/devops/servers/:id/test', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const server = getServerById(userId, serverId);
+  if (!server) return res.status(404).json({ error: 'not_found' });
+
+  try {
+    const result = await testSshConnection(userId, serverId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'ssh_test_failed', details: err?.message });
+  }
+});
+
+// ─── DevOps: Execute command (manual, from desktop) ─────────────────────────
+
+app.post('/api/v1/devops/servers/:id/exec', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const command = `${req.body?.command || ''}`.trim();
+  if (!command) return res.status(400).json({ error: 'command_required' });
+
+  const server = getServerById(userId, serverId);
+  if (!server) return res.status(404).json({ error: 'not_found' });
+
+  try {
+    const result = await execSshCommand(userId, serverId, command);
+    return res.json(result);
+  } catch (err: any) {
+    if (err?.message === 'command_blocked_dangerous') return res.status(403).json({ error: 'command_blocked_dangerous' });
+    if (err?.message === 'server_not_found') return res.status(404).json({ error: 'not_found' });
+    return res.status(500).json({ error: 'ssh_exec_failed', details: err?.message });
+  }
+});
+
+// ─── DevOps Policies CRUD ───────────────────────────────────────────────────
+
+app.get('/api/v1/devops/servers/:id/policies', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  return res.json({ policies: listPolicies(userId, serverId) });
+});
+
+app.post('/api/v1/devops/servers/:id/policies', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const serverId = Number(req.params.id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const pattern = `${req.body?.pattern || ''}`;
+  const autoApprove = req.body?.auto_approve === true;
+
+  const result = createPolicy(userId, serverId, pattern, autoApprove);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    if (code === 'not_found') return res.status(404).json({ error: code });
+    return res.status(400).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
+});
+
+app.delete('/api/v1/devops/policies/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const policyId = Number(req.params.id);
+  if (!Number.isFinite(policyId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const deleted = deletePolicy(userId, policyId);
+  if (!deleted) return res.status(404).json({ error: 'not_found' });
+  return res.json({ ok: true });
+});
+
+// ─── DevOps: Approve/reject pending command (from desktop via WS) ───────────
+
+app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const confirmationId = `${req.body?.confirmation_id || ''}`;
+  const approved = req.body?.approved === true;
+
+  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+
+  // Resolve pending confirmation
+  const pending = getPendingConfirmation(confirmationId);
+  if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
+  if (pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+
+  deletePendingConfirmation(confirmationId);
+
+  if (!approved) {
+    pending.reject(new Error('rejected_by_user'));
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  // Execute the approved command
+  try {
+    const result = await execSshCommand(userId, pending.serverId, pending.command);
+    pending.resolve(result);
+    return res.json({ ok: true, status: 'executed', result });
+  } catch (err: any) {
+    pending.reject(err);
+    return res.status(500).json({ error: 'ssh_exec_failed', details: err?.message });
   }
 });
 

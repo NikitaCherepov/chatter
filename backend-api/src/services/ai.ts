@@ -1332,6 +1332,53 @@ const buildSuggestMacroTool = () => {
   };
 };
 
+// ── DevOps tools (desktop-only) ──────────────────────────────────────────────
+
+const buildListDevopsServersTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'list_devops_servers',
+      description: `Показывает список серверов пользователя (id, name, host, username). Используй, когда пользователь упоминает сервер или просит выполнить команду на удалённом сервере.`,
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  };
+};
+
+const buildExecuteSshCommandTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'execute_ssh_command',
+      description: `Выполняет команду на удалённом сервере через SSH. Бэкенд подключается к серверу, выполняет команду и возвращает stdout/stderr.
+Используй когда пользователь просит:
+- Выполнить команду на сервере (ls, pm2 status, systemctl status, df -h и т.д.)
+- Проверить состояние сервера или сервисов
+- Посмотреть логи, процессы, дисковое пространство
+
+Важно: если команда неизвестна или может быть опасной — пользователь должен подтвердить выполнение на десктопе.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          server_id: {
+            type: 'number',
+            description: 'ID сервера (получи из list_devops_servers если не известен).'
+          },
+          command: {
+            type: 'string',
+            description: 'Команда для выполнения на сервере (например "ls -la /var/log" или "pm2 status").'
+          }
+        },
+        required: ['server_id', 'command']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -2033,6 +2080,103 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return JSON.stringify({ status: 'success', message: `Предложение макроса "${title}" отправлено.`, title, commands });
   }
 
+  // ── DevOps: list servers ────────────────────────────────────────────────────
+
+  if (toolName === 'list_devops_servers') {
+    const { listServers } = await import('./devops.js');
+    const servers = listServers(user.id);
+    if (servers.length === 0) {
+      return JSON.stringify({ status: 'info', message: 'У пользователя нет добавленных серверов. Попроси его добавить сервер в настройках (вкладка "Серверы").' });
+    }
+    return JSON.stringify({
+      status: 'success',
+      servers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username }))
+    });
+  }
+
+  // ── DevOps: execute SSH command (with HitL confirmation) ────────────────────
+
+  if (toolName === 'execute_ssh_command') {
+    const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
+    const command: string = typeof parsed.command === 'string' ? parsed.command.trim() : '';
+
+    if (!serverId) return JSON.stringify({ status: 'error', message: 'server_id обязателен' });
+    if (!command) return JSON.stringify({ status: 'error', message: 'command обязательна' });
+
+    const { getServerById, isAutoApproved } = await import('./devops.js');
+    const server = getServerById(user.id, serverId);
+    if (!server) return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден. Вызови list_devops_servers для списка доступных.` });
+
+    // Check if command is auto-approved by policy
+    const autoOk = isAutoApproved(user.id, serverId, command);
+
+    if (autoOk) {
+      // Execute immediately — no confirmation needed
+      try {
+        const { execSshCommand } = await import('./ssh.js');
+        const result = await execSshCommand(user.id, serverId, command);
+        return JSON.stringify({
+          status: 'success',
+          server: server.name,
+          command,
+          stdout: result.stdout.slice(-3000),
+          stderr: result.stderr.slice(-1000),
+          exit_code: result.exitCode
+        });
+      } catch (err: any) {
+        return JSON.stringify({ status: 'error', message: `SSH ошибка: ${err?.message || String(err)}`, server: server.name, command });
+      }
+    }
+
+    // Needs user confirmation — push to desktop via WS/SSE
+    // Desktop must be online for confirmation
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение команды невозможно — попроси пользователя запустить приложение на ПК.' });
+    }
+
+    // Push confirmation request to desktop
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+    const payload: DesktopActionPayload = {
+      action: 'devops_confirmation',
+      target: String(serverId),
+      value: { confirmation_id: confirmationId, server_name: server.name, server_id: serverId, host: server.host, command }
+    };
+    if (desktopActionSink) desktopActionSink.value = payload;
+
+    // Wait for user response via WS → POST /api/v1/devops/approve
+    const { registerPendingConfirmation } = await import('./devops-confirmations.js');
+    try {
+      const result = await new Promise<any>((resolve, reject) => {
+        registerPendingConfirmation(confirmationId, {
+          userId: user.id,
+          serverId,
+          command,
+          resolve,
+          reject,
+          createdAt: Date.now()
+        });
+      });
+
+      return JSON.stringify({
+        status: 'success',
+        server: server.name,
+        command,
+        stdout: result.stdout?.slice(-3000) || '',
+        stderr: result.stderr?.slice(-1000) || '',
+        exit_code: result.exitCode
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', server: server.name, command });
+      }
+      if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, command });
+      }
+      return JSON.stringify({ status: 'error', message: `SSH ошибка: ${err?.message || String(err)}`, server: server.name, command });
+    }
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -2096,6 +2240,8 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'execute_macro') return 'Запускаю макрос...';
   if (toolName === 'explore_fs') return 'Читаю директорию...';
   if (toolName === 'suggest_macro') return 'Предлагаю сохранить макрос...';
+  if (toolName === 'list_devops_servers') return 'Получаю список серверов...';
+  if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
     try {
@@ -2206,7 +2352,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
@@ -2509,7 +2655,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 

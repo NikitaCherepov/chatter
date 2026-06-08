@@ -325,6 +325,14 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     // ChatPage will render a special card for it
     return;
   }
+
+  // ── DevOps confirmation ──
+
+  if (a === 'devops_confirmation') {
+    // Handled by ChatPage via the devopsConfirmation callback
+    // Renders a confirmation card: [Approve] [Reject]
+    return;
+  }
 }
 
 // ── Suggest Macro callback ──────────────────────────────────────────────────
@@ -346,4 +354,27 @@ export function subscribeSuggestMacro(listener: SuggestMacroListener): () => voi
 
 export function emitSuggestMacro(payload: SuggestMacroPayload) {
   suggestMacroListeners.forEach(fn => fn(payload));
+}
+
+// ── DevOps Confirmation callback ────────────────────────────────────────────
+
+export type DevopsConfirmationPayload = {
+  confirmation_id: string;
+  server_name: string;
+  server_id: number;
+  host: string;
+  command: string;
+};
+
+type DevopsConfirmationListener = (payload: DevopsConfirmationPayload) => void;
+
+const devopsConfirmationListeners = new Set<DevopsConfirmationListener>();
+
+export function subscribeDevopsConfirmation(listener: DevopsConfirmationListener): () => void {
+  devopsConfirmationListeners.add(listener);
+  return () => devopsConfirmationListeners.delete(listener);
+}
+
+export function emitDevopsConfirmation(payload: DevopsConfirmationPayload) {
+  devopsConfirmationListeners.forEach(fn => fn(payload));
 }

@@ -1,0 +1,294 @@
+import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import * as api from '../lib/api';
+import s from './SettingsModal.module.scss';
+
+type Server = {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  has_password: boolean;
+  has_key: boolean;
+  created_at: number;
+  updated_at: number;
+};
+
+export function ServerSettings() {
+  const [servers, setServers] = useState<Server[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [testing, setTesting] = useState<number | null>(null);
+
+  // Form
+  const [formName, setFormName] = useState('');
+  const [formHost, setFormHost] = useState('');
+  const [formPort, setFormPort] = useState(22);
+  const [formUsername, setFormUsername] = useState('root');
+  const [formPassword, setFormPassword] = useState('');
+  const [formKey, setFormKey] = useState('');
+  const [formSaving, setFormSaving] = useState(false);
+
+  const resetForm = () => {
+    setEditingId(null);
+    setFormName('');
+    setFormHost('');
+    setFormPort(22);
+    setFormUsername('root');
+    setFormPassword('');
+    setFormKey('');
+  };
+
+  const startEdit = (server: Server) => {
+    setEditingId(server.id);
+    setFormName(server.name);
+    setFormHost(server.host);
+    setFormPort(server.port);
+    setFormUsername(server.username);
+    setFormPassword('');
+    setFormKey('');
+  };
+
+  const loadServers = async () => {
+    try {
+      const res = await api.apiFetch<{ servers: Server[] }>('/api/v1/devops/servers');
+      setServers(res.servers);
+    } catch (err) {
+      console.error('Failed to load servers:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadServers(); }, []);
+
+  const handleSave = async () => {
+    const trimmedName = formName.trim();
+    const trimmedHost = formHost.trim();
+    const trimmedUsername = formUsername.trim();
+
+    if (!trimmedName || !trimmedHost || !trimmedUsername) {
+      toast.error('Заполните название, хост и пользователя');
+      return;
+    }
+
+    setFormSaving(true);
+    try {
+      if (editingId !== null) {
+        const updates: Record<string, unknown> = {
+          name: trimmedName,
+          host: trimmedHost,
+          port: formPort,
+          username: trimmedUsername,
+        };
+        if (formPassword) updates.password = formPassword;
+        if (formKey) updates.private_key = formKey;
+
+        await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(updates),
+        });
+        toast.success('Сервер обновлён');
+      } else {
+        if (!formPassword && !formKey) {
+          toast.error('Укажите пароль или приватный ключ');
+          setFormSaving(false);
+          return;
+        }
+        await api.apiFetch('/api/v1/devops/servers', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: trimmedName,
+            host: trimmedHost,
+            port: formPort,
+            username: trimmedUsername,
+            password: formPassword || undefined,
+            private_key: formKey || undefined,
+          }),
+        });
+        toast.success('Сервер добавлен');
+      }
+      resetForm();
+      loadServers();
+    } catch (err: any) {
+      toast.error(err?.body?.error || 'Ошибка сохранения');
+    } finally {
+      setFormSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Удалить сервер?')) return;
+    try {
+      await api.apiFetch(`/api/v1/devops/servers/${id}`, { method: 'DELETE' });
+      toast.success('Сервер удалён');
+      if (editingId === id) resetForm();
+      loadServers();
+    } catch {
+      toast.error('Ошибка удаления');
+    }
+  };
+
+  const handleTest = async (id: number) => {
+    setTesting(id);
+    try {
+      const res = await api.apiFetch<{ ok: boolean; error?: string }>(`/api/v1/devops/servers/${id}/test`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        toast.success('Подключение успешно');
+      } else {
+        toast.error(`Ошибка: ${res.error || 'неизвестная'}`);
+      }
+    } catch (err: any) {
+      toast.error(err?.body?.details || 'Ошибка подключения');
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  if (loading) return <div className={s.panel}><div className={s.promptLoading}>Загрузка...</div></div>;
+
+  return (
+    <div className={s.panel}>
+      <div className={s.panelTitle}>Серверы</div>
+
+      {/* Form */}
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Название</label>
+        <input
+          className={s.fieldInput}
+          type="text"
+          value={formName}
+          onChange={(e) => setFormName(e.target.value)}
+          placeholder="Мой VPS"
+        />
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Хост (IP или домен)</label>
+        <input
+          className={s.fieldInput}
+          type="text"
+          value={formHost}
+          onChange={(e) => setFormHost(e.target.value)}
+          placeholder="192.168.1.100"
+        />
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Порт</label>
+        <input
+          className={s.fieldInput}
+          type="number"
+          value={formPort}
+          onChange={(e) => setFormPort(Number(e.target.value))}
+          min={1}
+          max={65535}
+        />
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Пользователь</label>
+        <input
+          className={s.fieldInput}
+          type="text"
+          value={formUsername}
+          onChange={(e) => setFormUsername(e.target.value)}
+          placeholder="root"
+        />
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Пароль {editingId !== null ? '(оставьте пустым чтобы не менять)' : ''}</label>
+        <input
+          className={s.fieldInput}
+          type="password"
+          value={formPassword}
+          onChange={(e) => setFormPassword(e.target.value)}
+          placeholder="••••••••"
+        />
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Приватный ключ {editingId !== null ? '(оставьте пустым чтобы не менять)' : ''}</label>
+        <textarea
+          className={s.textareaInput}
+          value={formKey}
+          onChange={(e) => setFormKey(e.target.value)}
+          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+          rows={3}
+          style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button
+          className={s.saveBtn}
+          onClick={handleSave}
+          disabled={formSaving}
+        >
+          {formSaving ? 'Сохранение...' : editingId ? 'Обновить' : 'Добавить'}
+        </button>
+        {editingId !== null && (
+          <button className={s.cancelBtn} onClick={resetForm}>
+            Отмена
+          </button>
+        )}
+      </div>
+
+      {/* Server list */}
+      {servers.length > 0 && (
+        <div style={{ marginTop: '16px' }}>
+          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>Добавленные серверы</div>
+          {servers.map((server) => (
+            <div key={server.id} className={s.macroCard}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: '13px' }}>{server.name}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  {server.username}@{server.host}:{server.port}
+                  {server.has_password && ' · пароль'}
+                  {server.has_key && ' · ключ'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                <button
+                  className={s.macroActionBtn}
+                  onClick={() => handleTest(server.id)}
+                  disabled={testing === server.id}
+                  title="Проверить подключение"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                </button>
+                <button
+                  className={s.macroActionBtn}
+                  onClick={() => startEdit(server)}
+                  title="Редактировать"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+                <button
+                  className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
+                  onClick={() => handleDelete(server.id)}
+                  title="Удалить"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

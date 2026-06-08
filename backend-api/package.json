@@ -18,6 +18,7 @@
     "fast-xml-parser": "^5.8.0",
     "openai": "^4.0.0",
     "sharp": "^0.34.5",
+    "ssh2": "^1.17.0",
     "ws": "^8.21.0"
   },
   "optionalDependencies": {
@@ -25,6 +26,7 @@
     "nodemailer": "^8.0.5"
   },
   "devDependencies": {
+    "@types/ssh2": "^1.15.5",
     "@types/ws": "^8.18.1"
   }
 }
