@@ -57,6 +57,14 @@ export function isDesktopOnline(userId: number): boolean {
   return !!client;
 }
 
+/** Send a JSON message directly to a desktop client via WS. Returns false if not connected. */
+export function sendToDesktop(userId: number, data: any): boolean {
+  const client = wsClients.get(userId);
+  if (!client) return false;
+  client.ws.send(JSON.stringify(data));
+  return true;
+}
+
 /** Register a WS client under both apiUserId and effectiveUserId keys. */
 export function registerWsClient(client: WsClient) {
   wsClients.set(client.apiUserId, client);

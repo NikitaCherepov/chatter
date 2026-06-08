@@ -12,7 +12,7 @@ import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
 import { runImageGeneration } from './image-generation.js';
-import { sendIpcToDesktop, isDesktopOnline } from '../ws-clients.js';
+import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
 import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
@@ -2134,15 +2134,17 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение команды невозможно — попроси пользователя запустить приложение на ПК.' });
     }
 
-    // Push confirmation request to desktop
+    // Push confirmation request directly via WS (can't use desktopActionSink — it dispatches AFTER runTool returns, but we block here)
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
-    const payload: DesktopActionPayload = {
+
+    // Send WS message directly to desktop client
+    sendToDesktop(user.id, {
+      type: 'desktop_action',
       action: 'devops_confirmation',
       target: String(serverId),
       value: { confirmation_id: confirmationId, server_name: server.name, server_id: serverId, host: server.host, command }
-    };
-    if (desktopActionSink) desktopActionSink.value = payload;
+    });
 
     // Wait for user response via WS → POST /api/v1/devops/approve
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
