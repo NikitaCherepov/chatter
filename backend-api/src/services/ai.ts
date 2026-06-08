@@ -1379,6 +1379,41 @@ const buildExecuteSshCommandTool = () => {
   };
 };
 
+const buildListRunbooksTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'list_devops_runbooks',
+      description: `Показывает список сохранённых инструкций (runbooks) пользователя. Runbook — это пошаговое руководство для типовых DevOps-задач. Используй перед выполнением сложных операций, чтобы проверить нет ли готовой инструкции.`,
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  };
+};
+
+const buildReadRunbookTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'read_devops_runbook',
+      description: `Читает содержимое конкретного runbook (инструкции). Возвращает пошаговое руководство в Markdown. Следуй инструкции шаг за шагом, вызывая execute_ssh_command для каждого шага.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          runbook_id: {
+            type: 'number',
+            description: 'ID runbook (получи из list_devops_runbooks).'
+          }
+        },
+        required: ['runbook_id']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -2179,6 +2214,38 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
   }
 
+  // ── DevOps: list runbooks ──────────────────────────────────────────────────
+
+  if (toolName === 'list_devops_runbooks') {
+    const { listRunbooks } = await import('./devops.js');
+    const runbooks = listRunbooks(user.id);
+    if (runbooks.length === 0) {
+      return JSON.stringify({ status: 'info', message: 'У пользователя нет сохранённых инструкций (runbooks).' });
+    }
+    return JSON.stringify({
+      status: 'success',
+      runbooks: runbooks.map(r => ({ id: r.id, title: r.title, updated_at: r.updated_at }))
+    });
+  }
+
+  // ── DevOps: read runbook ───────────────────────────────────────────────────
+
+  if (toolName === 'read_devops_runbook') {
+    const runbookId: number | undefined = typeof parsed.runbook_id === 'number' ? parsed.runbook_id : undefined;
+    if (!runbookId) return JSON.stringify({ status: 'error', message: 'runbook_id обязателен' });
+
+    const { getRunbookById } = await import('./devops.js');
+    const runbook = getRunbookById(user.id, runbookId);
+    if (!runbook) return JSON.stringify({ status: 'error', message: `Runbook с id=${runbookId} не найден.` });
+
+    return JSON.stringify({
+      status: 'success',
+      id: runbook.id,
+      title: runbook.title,
+      content: runbook.content
+    });
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -2244,6 +2311,8 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'suggest_macro') return 'Предлагаю сохранить макрос...';
   if (toolName === 'list_devops_servers') return 'Получаю список серверов...';
   if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
+  if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
+  if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
     try {
@@ -2354,7 +2423,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 

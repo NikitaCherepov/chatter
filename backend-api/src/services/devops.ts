@@ -331,3 +331,109 @@ export const isAutoApproved = (userId: number, serverId: number, command: string
   }
   return false;
 };
+
+// ── Runbooks (instruction manuals for DevOps tasks) ─────────────────────────
+
+export type DevopsRunbook = {
+  id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  created_at: number;
+  updated_at: number;
+};
+
+type DevopsRunbookRow = {
+  id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  created_at: number;
+  updated_at: number;
+};
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devops_runbooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+db.exec('CREATE INDEX IF NOT EXISTS idx_devops_runbooks_user ON devops_runbooks(user_id)');
+
+const RUNBOOKS_LIMIT = 20;
+
+const runbookRowToDto = (row: DevopsRunbookRow): DevopsRunbook => ({
+  id: row.id,
+  user_id: row.user_id,
+  title: row.title,
+  content: row.content,
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+});
+
+export const listRunbooks = (userId: number): DevopsRunbook[] => {
+  const rows = db.prepare('SELECT * FROM devops_runbooks WHERE user_id = ? ORDER BY created_at DESC')
+    .all(userId) as DevopsRunbookRow[];
+  return rows.map(runbookRowToDto);
+};
+
+export const getRunbookById = (userId: number, runbookId: number): DevopsRunbook | null => {
+  const row = db.prepare('SELECT * FROM devops_runbooks WHERE user_id = ? AND id = ?')
+    .get(userId, runbookId) as DevopsRunbookRow | undefined;
+  return row ? runbookRowToDto(row) : null;
+};
+
+export const createRunbook = (
+  userId: number,
+  title: string,
+  content: string,
+): { ok: true; id: number } | { ok: false; error: string } => {
+  const trimmedTitle = title.trim();
+  const trimmedContent = content.trim();
+
+  if (!trimmedTitle) return { ok: false, error: 'title_required' };
+  if (!trimmedContent) return { ok: false, error: 'content_required' };
+
+  const count = db.prepare('SELECT COUNT(*) as cnt FROM devops_runbooks WHERE user_id = ?')
+    .get(userId) as { cnt: number };
+  if (count.cnt >= RUNBOOKS_LIMIT) return { ok: false, error: 'runbooks_limit' };
+
+  const now = getNowUnix();
+  const result = db.prepare(
+    'INSERT INTO devops_runbooks (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(userId, trimmedTitle, trimmedContent, now, now);
+
+  return { ok: true, id: Number(result.lastInsertRowid) };
+};
+
+export const updateRunbook = (
+  userId: number,
+  runbookId: number,
+  updates: { title?: string; content?: string },
+): { ok: true } | { ok: false; error: string } => {
+  const existing = db.prepare('SELECT * FROM devops_runbooks WHERE user_id = ? AND id = ?')
+    .get(userId, runbookId) as DevopsRunbookRow | undefined;
+  if (!existing) return { ok: false, error: 'not_found' };
+
+  const now = getNowUnix();
+  const title = updates.title !== undefined ? updates.title.trim() : existing.title;
+  const content = updates.content !== undefined ? updates.content.trim() : existing.content;
+
+  if (!title) return { ok: false, error: 'title_required' };
+  if (!content) return { ok: false, error: 'content_required' };
+
+  db.prepare('UPDATE devops_runbooks SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .run(title, content, now, runbookId, userId);
+
+  return { ok: true };
+};
+
+export const deleteRunbook = (userId: number, runbookId: number): boolean => {
+  return db.prepare('DELETE FROM devops_runbooks WHERE user_id = ? AND id = ?')
+    .run(userId, runbookId).changes > 0;
+};

@@ -10,7 +10,7 @@ import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
-import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved } from './services/devops.js';
+import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
@@ -2037,6 +2037,68 @@ app.delete('/api/v1/devops/policies/:id', (req: AuthedRequest, res: any) => {
   if (!Number.isFinite(policyId)) return res.status(400).json({ error: 'invalid_id' });
 
   const deleted = deletePolicy(userId, policyId);
+  if (!deleted) return res.status(404).json({ error: 'not_found' });
+  return res.json({ ok: true });
+});
+
+// ─── DevOps Runbooks CRUD ───────────────────────────────────────────────────
+
+app.get('/api/v1/devops/runbooks', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  return res.json({ runbooks: listRunbooks(userId) });
+});
+
+app.get('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const runbookId = Number(req.params.id);
+  if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const runbook = getRunbookById(userId, runbookId);
+  if (!runbook) return res.status(404).json({ error: 'not_found' });
+  return res.json({ runbook });
+});
+
+app.post('/api/v1/devops/runbooks', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const title = `${req.body?.title || ''}`;
+  const content = `${req.body?.content || ''}`;
+
+  const result = createRunbook(userId, title, content);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    if (code === 'title_required' || code === 'content_required') return res.status(400).json({ error: code });
+    if (code === 'runbooks_limit') return res.status(429).json({ error: code });
+    return res.status(422).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
+});
+
+app.put('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const runbookId = Number(req.params.id);
+  if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const updates: Record<string, string> = {};
+  if (req.body?.title !== undefined) updates.title = `${req.body.title}`;
+  if (req.body?.content !== undefined) updates.content = `${req.body.content}`;
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
+
+  const result = updateRunbook(userId, runbookId, updates);
+  if (!result.ok) {
+    const err = (result as { ok: false; error: string }).error;
+    if (err === 'not_found') return res.status(404).json({ error: err });
+    return res.status(422).json({ error: err });
+  }
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const runbookId = Number(req.params.id);
+  if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const deleted = deleteRunbook(userId, runbookId);
   if (!deleted) return res.status(404).json({ error: 'not_found' });
   return res.json({ ok: true });
 });

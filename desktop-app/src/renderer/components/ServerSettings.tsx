@@ -15,8 +15,17 @@ type Server = {
   updated_at: number;
 };
 
+type Policy = {
+  id: number;
+  server_id: number;
+  pattern: string;
+  auto_approve: boolean;
+  created_at: number;
+};
+
 export function ServerSettings() {
   const [servers, setServers] = useState<Server[]>([]);
+  const [policies, setPolicies] = useState<Record<number, Policy[]>>({});
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
@@ -54,6 +63,15 @@ export function ServerSettings() {
     try {
       const res = await api.apiFetch<{ servers: Server[] }>('/api/v1/devops/servers');
       setServers(res.servers);
+      // Load policies for each server
+      const policyMap: Record<number, Policy[]> = {};
+      for (const server of res.servers) {
+        try {
+          const pRes = await api.apiFetch<{ policies: Policy[] }>(`/api/v1/devops/servers/${server.id}/policies`);
+          policyMap[server.id] = pRes.policies;
+        } catch { policyMap[server.id] = []; }
+      }
+      setPolicies(policyMap);
     } catch (err) {
       console.error('Failed to load servers:', err);
     } finally {
@@ -115,6 +133,19 @@ export function ServerSettings() {
       toast.error(err?.body?.error || 'Ошибка сохранения');
     } finally {
       setFormSaving(false);
+    }
+  };
+
+  const handleDeletePolicy = async (serverId: number, policyId: number) => {
+    try {
+      await api.apiFetch(`/api/v1/devops/policies/${policyId}`, { method: 'DELETE' });
+      setPolicies(prev => ({
+        ...prev,
+        [serverId]: (prev[serverId] || []).filter(p => p.id !== policyId),
+      }));
+      toast.success('Политика удалена');
+    } catch {
+      toast.error('Ошибка удаления политики');
     }
   };
 
@@ -285,6 +316,30 @@ export function ServerSettings() {
                   </svg>
                 </button>
               </div>
+              {/* Policies */}
+              {policies[server.id] && policies[server.id].length > 0 && (
+                <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Авто-разрешённые команды</div>
+                  {policies[server.id].map((policy) => (
+                    <div key={policy.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                      <code style={{ fontSize: '10px', color: 'var(--accent)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {policy.pattern}
+                      </code>
+                      <button
+                        className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
+                        style={{ width: '20px', height: '20px' }}
+                        onClick={() => handleDeletePolicy(server.id, policy.id)}
+                        title="Удалить политику"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

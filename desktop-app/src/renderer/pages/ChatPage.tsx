@@ -1285,6 +1285,31 @@ export function ChatPage() {
                       Разрешить
                     </button>
                     <button
+                      className={s.suggestMacroSaveBtn}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                      onClick={async () => {
+                        try {
+                          // Create auto-approve policy for this exact command
+                          const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          await api.apiFetch(`/api/v1/devops/servers/${conf.server_id}/policies`, {
+                            method: 'POST',
+                            body: JSON.stringify({ pattern: `^${escapedCmd}$`, auto_approve: true }),
+                          });
+                          // Also approve current command
+                          await api.apiFetch('/api/v1/devops/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success('Команда одобрена навсегда');
+                          setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка сохранения политики');
+                        }
+                      }}
+                    >
+                      Разрешить всегда
+                    </button>
+                    <button
                       className={s.suggestMacroDismissBtn}
                       onClick={async () => {
                         try {
