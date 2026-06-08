@@ -15,12 +15,15 @@ export type WsClient = {
 // When looking up, ai.ts passes effectiveUserId — which is what sendMessageThroughAi uses.
 export const wsClients = new Map<number, WsClient>();
 
-export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000): Promise<any> {
+export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000, signal?: AbortSignal): Promise<any> {
   const client = wsClients.get(userId);
   if (!client) {
     console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} NOT FOUND in wsClients (keys: [${[...wsClients.keys()].join(',')}])`);
     throw new Error('desktop_not_connected');
   }
+
+  // Если уже отменено — не отправляем вообще
+  if (signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
 
   console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} FOUND, apiUserId=${client.apiUserId}, effectiveUserId=${client.effectiveUserId}`);
 
@@ -31,7 +34,19 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
       reject(new Error('ipc_timeout'));
     }, timeoutMs);
 
-    client.pendingIpc.set(requestId, { resolve, reject, timer });
+    // Если сигнал отмены прийдёт пока ждём — чистим pending и режектим
+    const onAbort = () => {
+      client.pendingIpc.delete(requestId);
+      clearTimeout(timer);
+      reject(new DOMException('The user aborted a request.', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    client.pendingIpc.set(requestId, {
+      resolve: (data: any) => { signal?.removeEventListener('abort', onAbort); clearTimeout(timer); resolve(data); },
+      reject: (err: Error) => { signal?.removeEventListener('abort', onAbort); clearTimeout(timer); reject(err); },
+      timer,
+    });
     client.ws.send(JSON.stringify({ type: 'execute_ipc', request_id: requestId, ipc_type: ipcType, payload }));
   });
 }

@@ -1528,7 +1528,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>) => {
+const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal) => {
   const parsed = JSON.parse(argsRaw || '{}');
 
   if (toolName === 'search_web') {
@@ -1908,7 +1908,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     if (matchedMacro.return_output) {
       if (isDesktopOnline(user.id)) {
         try {
-          const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: matchedMacro.commands });
+          const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: matchedMacro.commands }, 30000, signal);
           const safeOutput = String(result || '').slice(-3000);
           return JSON.stringify({ status: 'success', logs: safeOutput, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
         } catch (err: any) {
@@ -1936,7 +1936,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     // If desktop is connected via WS — wait for result
     if (isDesktopOnline(user.id)) {
       try {
-        const result = await sendIpcToDesktop(user.id, 'read_directory', { target_path: targetPath });
+        const result = await sendIpcToDesktop(user.id, 'read_directory', { target_path: targetPath }, 30000, signal);
         return JSON.stringify({ status: 'success', entries: result, target_path: targetPath });
       } catch (err: any) {
         return JSON.stringify({ status: 'error', message: err.message, target_path: targetPath });
@@ -2374,7 +2374,14 @@ PRO
 
 let escalatedToPro = false;
 
+// Promise, который резолвится при abort — для Promise.race с runTool
+const abortPromise = new Promise<never>((_, reject) => {
+  if (abortController.signal.aborted) { reject(new DOMException('The user aborted a request.', 'AbortError')); return; }
+  abortController.signal.addEventListener('abort', () => reject(new DOMException('The user aborted a request.', 'AbortError')), { once: true });
+});
+
 for (const toolCall of message.tool_calls) {
+  if (abortController.signal.aborted) break;
   if (toolCall.type !== 'function') continue;
 
   const toolName = `${toolCall.function?.name || ''}`;
@@ -2413,18 +2420,22 @@ for (const toolCall of message.tool_calls) {
 
   let toolContent = '';
   try {
-    toolContent = await runTool(
-      user,
-      timezone,
-      toolName,
-      toolCall.function?.arguments || '{}',
-      (payload) => runCompletion('pro', payload),
-      generatedImages,
-      displayStateSink,
-      desktopActionSink,
-      mapUpdateSink,
-      options?.activeMacros
-    );
+    toolContent = await Promise.race([
+      runTool(
+        user,
+        timezone,
+        toolName,
+        toolCall.function?.arguments || '{}',
+        (payload) => runCompletion('pro', payload),
+        generatedImages,
+        displayStateSink,
+        desktopActionSink,
+        mapUpdateSink,
+        options?.activeMacros,
+        abortController.signal
+      ),
+      abortPromise,
+    ]);
 
     // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
     if (toolName === 'set_display_state' && displayStateSink.value && options?.onStateChange) {
@@ -2441,8 +2452,11 @@ for (const toolCall of message.tool_calls) {
       await options.onMapUpdate(mapUpdateSink.value);
     }
   } catch (err: any) {
+    if (err?.name === 'AbortError') break; // Прерываем цикл tool_calls
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
   }
+
+  if (abortController.signal.aborted) break;
 
   currentMessages.push({
     role: 'tool',
