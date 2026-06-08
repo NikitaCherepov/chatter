@@ -50,6 +50,7 @@ export function ChatPage() {
   const [messages, setMessages] = useState<api.Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [showTyping, setShowTyping] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
@@ -184,6 +185,7 @@ export function ChatPage() {
 
     setInput('');
     setSending(true);
+    setShowTyping(true);
 
     const imagesToSend = attachedImages.map((img) => ({
       base64: img.base64,
@@ -212,7 +214,7 @@ export function ChatPage() {
     const appendToAssistant = (text: string) => {
       if (!assistantMsgCreated) {
         assistantMsgCreated = true;
-        setSending(false); // убираем три точки — заменяем на реальный баббл
+        setShowTyping(false);
         setMessages((prev) => [...prev, {
           id: tempAssistantId, role: 'assistant', content: text, created_at: Math.floor(Date.now() / 1000),
         }]);
@@ -260,6 +262,7 @@ export function ChatPage() {
               // Удаляем временный assistant message (если был промежуточный текст)
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
             }
+            setShowTyping(false);
             setSending(false);
             return;
           }
@@ -289,12 +292,13 @@ export function ChatPage() {
             ));
           } else {
             // Ни одного промежуточного сообщения не было — добавляем финальный ответ
-            setSending(false);
             setMessages((prev) => [...prev, {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
               images: genImages,
             }]);
           }
+          setShowTyping(false);
+          setSending(false);
           if (res.display_state) dispatchAvatarState(res.display_state);
           if (!activeChatId || res.chat_id !== activeChatId) {
             setActiveChatId(res.chat_id);
@@ -313,6 +317,7 @@ export function ChatPage() {
           } else {
             setMessages((prev) => prev.filter(m => m.id !== tempUserMsg.id));
           }
+          setShowTyping(false);
           setSending(false);
         }
       },
@@ -1150,7 +1155,7 @@ export function ChatPage() {
                   </div>
                 </div>
               ))}
-              {sending && (
+              {showTyping && (
                 <div className={s.messageGroup}>
                   <div className={s.metaRow}>Chatter &bull; typing...</div>
                   <div className={s.bubble}>
