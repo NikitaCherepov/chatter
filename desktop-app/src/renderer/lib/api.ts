@@ -228,6 +228,7 @@ export type ChatSendResponse = {
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;
   model_fallback_notice?: string | null;
+  aborted?: boolean;
 };
 
 export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[], displayManifest?: { moods: string[]; reactions: string[] }): Promise<ChatSendResponse> {
@@ -410,6 +411,20 @@ export async function streamChatMessage(
 
   // Fallback: SSE
   await streamChatMessageSSE(text, chatId, images, displayManifest, callbacks, options);
+}
+
+// ── Stop chat generation ──
+
+export function stopChatStream() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'chat_stop' }));
+  } else {
+    // SSE fallback — POST to /stop endpoint
+    const tokens = loadTokens();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
+    fetch(`${API_BASE}/api/v1/chat/stop`, { method: 'POST', headers }).catch(() => {});
+  }
 }
 
 // ── SSE fallback (kept for when WS is not connected) ──

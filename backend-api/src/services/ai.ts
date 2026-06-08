@@ -23,6 +23,9 @@ dotenv.config();
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const MAX_TOOL_LOOPS = 12;
 const MAX_TOOL_LOOPS_VOICE = 4;
+
+// Реестр активных генераций для остановки по userId
+export const activeGenerations = new Map<number, AbortController>();
 const MAX_PENDING_TASKS_PER_USER = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
@@ -265,7 +268,8 @@ const createCompletionWithModelFallback = async (
   modelChain: string[],
   requestBody: Record<string, unknown>,
   providerName = 'default',
-  baseURL = ''
+  baseURL = '',
+  signal?: AbortSignal
 ) => {
   const failedModels: string[] = [];
   let lastError: unknown = null;
@@ -275,7 +279,7 @@ const createCompletionWithModelFallback = async (
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         const providerRequestBody = adaptRequestBodyForProvider(requestBody, baseURL, model);
-        const response = await client.chat.completions.create({ ...providerRequestBody, model } as any);
+        const response = await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
         return { response, modelUsed: model, failedModels };
       } catch (err) {
         lastError = err;
@@ -306,7 +310,7 @@ const createCompletionWithModelFallback = async (
   });
 };
 
-const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>) => {
+const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal) => {
   const failedProviders: string[] = [];
   const failedModels: string[] = [];
 
@@ -317,7 +321,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -352,7 +356,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
   throw Object.assign(new Error('pro_providers_failed'), { failedProviders, failedModels });
 };
 
-const createCompletionWithLiteProviderFallback = async (requestBody: Record<string, unknown>) => {
+const createCompletionWithLiteProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal) => {
   const failedProviders: string[] = [];
   const failedModels: string[] = [];
 
@@ -363,7 +367,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -1430,11 +1434,11 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
-const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry): Promise<CompletionMeta & { manualFallback?: boolean }> => {
+const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal): Promise<CompletionMeta & { manualFallback?: boolean }> => {
   // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
   if (manualModel) {
     try {
-      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL);
+      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal);
       return {
         response: completion.response,
         usedModel: completion.modelUsed,
@@ -1453,13 +1457,13 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
   if (mode === 'vision-pro' || mode === 'vision-lite') {
     const providers = mode === 'vision-pro' ? VISION_PROVIDERS.pro : VISION_PROVIDERS.lite;
     if (!providers.length) {
-      return runCompletion(mode === 'vision-pro' ? 'pro' : 'lite', requestPayload);
+      return runCompletion(mode === 'vision-pro' ? 'pro' : 'lite', requestPayload, undefined, signal);
     }
     const failedProviders: string[] = [];
     const failedModels: string[] = [];
     for (const provider of providers) {
       try {
-        const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestPayload);
+        const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestPayload, provider.name, provider.baseURL, signal);
         if (completion.failedModels.length) {
           failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
         }
@@ -1482,7 +1486,7 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
   }
   if (mode === 'pro') {
     if (PRO_PROVIDERS.length > 0) {
-      const res = await createCompletionWithProProviderFallback(requestPayload);
+      const res = await createCompletionWithProProviderFallback(requestPayload, signal);
       return {
         response: res.response,
         usedModel: res.modelUsed,
@@ -1492,7 +1496,7 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
         failedProviders: res.failedProviders
       };
     }
-    const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload);
+    const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload, 'pro-main', '', signal);
     return {
       response: res.response,
       usedModel: res.modelUsed,
@@ -1501,7 +1505,7 @@ const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite'
       failedModels: res.failedModels
     };
   }
-  const res = await createCompletionWithLiteProviderFallback(requestPayload);
+  const res = await createCompletionWithLiteProviderFallback(requestPayload, signal);
   return {
     response: res.response,
     usedModel: res.modelUsed,
@@ -2257,6 +2261,11 @@ PRO
   let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
   let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
 
+  // AbortController для остановки генерации пользователем
+  const abortController = new AbortController();
+  activeGenerations.set(userId, abortController);
+
+  try {
   while (loop < effectiveMaxLoops) {
     loop += 1;
 
@@ -2274,7 +2283,7 @@ PRO
       max_tokens: 16384,
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
-    }, manualModel);
+    }, manualModel, abortController.signal);
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
@@ -2483,7 +2492,7 @@ if (escalatedToPro) {
         max_tokens: 8192,
         thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
         clear_thinking: false
-      }, manualModel);
+      }, manualModel, abortController.signal);
       const finalMessage = finalCompletion.response?.choices?.[0]?.message;
       if (finalMessage) {
         currentMessages.push(finalMessage);
@@ -2568,6 +2577,22 @@ if (escalatedToPro) {
       used_provider: usedProvider
     }
   };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      // Генерация остановлена пользователем
+      console.log(`[AI] Generation aborted by user ${userId}`);
+      return {
+        reply_text: '',
+        chat_id: chatId,
+        message_id: 0,
+        aborted: true,
+        usage: { tokens_used: totalTokens, used_model: usedModel, used_provider: usedProvider }
+      };
+    }
+    throw err;
+  } finally {
+    activeGenerations.delete(userId);
+  }
 };
 
 export const generateAdminOutreach = async (targetUserId: number, adminInstruction: string) => {

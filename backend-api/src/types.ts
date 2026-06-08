@@ -103,6 +103,7 @@ export type AiSendResult = {
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;
   desktop_action?: DesktopActionPayload | null;
+  aborted?: boolean;
   usage: UsageDto;
 };
 

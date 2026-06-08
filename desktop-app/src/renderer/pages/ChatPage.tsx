@@ -254,6 +254,15 @@ export function ChatPage() {
           dispatchMapData(data);
         },
         onDone: (res) => {
+          // Если генерация была остановлена пользователем
+          if (res.aborted) {
+            if (assistantMsgCreated) {
+              // Удаляем временный assistant message (если был промежуточный текст)
+              setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
+            }
+            setSending(false);
+            return;
+          }
           if (res.model_fallback_notice) {
             toast.warning(res.model_fallback_notice, { duration: 5000 });
           }
@@ -1297,14 +1306,24 @@ export function ChatPage() {
                 disabled={sending}
               />
 
+              {sending ? (
+                <svg
+                  className={s.sendIcon}
+                  onClick={() => { api.stopChatStream(); setSending(false); }}
+                  viewBox="0 0 24 24" fill="var(--accent-icon-light)" stroke="none"
+                >
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
               <svg
-                className={sending || (!input.trim() && attachedImages.length === 0) ? s.sendIconDisabled : s.sendIcon}
-                onClick={() => { if (!sending && (input.trim() || attachedImages.length > 0)) handleSend(); }}
+                className={!input.trim() && attachedImages.length === 0 ? s.sendIconDisabled : s.sendIcon}
+                onClick={() => { if (input.trim() || attachedImages.length > 0) handleSend(); }}
                 viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
               >
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
+              )}
 
               <svg
                 className={isTranscribing ? s.micIconTranscribing : isRecording ? s.micIconRecording : s.micIcon}

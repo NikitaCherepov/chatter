@@ -8,7 +8,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, create
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
@@ -711,6 +711,17 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     res.write(`event: error\ndata: ${JSON.stringify({ error: code })}\n\n`);
     res.end();
   }
+});
+
+// ── Остановка генерации ────────────────────────────────────────────────────
+app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const controller = activeGenerations.get(userId);
+  if (controller) {
+    controller.abort();
+    return res.json({ ok: true, message: 'Остановлено' });
+  }
+  return res.json({ ok: false, message: 'Нет активной генерации' });
 });
 
 app.get('/api/v1/notes', (req: AuthedRequest, res) => {
@@ -1948,6 +1959,13 @@ wss.on('connection', (ws, req) => {
 
       if (msg.type === 'chat_send') {
         await handleWsChatSend(client, msg);
+      } else if (msg.type === 'chat_stop') {
+        const userId = client.effectiveUserId;
+        const controller = activeGenerations.get(userId);
+        if (controller) {
+          controller.abort();
+        }
+        // Ответ не нужен — клиент получит done с aborted: true
       } else if (msg.type === 'ipc_result') {
         handleIpcResult(client, msg);
       } else if (msg.type === 'ping') {
