@@ -285,7 +285,7 @@ export const createServerUser = (
         result = await runSudo(`usermod -aG ${shellQuote(sudoGroup)} -- ${shellQuote(username)}`);
         if (result.exitCode !== 0) throw new Error(`usermod_failed: ${result.stderr || result.stdout}`);
 
-        const nopasswdSudo = options.nopasswdSudo !== false;
+        const nopasswdSudo = options.nopasswdSudo === true;
         if (nopasswdSudo) {
           const sudoersLine = `${username} ALL=(ALL) NOPASSWD:ALL`;
           const sudoersPath = `/etc/sudoers.d/${username}`;

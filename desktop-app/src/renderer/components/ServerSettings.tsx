@@ -48,6 +48,7 @@ export function ServerSettings() {
   const [sshKeys, setSshKeys] = useState<SshKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingHasSudoPassword, setEditingHasSudoPassword] = useState(false);
   const [testing, setTesting] = useState<number | null>(null);
 
   // Form
@@ -69,6 +70,7 @@ export function ServerSettings() {
     setFormUsername('root');
     setFormPassword('');
     setFormSudoPassword('');
+    setEditingHasSudoPassword(false);
     setFormDefaultKey(null);
     setFormUseSshKeyForLogin(false);
   };
@@ -81,6 +83,7 @@ export function ServerSettings() {
     setFormUsername(server.username);
     setFormPassword('');
     setFormSudoPassword('');
+    setEditingHasSudoPassword(server.has_sudo_password);
     setFormDefaultKey(server.default_ssh_key_id);
     setFormUseSshKeyForLogin(server.use_ssh_key_for_login);
   };
@@ -315,6 +318,29 @@ export function ServerSettings() {
           onChange={(e) => setFormSudoPassword(e.target.value)}
           placeholder="Для команд с sudo"
         />
+        {editingId !== null && editingHasSudoPassword && (
+          <button
+            className={s.cancelBtn}
+            style={{ alignSelf: 'flex-start', padding: '6px 10px', fontSize: '12px' }}
+            type="button"
+            onClick={async () => {
+              try {
+                await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ sudo_password: '' }),
+                });
+                setEditingHasSudoPassword(false);
+                setFormSudoPassword('');
+                toast.success('Sudo password cleared');
+                loadServers();
+              } catch (err: any) {
+                toast.error(err?.body?.error || 'Failed to clear sudo password');
+              }
+            }}
+          >
+            Clear sudo password
+          </button>
+        )}
       </div>
 
       <div className={s.fieldGroup}>

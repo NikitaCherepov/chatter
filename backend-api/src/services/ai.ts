@@ -1520,7 +1520,7 @@ const buildCreateServerUserTool = () => {
     type: 'function' as const,
     function: {
       name: 'create_server_user',
-      description: `Создаёт нового пользователя на удалённом сервере с sudo-правами (NOPASSWD). Пароль нового пользователя вводится в карточке подтверждения на десктопе — НЕ генерируй и НЕ передавай пароль сам. SSH-ключ установится автоматически если у сервера есть дефолтный ключ.`,
+      description: `Создаёт нового пользователя на удалённом сервере с sudo-правами. Использует sudo_password сервера как пароль для нового пользователя; если sudo_password не сохранён — пользователь введёт его в карточке подтверждения. NOPASSWD не включается по умолчанию: передавай nopasswd_sudo=true только если пользователь явно попросил sudo без пароля.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1542,7 +1542,7 @@ const buildCreateServerUserTool = () => {
           },
           nopasswd_sudo: {
             type: 'boolean',
-            description: 'Если true — добавить sudoers правило NOPASSWD для нового пользователя (по умолчанию true).'
+            description: 'Если true — добавить sudoers правило NOPASSWD для нового пользователя. По умолчанию false.'
           }
         },
         required: ['server_id', 'username']
@@ -2467,7 +2467,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const username: string = typeof parsed.username === 'string' ? parsed.username.trim() : '';
     const installSshKey: boolean = parsed.install_ssh_key !== false;
     const explicitKeyId: number | undefined = typeof parsed.key_id === 'number' ? parsed.key_id : undefined;
-    const nopasswdSudo: boolean = parsed.nopasswd_sudo !== false;
+    const nopasswdSudo: boolean = parsed.nopasswd_sudo === true;
 
     if (!serverId || !username) {
       return JSON.stringify({ status: 'error', message: 'server_id и username обязательны' });

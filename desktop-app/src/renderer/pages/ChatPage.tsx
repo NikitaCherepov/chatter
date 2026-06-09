@@ -1294,8 +1294,7 @@ export function ChatPage() {
                   </div>
                   {conf.needs_sudo_password && (
                     <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {conf.needs_sudo_password && (
-                        <>
+                      <>
                           <input
                             type="password"
                             placeholder="Sudo пароль"
@@ -1312,8 +1311,7 @@ export function ChatPage() {
                             />
                             Сохранить sudo пароль в настройках сервера
                           </label>
-                        </>
-                      )}
+                      </>
                     </div>
                   )}
                   {conf._verdict && (
