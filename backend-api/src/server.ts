@@ -2225,6 +2225,7 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
   const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
+  const newPassword = typeof req.body?.new_password === 'string' ? req.body.new_password : undefined;
   const saveSudoPassword = req.body?.save_sudo_password === true;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
@@ -2247,6 +2248,9 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   if (needsSudoPassword && !serverHasSudoPassword(userId, pending.serverId) && !sudoPassword) {
     return res.status(400).json({ error: 'sudo_password_required' });
   }
+  if (pending.needsNewPassword === true && !newPassword) {
+    return res.status(400).json({ error: 'new_password_required' });
+  }
   // Save sudo password to server settings if requested
   if (saveSudoPassword && sudoPassword) {
     updateServer(userId, pending.serverId, { sudoPassword });
@@ -2255,7 +2259,7 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   // Execute the approved command
   try {
     deletePendingConfirmation(confirmationId);
-    const execOptions = sudoPassword ? { sudoPasswordOverride: sudoPassword } : undefined;
+    const execOptions = (sudoPassword || newPassword) ? { sudoPasswordOverride: sudoPassword, newPasswordOverride: newPassword } : undefined;
     const result = pending.execute
       ? await pending.execute(execOptions)
       : await execSshCommand(userId, pending.serverId, pending.command, execOptions);

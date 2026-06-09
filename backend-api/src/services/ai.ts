@@ -1551,6 +1551,30 @@ const buildCreateServerUserTool = () => {
   };
 };
 
+const buildChangeServerUserPasswordTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'change_server_user_password',
+      description: `Меняет пароль существующего Linux-пользователя на сервере. Пароль НЕ передаётся ботом в аргументах: пользователь вводит новый пароль в карточке подтверждения. Используй, когда пользователь просит сменить/задать пароль существующему пользователю.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          server_id: {
+            type: 'number',
+            description: 'ID сервера (из list_devops_servers).'
+          },
+          username: {
+            type: 'string',
+            description: 'Имя существующего пользователя, которому нужно сменить пароль.'
+          }
+        },
+        required: ['server_id', 'username']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -2537,7 +2561,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
           serverId,
           command: previewCommand,
           needsSudoPassword: needsSudoPasswordPrompt,
-          execute: async (execOptions?: { sudoPasswordOverride?: string }) => {
+          execute: async (execOptions?: { sudoPasswordOverride?: string; newPasswordOverride?: string }) => {
             const { createServerUser } = await import('./ssh.js');
             return createServerUser(user.id, serverId, {
               username,
@@ -2571,6 +2595,96 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, username });
       }
       return JSON.stringify({ status: 'error', message: `Ошибка создания пользователя: ${err?.message || String(err)}`, server: server.name, username });
+    }
+  }
+
+  // ── DevOps: change server user password ───────────────────────────────────
+
+  if (toolName === 'change_server_user_password') {
+    const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
+    const username: string = typeof parsed.username === 'string' ? parsed.username.trim() : '';
+
+    if (!serverId || !username) {
+      return JSON.stringify({ status: 'error', message: 'server_id и username обязательны' });
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+      return JSON.stringify({ status: 'error', message: 'username содержит недопустимые символы' });
+    }
+
+    const { getServerById, serverHasSudoPassword } = await import('./devops.js');
+    const server = getServerById(user.id, serverId);
+    if (!server) {
+      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+    }
+
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение смены пароля невозможно — попроси пользователя запустить приложение на ПК.' });
+    }
+
+    const needsSudoPasswordPrompt = server.username !== 'root' && !serverHasSudoPassword(user.id, serverId);
+    const previewCommand = [
+      'change_server_user_password',
+      `username=${username}`,
+      'password=***',
+    ].join(' ');
+
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    sendToDesktop(user.id, {
+      type: 'desktop_action',
+      action: 'devops_confirmation',
+      target: String(serverId),
+      value: {
+        confirmation_id: confirmationId,
+        server_name: server.name,
+        server_id: serverId,
+        host: server.host,
+        command: previewCommand,
+        needs_sudo_password: needsSudoPasswordPrompt,
+        needs_new_password: true,
+        new_username: username,
+      }
+    });
+
+    const { registerPendingConfirmation } = await import('./devops-confirmations.js');
+    try {
+      const result = await new Promise<any>((resolve, reject) => {
+        registerPendingConfirmation(confirmationId, {
+          userId: user.id,
+          serverId,
+          command: previewCommand,
+          needsSudoPassword: needsSudoPasswordPrompt,
+          needsNewPassword: true,
+          execute: async (execOptions?: { sudoPasswordOverride?: string; newPasswordOverride?: string }) => {
+            const { changeServerUserPassword } = await import('./ssh.js');
+            return changeServerUserPassword(user.id, serverId, {
+              username,
+              newPassword: execOptions?.newPasswordOverride,
+              sudoPasswordOverride: execOptions?.sudoPasswordOverride,
+            });
+          },
+          resolve,
+          reject,
+          createdAt: Date.now()
+        });
+      });
+
+      return JSON.stringify({
+        status: 'success',
+        message: `Пароль пользователя ${username} изменён на сервере ${server.name}.`,
+        server: server.name,
+        username,
+        changed: result.changed === true
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил смену пароля.', server: server.name, username });
+      }
+      if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, username });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка смены пароля: ${err?.message || String(err)}`, server: server.name, username });
     }
   }
 
@@ -2728,6 +2842,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
   if (toolName === 'install_ssh_public_key') return 'Устанавливаю SSH-ключ...';
   if (toolName === 'create_server_user') return 'Создаю пользователя на сервере...';
+  if (toolName === 'change_server_user_password') return 'Запрашиваю смену пароля пользователя...';
   if (toolName === 'suggest_server_creds_update') return 'Предлагаю обновить учётные данные...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
@@ -2839,7 +2954,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 

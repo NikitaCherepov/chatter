@@ -25,6 +25,17 @@ export type CreateServerUserResult = {
   nopasswdSudo: boolean;
 };
 
+export type ChangeServerUserPasswordOptions = {
+  username: string;
+  newPassword?: string;
+  sudoPasswordOverride?: string;
+};
+
+export type ChangeServerUserPasswordResult = {
+  username: string;
+  changed: boolean;
+};
+
 // ── Dangerous command check ─────────────────────────────────────────────────
 
 const DANGEROUS_PATTERNS = [
@@ -315,6 +326,131 @@ export const createServerUser = (
           sshKeyInstalled: shouldInstallKey,
           nopasswdSudo,
         });
+      } catch (err: any) {
+        fail(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+
+    client.on('error', (err: Error) => {
+      clearTimeout(timer);
+      fail(err);
+    });
+
+    client.connect(buildSshConfig(creds, SSH_TIMEOUT_MS));
+  });
+};
+
+export const changeServerUserPassword = (
+  userId: number,
+  serverId: number,
+  options: ChangeServerUserPasswordOptions,
+): Promise<ChangeServerUserPasswordResult> => {
+  return new Promise((resolve, reject) => {
+    const username = options.username.trim();
+
+    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+      return reject(new Error('invalid_username'));
+    }
+
+    const creds = getServerCreds(userId, serverId);
+    if (!creds) return reject(new Error('server_not_found'));
+    if (!creds.password && !creds.privateKey) return reject(new Error('server_no_credentials'));
+
+    const newPassword = options.newPassword || '';
+    if (newPassword.length < 8 || newPassword.length > 128 || /[\r\n]/.test(newPassword)) {
+      return reject(new Error('invalid_password'));
+    }
+
+    const client = new Client();
+    let resolved = false;
+    let sudoMode: 'root' | 'nopasswd' | 'password' = 'password';
+
+    const cleanup = () => {
+      resolved = true;
+      client.end();
+    };
+
+    const fail = (err: Error) => {
+      if (!resolved) { cleanup(); reject(err); }
+    };
+
+    const done = (result: ChangeServerUserPasswordResult) => {
+      if (!resolved) { cleanup(); resolve(result); }
+    };
+
+    const run = (command: string, input?: string): Promise<SshResult> => {
+      return new Promise((runResolve, runReject) => {
+        let stdout = '';
+        let stderr = '';
+
+        client.exec(command, (err: Error | undefined, stream: ClientChannel) => {
+          if (err) return runReject(err);
+
+          if (input !== undefined) {
+            stream.write(input);
+            stream.end();
+          }
+
+          stream.on('data', (data: Buffer) => {
+            stdout += data.toString();
+            if (stdout.length > MAX_BUFFER) stdout = stdout.slice(-MAX_BUFFER);
+          });
+          stream.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+            if (stderr.length > MAX_BUFFER) stderr = stderr.slice(-MAX_BUFFER);
+          });
+          stream.on('close', (code: number | null) => runResolve({ stdout, stderr, exitCode: code }));
+          stream.on('error', (streamErr: Error) => runReject(streamErr));
+        });
+      });
+    };
+
+    const sudoCommand = (command: string): string => {
+      if (sudoMode === 'root') return command;
+      if (sudoMode === 'nopasswd') return `sudo -n ${command}`;
+      return `sudo -S -p '' ${command}`;
+    };
+
+    const sudoInput = (payload?: string): string | undefined => {
+      if (sudoMode === 'password') return `${options.sudoPasswordOverride || creds.sudoPassword || ''}\n${payload || ''}`;
+      return payload;
+    };
+
+    const runSudo = (command: string, payload?: string) => run(sudoCommand(command), sudoInput(payload));
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        cleanup();
+        reject(new Error('ssh_timeout'));
+      }
+    }, SSH_TIMEOUT_MS);
+
+    client.on('ready', async () => {
+      clearTimeout(timer);
+
+      try {
+        if (creds.username === 'root') {
+          sudoMode = 'root';
+        } else {
+          const nopasswdCheck = await run('sudo -n true');
+          if (nopasswdCheck.exitCode === 0) {
+            sudoMode = 'nopasswd';
+          } else if (options.sudoPasswordOverride || creds.sudoPassword) {
+            const passwordCheck = await run('sudo -S -p \'\' true', `${options.sudoPasswordOverride || creds.sudoPassword}\n`);
+            if (passwordCheck.exitCode !== 0) throw new Error('sudo_auth_failed');
+            sudoMode = 'password';
+          } else {
+            throw new Error('sudo_password_required');
+          }
+        }
+
+        const exists = await run(`id -u ${shellQuote(username)}`);
+        if (exists.exitCode !== 0) throw new Error('user_not_found');
+
+        const result = await runSudo('chpasswd', `${username}:${newPassword}\n`);
+        if (result.exitCode !== 0) throw new Error(`chpasswd_failed: ${result.stderr || result.stdout}`);
+
+        done({ username, changed: true });
       } catch (err: any) {
         fail(err instanceof Error ? err : new Error(String(err)));
       }
