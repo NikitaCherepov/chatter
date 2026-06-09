@@ -504,3 +504,147 @@ export const attachRunbookToServer = (
 
   return { ok: true, created };
 };
+
+// ── SSH Keys (public keys for deploying to servers) ─────────────────────────
+
+export type DevopsSshKey = {
+  id: number;
+  user_id: number;
+  name: string;
+  public_key: string;
+  created_at: number;
+  updated_at: number;
+};
+
+type DevopsSshKeyRow = {
+  id: number;
+  user_id: number;
+  name: string;
+  public_key_enc: string;
+  created_at: number;
+  updated_at: number;
+};
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devops_ssh_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    public_key_enc TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+db.exec('CREATE INDEX IF NOT EXISTS idx_devops_ssh_keys_user ON devops_ssh_keys(user_id)');
+
+const SSH_KEYS_LIMIT = 20;
+
+const sshKeyRowToDto = (row: DevopsSshKeyRow): DevopsSshKey => ({
+  id: row.id,
+  user_id: row.user_id,
+  name: row.name,
+  public_key: decrypt(row.public_key_enc),
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+});
+
+export const listSshKeys = (userId: number): DevopsSshKey[] => {
+  const rows = db.prepare('SELECT * FROM devops_ssh_keys WHERE user_id = ? ORDER BY created_at DESC')
+    .all(userId) as DevopsSshKeyRow[];
+  return rows.map(sshKeyRowToDto);
+};
+
+export const getSshKeyById = (userId: number, keyId: number): DevopsSshKey | null => {
+  const row = db.prepare('SELECT * FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+    .get(userId, keyId) as DevopsSshKeyRow | undefined;
+  return row ? sshKeyRowToDto(row) : null;
+};
+
+/** Returns decrypted public key — used only when deploying to a server */
+export const getSshPublicKey = (userId: number, keyId: number): string | null => {
+  const row = db.prepare('SELECT public_key_enc FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+    .get(userId, keyId) as { public_key_enc: string } | undefined;
+  return row ? decrypt(row.public_key_enc) : null;
+};
+
+export const createSshKey = (
+  userId: number,
+  name: string,
+  publicKey: string,
+): { ok: true; id: number } | { ok: false; error: string } => {
+  const trimmedName = name.trim();
+  const trimmedKey = publicKey.trim();
+
+  if (!trimmedName) return { ok: false, error: 'name_required' };
+  if (!trimmedKey) return { ok: false, error: 'public_key_required' };
+
+  // Basic validation: public key should start with ssh- or ecjsa-
+  if (!trimmedKey.startsWith('ssh-') && !trimmedKey.startsWith('ecdsa-')) {
+    return { ok: false, error: 'invalid_public_key_format' };
+  }
+
+  const count = db.prepare('SELECT COUNT(*) as cnt FROM devops_ssh_keys WHERE user_id = ?')
+    .get(userId) as { cnt: number };
+  if (count.cnt >= SSH_KEYS_LIMIT) return { ok: false, error: 'ssh_keys_limit' };
+
+  const now = getNowUnix();
+  const result = db.prepare(
+    'INSERT INTO devops_ssh_keys (user_id, name, public_key_enc, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(userId, trimmedName, encrypt(trimmedKey), now, now);
+
+  return { ok: true, id: Number(result.lastInsertRowid) };
+};
+
+export const updateSshKey = (
+  userId: number,
+  keyId: number,
+  updates: { name?: string; public_key?: string },
+): { ok: true } | { ok: false; error: string } => {
+  const existing = db.prepare('SELECT * FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+    .get(userId, keyId) as DevopsSshKeyRow | undefined;
+  if (!existing) return { ok: false, error: 'not_found' };
+
+  const now = getNowUnix();
+  const name = updates.name !== undefined ? updates.name.trim() : existing.name;
+  const publicKey = updates.public_key !== undefined ? updates.public_key.trim() : decrypt(existing.public_key_enc);
+
+  if (!name) return { ok: false, error: 'name_required' };
+  if (!publicKey) return { ok: false, error: 'public_key_required' };
+
+  db.prepare('UPDATE devops_ssh_keys SET name = ?, public_key_enc = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .run(name, encrypt(publicKey), now, keyId, userId);
+
+  return { ok: true };
+};
+
+export const deleteSshKey = (userId: number, keyId: number): boolean => {
+  return db.prepare('DELETE FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+    .run(userId, keyId).changes > 0;
+};
+
+/**
+ * Build the shell script to install a public SSH key for a target user.
+ * Handles both root and non-root users with proper permissions.
+ */
+export const buildInstallKeyScript = (targetUser: string, publicKey: string): string => {
+  const escapedKey = publicKey.replace(/'/g, "'\\''");
+  if (targetUser === 'root') {
+    return [
+      `mkdir -p /root/.ssh`,
+      `printf '%s\\n' '${escapedKey}' >> /root/.ssh/authorized_keys`,
+      `sort -u /root/.ssh/authorized_keys -o /root/.ssh/authorized_keys`,
+      `chmod 700 /root/.ssh`,
+      `chmod 600 /root/.ssh/authorized_keys`,
+      `chown -R root:root /root/.ssh`,
+    ].join(' && ');
+  }
+  return [
+    `mkdir -p /home/${targetUser}/.ssh`,
+    `printf '%s\\n' '${escapedKey}' >> /home/${targetUser}/.ssh/authorized_keys`,
+    `sort -u /home/${targetUser}/.ssh/authorized_keys -o /home/${targetUser}/.ssh/authorized_keys`,
+    `chmod 700 /home/${targetUser}/.ssh`,
+    `chmod 600 /home/${targetUser}/.ssh/authorized_keys`,
+    `chown -R ${targetUser}:${targetUser} /home/${targetUser}/.ssh`,
+  ].join(' && ');
+};

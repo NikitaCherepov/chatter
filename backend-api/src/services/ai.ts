@@ -1443,6 +1443,34 @@ const buildSuggestRunbookTool = () => {
   };
 };
 
+const buildInstallSshPublicKeyTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'install_ssh_public_key',
+      description: `Устанавливает сохранённый SSH-публичный ключ в authorized_keys указанного пользователя на сервере. Создаёт .ssh директорию, добавляет ключ, выставляет правильные права. Используй когда нужно настроить SSH-доступ для нового или существующего пользователя.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          server_id: {
+            type: 'number',
+            description: 'ID сервера (из list_devops_servers).'
+          },
+          key_id: {
+            type: 'number',
+            description: 'ID SSH-ключа для установки.'
+          },
+          target_user: {
+            type: 'string',
+            description: 'Имя пользователя на сервере, которому устанавливается ключ (например "root", "deploy").'
+          }
+        },
+        required: ['server_id', 'key_id', 'target_user']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -2147,14 +2175,16 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
   // ── DevOps: list servers ────────────────────────────────────────────────────
 
   if (toolName === 'list_devops_servers') {
-    const { listServers } = await import('./devops.js');
+    const { listServers, listSshKeys } = await import('./devops.js');
     const servers = listServers(user.id);
+    const sshKeys = listSshKeys(user.id);
     if (servers.length === 0) {
       return JSON.stringify({ status: 'info', message: 'У пользователя нет добавленных серверов. Попроси его добавить сервер в настройках (вкладка "Серверы").' });
     }
     return JSON.stringify({
       status: 'success',
-      servers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username }))
+      servers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username })),
+      ssh_keys: sshKeys.map(k => ({ id: k.id, name: k.name }))
     });
   }
 
@@ -2295,6 +2325,51 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return JSON.stringify({ status: 'success', message: `Предложение инструкции "${title}" отправлено.` });
   }
 
+  // ── DevOps: install SSH public key ───────────────────────────────────────────
+
+  if (toolName === 'install_ssh_public_key') {
+    const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
+    const keyId: number | undefined = typeof parsed.key_id === 'number' ? parsed.key_id : undefined;
+    const targetUser: string = typeof parsed.target_user === 'string' ? parsed.target_user.trim() : '';
+
+    if (!serverId || !keyId || !targetUser) {
+      return JSON.stringify({ status: 'error', message: 'server_id, key_id и target_user обязательны' });
+    }
+
+    // Validate target_user (no shell injection)
+    if (!/^[a-zA-Z0-9._-]+$/.test(targetUser)) {
+      return JSON.stringify({ status: 'error', message: 'target_user содержит недопустимые символы' });
+    }
+
+    const { getSshPublicKey, buildInstallKeyScript, getServerById } = await import('./devops.js');
+    const publicKey = getSshPublicKey(user.id, keyId);
+    if (!publicKey) {
+      return JSON.stringify({ status: 'error', message: `SSH-ключ с id=${keyId} не найден.` });
+    }
+
+    const server = getServerById(user.id, serverId);
+    if (!server) {
+      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+    }
+
+    // Build the install script
+    const script = buildInstallKeyScript(targetUser, publicKey);
+
+    // Use the existing SSH executor — respects HitL confirmation
+    const { execSshCommand } = await import('./ssh.js');
+    try {
+      const result = await execSshCommand(user.id, serverId, script);
+      return JSON.stringify({
+        status: 'success',
+        message: `SSH-ключ установлен для пользователя ${targetUser} на сервере ${server.name}`,
+        exitCode: result.exitCode,
+        stderr: result.stderr || undefined,
+      });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Ошибка установки ключа: ${err.message}` });
+    }
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -2363,6 +2438,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
+  if (toolName === 'install_ssh_public_key') return 'Устанавливаю SSH-ключ...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
     try {
@@ -2473,7 +2549,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 

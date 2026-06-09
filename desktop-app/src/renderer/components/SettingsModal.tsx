@@ -11,13 +11,14 @@ import type { SelectOption } from './Select';
 import { MacroSettings } from './MacroSettings';
 import { ServerSettings } from './ServerSettings';
 import { RunbookSettings } from './RunbookSettings';
+import { SshKeySettings } from './SshKeySettings';
 import s from './SettingsModal.module.scss';
 
 type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'servers' | 'runbooks';
+type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'servers' | 'runbooks' | 'sshkeys';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -44,6 +45,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'macros', label: 'Макросы' },
   { key: 'servers', label: 'Серверы' },
   { key: 'runbooks', label: 'Инструкции' },
+  { key: 'sshkeys', label: 'SSH-ключи' },
   { key: 'app', label: 'Приложение' },
 ];
 
@@ -463,6 +465,10 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'runbooks' && (
             <RunbookSettings />
+          )}
+
+          {section === 'sshkeys' && (
+            <SshKeySettings />
           )}
 
           {section === 'app' && (

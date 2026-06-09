@@ -10,7 +10,7 @@ import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
-import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer } from './services/devops.js';
+import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
@@ -2173,6 +2173,41 @@ app.post('/api/v1/devops/runbooks/review-commands', async (req: AuthedRequest, r
     console.error('[runbooks/review-commands]', err);
     return res.status(500).json({ error: 'ai_call_failed' });
   }
+});
+
+// ── SSH Keys ──────────────────────────────────────────────────────────────
+
+app.get('/api/v1/devops/ssh-keys', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+  const keys = listSshKeys(userId);
+  return res.json({ keys });
+});
+
+app.post('/api/v1/devops/ssh-keys', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+  const name = `${req.body?.name || ''}`;
+  const publicKey = `${req.body?.public_key || ''}`;
+
+  const result = createSshKey(userId, name, publicKey);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    return res.status(400).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
+});
+
+app.delete('/api/v1/devops/ssh-keys/:id', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+  const keyId = Number(req.params.id);
+  if (!Number.isFinite(keyId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const ok = deleteSshKey(userId, keyId);
+  if (!ok) return res.status(404).json({ error: 'not_found' });
+  return res.json({ ok: true });
 });
 
 // ─── DevOps: Approve/reject pending command (from desktop via WS) ───────────
