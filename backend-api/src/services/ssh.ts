@@ -360,19 +360,6 @@ export const testSshConnection = (
       resolve({ ok: false, error: err.message });
     });
 
-    const config: any = {
-      host: creds.host,
-      port: creds.port,
-      username: creds.username,
-      readyTimeout: 10_000,
-    };
-
-    if (creds.privateKey) {
-      config.privateKey = creds.privateKey;
-    } else if (creds.password) {
-      config.password = creds.password;
-    }
-
-    client.connect(config);
+    client.connect(buildSshConfig(creds, 10_000));
   });
 };

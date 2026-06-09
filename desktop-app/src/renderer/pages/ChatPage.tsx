@@ -82,7 +82,7 @@ export function ChatPage() {
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
-  const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
+  const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; use_ssh_key_for_login: boolean; remove_password: boolean }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
@@ -273,15 +273,17 @@ export function ChatPage() {
             }
           }
           if (action.action === 'suggest_server_creds_update' && action.value) {
-            const val = action.value as { server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean };
+            const val = action.value as { server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; use_ssh_key_for_login?: boolean; remove_password?: boolean };
             if (val.server_id && val.new_username && val.reason) {
+              const useSshKeyForLogin = val.use_ssh_key_for_login === true || val.use_ssh_key === true;
               setPendingCredsUpdates(prev => [...prev, {
                 server_id: val.server_id!,
                 server_name: val.server_name || '',
                 current_username: val.current_username || '',
                 new_username: val.new_username!,
                 reason: val.reason!,
-                use_ssh_key: val.use_ssh_key || false,
+                use_ssh_key: useSshKeyForLogin,
+                use_ssh_key_for_login: useSshKeyForLogin,
                 remove_password: val.remove_password || false,
               }]);
             }
@@ -1522,7 +1524,7 @@ export function ChatPage() {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                         <code style={{ fontSize: '11px', color: 'var(--accent)' }}>{upd.new_username}</code>
                       </div>
-                      {upd.use_ssh_key && (
+                      {upd.use_ssh_key_for_login && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Авторизация:</span>
                           <span style={{ fontSize: '11px', color: 'var(--accent)' }}>SSH-ключ</span>
@@ -1543,6 +1545,7 @@ export function ChatPage() {
                         try {
                           const body: Record<string, unknown> = {
                             username: upd.new_username,
+                            use_ssh_key_for_login: upd.use_ssh_key_for_login,
                           };
                           if (upd.remove_password) body.password = '';
                           await api.apiFetch(`/api/v1/devops/servers/${upd.server_id}`, {

@@ -37,6 +37,7 @@ export type DevopsServer = {
   has_key: boolean;
   has_sudo_password: boolean;
   default_ssh_key_id: number | null;
+  use_ssh_key_for_login: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -62,6 +63,7 @@ type DevopsServerRow = {
   private_key_enc: string | null;
   sudo_password_enc: string | null;
   default_ssh_key_id: number | null;
+  use_ssh_key_for_login: number;
   created_at: number;
   updated_at: number;
 };
@@ -80,6 +82,7 @@ db.exec(`
     private_key_enc TEXT,
     sudo_password_enc TEXT,
     default_ssh_key_id INTEGER,
+    use_ssh_key_for_login INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )
@@ -90,6 +93,7 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_devops_servers_user ON devops_servers(us
 // Safe migration for existing tables
 try { db.exec('ALTER TABLE devops_servers ADD COLUMN sudo_password_enc TEXT'); } catch {}
 try { db.exec('ALTER TABLE devops_servers ADD COLUMN default_ssh_key_id INTEGER'); } catch {}
+try { db.exec('ALTER TABLE devops_servers ADD COLUMN use_ssh_key_for_login INTEGER NOT NULL DEFAULT 0'); } catch {}
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +111,7 @@ const rowToDto = (row: DevopsServerRow): DevopsServer => ({
   has_key: !!row.private_key_enc,
   has_sudo_password: !!row.sudo_password_enc,
   default_ssh_key_id: row.default_ssh_key_id,
+  use_ssh_key_for_login: row.use_ssh_key_for_login === 1,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -134,19 +139,22 @@ export const getServerCreds = (userId: number, serverId: number): ServerCreds | 
   `).get(userId, serverId) as DevopsServerRow | undefined;
   if (!row) return null;
 
-  // Resolve private key: own field > default ssh key pair
-  let privateKey: string | undefined = row.private_key_enc ? decrypt(row.private_key_enc) : undefined;
-  if (!privateKey && row.default_ssh_key_id) {
-    const keyRow = db.prepare('SELECT private_key_enc FROM devops_ssh_keys WHERE user_id = ? AND id = ? AND private_key_enc IS NOT NULL')
-      .get(userId, row.default_ssh_key_id) as { private_key_enc: string } | undefined;
-    if (keyRow) privateKey = decrypt(keyRow.private_key_enc);
+  // default_ssh_key_id is the key to install. It is used for login only when the flag is enabled.
+  let privateKey: string | undefined;
+  if (row.use_ssh_key_for_login === 1) {
+    privateKey = row.private_key_enc ? decrypt(row.private_key_enc) : undefined;
+    if (!privateKey && row.default_ssh_key_id) {
+      const keyRow = db.prepare('SELECT private_key_enc FROM devops_ssh_keys WHERE user_id = ? AND id = ? AND private_key_enc IS NOT NULL')
+        .get(userId, row.default_ssh_key_id) as { private_key_enc: string } | undefined;
+      if (keyRow) privateKey = decrypt(keyRow.private_key_enc);
+    }
   }
 
   return {
     host: row.host,
     port: row.port,
     username: row.username,
-    password: row.password_enc ? decrypt(row.password_enc) : undefined,
+    password: row.use_ssh_key_for_login === 1 ? undefined : (row.password_enc ? decrypt(row.password_enc) : undefined),
     privateKey,
     sudoPassword: row.sudo_password_enc ? decrypt(row.sudo_password_enc) : undefined,
   };
@@ -170,6 +178,7 @@ export const createServer = (
   privateKey?: string,
   sudoPassword?: string,
   defaultSshKeyId?: number | null,
+  useSshKeyForLogin = false,
 ): { ok: true; id: number } | { ok: false; error: string } => {
   // Validation
   const trimmedName = name.trim();
@@ -180,14 +189,18 @@ export const createServer = (
   if (!trimmedHost) return { ok: false, error: 'host_required' };
   if (!trimmedUsername) return { ok: false, error: 'username_required' };
   if (!port || port < 1 || port > 65535) return { ok: false, error: 'invalid_port' };
+  if (useSshKeyForLogin && !privateKey && !defaultSshKeyId) return { ok: false, error: 'ssh_key_required' };
   if (!password && !privateKey && !defaultSshKeyId) return { ok: false, error: 'auth_required' };
 
+  let defaultKeyHasPrivate = false;
   // Validate defaultSshKeyId if provided
   if (defaultSshKeyId) {
-    const keyRow = db.prepare('SELECT id FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
-      .get(userId, defaultSshKeyId);
+    const keyRow = db.prepare('SELECT id, private_key_enc FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+      .get(userId, defaultSshKeyId) as { id: number; private_key_enc: string | null } | undefined;
     if (!keyRow) return { ok: false, error: 'invalid_ssh_key' };
+    defaultKeyHasPrivate = !!keyRow.private_key_enc;
   }
+  if (useSshKeyForLogin && !privateKey && !defaultKeyHasPrivate) return { ok: false, error: 'ssh_private_key_required' };
 
   // Limit check
   const count = db.prepare('SELECT COUNT(*) as cnt FROM devops_servers WHERE user_id = ?')
@@ -200,9 +213,9 @@ export const createServer = (
   const sudoPasswordEnc = sudoPassword ? encrypt(sudoPassword) : null;
 
   const result = db.prepare(`
-    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, sudoPasswordEnc, defaultSshKeyId ?? null, now, now);
+    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, use_ssh_key_for_login, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, sudoPasswordEnc, defaultSshKeyId ?? null, useSshKeyForLogin ? 1 : 0, now, now);
 
   return { ok: true, id: Number(result.lastInsertRowid) };
 };
@@ -219,6 +232,7 @@ export const updateServer = (
     privateKey?: string;
     sudoPassword?: string;
     defaultSshKeyId?: number | null;
+    useSshKeyForLogin?: boolean;
   },
 ): { ok: true } | { ok: false; error: string } => {
   const existing = db.prepare('SELECT * FROM devops_servers WHERE user_id = ? AND id = ?')
@@ -265,8 +279,27 @@ export const updateServer = (
     values.push(updates.sudoPassword ? encrypt(updates.sudoPassword) : null);
   }
   if (updates.defaultSshKeyId !== undefined) {
+    if (updates.defaultSshKeyId) {
+      const keyRow = db.prepare('SELECT id FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+        .get(userId, updates.defaultSshKeyId);
+      if (!keyRow) return { ok: false, error: 'invalid_ssh_key' };
+    }
     setClauses.push('default_ssh_key_id = ?');
     values.push(updates.defaultSshKeyId ?? null);
+  }
+  if (updates.useSshKeyForLogin !== undefined) {
+    const nextDefaultSshKeyId = updates.defaultSshKeyId !== undefined ? updates.defaultSshKeyId : existing.default_ssh_key_id;
+    const hasPrivateKey = updates.privateKey !== undefined ? !!updates.privateKey : !!existing.private_key_enc;
+    if (updates.useSshKeyForLogin && !hasPrivateKey && !nextDefaultSshKeyId) {
+      return { ok: false, error: 'ssh_key_required' };
+    }
+    if (updates.useSshKeyForLogin && !hasPrivateKey && nextDefaultSshKeyId) {
+      const keyRow = db.prepare('SELECT private_key_enc FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+        .get(userId, nextDefaultSshKeyId) as { private_key_enc: string | null } | undefined;
+      if (!keyRow?.private_key_enc) return { ok: false, error: 'ssh_private_key_required' };
+    }
+    setClauses.push('use_ssh_key_for_login = ?');
+    values.push(updates.useSshKeyForLogin ? 1 : 0);
   }
 
   values.push(userId, serverId);

@@ -1498,7 +1498,11 @@ const buildSuggestServerCredsUpdateTool = () => {
           },
           use_ssh_key: {
             type: 'boolean',
-            description: 'Если true — подключаться по SSH-ключу (дефолтному ключу сервера), а не по паролю.'
+            description: 'Если true — включить вход по SSH-ключу (дефолтному ключу сервера), а не по паролю. Старое имя параметра, совместимо с use_ssh_key_for_login.'
+          },
+          use_ssh_key_for_login: {
+            type: 'boolean',
+            description: 'Если true — включить вход по SSH-ключу. Если false — оставить вход по паролю, но default SSH key останется выбранным для установки.'
           },
           remove_password: {
             type: 'boolean',
@@ -2263,7 +2267,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
     return JSON.stringify({
       status: 'success',
-      servers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username })),
+      servers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, default_ssh_key_id: s.default_ssh_key_id, use_ssh_key_for_login: s.use_ssh_key_for_login })),
       ssh_keys: sshKeys.map(k => ({ id: k.id, name: k.name }))
     });
   }
@@ -2583,7 +2587,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
     const newUsername: string = typeof parsed.new_username === 'string' ? parsed.new_username.trim() : '';
     const reason: string = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
-    const useSshKey: boolean = parsed.use_ssh_key === true;
+    const useSshKey: boolean = parsed.use_ssh_key_for_login === true || parsed.use_ssh_key === true;
     const removePassword: boolean = parsed.remove_password === true;
 
     if (!serverId || !newUsername || !reason) {
@@ -2605,6 +2609,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
         new_username: newUsername,
         reason,
         use_ssh_key: useSshKey,
+        use_ssh_key_for_login: useSshKey,
         remove_password: removePassword,
       }
     };

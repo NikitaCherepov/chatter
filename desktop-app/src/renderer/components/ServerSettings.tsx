@@ -15,6 +15,7 @@ type Server = {
   has_password: boolean;
   has_sudo_password: boolean;
   default_ssh_key_id: number | null;
+  use_ssh_key_for_login: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -57,6 +58,7 @@ export function ServerSettings() {
   const [formPassword, setFormPassword] = useState('');
   const [formSudoPassword, setFormSudoPassword] = useState('');
   const [formDefaultKey, setFormDefaultKey] = useState<number | null>(null);
+  const [formUseSshKeyForLogin, setFormUseSshKeyForLogin] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
 
   const resetForm = () => {
@@ -68,6 +70,7 @@ export function ServerSettings() {
     setFormPassword('');
     setFormSudoPassword('');
     setFormDefaultKey(null);
+    setFormUseSshKeyForLogin(false);
   };
 
   const startEdit = (server: Server) => {
@@ -79,6 +82,7 @@ export function ServerSettings() {
     setFormPassword('');
     setFormSudoPassword('');
     setFormDefaultKey(server.default_ssh_key_id);
+    setFormUseSshKeyForLogin(server.use_ssh_key_for_login);
   };
 
   const loadServers = async () => {
@@ -123,6 +127,11 @@ export function ServerSettings() {
       return;
     }
 
+    if (formUseSshKeyForLogin && !formDefaultKey) {
+      toast.error('Выберите SSH-ключ для входа по ключу');
+      return;
+    }
+
     setFormSaving(true);
     try {
       if (editingId !== null) {
@@ -135,6 +144,7 @@ export function ServerSettings() {
         if (formPassword) updates.password = formPassword;
         if (formSudoPassword) updates.sudo_password = formSudoPassword;
         updates.default_ssh_key_id = formDefaultKey;
+        updates.use_ssh_key_for_login = formUseSshKeyForLogin;
 
         await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
           method: 'PUT',
@@ -157,6 +167,7 @@ export function ServerSettings() {
             password: formPassword || undefined,
             sudo_password: formSudoPassword || undefined,
             default_ssh_key_id: formDefaultKey,
+            use_ssh_key_for_login: formUseSshKeyForLogin,
           }),
         });
         toast.success('Сервер добавлен');
@@ -319,7 +330,10 @@ export function ServerSettings() {
               })),
             ]}
             value={formDefaultKey != null ? String(formDefaultKey) : ''}
-            onChange={(v) => setFormDefaultKey(v ? Number(v) : null)}
+            onChange={(v) => {
+              setFormDefaultKey(v ? Number(v) : null);
+              if (!v) setFormUseSshKeyForLogin(false);
+            }}
             placeholder="Не выбран"
           />
         ) : (
@@ -327,6 +341,21 @@ export function ServerSettings() {
             Сначала добавьте SSH-ключи во вкладке «SSH-ключи»
           </div>
         )}
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={formUseSshKeyForLogin}
+            onChange={(e) => setFormUseSshKeyForLogin(e.target.checked)}
+            disabled={!formDefaultKey}
+          />
+          Использовать SSH-ключ для входа
+        </label>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          Выбранный ключ можно оставить для установки ботом. Эта галка переключает именно способ подключения.
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '8px' }}>
@@ -356,6 +385,7 @@ export function ServerSettings() {
                   {server.username}@{server.host}:{server.port}
                   {server.has_password && ' · пароль'}
                   {server.default_ssh_key_id && ' · ssh-ключ'}
+                  {server.use_ssh_key_for_login && ' · вход по ssh'}
                   {server.has_sudo_password && ' · sudo'}
                 </div>
               </div>
