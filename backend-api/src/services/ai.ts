@@ -3399,19 +3399,17 @@ if (abortController.signal.aborted) {
   // Auto-title: if chat was empty, generate title via LITE AI (fire-and-forget)
   if (history.length === 0 && userTextForHistory.trim()) {
     const textForTitle = userTextForHistory.trim().slice(0, 200);
-    console.log(`[auto-title] Generating title for chat ${chatId}, text: "${textForTitle.slice(0, 50)}..."`);
+    const sendAction = options?.onDesktopAction;
     callLiteAi(
       'Придумай короткое название для чата (до 5 слов) на основе первого сообщения пользователя. Ответь ТОЛЬКО названием, без кавычек, без пояснений, без markdown. На русском языке.',
       textForTitle
     ).then(raw => {
-      console.log(`[auto-title] LITE response for chat ${chatId}: "${raw}"`);
       const title = raw.replace(/^["«]|["»]$/g, '').trim().slice(0, 120);
-      console.log(`[auto-title] Cleaned title for chat ${chatId}: "${title}"`);
       if (title) {
-        const ok = renameUserChat(userId, chatId, title);
-        console.log(`[auto-title] renameUserChat result for chat ${chatId}: ${ok}`);
+        renameUserChat(userId, chatId, title);
+        if (sendAction) sendAction({ action: 'chat_title_update', value: { chat_id: chatId, title } });
       }
-    }).catch(err => { console.error('[auto-title] failed:', err?.message || err); });
+    }).catch(() => { /* silent */ });
   }
 
   return {

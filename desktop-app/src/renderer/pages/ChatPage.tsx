@@ -289,6 +289,14 @@ export function ChatPage() {
               }]);
             }
           }
+          if (action.action === 'chat_title_update' && action.value) {
+            const val = action.value as { chat_id?: number; title?: string };
+            if (val.chat_id && val.title) {
+              setChats(prev => prev.map(c =>
+                c.id === val.chat_id ? { ...c, title: val.title! } : c
+              ));
+            }
+          }
           handleDesktopAction(action);
         },
         onMapUpdate: (data) => {
