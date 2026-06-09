@@ -2237,14 +2237,17 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     if (!serverId) return JSON.stringify({ status: 'error', message: 'server_id обязателен' });
     if (!command) return JSON.stringify({ status: 'error', message: 'command обязательна' });
 
-    const { getServerById, isAutoApproved } = await import('./devops.js');
+    const { getServerById, isAutoApproved, serverHasSudoPassword } = await import('./devops.js');
     const server = getServerById(user.id, serverId);
     if (!server) return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден. Вызови list_devops_servers для списка доступных.` });
 
     // Check if command is auto-approved by policy
     const autoOk = isAutoApproved(user.id, serverId, command);
 
-    if (autoOk) {
+    // Check if command needs sudo but server has no stored sudo password
+    const needsSudoPasswordPrompt = /\bsudo\b/.test(command) && !serverHasSudoPassword(user.id, serverId);
+
+    if (autoOk && !needsSudoPasswordPrompt) {
       // Execute immediately — no confirmation needed
       try {
         const { execSshCommand } = await import('./ssh.js');
@@ -2277,7 +2280,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
       type: 'desktop_action',
       action: 'devops_confirmation',
       target: String(serverId),
-      value: { confirmation_id: confirmationId, server_name: server.name, server_id: serverId, host: server.host, command }
+      value: { confirmation_id: confirmationId, server_name: server.name, server_id: serverId, host: server.host, command, needs_sudo_password: needsSudoPasswordPrompt }
     });
 
     // Wait for user response via WS → POST /api/v1/devops/approve

@@ -39,6 +39,7 @@ export const execSshCommand = (
   userId: number,
   serverId: number,
   command: string,
+  options?: { sudoPasswordOverride?: string },
 ): Promise<SshResult> => {
   return new Promise(async (resolve, reject) => {
     // Check dangerous commands
@@ -89,7 +90,8 @@ export const execSshCommand = (
 
       // If command uses sudo and we have a sudo password, use sudo -S and write password to stdin
       let execCommand = command;
-      const needsSudoPassword = /\bsudo\b/.test(command) && creds.sudoPassword;
+      const sudoPassword = options?.sudoPasswordOverride || creds.sudoPassword;
+      const needsSudoPassword = /\bsudo\b/.test(command) && sudoPassword;
       if (needsSudoPassword) {
         execCommand = `sudo -S ${command.replace(/^\s*sudo\s+/, '')}`;
       }
@@ -99,7 +101,7 @@ export const execSshCommand = (
 
         // Write sudo password directly to stdin stream (not visible in process list)
         if (needsSudoPassword) {
-          stream.write(creds.sudoPassword! + '\n');
+          stream.write(sudoPassword! + '\n');
         }
 
         stream.on('data', (data: Buffer) => {

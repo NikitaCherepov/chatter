@@ -152,6 +152,14 @@ export const getServerCreds = (userId: number, serverId: number): ServerCreds | 
   };
 };
 
+/** Safe check — does the server have a stored sudo password? (no decryption) */
+export const serverHasSudoPassword = (userId: number, serverId: number): boolean => {
+  const row = db.prepare(
+    'SELECT sudo_password_enc FROM devops_servers WHERE user_id = ? AND id = ?'
+  ).get(userId, serverId) as { sudo_password_enc: string | null } | undefined;
+  return !!row?.sudo_password_enc;
+};
+
 export const createServer = (
   userId: number,
   name: string,

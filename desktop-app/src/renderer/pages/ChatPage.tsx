@@ -80,7 +80,7 @@ export function ChatPage() {
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
-  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
@@ -254,14 +254,15 @@ export function ChatPage() {
             }
           }
           if (action.action === 'devops_confirmation' && action.value) {
-            const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string };
+            const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; needs_sudo_password?: boolean };
             if (val.confirmation_id && val.command) {
               setDevopsConfirmations(prev => [...prev, {
                 confirmation_id: val.confirmation_id!,
                 server_name: val.server_name || 'Unknown',
                 server_id: val.server_id || 0,
                 host: val.host || '',
-                command: val.command!
+                command: val.command!,
+                needs_sudo_password: Boolean(val.needs_sudo_password),
               }]);
             }
           }
@@ -1289,6 +1290,25 @@ export function ChatPage() {
                   <div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.command}</code>
                   </div>
+                  {conf.needs_sudo_password && (
+                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <input
+                        type="password"
+                        placeholder="Sudo пароль"
+                        value={conf.sudo_password || ''}
+                        onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
+                        style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={conf.save_sudo_password || false}
+                          onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, save_sudo_password: e.target.checked } : c))}
+                        />
+                        Сохранить sudo пароль в настройках сервера
+                      </label>
+                    </div>
+                  )}
                   {conf._verdict && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
                   )}
@@ -1297,9 +1317,21 @@ export function ChatPage() {
                       className={s.suggestMacroSaveBtn}
                       onClick={async () => {
                         try {
+                          const body: Record<string, unknown> = {
+                            confirmation_id: conf.confirmation_id,
+                            approved: true,
+                          };
+                          if (conf.needs_sudo_password) {
+                            if (!conf.sudo_password?.trim()) {
+                              toast.error('Введите sudo пароль');
+                              return;
+                            }
+                            body.sudo_password = conf.sudo_password;
+                            body.save_sudo_password = conf.save_sudo_password === true;
+                          }
                           await api.apiFetch('/api/v1/devops/approve', {
                             method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                            body: JSON.stringify(body),
                           });
                           toast.success('Команда подтверждена');
                           setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
@@ -1315,6 +1347,10 @@ export function ChatPage() {
                       style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
                       onClick={async () => {
                         try {
+                          if (conf.needs_sudo_password && !conf.sudo_password?.trim()) {
+                            toast.error('Введите sudo пароль');
+                            return;
+                          }
                           // Create auto-approve policy for this exact command
                           const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                           await api.apiFetch(`/api/v1/devops/servers/${conf.server_id}/policies`, {
@@ -1322,9 +1358,14 @@ export function ChatPage() {
                             body: JSON.stringify({ pattern: `^${escapedCmd}$`, auto_approve: true }),
                           });
                           // Also approve current command
+                          const body: Record<string, unknown> = { confirmation_id: conf.confirmation_id, approved: true };
+                          if (conf.needs_sudo_password) {
+                            body.sudo_password = conf.sudo_password;
+                            body.save_sudo_password = conf.save_sudo_password === true;
+                          }
                           await api.apiFetch('/api/v1/devops/approve', {
                             method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                            body: JSON.stringify(body),
                           });
                           toast.success('Команда одобрена навсегда');
                           setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));

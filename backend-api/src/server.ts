@@ -10,7 +10,7 @@ import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
-import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey } from './services/devops.js';
+import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
@@ -2222,6 +2222,8 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
+  const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
+  const saveSudoPassword = req.body?.save_sudo_password === true;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
 
@@ -2237,9 +2239,20 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
     return res.json({ ok: true, status: 'rejected' });
   }
 
+  // If command needs sudo but no sudo password provided — reject
+  if (/\bsudo\b/.test(pending.command) && !serverHasSudoPassword(userId, pending.serverId) && !sudoPassword) {
+    return res.status(400).json({ error: 'sudo_password_required' });
+  }
+
+  // Save sudo password to server settings if requested
+  if (saveSudoPassword && sudoPassword) {
+    updateServer(userId, pending.serverId, { sudoPassword });
+  }
+
   // Execute the approved command
   try {
-    const result = await execSshCommand(userId, pending.serverId, pending.command);
+    const execOptions = sudoPassword ? { sudoPasswordOverride: sudoPassword } : undefined;
+    const result = await execSshCommand(userId, pending.serverId, pending.command, execOptions);
     pending.resolve(result);
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {
