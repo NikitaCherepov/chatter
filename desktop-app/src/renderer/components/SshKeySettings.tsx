@@ -7,6 +7,7 @@ type SshKey = {
   id: number;
   name: string;
   public_key: string;
+  has_private_key: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -16,6 +17,7 @@ export function SshKeySettings() {
   const [loading, setLoading] = useState(true);
   const [formName, setFormName] = useState('');
   const [formPublicKey, setFormPublicKey] = useState('');
+  const [formPrivateKey, setFormPrivateKey] = useState('');
   const [formSaving, setFormSaving] = useState(false);
 
   const loadKeys = async () => {
@@ -34,6 +36,7 @@ export function SshKeySettings() {
   const resetForm = () => {
     setFormName('');
     setFormPublicKey('');
+    setFormPrivateKey('');
   };
 
   const handleSave = async () => {
@@ -49,7 +52,11 @@ export function SshKeySettings() {
     try {
       await api.apiFetch('/api/v1/devops/ssh-keys', {
         method: 'POST',
-        body: JSON.stringify({ name: trimmedName, public_key: trimmedKey }),
+        body: JSON.stringify({
+          name: trimmedName,
+          public_key: trimmedKey,
+          private_key: formPrivateKey.trim() || undefined,
+        }),
       });
       toast.success('SSH-ключ добавлен');
       resetForm();
@@ -78,7 +85,7 @@ export function SshKeySettings() {
     <div className={s.panel}>
       <div className={s.panelTitle}>SSH-ключи</div>
       <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-        Публичные SSH-ключи для установки на серверы. AI может установить ключ пользователю на сервере через tool install_ssh_public_key.
+        SSH-ключи для установки на серверы. Публичный ключ устанавливается в authorized_keys, приватный — опционально для входа. В настройках сервера можно выбрать ключ по умолчанию.
       </div>
 
       {/* Form */}
@@ -105,6 +112,18 @@ export function SshKeySettings() {
         />
       </div>
 
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Приватный ключ (опционально)</label>
+        <textarea
+          className={s.textareaInput}
+          value={formPrivateKey}
+          onChange={(e) => setFormPrivateKey(e.target.value)}
+          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+          rows={3}
+          style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
+        />
+      </div>
+
       <div style={{ display: 'flex', gap: '8px' }}>
         <button
           className={s.saveBtn}
@@ -122,7 +141,10 @@ export function SshKeySettings() {
           {keys.map((key) => (
             <div key={key.id} className={s.macroCard}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: '13px' }}>{key.name}</div>
+                <div style={{ fontWeight: 500, fontSize: '13px' }}>
+                  {key.name}
+                  {key.has_private_key && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>пара</span>}
+                </div>
                 <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {key.public_key.substring(0, 60)}...
                 </div>

@@ -1448,7 +1448,7 @@ const buildInstallSshPublicKeyTool = () => {
     type: 'function' as const,
     function: {
       name: 'install_ssh_public_key',
-      description: `Устанавливает сохранённый SSH-публичный ключ в authorized_keys указанного пользователя на сервере. Создаёт .ssh директорию, добавляет ключ, выставляет правильные права. Используй когда нужно настроить SSH-доступ для нового или существующего пользователя.`,
+      description: `Устанавливает SSH-публичный ключ в authorized_keys указанного пользователя на сервере. Создаёт .ssh директорию, добавляет ключ, выставляет правильные права. Если key_id не указан — используется ключ по умолчанию для этого сервера.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1458,14 +1458,14 @@ const buildInstallSshPublicKeyTool = () => {
           },
           key_id: {
             type: 'number',
-            description: 'ID SSH-ключа для установки.'
+            description: 'ID SSH-ключа для установки (опционально, по умолчанию берётся с сервера).'
           },
           target_user: {
             type: 'string',
             description: 'Имя пользователя на сервере, которому устанавливается ключ (например "root", "deploy").'
           }
         },
-        required: ['server_id', 'key_id', 'target_user']
+        required: ['server_id', 'target_user']
       }
     }
   };
@@ -2329,11 +2329,11 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
 
   if (toolName === 'install_ssh_public_key') {
     const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
-    const keyId: number | undefined = typeof parsed.key_id === 'number' ? parsed.key_id : undefined;
+    const explicitKeyId: number | undefined = typeof parsed.key_id === 'number' ? parsed.key_id : undefined;
     const targetUser: string = typeof parsed.target_user === 'string' ? parsed.target_user.trim() : '';
 
-    if (!serverId || !keyId || !targetUser) {
-      return JSON.stringify({ status: 'error', message: 'server_id, key_id и target_user обязательны' });
+    if (!serverId || !targetUser) {
+      return JSON.stringify({ status: 'error', message: 'server_id и target_user обязательны' });
     }
 
     // Validate target_user (no shell injection)
@@ -2342,14 +2342,21 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
 
     const { getSshPublicKey, buildInstallKeyScript, getServerById } = await import('./devops.js');
-    const publicKey = getSshPublicKey(user.id, keyId);
-    if (!publicKey) {
-      return JSON.stringify({ status: 'error', message: `SSH-ключ с id=${keyId} не найден.` });
-    }
 
     const server = getServerById(user.id, serverId);
     if (!server) {
       return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+    }
+
+    // Resolve key_id: explicit > server default
+    const keyId = explicitKeyId ?? server.default_ssh_key_id;
+    if (!keyId) {
+      return JSON.stringify({ status: 'error', message: `У сервера "${server.name}" нет ключа по умолчанию. Укажи key_id или настрой default в настройках сервера.` });
+    }
+
+    const publicKey = getSshPublicKey(user.id, keyId);
+    if (!publicKey) {
+      return JSON.stringify({ status: 'error', message: `SSH-ключ с id=${keyId} не найден.` });
     }
 
     // Build the install script

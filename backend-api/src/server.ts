@@ -1943,6 +1943,10 @@ app.put('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
   if (req.body?.password !== undefined) updates.password = `${req.body.password}`;
   if (req.body?.private_key !== undefined) updates.privateKey = `${req.body.private_key}`;
   if (req.body?.sudo_password !== undefined) updates.sudoPassword = `${req.body.sudo_password}`;
+  if (req.body?.default_ssh_key_id !== undefined) {
+    const v = req.body.default_ssh_key_id;
+    updates.defaultSshKeyId = v === null || v === '' ? null : Number(v);
+  }
 
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
 
@@ -2190,8 +2194,9 @@ app.post('/api/v1/devops/ssh-keys', (req: AuthedRequest, res: any) => {
 
   const name = `${req.body?.name || ''}`;
   const publicKey = `${req.body?.public_key || ''}`;
+  const privateKey = req.body?.private_key ? `${req.body.private_key}` : undefined;
 
-  const result = createSshKey(userId, name, publicKey);
+  const result = createSshKey(userId, name, publicKey, privateKey);
   if (!result.ok) {
     const code = (result as { ok: false; error: string }).error;
     return res.status(400).json({ error: code });

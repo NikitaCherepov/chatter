@@ -12,8 +12,16 @@ type Server = {
   has_password: boolean;
   has_key: boolean;
   has_sudo_password: boolean;
+  default_ssh_key_id: number | null;
   created_at: number;
   updated_at: number;
+};
+
+type SshKey = {
+  id: number;
+  name: string;
+  public_key: string;
+  has_private_key: boolean;
 };
 
 type Policy = {
@@ -34,6 +42,7 @@ export function ServerSettings() {
   const [servers, setServers] = useState<Server[]>([]);
   const [policies, setPolicies] = useState<Record<number, Policy[]>>({});
   const [runbooks, setRunbooks] = useState<Runbook[]>([]);
+  const [sshKeys, setSshKeys] = useState<SshKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
@@ -46,6 +55,7 @@ export function ServerSettings() {
   const [formPassword, setFormPassword] = useState('');
   const [formKey, setFormKey] = useState('');
   const [formSudoPassword, setFormSudoPassword] = useState('');
+  const [formDefaultKey, setFormDefaultKey] = useState<number | null>(null);
   const [formSaving, setFormSaving] = useState(false);
 
   const resetForm = () => {
@@ -57,6 +67,7 @@ export function ServerSettings() {
     setFormPassword('');
     setFormKey('');
     setFormSudoPassword('');
+    setFormDefaultKey(null);
   };
 
   const startEdit = (server: Server) => {
@@ -68,6 +79,7 @@ export function ServerSettings() {
     setFormPassword('');
     setFormKey('');
     setFormSudoPassword('');
+    setFormDefaultKey(server.default_ssh_key_id);
   };
 
   const loadServers = async () => {
@@ -87,6 +99,11 @@ export function ServerSettings() {
       try {
         const rRes = await api.apiFetch<{ runbooks: Runbook[] }>('/api/v1/devops/runbooks');
         setRunbooks(rRes.runbooks);
+      } catch {}
+      // Load available SSH keys
+      try {
+        const kRes = await api.apiFetch<{ keys: SshKey[] }>('/api/v1/devops/ssh-keys');
+        setSshKeys(kRes.keys);
       } catch {}
     } catch (err) {
       console.error('Failed to load servers:', err);
@@ -119,6 +136,7 @@ export function ServerSettings() {
         if (formPassword) updates.password = formPassword;
         if (formKey) updates.private_key = formKey;
         if (formSudoPassword) updates.sudo_password = formSudoPassword;
+        updates.default_ssh_key_id = formDefaultKey;
 
         await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
           method: 'PUT',
@@ -141,6 +159,7 @@ export function ServerSettings() {
             password: formPassword || undefined,
             private_key: formKey || undefined,
             sudo_password: formSudoPassword || undefined,
+            default_ssh_key_id: formDefaultKey,
           }),
         });
         toast.success('Сервер добавлен');
@@ -299,6 +318,23 @@ export function ServerSettings() {
           placeholder="Для команд с sudo"
         />
       </div>
+
+      {sshKeys.length > 0 && (
+        <div className={s.fieldGroup}>
+          <label className={s.fieldLabel}>SSH-ключ по умолчанию</label>
+          <select
+            className={s.fieldInput}
+            value={formDefaultKey ?? ''}
+            onChange={(e) => setFormDefaultKey(e.target.value ? Number(e.target.value) : null)}
+            style={{ color: 'var(--text-primary)', background: 'var(--bg-input)' }}
+          >
+            <option value="">Не выбран</option>
+            {sshKeys.map((key) => (
+              <option key={key.id} value={key.id}>{key.name}{key.has_private_key ? ' (пара)' : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '8px' }}>
         <button
