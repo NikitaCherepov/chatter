@@ -16,7 +16,6 @@ const DANGEROUS_PATTERNS = [
   /\bmkfs\b/i,
   /\bdd\s+.*of=\/dev\//i,
   /\bshutdown\b/i,
-  /\breboot\b/i,
   /\binit\s+[06]\b/i,
   />\s*\/dev\/sda/i,
   /\bchmod\s+(-R\s+)?000\s+\//i,
