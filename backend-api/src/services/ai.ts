@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getUserById, renameUserChat, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -3395,6 +3395,18 @@ if (abortController.signal.aborted) {
   }
 
   trimUserHistoryByChat(userId, chatId, contextWindow);
+
+  // Auto-title: if chat was empty, generate title via LITE AI (fire-and-forget)
+  if (history.length === 0 && userTextForHistory.trim()) {
+    const textForTitle = userTextForHistory.trim().slice(0, 200);
+    callLiteAi(
+      'Придумай короткое название для чата (до 5 слов) на основе первого сообщения пользователя. Ответь ТОЛЬКО названием, без кавычек, без пояснений, без markdown. На русском языке.',
+      textForTitle
+    ).then(raw => {
+      const title = raw.replace(/^["«]|["»]$/g, '').trim().slice(0, 120);
+      if (title) renameUserChat(userId, chatId, title);
+    }).catch(() => { /* silent */ });
+  }
 
   return {
     reply_text: answer,
