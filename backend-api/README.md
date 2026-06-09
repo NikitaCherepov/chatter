@@ -27,6 +27,7 @@ npm run logs:api
 - `TIMEWEB_*` и другие AI ключи - для AI/voice/photo.
 - `ENCRYPTION_KEY` - для mail (шифрование паролей).
 - `MAP_PINS_ENCRYPTION_KEY` - для шифрования координат меток карты (fallback на `ENCRYPTION_KEY`).
+- `DEVOPS_ENCRYPTION_KEY` - для шифрования учётных данных SSH серверов (пароли, ключи, sudo-пароль). Fallback на `ENCRYPTION_KEY`.
 - `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` опционально) - для `/internal/tools/read_url`.
 - `PROXYAPI_KEY` - ключ ProxyAPI для генерации изображений.
 - `PROXYAPI_BASE_URL` - базовый URL ProxyAPI (по умолчанию `https://api.proxyapi.ru/openai/v1`).
@@ -229,6 +230,43 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - Ввод: `{ model_id: string | null }` (null = авто)
   - Вывод: `{ ok, preferred_model }`
 
+### DevOps Agent Runtime (JWT, desktop-only)
+
+Управление SSH-серверами, политиками авто-разрешения и инструкциями (runbooks). Доступно только desktop-клиентам.
+
+**Серверы:**
+
+- `GET /api/v1/devops/servers` — список серверов пользователя (без паролей/ключей)
+- `POST /api/v1/devops/servers` — добавить сервер (`{ name, host, port, username, password?, private_key?, sudo_password? }`)
+- `GET /api/v1/devops/servers/:id` — информация о сервере
+- `PUT /api/v1/devops/servers/:id` — обновить сервер (частичное обновление, пустые пароль/ключ не перезаписывают существующие)
+- `DELETE /api/v1/devops/servers/:id` — удалить сервер
+- `POST /api/v1/devops/servers/:id/test` — проверить SSH-подключение
+- `POST /api/v1/devops/servers/:id/exec` — выполнить команду на сервере (только для внутренних вызовов, не из AI)
+
+**Политики (авто-разрешение команд):**
+
+- `GET /api/v1/devops/servers/:id/policies` — список политик для сервера
+- `POST /api/v1/devops/servers/:id/policies` — создать политику (`{ pattern, auto_approve }`). `pattern` — regex для команды.
+- `DELETE /api/v1/devops/policies/:id` — удалить политику
+
+**Подтверждение команд (HitL):**
+
+- `POST /api/v1/devops/approve` — подтвердить/отклонить выполнение команды (`{ confirmation_id, approved: boolean }`)
+
+**Инструкции (runbooks):**
+
+- `GET /api/v1/devops/runbooks` — список инструкций пользователя
+- `POST /api/v1/devops/runbooks` — создать инструкцию (`{ title, content, commands? }`)
+- `PUT /api/v1/devops/runbooks/:id` — обновить инструкцию
+- `DELETE /api/v1/devops/runbooks/:id` — удалить инструкцию
+- `POST /api/v1/devops/runbooks/extract-commands` — извлечь shell-команды из текста инструкции через AI (`{ content }`)
+- `POST /api/v1/devops/runbooks/review-commands` — проверить безопасность команд через AI (`{ commands: string[] }`)
+
+**Привязка инструкций к серверам:**
+
+- `POST /api/v1/devops/servers/:id/attach-runbook` — привязать инструкцию к серверу (`{ runbook_id }`). Создаёт авто-разрешающие политики для каждой команды инструкции.
+
 ### Vector Memory (JWT, feature-flag)
 
 - Нужно `BACKEND_VECTOR_MEMORY_API_ENABLED=1`.
@@ -360,6 +398,66 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). Доступен и из Telegram: если десктоп онлайн — команды пушатся через WS. |
 | `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). Доступен и из Telegram при подключённом десктопе. |
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
+
+### DevOps Agent Runtime (desktop-only)
+
+Система удалённого выполнения SSH-команд на серверах пользователя с подтверждением через HitL (Human-in-the-Loop).
+
+**AI-инструменты (desktop-only):**
+
+| Инструмент | Описание |
+|---|---|
+| `list_devops_servers` | Показывает список серверов пользователя (id, name, host, port, username). Без паролей/ключей. |
+| `execute_ssh_command` | Выполняет SSH-команду на сервере. Сначала проверяет auto-approve политики → если есть совпадение, выполняет сразу. Иначе — отправляет карточку подтверждения на десктоп (HitL), блокирует tool call до ответа пользователя. |
+| `list_devops_runbooks` | Показывает список инструкций пользователя (id, title, updated_at). |
+| `read_devops_runbook` | Читает содержимое инструкции по id (title, content). |
+| `suggest_devops_runbook` | Предлагает пользователю сохранить инструкцию. AI формирует `title, content, commands` → карточка в чате с кнопками «Сохранить»/«Проверить»/«Отклонить». |
+
+**Архитектура безопасности:**
+
+- **Шифрование:** все учётные данные (SSH пароль, приватный ключ, sudo-пароль) шифруются через AES-256-CBC и хранятся в `devops_servers`. Дешифровка только in-memory в момент выполнения команды.
+- **Human-in-the-Loop:** каждая SSH-команда (кроме auto-approved) требует подтверждения пользователя. На десктопе появляется карточка с информацией о команде, сервере, и кнопками «Разрешить»/«Разрешить всегда»/«? Проверить»/«Отклонить».
+- **Auto-approve политики:** regex-паттерны для автоматического разрешения команд. Создаются вручную или при привязке инструкции к серверу. Точное совпадение: `^systemctl restart nginx$`.
+- **Опасные команды:** блокируются на уровне SSH-executor (`rm -rf /`, `mkfs`, `dd of=/dev/`, `shutdown`, `init 0/6`, `chmod 000 /`, `chown` root-директорий).
+- **Sudo:** если команда содержит `sudo` и в настройках сервера указан sudo-пароль — пароль передаётся через stdin stream (`sudo -S`), не виден в process list.
+- **Буфер:** stdout/stderr ограничен 1MB, таймаут выполнения — 30 секунд.
+
+**Поток выполнения команды:**
+
+```
+AI: execute_ssh_command(server_id, command)
+  → ai.ts: проверка isAutoApproved()
+    → Да: прямой вызов execSshCommand() → stdout/stderr/exitCode
+    → Нет: отправка WS desktop_action { action: 'devops_confirmation', value: { confirmation_id, server_name, host, command } }
+      → ai.ts: блокировка на Promise (ожидание ответа)
+      → Десктоп: карточка подтверждения
+        → Разрешить: POST /api/v1/devops/approve { approved: true }
+        → Разрешить всегда: создаёт политику + approve
+        → Проверить: POST /api/v1/devops/runbooks/review-commands (LITE AI)
+        → Отклонить: POST /api/v1/devops/approve { approved: false }
+      → Promise резолвится → execSshCommand() → результат AI
+```
+
+**Инструкции (runbooks):**
+
+Универсальные пошаговые руководства (Markdown) с набором shell-команд. Не привязаны к конкретному серверу.
+
+- AI может предложить сохранить инструкцию (`suggest_devops_runbook`) — карточка в чате
+- AI может извлечь команды из текста (`POST /api/v1/devops/runbooks/extract-commands`, LITE AI)
+- AI может проверить безопасность команд (`POST /api/v1/devops/runbooks/review-commands`, LITE AI)
+- Кнопка «Привязать инструкцию» в настройках сервера создаёт auto-approve политики для каждой команды
+
+**Таблицы БД:**
+
+| Таблица | Описание |
+|---|---|
+| `devops_servers` | SSH-серверы (name, host, port, username, password_enc, private_key_enc, sudo_password_enc) |
+| `devops_policies` | Auto-approve политики (server_id, pattern, auto_approve) |
+| `devops_runbooks` | Инструкции (user_id, title, content, commands JSON) |
+
+**Подтверждения (in-memory):**
+
+Ожидающие подтверждения хранятся в `Map<string, PendingDevopsConfirmation>` в `services/devops-confirmations.ts`. Авто-очистка каждые 30 секунд, TTL — 5 минут.
 
 ### Система макросов
 
