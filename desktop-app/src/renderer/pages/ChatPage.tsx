@@ -79,7 +79,7 @@ export function ChatPage() {
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
-  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string }>>([]);
+  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
@@ -1273,6 +1273,9 @@ export function ChatPage() {
                   <div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.command}</code>
                   </div>
+                  {conf._verdict && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
+                  )}
                   <div className={s.suggestMacroActions}>
                     <button
                       className={s.suggestMacroSaveBtn}
@@ -1315,6 +1318,25 @@ export function ChatPage() {
                       }}
                     >
                       Разрешить всегда
+                    </button>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing ? 0.6 : 1, minWidth: '80px' }}
+                      onClick={async () => {
+                        setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
+                        try {
+                          const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
+                            method: 'POST',
+                            body: JSON.stringify({ commands: [conf.command] }),
+                          });
+                          setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
+                        } catch {
+                          toast.error('Не удалось проверить команду');
+                          setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
+                        }
+                      }}
+                    >
+                      {conf._reviewing ? 'Проверяю...' : 'Проверить'}
                     </button>
                     <button
                       className={s.suggestMacroDismissBtn}
@@ -1362,7 +1384,7 @@ export function ChatPage() {
                     </div>
                   )}
                   {rb._verdict && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'pre-wrap', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>{rb._verdict}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={rb._verdict} /></div>
                   )}
                   <div className={s.suggestMacroActions}>
                     <button

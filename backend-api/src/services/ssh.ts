@@ -88,8 +88,20 @@ export const execSshCommand = (
     client.on('ready', () => {
       clearTimeout(timer);
 
-      client.exec(command, (err: Error | undefined, stream: ClientChannel) => {
+      // If command uses sudo and we have a sudo password, use sudo -S and write password to stdin
+      let execCommand = command;
+      const needsSudoPassword = /\bsudo\b/.test(command) && creds.sudoPassword;
+      if (needsSudoPassword) {
+        execCommand = `sudo -S ${command.replace(/^\s*sudo\s+/, '')}`;
+      }
+
+      client.exec(execCommand, (err: Error | undefined, stream: ClientChannel) => {
         if (err) { fail(err); return; }
+
+        // Write sudo password directly to stdin stream (not visible in process list)
+        if (needsSudoPassword) {
+          stream.write(creds.sudoPassword! + '\n');
+        }
 
         stream.on('data', (data: Buffer) => {
           stdout += data.toString();

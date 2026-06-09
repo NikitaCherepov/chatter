@@ -11,6 +11,7 @@ type Server = {
   username: string;
   has_password: boolean;
   has_key: boolean;
+  has_sudo_password: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -44,6 +45,7 @@ export function ServerSettings() {
   const [formUsername, setFormUsername] = useState('root');
   const [formPassword, setFormPassword] = useState('');
   const [formKey, setFormKey] = useState('');
+  const [formSudoPassword, setFormSudoPassword] = useState('');
   const [formSaving, setFormSaving] = useState(false);
 
   const resetForm = () => {
@@ -54,6 +56,7 @@ export function ServerSettings() {
     setFormUsername('root');
     setFormPassword('');
     setFormKey('');
+    setFormSudoPassword('');
   };
 
   const startEdit = (server: Server) => {
@@ -64,6 +67,7 @@ export function ServerSettings() {
     setFormUsername(server.username);
     setFormPassword('');
     setFormKey('');
+    setFormSudoPassword('');
   };
 
   const loadServers = async () => {
@@ -114,6 +118,7 @@ export function ServerSettings() {
         };
         if (formPassword) updates.password = formPassword;
         if (formKey) updates.private_key = formKey;
+        if (formSudoPassword) updates.sudo_password = formSudoPassword;
 
         await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
           method: 'PUT',
@@ -135,6 +140,7 @@ export function ServerSettings() {
             username: trimmedUsername,
             password: formPassword || undefined,
             private_key: formKey || undefined,
+            sudo_password: formSudoPassword || undefined,
           }),
         });
         toast.success('Сервер добавлен');
@@ -283,6 +289,17 @@ export function ServerSettings() {
         />
       </div>
 
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>Пароль для sudo {editingId !== null ? '(оставьте пустым чтобы не менять)' : '(опционально)'}</label>
+        <input
+          className={s.fieldInput}
+          type="password"
+          value={formSudoPassword}
+          onChange={(e) => setFormSudoPassword(e.target.value)}
+          placeholder="Для команд с sudo"
+        />
+      </div>
+
       <div style={{ display: 'flex', gap: '8px' }}>
         <button
           className={s.saveBtn}
@@ -310,6 +327,7 @@ export function ServerSettings() {
                   {server.username}@{server.host}:{server.port}
                   {server.has_password && ' · пароль'}
                   {server.has_key && ' · ключ'}
+                  {server.has_sudo_password && ' · sudo'}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>

@@ -1918,8 +1918,9 @@ app.post('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
   const username = `${req.body?.username || ''}`;
   const password = typeof req.body?.password === 'string' ? req.body.password : undefined;
   const privateKey = typeof req.body?.private_key === 'string' ? req.body.private_key : undefined;
+  const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
 
-  const result = createServer(userId, name, host, port, username, password, privateKey);
+  const result = createServer(userId, name, host, port, username, password, privateKey, sudoPassword);
   if (!result.ok) {
     const code = (result as { ok: false; error: string }).error;
     if (code === 'name_required' || code === 'host_required' || code === 'username_required' || code === 'invalid_port' || code === 'auth_required') return res.status(400).json({ error: code });
@@ -1941,6 +1942,7 @@ app.put('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
   if (req.body?.username !== undefined) updates.username = `${req.body.username}`;
   if (req.body?.password !== undefined) updates.password = `${req.body.password}`;
   if (req.body?.private_key !== undefined) updates.privateKey = `${req.body.private_key}`;
+  if (req.body?.sudo_password !== undefined) updates.sudoPassword = `${req.body.sudo_password}`;
 
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
 

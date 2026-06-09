@@ -35,6 +35,7 @@ export type DevopsServer = {
   username: string;
   has_password: boolean;
   has_key: boolean;
+  has_sudo_password: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -46,6 +47,7 @@ export type ServerCreds = {
   username: string;
   password?: string;
   privateKey?: string;
+  sudoPassword?: string;
 };
 
 type DevopsServerRow = {
@@ -57,6 +59,7 @@ type DevopsServerRow = {
   username: string;
   password_enc: string | null;
   private_key_enc: string | null;
+  sudo_password_enc: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -73,12 +76,16 @@ db.exec(`
     username TEXT NOT NULL,
     password_enc TEXT,
     private_key_enc TEXT,
+    sudo_password_enc TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )
 `);
 
 db.exec('CREATE INDEX IF NOT EXISTS idx_devops_servers_user ON devops_servers(user_id)');
+
+// Safe migration for existing tables
+try { db.exec('ALTER TABLE devops_servers ADD COLUMN sudo_password_enc TEXT'); } catch {}
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +101,7 @@ const rowToDto = (row: DevopsServerRow): DevopsServer => ({
   username: row.username,
   has_password: !!row.password_enc,
   has_key: !!row.private_key_enc,
+  has_sudo_password: !!row.sudo_password_enc,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -127,6 +135,7 @@ export const getServerCreds = (userId: number, serverId: number): ServerCreds | 
     username: row.username,
     password: row.password_enc ? decrypt(row.password_enc) : undefined,
     privateKey: row.private_key_enc ? decrypt(row.private_key_enc) : undefined,
+    sudoPassword: row.sudo_password_enc ? decrypt(row.sudo_password_enc) : undefined,
   };
 };
 
@@ -138,6 +147,7 @@ export const createServer = (
   username: string,
   password?: string,
   privateKey?: string,
+  sudoPassword?: string,
 ): { ok: true; id: number } | { ok: false; error: string } => {
   // Validation
   const trimmedName = name.trim();
@@ -158,11 +168,12 @@ export const createServer = (
   const now = getNowUnix();
   const passwordEnc = password ? encrypt(password) : null;
   const privateKeyEnc = privateKey ? encrypt(privateKey) : null;
+  const sudoPasswordEnc = sudoPassword ? encrypt(sudoPassword) : null;
 
   const result = db.prepare(`
-    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, now, now);
+    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, sudo_password_enc, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, sudoPasswordEnc, now, now);
 
   return { ok: true, id: Number(result.lastInsertRowid) };
 };
@@ -177,6 +188,7 @@ export const updateServer = (
     username?: string;
     password?: string;
     privateKey?: string;
+    sudoPassword?: string;
   },
 ): { ok: true } | { ok: false; error: string } => {
   const existing = db.prepare('SELECT * FROM devops_servers WHERE user_id = ? AND id = ?')
@@ -217,6 +229,10 @@ export const updateServer = (
   if (updates.privateKey !== undefined) {
     setClauses.push('private_key_enc = ?');
     values.push(updates.privateKey ? encrypt(updates.privateKey) : null);
+  }
+  if (updates.sudoPassword !== undefined) {
+    setClauses.push('sudo_password_enc = ?');
+    values.push(updates.sudoPassword ? encrypt(updates.sudoPassword) : null);
   }
 
   values.push(userId, serverId);
