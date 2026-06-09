@@ -2596,6 +2596,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const payload: DesktopActionPayload = {
       action: 'suggest_server_creds_update',
       value: {
+        confirmation_id: '',
         server_id: serverId,
         server_name: server.name,
         current_username: server.username,
@@ -2606,9 +2607,55 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
         remove_password: removePassword,
       }
     };
-    if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Предложение обновления кредов для "${server.name}" отправлено пользователю.` });
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение обновления credentials невозможно — попроси пользователя запустить приложение на ПК.' });
+    }
+
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+    payload.value = { ...(payload.value as Record<string, unknown>), confirmation_id: confirmationId };
+
+    sendToDesktop(user.id, {
+      type: 'desktop_action',
+      action: 'suggest_server_creds_update',
+      target: String(serverId),
+      value: payload.value
+    });
+
+    const { registerPendingConfirmation } = await import('./devops-confirmations.js');
+    try {
+      const result = await new Promise<any>((resolve, reject) => {
+        registerPendingConfirmation(confirmationId, {
+          userId: user.id,
+          serverId,
+          command: `suggest_server_creds_update username=${newUsername} use_ssh_key_for_login=${useSshKey} remove_password=${removePassword}`,
+          execute: async () => {
+            const { updateServer } = await import('./devops.js');
+            const updateResult = updateServer(user.id, serverId, {
+              username: newUsername,
+              useSshKeyForLogin: useSshKey,
+              ...(removePassword ? { password: '' } : {}),
+            });
+            if (!updateResult.ok) throw new Error((updateResult as { ok: false; error: string }).error);
+            return { ok: true, username: newUsername, use_ssh_key_for_login: useSshKey, remove_password: removePassword };
+          },
+          resolve,
+          reject,
+          createdAt: Date.now()
+        });
+      });
+
+      return JSON.stringify({ status: 'success', message: `Credentials для "${server.name}" обновлены.`, result });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил обновление credentials.', server: server.name });
+      }
+      if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка обновления credentials: ${err?.message || String(err)}`, server: server.name });
+    }
   }
 
   if (toolName === 'desktop_action') {

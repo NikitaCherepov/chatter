@@ -346,6 +346,7 @@ export function ServerSettings() {
       <div className={s.fieldGroup}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
           <input
+            className={s.macroCheckbox}
             type="checkbox"
             checked={formUseSshKeyForLogin}
             onChange={(e) => setFormUseSshKeyForLogin(e.target.checked)}

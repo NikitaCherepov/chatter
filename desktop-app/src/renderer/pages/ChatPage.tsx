@@ -82,7 +82,7 @@ export function ChatPage() {
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
-  const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
+  const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
@@ -274,9 +274,10 @@ export function ChatPage() {
             }
           }
           if (action.action === 'suggest_server_creds_update' && action.value) {
-            const val = action.value as { server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean };
+            const val = action.value as { confirmation_id?: string; server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean };
             if (val.server_id && val.new_username && val.reason) {
               setPendingCredsUpdates(prev => [...prev, {
+                confirmation_id: val.confirmation_id,
                 server_id: val.server_id!,
                 server_name: val.server_name || '',
                 current_username: val.current_username || '',
@@ -1547,15 +1548,22 @@ export function ChatPage() {
                       className={s.suggestMacroSaveBtn}
                       onClick={async () => {
                         try {
-                          const body: Record<string, unknown> = {
-                            username: upd.new_username,
-                            use_ssh_key_for_login: upd.use_ssh_key,
-                          };
-                          if (upd.remove_password) body.password = '';
-                          await api.apiFetch(`/api/v1/devops/servers/${upd.server_id}`, {
-                            method: 'PUT',
-                            body: JSON.stringify(body),
-                          });
+                          if (upd.confirmation_id) {
+                            await api.apiFetch('/api/v1/devops/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: true }),
+                            });
+                          } else {
+                            const body: Record<string, unknown> = {
+                              username: upd.new_username,
+                              use_ssh_key_for_login: upd.use_ssh_key,
+                            };
+                            if (upd.remove_password) body.password = '';
+                            await api.apiFetch(`/api/v1/devops/servers/${upd.server_id}`, {
+                              method: 'PUT',
+                              body: JSON.stringify(body),
+                            });
+                          }
                           toast.success(`Учётные данные для "${upd.server_name}" обновлены`);
                           setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx));
                         } catch (err: any) {
@@ -1567,7 +1575,17 @@ export function ChatPage() {
                     </button>
                     <button
                       className={s.suggestMacroDismissBtn}
-                      onClick={() => setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx))}
+                      onClick={async () => {
+                        if (upd.confirmation_id) {
+                          try {
+                            await api.apiFetch('/api/v1/devops/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: false }),
+                            });
+                          } catch {}
+                        }
+                        setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx));
+                      }}
                     >
                       Отклонить
                     </button>
