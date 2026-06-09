@@ -2234,21 +2234,19 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
   if (pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
 
-  deletePendingConfirmation(confirmationId);
-
   if (!approved) {
+    deletePendingConfirmation(confirmationId);
     pending.reject(new Error('rejected_by_user'));
     return res.json({ ok: true, status: 'rejected' });
   }
 
   const pendingServer = getServerById(userId, pending.serverId);
-  const needsSudoPassword = pendingServer?.username !== 'root' && (pending.needsSudoPassword === true || /\bsudo\b/.test(pending.command));
+  const needsSudoPassword = pending.needsSudoPassword === true || (pendingServer?.username !== 'root' && /\bsudo\b/.test(pending.command));
 
   // If command needs sudo but no sudo password provided — reject
   if (needsSudoPassword && !serverHasSudoPassword(userId, pending.serverId) && !sudoPassword) {
     return res.status(400).json({ error: 'sudo_password_required' });
   }
-
   // Save sudo password to server settings if requested
   if (saveSudoPassword && sudoPassword) {
     updateServer(userId, pending.serverId, { sudoPassword });
@@ -2256,6 +2254,7 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
 
   // Execute the approved command
   try {
+    deletePendingConfirmation(confirmationId);
     const execOptions = sudoPassword ? { sudoPasswordOverride: sudoPassword } : undefined;
     const result = pending.execute
       ? await pending.execute(execOptions)

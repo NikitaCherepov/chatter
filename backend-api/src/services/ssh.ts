@@ -11,7 +11,7 @@ export type SshResult = {
 
 export type CreateServerUserOptions = {
   username: string;
-  password: string;
+  password?: string;
   publicKey?: string;
   installSshKey?: boolean;
   nopasswdSudo?: boolean;
@@ -172,18 +172,19 @@ export const createServerUser = (
 ): Promise<CreateServerUserResult> => {
   return new Promise((resolve, reject) => {
     const username = options.username.trim();
-    const password = options.password;
 
     if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
       return reject(new Error('invalid_username'));
-    }
-    if (password.length < 8 || password.length > 128 || /[\r\n]/.test(password)) {
-      return reject(new Error('invalid_password'));
     }
 
     const creds = getServerCreds(userId, serverId);
     if (!creds) return reject(new Error('server_not_found'));
     if (!creds.password && !creds.privateKey) return reject(new Error('server_no_credentials'));
+
+    const password = options.password || options.sudoPasswordOverride || creds.sudoPassword || '';
+    if (password.length < 8 || password.length > 128 || /[\r\n]/.test(password)) {
+      return reject(new Error('invalid_password'));
+    }
 
     const client = new Client();
     let resolved = false;

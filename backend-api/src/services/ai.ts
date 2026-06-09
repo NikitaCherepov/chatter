@@ -1520,7 +1520,7 @@ const buildCreateServerUserTool = () => {
     type: 'function' as const,
     function: {
       name: 'create_server_user',
-      description: `Создаёт нового пользователя на удалённом сервере с заданным паролем и sudo-правами. Пароль передаётся в backend и задаётся через stdin, не через shell-команду. Если у текущего SSH-пользователя нет сохранённого sudo-пароля, пользователь подтвердит действие и введёт sudo-пароль в desktop-карточке.`,
+      description: `Создаёт нового пользователя на удалённом сервере с sudo-правами (NOPASSWD). Пароль нового пользователя вводится в карточке подтверждения на десктопе — НЕ генерируй и НЕ передавай пароль сам. SSH-ключ установится автоматически если у сервера есть дефолтный ключ.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1531,10 +1531,6 @@ const buildCreateServerUserTool = () => {
           username: {
             type: 'string',
             description: 'Имя нового пользователя (например "deployer", "admin").'
-          },
-          password: {
-            type: 'string',
-            description: 'Пароль для нового пользователя. Не выводи его в обычном тексте после вызова tool.'
           },
           install_ssh_key: {
             type: 'boolean',
@@ -1549,7 +1545,7 @@ const buildCreateServerUserTool = () => {
             description: 'Если true — добавить sudoers правило NOPASSWD для нового пользователя (по умолчанию true).'
           }
         },
-        required: ['server_id', 'username', 'password']
+        required: ['server_id', 'username']
       }
     }
   };
@@ -2469,19 +2465,15 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
   if (toolName === 'create_server_user') {
     const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
     const username: string = typeof parsed.username === 'string' ? parsed.username.trim() : '';
-    const password: string = typeof parsed.password === 'string' ? parsed.password : '';
     const installSshKey: boolean = parsed.install_ssh_key !== false;
     const explicitKeyId: number | undefined = typeof parsed.key_id === 'number' ? parsed.key_id : undefined;
     const nopasswdSudo: boolean = parsed.nopasswd_sudo !== false;
 
-    if (!serverId || !username || !password) {
-      return JSON.stringify({ status: 'error', message: 'server_id, username и password обязательны' });
+    if (!serverId || !username) {
+      return JSON.stringify({ status: 'error', message: 'server_id и username обязательны' });
     }
     if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
       return JSON.stringify({ status: 'error', message: 'username содержит недопустимые символы' });
-    }
-    if (password.length < 8 || password.length > 128 || /[\r\n]/.test(password)) {
-      return JSON.stringify({ status: 'error', message: 'password должен быть длиной 8-128 символов и без переносов строк' });
     }
 
     const { getServerById, getSshPublicKey, serverHasSudoPassword } = await import('./devops.js');
@@ -2508,7 +2500,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение создания пользователя невозможно — попроси пользователя запустить приложение на ПК.' });
     }
 
-    const needsSudoPasswordPrompt = server.username !== 'root' && !serverHasSudoPassword(user.id, serverId);
+    const needsSudoPasswordPrompt = !serverHasSudoPassword(user.id, serverId);
     const previewCommand = [
       'create_server_user',
       `username=${username}`,
@@ -2532,7 +2524,8 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
         server_id: serverId,
         host: server.host,
         command: previewCommand,
-        needs_sudo_password: needsSudoPasswordPrompt
+        needs_sudo_password: needsSudoPasswordPrompt,
+        new_username: username,
       }
     });
 
@@ -2548,7 +2541,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
             const { createServerUser } = await import('./ssh.js');
             return createServerUser(user.id, serverId, {
               username,
-              password,
+              password: execOptions?.sudoPasswordOverride,
               publicKey,
               installSshKey,
               nopasswdSudo,

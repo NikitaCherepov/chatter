@@ -80,9 +80,9 @@ export function ChatPage() {
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
-  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
-  const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; use_ssh_key_for_login: boolean; remove_password: boolean }>>([]);
+  const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
@@ -254,7 +254,7 @@ export function ChatPage() {
             }
           }
           if (action.action === 'devops_confirmation' && action.value) {
-            const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; needs_sudo_password?: boolean };
+            const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; needs_sudo_password?: boolean; new_username?: string };
             if (val.confirmation_id && val.command) {
               setDevopsConfirmations(prev => [...prev, {
                 confirmation_id: val.confirmation_id!,
@@ -263,6 +263,7 @@ export function ChatPage() {
                 host: val.host || '',
                 command: val.command!,
                 needs_sudo_password: Boolean(val.needs_sudo_password),
+                new_username: val.new_username,
               }]);
             }
           }
@@ -273,17 +274,15 @@ export function ChatPage() {
             }
           }
           if (action.action === 'suggest_server_creds_update' && action.value) {
-            const val = action.value as { server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; use_ssh_key_for_login?: boolean; remove_password?: boolean };
+            const val = action.value as { server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean };
             if (val.server_id && val.new_username && val.reason) {
-              const useSshKeyForLogin = val.use_ssh_key_for_login === true || val.use_ssh_key === true;
               setPendingCredsUpdates(prev => [...prev, {
                 server_id: val.server_id!,
                 server_name: val.server_name || '',
                 current_username: val.current_username || '',
                 new_username: val.new_username!,
                 reason: val.reason!,
-                use_ssh_key: useSshKeyForLogin,
-                use_ssh_key_for_login: useSshKeyForLogin,
+                use_ssh_key: val.use_ssh_key === true,
                 remove_password: val.remove_password || false,
               }]);
             }
@@ -1294,21 +1293,26 @@ export function ChatPage() {
                   </div>
                   {conf.needs_sudo_password && (
                     <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <input
-                        type="password"
-                        placeholder="Sudo пароль"
-                        value={conf.sudo_password || ''}
-                        onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
-                        style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
-                      />
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={conf.save_sudo_password || false}
-                          onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, save_sudo_password: e.target.checked } : c))}
-                        />
-                        Сохранить sudo пароль в настройках сервера
-                      </label>
+                      {conf.needs_sudo_password && (
+                        <>
+                          <input
+                            type="password"
+                            placeholder="Sudo пароль"
+                            value={conf.sudo_password || ''}
+                            onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
+                            style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
+                          />
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                            <input
+                              className={s.devopsCheckbox}
+                              type="checkbox"
+                              checked={conf.save_sudo_password || false}
+                              onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, save_sudo_password: e.target.checked } : c))}
+                            />
+                            Сохранить sudo пароль в настройках сервера
+                          </label>
+                        </>
+                      )}
                     </div>
                   )}
                   {conf._verdict && (
@@ -1524,7 +1528,7 @@ export function ChatPage() {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                         <code style={{ fontSize: '11px', color: 'var(--accent)' }}>{upd.new_username}</code>
                       </div>
-                      {upd.use_ssh_key_for_login && (
+                      {upd.use_ssh_key && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Авторизация:</span>
                           <span style={{ fontSize: '11px', color: 'var(--accent)' }}>SSH-ключ</span>
@@ -1545,7 +1549,7 @@ export function ChatPage() {
                         try {
                           const body: Record<string, unknown> = {
                             username: upd.new_username,
-                            use_ssh_key_for_login: upd.use_ssh_key_for_login,
+                            use_ssh_key_for_login: upd.use_ssh_key,
                           };
                           if (upd.remove_password) body.password = '';
                           await api.apiFetch(`/api/v1/devops/servers/${upd.server_id}`, {
@@ -1562,8 +1566,7 @@ export function ChatPage() {
                       Применить
                     </button>
                     <button
-                      className={s.suggestMacroClose}
-                      style={{ fontSize: '12px', padding: '6px 12px', color: 'var(--text-muted)' }}
+                      className={s.suggestMacroDismissBtn}
                       onClick={() => setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx))}
                     >
                       Отклонить
