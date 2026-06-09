@@ -2289,7 +2289,7 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const autoOk = isAutoApproved(user.id, serverId, command);
 
     // Check if command needs sudo but server has no stored sudo password
-    const needsSudoPasswordPrompt = /\bsudo\b/.test(command) && !serverHasSudoPassword(user.id, serverId);
+    const needsSudoPasswordPrompt = server.username !== 'root' && /\bsudo\b/.test(command) && !serverHasSudoPassword(user.id, serverId);
 
     if (autoOk && !needsSudoPasswordPrompt) {
       // Execute immediately — no confirmation needed

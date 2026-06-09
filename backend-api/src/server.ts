@@ -2241,7 +2241,8 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
     return res.json({ ok: true, status: 'rejected' });
   }
 
-  const needsSudoPassword = pending.needsSudoPassword === true || /\bsudo\b/.test(pending.command);
+  const pendingServer = getServerById(userId, pending.serverId);
+  const needsSudoPassword = pendingServer?.username !== 'root' && (pending.needsSudoPassword === true || /\bsudo\b/.test(pending.command));
 
   // If command needs sudo but no sudo password provided — reject
   if (needsSudoPassword && !serverHasSudoPassword(userId, pending.serverId) && !sudoPassword) {
