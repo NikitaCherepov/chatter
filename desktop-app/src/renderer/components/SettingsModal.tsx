@@ -271,7 +271,6 @@ export function SettingsModal({ onClose }: Props) {
   return (
     <motion.div
       className={s.overlay}
-      onClick={onClose}
       variants={overlayVariants}
       initial="hidden"
       animate="visible"

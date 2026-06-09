@@ -1294,7 +1294,7 @@ export function ChatPage() {
                     <code className={s.suggestMacroCmd}>{conf.command}</code>
                   </div>
                   {conf.needs_new_password && (
-                    <div style={{ marginTop: '8px' }}>
+                    <div style={{ marginTop: '8px', marginBottom: conf.needs_sudo_password ? '0' : '8px' }}>
                       <input
                         type="password"
                         placeholder="New password"
@@ -1305,7 +1305,7 @@ export function ChatPage() {
                     </div>
                   )}
                   {conf.needs_sudo_password && (
-                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <>
                           <input
                             type="password"

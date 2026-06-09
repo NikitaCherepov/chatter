@@ -391,6 +391,53 @@ AI: execute_ssh_command(server_id, command)
     → SSH executor: выполнить команду → stdout/stderr/exitCode → AI
 ```
 
+### DevOps: актуальные карточки и пароли
+
+Desktop получает DevOps-действия через WS `desktop_action` и рендерит их в `ChatPage.tsx`.
+
+**`devops_confirmation`**
+- Используется для SSH-команд, `create_server_user` и `change_server_user_password`.
+- Карточка показывает сервер, host и безопасное preview команды.
+- Если backend передал `needs_sudo_password=true`, появляется поле `Sudo password` и чекбокс сохранения в `sudo_password` сервера.
+- Если backend передал `needs_new_password=true`, появляется поле `New password`. Это пароль Linux-пользователя для `change_server_user_password`; бот его не видит, в preview остаётся `password=***`.
+- Кнопки: allow, allow always, review, reject. `allow always` создаёт auto-approve policy для точного preview команды и затем подтверждает текущую операцию.
+- Подтверждение отправляется в `POST /api/v1/devops/approve` с `{ confirmation_id, approved, sudo_password?, save_sudo_password?, new_password? }`.
+
+**`suggest_server_creds_update`**
+- Используется, когда бот предлагает переключить credentials сервера после создания пользователя или установки SSH-ключа.
+- Поддерживает `new_username`, `use_ssh_key_for_login` / `use_ssh_key`, `remove_password`.
+- Если есть `confirmation_id`, карточка подтверждает изменение через `/api/v1/devops/approve`, чтобы backend tool call дождался решения пользователя и продолжил тот же AI-поток.
+- Если `use_ssh_key_for_login=true`, backend будет логиниться по дефолтному SSH-ключу сервера. Если ключ не подходит, password fallback не выполняется.
+
+**Настройки сервера**
+- `password` — обычный SSH password.
+- `sudo_password` — пароль для sudo и пароль, который используется `create_server_user`, если он сохранён.
+- `default_ssh_key_id` — ключ, который можно ставить на сервер и использовать для входа.
+- `use_ssh_key_for_login` — отдельная галочка способа входа: password login или key login.
+
+### DevOps: current cards and passwords
+
+Desktop receives DevOps actions through WS `desktop_action` and renders them in `ChatPage.tsx`.
+
+**`devops_confirmation`**
+- Used for SSH commands, `create_server_user`, and `change_server_user_password`.
+- Shows server name, host, and a safe command preview.
+- If backend sends `needs_sudo_password=true`, the card shows a `Sudo password` input and a checkbox to save it into server `sudo_password`.
+- If backend sends `needs_new_password=true`, the card shows a `New password` input. This is the Linux user's new password for `change_server_user_password`; the bot does not see it, and the preview stays `password=***`.
+- Confirmation is sent to `POST /api/v1/devops/approve` with `{ confirmation_id, approved, sudo_password?, save_sudo_password?, new_password? }`.
+
+**`suggest_server_creds_update`**
+- Used when the bot proposes changing server credentials after creating a user or installing an SSH key.
+- Supports `new_username`, `use_ssh_key_for_login` / `use_ssh_key`, and `remove_password`.
+- If `confirmation_id` is present, the card confirms through `/api/v1/devops/approve`, so the backend tool call waits for the user and continues the same AI flow.
+- If `use_ssh_key_for_login=true`, backend logs in with the server default SSH key. If the key does not work, password fallback is not attempted.
+
+**Server settings**
+- `password` is the normal SSH login password.
+- `sudo_password` is used for `sudo -S` and as the password source for `create_server_user` when saved.
+- `default_ssh_key_id` is the key used for installation and optional key login.
+- `use_ssh_key_for_login` is the explicit login-mode checkbox: password login or key login.
+
 ## WebSocket Transport
 
 Desktop-клиент использует **WebSocket** для двунаправленного обмена с сервером. Реализация в `lib/api.ts`.

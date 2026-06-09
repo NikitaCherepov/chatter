@@ -12,10 +12,12 @@
   background-color: var(--bg-primary);
   border-radius: 12px;
   box-shadow: var(--shadow-modal);
-  width: 560px;
-  max-width: 90vw;
-  height: 420px;
-  max-height: 80vh;
+  width: 70vw;
+  min-width: 480px;
+  max-width: 900px;
+  height: 75vh;
+  min-height: 360px;
+  max-height: 800px;
   display: flex;
   flex-direction: column;
   position: relative;

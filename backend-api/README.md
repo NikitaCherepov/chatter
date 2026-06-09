@@ -31,9 +31,31 @@ npm run logs:api
 - `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` опционально) - для `/internal/tools/read_url`.
 - `PROXYAPI_KEY` - ключ ProxyAPI для генерации изображений.
 - `PROXYAPI_BASE_URL` - базовый URL ProxyAPI (по умолчанию `https://api.proxyapi.ru/openai/v1`).
-- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1`).
+- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1.5`).
 - `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`).
 - `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`).
+
+### Генерация изображений
+
+Генерация живёт в `services/image-generation.ts` и ходит в OpenAI-compatible endpoint:
+
+```text
+POST {PROXYAPI_BASE_URL}/images/generations
+Authorization: Bearer {PROXYAPI_KEY}
+```
+
+Тело запроса:
+
+```json
+{
+  "model": "IMAGE_GEN_MODEL",
+  "prompt": "...",
+  "quality": "IMAGE_GEN_QUALITY",
+  "size": "IMAGE_GEN_SIZE"
+}
+```
+
+Ожидаемый ответ — `data[0].b64_json`. Поэтому провайдер/модель можно заменить на другой OpenAI-compatible image endpoint, если он поддерживает тот же формат запроса и ответа. Для провайдеров с другим API нужен отдельный адаптер в `image-generation.ts`.
 
 ### AI-провайдеры (основные)
 
@@ -237,9 +259,9 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 **Серверы:**
 
 - `GET /api/v1/devops/servers` — список серверов пользователя (без паролей/ключей)
-- `POST /api/v1/devops/servers` — добавить сервер (`{ name, host, port, username, password?, private_key?, sudo_password? }`)
+- `POST /api/v1/devops/servers` — добавить сервер (`{ name, host, port, username, password?, private_key?, sudo_password?, default_ssh_key_id?, use_ssh_key_for_login? }`)
 - `GET /api/v1/devops/servers/:id` — информация о сервере
-- `PUT /api/v1/devops/servers/:id` — обновить сервер (частичное обновление, пустые пароль/ключ не перезаписывают существующие)
+- `PUT /api/v1/devops/servers/:id` — обновить сервер (частичное обновление). Поля: `{ name?, host?, port?, username?, password?, private_key?, sudo_password?, default_ssh_key_id?, use_ssh_key_for_login? }`
 - `DELETE /api/v1/devops/servers/:id` — удалить сервер
 - `POST /api/v1/devops/servers/:id/test` — проверить SSH-подключение
 - `POST /api/v1/devops/servers/:id/exec` — выполнить команду на сервере (только для внутренних вызовов, не из AI)
@@ -252,7 +274,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 **Подтверждение команд (HitL):**
 
-- `POST /api/v1/devops/approve` — подтвердить/отклонить выполнение команды (`{ confirmation_id, approved: boolean }`)
+- `POST /api/v1/devops/approve` — подтвердить/отклонить выполнение команды (`{ confirmation_id, approved: boolean, sudo_password?, save_sudo_password?, new_password? }`)
 
 **Инструкции (runbooks):**
 
@@ -358,6 +380,8 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 Инструменты доступны AI через tool calling. Определены в `services/ai.ts` в `toolDefinitions`.
 
+Агентский цикл ограничен константами в `services/ai.ts`: `MAX_TOOL_LOOPS = 25`, `MAX_TOOL_LOOPS_VOICE = 10`. Это лимит итераций "модель → tool calls → модель", а не строгий лимит количества отдельных tool calls: за одну итерацию модель может вернуть несколько вызовов инструментов.
+
 | Инструмент | Описание |
 |---|---|
 | `search_web` | Поиск в интернете (Tavily) |
@@ -412,6 +436,10 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `list_devops_runbooks` | Показывает список инструкций пользователя (id, title, updated_at). |
 | `read_devops_runbook` | Читает содержимое инструкции по id (title, content). |
 | `suggest_devops_runbook` | Предлагает пользователю сохранить инструкцию. AI формирует `title, content, commands` → карточка в чате с кнопками «Сохранить»/«Проверить»/«Отклонить». |
+| `install_ssh_public_key` | Устанавливает публичный SSH-ключ в `authorized_keys` выбранного пользователя. Если `key_id` не указан, берётся дефолтный ключ сервера. |
+| `create_server_user` | Создаёт Linux-пользователя с sudo-группой. Пароль нового пользователя берётся из `sudo_password` сервера; если он не сохранён, пользователь вводит его в карточке подтверждения. `nopasswd_sudo` по умолчанию `false`. |
+| `change_server_user_password` | Меняет пароль существующего Linux-пользователя. Новый пароль вводится пользователем в карточке подтверждения и не передаётся в аргументах tool call. |
+| `suggest_server_creds_update` | Предлагает сменить credentials сервера: `username`, `use_ssh_key_for_login`, опционально очистить обычный SSH `password`. Блокирует tool call до подтверждения пользователя. |
 
 **Архитектура безопасности:**
 
@@ -421,6 +449,14 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - **Опасные команды:** блокируются на уровне SSH-executor (`rm -rf /`, `mkfs`, `dd of=/dev/`, `shutdown`, `init 0/6`, `chmod 000 /`, `chown` root-директорий).
 - **Sudo:** если команда содержит `sudo` и в настройках сервера указан sudo-пароль — пароль передаётся через stdin stream (`sudo -S`), не виден в process list.
 - **Буфер:** stdout/stderr ограничен 1MB, таймаут выполнения — 30 секунд.
+
+**SSH/password поля:**
+
+- `password` — обычный пароль для SSH-login. Не используется, если `use_ssh_key_for_login=true`.
+- `private_key` / `default_ssh_key_id` — ключи для входа/установки. Дефолтный ключ можно хранить на сервере и ставить пользователям через `install_ssh_public_key`.
+- `use_ssh_key_for_login` — явная галочка выбора способа входа. Если `true`, backend логинится по дефолтному SSH-ключу; если ключ не подходит, fallback на password не делается.
+- `sudo_password` — пароль для `sudo -S` и пароль, который используется при `create_server_user`, если создаваемому пользователю нужен пароль.
+- `change_server_user_password` не использует `sudo_password` как новый пароль: новый пароль вводится отдельно в confirmation card как `new_password`.
 
 **Поток выполнения команды:**
 
@@ -451,7 +487,7 @@ AI: execute_ssh_command(server_id, command)
 
 | Таблица | Описание |
 |---|---|
-| `devops_servers` | SSH-серверы (name, host, port, username, password_enc, private_key_enc, sudo_password_enc) |
+| `devops_servers` | SSH-серверы (name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, use_ssh_key_for_login) |
 | `devops_policies` | Auto-approve политики (server_id, pattern, auto_approve) |
 | `devops_runbooks` | Инструкции (user_id, title, content, commands JSON) |
 
