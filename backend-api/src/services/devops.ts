@@ -134,12 +134,20 @@ export const getServerCreds = (userId: number, serverId: number): ServerCreds | 
   `).get(userId, serverId) as DevopsServerRow | undefined;
   if (!row) return null;
 
+  // Resolve private key: own field > default ssh key pair
+  let privateKey: string | undefined = row.private_key_enc ? decrypt(row.private_key_enc) : undefined;
+  if (!privateKey && row.default_ssh_key_id) {
+    const keyRow = db.prepare('SELECT private_key_enc FROM devops_ssh_keys WHERE user_id = ? AND id = ? AND private_key_enc IS NOT NULL')
+      .get(userId, row.default_ssh_key_id) as { private_key_enc: string } | undefined;
+    if (keyRow) privateKey = decrypt(keyRow.private_key_enc);
+  }
+
   return {
     host: row.host,
     port: row.port,
     username: row.username,
     password: row.password_enc ? decrypt(row.password_enc) : undefined,
-    privateKey: row.private_key_enc ? decrypt(row.private_key_enc) : undefined,
+    privateKey,
     sudoPassword: row.sudo_password_enc ? decrypt(row.sudo_password_enc) : undefined,
   };
 };
@@ -153,6 +161,7 @@ export const createServer = (
   password?: string,
   privateKey?: string,
   sudoPassword?: string,
+  defaultSshKeyId?: number | null,
 ): { ok: true; id: number } | { ok: false; error: string } => {
   // Validation
   const trimmedName = name.trim();
@@ -163,7 +172,14 @@ export const createServer = (
   if (!trimmedHost) return { ok: false, error: 'host_required' };
   if (!trimmedUsername) return { ok: false, error: 'username_required' };
   if (!port || port < 1 || port > 65535) return { ok: false, error: 'invalid_port' };
-  if (!password && !privateKey) return { ok: false, error: 'auth_required' };
+  if (!password && !privateKey && !defaultSshKeyId) return { ok: false, error: 'auth_required' };
+
+  // Validate defaultSshKeyId if provided
+  if (defaultSshKeyId) {
+    const keyRow = db.prepare('SELECT id FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
+      .get(userId, defaultSshKeyId);
+    if (!keyRow) return { ok: false, error: 'invalid_ssh_key' };
+  }
 
   // Limit check
   const count = db.prepare('SELECT COUNT(*) as cnt FROM devops_servers WHERE user_id = ?')
@@ -176,9 +192,9 @@ export const createServer = (
   const sudoPasswordEnc = sudoPassword ? encrypt(sudoPassword) : null;
 
   const result = db.prepare(`
-    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, sudo_password_enc, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, sudoPasswordEnc, now, now);
+    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, sudoPasswordEnc, defaultSshKeyId ?? null, now, now);
 
   return { ok: true, id: Number(result.lastInsertRowid) };
 };
@@ -638,6 +654,10 @@ export const updateSshKey = (
 };
 
 export const deleteSshKey = (userId: number, keyId: number): boolean => {
+  // Reset default_ssh_key_id on all servers that reference this key
+  db.prepare('UPDATE devops_servers SET default_ssh_key_id = NULL WHERE user_id = ? AND default_ssh_key_id = ?')
+    .run(userId, keyId);
+
   return db.prepare('DELETE FROM devops_ssh_keys WHERE user_id = ? AND id = ?')
     .run(userId, keyId).changes > 0;
 };

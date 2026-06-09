@@ -331,6 +331,11 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     return;
   }
 
+  if (a === 'suggest_server_creds_update') {
+    // Handled by ChatPage via the suggestServerCredsUpdate callback
+    return;
+  }
+
   // ── DevOps confirmation ──
 
   if (a === 'devops_confirmation') {
@@ -403,4 +408,29 @@ export function subscribeSuggestDevopsRunbook(listener: SuggestDevopsRunbookList
 
 export function emitSuggestDevopsRunbook(payload: SuggestDevopsRunbookPayload) {
   suggestDevopsRunbookListeners.forEach(fn => fn(payload));
+}
+
+// ── Suggest Server Creds Update callback ───────────────────────────────────
+
+export type SuggestServerCredsUpdatePayload = {
+  server_id: number;
+  server_name: string;
+  current_username: string;
+  new_username: string;
+  reason: string;
+  use_ssh_key: boolean;
+  remove_password: boolean;
+};
+
+type SuggestServerCredsUpdateListener = (payload: SuggestServerCredsUpdatePayload) => void;
+
+const suggestServerCredsUpdateListeners = new Set<SuggestServerCredsUpdateListener>();
+
+export function subscribeSuggestServerCredsUpdate(listener: SuggestServerCredsUpdateListener): () => void {
+  suggestServerCredsUpdateListeners.add(listener);
+  return () => suggestServerCredsUpdateListeners.delete(listener);
+}
+
+export function emitSuggestServerCredsUpdate(payload: SuggestServerCredsUpdatePayload) {
+  suggestServerCredsUpdateListeners.forEach(fn => fn(payload));
 }

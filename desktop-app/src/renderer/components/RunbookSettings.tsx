@@ -123,8 +123,10 @@ export function RunbookSettings() {
     }
   };
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
   const handleDelete = async (id: number) => {
-    if (!confirm('Удалить инструкцию?')) return;
+    setDeleteConfirmId(null);
     try {
       await api.apiFetch(`/api/v1/devops/runbooks/${id}`, { method: 'DELETE' });
       toast.success('Инструкция удалена');
@@ -264,7 +266,7 @@ export function RunbookSettings() {
                 </button>
                 <button
                   className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                  onClick={() => handleDelete(runbook.id)}
+                  onClick={() => setDeleteConfirmId(runbook.id)}
                   title="Удалить"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -287,6 +289,20 @@ export function RunbookSettings() {
             <button className={s.saveBtn} onClick={() => setReviewResult(null)}>
               Закрыть
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId !== null && (
+        <div className={s.explainOverlay} onClick={() => setDeleteConfirmId(null)}>
+          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
+            <div className={s.explainTitle}>Удалить инструкцию?</div>
+            <div className={s.explainText}>Инструкция и все привязанные политики будут удалены.</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button className={s.cancelBtn} onClick={() => setDeleteConfirmId(null)}>Отмена</button>
+              <button className={s.saveBtn} style={{ backgroundColor: 'var(--danger, #e53935)' }} onClick={() => handleDelete(deleteConfirmId)}>Удалить</button>
+            </div>
           </div>
         </div>
       )}

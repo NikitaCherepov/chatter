@@ -81,6 +81,7 @@ export function ChatPage() {
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
@@ -267,6 +268,20 @@ export function ChatPage() {
             const val = action.value as { title?: string; content?: string; commands?: string[] };
             if (val.title && val.content) {
               setPendingRunbooks(prev => [...prev, { title: val.title!, content: val.content!, commands: val.commands || [] }]);
+            }
+          }
+          if (action.action === 'suggest_server_creds_update' && action.value) {
+            const val = action.value as { server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean };
+            if (val.server_id && val.new_username && val.reason) {
+              setPendingCredsUpdates(prev => [...prev, {
+                server_id: val.server_id!,
+                server_name: val.server_name || '',
+                current_username: val.current_username || '',
+                new_username: val.new_username!,
+                reason: val.reason!,
+                use_ssh_key: val.use_ssh_key || false,
+                remove_password: val.remove_password || false,
+              }]);
             }
           }
           handleDesktopAction(action);
@@ -1430,6 +1445,81 @@ export function ChatPage() {
                     <button
                       className={s.suggestMacroDismissBtn}
                       onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Suggest Server Creds Update cards */}
+              {pendingCredsUpdates.map((upd, updIdx) => (
+                <div key={`creds-${updIdx}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>Смена учётных данных</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroName}>{upd.server_name}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-body)', marginTop: '6px', lineHeight: '1.5' }}>
+                    <div>{upd.reason}</div>
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Пользователь:</span>
+                        <code style={{ fontSize: '11px', color: 'var(--danger, #e53935)', textDecoration: 'line-through' }}>{upd.current_username}</code>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                        <code style={{ fontSize: '11px', color: 'var(--accent)' }}>{upd.new_username}</code>
+                      </div>
+                      {upd.use_ssh_key && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Авторизация:</span>
+                          <span style={{ fontSize: '11px', color: 'var(--accent)' }}>SSH-ключ</span>
+                        </div>
+                      )}
+                      {upd.remove_password && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Пароль:</span>
+                          <span style={{ fontSize: '11px', color: 'var(--danger, #e53935)' }}>будет удалён</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          const body: Record<string, unknown> = {
+                            username: upd.new_username,
+                          };
+                          if (upd.remove_password) body.password = '';
+                          await api.apiFetch(`/api/v1/devops/servers/${upd.server_id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify(body),
+                          });
+                          toast.success(`Учётные данные для "${upd.server_name}" обновлены`);
+                          setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx));
+                        } catch (err: any) {
+                          toast.error(err?.body?.error || 'Ошибка обновления кредов');
+                        }
+                      }}
+                    >
+                      Применить
+                    </button>
+                    <button
+                      className={s.suggestMacroClose}
+                      style={{ fontSize: '12px', padding: '6px 12px', color: 'var(--text-muted)' }}
+                      onClick={() => setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx))}
                     >
                       Отклонить
                     </button>

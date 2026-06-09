@@ -1471,6 +1471,46 @@ const buildInstallSshPublicKeyTool = () => {
   };
 };
 
+const buildSuggestServerCredsUpdateTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'suggest_server_creds_update',
+      description: `Предлагает пользователю обновить учётные данные для подключения к серверу. Используй когда:
+- Бот создал нового пользователя на сервере и хочет переключиться на него
+- SSH-ключ установлен на нового пользователя, и нужно заходить по ключу вместо пароля
+- Старый пользователь (например root) заблокирован, и нужно переключиться
+Бот описывает предлагаемые изменения, пользователь подтверждает через HitL.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          server_id: {
+            type: 'number',
+            description: 'ID сервера (из list_devops_servers).'
+          },
+          new_username: {
+            type: 'string',
+            description: 'Новый пользователь для SSH-подключения.'
+          },
+          reason: {
+            type: 'string',
+            description: 'Причина смены (например: "Создан новый пользователь deployer, root заблокирован").'
+          },
+          use_ssh_key: {
+            type: 'boolean',
+            description: 'Если true — подключаться по SSH-ключу (дефолтному ключу сервера), а не по паролю.'
+          },
+          remove_password: {
+            type: 'boolean',
+            description: 'Если true — удалить сохранённый пароль (оставить только SSH-ключ для входа).'
+          }
+        },
+        required: ['server_id', 'new_username', 'reason']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -2377,6 +2417,42 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
   }
 
+  // ── DevOps: suggest server creds update ──────────────────────────────────
+
+  if (toolName === 'suggest_server_creds_update') {
+    const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
+    const newUsername: string = typeof parsed.new_username === 'string' ? parsed.new_username.trim() : '';
+    const reason: string = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
+    const useSshKey: boolean = parsed.use_ssh_key === true;
+    const removePassword: boolean = parsed.remove_password === true;
+
+    if (!serverId || !newUsername || !reason) {
+      return JSON.stringify({ status: 'error', message: 'server_id, new_username и reason обязательны' });
+    }
+
+    const { getServerById } = await import('./devops.js');
+    const server = getServerById(user.id, serverId);
+    if (!server) {
+      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+    }
+
+    const payload: DesktopActionPayload = {
+      action: 'suggest_server_creds_update',
+      value: {
+        server_id: serverId,
+        server_name: server.name,
+        current_username: server.username,
+        new_username: newUsername,
+        reason,
+        use_ssh_key: useSshKey,
+        remove_password: removePassword,
+      }
+    };
+    if (desktopActionSink) desktopActionSink.value = payload;
+
+    return JSON.stringify({ status: 'success', message: `Предложение обновления кредов для "${server.name}" отправлено пользователю.` });
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -2446,6 +2522,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
   if (toolName === 'install_ssh_public_key') return 'Устанавливаю SSH-ключ...';
+  if (toolName === 'suggest_server_creds_update') return 'Предлагаю обновить учётные данные...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
     try {
@@ -2556,7 +2633,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
@@ -2859,7 +2936,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'suggest_devops_runbook') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 

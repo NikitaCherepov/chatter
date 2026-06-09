@@ -68,14 +68,66 @@ export function SshKeySettings() {
     }
   };
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
   const handleDelete = async (id: number) => {
-    if (!confirm('Удалить SSH-ключ?')) return;
+    setDeleteConfirmId(null);
     try {
       await api.apiFetch(`/api/v1/devops/ssh-keys/${id}`, { method: 'DELETE' });
       toast.success('SSH-ключ удалён');
       loadKeys();
     } catch {
       toast.error('Ошибка удаления');
+    }
+  };
+
+  const [importing, setImporting] = useState(false);
+  const [detectedKeys, setDetectedKeys] = useState<{ name: string; filename: string; publicKey?: string; privateKey?: string }[]>([]);
+  const [showImport, setShowImport] = useState(false);
+
+  const handleDetectKeys = async () => {
+    if (!window.electronAPI?.readSshKeys) {
+      toast.error('Доступно только в десктоп-приложении');
+      return;
+    }
+    setImporting(true);
+    try {
+      const found = await window.electronAPI.readSshKeys();
+      if (found.length === 0) {
+        toast.info('В ~/.ssh/ не найдены ключи (id_ed25519, id_rsa и т.д.)');
+      } else {
+        setDetectedKeys(found);
+        setShowImport(true);
+      }
+    } catch (err: any) {
+      toast.error(err?.message === 'no_ssh_dir' ? 'Папка ~/.ssh/ не найдена' : 'Ошибка чтения ключей');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleImportKey = async (key: typeof detectedKeys[0]) => {
+    if (!key.publicKey && !key.privateKey) return;
+    const name = key.filename; // e.g. "id_ed25519"
+    setFormSaving(true);
+    try {
+      await api.apiFetch('/api/v1/devops/ssh-keys', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          public_key: key.publicKey || '',
+          private_key: key.privateKey || undefined,
+        }),
+      });
+      toast.success(`Ключ ${name} импортирован`);
+      loadKeys();
+      // Remove from detected list
+      setDetectedKeys(prev => prev.filter(k => k.filename !== key.filename));
+      if (detectedKeys.length <= 1) setShowImport(false);
+    } catch (err: any) {
+      toast.error(err?.body?.error || 'Ошибка импорта');
+    } finally {
+      setFormSaving(false);
     }
   };
 
@@ -96,7 +148,7 @@ export function SshKeySettings() {
           type="text"
           value={formName}
           onChange={(e) => setFormName(e.target.value)}
-          placeholder="Ramin main key"
+          placeholder="Название ключа"
         />
       </div>
 
@@ -132,7 +184,43 @@ export function SshKeySettings() {
         >
           {formSaving ? 'Сохранение...' : 'Добавить'}
         </button>
+        {typeof window.electronAPI?.readSshKeys === 'function' && (
+          <button
+            className={s.cancelBtn}
+            onClick={handleDetectKeys}
+            disabled={importing}
+          >
+            {importing ? 'Поиск...' : 'Импорт из ~/.ssh'}
+          </button>
+        )}
       </div>
+
+      {/* Detected keys */}
+      {showImport && detectedKeys.length > 0 && (
+        <div style={{ marginTop: '12px' }}>
+          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>Найдены ключи в ~/.ssh</div>
+          {detectedKeys.map((key) => (
+            <div key={key.filename} className={s.macroCard}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: '13px' }}>
+                  {key.filename}
+                  {key.publicKey && key.privateKey && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>пара</span>}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  {key.publicKey ? 'pub + ' : ''}{key.privateKey ? 'private' : ''}
+                </div>
+              </div>
+              <button
+                className={s.saveBtn}
+                style={{ fontSize: '11px', padding: '4px 10px' }}
+                onClick={() => handleImportKey(key)}
+              >
+                Сохранить
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Key list */}
       {keys.length > 0 && (
@@ -152,7 +240,7 @@ export function SshKeySettings() {
               <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                 <button
                   className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                  onClick={() => handleDelete(key.id)}
+                  onClick={() => setDeleteConfirmId(key.id)}
                   title="Удалить"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -163,6 +251,20 @@ export function SshKeySettings() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId !== null && (
+        <div className={s.explainOverlay} onClick={() => setDeleteConfirmId(null)}>
+          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
+            <div className={s.explainTitle}>Удалить SSH-ключ?</div>
+            <div className={s.explainText}>Этот ключ будет удалён. Если он выбран как ключ по умолчанию для какого-либо сервера, ссылка будет сброшена.</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button className={s.cancelBtn} onClick={() => setDeleteConfirmId(null)}>Отмена</button>
+              <button className={s.saveBtn} style={{ backgroundColor: 'var(--danger, #e53935)' }} onClick={() => handleDelete(deleteConfirmId)}>Удалить</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

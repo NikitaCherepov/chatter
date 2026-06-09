@@ -556,6 +556,45 @@ function createWindow() {
       }
     });
   });
+
+  ipcMain.handle('read-ssh-keys', async () => {
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    if (!homeDir) throw new Error('no_home_dir');
+
+    const sshDir = path.join(homeDir, '.ssh');
+    if (!fs.existsSync(sshDir)) throw new Error('no_ssh_dir');
+
+    const entries = fs.readdirSync(sshDir).filter(f =>
+      f.startsWith('id_') && !f.endsWith('.pub') && !f.endsWith('.pem')
+    );
+
+    const keys: { name: string; filename: string; publicKey?: string; privateKey?: string }[] = [];
+
+    for (const filename of entries) {
+      const privateKeyPath = path.join(sshDir, filename);
+      const publicKeyPath = path.join(sshDir, filename + '.pub');
+
+      const entry: typeof keys[0] = {
+        name: filename,
+        filename,
+      };
+
+      try {
+        if (fs.existsSync(publicKeyPath)) {
+          entry.publicKey = fs.readFileSync(publicKeyPath, 'utf-8').trim();
+        }
+      } catch {}
+      try {
+        entry.privateKey = fs.readFileSync(privateKeyPath, 'utf-8').trim();
+      } catch {}
+
+      if (entry.publicKey || entry.privateKey) {
+        keys.push(entry);
+      }
+    }
+
+    return keys;
+  });
 }
 
 // ── Custom Updater (ASAR Hot-Swap + Full Installer) ──────────────────────

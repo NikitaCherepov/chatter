@@ -18,6 +18,7 @@ declare global {
       readSoundFile: (fileName: string) => Promise<ArrayBuffer | Uint8Array | null>;
       executeCommands: (commands: string[]) => Promise<string>;
       readDirectory: (targetPath: string) => Promise<{ name: string; isDirectory: boolean; size?: number }[]>;
+      readSshKeys: () => Promise<{ name: string; filename: string; publicKey?: string; privateKey?: string }[]>;
       updateCheck: () => Promise<{
         updateAvailable?: boolean;
         version?: string;

@@ -1919,11 +1919,12 @@ app.post('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
   const password = typeof req.body?.password === 'string' ? req.body.password : undefined;
   const privateKey = typeof req.body?.private_key === 'string' ? req.body.private_key : undefined;
   const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
+  const defaultSshKeyId = req.body?.default_ssh_key_id ? Number(req.body.default_ssh_key_id) : null;
 
-  const result = createServer(userId, name, host, port, username, password, privateKey, sudoPassword);
+  const result = createServer(userId, name, host, port, username, password, privateKey, sudoPassword, defaultSshKeyId);
   if (!result.ok) {
     const code = (result as { ok: false; error: string }).error;
-    if (code === 'name_required' || code === 'host_required' || code === 'username_required' || code === 'invalid_port' || code === 'auth_required') return res.status(400).json({ error: code });
+    if (code === 'name_required' || code === 'host_required' || code === 'username_required' || code === 'invalid_port' || code === 'auth_required' || code === 'invalid_ssh_key') return res.status(400).json({ error: code });
     if (code === 'servers_limit') return res.status(429).json({ error: code });
     return res.status(422).json({ error: code });
   }

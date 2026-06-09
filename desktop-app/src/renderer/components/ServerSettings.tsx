@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
+import { Select } from './Select';
+import type { SelectOption } from './Select';
 
 type Server = {
   id: number;
@@ -10,7 +12,6 @@ type Server = {
   port: number;
   username: string;
   has_password: boolean;
-  has_key: boolean;
   has_sudo_password: boolean;
   default_ssh_key_id: number | null;
   created_at: number;
@@ -53,7 +54,6 @@ export function ServerSettings() {
   const [formPort, setFormPort] = useState(22);
   const [formUsername, setFormUsername] = useState('root');
   const [formPassword, setFormPassword] = useState('');
-  const [formKey, setFormKey] = useState('');
   const [formSudoPassword, setFormSudoPassword] = useState('');
   const [formDefaultKey, setFormDefaultKey] = useState<number | null>(null);
   const [formSaving, setFormSaving] = useState(false);
@@ -65,7 +65,6 @@ export function ServerSettings() {
     setFormPort(22);
     setFormUsername('root');
     setFormPassword('');
-    setFormKey('');
     setFormSudoPassword('');
     setFormDefaultKey(null);
   };
@@ -77,7 +76,6 @@ export function ServerSettings() {
     setFormPort(server.port);
     setFormUsername(server.username);
     setFormPassword('');
-    setFormKey('');
     setFormSudoPassword('');
     setFormDefaultKey(server.default_ssh_key_id);
   };
@@ -134,7 +132,6 @@ export function ServerSettings() {
           username: trimmedUsername,
         };
         if (formPassword) updates.password = formPassword;
-        if (formKey) updates.private_key = formKey;
         if (formSudoPassword) updates.sudo_password = formSudoPassword;
         updates.default_ssh_key_id = formDefaultKey;
 
@@ -144,8 +141,8 @@ export function ServerSettings() {
         });
         toast.success('Сервер обновлён');
       } else {
-        if (!formPassword && !formKey) {
-          toast.error('Укажите пароль или приватный ключ');
+        if (!formPassword && !formDefaultKey) {
+          toast.error('Укажите пароль или выберите SSH-ключ');
           setFormSaving(false);
           return;
         }
@@ -157,7 +154,6 @@ export function ServerSettings() {
             port: formPort,
             username: trimmedUsername,
             password: formPassword || undefined,
-            private_key: formKey || undefined,
             sudo_password: formSudoPassword || undefined,
             default_ssh_key_id: formDefaultKey,
           }),
@@ -203,8 +199,10 @@ export function ServerSettings() {
     }
   };
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
   const handleDelete = async (id: number) => {
-    if (!confirm('Удалить сервер?')) return;
+    setDeleteConfirmId(null);
     try {
       await api.apiFetch(`/api/v1/devops/servers/${id}`, { method: 'DELETE' });
       toast.success('Сервер удалён');
@@ -297,18 +295,6 @@ export function ServerSettings() {
       </div>
 
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Приватный ключ {editingId !== null ? '(оставьте пустым чтобы не менять)' : ''}</label>
-        <textarea
-          className={s.textareaInput}
-          value={formKey}
-          onChange={(e) => setFormKey(e.target.value)}
-          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-          rows={3}
-          style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
-        />
-      </div>
-
-      <div className={s.fieldGroup}>
         <label className={s.fieldLabel}>Пароль для sudo {editingId !== null ? '(оставьте пустым чтобы не менять)' : '(опционально)'}</label>
         <input
           className={s.fieldInput}
@@ -319,22 +305,28 @@ export function ServerSettings() {
         />
       </div>
 
-      {sshKeys.length > 0 && (
-        <div className={s.fieldGroup}>
-          <label className={s.fieldLabel}>SSH-ключ по умолчанию</label>
-          <select
-            className={s.fieldInput}
-            value={formDefaultKey ?? ''}
-            onChange={(e) => setFormDefaultKey(e.target.value ? Number(e.target.value) : null)}
-            style={{ color: 'var(--text-primary)', background: 'var(--bg-input)' }}
-          >
-            <option value="">Не выбран</option>
-            {sshKeys.map((key) => (
-              <option key={key.id} value={key.id}>{key.name}{key.has_private_key ? ' (пара)' : ''}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel}>SSH-ключ по умолчанию</label>
+        {sshKeys.length > 0 ? (
+          <Select
+            options={[
+              { value: '', label: 'Не выбран' },
+              ...sshKeys.map((key) => ({
+                value: String(key.id),
+                label: key.name,
+                hint: key.has_private_key ? 'полная пара' : 'только публичный',
+              })),
+            ]}
+            value={formDefaultKey != null ? String(formDefaultKey) : ''}
+            onChange={(v) => setFormDefaultKey(v ? Number(v) : null)}
+            placeholder="Не выбран"
+          />
+        ) : (
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            Сначала добавьте SSH-ключи во вкладке «SSH-ключи»
+          </div>
+        )}
+      </div>
 
       <div style={{ display: 'flex', gap: '8px' }}>
         <button
@@ -362,7 +354,7 @@ export function ServerSettings() {
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {server.username}@{server.host}:{server.port}
                   {server.has_password && ' · пароль'}
-                  {server.has_key && ' · ключ'}
+                  {server.default_ssh_key_id && ' · ssh-ключ'}
                   {server.has_sudo_password && ' · sudo'}
                 </div>
               </div>
@@ -390,7 +382,7 @@ export function ServerSettings() {
                 </button>
                 <button
                   className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                  onClick={() => handleDelete(server.id)}
+                  onClick={() => setDeleteConfirmId(server.id)}
                   title="Удалить"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -444,6 +436,20 @@ export function ServerSettings() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId !== null && (
+        <div className={s.explainOverlay} onClick={() => setDeleteConfirmId(null)}>
+          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
+            <div className={s.explainTitle}>Удалить сервер?</div>
+            <div className={s.explainText}>Все политики и настройки сервера будут удалены.</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button className={s.cancelBtn} onClick={() => setDeleteConfirmId(null)}>Отмена</button>
+              <button className={s.saveBtn} style={{ backgroundColor: 'var(--danger, #e53935)' }} onClick={() => handleDelete(deleteConfirmId)}>Удалить</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

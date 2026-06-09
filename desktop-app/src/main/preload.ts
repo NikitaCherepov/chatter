@@ -58,6 +58,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (targetPath: string) =>
     ipcRenderer.invoke('read-directory', targetPath),
 
+  readSshKeys: () =>
+    ipcRenderer.invoke('read-ssh-keys'),
+
   // ── Custom Updater ──────────────────────────────────────────────────────
 
   // Check server for available update
