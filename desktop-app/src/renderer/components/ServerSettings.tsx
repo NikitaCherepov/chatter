@@ -4,6 +4,7 @@ import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type Server = {
   id: number;
@@ -439,19 +440,13 @@ export function ServerSettings() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
-      {deleteConfirmId !== null && (
-        <div className={s.explainOverlay} onClick={() => setDeleteConfirmId(null)}>
-          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
-            <div className={s.explainTitle}>Удалить сервер?</div>
-            <div className={s.explainText}>Все политики и настройки сервера будут удалены.</div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button className={s.cancelBtn} onClick={() => setDeleteConfirmId(null)}>Отмена</button>
-              <button className={s.saveBtn} style={{ backgroundColor: 'var(--danger, #e53935)' }} onClick={() => handleDelete(deleteConfirmId)}>Удалить</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        title="Удалить сервер?"
+        text="Все политики и настройки сервера будут удалены."
+        onCancel={() => setDeleteConfirmId(null)}
+        onConfirm={() => handleDelete(deleteConfirmId!)}
+      />
     </div>
   );
 }

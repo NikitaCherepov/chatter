@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
@@ -1689,43 +1690,13 @@ export function ChatPage() {
           />
         )}
 
-        {deletingChatId !== null && (
-          <motion.div
-            key="delete-confirm"
-            className={s.overlay}
-            onClick={() => setDeletingChatId(null)}
-            variants={{
-              hidden: { opacity: 0 },
-              visible: { opacity: 1 },
-              exit: { opacity: 0 },
-            }}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-          >
-            <motion.div
-              className={s.confirmDialog}
-              onClick={(e) => e.stopPropagation()}
-              variants={{
-                hidden: { opacity: 0, y: 16 },
-                visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' as const } },
-                exit: { opacity: 0, y: 16, transition: { duration: 0.15 } },
-              }}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-            >
-              <div className={s.confirmTitle}>Удалить чат?</div>
-              <div className={s.confirmText}>
-                Это действие нельзя отменить. Все сообщения будут удалены безвозвратно.
-              </div>
-              <div className={s.confirmBtns}>
-                <button className={s.confirmCancel} onClick={() => setDeletingChatId(null)}>Отмена</button>
-                <button className={s.confirmDanger} onClick={handleConfirmDelete}>Удалить</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
+        <ConfirmDialog
+          open={deletingChatId !== null}
+          title="Удалить чат?"
+          text="Это действие нельзя отменить. Все сообщения будут удалены безвозвратно."
+          onCancel={() => setDeletingChatId(null)}
+          onConfirm={handleConfirmDelete}
+        />
 
         {viewerImageSrc && (
           <motion.div

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type SshKey = {
   id: number;
@@ -254,19 +255,13 @@ export function SshKeySettings() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
-      {deleteConfirmId !== null && (
-        <div className={s.explainOverlay} onClick={() => setDeleteConfirmId(null)}>
-          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
-            <div className={s.explainTitle}>Удалить SSH-ключ?</div>
-            <div className={s.explainText}>Этот ключ будет удалён. Если он выбран как ключ по умолчанию для какого-либо сервера, ссылка будет сброшена.</div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button className={s.cancelBtn} onClick={() => setDeleteConfirmId(null)}>Отмена</button>
-              <button className={s.saveBtn} style={{ backgroundColor: 'var(--danger, #e53935)' }} onClick={() => handleDelete(deleteConfirmId)}>Удалить</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        title="Удалить SSH-ключ?"
+        text="Этот ключ будет удалён. Если он выбран как ключ по умолчанию для какого-либо сервера, ссылка будет сброшена."
+        onCancel={() => setDeleteConfirmId(null)}
+        onConfirm={() => handleDelete(deleteConfirmId!)}
+      />
     </div>
   );
 }

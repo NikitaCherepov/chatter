@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type Runbook = {
   id: number;
@@ -293,19 +294,13 @@ export function RunbookSettings() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
-      {deleteConfirmId !== null && (
-        <div className={s.explainOverlay} onClick={() => setDeleteConfirmId(null)}>
-          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
-            <div className={s.explainTitle}>Удалить инструкцию?</div>
-            <div className={s.explainText}>Инструкция и все привязанные политики будут удалены.</div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button className={s.cancelBtn} onClick={() => setDeleteConfirmId(null)}>Отмена</button>
-              <button className={s.saveBtn} style={{ backgroundColor: 'var(--danger, #e53935)' }} onClick={() => handleDelete(deleteConfirmId)}>Удалить</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        title="Удалить инструкцию?"
+        text="Инструкция и все привязанные политики будут удалены."
+        onCancel={() => setDeleteConfirmId(null)}
+        onConfirm={() => handleDelete(deleteConfirmId!)}
+      />
     </div>
   );
 }
