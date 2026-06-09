@@ -9,6 +9,22 @@ export type SshResult = {
   exitCode: number | null;
 };
 
+export type CreateServerUserOptions = {
+  username: string;
+  password: string;
+  publicKey?: string;
+  installSshKey?: boolean;
+  nopasswdSudo?: boolean;
+  sudoPasswordOverride?: string;
+};
+
+export type CreateServerUserResult = {
+  username: string;
+  sudoGroup: string;
+  sshKeyInstalled: boolean;
+  nopasswdSudo: boolean;
+};
+
 // ── Dangerous command check ─────────────────────────────────────────────────
 
 const DANGEROUS_PATTERNS = [
@@ -24,6 +40,25 @@ const DANGEROUS_PATTERNS = [
 
 const isDangerous = (cmd: string): boolean => {
   return DANGEROUS_PATTERNS.some(p => p.test(cmd.trim()));
+};
+
+const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
+const buildSshConfig = (creds: ServerCreds, timeoutMs: number) => {
+  const config: any = {
+    host: creds.host,
+    port: creds.port,
+    username: creds.username,
+    readyTimeout: timeoutMs,
+  };
+
+  if (creds.privateKey) {
+    config.privateKey = creds.privateKey;
+  } else if (creds.password) {
+    config.password = creds.password;
+  }
+
+  return config;
 };
 
 // ── Exec ────────────────────────────────────────────────────────────────────
@@ -126,21 +161,170 @@ export const execSshCommand = (
       fail(err);
     });
 
-    // Connect config
-    const config: any = {
-      host: creds.host,
-      port: creds.port,
-      username: creds.username,
-      readyTimeout: SSH_TIMEOUT_MS,
-    };
+    client.connect(buildSshConfig(creds, SSH_TIMEOUT_MS));
+  });
+};
 
-    if (creds.privateKey) {
-      config.privateKey = creds.privateKey;
-    } else if (creds.password) {
-      config.password = creds.password;
+export const createServerUser = (
+  userId: number,
+  serverId: number,
+  options: CreateServerUserOptions,
+): Promise<CreateServerUserResult> => {
+  return new Promise((resolve, reject) => {
+    const username = options.username.trim();
+    const password = options.password;
+
+    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+      return reject(new Error('invalid_username'));
+    }
+    if (password.length < 8 || password.length > 128 || /[\r\n]/.test(password)) {
+      return reject(new Error('invalid_password'));
     }
 
-    client.connect(config);
+    const creds = getServerCreds(userId, serverId);
+    if (!creds) return reject(new Error('server_not_found'));
+    if (!creds.password && !creds.privateKey) return reject(new Error('server_no_credentials'));
+
+    const client = new Client();
+    let resolved = false;
+    let sudoMode: 'root' | 'nopasswd' | 'password' = 'password';
+    let sudoGroup = 'sudo';
+
+    const cleanup = () => {
+      resolved = true;
+      client.end();
+    };
+
+    const fail = (err: Error) => {
+      if (!resolved) { cleanup(); reject(err); }
+    };
+
+    const done = (result: CreateServerUserResult) => {
+      if (!resolved) { cleanup(); resolve(result); }
+    };
+
+    const run = (command: string, input?: string): Promise<SshResult> => {
+      return new Promise((runResolve, runReject) => {
+        let stdout = '';
+        let stderr = '';
+
+        client.exec(command, (err: Error | undefined, stream: ClientChannel) => {
+          if (err) return runReject(err);
+
+          if (input !== undefined) {
+            stream.write(input);
+            stream.end();
+          }
+
+          stream.on('data', (data: Buffer) => {
+            stdout += data.toString();
+            if (stdout.length > MAX_BUFFER) stdout = stdout.slice(-MAX_BUFFER);
+          });
+          stream.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+            if (stderr.length > MAX_BUFFER) stderr = stderr.slice(-MAX_BUFFER);
+          });
+          stream.on('close', (code: number | null) => runResolve({ stdout, stderr, exitCode: code }));
+          stream.on('error', (streamErr: Error) => runReject(streamErr));
+        });
+      });
+    };
+
+    const sudoCommand = (command: string): string => {
+      if (sudoMode === 'root') return command;
+      if (sudoMode === 'nopasswd') return `sudo -n ${command}`;
+      return `sudo -S -p '' ${command}`;
+    };
+
+    const sudoInput = (payload?: string): string | undefined => {
+      if (sudoMode === 'password') return `${options.sudoPasswordOverride || creds.sudoPassword || ''}\n${payload || ''}`;
+      return payload;
+    };
+
+    const runSudo = (command: string, payload?: string) => run(sudoCommand(command), sudoInput(payload));
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        cleanup();
+        reject(new Error('ssh_timeout'));
+      }
+    }, SSH_TIMEOUT_MS);
+
+    client.on('ready', async () => {
+      clearTimeout(timer);
+
+      try {
+        if (creds.username === 'root') {
+          sudoMode = 'root';
+        } else {
+          const nopasswdCheck = await run('sudo -n true');
+          if (nopasswdCheck.exitCode === 0) {
+            sudoMode = 'nopasswd';
+          } else if (options.sudoPasswordOverride || creds.sudoPassword) {
+            const passwordCheck = await run('sudo -S -p \'\' true', `${options.sudoPasswordOverride || creds.sudoPassword}\n`);
+            if (passwordCheck.exitCode !== 0) throw new Error('sudo_auth_failed');
+            sudoMode = 'password';
+          } else {
+            throw new Error('sudo_password_required');
+          }
+        }
+
+        const exists = await run(`id -u ${shellQuote(username)}`);
+        if (exists.exitCode === 0) throw new Error('user_already_exists');
+
+        const groupResult = await run('getent group sudo >/dev/null 2>&1 && printf sudo || printf wheel');
+        sudoGroup = groupResult.stdout.trim() === 'wheel' ? 'wheel' : 'sudo';
+
+        let result = await runSudo(`useradd -m -s /bin/bash -- ${shellQuote(username)}`);
+        if (result.exitCode !== 0) throw new Error(`useradd_failed: ${result.stderr || result.stdout}`);
+
+        result = await runSudo('chpasswd', `${username}:${password}\n`);
+        if (result.exitCode !== 0) throw new Error(`chpasswd_failed: ${result.stderr || result.stdout}`);
+
+        result = await runSudo(`usermod -aG ${shellQuote(sudoGroup)} -- ${shellQuote(username)}`);
+        if (result.exitCode !== 0) throw new Error(`usermod_failed: ${result.stderr || result.stdout}`);
+
+        const nopasswdSudo = options.nopasswdSudo !== false;
+        if (nopasswdSudo) {
+          const sudoersLine = `${username} ALL=(ALL) NOPASSWD:ALL`;
+          const sudoersPath = `/etc/sudoers.d/${username}`;
+          result = await runSudo(`sh -c ${shellQuote(`printf '%s\\n' ${shellQuote(sudoersLine)} > ${shellQuote(sudoersPath)} && chmod 0440 ${shellQuote(sudoersPath)}`)}`);
+          if (result.exitCode !== 0) throw new Error(`sudoers_failed: ${result.stderr || result.stdout}`);
+        }
+
+        const shouldInstallKey = options.installSshKey !== false && !!options.publicKey;
+        if (shouldInstallKey && options.publicKey) {
+          const escapedKey = options.publicKey.replace(/'/g, `'\\''`);
+          const home = `/home/${username}`;
+          const script = [
+            `mkdir -p ${shellQuote(`${home}/.ssh`)}`,
+            `printf '%s\\n' '${escapedKey}' >> ${shellQuote(`${home}/.ssh/authorized_keys`)}`,
+            `sort -u ${shellQuote(`${home}/.ssh/authorized_keys`)} -o ${shellQuote(`${home}/.ssh/authorized_keys`)}`,
+            `chmod 700 ${shellQuote(`${home}/.ssh`)}`,
+            `chmod 600 ${shellQuote(`${home}/.ssh/authorized_keys`)}`,
+            `chown -R ${shellQuote(username)}:${shellQuote(username)} ${shellQuote(`${home}/.ssh`)}`,
+          ].join(' && ');
+          result = await runSudo(`sh -c ${shellQuote(script)}`);
+          if (result.exitCode !== 0) throw new Error(`install_key_failed: ${result.stderr || result.stdout}`);
+        }
+
+        done({
+          username,
+          sudoGroup,
+          sshKeyInstalled: shouldInstallKey,
+          nopasswdSudo,
+        });
+      } catch (err: any) {
+        fail(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+
+    client.on('error', (err: Error) => {
+      clearTimeout(timer);
+      fail(err);
+    });
+
+    client.connect(buildSshConfig(creds, SSH_TIMEOUT_MS));
   });
 };
 

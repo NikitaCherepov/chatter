@@ -7,6 +7,8 @@ export type PendingDevopsConfirmation = {
   userId: number;
   serverId: number;
   command: string;
+  needsSudoPassword?: boolean;
+  execute?: (options?: { sudoPasswordOverride?: string }) => Promise<any>;
   resolve: (result: any) => void;
   reject: (err: Error) => void;
   createdAt: number;

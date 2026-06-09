@@ -2239,8 +2239,10 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
     return res.json({ ok: true, status: 'rejected' });
   }
 
+  const needsSudoPassword = pending.needsSudoPassword === true || /\bsudo\b/.test(pending.command);
+
   // If command needs sudo but no sudo password provided — reject
-  if (/\bsudo\b/.test(pending.command) && !serverHasSudoPassword(userId, pending.serverId) && !sudoPassword) {
+  if (needsSudoPassword && !serverHasSudoPassword(userId, pending.serverId) && !sudoPassword) {
     return res.status(400).json({ error: 'sudo_password_required' });
   }
 
@@ -2252,7 +2254,9 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   // Execute the approved command
   try {
     const execOptions = sudoPassword ? { sudoPasswordOverride: sudoPassword } : undefined;
-    const result = await execSshCommand(userId, pending.serverId, pending.command, execOptions);
+    const result = pending.execute
+      ? await pending.execute(execOptions)
+      : await execSshCommand(userId, pending.serverId, pending.command, execOptions);
     pending.resolve(result);
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {

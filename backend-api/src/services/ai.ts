@@ -1511,6 +1511,46 @@ const buildSuggestServerCredsUpdateTool = () => {
   };
 };
 
+const buildCreateServerUserTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'create_server_user',
+      description: `Создаёт нового пользователя на удалённом сервере с заданным паролем и sudo-правами. Пароль передаётся в backend и задаётся через stdin, не через shell-команду. Если у текущего SSH-пользователя нет сохранённого sudo-пароля, пользователь подтвердит действие и введёт sudo-пароль в desktop-карточке.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          server_id: {
+            type: 'number',
+            description: 'ID сервера (из list_devops_servers).'
+          },
+          username: {
+            type: 'string',
+            description: 'Имя нового пользователя (например "deployer", "admin").'
+          },
+          password: {
+            type: 'string',
+            description: 'Пароль для нового пользователя. Не выводи его в обычном тексте после вызова tool.'
+          },
+          install_ssh_key: {
+            type: 'boolean',
+            description: 'Установить дефолтный SSH-ключ сервера в authorized_keys нового пользователя (по умолчанию true).'
+          },
+          key_id: {
+            type: 'number',
+            description: 'ID SSH-ключа для установки (опционально, по умолчанию берётся ключ сервера).'
+          },
+          nopasswd_sudo: {
+            type: 'boolean',
+            description: 'Если true — добавить sudoers правило NOPASSWD для нового пользователя (по умолчанию true).'
+          }
+        },
+        required: ['server_id', 'username', 'password']
+      }
+    }
+  };
+};
+
 /** Build map_control tool — only available on desktop client */
 const buildMapControlTool = () => {
   return {
@@ -2420,6 +2460,123 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     }
   }
 
+  // ── DevOps: create server user ─────────────────────────────────────────────
+
+  if (toolName === 'create_server_user') {
+    const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
+    const username: string = typeof parsed.username === 'string' ? parsed.username.trim() : '';
+    const password: string = typeof parsed.password === 'string' ? parsed.password : '';
+    const installSshKey: boolean = parsed.install_ssh_key !== false;
+    const explicitKeyId: number | undefined = typeof parsed.key_id === 'number' ? parsed.key_id : undefined;
+    const nopasswdSudo: boolean = parsed.nopasswd_sudo !== false;
+
+    if (!serverId || !username || !password) {
+      return JSON.stringify({ status: 'error', message: 'server_id, username и password обязательны' });
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+      return JSON.stringify({ status: 'error', message: 'username содержит недопустимые символы' });
+    }
+    if (password.length < 8 || password.length > 128 || /[\r\n]/.test(password)) {
+      return JSON.stringify({ status: 'error', message: 'password должен быть длиной 8-128 символов и без переносов строк' });
+    }
+
+    const { getServerById, getSshPublicKey, serverHasSudoPassword } = await import('./devops.js');
+    const server = getServerById(user.id, serverId);
+    if (!server) {
+      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+    }
+
+    let publicKey: string | undefined;
+    let keyId: number | null | undefined;
+    if (installSshKey) {
+      keyId = explicitKeyId ?? server.default_ssh_key_id;
+      if (!keyId) {
+        return JSON.stringify({ status: 'error', message: `У сервера "${server.name}" нет SSH-ключа по умолчанию. Укажи key_id или вызови tool с install_ssh_key=false.` });
+      }
+      const resolvedPublicKey = getSshPublicKey(user.id, keyId);
+      if (!resolvedPublicKey) {
+        return JSON.stringify({ status: 'error', message: `SSH-ключ с id=${keyId} не найден.` });
+      }
+      publicKey = resolvedPublicKey;
+    }
+
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение создания пользователя невозможно — попроси пользователя запустить приложение на ПК.' });
+    }
+
+    const needsSudoPasswordPrompt = server.username !== 'root' && !serverHasSudoPassword(user.id, serverId);
+    const previewCommand = [
+      'create_server_user',
+      `username=${username}`,
+      'password=***',
+      `sudo_group=true`,
+      `nopasswd_sudo=${nopasswdSudo}`,
+      `install_ssh_key=${installSshKey}`,
+      keyId ? `key_id=${keyId}` : '',
+    ].filter(Boolean).join(' ');
+
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    sendToDesktop(user.id, {
+      type: 'desktop_action',
+      action: 'devops_confirmation',
+      target: String(serverId),
+      value: {
+        confirmation_id: confirmationId,
+        server_name: server.name,
+        server_id: serverId,
+        host: server.host,
+        command: previewCommand,
+        needs_sudo_password: needsSudoPasswordPrompt
+      }
+    });
+
+    const { registerPendingConfirmation } = await import('./devops-confirmations.js');
+    try {
+      const result = await new Promise<any>((resolve, reject) => {
+        registerPendingConfirmation(confirmationId, {
+          userId: user.id,
+          serverId,
+          command: previewCommand,
+          needsSudoPassword: needsSudoPasswordPrompt,
+          execute: async (execOptions?: { sudoPasswordOverride?: string }) => {
+            const { createServerUser } = await import('./ssh.js');
+            return createServerUser(user.id, serverId, {
+              username,
+              password,
+              publicKey,
+              installSshKey,
+              nopasswdSudo,
+              sudoPasswordOverride: execOptions?.sudoPasswordOverride,
+            });
+          },
+          resolve,
+          reject,
+          createdAt: Date.now()
+        });
+      });
+
+      return JSON.stringify({
+        status: 'success',
+        message: `Пользователь ${username} создан на сервере ${server.name}.`,
+        server: server.name,
+        username,
+        sudo_group: result.sudoGroup,
+        ssh_key_installed: result.sshKeyInstalled,
+        nopasswd_sudo: result.nopasswdSudo
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил создание server user.', server: server.name, username });
+      }
+      if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, username });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка создания пользователя: ${err?.message || String(err)}`, server: server.name, username });
+    }
+  }
+
   // ── DevOps: suggest server creds update ──────────────────────────────────
 
   if (toolName === 'suggest_server_creds_update') {
@@ -2525,6 +2682,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
   if (toolName === 'install_ssh_public_key') return 'Устанавливаю SSH-ключ...';
+  if (toolName === 'create_server_user') return 'Создаю пользователя на сервере...';
   if (toolName === 'suggest_server_creds_update') return 'Предлагаю обновить учётные данные...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'desktop_action') {
@@ -2636,7 +2794,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
