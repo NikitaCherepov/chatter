@@ -458,6 +458,10 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
   if (!payload) return res.status(401).json({ error: 'unauthorized' });
 
   const userId = payload.sub;
+
+  // Resolve effective user (linked TG user) — same as other endpoints
+  const rawUser = getUserById(userId);
+  const effectiveId = rawUser?.linked_tg_id || userId;
   const filename = path.basename(req.params.filename || '');
   if (!filename) return res.status(400).json({ error: 'bad_filename' });
 
@@ -469,7 +473,7 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
     SELECT 1 FROM chat_messages
     WHERE user_id = ? AND images LIKE ?
     LIMIT 1
-  `).get(userId, `%"${filename}"%`) as { 1: number } | undefined;
+  `).get(effectiveId, `%"${filename}"%`) as { 1: number } | undefined;
 
   if (!row) return res.status(403).json({ error: 'access_denied' });
 
