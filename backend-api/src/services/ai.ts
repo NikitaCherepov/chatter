@@ -452,7 +452,7 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ],
-    max_tokens: 1024,
+    max_tokens: 4096,
     temperature: 0.7
   };
 
