@@ -29,33 +29,40 @@ npm run logs:api
 - `MAP_PINS_ENCRYPTION_KEY` - для шифрования координат меток карты (fallback на `ENCRYPTION_KEY`).
 - `DEVOPS_ENCRYPTION_KEY` - для шифрования учётных данных SSH серверов (пароли, ключи, sudo-пароль). Fallback на `ENCRYPTION_KEY`.
 - `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` опционально) - для `/internal/tools/read_url`.
-- `PROXYAPI_KEY` - ключ ProxyAPI для генерации изображений.
+- `IMAGE_GEN_PROVIDER` — провайдер генерации: `proxyapi` (по умолчанию) или `openrouter`.
+- `PROXYAPI_KEY` - ключ ProxyAPI (provider=proxyapi).
 - `PROXYAPI_BASE_URL` - базовый URL ProxyAPI (по умолчанию `https://api.proxyapi.ru/openai/v1`).
-- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1.5`).
-- `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`).
-- `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`).
+- `OPENROUTER_API_KEY` - ключ OpenRouter (provider=openrouter).
+- `OPENROUTER_BASE_URL` - базовый URL OpenRouter (по умолчанию `https://openrouter.ai/api/v1`).
+- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1.5` для proxyapi, `x-ai/grok-imagine-image-quality` для openrouter).
+- `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`, только proxyapi).
+- `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`, только proxyapi).
 
 ### Генерация изображений
 
-Генерация живёт в `services/image-generation.ts` и ходит в OpenAI-compatible endpoint:
+Генерация живёт в `services/image-generation.ts`. Провайдер выбирается через `IMAGE_GEN_PROVIDER`:
+
+**provider=proxyapi** (по умолчанию) — OpenAI-compatible `/images/generations`:
 
 ```text
 POST {PROXYAPI_BASE_URL}/images/generations
 Authorization: Bearer {PROXYAPI_KEY}
+
+{ "model": "...", "prompt": "...", "quality": "...", "size": "..." }
+→ response.data[0].b64_json
 ```
 
-Тело запроса:
+**provider=openrouter** — chat completion с image modality:
 
-```json
-{
-  "model": "IMAGE_GEN_MODEL",
-  "prompt": "...",
-  "quality": "IMAGE_GEN_QUALITY",
-  "size": "IMAGE_GEN_SIZE"
-}
+```text
+POST {OPENROUTER_BASE_URL}/chat/completions
+Authorization: Bearer {OPENROUTER_API_KEY}
+
+{ "model": "...", "messages": [{ "role": "user", "content": "..." }], "modalities": ["image"] }
+→ response.choices[0].message.images[0].image_url.url → download → base64
 ```
 
-Ожидаемый ответ — `data[0].b64_json`. Поэтому провайдер/модель можно заменить на другой OpenAI-compatible image endpoint, если он поддерживает тот же формат запроса и ответа. Для провайдеров с другим API нужен отдельный адаптер в `image-generation.ts`.
+Для добавления нового провайдера — создать функцию `generateXxx()` и добавить case в switch `runImageGeneration`.
 
 ### AI-провайдеры (основные)
 
