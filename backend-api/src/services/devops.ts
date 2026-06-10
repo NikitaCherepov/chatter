@@ -541,6 +541,114 @@ export const deleteRunbook = (userId: number, runbookId: number): boolean => {
     .run(userId, runbookId).changes > 0;
 };
 
+// ── Public Runbooks (shared by admins, visible to all) ───────────────────────
+
+export type PublicRunbook = {
+  id: number;
+  title: string;
+  content: string;
+  commands: string[];
+  author_user_id: number;
+  author_name: string;
+  created_at: number;
+  updated_at: number;
+};
+
+type PublicRunbookRow = {
+  id: number;
+  title: string;
+  content: string;
+  commands: string;
+  author_user_id: number;
+  author_name: string;
+  created_at: number;
+  updated_at: number;
+};
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devops_runbooks_public (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    commands TEXT NOT NULL DEFAULT '[]',
+    author_user_id INTEGER NOT NULL,
+    author_name TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+const publicRunbookRowToDto = (row: PublicRunbookRow): PublicRunbook => ({
+  id: row.id,
+  title: row.title,
+  content: row.content,
+  commands: JSON.parse(row.commands || '[]'),
+  author_user_id: row.author_user_id,
+  author_name: row.author_name,
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+});
+
+export const listPublicRunbooks = (): PublicRunbook[] => {
+  const rows = db.prepare('SELECT * FROM devops_runbooks_public ORDER BY created_at DESC')
+    .all() as PublicRunbookRow[];
+  return rows.map(publicRunbookRowToDto);
+};
+
+export const getPublicRunbookById = (runbookId: number): PublicRunbook | null => {
+  const row = db.prepare('SELECT * FROM devops_runbooks_public WHERE id = ?')
+    .get(runbookId) as PublicRunbookRow | undefined;
+  return row ? publicRunbookRowToDto(row) : null;
+};
+
+export const createPublicRunbook = (
+  authorUserId: number,
+  authorName: string,
+  title: string,
+  content: string,
+  commands: string[] = [],
+): { ok: true; id: number } | { ok: false; error: string } => {
+  const trimmedTitle = title.trim();
+  const trimmedContent = content.trim();
+
+  if (!trimmedTitle) return { ok: false, error: 'title_required' };
+  if (!trimmedContent) return { ok: false, error: 'content_required' };
+
+  const now = getNowUnix();
+  const result = db.prepare(
+    'INSERT INTO devops_runbooks_public (title, content, commands, author_user_id, author_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(trimmedTitle, trimmedContent, JSON.stringify(commands), authorUserId, authorName.trim() || 'Admin', now, now);
+
+  return { ok: true, id: Number(result.lastInsertRowid) };
+};
+
+export const updatePublicRunbook = (
+  runbookId: number,
+  updates: { title?: string; content?: string; commands?: string[] },
+): { ok: true } | { ok: false; error: string } => {
+  const existing = db.prepare('SELECT * FROM devops_runbooks_public WHERE id = ?')
+    .get(runbookId) as PublicRunbookRow | undefined;
+  if (!existing) return { ok: false, error: 'not_found' };
+
+  const now = getNowUnix();
+  const title = updates.title !== undefined ? updates.title.trim() : existing.title;
+  const content = updates.content !== undefined ? updates.content.trim() : existing.content;
+  const commands = updates.commands !== undefined ? JSON.stringify(updates.commands) : existing.commands;
+
+  if (!title) return { ok: false, error: 'title_required' };
+  if (!content) return { ok: false, error: 'content_required' };
+
+  db.prepare('UPDATE devops_runbooks_public SET title = ?, content = ?, commands = ?, updated_at = ? WHERE id = ?')
+    .run(title, content, commands, now, runbookId);
+
+  return { ok: true };
+};
+
+export const deletePublicRunbook = (runbookId: number): boolean => {
+  return db.prepare('DELETE FROM devops_runbooks_public WHERE id = ?')
+    .run(runbookId).changes > 0;
+};
+
 /** Attach a runbook to a server — creates auto-approve policies for each command */
 export const attachRunbookToServer = (
   userId: number,

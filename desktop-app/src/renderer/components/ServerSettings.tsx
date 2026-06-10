@@ -391,8 +391,8 @@ export function ServerSettings() {
         </div>
       </div>
 
-      <div style={{ marginBottom: '12px' }}>
-        <label className={s.macroLabel} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+      <div className={s.fieldGroup}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
           <input
             className={s.macroCheckbox}
             type="checkbox"

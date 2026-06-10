@@ -10,7 +10,7 @@ import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
-import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey } from './services/devops.js';
+import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey, listPublicRunbooks, getPublicRunbookById, createPublicRunbook, updatePublicRunbook, deletePublicRunbook } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
@@ -2135,6 +2135,90 @@ app.delete('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
   const deleted = deleteRunbook(userId, runbookId);
   if (!deleted) return res.status(404).json({ error: 'not_found' });
   return res.json({ ok: true });
+});
+
+// ─── DevOps: Public Runbooks (shared by admins) ──────────────────────────────
+
+app.get('/api/v1/devops/runbooks/public', (_req: AuthedRequest, res: any) => {
+  return res.json({ runbooks: listPublicRunbooks() });
+});
+
+app.post('/api/v1/devops/runbooks/public', (req: AuthedRequest, res: any) => {
+  const rawUserId = req.authUserId!;
+  const rawUser = getUserById(rawUserId);
+  const userId = rawUser?.linked_tg_id || rawUserId;
+  const user = getUserById(userId);
+  if (!user || user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
+
+  const title = `${req.body?.title || ''}`;
+  const content = `${req.body?.content || ''}`;
+  const commands: string[] = Array.isArray(req.body?.commands) ? req.body.commands.filter((c: unknown) => typeof c === 'string') : [];
+
+  const result = createPublicRunbook(userId, user.name || '', title, content, commands);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    if (code === 'title_required' || code === 'content_required') return res.status(400).json({ error: code });
+    return res.status(422).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
+});
+
+app.put('/api/v1/devops/runbooks/public/:id', (req: AuthedRequest, res: any) => {
+  const rawUserId = req.authUserId!;
+  const rawUser = getUserById(rawUserId);
+  const userId = rawUser?.linked_tg_id || rawUserId;
+  const user = getUserById(userId);
+  if (!user || user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
+
+  const runbookId = Number(req.params.id);
+  if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const updates: Record<string, any> = {};
+  if (req.body?.title !== undefined) updates.title = `${req.body.title}`;
+  if (req.body?.content !== undefined) updates.content = `${req.body.content}`;
+  if (Array.isArray(req.body?.commands)) updates.commands = req.body.commands.filter((c: unknown) => typeof c === 'string');
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
+
+  const result = updatePublicRunbook(runbookId, updates);
+  if (!result.ok) {
+    const err = (result as { ok: false; error: string }).error;
+    if (err === 'not_found') return res.status(404).json({ error: err });
+    return res.status(422).json({ error: err });
+  }
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/devops/runbooks/public/:id', (req: AuthedRequest, res: any) => {
+  const rawUserId = req.authUserId!;
+  const rawUser = getUserById(rawUserId);
+  const userId = rawUser?.linked_tg_id || rawUserId;
+  const user = getUserById(userId);
+  if (!user || user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
+
+  const runbookId = Number(req.params.id);
+  if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const deleted = deletePublicRunbook(runbookId);
+  if (!deleted) return res.status(404).json({ error: 'not_found' });
+  return res.json({ ok: true });
+});
+
+app.post('/api/v1/devops/runbooks/public/:id/save', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const publicId = Number(req.params.id);
+  if (!Number.isFinite(publicId)) return res.status(400).json({ error: 'invalid_id' });
+
+  const publicRunbook = getPublicRunbookById(publicId);
+  if (!publicRunbook) return res.status(404).json({ error: 'not_found' });
+
+  const result = createRunbook(userId, publicRunbook.title, publicRunbook.content, publicRunbook.commands);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    if (code === 'runbooks_limit') return res.status(429).json({ error: code });
+    return res.status(422).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
 });
 
 // ─── DevOps: Attach runbook to server (creates auto-approve policies) ────────

@@ -463,7 +463,7 @@ export function SettingsModal({ onClose }: Props) {
           )}
 
           {section === 'runbooks' && (
-            <RunbookSettings />
+            <RunbookSettings isAdmin={user?.is_admin || 0} />
           )}
 
           {section === 'sshkeys' && (
