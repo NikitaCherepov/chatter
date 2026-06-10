@@ -61,15 +61,15 @@ app.use('/updates', express.static(updatesPath, {
   }
 }));
 
-// ── Static uploads for images ─────────────────────────────────────────────
+// ── Images are served via /api/v1/images/:filename (auth + ownership check) ─
 const uploadsDir = getUploadsDir();
-console.log(`[uploads] serving from: ${uploadsDir}`);
-app.use('/uploads', express.static(uploadsDir, {
-  maxAge: '30d',
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'public, max-age=2592000');
-  }
-}));
+console.log(`[uploads] directory: ${uploadsDir}`);
+
+// Legacy redirect: /uploads/:filename → /api/v1/images/:filename (preserves old URLs in DB)
+app.get('/uploads/:filename', (req: any, res: any) => {
+  const query = req.query.token ? `?token=${req.query.token}` : '';
+  res.redirect(301, `/api/v1/images/${req.params.filename}${query}`);
+});
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'backend-api', now: Math.floor(Date.now() / 1000) });
@@ -444,27 +444,20 @@ app.post('/api/v1/auth/refresh', (req, res) => {
   return res.json(tokens);
 });
 
-app.use('/api/v1', authMiddleware);
+// ── Image download API (owner-only, supports ?token= query param for <img src>) ─
+app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
+  // Accept token from query param (for <img src> usage) or Authorization header
+  const queryToken = `${req.query.token || ''}`.trim();
+  const authHeader = `${req.headers.authorization || ''}`;
+  const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const token = queryToken || headerToken;
 
-// Return current authenticated user profile
-app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
-  const user = getUserById(userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ user: toAuthUserDto(user) });
-});
+  if (!token) return res.status(401).json({ error: 'unauthorized' });
 
-// Resolve effective user: if web user has linked_tg_id, act as TG user
-const effectiveUserId = (req: AuthedRequest): number => {
-  const rawId = req.authUserId!;
-  const user = getUserById(rawId);
-  if (user?.linked_tg_id) return user.linked_tg_id;
-  return rawId;
-};
+  const payload = verifyToken(token, 'access');
+  if (!payload) return res.status(401).json({ error: 'unauthorized' });
 
-// ── Image download API (owner-only) ────────────────────────────────────────
-app.get('/api/v1/images/:filename', authMiddleware, (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = payload.sub;
   const filename = path.basename(req.params.filename || '');
   if (!filename) return res.status(400).json({ error: 'bad_filename' });
 
@@ -482,6 +475,24 @@ app.get('/api/v1/images/:filename', authMiddleware, (req: AuthedRequest, res) =>
 
   res.sendFile(filepath);
 });
+
+app.use('/api/v1', authMiddleware);
+
+// Return current authenticated user profile
+app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ user: toAuthUserDto(user) });
+});
+
+// Resolve effective user: if web user has linked_tg_id, act as TG user
+const effectiveUserId = (req: AuthedRequest): number => {
+  const rawId = req.authUserId!;
+  const user = getUserById(rawId);
+  if (user?.linked_tg_id) return user.linked_tg_id;
+  return rawId;
+};
 
 app.post('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {

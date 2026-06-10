@@ -318,10 +318,13 @@ export function ChatPage() {
             toast.warning(res.model_fallback_notice, { duration: 5000 });
           }
           // Build images array from generated_images
+          const currentTokens = api.loadTokens();
           const genImages: api.MessageImage[] | undefined = res.generated_images?.length
             ? res.generated_images.map(img => ({
                 url: img.image_url
-                  ? (img.image_url.startsWith('http') ? img.image_url : `${api.API_BASE}${img.image_url}`)
+                  ? (img.image_url.startsWith('http')
+                      ? img.image_url
+                      : `${api.API_BASE}${img.image_url}${currentTokens?.access_token ? `?token=${currentTokens.access_token}` : ''}`)
                   : `data:image/png;base64,${img.image_base64}`,
                 type: 'generated' as const
               }))
@@ -819,7 +822,13 @@ export function ChatPage() {
     };
   }, []);
 
-  const resolveImageUrl = (url: string) => url.startsWith('/') ? `${api.API_BASE}${url}` : url;
+  const resolveImageUrl = (url: string) => {
+    if (!url.startsWith('/')) return url;
+    const tokens = api.loadTokens();
+    const separator = url.includes('?') ? '&' : '?';
+    const authParam = tokens?.access_token ? `${separator}token=${tokens.access_token}` : '';
+    return `${api.API_BASE}${url}${authParam}`;
+  };
 
   const handleDownloadImage = async (src: string) => {
     try {

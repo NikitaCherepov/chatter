@@ -648,11 +648,11 @@ AI: execute_ssh_command(server_id, command)
 - Новый сервис `services/image-storage.ts` (зависимость `sharp`):
   - `saveUserImageThumbnail()` — ресайзит до 512px, конвертирует в webp, сохраняет в `uploads/`.
   - `saveGeneratedImage()` — сохраняет PNG без сжатия.
-- Статический сервер `/uploads/` с кешированием 30 дней.
-- API скачивания `GET /api/v1/images/:filename` — только для владельца (JWT + проверка `images` в `chat_messages`).
+- API скачивания `GET /api/v1/images/:filename?token=<access_token>` — только для владельца (JWT через query-параметр или Authorization header + проверка `images` в `chat_messages`).
+- Статического роута `/uploads/` нет — все запросы перенаправляются на /images.
 
 **БД:**
-- Колонка `images TEXT` в `chat_messages` — JSON-массив `[{ "url": "/uploads/abc.webp", "type": "user_photo" | "generated" }]`.
+- Колонка `images TEXT` в `chat_messages` — JSON-массив `[{ "url": "/api/v1/images/abc.webp", "type": "user_photo" | "generated" }]`.
 - `appendChatMessage` принимает параметр `images[]`.
 - `getChatMessages` парсит и возвращает `images` в ответе.
 

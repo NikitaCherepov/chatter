@@ -22,7 +22,7 @@ const ensureUploadsDir = () => {
 };
 
 export type SavedImage = {
-  url: string;       // relative URL: /uploads/abc123.webp
+  url: string;       // relative URL: /api/v1/images/abc123.webp
   filename: string;  // abc123.webp
 };
 
@@ -49,7 +49,7 @@ export const saveUserImageThumbnail = async (
     .webp({ quality: THUMBNAIL_QUALITY })
     .toFile(filepath);
 
-  return { url: `/uploads/${filename}`, filename };
+  return { url: `/api/v1/images/${filename}`, filename };
 };
 
 /**
@@ -68,7 +68,7 @@ export const saveGeneratedImage = async (
 
   await fs.promises.writeFile(filepath, buffer);
 
-  return { url: `/uploads/${filename}`, filename };
+  return { url: `/api/v1/images/${filename}`, filename };
 };
 
 /**
