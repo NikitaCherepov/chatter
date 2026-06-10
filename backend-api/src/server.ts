@@ -649,14 +649,17 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
   const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
   if (!TELEGRAM_TOKEN) return res.status(500).json({ error: 'telegram_not_configured' });
 
+  const rawUserId = req.authUserId!;
   const userId = effectiveUserId(req);
   const messageId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
 
   // Check linked TG account — use the raw (non-effective) user to find linked_tg_id
-  const rawUser = getUserById(req.authUserId!);
+  const rawUser = getUserById(rawUserId);
   const linkedTgId = rawUser?.linked_tg_id;
   if (!linkedTgId) return res.status(400).json({ error: 'telegram_not_linked' });
+
+  console.log(`[send-to-telegram] rawUserId=${rawUserId}, effectiveUserId=${userId}, linkedTgId=${linkedTgId}, messageId=${messageId}`);
 
   // Fetch the message, verify ownership
   const row = db.prepare(`
@@ -670,6 +673,8 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
   if (row.images) {
     try { images = JSON.parse(row.images); } catch { images = []; }
   }
+
+  console.log(`[send-to-telegram] message found, text_len=${text.length}, images_count=${images.length}, sending to tg_id=${linkedTgId}`);
 
   const tgApiBase = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
