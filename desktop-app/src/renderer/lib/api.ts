@@ -202,6 +202,10 @@ export async function deleteMessage(chatId: number, messageId: number): Promise<
   return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}`, { method: 'DELETE' });
 }
 
+export async function sendMessageToTelegram(messageId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/messages/${messageId}/send-to-telegram`, { method: 'POST' });
+}
+
 export type ChatSendImage = {
   base64: string;
   mime_type: string;

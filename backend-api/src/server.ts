@@ -644,6 +644,100 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res
   return res.json({ ok: true });
 });
 
+// ── Send message to linked Telegram account ──
+app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res) => {
+  const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
+  if (!TELEGRAM_TOKEN) return res.status(500).json({ error: 'telegram_not_configured' });
+
+  const userId = effectiveUserId(req);
+  const messageId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
+
+  // Check linked TG account — use the raw (non-effective) user to find linked_tg_id
+  const rawUser = getUserById(req.authUserId!);
+  const linkedTgId = rawUser?.linked_tg_id;
+  if (!linkedTgId) return res.status(400).json({ error: 'telegram_not_linked' });
+
+  // Fetch the message, verify ownership
+  const row = db.prepare(`
+    SELECT id, content, images FROM chat_messages WHERE id = ? AND user_id = ?
+  `).get(messageId, userId) as { id: number; content: string; images: string | null } | undefined;
+  if (!row) return res.status(404).json({ error: 'message_not_found' });
+
+  const text = row.content || '';
+  type MsgImage = { url: string; type: string };
+  let images: MsgImage[] = [];
+  if (row.images) {
+    try { images = JSON.parse(row.images); } catch { images = []; }
+  }
+
+  const tgApiBase = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+
+  try {
+    if (images.length > 0) {
+      // Collect image file paths
+      const imageFiles: Buffer[] = [];
+      for (const img of images) {
+        const filename = path.basename(img.url);
+        const filepath = resolveImageFile(filename);
+        if (filepath) {
+          imageFiles.push(await fs.promises.readFile(filepath));
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        if (imageFiles.length === 1) {
+          // Single photo with caption
+          const formData = new FormData();
+          formData.append('chat_id', String(linkedTgId));
+          formData.append('photo', new Blob([new Uint8Array(imageFiles[0])]), 'photo.webp');
+          if (text) formData.append('caption', text.slice(0, 1024));
+
+          await fetch(`${tgApiBase}/sendPhoto`, { method: 'POST', body: formData });
+        } else {
+          // Multiple photos via sendMediaGroup
+          const media = imageFiles.map((buf, i) => ({
+            type: 'photo',
+            media: `attach://photo_${i}`,
+            ...(i === 0 && text ? { caption: text.slice(0, 1024) } : {}),
+          }));
+
+          const formData = new FormData();
+          formData.append('chat_id', String(linkedTgId));
+          formData.append('media', JSON.stringify(media));
+          imageFiles.forEach((buf, i) => {
+            formData.append(`photo_${i}`, new Blob([new Uint8Array(buf)]), `photo_${i}.webp`);
+          });
+
+          await fetch(`${tgApiBase}/sendMediaGroup`, { method: 'POST', body: formData });
+        }
+      } else {
+        // Images existed but files not found on disk — send text only
+        const payload = { chat_id: linkedTgId, text: text || '(изображение недоступно)' };
+        await fetch(`${tgApiBase}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+    } else {
+      // Text only
+      if (!text) return res.status(400).json({ error: 'empty_message' });
+      const payload = { chat_id: linkedTgId, text };
+      await fetch(`${tgApiBase}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[send-to-telegram] Failed:', err);
+    return res.status(500).json({ error: 'telegram_send_failed' });
+  }
+});
+
 app.get('/api/v1/chats/:id/messages', (req: AuthedRequest, res) => {
   const userId = effectiveUserId(req);
   const chatId = Number.parseInt(req.params.id, 10);

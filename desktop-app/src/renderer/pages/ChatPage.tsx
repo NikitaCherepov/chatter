@@ -648,6 +648,23 @@ export function ChatPage() {
     }
   };
 
+  const handleSendToTelegram = async (messageId: number) => {
+    closeMsgMenu();
+    try {
+      await api.sendMessageToTelegram(messageId);
+      toast.success('Отправлено в Telegram');
+    } catch (err: any) {
+      const error = err?.data?.error || err?.message || '';
+      if (error === 'telegram_not_linked') {
+        toast.error('Telegram не привязан. Привяжите аккаунт в настройках.');
+      } else if (error === 'telegram_not_configured') {
+        toast.error('Telegram не настроен на сервере');
+      } else {
+        toast.error('Не удалось отправить в Telegram');
+      }
+    }
+  };
+
   const prevMsgCountRef = useRef(0);
   useEffect(() => {
     if (messages.length > prevMsgCountRef.current) {
@@ -1776,6 +1793,13 @@ export function ChatPage() {
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
                   Скачать docx
+                </button>
+                <button className={s.contextMenuItem} onClick={() => handleSendToTelegram(msgMenuId)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                  Отправить в Telegram
                 </button>
                 <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleDeleteMessage(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
