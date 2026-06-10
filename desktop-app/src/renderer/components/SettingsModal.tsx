@@ -101,6 +101,22 @@ export function SettingsModal({ onClose }: Props) {
     }
   }, [user]);
 
+  // Refresh core memory from server when account tab opens
+  useEffect(() => {
+    if (section === 'account') {
+      api.apiFetch('/api/v1/auth/me')
+        .then((res: any) => {
+          setCoreMemory(res.user.core_memory || '');
+          if (user) {
+            const updated = { ...user, core_memory: res.user.core_memory || '' };
+            setUser(updated);
+            localStorage.setItem('chatter_user', JSON.stringify(updated));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [section]);
+
   // Load zoom level on modal open
   useEffect(() => {
     window.electronAPI?.getZoomLevel().then((level) => {
