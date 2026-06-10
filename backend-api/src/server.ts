@@ -2080,6 +2080,10 @@ app.get('/api/v1/devops/runbooks', (req: AuthedRequest, res: any) => {
   return res.json({ runbooks: listRunbooks(userId) });
 });
 
+app.get('/api/v1/devops/runbooks/public', (_req: AuthedRequest, res: any) => {
+  return res.json({ runbooks: listPublicRunbooks() });
+});
+
 app.get('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
   const runbookId = Number(req.params.id);
@@ -2138,10 +2142,6 @@ app.delete('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
 });
 
 // ─── DevOps: Public Runbooks (shared by admins) ──────────────────────────────
-
-app.get('/api/v1/devops/runbooks/public', (_req: AuthedRequest, res: any) => {
-  return res.json({ runbooks: listPublicRunbooks() });
-});
 
 app.post('/api/v1/devops/runbooks/public', (req: AuthedRequest, res: any) => {
   const rawUserId = req.authUserId!;
