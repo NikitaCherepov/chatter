@@ -362,17 +362,23 @@ export function SettingsModal({ onClose }: Props) {
                       <textarea
                         className={s.textareaInput}
                         value={customContent}
-                        onChange={(e) => setCustomContent(e.target.value)}
+                        onChange={(e) => setCustomContent(e.target.value.slice(0, 8000))}
                         placeholder="Опишите стиль общения..."
                         rows={6}
+                        maxLength={8000}
                       />
-                      <button
-                        className={s.saveBtn}
-                        onClick={handleSaveCustomPrompt}
-                        disabled={promptSaving}
-                      >
-                        {promptSaving ? 'Сохранение...' : 'Сохранить промпт'}
-                      </button>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <button
+                          className={s.saveBtn}
+                          onClick={handleSaveCustomPrompt}
+                          disabled={promptSaving}
+                        >
+                          {promptSaving ? 'Сохранение...' : 'Сохранить промпт'}
+                        </button>
+                        <span style={{ fontSize: '11px', color: customContent.length > 7500 ? '#e74c3c' : 'var(--text-hint)' }}>
+                          {customContent.length} / 8000
+                        </span>
+                      </div>
                     </div>
                   )}
                 </>
