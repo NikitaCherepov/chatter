@@ -380,6 +380,7 @@ const toAuthUserDto = (user: UserRecord) => {
     plan: effectiveUser.plan,
     selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
+    core_memory: effectiveUser.core_memory ?? null,
   };
 };
 
@@ -496,6 +497,14 @@ app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   return res.json({ user: toAuthUserDto(user) });
+});
+
+// Update core memory
+app.put('/api/v1/account/core-memory', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const content = typeof req.body?.content === 'string' ? req.body.content.slice(0, 800) : '';
+  db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(content, userId);
+  return res.json({ ok: true });
 });
 
 // Resolve effective user: if web user has linked_tg_id, act as TG user

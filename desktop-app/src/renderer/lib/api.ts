@@ -18,6 +18,7 @@ type User = {
   plan: string;
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
+  core_memory: string | null;
 };
 
 // ---------- Token storage ----------

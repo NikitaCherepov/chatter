@@ -90,10 +90,14 @@ export function SettingsModal({ onClose }: Props) {
   const [ttsSettings, setTtsSettingsState] = useState<TtsSettings>(() => getTtsSettings());
   const [previewPlaying, setPreviewPlaying] = useState(false);
 
+  const [coreMemory, setCoreMemory] = useState('');
+  const [coreMemorySaving, setCoreMemorySaving] = useState(false);
+
   // Load account data
   useEffect(() => {
     if (user) {
       setNameValue(user.name || '');
+      setCoreMemory(user.core_memory || '');
     }
   }, [user]);
 
@@ -154,6 +158,24 @@ export function SettingsModal({ onClose }: Props) {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSaveName();
+    }
+  };
+
+  const handleSaveCoreMemory = async () => {
+    setCoreMemorySaving(true);
+    try {
+      await api.apiFetch('/api/v1/account/core-memory', {
+        method: 'PUT',
+        body: JSON.stringify({ content: coreMemory }),
+      });
+      const updated = { ...user!, core_memory: coreMemory };
+      setUser(updated);
+      localStorage.setItem('chatter_user', JSON.stringify(updated));
+      toast.success('Память сохранена');
+    } catch {
+      toast.error('Не удалось сохранить память');
+    } finally {
+      setCoreMemorySaving(false);
     }
   };
 
@@ -334,6 +356,35 @@ export function SettingsModal({ onClose }: Props) {
               >
                 {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
+
+              <div className={s.macroFormDivider} />
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>Горячая память</label>
+                <span className={s.fieldLabel} style={{ marginTop: '-4px', display: 'block' }}>
+                  То, что ИИ всегда помнит о вас. Заполняется автоматически, но вы можете редактировать вручную.
+                </span>
+                <textarea
+                  className={s.textareaInput}
+                  value={coreMemory}
+                  onChange={(e) => setCoreMemory(e.target.value.slice(0, 800))}
+                  placeholder="Имя, город, работа, предпочтения..."
+                  rows={5}
+                  maxLength={800}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button
+                    className={s.saveBtn}
+                    onClick={handleSaveCoreMemory}
+                    disabled={coreMemorySaving}
+                  >
+                    {coreMemorySaving ? 'Сохранение...' : 'Сохранить'}
+                  </button>
+                  <span style={{ fontSize: '11px', color: coreMemory.length > 700 ? '#e74c3c' : 'var(--text-hint)' }}>
+                    {coreMemory.length} / 800
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
