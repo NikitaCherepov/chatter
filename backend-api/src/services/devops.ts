@@ -38,6 +38,7 @@ export type DevopsServer = {
   has_sudo_password: boolean;
   default_ssh_key_id: number | null;
   use_ssh_key_for_login: boolean;
+  auto_approve_all: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -64,6 +65,7 @@ type DevopsServerRow = {
   sudo_password_enc: string | null;
   default_ssh_key_id: number | null;
   use_ssh_key_for_login: number;
+  auto_approve_all: number;
   created_at: number;
   updated_at: number;
 };
@@ -83,6 +85,7 @@ db.exec(`
     sudo_password_enc TEXT,
     default_ssh_key_id INTEGER,
     use_ssh_key_for_login INTEGER NOT NULL DEFAULT 0,
+    auto_approve_all INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )
@@ -94,6 +97,7 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_devops_servers_user ON devops_servers(us
 try { db.exec('ALTER TABLE devops_servers ADD COLUMN sudo_password_enc TEXT'); } catch {}
 try { db.exec('ALTER TABLE devops_servers ADD COLUMN default_ssh_key_id INTEGER'); } catch {}
 try { db.exec('ALTER TABLE devops_servers ADD COLUMN use_ssh_key_for_login INTEGER NOT NULL DEFAULT 0'); } catch {}
+try { db.exec('ALTER TABLE devops_servers ADD COLUMN auto_approve_all INTEGER NOT NULL DEFAULT 0'); } catch {}
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -112,6 +116,7 @@ const rowToDto = (row: DevopsServerRow): DevopsServer => ({
   has_sudo_password: !!row.sudo_password_enc,
   default_ssh_key_id: row.default_ssh_key_id,
   use_ssh_key_for_login: row.use_ssh_key_for_login === 1,
+  auto_approve_all: row.auto_approve_all === 1,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -179,6 +184,7 @@ export const createServer = (
   sudoPassword?: string,
   defaultSshKeyId?: number | null,
   useSshKeyForLogin = false,
+  autoApproveAll = false,
 ): { ok: true; id: number } | { ok: false; error: string } => {
   // Validation
   const trimmedName = name.trim();
@@ -213,9 +219,9 @@ export const createServer = (
   const sudoPasswordEnc = sudoPassword ? encrypt(sudoPassword) : null;
 
   const result = db.prepare(`
-    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, use_ssh_key_for_login, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, sudoPasswordEnc, defaultSshKeyId ?? null, useSshKeyForLogin ? 1 : 0, now, now);
+    INSERT INTO devops_servers (user_id, name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, use_ssh_key_for_login, auto_approve_all, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, trimmedName, trimmedHost, port, trimmedUsername, passwordEnc, privateKeyEnc, sudoPasswordEnc, defaultSshKeyId ?? null, useSshKeyForLogin ? 1 : 0, autoApproveAll ? 1 : 0, now, now);
 
   return { ok: true, id: Number(result.lastInsertRowid) };
 };
@@ -233,6 +239,7 @@ export const updateServer = (
     sudoPassword?: string;
     defaultSshKeyId?: number | null;
     useSshKeyForLogin?: boolean;
+    autoApproveAll?: boolean;
   },
 ): { ok: true } | { ok: false; error: string } => {
   const existing = db.prepare('SELECT * FROM devops_servers WHERE user_id = ? AND id = ?')
@@ -300,6 +307,10 @@ export const updateServer = (
     }
     setClauses.push('use_ssh_key_for_login = ?');
     values.push(updates.useSshKeyForLogin ? 1 : 0);
+  }
+  if (updates.autoApproveAll !== undefined) {
+    setClauses.push('auto_approve_all = ?');
+    values.push(updates.autoApproveAll ? 1 : 0);
   }
 
   values.push(userId, serverId);

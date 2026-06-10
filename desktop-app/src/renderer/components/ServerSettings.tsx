@@ -16,6 +16,7 @@ type Server = {
   has_sudo_password: boolean;
   default_ssh_key_id: number | null;
   use_ssh_key_for_login: boolean;
+  auto_approve_all: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -60,6 +61,7 @@ export function ServerSettings() {
   const [formSudoPassword, setFormSudoPassword] = useState('');
   const [formDefaultKey, setFormDefaultKey] = useState<number | null>(null);
   const [formUseSshKeyForLogin, setFormUseSshKeyForLogin] = useState(false);
+  const [formAutoApproveAll, setFormAutoApproveAll] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
 
   const resetForm = () => {
@@ -73,6 +75,7 @@ export function ServerSettings() {
     setEditingHasSudoPassword(false);
     setFormDefaultKey(null);
     setFormUseSshKeyForLogin(false);
+    setFormAutoApproveAll(false);
   };
 
   const startEdit = (server: Server) => {
@@ -86,6 +89,7 @@ export function ServerSettings() {
     setEditingHasSudoPassword(server.has_sudo_password);
     setFormDefaultKey(server.default_ssh_key_id);
     setFormUseSshKeyForLogin(server.use_ssh_key_for_login);
+    setFormAutoApproveAll(server.auto_approve_all);
   };
 
   const loadServers = async () => {
@@ -148,6 +152,7 @@ export function ServerSettings() {
         if (formSudoPassword) updates.sudo_password = formSudoPassword;
         updates.default_ssh_key_id = formDefaultKey;
         updates.use_ssh_key_for_login = formUseSshKeyForLogin;
+        updates.auto_approve_all = formAutoApproveAll;
 
         await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
           method: 'PUT',
@@ -171,6 +176,7 @@ export function ServerSettings() {
             sudo_password: formSudoPassword || undefined,
             default_ssh_key_id: formDefaultKey,
             use_ssh_key_for_login: formUseSshKeyForLogin,
+            auto_approve_all: formAutoApproveAll,
           }),
         });
         toast.success('Сервер добавлен');
@@ -382,6 +388,21 @@ export function ServerSettings() {
         </label>
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
           Выбранный ключ можно оставить для установки ботом. Эта галка переключает именно способ подключения.
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '12px' }}>
+        <label className={s.macroLabel} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+          <input
+            className={s.macroCheckbox}
+            type="checkbox"
+            checked={formAutoApproveAll}
+            onChange={(e) => setFormAutoApproveAll(e.target.checked)}
+          />
+          Автоподтверждение команд
+        </label>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          Опасные команды (rm -rf, mkfs, dd и т.д.) блокируются всегда.
         </div>
       </div>
 

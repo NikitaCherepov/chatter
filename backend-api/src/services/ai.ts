@@ -20,7 +20,7 @@ import { db } from '../db.js';
 dotenv.config();
 
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
-const MAX_TOOL_LOOPS = 60;
+const MAX_TOOL_LOOPS = 80;
 const MAX_TOOL_LOOPS_VOICE = 10;
 
 // Реестр активных генераций для остановки по userId
@@ -2305,8 +2305,8 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const server = getServerById(user.id, serverId);
     if (!server) return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден. Вызови list_devops_servers для списка доступных.` });
 
-    // Check if command is auto-approved by policy
-    const autoOk = isAutoApproved(user.id, serverId, command);
+    // Check if command is auto-approved: by policy or by server-level auto_approve_all flag
+    const autoOk = server.auto_approve_all || isAutoApproved(user.id, serverId, command);
 
     // Check if command needs sudo but server has no stored sudo password
     const needsSudoPasswordPrompt = server.username !== 'root' && /\bsudo\b/.test(command) && !serverHasSudoPassword(user.id, serverId);

@@ -1942,8 +1942,9 @@ app.post('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
   const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
   const defaultSshKeyId = req.body?.default_ssh_key_id ? Number(req.body.default_ssh_key_id) : null;
   const useSshKeyForLogin = req.body?.use_ssh_key_for_login === true;
+  const autoApproveAll = req.body?.auto_approve_all === true;
 
-  const result = createServer(userId, name, host, port, username, password, privateKey, sudoPassword, defaultSshKeyId, useSshKeyForLogin);
+  const result = createServer(userId, name, host, port, username, password, privateKey, sudoPassword, defaultSshKeyId, useSshKeyForLogin, autoApproveAll);
   if (!result.ok) {
     const code = (result as { ok: false; error: string }).error;
     if (code === 'name_required' || code === 'host_required' || code === 'username_required' || code === 'invalid_port' || code === 'auth_required' || code === 'invalid_ssh_key' || code === 'ssh_key_required' || code === 'ssh_private_key_required') return res.status(400).json({ error: code });
@@ -1971,6 +1972,7 @@ app.put('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
     updates.defaultSshKeyId = v === null || v === '' ? null : Number(v);
   }
   if (req.body?.use_ssh_key_for_login !== undefined) updates.useSshKeyForLogin = req.body.use_ssh_key_for_login === true;
+  if (req.body?.auto_approve_all !== undefined) updates.autoApproveAll = req.body.auto_approve_all === true;
 
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no_fields_to_update' });
 
