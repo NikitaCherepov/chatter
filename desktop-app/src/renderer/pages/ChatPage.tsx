@@ -83,6 +83,7 @@ export function ChatPage() {
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
+  const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
 
@@ -286,6 +287,15 @@ export function ChatPage() {
                 reason: val.reason!,
                 use_ssh_key: val.use_ssh_key === true,
                 remove_password: val.remove_password || false,
+              }]);
+            }
+          }
+          if (action.action === 'pc_command_confirmation' && action.value) {
+            const val = action.value as { confirmation_id?: string; command?: string };
+            if (val.confirmation_id && val.command) {
+              setPcCommandConfirmations(prev => [...prev, {
+                confirmation_id: val.confirmation_id!,
+                command: val.command!,
               }]);
             }
           }
@@ -1453,6 +1463,112 @@ export function ChatPage() {
                           });
                         } catch {}
                         setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                      }}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* PC Command Confirmation cards */}
+              {pcCommandConfirmations.map((conf, confIdx) => (
+                <div key={`pc-${confIdx}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>Команда на ПК</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.command}</code>
+                  </div>
+                  {conf._verdict && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
+                  )}
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success('Команда выполнена');
+                          setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка выполнения');
+                        }
+                      }}
+                    >
+                      Разрешить
+                    </button>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                      onClick={async () => {
+                        try {
+                          // Create auto-approve policy for this exact command
+                          const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          await api.apiFetch('/api/v1/pc-commands/policies', {
+                            method: 'POST',
+                            body: JSON.stringify({ pattern: `^${escapedCmd}$` }),
+                          });
+                          // Also approve current command
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success('Команда одобрена навсегда');
+                          setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка сохранения политики');
+                        }
+                      }}
+                    >
+                      Разрешить всегда
+                    </button>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing ? 0.6 : 1, minWidth: '80px' }}
+                      onClick={async () => {
+                        setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
+                        try {
+                          const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
+                            method: 'POST',
+                            body: JSON.stringify({ commands: [conf.command] }),
+                          });
+                          setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
+                        } catch {
+                          toast.error('Не удалось проверить команду');
+                          setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
+                        }
+                      }}
+                    >
+                      {conf._reviewing ? 'Проверяю...' : 'Проверить'}
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                          });
+                        } catch {}
+                        setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
                     >
                       Отклонить

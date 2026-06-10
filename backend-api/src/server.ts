@@ -13,6 +13,8 @@ import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, d
 import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey, listPublicRunbooks, getPublicRunbookById, createPublicRunbook, updatePublicRunbook, deletePublicRunbook } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
+import { getPcCommandsSettings, updatePcCommandsSettings, listPcCommandPolicies, createPcCommandPolicy, deletePcCommandPolicy } from './services/pc-commands.js';
+import { getPendingPcConfirmation, deletePendingPcConfirmation } from './services/pc-command-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -2375,6 +2377,80 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   } catch (err: any) {
     pending.reject(err);
     return res.status(500).json({ error: 'ssh_exec_failed', details: err?.message });
+  }
+});
+
+// ─── PC Commands: Settings ─────────────────────────────────────────────────
+
+app.get('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const settings = getPcCommandsSettings(userId);
+  return res.json(settings);
+});
+
+app.put('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const updates: { fs_scan_enabled?: boolean; auto_approve_all?: boolean } = {};
+  if (typeof req.body?.fs_scan_enabled === 'boolean') updates.fs_scan_enabled = req.body.fs_scan_enabled;
+  if (typeof req.body?.auto_approve_all === 'boolean') updates.auto_approve_all = req.body.auto_approve_all;
+  updatePcCommandsSettings(userId, updates);
+  return res.json({ ok: true });
+});
+
+// ─── PC Commands: Policies ─────────────────────────────────────────────────
+
+app.get('/api/v1/pc-commands/policies', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const policies = listPcCommandPolicies(userId);
+  return res.json({ policies });
+});
+
+app.post('/api/v1/pc-commands/policies', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const pattern = `${req.body?.pattern || ''}`;
+  const result = createPcCommandPolicy(userId, pattern);
+  if (!result.ok) return res.status(400).json({ error: (result as { ok: false; error: string }).error });
+  return res.status(201).json({ id: result.id });
+});
+
+app.delete('/api/v1/pc-commands/policies/:id', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const policyId = Number(req.params.id);
+  if (!policyId) return res.status(400).json({ error: 'id_required' });
+  const deleted = deletePcCommandPolicy(userId, policyId);
+  if (!deleted) return res.status(404).json({ error: 'not_found' });
+  return res.json({ ok: true });
+});
+
+// ─── PC Commands: Approve/reject pending command ───────────────────────────
+
+app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const confirmationId = `${req.body?.confirmation_id || ''}`;
+  const approved = req.body?.approved === true;
+
+  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+
+  const pending = getPendingPcConfirmation(confirmationId);
+  if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
+  if (pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+
+  if (!approved) {
+    deletePendingPcConfirmation(confirmationId);
+    pending.reject(new Error('rejected_by_user'));
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  // Execute the approved command on user's PC via WS IPC
+  try {
+    deletePendingPcConfirmation(confirmationId);
+    const { sendIpcToDesktop } = await import('./ws-clients.js');
+    const result = await sendIpcToDesktop(userId, 'execute_commands', { commands: [pending.command] }, 60000);
+    pending.resolve(result);
+    return res.json({ ok: true, status: 'executed', result });
+  } catch (err: any) {
+    pending.reject(err);
+    return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
   }
 });
 

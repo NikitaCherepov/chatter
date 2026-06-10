@@ -17,16 +17,6 @@ export type Macro = {
   return_output: boolean;
 };
 
-const FS_SCAN_KEY = 'chatter_macro_fs_scan_enabled';
-
-export function loadFsScanEnabled(): boolean {
-  return localStorage.getItem(FS_SCAN_KEY) === '1';
-}
-
-export function saveFsScanEnabled(enabled: boolean): void {
-  localStorage.setItem(FS_SCAN_KEY, enabled ? '1' : '0');
-}
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 type Props = {
@@ -37,7 +27,6 @@ type Props = {
 export function MacroSettings({ onChange }: Props) {
   const [macros, setMacros] = useState<Macro[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fsScanEnabled, setFsScanEnabled] = useState(() => loadFsScanEnabled());
 
   // Editing state — null = not editing, number = macro id being edited
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -80,11 +69,6 @@ export function MacroSettings({ onChange }: Props) {
 
   useEffect(() => { fetchMacros(); }, [fetchMacros]);
 
-  // Persist fs scan toggle
-  const updateFsScan = (enabled: boolean) => {
-    setFsScanEnabled(enabled);
-    saveFsScanEnabled(enabled);
-  };
 
   // ── Form helpers ──
 
@@ -466,23 +450,6 @@ export function MacroSettings({ onChange }: Props) {
             Отмена
           </button>
         )}
-      </div>
-
-      {/* FS scan toggle */}
-      <div className={s.macroFormDivider} />
-
-      <div className={s.fieldGroup}>
-        <label className={s.macroToggleLabel}>
-          <input
-            type="checkbox"
-            checked={fsScanEnabled}
-            onChange={(e) => updateFsScan(e.target.checked)}
-            className={s.macroCheckbox}
-          />
-          <span className={s.fieldLabel} style={{ color: 'var(--text-body)' }}>
-            Разрешить ИИ сканировать файловую систему (ls/cd)
-          </span>
-        </label>
       </div>
     </div>
   );

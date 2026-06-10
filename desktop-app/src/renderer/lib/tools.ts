@@ -343,6 +343,14 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     // Renders a confirmation card: [Approve] [Reject]
     return;
   }
+
+  // ── PC Command confirmation ──
+
+  if (a === 'pc_command_confirmation') {
+    // Handled by ChatPage via the pcCommandConfirmation callback
+    // Renders a confirmation card: [Approve] [Reject]
+    return;
+  }
 }
 
 // ── Suggest Macro callback ──────────────────────────────────────────────────
@@ -433,4 +441,24 @@ export function subscribeSuggestServerCredsUpdate(listener: SuggestServerCredsUp
 
 export function emitSuggestServerCredsUpdate(payload: SuggestServerCredsUpdatePayload) {
   suggestServerCredsUpdateListeners.forEach(fn => fn(payload));
+}
+
+// ── PC Command Confirmation callback ────────────────────────────────────────
+
+export type PcCommandConfirmationPayload = {
+  confirmation_id: string;
+  command: string;
+};
+
+type PcCommandConfirmationListener = (payload: PcCommandConfirmationPayload) => void;
+
+const pcCommandConfirmationListeners = new Set<PcCommandConfirmationListener>();
+
+export function subscribePcCommandConfirmation(listener: PcCommandConfirmationListener): () => void {
+  pcCommandConfirmationListeners.add(listener);
+  return () => pcCommandConfirmationListeners.delete(listener);
+}
+
+export function emitPcCommandConfirmation(payload: PcCommandConfirmationPayload) {
+  pcCommandConfirmationListeners.forEach(fn => fn(payload));
 }

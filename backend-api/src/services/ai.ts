@@ -1379,6 +1379,33 @@ const buildExecuteSshCommandTool = () => {
   };
 };
 
+/** Build execute_pc_command tool — lets AI execute commands on user's PC via desktop IPC */
+const buildExecutePcCommandTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'execute_pc_command',
+      description: `Выполняет команду на компьютере пользователя (не на сервере!). Команда запускается через терминал/консоль на ПК пользователя.
+Используй когда:
+- Пользователь просит выполнить что-то локально на его компьютере (открыть программу, посмотреть файлы, запустить скрипт)
+- Нужно узнать информацию о системе (ipconfig, systeminfo, tasklist, dir и т.д.)
+- Пользователь просит помочь с файлами на его ПК
+
+Важно: неизвестные или потенциально опасные команды требуют подтверждения пользователя на десктопе.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          command: {
+            type: 'string',
+            description: 'Команда для выполнения на ПК пользователя (например "dir C:\\Users", "tasklist", "ipconfig").'
+          }
+        },
+        required: ['command']
+      }
+    }
+  };
+};
+
 const buildListRunbooksTool = () => {
   return {
     type: 'function' as const,
@@ -2241,6 +2268,13 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     const targetPath: string = typeof parsed.target_path === 'string' ? parsed.target_path : '';
     if (!targetPath) return JSON.stringify({ status: 'error', message: 'target_path обязателен' });
 
+    // Check if user has enabled fs scan
+    const { getPcCommandsSettings } = await import('./pc-commands.js');
+    const pcSettings = getPcCommandsSettings(user.id);
+    if (!pcSettings.fs_scan_enabled) {
+      return JSON.stringify({ status: 'error', message: 'Чтение файловой системы отключено в настройках "Управление ПК". Попроси пользователя включить галочку "Разрешить ИИ сканировать файловую систему".' });
+    }
+
     // If desktop is connected via WS — wait for result
     if (isDesktopOnline(user.id)) {
       try {
@@ -2377,6 +2411,97 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, command });
       }
       return JSON.stringify({ status: 'error', message: `SSH ошибка: ${err?.message || String(err)}`, server: server.name, command });
+    }
+  }
+
+  // ── PC Command: execute on user's desktop (with HitL confirmation) ────────
+
+  if (toolName === 'execute_pc_command') {
+    const command: string = typeof parsed.command === 'string' ? parsed.command.trim() : '';
+    if (!command) return JSON.stringify({ status: 'error', message: 'command обязательна' });
+
+    // Block dangerous commands (Linux + Windows)
+    const dangerousPcPatterns = [
+      /rm\s+(-\w*r\w*f\w*\s+|.*--no-preserve-root)/i,
+      /\bmkfs\b/i,
+      /\bdd\s+.*of=\/dev\//i,
+      /\bshutdown\b/i,
+      /\binit\s+[06]\b/i,
+      />\s*\/dev\/sda/i,
+      /\bchmod\s+(-R\s+)?000\s+\//i,
+      /\bchown\s+(-R\s+)?\w+\s+\//i,
+      /\bformat\s+[a-z]:/i,
+      /\bdel\s+\/f\s+\/s\s+\/q\s+c:/i,
+      /\brd\s+\/s\s+\/q\s+[a-z]:/i,
+      /\brmdir\s+\/s\s+\/q/i,
+    ];
+    if (dangerousPcPatterns.some(p => p.test(command))) {
+      return JSON.stringify({ status: 'error', message: 'Команда заблокирована как потенциально опасная. Это ограничение безопасности, его нельзя обойти.' });
+    }
+
+    // Desktop must be online
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Выполнение команды на ПК невозможно — попроси пользователя запустить приложение.' });
+    }
+
+    // Check auto-approve: settings + policies
+    const { getPcCommandsSettings, isPcCommandAutoApproved } = await import('./pc-commands.js');
+    const settings = getPcCommandsSettings(user.id);
+    const autoOk = settings.auto_approve_all || isPcCommandAutoApproved(user.id, command);
+
+    if (autoOk) {
+      // Execute immediately via WS IPC
+      try {
+        const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: [command] }, 60000, signal);
+        // result is a string (stdout/stderr joined by \n---\n)
+        const output = typeof result === 'string' ? result : JSON.stringify(result);
+        return JSON.stringify({
+          status: 'success',
+          command,
+          output: output.slice(-5000),
+        });
+      } catch (err: any) {
+        return JSON.stringify({ status: 'error', message: `Ошибка выполнения: ${err?.message || String(err)}`, command });
+      }
+    }
+
+    // Needs user confirmation — push to desktop via WS
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    sendToDesktop(user.id, {
+      type: 'desktop_action',
+      action: 'pc_command_confirmation',
+      value: { confirmation_id: confirmationId, command }
+    });
+
+    // Wait for user response via WS → POST /api/v1/pc-commands/approve
+    const { registerPendingPcConfirmation } = await import('./pc-command-confirmations.js');
+    try {
+      const result = await new Promise<any>((resolve, reject) => {
+        registerPendingPcConfirmation(confirmationId, {
+          userId: user.id,
+          command,
+          resolve,
+          reject,
+          createdAt: Date.now()
+        });
+      });
+
+      const output = typeof result === 'string' ? result : JSON.stringify(result);
+      return JSON.stringify({
+        status: 'success',
+        command,
+        output: output.slice(-5000),
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', command });
+      }
+      if (err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', command });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка выполнения: ${err?.message || String(err)}`, command });
     }
   }
 
@@ -2837,6 +2962,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'suggest_macro') return 'Предлагаю сохранить макрос...';
   if (toolName === 'list_devops_servers') return 'Получаю список серверов...';
   if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
+  if (toolName === 'execute_pc_command') return 'Выполняю команду на ПК...';
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
@@ -2954,7 +3080,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildExecutePcCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
@@ -3257,7 +3383,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 
