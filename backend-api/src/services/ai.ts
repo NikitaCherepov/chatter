@@ -20,7 +20,7 @@ import { db } from '../db.js';
 dotenv.config();
 
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
-const MAX_TOOL_LOOPS = 25;
+const MAX_TOOL_LOOPS = 60;
 const MAX_TOOL_LOOPS_VOICE = 10;
 
 // Реестр активных генераций для остановки по userId
