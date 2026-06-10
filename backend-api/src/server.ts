@@ -469,7 +469,8 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
   if (!filepath) return res.status(404).json({ error: 'image_not_found' });
 
   // Verify ownership: check that this image belongs to a message owned by this user
-  const likePattern = `%"${filename}"%`;
+  // images column may be JSON: [{"url":"/api/v1/images/xxx.png",...}] or plain text: "generated: /uploads/xxx.png"
+  const likePattern = `%${filename}%`;
   console.log(`[image-access] userId=${userId}, effectiveId=${effectiveId}, linked_tg_id=${rawUser?.linked_tg_id}, filename=${filename}`);
   const row = db.prepare(`
     SELECT 1 FROM chat_messages
@@ -479,10 +480,6 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
 
   if (!row) {
     console.log(`[image-access] DENIED - no matching row for effectiveId=${effectiveId}, pattern=${likePattern}`);
-    // Debug: check if row exists at all (any user)
-    const anyRow = db.prepare(`SELECT user_id FROM chat_messages WHERE images LIKE ? LIMIT 1`).get(likePattern) as { user_id: number } | undefined;
-    if (anyRow) console.log(`[image-access] found under user_id=${anyRow.user_id}`);
-    else console.log(`[image-access] no row found for this filename at all`);
     return res.status(403).json({ error: 'access_denied' });
   }
 
