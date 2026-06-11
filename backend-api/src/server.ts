@@ -905,13 +905,18 @@ app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
 // ── TTS (Cartesia cloud) ────────────────────────────────────────────────
 
 // List available Cartesia voices for the selector
+const CARTESIA_ALLOWED_LANGUAGES = ['en', 'ru', 'de', 'fr'];
+
 app.get('/api/v1/tts/voices', async (req: AuthedRequest, res) => {
   if (!isCartesiaConfigured()) {
     return res.status(503).json({ error: 'tts_not_configured' });
   }
   try {
-    const language = req.query.language ? `${req.query.language}` : undefined;
-    const voices = await fetchCartesiaVoices(language);
+    const allVoices = await fetchCartesiaVoices();
+    const voices = allVoices.filter(v => {
+      const lang = (v.language || '').split('-')[0].toLowerCase();
+      return CARTESIA_ALLOWED_LANGUAGES.includes(lang);
+    });
     return res.json({ voices });
   } catch (err: any) {
     console.error('[tts/voices] error:', err.message);
