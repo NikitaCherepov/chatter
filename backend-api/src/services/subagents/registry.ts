@@ -8,8 +8,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 
 import { SubagentConfig } from './types.js';
 
@@ -17,7 +16,6 @@ import { SubagentConfig } from './types.js';
 // Prompt loader
 // ---------------------------------------------------------------------------
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = join(__dirname, 'prompts');
 
 const promptCache = new Map<string, string>();
