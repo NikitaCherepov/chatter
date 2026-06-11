@@ -296,6 +296,53 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 - `POST /api/v1/devops/servers/:id/attach-runbook` — привязать инструкцию к серверу (`{ runbook_id }`). Создаёт авто-разрешающие политики для каждой команды инструкции.
 
+### Subagent System (desktop-only)
+
+Система специализированных вложенных агентов (субагентов). Главный AI-агент делегирует узкоспециализированные задачи субагентам через инструмент `invoke_subagent`. Каждый субагент имеет свой системный промпт, собственный набор инструментов и отдельный агентский цикл.
+
+**Архитектура:**
+
+```
+Главный агент (ai.ts)
+  ├── invoke_subagent(agent, task, context)
+  │     └── runner.ts: загрузка промпта + инструментов
+  │           ├── Собственные инструменты (ownTools) — выполняются напрямую
+  │           └── Разделяемые инструменты (sharedTools) — через runTool главного агента
+  └── Возврат результата (answer, summary, toolCallsHistory)
+```
+
+**Интеграция:**
+- `invoke_subagent` — динамически генерируемый инструмент, добавляется в `executionTools` только если `isDesktop=true` и в реестре есть зарегистрированные субагенты
+- `initSubagentRunner()` — вызывается при старте сервера (`ai.ts`), передаёт ссылки на `runCompletion`, `runTool`, `toolDefinitions` для разрыва циклических зависимостей
+- Субагент использует тот же `AbortSignal` что и основной запрос — остановка генерации (`chat_stop`) останавливает и субагента
+
+**Структура файлов:**
+
+```
+services/subagents/
+  types.ts          — типы: SubagentConfig, SubagentTool, SubagentContext, SubagentResult
+  registry.ts       — реестр субагентов: REGISTRY, getSubagent(), buildSubagentListDescription()
+  runner.ts         — агентский цикл: runSubagent(), initSubagentRunner()
+  prompts/
+  tools/
+```
+
+**Как добавить новый субагент:**
+1. Создать инструменты в `tools/<name>-tools.ts`
+2. Создать промпт в `prompts/<name>.md`
+3. Добавить entry в `REGISTRY` в `registry.ts`
+
+**Реестр (REGISTRY):**
+
+| Имя | Описание | mode | maxLoops | sharedTools |
+|---|---|---|---|---|
+
+**Агентский цикл (runner.ts):**
+- Лимит итераций: `maxLoops` из конфига (default 50)
+- За 2 итерации до лимота — nudge "заверши задачу"
+- Debug: `DEBUG_AI_RAW_SUBAGENT=1` — логирует полные ответы модели
+- `setMaxListeners(100)` на signal — предотвращает `MaxListenersExceededWarning` при длинных циклах
+
 ### Vector Memory (JWT, feature-flag)
 
 - Нужно `BACKEND_VECTOR_MEMORY_API_ENABLED=1`.
@@ -429,6 +476,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 | `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). Доступен и из Telegram: если десктоп онлайн — команды пушатся через WS. |
 | `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). Доступен и из Telegram при подключённом десктопе. |
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
+| `invoke_subagent` | Делегирует задачу специализированному субагенту. Динамически генерируется из реестра (`services/subagents/registry.ts`). Добавляется только при `isDesktop=true` и наличии зарегистрированных субагентов. |
 
 ### DevOps Agent Runtime (desktop-only)
 
