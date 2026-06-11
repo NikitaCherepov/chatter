@@ -1901,7 +1901,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void }) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -2987,11 +2987,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         context: contextData,
         ctx: {
           userId: user.id,
-          isDesktop: !!desktopActionSink, // if desktopActionSink is present → desktop context
+          isDesktop: !!desktopActionSink,
           timezoneOffset,
           signal,
           desktopActionSink: desktopActionSink || undefined,
-          onDesktopAction: undefined, // will be dispatched by the main agent loop after runTool returns
+          onDesktopAction: subagentExtra?.onDesktopAction,
+          onToolStatus: subagentExtra?.onToolStatus,
+          manualModel: subagentExtra?.manualModel,
         },
       });
 
@@ -3459,7 +3461,8 @@ for (const toolCall of message.tool_calls) {
         desktopActionSink,
         mapUpdateSink,
         options?.activeMacros,
-        abortController.signal
+        abortController.signal,
+        { manualModel, onToolStatus: options?.onToolStatus, onDesktopAction: options?.onDesktopAction }
       ),
       abortController.signal
     );

@@ -8,6 +8,8 @@
  * 4. Returns the result to the calling main agent
  *
  * Reuses the main agent's `runCompletion` for AI calls and `runTool` for shared tools.
+ * Broadcasts tool status via onToolStatus (same SSE channel as the main agent).
+ * Respects user's preferred model (manual model selection).
  */
 
 import { SubagentContext, SubagentResult } from './types.js';
@@ -42,6 +44,20 @@ export function initSubagentRunner(deps: {
 }
 
 // ---------------------------------------------------------------------------
+// Human-readable tool names for status broadcasting
+// ---------------------------------------------------------------------------
+
+const TOOL_STATUS_MESSAGES: Record<string, string> = {
+  execute_ssh_command: 'Выполнение команды на сервере...',
+  list_devops_servers: 'Получение списка серверов...',
+};
+
+function getToolStatusMessage(agentName: string, toolName: string): string {
+  const base = TOOL_STATUS_MESSAGES[toolName];
+  return base ? `[${agentName}] ${base}` : `[${agentName}] ${toolName}...`;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -54,8 +70,6 @@ export interface RunSubagentParams {
   context?: Record<string, any>;
   /** Execution context (userId, desktop, etc.). */
   ctx: SubagentContext;
-  /** Optional manual model override from the main agent's options. */
-  manualModel?: any;
 }
 
 /**
@@ -64,7 +78,7 @@ export interface RunSubagentParams {
  * This function is called from the main agent's `runTool` handler for `invoke_subagent`.
  */
 export async function runSubagent(params: RunSubagentParams): Promise<SubagentResult> {
-  const { agentName, task, context, ctx, manualModel } = params;
+  const { agentName, task, context, ctx } = params;
 
   if (!_runCompletion || !_runTool) {
     throw new Error('Subagent runner not initialised. Call initSubagentRunner() first.');
@@ -72,21 +86,17 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
 
   _throwIfAborted(ctx.signal);
 
+  // Resolve user's preferred model (manual model selection)
+  const manualModel = ctx.manualModel || undefined;
+
   // 1. Resolve agent config
   const agent: RegisteredSubagent = getSubagent(agentName);
 
   // 2. Build tool list: own tools + shared tools from main agent
   const ownToolDefs = agent.ownTools.map(t => t.definition);
-  const sharedToolDefs = (_toolDefinitions as any[]).filter(
+  const sharedToolDefs = (_toolDefinitions as unknown as any[]).filter(
     (t: any) => agent.sharedTools.includes(t?.function?.name || '')
   );
-  // Also include dynamic tool builders that the main agent adds for desktop
-  // (execute_ssh_command etc. are built dynamically, but they are in the base toolDefinitions
-  //  only if the function is called in the main agent loop context — so we need to check
-  //  sharedTools against the full execution tool set, not just base toolDefinitions.)
-  // For now, shared tools are matched against the base toolDefinitions.
-  // Dynamic tools like execute_ssh_command are built via builder functions in ai.ts and
-  // are part of the full executionTools array. We'll handle them in the tool dispatch below.
 
   const allToolDefs = [...ownToolDefs, ...sharedToolDefs];
 
@@ -120,7 +130,9 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       });
     }
 
-    // Call AI
+    console.log(`[subagent:${agentName}] loop ${loop + 1}/${maxLoops}, messages: ${messages.length}`);
+
+    // Call AI — use user's preferred model if set, otherwise agent's configured mode
     const completion = await _withAbort(
       _runCompletion(mode, {
         messages,
@@ -134,6 +146,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     const response = completion?.response;
     const message = response?.choices?.[0]?.message;
     if (!message) {
+      console.warn(`[subagent:${agentName}] empty response from model`);
       return {
         answer: 'Субагент не получил ответ от модели.',
         summary: 'Пустой ответ модели.',
@@ -148,12 +161,15 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     const toolCalls = message.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
       const content = message.content || '';
+      console.log(`[subagent:${agentName}] finished after ${loop + 1} loops, answer length: ${content.length}`);
       return {
         answer: content,
         summary: content.slice(0, 500),
         toolCallsHistory,
       };
     }
+
+    console.log(`[subagent:${agentName}] loop ${loop + 1}: ${toolCalls.length} tool call(s): ${toolCalls.map((tc: any) => tc.function?.name).join(', ')}`);
 
     // Process tool calls
     for (const toolCall of toolCalls) {
@@ -162,6 +178,12 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       const toolName = toolCall.function?.name || '';
       const argsRaw = toolCall.function?.arguments || '{}';
       let toolContent: string;
+
+      // Broadcast tool status to client
+      const statusMsg = getToolStatusMessage(agentName, toolName);
+      if (ctx.onToolStatus) {
+        try { await ctx.onToolStatus(statusMsg); } catch {}
+      }
 
       // Check if it's an own tool
       const ownTool = ownToolsMap.get(toolName);
@@ -179,7 +201,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         }
       } else if (agent.sharedTools.includes(toolName)) {
         // Shared tool — delegate to the main agent's runTool
-        // We need a UserRecord. Create a minimal one from ctx.
+        // This ensures auto-approve policies, HitL confirmations, sudo passwords, etc.
         const minimalUser = { id: ctx.userId } as any;
 
         try {
@@ -190,7 +212,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
               toolName,
               argsRaw,
               // aiCall — used by some tools like update_core_memory for sub-AI calls
-              (payload) => _runCompletion('pro', payload, undefined, ctx.signal),
+              (payload) => _runCompletion(mode, payload, manualModel, ctx.signal),
               [],       // generatedImages
               undefined, // displayStateSink
               ctx.desktopActionSink, // desktopActionSink — enables HitL confirmations

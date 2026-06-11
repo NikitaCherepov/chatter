@@ -35,6 +35,10 @@ export interface SubagentContext {
   desktopActionSink?: { value: any | null };
   /** Callback the runner calls when a desktop_action is produced by a shared tool. */
   onDesktopAction?: (action: any) => Promise<void> | void;
+  /** Broadcast tool status to the client (SSE / WS), same as onToolStatus in the main agent. */
+  onToolStatus?: (text: string) => Promise<void> | void;
+  /** User's preferred model (from manual model selection), passed through from the main agent. */
+  manualModel?: any;
 }
 
 /** Result returned from a finished subagent run. */
