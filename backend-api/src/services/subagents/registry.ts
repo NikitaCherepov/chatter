@@ -16,7 +16,12 @@ import { SubagentConfig } from './types.js';
 // Prompt loader
 // ---------------------------------------------------------------------------
 
-const PROMPTS_DIR = join(__dirname, 'prompts');
+// In dev __dirname = .../src/services/subagents (ts-node / tsx)
+// In prod __dirname = .../dist/services/subagents (compiled)
+// Prompts live in src/services/subagents/prompts/ and are NOT copied to dist by tsc.
+// Resolve relative to src/ — try dist→src fallback.
+const SRC_PROMPTS_DIR = join(__dirname, '..', '..', '..', 'src', 'services', 'subagents', 'prompts');
+const LOCAL_PROMPTS_DIR = join(__dirname, 'prompts');
 
 const promptCache = new Map<string, string>();
 
@@ -24,7 +29,15 @@ function loadPrompt(filename: string): string {
   const cached = promptCache.get(filename);
   if (cached) return cached;
 
-  const filePath = join(PROMPTS_DIR, filename);
+  // Try local first (if running from src), then src-relative (if running from dist)
+  let filePath = join(LOCAL_PROMPTS_DIR, filename);
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    promptCache.set(filename, content);
+    return content;
+  } catch {}
+
+  filePath = join(SRC_PROMPTS_DIR, filename);
   const content = readFileSync(filePath, 'utf-8');
   promptCache.set(filename, content);
   return content;
