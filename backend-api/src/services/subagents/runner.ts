@@ -13,6 +13,7 @@
  */
 
 import { SubagentContext, SubagentResult } from './types.js';
+import { setMaxListeners } from 'events';
 import { getSubagent, RegisteredSubagent } from './registry.js';
 
 // These will be set by initSubagentRunner() at startup to avoid circular imports.
@@ -48,7 +49,7 @@ export function initSubagentRunner(deps: {
 // ---------------------------------------------------------------------------
 
 const TOOL_STATUS_MESSAGES: Record<string, string> = {
-  execute_ssh_command: 'Выполнение команды на сервере...',
+  // Shared tools
   list_devops_servers: 'Получение списка серверов...',
 };
 
@@ -86,6 +87,13 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
 
   _throwIfAborted(ctx.signal);
 
+  // The subagent loop can accumulate many abort listeners on the shared signal
+  // (each withAbort + runCompletion + runTool adds one). Raise the limit to avoid
+  // the MaxListenersExceededWarning — these are not leaks, they clean up after each call.
+  if (ctx.signal) {
+    try { setMaxListeners(100, ctx.signal); } catch {}
+  }
+
   // Resolve user's preferred model (manual model selection)
   const manualModel = ctx.manualModel || undefined;
 
@@ -118,6 +126,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   const toolCallsHistory: SubagentResult['toolCallsHistory'] = [];
   const mode = agent.mode || 'pro';
   const maxLoops = agent.maxLoops;
+  const debugRaw = process.env.DEBUG_AI_RAW_SUBAGENT === '1';
 
   for (let loop = 0; loop < maxLoops; loop++) {
     _throwIfAborted(ctx.signal);
@@ -130,7 +139,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       });
     }
 
-    console.log(`[subagent:${agentName}] loop ${loop + 1}/${maxLoops}, messages: ${messages.length}`);
+    console.log(`[subagent:${agentName}] === loop ${loop + 1}/${maxLoops} === (messages: ${messages.length})`);
 
     // Call AI — use user's preferred model if set, otherwise agent's configured mode
     const completion = await _withAbort(
@@ -154,6 +163,21 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       };
     }
 
+    // Debug: log raw model response
+    if (debugRaw) {
+      try {
+        console.log(`[subagent:${agentName}][RAW]`, JSON.stringify(response, null, 2));
+      } catch (err) {
+        console.warn(`[subagent:${agentName}][RAW] serialization failed:`, err);
+      }
+    }
+
+    // Log assistant text (reasoning / intermediate message)
+    if (message.content) {
+      const text = String(message.content);
+      console.log(`[subagent:${agentName}][text] ${text.slice(0, 2000)}`);
+    }
+
     // Push assistant message to history
     messages.push(message);
 
@@ -161,15 +185,13 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     const toolCalls = message.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
       const content = message.content || '';
-      console.log(`[subagent:${agentName}] finished after ${loop + 1} loops, answer length: ${content.length}`);
+      console.log(`[subagent:${agentName}] === finished after ${loop + 1} loops, answer: ${content.slice(0, 500)}`);
       return {
         answer: content,
         summary: content.slice(0, 500),
         toolCallsHistory,
       };
     }
-
-    console.log(`[subagent:${agentName}] loop ${loop + 1}: ${toolCalls.length} tool call(s): ${toolCalls.map((tc: any) => tc.function?.name).join(', ')}`);
 
     // Process tool calls
     for (const toolCall of toolCalls) {
@@ -178,6 +200,9 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       const toolName = toolCall.function?.name || '';
       const argsRaw = toolCall.function?.arguments || '{}';
       let toolContent: string;
+
+      // Log tool call with arguments
+      console.log(`[subagent:${agentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
 
       // Broadcast tool status to client
       const statusMsg = getToolStatusMessage(agentName, toolName);
@@ -232,6 +257,9 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
           message: `Инструмент "${toolName}" недоступен для этого субагента.`,
         });
       }
+
+      // Log tool result
+      console.log(`[subagent:${agentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
 
       // Record history
       try {
