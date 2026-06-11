@@ -326,9 +326,11 @@ export function SettingsModal({ onClose }: Props) {
     setPreviewPlaying(false);
     setTimeout(() => {
       setPreviewPlaying(true);
-      ttsPreview(ttsSettings.modelId, ttsSettings.voiceId);
-      // Auto-reset after 5s safety net (piper generation can be slow)
-      setTimeout(() => setPreviewPlaying(false), 5000);
+      ttsPreview(ttsSettings.modelId, ttsSettings.voiceId).finally(() => {
+        setPreviewPlaying(false);
+      });
+      // Safety net: auto-reset after 15s (first cartesia generation can be slow)
+      setTimeout(() => setPreviewPlaying(false), 15000);
     }, 50);
   };
 

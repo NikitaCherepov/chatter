@@ -514,15 +514,21 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
   const filepath = resolveAudioFile(filename);
   if (!filepath) return res.status(404).json({ error: 'audio_not_found' });
 
-  // Verify ownership: check that this audio belongs to a message owned by this user
+  // Verify access: check chat_messages (per-user audio) OR tts_voice_previews (shared preview cache)
   const likePattern = `%${filename}%`;
-  const row = db.prepare(`
+  const msgRow = db.prepare(`
     SELECT 1 FROM chat_messages
     WHERE user_id = ? AND audio LIKE ?
     LIMIT 1
   `).get(effectiveId, likePattern) as { 1: number } | undefined;
 
-  if (!row) return res.status(403).json({ error: 'access_denied' });
+  const previewRow = db.prepare(`
+    SELECT 1 FROM tts_voice_previews
+    WHERE audio_url LIKE ?
+    LIMIT 1
+  `).get(likePattern) as { 1: number } | undefined;
+
+  if (!msgRow && !previewRow) return res.status(403).json({ error: 'access_denied' });
 
   res.sendFile(filepath);
 });
