@@ -91,6 +91,13 @@ export function SettingsModal({ onClose }: Props) {
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [cartesiaLoading, setCartesiaLoading] = useState(false);
 
+  // Refresh TTS models when voice section opens (cartesia voices may have been cached)
+  useEffect(() => {
+    if (section === 'voice') {
+      setTtsModels(getTtsModels());
+    }
+  }, [section]);
+
   const [coreMemory, setCoreMemory] = useState('');
   const [coreMemorySaving, setCoreMemorySaving] = useState(false);
 

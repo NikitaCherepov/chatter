@@ -910,7 +910,7 @@ app.get('/api/v1/tts/voices', async (req: AuthedRequest, res) => {
     return res.status(503).json({ error: 'tts_not_configured' });
   }
   try {
-    const language = `${req.query.language || 'ru'}`;
+    const language = req.query.language ? `${req.query.language}` : undefined;
     const voices = await fetchCartesiaVoices(language);
     return res.json({ voices });
   } catch (err: any) {
