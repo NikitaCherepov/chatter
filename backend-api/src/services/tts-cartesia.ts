@@ -32,31 +32,50 @@ export type CartesiaVoice = {
 };
 
 export async function fetchCartesiaVoices(language?: string): Promise<CartesiaVoice[]> {
-  const params = new URLSearchParams();
-  params.set('limit', '100');
-  if (language) params.set('language', language);
+  const allVoices: CartesiaVoice[] = [];
+  let startingAfter: string | undefined;
 
-  const url = `${CARTESIA_BASE_URL}/voices?${params.toString()}`;
-  const res = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${CARTESIA_API_KEY}`,
-      'Cartesia-Version': CARTESIA_VERSION,
-    },
-  });
+  // Paginate through all voices
+  do {
+    const params = new URLSearchParams();
+    params.set('limit', '100');
+    if (language) params.set('language', language);
+    if (startingAfter) params.set('starting_after', startingAfter);
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Cartesia voices API error: ${res.status} ${body}`);
-  }
+    const url = `${CARTESIA_BASE_URL}/voices?${params.toString()}`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${CARTESIA_API_KEY}`,
+        'Cartesia-Version': CARTESIA_VERSION,
+      },
+    });
 
-  const data = await res.json() as { data: Array<{ id: string; name: string; description?: string; language?: string; gender?: string }> };
-  return data.data.map(v => ({
-    id: v.id,
-    name: v.name,
-    description: v.description,
-    language: v.language,
-    gender: v.gender,
-  }));
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Cartesia voices API error: ${res.status} ${body}`);
+    }
+
+    const data = await res.json() as {
+      data: Array<{ id: string; name: string; description?: string; language?: string; gender?: string }>;
+      has_more: boolean;
+      next_page?: string;
+    };
+
+    for (const v of data.data) {
+      allVoices.push({
+        id: v.id,
+        name: v.name,
+        description: v.description,
+        language: v.language,
+        gender: v.gender,
+      });
+      startingAfter = v.id;
+    }
+
+    if (!data.has_more) break;
+  } while (true);
+
+  return allVoices;
 }
 
 // ── Audio generation ────────────────────────────────────────────────────

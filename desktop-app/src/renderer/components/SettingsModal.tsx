@@ -270,7 +270,7 @@ export function SettingsModal({ onClose }: Props) {
     if (modelId === 'cartesia') {
       // Load voices from server
       setCartesiaLoading(true);
-      fetchCartesiaVoiceList('ru').then(() => {
+      fetchCartesiaVoiceList().then(() => {
         setTtsModels(getTtsModels()); // refresh models with updated cartesia voices
         const voices = getVoicesForModel('cartesia');
         const newSettings: TtsSettings = {

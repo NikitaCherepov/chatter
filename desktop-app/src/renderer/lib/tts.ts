@@ -91,7 +91,7 @@ let cartesiaFetchPromise: Promise<TtsVoice[]> | null = null;
  * Fetch Cartesia voices from backend.
  * Caches result — call again to refresh.
  */
-export async function fetchCartesiaVoiceList(language: string = 'ru'): Promise<TtsVoice[]> {
+export async function fetchCartesiaVoiceList(language?: string): Promise<TtsVoice[]> {
   if (cachedCartesiaVoices) return cachedCartesiaVoices;
 
   // Deduplicate concurrent calls

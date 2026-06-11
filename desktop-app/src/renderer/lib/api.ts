@@ -733,8 +733,9 @@ export type CartesiaVoice = {
   gender?: string;
 };
 
-export async function fetchTtsVoices(language: string = 'ru'): Promise<{ voices: CartesiaVoice[] }> {
-  return apiFetch(`/api/v1/tts/voices?language=${encodeURIComponent(language)}`);
+export async function fetchTtsVoices(language?: string): Promise<{ voices: CartesiaVoice[] }> {
+  const query = language ? `?language=${encodeURIComponent(language)}` : '';
+  return apiFetch(`/api/v1/tts/voices${query}`);
 }
 
 export async function fetchTtsVoicePreview(voiceId: string, language: string = 'ru'): Promise<{ audio_url: string }> {
