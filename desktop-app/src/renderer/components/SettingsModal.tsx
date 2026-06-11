@@ -91,10 +91,21 @@ export function SettingsModal({ onClose }: Props) {
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [cartesiaLoading, setCartesiaLoading] = useState(false);
 
-  // Refresh TTS models when voice section opens (cartesia voices may have been cached)
+  // Refresh TTS models when voice section opens
+  // If cartesia voices are empty (not cached), fetch from server
   useEffect(() => {
     if (section === 'voice') {
-      setTtsModels(getTtsModels());
+      const models = getTtsModels();
+      const cartesiaModel = models.find(m => m.id === 'cartesia');
+      if (ttsSettings.modelId === 'cartesia' && (!cartesiaModel || cartesiaModel.voices.length === 0)) {
+        setCartesiaLoading(true);
+        fetchCartesiaVoiceList().then(() => {
+          setTtsModels(getTtsModels());
+          setCartesiaLoading(false);
+        }).catch(() => setCartesiaLoading(false));
+      } else {
+        setTtsModels(models);
+      }
     }
   }, [section]);
 
