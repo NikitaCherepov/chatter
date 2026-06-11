@@ -54,6 +54,7 @@ ensureUserColumn('preferred_model', 'ALTER TABLE users ADD COLUMN preferred_mode
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
 ensureChatMessageColumn('images', 'ALTER TABLE chat_messages ADD COLUMN images TEXT');
+ensureChatMessageColumn('audio', 'ALTER TABLE chat_messages ADD COLUMN audio TEXT');
 
 db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
 

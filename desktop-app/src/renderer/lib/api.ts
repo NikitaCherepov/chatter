@@ -143,11 +143,18 @@ export type MessageImage = {
   type: 'user_photo' | 'generated';
 };
 
+export type MessageAudio = {
+  url: string;
+  tts_type: string;
+  voice_id: string;
+};
+
 export type Message = {
   id: number;
   role: 'user' | 'assistant';
   content: string;
   images?: MessageImage[] | null;
+  audio?: MessageAudio | null;
   created_at: number;
 };
 
@@ -714,4 +721,51 @@ export async function setPreferredModel(modelId: string | null): Promise<{ ok: b
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model_id: modelId }),
   });
+}
+
+// ---------- TTS (Cartesia cloud) ----------
+
+export type CartesiaVoice = {
+  id: string;
+  name: string;
+  description?: string;
+  language?: string;
+  gender?: string;
+};
+
+export async function fetchTtsVoices(language: string = 'ru'): Promise<{ voices: CartesiaVoice[] }> {
+  return apiFetch(`/api/v1/tts/voices?language=${encodeURIComponent(language)}`);
+}
+
+export type TtsGenerateResponse = {
+  audio_url: string;
+  tts_type: string;
+  voice_id: string;
+};
+
+export async function generateTts(
+  text: string,
+  voiceId: string,
+  language: string = 'ru',
+  messageId?: number,
+): Promise<TtsGenerateResponse> {
+  const body: Record<string, unknown> = { text, voice_id: voiceId, language };
+  if (messageId) body.message_id = messageId;
+  return apiFetch('/api/v1/tts/generate', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Download audio file from server as ArrayBuffer.
+ * Uses ?token= query param for auth (same pattern as images).
+ */
+export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
+  const tokens = loadTokens();
+  const token = tokens?.access_token || '';
+  const separator = audioUrl.includes('?') ? '&' : '?';
+  const res = await fetch(`${API_BASE}${audioUrl}${separator}token=${encodeURIComponent(token)}`);
+  if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`);
+  return res.arrayBuffer();
 }

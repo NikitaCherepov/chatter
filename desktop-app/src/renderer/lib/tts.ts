@@ -3,16 +3,19 @@
  *
  * Architecture:
  *   - TTS models: abstraction layer. Supports:
- *     1. "piper"   — local Piper TTS via Electron IPC → piper.exe → WAV → Web Audio API
- *     2. "builtin" — Chromium SpeechSynthesis (0 deps)
+ *     1. "piper"    — local Piper TTS via Electron IPC → piper.exe → WAV → Web Audio API
+ *     2. "builtin"  — Chromium SpeechSynthesis (0 deps)
+ *     3. "cartesia" — Cartesia.ai cloud TTS via backend proxy → MP3 → Web Audio API
  *   - Each model has its own list of voices.
  *   - User selection (model + voice + volume) persisted in localStorage.
- *   - Piper playback uses ChatterAudioManager for smooth fade-in/fade-out.
+ *   - Piper + Cartesia playback use ChatterAudioManager for smooth fade-in/fade-out.
  *
  * Single global state — only one utterance plays at a time.
  */
 
 import { audioManager } from './audioManager';
+import { generateTts, fetchAudioBuffer } from './api';
+import type { MessageAudio } from './api';
 
 type Listener = (playingId: number | null) => void;
 
@@ -79,6 +82,47 @@ const PIPER_VOICES: TtsVoice[] = [
   { id: 'irina', name: 'Irina', lang: 'ru-RU' },
 ];
 
+// ── Cartesia cloud voices (fetched dynamically) ─────────────────────────
+
+let cachedCartesiaVoices: TtsVoice[] | null = null;
+let cartesiaFetchPromise: Promise<TtsVoice[]> | null = null;
+
+/**
+ * Fetch Cartesia voices from backend.
+ * Caches result — call again to refresh.
+ */
+export async function fetchCartesiaVoiceList(language: string = 'ru'): Promise<TtsVoice[]> {
+  if (cachedCartesiaVoices) return cachedCartesiaVoices;
+
+  // Deduplicate concurrent calls
+  if (cartesiaFetchPromise) return cartesiaFetchPromise;
+
+  cartesiaFetchPromise = (async () => {
+    try {
+      const { fetchTtsVoices } = await import('./api');
+      const { voices } = await fetchTtsVoices(language);
+      cachedCartesiaVoices = voices.map(v => ({
+        id: v.id,
+        name: v.name,
+        lang: v.language || 'ru',
+      }));
+      return cachedCartesiaVoices;
+    } catch (err) {
+      console.error('[TTS:cartesia] failed to fetch voices:', err);
+      return [];
+    } finally {
+      cartesiaFetchPromise = null;
+    }
+  })();
+
+  return cartesiaFetchPromise;
+}
+
+/** Invalidate Cartesia voice cache (e.g. on language change) */
+export function invalidateCartesiaVoices(): void {
+  cachedCartesiaVoices = null;
+}
+
 export function getTtsModels(): TtsModel[] {
   const builtinVoices = getBuiltinVoices();
   return [
@@ -93,6 +137,11 @@ export function getTtsModels(): TtsModel[] {
       voices: builtinVoices.length > 0
         ? builtinVoices
         : [{ id: '__default', name: 'По умолчанию', lang: 'ru-RU' }],
+    },
+    {
+      id: 'cartesia',
+      name: 'Cartesia (облачная)',
+      voices: cachedCartesiaVoices || [],
     },
   ];
 }
@@ -193,9 +242,55 @@ async function piperSpeak(messageId: number, text: string): Promise<void> {
   }
 }
 
+// ── Cartesia: generate via backend API and play ────────────────────────
+
+async function cartesiaSpeak(
+  messageId: number,
+  text: string,
+  existingAudio?: MessageAudio | null,
+): Promise<void> {
+  await audioManager.stopWithFade(150);
+
+  const ticket = ++generationTicket;
+  playingId = messageId;
+  notify();
+
+  const settings = loadSettings();
+
+  try {
+    let audioBuffer: ArrayBuffer;
+
+    if (existingAudio?.url) {
+      // Audio already generated — just download and play
+      audioBuffer = await fetchAudioBuffer(existingAudio.url);
+    } else {
+      // Generate new audio via backend
+      const result = await generateTts(text, settings.voiceId, 'ru', messageId);
+      if (ticket !== generationTicket) return;
+
+      audioBuffer = await fetchAudioBuffer(result.audio_url);
+    }
+
+    if (ticket !== generationTicket) return;
+
+    await audioManager.playBuffer(audioBuffer, settings.volume);
+
+    if (ticket === generationTicket && playingId === messageId) {
+      playingId = null;
+      notify();
+    }
+  } catch (err) {
+    console.error('[TTS:cartesia] error:', err);
+    if (ticket === generationTicket && playingId === messageId) {
+      playingId = null;
+      notify();
+    }
+  }
+}
+
 // ── Core speak ─────────────────────────────────────────────────────────
 
-export function ttsSpeak(messageId: number, rawText: string): void {
+export function ttsSpeak(messageId: number, rawText: string, audio?: MessageAudio | null): void {
   if (playingId === messageId) {
     ttsStop();
     return;
@@ -209,6 +304,12 @@ export function ttsSpeak(messageId: number, rawText: string): void {
   if (settings.modelId === 'piper') {
     // Piper is async — fire and forget
     piperSpeak(messageId, text);
+    return;
+  }
+
+  if (settings.modelId === 'cartesia') {
+    // Cartesia is async — fire and forget
+    cartesiaSpeak(messageId, text, audio);
     return;
   }
 
@@ -280,6 +381,20 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
       previewPlaying = false;
     } catch (err) {
       console.error('[TTS:piper] preview error:', err);
+      previewPlaying = false;
+    }
+    return;
+  }
+
+  if (modelId === 'cartesia') {
+    try {
+      const text = 'Привет, я Чаттер!';
+      const result = await generateTts(text, voiceId, 'ru');
+      const audioBuffer = await fetchAudioBuffer(result.audio_url);
+      await audioManager.playBuffer(audioBuffer, volume);
+      previewPlaying = false;
+    } catch (err) {
+      console.error('[TTS:cartesia] preview error:', err);
       previewPlaying = false;
     }
     return;

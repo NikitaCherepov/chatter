@@ -1,5 +1,5 @@
 ﻿import { db, toUnix } from '../db.js';
-import type { ChatDto, MessageDto, MessageImage, ChatRole, UserRecord } from '../types.js';
+import type { ChatDto, MessageDto, MessageImage, MessageAudio, ChatRole, UserRecord } from '../types.js';
 
 const parseAdminId = (raw: string | undefined) => {
   if (!raw) return null;
@@ -146,17 +146,21 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, images, telegram_chat_id, telegram_message_id, created_at
+    SELECT id, chat_id, role, content, images, audio, telegram_chat_id, telegram_message_id, created_at
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; images: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
     if (row.images) {
       try { parsedImages = JSON.parse(row.images); } catch { parsedImages = null; }
+    }
+    let parsedAudio: MessageAudio | null = null;
+    if (row.audio) {
+      try { parsedAudio = JSON.parse(row.audio); } catch { parsedAudio = null; }
     }
     return {
       id: row.id,
@@ -164,6 +168,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       role: row.role,
       content: row.content,
       images: parsedImages,
+      audio: parsedAudio,
       telegram_chat_id: row.telegram_chat_id,
       telegram_message_id: row.telegram_message_id,
       created_at: toUnix(row.created_at)
@@ -200,6 +205,21 @@ export const bindChatMessageTelegramMeta = (
       telegram_message_id = COALESCE(?, telegram_message_id)
   WHERE id = ? AND user_id = ?
 `).run(telegramChatId, telegramMessageId, messageId, userId);
+
+export const updateChatMessageAudio = (
+  userId: number,
+  messageId: number,
+  audio: MessageAudio
+) => db.prepare(`
+  UPDATE chat_messages
+  SET audio = ?
+  WHERE id = ? AND user_id = ?
+`).run(JSON.stringify(audio), messageId, userId);
+
+export const getChatMessageOwner = (messageId: number): number | null => {
+  const row = db.prepare('SELECT user_id FROM chat_messages WHERE id = ?').get(messageId) as { user_id: number } | undefined;
+  return row?.user_id ?? null;
+};
 
 export const getHistoryForAi = (userId: number, chatId: number, limit: number) => db.prepare(`
   SELECT role, content

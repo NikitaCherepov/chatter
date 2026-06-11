@@ -50,12 +50,19 @@ export type MessageImage = {
   type: 'user_photo' | 'generated';
 };
 
+export type MessageAudio = {
+  url: string;
+  tts_type: string;
+  voice_id: string;
+};
+
 export type MessageDto = {
   id: number;
   chat_id: number;
   role: ChatRole;
   content: string;
   images?: MessageImage[] | null;
+  audio?: MessageAudio | null;
   telegram_chat_id?: number | null;
   telegram_message_id?: number | null;
   created_at: number;

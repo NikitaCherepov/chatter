@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -29,6 +29,8 @@ import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updat
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
+import { resolveAudioFile, saveTtsAudio } from './services/audio-storage.js';
+import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './services/tts-cartesia.js';
 import type { UserRecord } from './types.js';
 
 dotenv.config();
@@ -491,6 +493,40 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
   res.sendFile(filepath);
 });
 
+// ── Audio download API (owner-only, supports ?token= query param for <audio src>) ─
+app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
+  const queryToken = `${req.query.token || ''}`.trim();
+  const authHeader = `${req.headers.authorization || ''}`;
+  const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const token = queryToken || headerToken;
+
+  if (!token) return res.status(401).json({ error: 'unauthorized' });
+
+  const payload = verifyToken(token, 'access');
+  if (!payload) return res.status(401).json({ error: 'unauthorized' });
+
+  const userId = payload.sub;
+  const rawUser = getUserById(userId);
+  const effectiveId = rawUser?.linked_tg_id || userId;
+  const filename = path.basename(req.params.filename || '');
+  if (!filename) return res.status(400).json({ error: 'bad_filename' });
+
+  const filepath = resolveAudioFile(filename);
+  if (!filepath) return res.status(404).json({ error: 'audio_not_found' });
+
+  // Verify ownership: check that this audio belongs to a message owned by this user
+  const likePattern = `%${filename}%`;
+  const row = db.prepare(`
+    SELECT 1 FROM chat_messages
+    WHERE user_id = ? AND audio LIKE ?
+    LIMIT 1
+  `).get(effectiveId, likePattern) as { 1: number } | undefined;
+
+  if (!row) return res.status(403).json({ error: 'access_denied' });
+
+  res.sendFile(filepath);
+});
+
 app.use('/api/v1', authMiddleware);
 
 // Return current authenticated user profile
@@ -858,6 +894,70 @@ app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
     return res.json({ ok: true, message: 'Остановлено' });
   }
   return res.json({ ok: false, message: 'Нет активной генерации' });
+});
+
+// ── TTS (Cartesia cloud) ────────────────────────────────────────────────
+
+// List available Cartesia voices for the selector
+app.get('/api/v1/tts/voices', async (req: AuthedRequest, res) => {
+  if (!isCartesiaConfigured()) {
+    return res.status(503).json({ error: 'tts_not_configured' });
+  }
+  try {
+    const language = `${req.query.language || 'ru'}`;
+    const voices = await fetchCartesiaVoices(language);
+    return res.json({ voices });
+  } catch (err: any) {
+    console.error('[tts/voices] error:', err.message);
+    return res.status(500).json({ error: 'tts_voices_error', message: err.message });
+  }
+});
+
+// Generate TTS audio and bind to message
+app.post('/api/v1/tts/generate', async (req: AuthedRequest, res) => {
+  if (!isCartesiaConfigured()) {
+    return res.status(503).json({ error: 'tts_not_configured' });
+  }
+
+  const userId = effectiveUserId(req);
+  const text = `${req.body?.text || ''}`.trim();
+  const voiceId = `${req.body?.voice_id || ''}`.trim();
+  const language = `${req.body?.language || 'ru'}`.trim();
+  const messageId = req.body?.message_id as number | undefined;
+
+  if (!text) return res.status(400).json({ error: 'text_required' });
+  if (!voiceId) return res.status(400).json({ error: 'voice_id_required' });
+
+  // If message_id provided, verify ownership
+  if (messageId) {
+    const ownerId = getChatMessageOwner(messageId);
+    if (ownerId !== userId) {
+      return res.status(403).json({ error: 'access_denied' });
+    }
+  }
+
+  try {
+    const result = await generateTtsAudio(text, voiceId, language);
+    const saved = await saveTtsAudio(result.audioBuffer, '.mp3');
+
+    // Bind audio to message if requested
+    if (messageId) {
+      updateChatMessageAudio(userId, messageId, {
+        url: saved.url,
+        tts_type: 'cartesia',
+        voice_id: voiceId,
+      });
+    }
+
+    return res.json({
+      audio_url: saved.url,
+      tts_type: 'cartesia',
+      voice_id: voiceId,
+    });
+  } catch (err: any) {
+    console.error('[tts/generate] error:', err.message);
+    return res.status(500).json({ error: 'tts_generation_error', message: err.message });
+  }
 });
 
 app.get('/api/v1/notes', (req: AuthedRequest, res) => {

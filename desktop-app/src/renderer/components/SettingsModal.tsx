@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { PromptSelector } from './PromptSelector';
-import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel } from '../lib/tts';
+import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchCartesiaVoiceList } from '../lib/tts';
 import type { TtsSettings } from '../lib/tts';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
@@ -86,9 +86,10 @@ export function SettingsModal({ onClose }: Props) {
   const [zoomInputValue, setZoomInputValue] = useState('100');
 
   // Voice / TTS
-  const [ttsModels] = useState(() => getTtsModels());
+  const [ttsModels, setTtsModels] = useState(() => getTtsModels());
   const [ttsSettings, setTtsSettingsState] = useState<TtsSettings>(() => getTtsSettings());
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [cartesiaLoading, setCartesiaLoading] = useState(false);
 
   const [coreMemory, setCoreMemory] = useState('');
   const [coreMemorySaving, setCoreMemorySaving] = useState(false);
@@ -266,6 +267,29 @@ export function SettingsModal({ onClose }: Props) {
   }, [ttsModels]);
 
   const handleModelChange = (modelId: string) => {
+    if (modelId === 'cartesia') {
+      // Load voices from server
+      setCartesiaLoading(true);
+      fetchCartesiaVoiceList('ru').then(() => {
+        setTtsModels(getTtsModels()); // refresh models with updated cartesia voices
+        const voices = getVoicesForModel('cartesia');
+        const newSettings: TtsSettings = {
+          modelId,
+          voiceId: voices.length > 0 ? voices[0].id : '',
+          volume: ttsSettings.volume,
+          sfxVolume: ttsSettings.sfxVolume,
+        };
+        setTtsSettingsState(newSettings);
+        setTtsSettings(newSettings);
+        setCartesiaLoading(false);
+      }).catch(() => {
+        setCartesiaLoading(false);
+        toast.error('Не удалось загрузить голоса Cartesia');
+      });
+      setPreviewPlaying(false);
+      return;
+    }
+
     const voices = getVoicesForModel(modelId);
     const newSettings: TtsSettings = {
       modelId,
@@ -471,14 +495,18 @@ export function SettingsModal({ onClose }: Props) {
                 <label className={s.fieldLabel}>Голос</label>
                 <div className={s.voiceRow}>
                   <div className={s.voiceSelect}>
-                    <Select
-                      options={voiceOptions}
-                      value={ttsSettings.voiceId}
-                      onChange={handleVoiceChange}
-                      placeholder="Выберите голос..."
-                      searchable
-                      maxVisibleItems={6}
-                    />
+                    {cartesiaLoading ? (
+                      <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>Загрузка голосов...</div>
+                    ) : (
+                      <Select
+                        options={voiceOptions}
+                        value={ttsSettings.voiceId}
+                        onChange={handleVoiceChange}
+                        placeholder="Выберите голос..."
+                        searchable
+                        maxVisibleItems={6}
+                      />
+                    )}
                   </div>
                   <button
                     className={`${s.previewBtn} ${previewPlaying ? s.previewBtnPlaying : ''}`}
