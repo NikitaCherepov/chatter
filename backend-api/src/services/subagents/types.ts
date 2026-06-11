@@ -39,6 +39,8 @@ export interface SubagentContext {
   onToolStatus?: (text: string) => Promise<void> | void;
   /** User's preferred model (from manual model selection), passed through from the main agent. */
   manualModel?: any;
+  /** Extra context data passed from the main agent when invoking the subagent (e.g. server_id, api_token, port). */
+  subagentContext?: Record<string, any>;
 }
 
 /** Result returned from a finished subagent run. */

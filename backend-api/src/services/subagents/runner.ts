@@ -216,8 +216,10 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         // Execute own tool handler directly
         try {
           const parsedArgs = JSON.parse(argsRaw);
+          // Inject subagent context (server_id, api_token, port, etc.) into ctx
+          const ctxForTool = { ...ctx, subagentContext: context };
           toolContent = await _withAbort(
-            ownTool.handler(parsedArgs, ctx),
+            ownTool.handler(parsedArgs, ctxForTool),
             ctx.signal,
           );
         } catch (err: any) {
