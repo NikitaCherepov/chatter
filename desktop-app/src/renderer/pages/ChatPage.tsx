@@ -1174,7 +1174,12 @@ export function ChatPage() {
                     <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}</span>
                     <button
                       className={`${s.playBtn} ${ttsPlayingId === msg.id ? s.playBtnPlaying : ''}`}
-                      onClick={(e) => { e.stopPropagation(); ttsSpeak(msg.id, msg.content, msg.audio); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        ttsSpeak(msg.id, msg.content, msg.audio, (id, audio) => {
+                          setMessages(prev => prev.map(m => m.id === id ? { ...m, audio } : m));
+                        });
+                      }}
                       title={ttsPlayingId === msg.id ? 'Остановить' : 'Озвучить'}
                     >
                       {ttsPlayingId === msg.id ? (

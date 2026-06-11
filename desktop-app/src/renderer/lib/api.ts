@@ -737,6 +737,10 @@ export async function fetchTtsVoices(language: string = 'ru'): Promise<{ voices:
   return apiFetch(`/api/v1/tts/voices?language=${encodeURIComponent(language)}`);
 }
 
+export async function fetchTtsVoicePreview(voiceId: string, language: string = 'ru'): Promise<{ audio_url: string }> {
+  return apiFetch(`/api/v1/tts/preview?voice_id=${encodeURIComponent(voiceId)}&language=${encodeURIComponent(language)}`);
+}
+
 export type TtsGenerateResponse = {
   audio_url: string;
   tts_type: string;

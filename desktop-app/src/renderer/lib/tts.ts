@@ -247,7 +247,8 @@ async function piperSpeak(messageId: number, text: string): Promise<void> {
 async function cartesiaSpeak(
   messageId: number,
   text: string,
-  existingAudio?: MessageAudio | null,
+  existingAudio: MessageAudio | null | undefined,
+  onAudioGenerated?: (messageId: number, audio: MessageAudio) => void,
 ): Promise<void> {
   await audioManager.stopWithFade(150);
 
@@ -259,6 +260,7 @@ async function cartesiaSpeak(
 
   try {
     let audioBuffer: ArrayBuffer;
+    let generatedAudio: MessageAudio | null = null;
 
     if (existingAudio?.url) {
       // Audio already generated — just download and play
@@ -267,6 +269,9 @@ async function cartesiaSpeak(
       // Generate new audio via backend
       const result = await generateTts(text, settings.voiceId, 'ru', messageId);
       if (ticket !== generationTicket) return;
+
+      generatedAudio = { url: result.audio_url, tts_type: result.tts_type, voice_id: result.voice_id };
+      onAudioGenerated?.(messageId, generatedAudio);
 
       audioBuffer = await fetchAudioBuffer(result.audio_url);
     }
@@ -290,7 +295,12 @@ async function cartesiaSpeak(
 
 // ── Core speak ─────────────────────────────────────────────────────────
 
-export function ttsSpeak(messageId: number, rawText: string, audio?: MessageAudio | null): void {
+export function ttsSpeak(
+  messageId: number,
+  rawText: string,
+  audio?: MessageAudio | null,
+  onAudioGenerated?: (messageId: number, audio: MessageAudio) => void,
+): void {
   if (playingId === messageId) {
     ttsStop();
     return;
@@ -309,7 +319,7 @@ export function ttsSpeak(messageId: number, rawText: string, audio?: MessageAudi
 
   if (settings.modelId === 'cartesia') {
     // Cartesia is async — fire and forget
-    cartesiaSpeak(messageId, text, audio);
+    cartesiaSpeak(messageId, text, audio, onAudioGenerated);
     return;
   }
 
@@ -388,8 +398,8 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
 
   if (modelId === 'cartesia') {
     try {
-      const text = 'Привет, я Чаттер!';
-      const result = await generateTts(text, voiceId, 'ru');
+      const { fetchTtsVoicePreview } = await import('./api');
+      const result = await fetchTtsVoicePreview(voiceId, 'ru');
       const audioBuffer = await fetchAudioBuffer(result.audio_url);
       await audioManager.playBuffer(audioBuffer, volume);
       previewPlaying = false;

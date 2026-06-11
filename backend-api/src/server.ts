@@ -960,6 +960,37 @@ app.post('/api/v1/tts/generate', async (req: AuthedRequest, res) => {
   }
 });
 
+// Get or generate a voice preview sample (cached per voice_id in DB)
+app.get('/api/v1/tts/preview', async (req: AuthedRequest, res) => {
+  if (!isCartesiaConfigured()) {
+    return res.status(503).json({ error: 'tts_not_configured' });
+  }
+
+  const voiceId = `${req.query.voice_id || ''}`.trim();
+  const language = `${req.query.language || 'ru'}`.trim();
+  const PREVIEW_TEXT = 'Привет, я Чаттер!';
+
+  if (!voiceId) return res.status(400).json({ error: 'voice_id_required' });
+
+  // Check cache
+  const cached = db.prepare('SELECT audio_url FROM tts_voice_previews WHERE voice_id = ?').get(voiceId) as { audio_url: string } | undefined;
+  if (cached) {
+    return res.json({ audio_url: cached.audio_url });
+  }
+
+  // Generate and cache
+  try {
+    const result = await generateTtsAudio(PREVIEW_TEXT, voiceId, language);
+    const saved = await saveTtsAudio(result.audioBuffer, '.mp3');
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare('INSERT INTO tts_voice_previews (voice_id, audio_url, language, created_at) VALUES (?, ?, ?, ?)').run(voiceId, saved.url, language, now);
+    return res.json({ audio_url: saved.url });
+  } catch (err: any) {
+    console.error('[tts/preview] error:', err.message);
+    return res.status(500).json({ error: 'tts_preview_error', message: err.message });
+  }
+});
+
 app.get('/api/v1/notes', (req: AuthedRequest, res) => {
   const userId = effectiveUserId(req);
   const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);

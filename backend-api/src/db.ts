@@ -204,3 +204,14 @@ db.exec(`
   )
 `);
 
+// ── TTS voice preview samples cache ──────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tts_voice_previews (
+    voice_id TEXT PRIMARY KEY,
+    audio_url TEXT NOT NULL,
+    language TEXT NOT NULL DEFAULT 'ru',
+    created_at INTEGER NOT NULL
+  )
+`);
+
