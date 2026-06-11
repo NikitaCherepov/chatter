@@ -9,6 +9,8 @@ import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './se
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
+import { initSubagentRunner } from './services/subagents/runner.js';
+import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey, listPublicRunbooks, getPublicRunbookById, createPublicRunbook, updatePublicRunbook, deletePublicRunbook } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
@@ -2585,6 +2587,7 @@ const server = app.listen(PORT, () => {
     console.log('[backend-vector-memory] disabled (BACKEND_VECTOR_MEMORY_API_ENABLED != 1)');
   }
   startTaskScheduler();
+  initSubagentRunner({ runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions });
 });
 
 // Increase timeout for long-running AI requests (tool loops, streaming)

@@ -16,6 +16,7 @@ import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.
 import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
+import { listSubagentNames, buildSubagentListDescription } from './subagents/registry.js';
 
 dotenv.config();
 
@@ -227,7 +228,7 @@ const createAbortError = () => new DOMException('The user aborted a request.', '
 const isAbortError = (err: any) =>
   err?.name === 'AbortError' || err?.code === 'ABORT_ERR' || `${err?.message || ''}` === 'AbortError';
 
-const throwIfAborted = (signal?: AbortSignal) => {
+export const throwIfAborted = (signal?: AbortSignal) => {
   if (signal?.aborted) throw createAbortError();
 };
 
@@ -244,7 +245,7 @@ const abortableSleep = (ms: number, signal?: AbortSignal) => new Promise<void>((
   signal?.addEventListener('abort', onAbort, { once: true });
 });
 
-const withAbort = async <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
+export const withAbort = async <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
   throwIfAborted(signal);
   if (!signal) return promise;
 
@@ -1761,12 +1762,50 @@ const ESCALATE_TO_PRO_TOOL = {
   }
 } as const;
 
+const buildInvokeSubagentTool = () => {
+  const names = listSubagentNames();
+  if (names.length === 0) return null; // no subagents configured
+
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'invoke_subagent',
+      description:
+        'Передай задачу специализированному агенту (субагенту). Субагент имеет свой промпт, ' +
+        'набор инструментов и ограничения. Используй для узкоспециализированных задач, ' +
+        'где нужна экспертиза конкретного агента.\n\n' +
+        'ВАЖНО: Сначала выполни общие задачи сам (установка ПО, создание юзеров, настройка сервера), ' +
+        'затем вызови субагента для специфичной части.\n\n' +
+        'Доступные субагенты:\n' + buildSubagentListDescription(),
+      parameters: {
+        type: 'object',
+        properties: {
+          agent: {
+            type: 'string',
+            description: 'Имя субагента',
+            enum: names,
+          },
+          task: {
+            type: 'string',
+            description: 'Чёткое описание задачи для субагента',
+          },
+          context: {
+            type: 'object',
+            description: 'Дополнительные данные для субагента (JSON-объект с контекстом)',
+          },
+        },
+        required: ['agent', 'task'],
+      },
+    },
+  };
+};
+
 const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const allowed = new Set(allowedToolNames);
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
-const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal): Promise<CompletionMeta & { manualFallback?: boolean }> => {
+export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal): Promise<CompletionMeta & { manualFallback?: boolean }> => {
   // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
   if (manualModel) {
     try {
@@ -1862,7 +1901,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -2931,6 +2970,46 @@ const runTool = async (user: UserRecord, timezoneOffset: number, toolName: strin
     return parts.join('\n');
   }
 
+  // --- invoke_subagent (desktop-only, delegates to a specialized subagent) ---
+  if (toolName === 'invoke_subagent') {
+    const agentName: string = typeof parsed.agent === 'string' ? parsed.agent.trim() : '';
+    const task: string = typeof parsed.task === 'string' ? parsed.task.trim() : '';
+    const contextData = parsed.context ?? undefined;
+
+    if (!agentName) return JSON.stringify({ status: 'error', message: 'agent (имя субагента) обязательно' });
+    if (!task) return JSON.stringify({ status: 'error', message: 'task (описание задачи) обязательно' });
+
+    try {
+      const { runSubagent } = await import('./subagents/runner.js');
+      const result = await runSubagent({
+        agentName,
+        task,
+        context: contextData,
+        ctx: {
+          userId: user.id,
+          isDesktop: !!desktopActionSink, // if desktopActionSink is present → desktop context
+          timezoneOffset,
+          signal,
+          desktopActionSink: desktopActionSink || undefined,
+          onDesktopAction: undefined, // will be dispatched by the main agent loop after runTool returns
+        },
+      });
+
+      return JSON.stringify({
+        status: 'success',
+        answer: result.answer,
+        summary: result.summary,
+        tools_used: result.toolCallsHistory.map(t => t.tool),
+      });
+    } catch (err: any) {
+      console.warn('[ai] invoke_subagent error:', err?.message || err);
+      return JSON.stringify({
+        status: 'error',
+        message: `Ошибка субагента ${agentName}: ${err?.message || String(err)}`,
+      });
+    }
+  }
+
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
@@ -2971,6 +3050,13 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'change_server_user_password') return 'Запрашиваю смену пароля пользователя...';
   if (toolName === 'suggest_server_creds_update') return 'Предлагаю обновить учётные данные...';
   if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
+  if (toolName === 'invoke_subagent') {
+    try {
+      const parsed = JSON.parse(argsRaw || '{}');
+      const agent = parsed.agent || '';
+      return `Вызываю субагента "${agent}"...`;
+    } catch { return 'Вызываю субагента...'; }
+  }
   if (toolName === 'desktop_action') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
@@ -3080,7 +3166,8 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildExecutePcCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildExecutePcCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(subagentTool ? [subagentTool] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
