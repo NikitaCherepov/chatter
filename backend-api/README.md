@@ -37,6 +37,8 @@ npm run logs:api
 - `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1.5` для proxyapi, `x-ai/grok-imagine-image-quality` для openrouter).
 - `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`, только proxyapi).
 - `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`, только proxyapi).
+- `CARTESIA_API_KEY` — API-ключ Cartesia.ai (обязательно для облачной озвучки, формат `sk_car_...`).
+- `CARTESIA_MODEL_ID` — модель TTS Cartesia (по умолчанию `sonic-3.5`).
 
 ### Генерация изображений
 
@@ -63,6 +65,33 @@ Authorization: Bearer {OPENROUTER_API_KEY}
 ```
 
 Для добавления нового провайдера — создать функцию `generateXxx()` и добавить case в switch `runImageGeneration`.
+
+### TTS Cartesia (облачная озвучка)
+
+Облачная озвучка через Cartesia.ai. API-ключ живёт только на сервере — клиенты никогда его не видят.
+
+**Эндпоинты:**
+
+| Эндпоинт | Метод | Описание |
+|---|---|---|
+| `/api/v1/tts/voices` | GET | Список голосов (en, ru, de, fr) для селектора |
+| `/api/v1/tts/generate` | POST | Генерация аудио + привязка к сообщению |
+| `/api/v1/tts/preview` | GET | Превью голоса (кешируется в `tts_voice_previews`) |
+| `/api/v1/audio/:filename` | GET | Отдача аудиофайла (owner-only) |
+
+**Ключевые файлы:**
+- `services/tts-cartesia.ts` — прокси к Cartesia API (генерация + список голосов)
+- `services/audio-storage.ts` — сохранение MP3 в `uploads/audio/`
+- `tts_voice_previews` (таблица) — кеш превью-фраз по `voice_id`
+
+**Поток данных при озвучке сообщения:**
+```text
+POST /tts/generate { text, voice_id, message_id }
+  → Cartesia API: POST /tts/bytes (MP3)
+  → saveTtsAudio() → uploads/audio/abc123.mp3
+  → updateChatMessageAudio() → chat_messages.audio = { url, tts_type, voice_id }
+  → повторный play → GET /api/v1/audio/abc123.mp3 (без повторной генерации)
+```
 
 ### AI-провайдеры (основные)
 

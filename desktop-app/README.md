@@ -62,25 +62,31 @@ Main process парсит эти строки и отправляет событ
 
 ## TTS (Text-to-Speech)
 
-Озвучка сообщений бота — две модели, единый стейт, плавные переходы.
+Озвучка сообщений бота — три модели, единый стейт, плавные переходы.
 
 ### Модели
 
 | Модель | Движок | Голоса |
 |---|---|---|
 | **Piper** (по умолчанию) | Локальный `piper.exe` через IPC → WAV → Web Audio API | `ruslan` (ru), расширяемо |
-| **Встроенный (Chromium)** | `window.speechSynthesis` — системные голосы Windows | Все голоса ОС |
+| **Встроенный (Chromium)** | `window.speechSynthesis` — системные голоса Windows | Все голоса ОС |
+| **Cartesia (облачная)** | Backend-прокси → Cartesia.ai API → MP3 → Web Audio API | Голоса en/ru/de/fr, подгружаются с сервера |
 
 ### Архитектура
 
 ```
-Renderer (tts.ts)          Main (main.ts)          FileSystem
-─────────────────          ──────────────          ──────────
-ttsSpeak(msgId, text)
+Renderer (tts.ts)          Main (main.ts)          FileSystem / Server
+─────────────────          ──────────────          ────────────────────
+ttsSpeak(msgId, text, audio)
   │
   ├─ Piper? ──► IPC tts:generate ──► spawn piper.exe ──► models/piper-voices/*/
   │              (text)              -m model.onnx -f out.wav
   │                                  ◄── WAV buffer ──── temp file
+  │
+  ├─ Cartesia? ► audio.url есть? ──► GET /api/v1/audio/xxx.mp3 ──► playBuffer()
+  │              нет? ──► POST /api/v1/tts/generate ──► server → Cartesia API
+  │                      ◄── { audio_url } ──► GET /api/v1/audio/xxx.mp3 ──► playBuffer()
+  │                      (audio привязывается к сообщению, повторный play — без генерации)
   │
   ├─ Builtin? ► SpeechSynthesisUtterance (Chromium API, 0 IPC)
   │
@@ -140,7 +146,7 @@ src/
     └── lib/
         ├── api.ts         # API + WebSocket streaming (SSE fallback)
         ├── auth.tsx       # Auth context + WS lifecycle
-        ├── tts.ts         # TTS-сервис (Piper + Chromium SpeechSynthesis)
+        ├── tts.ts         # TTS-сервис (Piper + Chromium SpeechSynthesis + Cartesia)
         ├── audioManager.ts # Web Audio API плеер с fade-in/out
         └── tools.ts       # Tools panel state + desktop_action роутер
 ```
@@ -680,6 +686,6 @@ Minor подходит для всего, что живёт внутри `app.as
 
 Major нужен для всего, что лежит вне `app.asar`:
 - `extraResources` (`models`, `wakeword`, `.venv-wakeword`, `sounds`);
-- новые exe/dll/native/runtime-файлы;
+- новые exe/dll/native runtime-файлы;
 - изменения installer/electron-builder config;
 - обновление Electron или зависимостей, требующих новой unpacked/native структуры.
