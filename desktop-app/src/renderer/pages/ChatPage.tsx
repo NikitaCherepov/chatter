@@ -233,14 +233,17 @@ const MessageItem = React.memo(function MessageItem({
           )}
           {hasToolCalls && isToolCallsOpen && (
             <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
-              {msg.tool_calls!.map((tc, i) => (
-                <div key={tc.id || i} style={{ marginBottom: i < msg.tool_calls!.length - 1 ? '8px' : 0 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{tc.name}</div>
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
-                    {typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments, null, 2)}
-                  </pre>
-                </div>
-              ))}
+              <div className={s.toolCallList}>
+                {msg.tool_calls!.map((tc, i) => {
+                  const args = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments, null, 2);
+                  return (
+                    <div key={tc.id || i} className={s.toolCallItem}>
+                      <div className={s.toolCallName}>{tc.name}</div>
+                      <pre className={s.toolCallArgs}>{args || '{}'}</pre>
+                    </div>
+                  );
+                })}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

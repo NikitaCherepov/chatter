@@ -647,6 +647,37 @@
   transform-origin: top left;
 }
 
+.toolCallList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toolCallItem {
+  min-width: 0;
+}
+
+.toolCallName {
+  color: var(--text-body);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.toolCallArgs {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-bubble);
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .msgKebabBtn {
   position: absolute;
   top: 4px;
