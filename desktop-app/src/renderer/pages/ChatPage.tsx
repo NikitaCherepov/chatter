@@ -50,6 +50,7 @@ type MessageItemProps = {
   isLastAssistant: boolean;
   isTtsPlaying: boolean;
   isReasoningOpen: boolean;
+  isToolCallsOpen: boolean;
   isRegenHintOpen: boolean;
   sending: boolean;
   regenHintText: string;
@@ -58,6 +59,7 @@ type MessageItemProps = {
   onSetViewerImageSrc: (src: string) => void;
   onDownloadImage: (src: string) => void;
   onToggleReasoning: (messageId: number) => void;
+  onToggleToolCalls: (messageId: number) => void;
   onRegenerate: (messageId: number) => void;
   onOpenRegenHint: (messageId: number) => void;
   onCloseRegenHint: () => void;
@@ -71,6 +73,7 @@ const MessageItem = React.memo(function MessageItem({
   isLastAssistant,
   isTtsPlaying,
   isReasoningOpen,
+  isToolCallsOpen,
   isRegenHintOpen,
   sending,
   regenHintText,
@@ -79,6 +82,7 @@ const MessageItem = React.memo(function MessageItem({
   onSetViewerImageSrc,
   onDownloadImage,
   onToggleReasoning,
+  onToggleToolCalls,
   onRegenerate,
   onOpenRegenHint,
   onCloseRegenHint,
@@ -88,9 +92,10 @@ const MessageItem = React.memo(function MessageItem({
 }: MessageItemProps) {
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
+  const hasToolCalls = msg.role === 'assistant' && Boolean(msg.tool_calls?.length);
 
   return (
-    <div className={`${s.messageGroup} ${reasoningOpen ? s.messageGroupRaised : ''}`}>
+    <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen ? s.messageGroupRaised : ''}`}>
       <div className={s.metaRow}>
         <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatMessageTime(msg.created_at)}</span>
         <button
@@ -124,6 +129,21 @@ const MessageItem = React.memo(function MessageItem({
             title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
           >
             <span>Рассуждение</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+        {hasToolCalls && (
+          <button
+            className={`${s.reasoningToggle} ${isToolCallsOpen ? s.reasoningToggleOpen : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleToolCalls(msg.id);
+            }}
+            title={isToolCallsOpen ? 'Скрыть инструменты' : 'Показать инструменты'}
+          >
+            <span>{msg.tool_calls!.length} {msg.tool_calls!.length === 1 ? 'инструмент' : msg.tool_calls!.length < 5 ? 'инструмента' : 'инструментов'}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -209,6 +229,18 @@ const MessageItem = React.memo(function MessageItem({
           {hasReasoning && reasoningOpen && (
             <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <MarkdownRenderer content={msg.reasoning_content || ''} />
+            </motion.div>
+          )}
+          {hasToolCalls && isToolCallsOpen && (
+            <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+              {msg.tool_calls!.map((tc, i) => (
+                <div key={tc.id || i} style={{ marginBottom: i < msg.tool_calls!.length - 1 ? '8px' : 0 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{tc.name}</div>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
+                    {typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments, null, 2)}
+                  </pre>
+                </div>
+              ))}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1346,6 +1378,10 @@ export function ChatPage() {
     setOpenReasoningId((current) => current === messageId ? null : messageId);
   }, []);
 
+  const handleToggleToolCalls = useCallback((messageId: number) => {
+    setOpenToolCallsId((current) => current === messageId ? null : messageId);
+  }, []);
+
   const handleOpenRegenHint = useCallback((messageId: number) => {
     setRegenHintMsgId(messageId);
     setRegenHintText('');
@@ -1659,6 +1695,7 @@ export function ChatPage() {
                   isLastAssistant={msg.id === lastAssistantId}
                   isTtsPlaying={ttsPlayingId === msg.id}
                   isReasoningOpen={openReasoningId === msg.id}
+                  isToolCallsOpen={openToolCallsId === msg.id}
                   isRegenHintOpen={regenHintMsgId === msg.id}
                   sending={sending}
                   regenHintText={regenHintText}
@@ -1667,6 +1704,7 @@ export function ChatPage() {
                   onSetViewerImageSrc={setViewerImageSrc}
                   onDownloadImage={handleDownloadImage}
                   onToggleReasoning={handleToggleReasoning}
+                  onToggleToolCalls={handleToggleToolCalls}
                   onRegenerate={handleRegenerate}
                   onOpenRegenHint={handleOpenRegenHint}
                   onCloseRegenHint={handleCloseRegenHint}

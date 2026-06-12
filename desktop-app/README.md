@@ -475,6 +475,47 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 
 Добавить `disabledToolSet.add('tool_name')` в соответствующий блок флага в `ai.ts` (секция `Feature flags → disabled tools`). Фильтрация сработает автоматически.
 
+## ChatPage Messages
+
+Основная лента чата живет в `pages/ChatPage.tsx`.
+
+### Оптимизация ленты
+
+- Сообщения рендерятся через memoized `MessageItem` (`React.memo`), чтобы изменение input, TTS, popover-состояний или WS-событий не перерисовывало всю историю.
+- Активные состояния передаются в `MessageItem` как booleans (`isTtsPlaying`, `isReasoningOpen`, `isToolCallsOpen`, `isRegenHintOpen`), а не как глобальные id. Так при переключении TTS/reasoning/tool calls изменяются только затронутые сообщения.
+- Начальная загрузка истории берет последние `MESSAGE_PAGE_SIZE = 50` сообщений.
+- Старые сообщения подгружаются кнопкой "Загрузить старые сообщения" через `GET /api/v1/chats/:id/messages?limit=&offset=`.
+- При prepend старых сообщений ChatPage сохраняет `scrollHeight`/`scrollTop` и восстанавливает позицию через `useLayoutEffect`, чтобы экран не прыгал вниз.
+- Автоскролл вниз пропускается, если идет prepend старых сообщений.
+
+### Reasoning и tool calls
+
+Assistant-сообщения могут иметь дополнительные поля:
+
+- `reasoning_content?: string | null`
+- `tool_calls?: Array<{ id?: string; name: string; arguments: unknown }>`
+
+UI:
+
+- Кнопка `Рассуждение` появляется только если `reasoning_content` непустой.
+- Кнопка инструментов появляется только если `tool_calls.length > 0`.
+- Оба блока открываются как absolute popover поверх ширины сообщения (`reasoningPanel`) и не раздвигают ленту.
+- Анимация popover сделана через `AnimatePresence` + `motion.div`, направление раскрытия — сверху вниз (`y: -16 -> 0`).
+
+### Regeneration
+
+В ChatPage есть обычная перегенерация последнего assistant-сообщения и перегенерация с hint.
+
+Поток:
+
+1. Клиент находит последнее user-сообщение перед assistant-сообщением.
+2. Старое assistant-сообщение оптимистично удаляется из UI и удаляется на backend через `DELETE /api/v1/chats/:id/messages/:messageId`.
+3. `streamChatMessage()` отправляет тот же user text, `skip_user_history: true` и `regenerate_from_history: true`.
+4. Для hint дополнительно отправляется `regenerate_hint`.
+5. Backend не сохраняет новый user message и не дублирует user text в AI-history; он использует последнее user-сообщение из истории как текущий запрос один раз.
+
+WS это не ломает: `streamChatMessage()` по-прежнему получает `intermediate`, `tool_status`, `display_state`, `desktop_action`, `map_update`, `done`, `error`; memoized rendering влияет только на React-перерисовки.
+
 ## WebSocket Transport
 
 Desktop-клиент использует **WebSocket** для двунаправленного обмена с сервером. Реализация в `lib/api.ts`.
@@ -499,7 +540,7 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | `display_state` | Изменение состояния аватара |
 | `desktop_action` | Команда управления UI / макрос |
 | `map_update` | Данные карты |
-| `done` | Финальный ответ |
+| `done` | Финальный ответ: `reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?`, `display_state?` |
 | `error` | Ошибка |
 | `execute_ipc` | Запрос сервера выполнить IPC и вернуть результат |
 | `pong` | Ответ на ping |

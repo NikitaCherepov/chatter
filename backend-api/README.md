@@ -201,7 +201,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - Вывод: `{ messages, limit, offset }`
 - `POST /api/v1/chat/send`
   - Ввод: `{ text, chat_id? }`
-  - Вывод: AI-ответ (`reply`, ids и метрики в зависимости от сервиса AI)
+  - Вывод: AI-ответ (`reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?` и метрики в зависимости от сервиса AI)
 - `GET /api/v1/notes?query=&limit=&offset=`
   - Ввод: query
   - Вывод: `{ notes, total, limit, offset }`
@@ -368,7 +368,7 @@ services/subagents/
 
 - Все эндпоинты ниже требуют `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
 - AI:
-  - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options? }` -> `{ reply_text, chat_id, message_id, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
+  - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options? }` -> `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
   - `POST /internal/ai/admin-outreach` -> `{ target_user_id, admin_instruction }`
   - `POST /internal/ai/generate-image` -> `{ user_id, prompt }` -> `{ ok: true, image_base64, prompt_used }` (требует `PROXYAPI_KEY`)
   - `POST /internal/messages/bind-telegram` -> `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
@@ -435,6 +435,22 @@ services/subagents/
 Инструменты доступны AI через tool calling. Определены в `services/ai.ts` в `toolDefinitions`.
 
 Агентский цикл ограничен константами в `services/ai.ts`: `MAX_TOOL_LOOPS = 25`, `MAX_TOOL_LOOPS_VOICE = 10`. Это лимит итераций "модель → tool calls → модель", а не строгий лимит количества отдельных tool calls: за одну итерацию модель может вернуть несколько вызовов инструментов.
+
+### Reasoning и tool-call metadata
+
+`sendMessageThroughAi()` сохраняет дополнительную метаинформацию assistant-ответа для desktop UI:
+
+- `reasoning_content` — человекочитаемое reasoning/thinking, если провайдер его вернул. Извлекается из `message.reasoning_content` (DeepSeek/vLLM), `message.reasoning` (OpenRouter/vLLM), Anthropic-style `content[]` blocks с `type: "thinking"`, а также из `response.output[]` items с `type: "reasoning"` для Responses-like формата.
+- `tool_calls` — список вызванных инструментов `{ id, name, arguments }`, собранный из `message.tool_calls` на шагах агентского цикла.
+- Оба поля возвращаются в `AiSendResult` / `ChatSendResponse`, уходят в WS/SSE `done` и сохраняются в `chat_messages`.
+- `getHistoryForAi()` выбирает только `role, content`, поэтому `reasoning_content` и `tool_calls_json` не попадают обратно в AI-контекст.
+
+БД:
+
+- `chat_messages.reasoning_content TEXT` — склеенный reasoning по шагам ответа.
+- `chat_messages.tool_calls_json TEXT` — JSON-массив tool calls для истории desktop-клиента.
+
+Desktop показывает эти поля как раскрывающиеся popover-кнопки у assistant-сообщения. Если reasoning или tool calls отсутствуют, соответствующая кнопка не отображается.
 
 | Инструмент | Описание |
 |---|---|
@@ -731,6 +747,21 @@ AI: execute_ssh_command(server_id, command)
 - Формат ответа: `USD (Доллар США): 89.5000 RUB (-0.5000)`
 
 ## Changelog
+
+### 2026-06-13: Reasoning, Tool Calls & Regeneration Metadata
+
+**Reasoning:**
+- Backend извлекает reasoning/thinking из совместимых OpenAI-like ответов: `reasoning_content`, `reasoning`, Anthropic-style thinking blocks и Responses-like `output[].type="reasoning"`.
+- Reasoning сохраняется в `chat_messages.reasoning_content`, возвращается в `done`/JSON и показывается только в UI. В AI-history оно не отправляется.
+
+**Tool calls:**
+- Агентский цикл собирает вызовы инструментов из `message.tool_calls` в `tool_calls: [{ id, name, arguments }]`.
+- Tool-call список сохраняется в `chat_messages.tool_calls_json`, возвращается клиенту и отображается в desktop UI.
+
+**Regeneration:**
+- Desktop может отправлять `regenerate_from_history: true` вместе с `skip_user_history`.
+- Backend удаляет из рабочей истории хвостовые assistant-сообщения, вынимает последнее user-сообщение и добавляет его обратно ровно один раз как текущий user request.
+- `regenerate_hint` дописывается в текущий user request и не сохраняется как новое пользовательское сообщение.
 
 ### 2025-05-03: Image Storage & Persistence
 
