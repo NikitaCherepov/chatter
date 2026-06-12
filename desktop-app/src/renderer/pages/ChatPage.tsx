@@ -88,6 +88,7 @@ export function ChatPage() {
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
   const [regenHintMsgId, setRegenHintMsgId] = useState<number | null>(null);
   const [regenHintText, setRegenHintText] = useState('');
+  const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
 
   // Subscribe to TTS state
   useEffect(() => {
@@ -349,6 +350,7 @@ export function ChatPage() {
                   ...m,
                   id: res.message_id,
                   ...(res.reply_text ? { content: res.reply_text } : {}),
+                  reasoning_content: res.reasoning_content ?? null,
                   ...(genImages ? { images: genImages } : {})
                 };
               }
@@ -366,6 +368,7 @@ export function ChatPage() {
                 : prev;
               return [...updated, {
                 id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+                reasoning_content: res.reasoning_content ?? null,
                 images: genImages,
               }];
             });
@@ -713,12 +716,13 @@ export function ChatPage() {
           if (assistantMsgCreated) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), ...(genImages ? { images: genImages } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, ...(genImages ? { images: genImages } : {}) }
                 : m
             ));
           } else {
             setMessages((prev) => [...prev, {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+              reasoning_content: res.reasoning_content ?? null,
               images: genImages,
             }]);
           }
@@ -821,12 +825,13 @@ export function ChatPage() {
           if (assistantMsgCreated) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), ...(genImages ? { images: genImages } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, ...(genImages ? { images: genImages } : {}) }
                 : m
             ));
           } else {
             setMessages((prev) => [...prev, {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+              reasoning_content: res.reasoning_content ?? null,
               images: genImages,
             }]);
           }
@@ -1423,6 +1428,21 @@ export function ChatPage() {
                         </svg>
                       )}
                     </button>
+                    {msg.role === 'assistant' && msg.reasoning_content?.trim() && (
+                      <button
+                        className={`${s.reasoningToggle} ${openReasoningId === msg.id ? s.reasoningToggleOpen : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenReasoningId((current) => current === msg.id ? null : msg.id);
+                        }}
+                        title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+                      >
+                        <span>Рассуждение</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    )}
                     {msg.id === lastAssistantId && (
                       <>
                         <button
@@ -1527,6 +1547,11 @@ export function ChatPage() {
                         : <div className={s.bubbleTextPlain}>{msg.content}</div>
                       }
                     </div>
+                    {msg.role === 'assistant' && msg.reasoning_content?.trim() && openReasoningId === msg.id && (
+                      <div className={s.reasoningPanel}>
+                        <MarkdownRenderer content={msg.reasoning_content} />
+                      </div>
+                    )}
                     <button
                       className={s.msgKebabBtn}
                       onClick={(e) => handleMsgKebabClick(e, msg.id)}

@@ -153,6 +153,7 @@ export type Message = {
   id: number;
   role: 'user' | 'assistant';
   content: string;
+  reasoning_content?: string | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   created_at: number;
@@ -235,6 +236,7 @@ export type GeneratedImage = {
 
 export type ChatSendResponse = {
   reply_text: string;
+  reasoning_content?: string | null;
   message_id: number;
   user_message_id?: number;
   chat_id: number;

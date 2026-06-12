@@ -481,6 +481,35 @@ const buildTimeContext = (timezoneOffset: number) => {
 const isLitePlan = (plan: UserPlan) => plan === 'free' || plan === 'standart';
 const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;
 
+const extractReasoning = (message: any, response?: any): string | null => {
+  if (!message) return null;
+  // DeepSeek native / vLLM style
+  if (typeof message.reasoning_content === 'string' && message.reasoning_content.trim()) return message.reasoning_content;
+  // OpenRouter normalized / vLLM
+  if (typeof message.reasoning === 'string' && message.reasoning.trim()) return message.reasoning;
+  // Anthropic-style content blocks (if proxied into message.content array)
+  if (Array.isArray(message.content)) {
+    const thinking = message.content
+      .filter((p: any) => p?.type === 'thinking' && typeof p.thinking === 'string')
+      .map((p: any) => p.thinking)
+      .join('\n\n');
+    if (thinking.trim()) return thinking;
+  }
+  // OpenAI Responses API shape, if proxied into the raw response.
+  if (Array.isArray(response?.output)) {
+    const reasoning = response.output
+      .filter((item: any) => item?.type === 'reasoning')
+      .map((item: any) => {
+        if (typeof item.summary === 'string') return item.summary;
+        if (Array.isArray(item.summary)) return item.summary.map((s: any) => s?.text ?? '').join('\n');
+        return '';
+      })
+      .join('\n\n');
+    if (reasoning.trim()) return reasoning;
+  }
+  return null;
+};
+
 const normalizeDailyMessageLimit = (value: number | null | undefined) => {
   if (!Number.isFinite(Number(value))) return 0;
   return Math.max(0, Math.floor(Number(value)));
@@ -3408,6 +3437,7 @@ PRO
   // Буферы для корректной сборки ответа агентского цикла
   let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
   let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
+  const reasoningParts: string[] = [];
 
   while (loop < effectiveMaxLoops) {
     loop += 1;
@@ -3469,6 +3499,8 @@ PRO
     const response = completion.response;
     totalTokens += extractTokens(response);
     const message = response?.choices?.[0]?.message || {};
+    const stepReasoning = extractReasoning(message, response);
+    if (stepReasoning) reasoningParts.push(stepReasoning);
     currentMessages.push(message);
 
     // --- УМНАЯ ОБРАБОТКА ТЕКСТА ---
@@ -3656,6 +3688,8 @@ if (abortController.signal.aborted) {
       }, manualModel, abortController.signal);
       const finalMessage = finalCompletion.response?.choices?.[0]?.message;
       if (finalMessage) {
+        const finalReasoning = extractReasoning(finalMessage, finalCompletion.response);
+        if (finalReasoning) reasoningParts.push(finalReasoning);
         currentMessages.push(finalMessage);
         const finalText = `${finalMessage.content || ''}`.trim();
         if (finalText) {
@@ -3690,13 +3724,14 @@ if (abortController.signal.aborted) {
     : null;
   // Сохраняем в БД полную историю, даже если она ушла через коллбэк
   const textToSave = fullDbHistory || answer;
+  const reasoningContent = reasoningParts.length > 0 ? reasoningParts.join('\n\n').trim() : null;
   // Collect generated image URLs for assistant message
   const assistantMessageImages = generatedImages.length > 0
     ? generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const }))
     : null;
   const assistantMessageId = options?.skipHistory
     ? 0
-    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages);
+    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent);
 
   const safeTokens = Math.max(0, Math.floor(totalTokens));
   const costRub = toRubFromTokens(safeTokens);
@@ -3743,6 +3778,7 @@ if (abortController.signal.aborted) {
 
   return {
     reply_text: answer,
+    reasoning_content: reasoningContent,
     chat_id: chatId,
     message_id: assistantMessageId,
     user_message_id: userMessageId,

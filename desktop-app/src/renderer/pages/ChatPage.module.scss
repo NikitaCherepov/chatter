@@ -486,6 +486,40 @@
   }
 }
 
+.reasoningToggle {
+  min-height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.1s, background-color 0.1s;
+
+  &:hover {
+    color: var(--accent-icon);
+    background-color: var(--bg-modal-hover);
+  }
+
+  svg {
+    transition: transform 0.15s;
+  }
+}
+
+.reasoningToggleOpen {
+  color: var(--accent-icon);
+
+  svg {
+    transform: rotate(180deg);
+  }
+}
+
 .regenHintOverlay {
   position: fixed;
   inset: 0;
@@ -563,6 +597,20 @@
   border: 1px solid var(--border-medium);
   border-radius: 8px;
   padding: 14px 18px;
+}
+
+.reasoningPanel {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 260px;
+  overflow: auto;
+  word-break: break-word;
 }
 
 .msgKebabBtn {

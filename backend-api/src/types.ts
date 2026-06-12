@@ -62,6 +62,7 @@ export type MessageDto = {
   chat_id: number;
   role: ChatRole;
   content: string;
+  reasoning_content?: string | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   telegram_chat_id?: number | null;
@@ -104,6 +105,7 @@ export type GeneratedImage = {
 
 export type AiSendResult = {
   reply_text: string;
+  reasoning_content?: string | null;
   chat_id: number;
   message_id: number;
   user_message_id?: number;

@@ -146,12 +146,12 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, images, audio, telegram_chat_id, telegram_message_id, created_at
+    SELECT id, chat_id, role, content, reasoning_content, images, audio, telegram_chat_id, telegram_message_id, created_at
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -167,6 +167,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       chat_id: row.chat_id,
       role: row.role,
       content: row.content,
+      reasoning_content: row.reasoning_content,
       images: parsedImages,
       audio: parsedAudio,
       telegram_chat_id: row.telegram_chat_id,
@@ -183,13 +184,15 @@ export const appendChatMessage = (
   content: string,
   telegramChatId: number | null = null,
   telegramMessageId: number | null = null,
-  images: MessageImage[] | null = null
+  images: MessageImage[] | null = null,
+  reasoningContent: string | null = null
 ) => {
   const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
+  const reasoning = role === 'assistant' && reasoningContent?.trim() ? reasoningContent.trim() : null;
   const inserted = db.prepare(`
-    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson);
+    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning);
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return Number(inserted.lastInsertRowid);
 };
