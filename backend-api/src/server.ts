@@ -883,6 +883,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       activeMacros: enabledMacros,
       preferredModel: req.body?.preferred_model || undefined,
       regenerateHint: req.body?.regenerate_hint || undefined,
+      regenerateFromHistory: Boolean(req.body?.regenerate_from_history),
       skipUserHistory: Boolean(req.body?.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
@@ -2866,7 +2867,7 @@ wss.on('connection', (ws, req) => {
 // ── WS chat_send handler ────────────────────────────────────────────────────
 
 async function handleWsChatSend(client: WsClient, msg: any) {
-  const { text, chat_id, images, display_manifest, is_voice, preferred_model, regenerate_hint } = msg;
+  const { text, chat_id, images, display_manifest, is_voice, preferred_model, regenerate_hint, regenerate_from_history } = msg;
   if (!text?.trim()) {
     client.ws.send(JSON.stringify({ type: 'error', error: 'empty_text' }));
     return;
@@ -2924,6 +2925,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       activeMacros: enabledMacros,
       preferredModel: preferred_model || undefined,
       regenerateHint: regenerate_hint || undefined,
+      regenerateFromHistory: Boolean(regenerate_from_history),
       skipUserHistory: Boolean(msg.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),

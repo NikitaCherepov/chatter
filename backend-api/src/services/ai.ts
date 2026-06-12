@@ -3147,6 +3147,7 @@ export const sendMessageThroughAi = async (
       disable_subagents?: boolean;
     } | null;
     regenerateHint?: string;
+    regenerateFromHistory?: boolean;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -3155,6 +3156,7 @@ export const sendMessageThroughAi = async (
 
   const images = options?.images?.filter(img => img.base64) ?? [];
   const hasImages = images.length > 0;
+  const requestedRegenerateFromHistory = Boolean(options?.regenerateFromHistory);
   let text = (inputText || '').trim();
   if (!text && !hasImages) throw new Error('empty_text');
   if (!text) text = hasImages ? (images.length === 1 ? 'Что на этой картинке?' : `Что на этих ${images.length} картинках?`) : '';
@@ -3191,7 +3193,18 @@ export const sendMessageThroughAi = async (
   try {
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
   const contextWindow = resolveEffectiveContextWindow(user);
-  const history = getHistoryForAi(userId, chatId, contextWindow);
+  let history = getHistoryForAi(userId, chatId, contextWindow);
+  let regenerateUserText: string | null = null;
+  if (requestedRegenerateFromHistory) {
+    history = [...history];
+    while (history.length > 0 && history[history.length - 1]?.role === 'assistant') {
+      history.pop();
+    }
+    if (history[history.length - 1]?.role === 'user') {
+      regenerateUserText = history.pop()?.content || null;
+    }
+  }
+  const isRegeneratingFromHistory = Boolean(regenerateUserText);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
   const promptUser = options?.promptUserId ? getUserById(options.promptUserId) ?? user : user;
@@ -3300,7 +3313,7 @@ export const sendMessageThroughAi = async (
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
-if (!forceProRoute && LITE_ROUTER_ENABLED && !manualModel) {
+if (!forceProRoute && !isRegeneratingFromHistory && LITE_ROUTER_ENABLED && !manualModel) {
   const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
 Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
 
@@ -3398,15 +3411,15 @@ PRO
 
   let userMessageContent: any = hasImages
     ? [
-        { type: 'text', text },
+        { type: 'text', text: regenerateUserText || text },
         ...images.map(img => ({
           type: 'image_url',
           image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
         }))
       ]
-    : text;
+    : (regenerateUserText || text);
 
-  // Append regeneration hint to user message (not saved to DB)
+  // Append regeneration hint to the current request (not saved to DB).
   if (options?.regenerateHint) {
     const hintText = `\n\n[УКАЗАНИЕ ДЛЯ ПЕРЕГЕНЕРАЦИИ: "${options.regenerateHint}"]`;
     if (typeof userMessageContent === 'string') {

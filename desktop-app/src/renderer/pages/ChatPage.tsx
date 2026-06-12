@@ -745,7 +745,7 @@ export function ChatPage() {
           setSending(false);
         },
       },
-      { preferredModel: preferredModel, skip_user_history: true }
+      { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true }
     );
   }, [activeChatId, sending, messages, preferredModel]);
 
@@ -854,7 +854,7 @@ export function ChatPage() {
           setSending(false);
         },
       },
-      { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true }
+      { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true }
     );
   }, [activeChatId, sending, messages, preferredModel]);
 
