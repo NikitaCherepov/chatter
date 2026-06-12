@@ -486,6 +486,10 @@
   }
 }
 
+.messageGroupRaised {
+  z-index: 30;
+}
+
 .reasoningToggle {
   min-height: 20px;
   border-radius: 4px;
@@ -600,7 +604,12 @@
 }
 
 .reasoningPanel {
-  margin-top: 6px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-light);
   border-radius: 8px;
@@ -608,9 +617,11 @@
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.5;
-  max-height: 260px;
+  max-height: min(360px, 48vh);
   overflow: auto;
   word-break: break-word;
+  box-shadow: var(--shadow-card);
+  transform-origin: top left;
 }
 
 .msgKebabBtn {

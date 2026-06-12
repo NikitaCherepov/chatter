@@ -33,6 +33,12 @@ const MAX_IMAGES_STANDART = 5;
 const MAX_IMAGES_PRO = 10;
 const MAX_IMAGES_ADMIN = 20;
 
+const reasoningPanelVariants = {
+  hidden: { opacity: 0, y: -16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' as const } },
+  exit: { opacity: 0, y: -16, transition: { duration: 0.15 } },
+};
+
 function getMaxImagesForPlan(plan: string, isAdmin: number): number {
   if (isAdmin === 1) return MAX_IMAGES_ADMIN;
   switch (plan) {
@@ -1404,7 +1410,7 @@ export function ChatPage() {
                 <div className={s.loadingRow}>Загрузка сообщений...</div>
               )}
               {messages.map((msg) => (
-                <div key={msg.id} className={s.messageGroup}>
+                <div key={msg.id} className={`${s.messageGroup} ${openReasoningId === msg.id ? s.messageGroupRaised : ''}`}>
                   <div className={s.metaRow}>
                     <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}</span>
                     <button
@@ -1547,11 +1553,19 @@ export function ChatPage() {
                         : <div className={s.bubbleTextPlain}>{msg.content}</div>
                       }
                     </div>
-                    {msg.role === 'assistant' && msg.reasoning_content?.trim() && openReasoningId === msg.id && (
-                      <div className={s.reasoningPanel}>
-                        <MarkdownRenderer content={msg.reasoning_content} />
-                      </div>
-                    )}
+                    <AnimatePresence>
+                      {msg.role === 'assistant' && msg.reasoning_content?.trim() && openReasoningId === msg.id && (
+                        <motion.div
+                          className={s.reasoningPanel}
+                          variants={reasoningPanelVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                        >
+                          <MarkdownRenderer content={msg.reasoning_content} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     <button
                       className={s.msgKebabBtn}
                       onClick={(e) => handleMsgKebabClick(e, msg.id)}
