@@ -441,9 +441,9 @@ services/subagents/
 `sendMessageThroughAi()` сохраняет дополнительную метаинформацию assistant-ответа для desktop UI:
 
 - `reasoning_content` — человекочитаемое reasoning/thinking, если провайдер его вернул. Извлекается из `message.reasoning_content` (DeepSeek/vLLM), `message.reasoning` (OpenRouter/vLLM), Anthropic-style `content[]` blocks с `type: "thinking"`, а также из `response.output[]` items с `type: "reasoning"` для Responses-like формата.
-- `tool_calls` — список вызванных инструментов `{ id, name, arguments }`, собранный из `message.tool_calls` на шагах агентского цикла.
+- `tool_calls` — список вызванных инструментов `{ id, name, arguments, result_preview? }`, собранный из `message.tool_calls` на шагах агентского цикла. `result_preview` содержит первые 500 символов tool response для UI/debug и не считается полным результатом инструмента.
 - Оба поля возвращаются в `AiSendResult` / `ChatSendResponse`, уходят в WS/SSE `done` и сохраняются в `chat_messages`.
-- `getHistoryForAi()` выбирает только `role, content`, поэтому `reasoning_content` и `tool_calls_json` не попадают обратно в AI-контекст.
+- `getHistoryForAi()` выбирает только `role, content`, поэтому `reasoning_content`, `tool_calls_json` и `result_preview` не попадают обратно в AI-контекст.
 
 БД:
 
@@ -755,7 +755,8 @@ AI: execute_ssh_command(server_id, command)
 - Reasoning сохраняется в `chat_messages.reasoning_content`, возвращается в `done`/JSON и показывается только в UI. В AI-history оно не отправляется.
 
 **Tool calls:**
-- Агентский цикл собирает вызовы инструментов из `message.tool_calls` в `tool_calls: [{ id, name, arguments }]`.
+- Агентский цикл собирает вызовы инструментов из `message.tool_calls` в `tool_calls: [{ id, name, arguments, result_preview? }]`.
+- `result_preview` — первые 500 символов результата инструмента для desktop UI/debug. Полный tool response остаётся внутри текущего AI-цикла и не сохраняется в истории.
 - Tool-call список сохраняется в `chat_messages.tool_calls_json`, возвращается клиенту и отображается в desktop UI.
 
 **Regeneration:**

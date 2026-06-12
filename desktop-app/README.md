@@ -493,7 +493,8 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 Assistant-сообщения могут иметь дополнительные поля:
 
 - `reasoning_content?: string | null`
-- `tool_calls?: Array<{ id?: string; name: string; arguments: unknown }>`
+- `tool_calls?: Array<{ id?: string; name: string; arguments: unknown; result_preview?: string }>`
+- `result_preview` содержит до 500 символов ответа инструмента и показывается только во всплывашке инструментов.
 
 UI:
 

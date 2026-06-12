@@ -23,6 +23,7 @@ dotenv.config();
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const MAX_TOOL_LOOPS = 80;
 const MAX_TOOL_LOOPS_VOICE = 10;
+const TOOL_RESULT_PREVIEW_MAX = 250;
 
 // Реестр активных генераций для остановки по userId
 export const activeGenerations = new Map<number, AbortController>();
@@ -508,6 +509,13 @@ const extractReasoning = (message: any, response?: any): string | null => {
     if (reasoning.trim()) return reasoning;
   }
   return null;
+};
+
+const formatToolResultPreview = (value: string): string | undefined => {
+  const text = `${value || ''}`.trim();
+  if (!text) return undefined;
+  if (text.length <= TOOL_RESULT_PREVIEW_MAX) return text;
+  return `${text.slice(0, TOOL_RESULT_PREVIEW_MAX)}\n\n...[truncated ${text.length - TOOL_RESULT_PREVIEW_MAX} chars]`;
 };
 
 const normalizeDailyMessageLimit = (value: number | null | undefined) => {
@@ -3451,7 +3459,7 @@ PRO
   let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
   let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
   const reasoningParts: string[] = [];
-  const toolCallsHistory: Array<{ id?: string; name: string; arguments: any }> = [];
+  const toolCallsHistory: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
 
   while (loop < effectiveMaxLoops) {
     loop += 1;
@@ -3656,6 +3664,14 @@ for (const toolCall of message.tool_calls) {
   }
 
   if (abortController.signal.aborted) break;
+
+  const resultPreview = formatToolResultPreview(toolContent);
+  if (resultPreview) {
+    const historyEntry = [...toolCallsHistory]
+      .reverse()
+      .find(t => (toolCall.id && t.id === toolCall.id) || (!toolCall.id && t.name === toolName && !t.result_preview));
+    if (historyEntry) historyEntry.result_preview = resultPreview;
+  }
 
   currentMessages.push({
     role: 'tool',

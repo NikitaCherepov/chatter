@@ -665,6 +665,15 @@
   margin-bottom: 3px;
 }
 
+.toolCallLabel {
+  margin: 6px 0 3px;
+  color: var(--text-hint);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
 .toolCallArgs {
   margin: 0;
   padding: 6px 8px;

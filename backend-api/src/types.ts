@@ -63,7 +63,7 @@ export type MessageDto = {
   role: ChatRole;
   content: string;
   reasoning_content?: string | null;
-  tool_calls?: Array<{ id?: string; name: string; arguments: any }> | null;
+  tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   telegram_chat_id?: number | null;
@@ -116,7 +116,7 @@ export type AiSendResult = {
   display_state?: DisplayStatePayload | null;
   desktop_action?: DesktopActionPayload | null;
   aborted?: boolean;
-  tool_calls?: Array<{ id?: string; name: string; arguments: any }>;
+  tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }>;
   usage: UsageDto;
 };
 

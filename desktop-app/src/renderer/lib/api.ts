@@ -149,7 +149,7 @@ export type MessageAudio = {
   voice_id: string;
 };
 
-export type ToolCall = { id?: string; name: string; arguments: any };
+export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };
 
 export type Message = {
   id: number;

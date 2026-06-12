@@ -45,6 +45,12 @@ const formatMessageTime = (ts: number) => {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+const formatToolValue = (value: unknown) => {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  return JSON.stringify(value, null, 2);
+};
+
 type MessageItemProps = {
   msg: api.Message;
   isLastAssistant: boolean;
@@ -235,11 +241,19 @@ const MessageItem = React.memo(function MessageItem({
             <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <div className={s.toolCallList}>
                 {msg.tool_calls!.map((tc, i) => {
-                  const args = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments, null, 2);
+                  const args = formatToolValue(tc.arguments);
+                  const result = formatToolValue(tc.result_preview);
                   return (
                     <div key={tc.id || i} className={s.toolCallItem}>
                       <div className={s.toolCallName}>{tc.name}</div>
+                      <div className={s.toolCallLabel}>Аргументы</div>
                       <pre className={s.toolCallArgs}>{args || '{}'}</pre>
+                      {result && (
+                        <>
+                          <div className={s.toolCallLabel}>Результат</div>
+                          <pre className={s.toolCallArgs}>{result}</pre>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -1895,14 +1909,27 @@ export function ChatPage() {
                           animate="visible"
                           exit="exit"
                         >
-                          {msg.tool_calls.map((tc, i) => (
-                            <div key={tc.id || i} style={{ marginBottom: i < msg.tool_calls!.length - 1 ? '8px' : 0 }}>
-                              <div style={{ fontWeight: 600, marginBottom: 2 }}>{tc.name}</div>
-                              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
-                                {typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments, null, 2)}
-                              </pre>
-                            </div>
-                          ))}
+                          {msg.tool_calls.map((tc, i) => {
+                            const args = formatToolValue(tc.arguments);
+                            const result = formatToolValue(tc.result_preview);
+                            return (
+                              <div key={tc.id || i} style={{ marginBottom: i < msg.tool_calls!.length - 1 ? '8px' : 0 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 2 }}>{tc.name}</div>
+                                <div className={s.toolCallLabel}>Аргументы</div>
+                                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
+                                  {args || '{}'}
+                                </pre>
+                                {result && (
+                                  <>
+                                    <div className={s.toolCallLabel}>Результат</div>
+                                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
+                                      {result}
+                                    </pre>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
                         </motion.div>
                       )}
                     </AnimatePresence>

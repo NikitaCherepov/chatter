@@ -162,7 +162,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
     if (row.audio) {
       try { parsedAudio = JSON.parse(row.audio); } catch { parsedAudio = null; }
     }
-    let parsedToolCalls: Array<{ id?: string; name: string; arguments: any }> | null = null;
+    let parsedToolCalls: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null = null;
     if (row.tool_calls_json) {
       try { parsedToolCalls = JSON.parse(row.tool_calls_json); } catch { parsedToolCalls = null; }
     }
