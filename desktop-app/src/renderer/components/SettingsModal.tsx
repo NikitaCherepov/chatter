@@ -659,7 +659,7 @@ export function SettingsModal({ onClose }: Props) {
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>Запрет записи данных</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          AI не может записывать в память, архив и заметки. Чтение остаётся доступным.
+                          AI не может записывать в архив (cold memory) и заметки. Горячая память и чтение остаются доступными.
                         </div>
                       </div>
                     </label>

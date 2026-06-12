@@ -3176,7 +3176,6 @@ export const sendMessageThroughAi = async (
   const flags = options?.featureFlags;
   const disabledToolSet = new Set<string>();
   if (flags?.disable_memory_write) {
-    disabledToolSet.add('update_core_memory');
     disabledToolSet.add('save_to_cold_memory');
     disabledToolSet.add('delete_from_cold_memory');
     disabledToolSet.add('save_note');
@@ -3186,6 +3185,9 @@ export const sendMessageThroughAi = async (
   if (flags?.disable_pc_control_lite) {
     disabledToolSet.add('execute_ssh_command');
     disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('list_devops_servers');
+    disabledToolSet.add('list_devops_runbooks');
+    disabledToolSet.add('read_devops_runbook');
     disabledToolSet.add('suggest_devops_runbook');
     disabledToolSet.add('install_ssh_public_key');
     disabledToolSet.add('suggest_server_creds_update');
@@ -3249,6 +3251,9 @@ export const sendMessageThroughAi = async (
   }
   if (flags?.disable_subagents) {
     disabledToolSet.add('invoke_subagent');
+  }
+  if (disabledToolSet.size > 0) {
+    console.log(`[feature-flags] user=${userId} disabled tools: ${[...disabledToolSet].join(', ')}`);
   }
   const isGuestMode = Boolean(flags?.disable_personal);
   const promptContent = isGuestMode ? '' : resolvePromptForUser(promptUser).content;
@@ -3540,6 +3545,9 @@ for (const toolCall of message.tool_calls) {
 
   let toolContent = '';
   try {
+    if (disabledToolSet.has(toolName)) {
+      toolContent = `Инструмент "${toolName}" отключён текущими настройками ограничений.`;
+    } else {
     toolContent = await withAbort(
       runTool(
         user,
@@ -3571,6 +3579,7 @@ for (const toolCall of message.tool_calls) {
     // Если тулз вызвал map_control или find_transit_route — прокидываем данные карты
     if ((toolName === 'map_control' || toolName === 'find_transit_route' || toolName === 'search_nearby') && mapUpdateSink.value && options?.onMapUpdate) {
       await options.onMapUpdate(mapUpdateSink.value);
+    }
     }
   } catch (err: any) {
     if (isAbortError(err)) break; // Прерываем цикл tool_calls
