@@ -5137,12 +5137,13 @@ bot.on('text', async (ctx) => {
         }
 
         const maxAllowed = Math.max(1, userRecord.context_window_max || getPlanContextLimit(parsePlanFromDb(userRecord.plan)));
-        if (parsed > maxAllowed) {
+        const isUserAdmin = ADMIN_IDS.has(userId) || userRecord.role === 'admin';
+        if (!isUserAdmin && parsed > maxAllowed) {
             return ctx.reply(`Для тебя доступно максимум ${maxAllowed}. Введи число от 1 до ${maxAllowed}.`);
         }
 
         const ctxValue = Math.floor(parsed);
-        try { await runBackendSetContextWindow(userId, ctxValue, false); } catch {}
+        try { await runBackendSetContextWindow(userId, ctxValue, isUserAdmin); } catch {}
         updateUserContextWindow(userId, ctxValue);
         await trimUserHistory(userId);
         contextLimitFlows.delete(userId);
