@@ -127,9 +127,11 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
 
   try {
     const enabledMacros = getEnabledMacros(userId);
+    const tgUser = getUserById(Math.floor(userId));
     const result = await sendMessageThroughAi(Math.floor(userId), text, chatId, {
       ...options,
       activeMacros: enabledMacros,
+      featureFlags: tgUser ? parseFeatureFlags(tgUser) : undefined,
     });
 
     // If AI triggered a desktop_action and desktop is online — push via WS
@@ -369,6 +371,12 @@ app.post('/api/v1/auth/register', (req, res) => {
 
 const getLinkedTelegramUser = (user: UserRecord) => {
   return user.linked_tg_id ? getUserById(user.linked_tg_id) : null;
+};
+
+const parseFeatureFlags = (user: UserRecord): Record<string, boolean> => {
+  try {
+    return JSON.parse(user.feature_flags || '{}');
+  } catch { return {}; }
 };
 
 const toAuthUserDto = (user: UserRecord) => {
@@ -856,6 +864,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
   try {
     const apiUserId = req.authUserId!;
+    const rawUserRecord = getUserById(userId);
     const result = await sendMessageThroughAi(userId, text, chatId, {
       ...(images.length > 0 ? { images } : {}),
       userImages: savedUserImages,
@@ -864,6 +873,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       isVoice,
       activeMacros: enabledMacros,
       preferredModel: req.body?.preferred_model || undefined,
+      featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
@@ -2040,6 +2050,38 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
   return res.json({ ok: true, preferred_model: modelId });
 });
 
+// ─── Feature flags (tool restrictions) ──────────────────────────────────────
+
+const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_internet', 'disable_personal', 'disable_subagents'] as const;
+
+app.get('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const flags: Record<string, boolean> = {};
+  try {
+    const raw = JSON.parse(user.feature_flags || '{}');
+    for (const key of VALID_FLAG_KEYS) {
+      flags[key] = Boolean(raw[key]);
+    }
+  } catch { /* defaults all false */ }
+  return res.json({ flags });
+});
+
+app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const incoming = req.body?.flags;
+  if (!incoming || typeof incoming !== 'object') {
+    return res.status(400).json({ error: 'bad_flags' });
+  }
+  const flags: Record<string, boolean> = {};
+  for (const key of VALID_FLAG_KEYS) {
+    flags[key] = Boolean(incoming[key]);
+  }
+  db.prepare('UPDATE users SET feature_flags = ? WHERE id = ?').run(JSON.stringify(flags), userId);
+  return res.json({ ok: true, flags });
+});
+
 // ─── Macros CRUD ────────────────────────────────────────────────────────────
 
 app.get('/api/v1/macros', (req: AuthedRequest, res: any) => {
@@ -2858,6 +2900,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   const enabledMacros = getEnabledMacros(userId);
 
   try {
+    const rawUserRecord = getUserById(userId);
     const result = await sendMessageThroughAi(userId, text, chat_id, {
       ...(parsedImages.length > 0 ? { images: parsedImages } : {}),
       userImages: savedUserImages,
@@ -2866,6 +2909,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       isVoice: Boolean(is_voice),
       activeMacros: enabledMacros,
       preferredModel: preferred_model || undefined,
+      featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         client.ws.send(JSON.stringify({ type: 'intermediate', text: stepText }));

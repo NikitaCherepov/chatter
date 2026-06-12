@@ -723,6 +723,29 @@ export async function setPreferredModel(modelId: string | null): Promise<{ ok: b
   });
 }
 
+// ---------- Feature flags (tool restrictions) ----------
+
+export type FeatureFlags = {
+  disable_memory_write: boolean;
+  disable_pc_control_lite: boolean;
+  disable_pc_control_full: boolean;
+  disable_internet: boolean;
+  disable_personal: boolean;
+  disable_subagents: boolean;
+};
+
+export async function getFeatureFlags(): Promise<{ flags: FeatureFlags }> {
+  return apiFetch('/api/v1/user/feature-flags');
+}
+
+export async function setFeatureFlags(flags: Partial<FeatureFlags>): Promise<{ ok: boolean; flags: FeatureFlags }> {
+  return apiFetch('/api/v1/user/feature-flags', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flags }),
+  });
+}
+
 // ---------- TTS (Cartesia cloud) ----------
 
 export type CartesiaVoice = {

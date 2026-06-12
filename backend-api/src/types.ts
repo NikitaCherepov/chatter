@@ -35,6 +35,7 @@ export type UserRecord = {
   total_image_gen_count?: number;
   linked_tg_id?: number | null;
   preferred_model?: string | null;
+  feature_flags?: string | null;
 };
 
 export type ChatDto = {

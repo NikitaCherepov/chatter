@@ -3108,6 +3108,14 @@ export const sendMessageThroughAi = async (
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>;
     preferredModel?: string | null;
+    featureFlags?: {
+      disable_memory_write?: boolean;
+      disable_pc_control_lite?: boolean;
+      disable_pc_control_full?: boolean;
+      disable_internet?: boolean;
+      disable_personal?: boolean;
+      disable_subagents?: boolean;
+    } | null;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -3163,13 +3171,96 @@ export const sendMessageThroughAi = async (
   const pinnedHint = pinnedMacros.length > 0
     ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
     : '';
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(resolvePromptForUser(promptUser).content, user.name || user.tg_username || 'Пользователь', user.core_memory || '')}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${pinnedHint}`;
+
+  // ── Feature flags → disabled tools ──
+  const flags = options?.featureFlags;
+  const disabledToolSet = new Set<string>();
+  if (flags?.disable_memory_write) {
+    disabledToolSet.add('update_core_memory');
+    disabledToolSet.add('save_to_cold_memory');
+    disabledToolSet.add('delete_from_cold_memory');
+    disabledToolSet.add('save_note');
+    disabledToolSet.add('delete_note');
+  }
+  // Лайт: отключает опасное, оставляет read-only
+  if (flags?.disable_pc_control_lite) {
+    disabledToolSet.add('execute_ssh_command');
+    disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('suggest_devops_runbook');
+    disabledToolSet.add('install_ssh_public_key');
+    disabledToolSet.add('suggest_server_creds_update');
+    disabledToolSet.add('create_server_user');
+    disabledToolSet.add('change_server_user_password');
+    disabledToolSet.add('execute_macro');
+    disabledToolSet.add('suggest_macro');
+    disabledToolSet.add('list_my_macros');
+    disabledToolSet.add('send_email');
+    disabledToolSet.add('schedule_task');
+    disabledToolSet.add('delete_my_task');
+  }
+  // Полная блокировка: всё десктопное + управление
+  if (flags?.disable_pc_control_full) {
+    // Всё из лайта
+    disabledToolSet.add('execute_ssh_command');
+    disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('suggest_devops_runbook');
+    disabledToolSet.add('install_ssh_public_key');
+    disabledToolSet.add('suggest_server_creds_update');
+    disabledToolSet.add('create_server_user');
+    disabledToolSet.add('change_server_user_password');
+    disabledToolSet.add('execute_macro');
+    disabledToolSet.add('suggest_macro');
+    disabledToolSet.add('list_my_macros');
+    disabledToolSet.add('send_email');
+    disabledToolSet.add('schedule_task');
+    disabledToolSet.add('delete_my_task');
+    // Плюс read-only десктоп
+    disabledToolSet.add('control_smart_home');
+    disabledToolSet.add('check_emails');
+    disabledToolSet.add('read_email_content');
+    disabledToolSet.add('get_my_tasks');
+    disabledToolSet.add('explore_fs');
+    disabledToolSet.add('desktop_action');
+    disabledToolSet.add('map_control');
+    disabledToolSet.add('get_map_pins');
+    disabledToolSet.add('find_transit_route');
+    disabledToolSet.add('search_nearby');
+    disabledToolSet.add('list_devops_servers');
+    disabledToolSet.add('list_devops_runbooks');
+    disabledToolSet.add('read_devops_runbook');
+  }
+  if (flags?.disable_internet) {
+    disabledToolSet.add('search_web');
+    disabledToolSet.add('read_webpage');
+    disabledToolSet.add('generate_image');
+  }
+  if (flags?.disable_personal) {
+    disabledToolSet.add('update_core_memory');
+    disabledToolSet.add('search_cold_memory');
+    disabledToolSet.add('save_to_cold_memory');
+    disabledToolSet.add('delete_from_cold_memory');
+    disabledToolSet.add('save_note');
+    disabledToolSet.add('list_my_notes');
+    disabledToolSet.add('read_note');
+    disabledToolSet.add('delete_note');
+    disabledToolSet.add('schedule_task');
+    disabledToolSet.add('get_my_tasks');
+    disabledToolSet.add('delete_my_task');
+  }
+  if (flags?.disable_subagents) {
+    disabledToolSet.add('invoke_subagent');
+  }
+  const isGuestMode = Boolean(flags?.disable_personal);
+  const promptContent = isGuestMode ? '' : resolvePromptForUser(promptUser).content;
+  const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
+  const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${pinnedHintForPrompt}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildExecutePcCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(subagentTool ? [subagentTool] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])] as any[];
+  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildExecutePcCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(subagentTool ? [subagentTool] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
@@ -3260,7 +3351,7 @@ PRO
   if (routeLabel !== 'PRO') {
     const allowedToolNames = cheapMap[routeLabel];
 
-    if (allowedToolNames.length) {
+    if (allowedToolNames.length && !allowedToolNames.some(n => disabledToolSet.has(n))) {
       executionTools = buildLiteExecutionTools(allowedToolNames);
       executionHistory = [];
       executionSystemPrompt = `${LITE_ROUTER_INSTRUCTIONS}${buildTimeContext(timezone)}`;

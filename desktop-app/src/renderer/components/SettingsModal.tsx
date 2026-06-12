@@ -19,7 +19,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys';
+type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'restrictions';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -48,6 +48,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'servers', label: 'Серверы' },
   { key: 'runbooks', label: 'Инструкции' },
   { key: 'sshkeys', label: 'SSH-ключи' },
+  { key: 'restrictions', label: 'Ограничения' },
   { key: 'app', label: 'Приложение' },
 ];
 
@@ -112,6 +113,18 @@ export function SettingsModal({ onClose }: Props) {
   const [coreMemory, setCoreMemory] = useState('');
   const [coreMemorySaving, setCoreMemorySaving] = useState(false);
 
+  // Feature flags (restrictions)
+  const [featureFlags, setFeatureFlagsState] = useState<api.FeatureFlags>({
+    disable_memory_write: false,
+    disable_pc_control_lite: false,
+    disable_pc_control_full: false,
+    disable_internet: false,
+    disable_personal: false,
+    disable_subagents: false,
+  });
+  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [flagsSaving, setFlagsSaving] = useState(false);
+
   // Load account data
   useEffect(() => {
     if (user) {
@@ -135,6 +148,32 @@ export function SettingsModal({ onClose }: Props) {
         .catch(() => {});
     }
   }, [section]);
+
+  // Load feature flags when restrictions tab opens
+  useEffect(() => {
+    if (section === 'restrictions') {
+      setFlagsLoading(true);
+      api.getFeatureFlags()
+        .then((res) => setFeatureFlagsState(res.flags))
+        .catch(() => {})
+        .finally(() => setFlagsLoading(false));
+    }
+  }, [section]);
+
+  const handleToggleFlag = async (key: keyof api.FeatureFlags) => {
+    const newFlags = { ...featureFlags, [key]: !featureFlags[key] };
+    setFeatureFlagsState(newFlags);
+    setFlagsSaving(true);
+    try {
+      const res = await api.setFeatureFlags(newFlags);
+      setFeatureFlagsState(res.flags);
+    } catch {
+      setFeatureFlagsState(featureFlags); // rollback
+      toast.error('Не удалось сохранить настройки');
+    } finally {
+      setFlagsSaving(false);
+    }
+  };
 
   // Load zoom level on modal open
   useEffect(() => {
@@ -595,6 +634,129 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'sshkeys' && (
             <SshKeySettings />
+          )}
+
+          {section === 'restrictions' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>Ограничения</div>
+              <span className={s.fieldLabel} style={{ display: 'block', marginBottom: 12, marginTop: -4 }}>
+                Управление доступными AI-инструментами. Изменения применяются мгновенно.
+              </span>
+
+              {flagsLoading ? (
+                <div className={s.promptLoading}>Загрузка...</div>
+              ) : (
+                <>
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_memory_write}
+                        onChange={() => handleToggleFlag('disable_memory_write')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Запрет записи данных</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          AI не может записывать в память, архив и заметки. Чтение остаётся доступным.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_pc_control_lite}
+                        onChange={() => handleToggleFlag('disable_pc_control_lite')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Ограниченный режим</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          Отключает SSH, выполнение команд, макросы, отправку писем, создание задач. Умный дом, карты, чтение почты и виджеты остаются.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_pc_control_full}
+                        onChange={() => handleToggleFlag('disable_pc_control_full')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Полная блокировка</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          Отключает всё десктопное: серверы, макросы, умный дом, почту, карты, виджеты, файловую систему.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_internet}
+                        onChange={() => handleToggleFlag('disable_internet')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без интернета и генерации</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          Отключает поиск в интернете, чтение веб-страниц и генерацию изображений.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_personal}
+                        onChange={() => handleToggleFlag('disable_personal')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Гостевой режим</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          AI не видит ваш промпт, профиль, архив, заметки и задачи. Общение с чистого листа.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_subagents}
+                        onChange={() => handleToggleFlag('disable_subagents')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без субагентов</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          Отключает вызов субагентов (invoke_subagent).
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {section === 'app' && (
