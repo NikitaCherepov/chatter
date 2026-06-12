@@ -403,7 +403,7 @@ export async function streamChatMessage(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string }
 ) {
   // Update callbacks for this request
   if (callbacks) {
@@ -418,6 +418,7 @@ export async function streamChatMessage(
     if (displayManifest) msg.display_manifest = displayManifest;
     if (options?.isVoice) msg.is_voice = true;
     if (options?.preferredModel) msg.preferred_model = options.preferredModel;
+    if (options?.regenerate_hint) msg.regenerate_hint = options.regenerate_hint;
     ws.send(JSON.stringify(msg));
     return;
   }
@@ -447,7 +448,7 @@ async function streamChatMessageSSE(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string }
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
@@ -460,6 +461,7 @@ async function streamChatMessageSSE(
     if (displayManifest) body.display_manifest = displayManifest;
     if (options?.isVoice) body.is_voice = true;
     if (options?.preferredModel) body.preferred_model = options.preferredModel;
+    if (options?.regenerate_hint) body.regenerate_hint = options.regenerate_hint;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',

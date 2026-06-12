@@ -3116,6 +3116,7 @@ export const sendMessageThroughAi = async (
       disable_personal?: boolean;
       disable_subagents?: boolean;
     } | null;
+    regenerateHint?: string;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -3365,7 +3366,7 @@ PRO
   }
 }
 
-  const userMessageContent: any = hasImages
+  let userMessageContent: any = hasImages
     ? [
         { type: 'text', text },
         ...images.map(img => ({
@@ -3374,6 +3375,16 @@ PRO
         }))
       ]
     : text;
+
+  // Append regeneration hint to user message (not saved to DB)
+  if (options?.regenerateHint) {
+    const hintText = `\n\n[УКАЗАНИЕ ДЛЯ ПЕРЕГЕНЕРАЦИИ: "${options.regenerateHint}"]`;
+    if (typeof userMessageContent === 'string') {
+      userMessageContent += hintText;
+    } else if (Array.isArray(userMessageContent)) {
+      userMessageContent = [...userMessageContent, { type: 'text', text: hintText }];
+    }
+  }
 
   const currentMessages: any[] = [
     { role: 'system', content: executionSystemPrompt },

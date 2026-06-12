@@ -882,6 +882,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       isVoice,
       activeMacros: enabledMacros,
       preferredModel: req.body?.preferred_model || undefined,
+      regenerateHint: req.body?.regenerate_hint || undefined,
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
@@ -2861,7 +2862,7 @@ wss.on('connection', (ws, req) => {
 // ── WS chat_send handler ────────────────────────────────────────────────────
 
 async function handleWsChatSend(client: WsClient, msg: any) {
-  const { text, chat_id, images, display_manifest, is_voice, preferred_model } = msg;
+  const { text, chat_id, images, display_manifest, is_voice, preferred_model, regenerate_hint } = msg;
   if (!text?.trim()) {
     client.ws.send(JSON.stringify({ type: 'error', error: 'empty_text' }));
     return;
@@ -2918,6 +2919,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       isVoice: Boolean(is_voice),
       activeMacros: enabledMacros,
       preferredModel: preferred_model || undefined,
+      regenerateHint: regenerate_hint || undefined,
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
