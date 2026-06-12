@@ -1032,6 +1032,8 @@ export function ChatPage() {
     return () => window.removeEventListener('chatter:open-tool', handler);
   }, []);
 
+  const lastAssistantId = messages.filter(m => m.role === 'assistant').pop()?.id ?? null;
+
   const formatTime = (ts: number) => {
     const d = new Date(ts * 1000);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1421,7 +1423,7 @@ export function ChatPage() {
                         </svg>
                       )}
                     </button>
-                    {msg.role === 'assistant' && (
+                    {msg.id === lastAssistantId && (
                       <>
                         <button
                           className={s.playBtn}
