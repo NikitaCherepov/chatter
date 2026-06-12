@@ -3662,6 +3662,7 @@ if (abortController.signal.aborted) {
   }
 
   const userTextForHistory = options?.persistUserText?.trim() || text;
+  let userMessageId = 0;
   if (!options?.skipHistory) {
     const userTelegramChatId = Number.isFinite(Number(options?.userTelegramChatId))
       ? Math.floor(Number(options?.userTelegramChatId))
@@ -3670,7 +3671,7 @@ if (abortController.signal.aborted) {
       ? Math.floor(Number(options?.userTelegramMessageId))
       : null;
     const userMessageImages = options?.userImages?.length ? options.userImages : null;
-    appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages);
+    userMessageId = appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages);
   }
   const assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))
@@ -3732,6 +3733,7 @@ if (abortController.signal.aborted) {
     reply_text: answer,
     chat_id: chatId,
     message_id: assistantMessageId,
+    user_message_id: userMessageId,
     model_fallback_notice: modelFallbackNotice,
     tool_user_messages: toolUserMessages,
     generated_images: generatedImages.length > 0 ? generatedImages : undefined,

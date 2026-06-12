@@ -106,6 +106,7 @@ export type AiSendResult = {
   reply_text: string;
   chat_id: number;
   message_id: number;
+  user_message_id?: number;
   model_fallback_notice?: string | null;
   tool_user_messages?: string[];
   generated_images?: GeneratedImage[];

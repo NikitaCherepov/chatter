@@ -236,6 +236,7 @@ export type GeneratedImage = {
 export type ChatSendResponse = {
   reply_text: string;
   message_id: number;
+  user_message_id?: number;
   chat_id: number;
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;

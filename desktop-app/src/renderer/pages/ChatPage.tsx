@@ -341,22 +341,32 @@ export function ChatPage() {
             : undefined;
 
           if (assistantMsgCreated) {
-            setMessages((prev) => prev.map(m =>
-              m.id === tempAssistantId
-                ? {
-                    ...m,
-                    id: res.message_id,
-                    ...(res.reply_text ? { content: res.reply_text } : {}),
-                    ...(genImages ? { images: genImages } : {})
-                  }
-                : m
-            ));
+            setMessages((prev) => prev.map(m => {
+              if (m.id === tempAssistantId) {
+                return {
+                  ...m,
+                  id: res.message_id,
+                  ...(res.reply_text ? { content: res.reply_text } : {}),
+                  ...(genImages ? { images: genImages } : {})
+                };
+              }
+              // Replace temp user message id with real one from server
+              if (res.user_message_id && m.id === tempUserMsg.id) {
+                return { ...m, id: res.user_message_id };
+              }
+              return m;
+            }));
           } else {
             // Ни одного промежуточного сообщения не было — добавляем финальный ответ
-            setMessages((prev) => [...prev, {
-              id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
-              images: genImages,
-            }]);
+            setMessages((prev) => {
+              const updated = res.user_message_id
+                ? prev.map(m => m.id === tempUserMsg.id ? { ...m, id: res.user_message_id! } : m)
+                : prev;
+              return [...updated, {
+                id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+                images: genImages,
+              }];
+            });
           }
           setShowTyping(false);
           setSending(false);
@@ -618,6 +628,114 @@ export function ChatPage() {
       setMessages(snapshot);
     }
   };
+
+  const handleRegenerate = useCallback(async (assistantMsgId: number) => {
+    if (!activeChatId || sending) return;
+    const idx = messages.findIndex(m => m.id === assistantMsgId);
+    if (idx < 0) return;
+    // Find last user message before this assistant message
+    let userText = '';
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userText = messages[i].content;
+        break;
+      }
+    }
+    if (!userText) return;
+
+    // Remove the assistant message optimistically
+    const snapshot = [...messages];
+    setMessages(prev => prev.filter(m => m.id !== assistantMsgId));
+    try {
+      await api.deleteMessage(activeChatId, assistantMsgId);
+    } catch {
+      // If delete fails, still proceed — server may not have it
+    }
+
+    setSending(true);
+    setShowTyping(true);
+
+    let assistantMsgCreated = false;
+    const tempAssistantId = -Date.now() - 1;
+    const appendToAssistant = (text: string) => {
+      if (!assistantMsgCreated) {
+        assistantMsgCreated = true;
+        setShowTyping(false);
+        setMessages((prev) => [...prev, {
+          id: tempAssistantId, role: 'assistant', content: text, created_at: Math.floor(Date.now() / 1000),
+        }]);
+      } else {
+        setMessages((prev) => prev.map(m =>
+          m.id === tempAssistantId
+            ? { ...m, content: m.content + '\n\n' + text }
+            : m
+        ));
+      }
+    };
+
+    await api.streamChatMessage(
+      userText,
+      activeChatId,
+      undefined,
+      getAvatarManifest(),
+      {
+        onIntermediate: (stepText) => appendToAssistant(stepText),
+        onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
+        onDisplayState: (state) => dispatchAvatarState(state),
+        onDesktopAction: (action) => handleDesktopAction(action),
+        onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
+        onDone: (res) => {
+          if (res.aborted) {
+            if (assistantMsgCreated) {
+              setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
+            }
+            setShowTyping(false);
+            setSending(false);
+            return;
+          }
+          if (res.model_fallback_notice) {
+            toast.warning(res.model_fallback_notice, { duration: 5000 });
+          }
+          const currentTokens = api.loadTokens();
+          const genImages: api.MessageImage[] | undefined = res.generated_images?.length
+            ? res.generated_images.map(img => ({
+                url: img.image_url
+                  ? (img.image_url.startsWith('http')
+                      ? img.image_url
+                      : `${api.API_BASE}${img.image_url}${currentTokens?.access_token ? `?token=${currentTokens.access_token}` : ''}`)
+                  : `data:image/png;base64,${img.image_base64}`,
+                type: 'generated' as const
+              }))
+            : undefined;
+
+          if (assistantMsgCreated) {
+            setMessages((prev) => prev.map(m =>
+              m.id === tempAssistantId
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), ...(genImages ? { images: genImages } : {}) }
+                : m
+            ));
+          } else {
+            setMessages((prev) => [...prev, {
+              id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
+              images: genImages,
+            }]);
+          }
+          setShowTyping(false);
+          setSending(false);
+          if (res.display_state) dispatchAvatarState(res.display_state);
+        },
+        onError: (err) => {
+          console.error('Regenerate error:', err);
+          if (assistantMsgCreated) {
+            setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
+          }
+          setShowTyping(false);
+          setSending(false);
+        },
+      },
+      { preferredModel: preferredModel }
+    );
+  }, [activeChatId, sending, messages, preferredModel]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);
@@ -1193,6 +1311,22 @@ export function ChatPage() {
                         </svg>
                       )}
                     </button>
+                    {msg.role === 'assistant' && (
+                      <button
+                        className={s.playBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRegenerate(msg.id);
+                        }}
+                        title="Перегенерировать"
+                        disabled={sending}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="23 4 23 10 17 10" />
+                          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                   <div className={s.bubbleWrap}>
                     <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>

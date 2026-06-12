@@ -696,6 +696,15 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res
   return res.json({ ok: true });
 });
 
+app.delete('/api/v1/chats/:chatId', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const ok = deleteUserChat(userId, chatId);
+  if (!ok) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ ok: true });
+});
+
 // ── Send message to linked Telegram account ──
 app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res) => {
   const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
