@@ -1439,6 +1439,9 @@ app.post('/internal/user/context-window', internalAuth, (req, res) => {
     const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0
       ? Math.floor(user.context_window_max) : 10;
     if (contextWindow > maxWindow) return res.status(422).json({ error: 'exceeds_max_context_window', max: maxWindow });
+  } else if (contextWindow > (user.context_window_max || 10)) {
+    // Admin can exceed the limit — bump context_window_max too
+    updateUserContextWindowMax(userId, Math.floor(contextWindow));
   }
 
   updateUserContextWindow(userId, Math.floor(contextWindow));

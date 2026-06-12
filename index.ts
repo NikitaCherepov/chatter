@@ -4962,6 +4962,10 @@ bot.on('text', async (ctx) => {
 
         const nextValue = Math.max(1, Math.floor(parsed));
         try { await runBackendSetContextWindow(adminContextFlow.targetUserId, nextValue, true); } catch {}
+        const targetBefore = await getUser(adminContextFlow.targetUserId);
+        if (targetBefore && nextValue > (targetBefore.context_window_max || 10)) {
+            updateUserContextWindowMax(adminContextFlow.targetUserId, nextValue);
+        }
         updateUserContextWindow(adminContextFlow.targetUserId, nextValue);
         await trimUserHistory(adminContextFlow.targetUserId);
         adminUserContextLimitFlows.delete(userId);
