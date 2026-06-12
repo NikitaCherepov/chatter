@@ -438,6 +438,43 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 - `default_ssh_key_id` is the key used for installation and optional key login.
 - `use_ssh_key_for_login` is the explicit login-mode checkbox: password login or key login.
 
+## Feature Flags (ограничения инструментов)
+
+Вкладка "Ограничения" в SettingsModal позволяет пользователю выборочно отключать AI-инструменты. Флаги хранятся на сервере (`users.feature_flags`, JSON), синхронизируются между desktop и Telegram.
+
+### UI
+
+`SettingsModal.tsx` → вкладка `restrictions` → 6 чекбоксов. Каждый чекбокс — instant save через `api.setFeatureFlags()` с optimistic update и rollback при ошибке.
+
+### Ключевые файлы
+
+| Файл | Роль |
+|---|---|
+| `lib/api.ts` | Тип `FeatureFlags` + `getFeatureFlags()` / `setFeatureFlags()` |
+| `components/SettingsModal.tsx` | Вкладка `restrictions`: state, загрузка, 6 чекбоксов с описаниями |
+
+### Флаги
+
+| Ключ | Название | Отключает |
+|---|---|---|
+| `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note`. Hot memory (`update_core_memory`) остаётся доступной |
+| `disable_pc_control_lite` | Ограниченный режим | SSH, выполнение команд, макросы, отправка писем, задачи, серверы, runbooks. Умный дом, карты, чтение почты, виджеты, файловая система остаются |
+| `disable_pc_control_full` | Полная блокировка | Всё из лайт + умный дом, почта, карты, виджеты, файловая система |
+| `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
+| `disable_personal` | Гостевой режим | Промпт, hot/cold memory, заметки, задачи. AI общается с чистого листа |
+| `disable_subagents` | Без субагентов | `invoke_subagent` |
+
+### Как добавить новый флаг
+
+1. Добавить ключ в `VALID_FLAG_KEYS` в `backend-api/src/server.ts`
+2. Добавить поле в тип `FeatureFlags` в `desktop-app/src/renderer/lib/api.ts`
+3. Добавить инструменты в `disabledToolSet` в `backend-api/src/services/ai.ts`
+4. Добавить чекбокс в `SettingsModal.tsx` (state default + render)
+
+### Как добавить новый инструмент под существующие флаги
+
+Добавить `disabledToolSet.add('tool_name')` в соответствующий блок флага в `ai.ts` (секция `Feature flags → disabled tools`). Фильтрация сработает автоматически.
+
 ## WebSocket Transport
 
 Desktop-клиент использует **WebSocket** для двунаправленного обмена с сервером. Реализация в `lib/api.ts`.

@@ -464,6 +464,50 @@ services/subagents/
 
 Доступны только если в запросе передан `is_desktop: true`. Не показываются в Telegram.
 
+### Feature Flags (ограничения инструментов)
+
+Система позволяет пользователю выборочно отключать AI-инструменты через галочки в настройках десктоп-приложения. Флаги хранятся в БД (`users.feature_flags`, JSON) и применяются сервером при каждом запросе к AI.
+
+**API:**
+
+- `GET /api/v1/user/feature-flags` — возвращает текущие флаги `{ flags: { ... } }`
+- `PUT /api/v1/user/feature-flags` — сохраняет флаги `{ flags: { ... } }` (валидация по whitelist)
+
+**Флаги (ключи JSON):**
+
+| Ключ | Название в UI | Отключаемые инструменты |
+|---|---|---|
+| `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
+| `disable_pc_control_lite` | Ограниченный режим | `execute_ssh_command`, `execute_pc_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
+| `disable_pc_control_full` | Полная блокировка | Всё из лайт + `control_smart_home`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
+| `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
+| `disable_personal` | Гостевой режим | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + скрытие промпта и горячей памяти из system prompt |
+| `disable_subagents` | Без субагентов | `invoke_subagent` |
+
+**Как это работает (ai.ts):**
+
+1. Все 3 обработчика (TG internal `/internal/ai/send`, SSE `/api/v1/chat/send`, WS `chat_send`) загружают `feature_flags` из записи пользователя через `parseFeatureFlags(user)`
+2. Флаги передаются в `sendMessageThroughAi({ featureFlags })`
+3. В `sendMessageThroughAi` формируется `disabledToolSet` (Set<string>) на основе активных флагов
+4. **Двойная защита:**
+   - `executionTools.filter()` — инструменты убираются из schema (AI не знает об их существовании)
+   - Guard перед `runTool()` — даже если модель hallucinate tool call, `runTool` вернёт `"Инструмент отключён"` вместо выполнения
+5. LITE-роутер: если cheap-маршрут содержит отключённый инструмент — форсируется PRO
+6. Гостевой режим (`disable_personal`): дополнительно очищаются `core_memory`, `custom_prompt` и `pinned_macros` из system prompt
+
+**Как добавить новый флаг:**
+
+1. Добавить ключ в `VALID_FLAG_KEYS` в `server.ts`
+2. Добавить ключ в тип `FeatureFlags` в `desktop-app/src/renderer/lib/api.ts`
+3. Добавить инструменты в соответствующий блок `if (flags?.new_flag)` в `ai.ts` (в `sendMessageThroughAi`)
+4. Добавить чекбокс в `SettingsModal.tsx` (desktop)
+
+**Как добавить новый инструмент, который подчиняется флагам:**
+
+Новый инструмент автоматически попадёт под фильтрацию если его `function.name` совпадает с именем, добавленным в `disabledToolSet`. Нужно добавить имя инструмента в соответствующий блок флага в `ai.ts` (секция `// ── Feature flags → disabled tools ──`).
+
+### Клиентские инструменты — продолжение
+
 | Инструмент | Описание |
 |---|---|
 | `set_display_state` | Управление пиксельным аватаром. Enum-значения (moods/reactions) берутся из `display_manifest` — массива, который клиент передаёт в body. Если манифеста нет (Telegram) — tool не добавляется. |
