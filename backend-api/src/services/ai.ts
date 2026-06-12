@@ -3091,6 +3091,7 @@ export const sendMessageThroughAi = async (
     ignoreDailyLimit?: boolean;
     countAsUserMessage?: boolean;
     skipHistory?: boolean;
+    skipUserHistory?: boolean;
     persistUserText?: string;
     userTelegramChatId?: number | null;
     userTelegramMessageId?: number | null;
@@ -3674,7 +3675,7 @@ if (abortController.signal.aborted) {
 
   const userTextForHistory = options?.persistUserText?.trim() || text;
   let userMessageId = 0;
-  if (!options?.skipHistory) {
+  if (!options?.skipHistory && !options?.skipUserHistory) {
     const userTelegramChatId = Number.isFinite(Number(options?.userTelegramChatId))
       ? Math.floor(Number(options?.userTelegramChatId))
       : null;

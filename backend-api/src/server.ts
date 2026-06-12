@@ -883,6 +883,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       activeMacros: enabledMacros,
       preferredModel: req.body?.preferred_model || undefined,
       regenerateHint: req.body?.regenerate_hint || undefined,
+      skipUserHistory: Boolean(req.body?.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
@@ -2920,6 +2921,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       activeMacros: enabledMacros,
       preferredModel: preferred_model || undefined,
       regenerateHint: regenerate_hint || undefined,
+      skipUserHistory: Boolean(msg.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {

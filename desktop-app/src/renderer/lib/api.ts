@@ -403,7 +403,7 @@ export async function streamChatMessage(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean }
 ) {
   // Update callbacks for this request
   if (callbacks) {
@@ -419,6 +419,7 @@ export async function streamChatMessage(
     if (options?.isVoice) msg.is_voice = true;
     if (options?.preferredModel) msg.preferred_model = options.preferredModel;
     if (options?.regenerate_hint) msg.regenerate_hint = options.regenerate_hint;
+    if (options?.skip_user_history) msg.skip_user_history = true;
     ws.send(JSON.stringify(msg));
     return;
   }
@@ -448,7 +449,7 @@ async function streamChatMessageSSE(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean }
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
@@ -462,6 +463,7 @@ async function streamChatMessageSSE(
     if (options?.isVoice) body.is_voice = true;
     if (options?.preferredModel) body.preferred_model = options.preferredModel;
     if (options?.regenerate_hint) body.regenerate_hint = options.regenerate_hint;
+    if (options?.skip_user_history) body.skip_user_history = true;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',
