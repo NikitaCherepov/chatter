@@ -57,6 +57,7 @@ ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD CO
 ensureChatMessageColumn('images', 'ALTER TABLE chat_messages ADD COLUMN images TEXT');
 ensureChatMessageColumn('audio', 'ALTER TABLE chat_messages ADD COLUMN audio TEXT');
 ensureChatMessageColumn('reasoning_content', 'ALTER TABLE chat_messages ADD COLUMN reasoning_content TEXT');
+ensureChatMessageColumn('tool_calls_json', 'ALTER TABLE chat_messages ADD COLUMN tool_calls_json TEXT');
 
 db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
 

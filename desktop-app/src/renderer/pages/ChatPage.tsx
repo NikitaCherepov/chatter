@@ -284,6 +284,7 @@ export function ChatPage() {
   const [regenHintMsgId, setRegenHintMsgId] = useState<number | null>(null);
   const [regenHintText, setRegenHintText] = useState('');
   const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
+  const [openToolCallsId, setOpenToolCallsId] = useState<number | null>(null);
 
   // Subscribe to TTS state
   useEffect(() => {
@@ -570,6 +571,7 @@ export function ChatPage() {
                   id: res.message_id,
                   ...(res.reply_text ? { content: res.reply_text } : {}),
                   reasoning_content: res.reasoning_content ?? null,
+                  tool_calls: res.tool_calls ?? null,
                   ...(genImages ? { images: genImages } : {})
                 };
               }
@@ -588,6 +590,7 @@ export function ChatPage() {
               return [...updated, {
                 id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
                 reasoning_content: res.reasoning_content ?? null,
+                tool_calls: res.tool_calls ?? null,
                 images: genImages,
               }];
             });
@@ -935,13 +938,14 @@ export function ChatPage() {
           if (assistantMsgCreated) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, ...(genImages ? { images: genImages } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}) }
                 : m
             ));
           } else {
             setMessages((prev) => [...prev, {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
               reasoning_content: res.reasoning_content ?? null,
+              tool_calls: res.tool_calls ?? null,
               images: genImages,
             }]);
           }
@@ -1044,13 +1048,14 @@ export function ChatPage() {
           if (assistantMsgCreated) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, ...(genImages ? { images: genImages } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}) }
                 : m
             ));
           } else {
             setMessages((prev) => [...prev, {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
               reasoning_content: res.reasoning_content ?? null,
+              tool_calls: res.tool_calls ?? null,
               images: genImages,
             }]);
           }
@@ -1710,6 +1715,21 @@ export function ChatPage() {
                         </svg>
                       </button>
                     )}
+                    {msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0 && (
+                      <button
+                        className={`${s.reasoningToggle} ${openToolCallsId === msg.id ? s.reasoningToggleOpen : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenToolCallsId((current) => current === msg.id ? null : msg.id);
+                        }}
+                        title={openToolCallsId === msg.id ? 'Скрыть инструменты' : 'Показать инструменты'}
+                      >
+                        <span>{msg.tool_calls.length} {msg.tool_calls.length === 1 ? 'инструмент' : msg.tool_calls.length < 5 ? 'инструмента' : 'инструментов'}</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    )}
                     {msg.id === lastAssistantId && (
                       <>
                         <button
@@ -1824,6 +1844,24 @@ export function ChatPage() {
                           exit="exit"
                         >
                           <MarkdownRenderer content={msg.reasoning_content} />
+                        </motion.div>
+                      )}
+                      {msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0 && openToolCallsId === msg.id && (
+                        <motion.div
+                          className={s.reasoningPanel}
+                          variants={reasoningPanelVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                        >
+                          {msg.tool_calls.map((tc, i) => (
+                            <div key={tc.id || i} style={{ marginBottom: i < msg.tool_calls!.length - 1 ? '8px' : 0 }}>
+                              <div style={{ fontWeight: 600, marginBottom: 2 }}>{tc.name}</div>
+                              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
+                                {typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments, null, 2)}
+                              </pre>
+                            </div>
+                          ))}
                         </motion.div>
                       )}
                     </AnimatePresence>

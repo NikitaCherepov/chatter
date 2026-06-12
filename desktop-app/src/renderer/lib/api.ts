@@ -149,11 +149,14 @@ export type MessageAudio = {
   voice_id: string;
 };
 
+export type ToolCall = { id?: string; name: string; arguments: any };
+
 export type Message = {
   id: number;
   role: 'user' | 'assistant';
   content: string;
   reasoning_content?: string | null;
+  tool_calls?: ToolCall[] | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   created_at: number;
@@ -244,6 +247,7 @@ export type ChatSendResponse = {
   display_state?: DisplayStatePayload | null;
   model_fallback_notice?: string | null;
   aborted?: boolean;
+  tool_calls?: ToolCall[];
 };
 
 export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[], displayManifest?: { moods: string[]; reactions: string[] }): Promise<ChatSendResponse> {

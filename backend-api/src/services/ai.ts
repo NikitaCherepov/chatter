@@ -3451,6 +3451,7 @@ PRO
   let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
   let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
   const reasoningParts: string[] = [];
+  const toolCallsHistory: Array<{ id?: string; name: string; arguments: any }> = [];
 
   while (loop < effectiveMaxLoops) {
     loop += 1;
@@ -3514,6 +3515,17 @@ PRO
     const message = response?.choices?.[0]?.message || {};
     const stepReasoning = extractReasoning(message, response);
     if (stepReasoning) reasoningParts.push(stepReasoning);
+    // Collect tool calls for UI display
+    if (message.tool_calls?.length) {
+      for (const tc of message.tool_calls) {
+        if (tc.type !== 'function') continue;
+        let parsedArgs: any = tc.function?.arguments ?? tc.arguments;
+        if (typeof parsedArgs === 'string') {
+          try { parsedArgs = JSON.parse(parsedArgs); } catch { /* keep as string */ }
+        }
+        toolCallsHistory.push({ id: tc.id, name: tc.function?.name ?? tc.name ?? '', arguments: parsedArgs });
+      }
+    }
     currentMessages.push(message);
 
     // --- УМНАЯ ОБРАБОТКА ТЕКСТА ---
@@ -3742,9 +3754,10 @@ if (abortController.signal.aborted) {
   const assistantMessageImages = generatedImages.length > 0
     ? generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const }))
     : null;
+  const tcJson = toolCallsHistory.length > 0 ? JSON.stringify(toolCallsHistory) : null;
   const assistantMessageId = options?.skipHistory
     ? 0
-    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent);
+    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent, tcJson);
 
   const safeTokens = Math.max(0, Math.floor(totalTokens));
   const costRub = toRubFromTokens(safeTokens);
@@ -3800,6 +3813,7 @@ if (abortController.signal.aborted) {
     generated_images: generatedImages.length > 0 ? generatedImages : undefined,
     display_state: displayStateSink.value ?? undefined,
     desktop_action: desktopActionSink.value ?? undefined,
+    tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
     usage: {
       tokens_used: totalTokens,
       used_model: usedModel,
