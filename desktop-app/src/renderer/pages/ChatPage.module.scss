@@ -439,6 +439,29 @@
   padding: 12px;
 }
 
+.loadOlderBtn {
+  align-self: center;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 10px;
+  transition: color 0.1s, background-color 0.1s, border-color 0.1s;
+
+  &:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--bg-modal-hover);
+    border-color: var(--border-medium);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
 .messageGroup {
   display: flex;
   flex-direction: column;

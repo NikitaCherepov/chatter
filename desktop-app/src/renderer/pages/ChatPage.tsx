@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -32,12 +32,197 @@ const MAX_IMAGES_FREE = 0;
 const MAX_IMAGES_STANDART = 5;
 const MAX_IMAGES_PRO = 10;
 const MAX_IMAGES_ADMIN = 20;
+const MESSAGE_PAGE_SIZE = 50;
 
 const reasoningPanelVariants = {
   hidden: { opacity: 0, y: -16 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' as const } },
   exit: { opacity: 0, y: -16, transition: { duration: 0.15 } },
 };
+
+const formatMessageTime = (ts: number) => {
+  const d = new Date(ts * 1000);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+type MessageItemProps = {
+  msg: api.Message;
+  isLastAssistant: boolean;
+  isTtsPlaying: boolean;
+  isReasoningOpen: boolean;
+  isRegenHintOpen: boolean;
+  sending: boolean;
+  regenHintText: string;
+  resolveImageUrl: (url: string) => string;
+  onSetMessages: React.Dispatch<React.SetStateAction<api.Message[]>>;
+  onSetViewerImageSrc: (src: string) => void;
+  onDownloadImage: (src: string) => void;
+  onToggleReasoning: (messageId: number) => void;
+  onRegenerate: (messageId: number) => void;
+  onOpenRegenHint: (messageId: number) => void;
+  onCloseRegenHint: () => void;
+  onSetRegenHintText: (value: string) => void;
+  onRegenerateWithHint: (messageId: number, hint: string) => void;
+  onMsgKebabClick: (e: React.MouseEvent, messageId: number) => void;
+};
+
+const MessageItem = React.memo(function MessageItem({
+  msg,
+  isLastAssistant,
+  isTtsPlaying,
+  isReasoningOpen,
+  isRegenHintOpen,
+  sending,
+  regenHintText,
+  resolveImageUrl,
+  onSetMessages,
+  onSetViewerImageSrc,
+  onDownloadImage,
+  onToggleReasoning,
+  onRegenerate,
+  onOpenRegenHint,
+  onCloseRegenHint,
+  onSetRegenHintText,
+  onRegenerateWithHint,
+  onMsgKebabClick,
+}: MessageItemProps) {
+  const reasoningOpen = isReasoningOpen;
+  const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
+
+  return (
+    <div className={`${s.messageGroup} ${reasoningOpen ? s.messageGroupRaised : ''}`}>
+      <div className={s.metaRow}>
+        <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatMessageTime(msg.created_at)}</span>
+        <button
+          className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            ttsSpeak(msg.id, msg.content, msg.audio, (id, audio) => {
+              onSetMessages(prev => prev.map(m => m.id === id ? { ...m, audio } : m));
+            });
+          }}
+          title={isTtsPlaying ? 'Остановить' : 'Озвучить'}
+        >
+          {isTtsPlaying ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16" rx="1" />
+              <rect x="14" y="4" width="4" height="16" rx="1" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+          )}
+        </button>
+        {hasReasoning && (
+          <button
+            className={`${s.reasoningToggle} ${reasoningOpen ? s.reasoningToggleOpen : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleReasoning(msg.id);
+            }}
+            title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+          >
+            <span>Рассуждение</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+        {isLastAssistant && (
+          <>
+            <button className={s.playBtn} onClick={(e) => { e.stopPropagation(); onRegenerate(msg.id); }} title="Перегенерировать" disabled={sending}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+            </button>
+            {isRegenHintOpen ? (
+              <>
+                <div className={s.regenHintOverlay} onClick={onCloseRegenHint} />
+                <div className={s.regenHintPopup}>
+                  <input
+                    className={s.regenHintInput}
+                    autoFocus
+                    placeholder="Инструкция для бота..."
+                    value={regenHintText}
+                    onChange={(e) => onSetRegenHintText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && regenHintText.trim()) onRegenerateWithHint(msg.id, regenHintText);
+                      else if (e.key === 'Escape') onCloseRegenHint();
+                    }}
+                  />
+                  <button
+                    className={s.regenHintSend}
+                    onClick={() => { if (regenHintText.trim()) onRegenerateWithHint(msg.id, regenHintText); }}
+                    disabled={!regenHintText.trim() || sending}
+                    title="Отправить"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                className={s.playBtn}
+                onClick={(e) => { e.stopPropagation(); onOpenRegenHint(msg.id); }}
+                title="Перегенерировать с инструкцией"
+                disabled={sending}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      <div className={s.bubbleWrap}>
+        <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
+          {msg.images && msg.images.length > 0 && (
+            <div className={s.messageImages}>
+              {msg.images.map((img, i) => {
+                const src = resolveImageUrl(img.url);
+                return (
+                  <div key={i} className={s.messageImageWrap}>
+                    <img className={s.messageImage} src={src} alt={img.type === 'generated' ? 'Generated' : 'Photo'} loading="lazy" onClick={() => onSetViewerImageSrc(src)} />
+                    <button className={s.messageImageDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(src); }} title="Скачать">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {msg.role === 'assistant'
+            ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
+            : <div className={s.bubbleTextPlain}>{msg.content}</div>
+          }
+        </div>
+        <AnimatePresence>
+          {hasReasoning && reasoningOpen && (
+            <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+              <MarkdownRenderer content={msg.reasoning_content || ''} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <button className={s.msgKebabBtn} onClick={(e) => onMsgKebabClick(e, msg.id)} title="Действия">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="8" cy="3" r="1.5" />
+            <circle cx="8" cy="8" r="1.5" />
+            <circle cx="8" cy="13" r="1.5" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+});
 
 function getMaxImagesForPlan(plan: string, isAdmin: number): number {
   if (isAdmin === 1) return MAX_IMAGES_ADMIN;
@@ -59,6 +244,8 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
@@ -77,6 +264,8 @@ export function ChatPage() {
   const [renamingTitle, setRenamingTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,14 +339,38 @@ export function ChatPage() {
   const loadMessages = async (chatId: number) => {
     setLoadingMessages(true);
     try {
-      const res = await api.getMessages(chatId, 100);
+      const res = await api.getMessages(chatId, MESSAGE_PAGE_SIZE);
       setMessages(res.messages);
+      setHasMoreMessages(res.messages.length === MESSAGE_PAGE_SIZE);
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {
       setLoadingMessages(false);
     }
   };
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeChatId || loadingOlderMessages || !hasMoreMessages) return;
+    const scroller = messagesScrollRef.current;
+    pendingPrependScrollRef.current = scroller
+      ? { scrollHeight: scroller.scrollHeight, scrollTop: scroller.scrollTop }
+      : null;
+    setLoadingOlderMessages(true);
+    try {
+      const res = await api.getMessages(activeChatId, MESSAGE_PAGE_SIZE, messages.length);
+      setHasMoreMessages(res.messages.length === MESSAGE_PAGE_SIZE);
+      if (res.messages.length > 0) {
+        setMessages(prev => [...res.messages, ...prev]);
+      } else {
+        pendingPrependScrollRef.current = null;
+      }
+    } catch (err) {
+      pendingPrependScrollRef.current = null;
+      console.error('Failed to load older messages:', err);
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }, [activeChatId, loadingOlderMessages, hasMoreMessages, messages.length]);
 
   const selectChat = async (chatId: number) => {
     setActiveChatId(chatId);
@@ -618,14 +831,14 @@ export function ChatPage() {
     if (msgMenuTimerRef.current) clearTimeout(msgMenuTimerRef.current);
   }, []);
 
-  const handleMsgKebabClick = (e: React.MouseEvent, messageId: number) => {
+  const handleMsgKebabClick = useCallback((e: React.MouseEvent, messageId: number) => {
     e.stopPropagation();
     if (msgMenuTimerRef.current) clearTimeout(msgMenuTimerRef.current);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setMsgMenuPos({ x: rect.right + 4, y: rect.top });
     setMsgMenuId(messageId);
     msgMenuTimerRef.current = setTimeout(() => setMsgMenuId(null), 1000);
-  };
+  }, []);
 
   const handleDeleteMessage = async (messageId: number) => {
     if (!activeChatId) return;
@@ -905,7 +1118,17 @@ export function ChatPage() {
   };
 
   const prevMsgCountRef = useRef(0);
+  useLayoutEffect(() => {
+    const pending = pendingPrependScrollRef.current;
+    const scroller = messagesScrollRef.current;
+    if (!pending || !scroller) return;
+    scroller.scrollTop = scroller.scrollHeight - pending.scrollHeight + pending.scrollTop;
+    pendingPrependScrollRef.current = null;
+    prevMsgCountRef.current = messages.length;
+  }, [messages.length]);
+
   useEffect(() => {
+    if (pendingPrependScrollRef.current) return;
     if (messages.length > prevMsgCountRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -1044,11 +1267,7 @@ export function ChatPage() {
   }, []);
 
   const lastAssistantId = messages.filter(m => m.role === 'assistant').pop()?.id ?? null;
-
-  const formatTime = (ts: number) => {
-    const d = new Date(ts * 1000);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  const formatTime = formatMessageTime;
 
   // ── Search ──────────────────────────────────────────────────────────────
 
@@ -1090,15 +1309,15 @@ export function ChatPage() {
     };
   }, []);
 
-  const resolveImageUrl = (url: string) => {
+  const resolveImageUrl = useCallback((url: string) => {
     if (!url.startsWith('/')) return url;
     const tokens = api.loadTokens();
     const separator = url.includes('?') ? '&' : '?';
     const authParam = tokens?.access_token ? `${separator}token=${tokens.access_token}` : '';
     return `${api.API_BASE}${url}${authParam}`;
-  };
+  }, []);
 
-  const handleDownloadImage = async (src: string) => {
+  const handleDownloadImage = useCallback(async (src: string) => {
     try {
       const response = await fetch(src);
       if (!response.ok) throw new Error('download failed');
@@ -1116,7 +1335,21 @@ export function ChatPage() {
       console.error('Failed to download image:', err);
       toast.error('Не удалось сохранить изображение');
     }
-  };
+  }, []);
+
+  const handleToggleReasoning = useCallback((messageId: number) => {
+    setOpenReasoningId((current) => current === messageId ? null : messageId);
+  }, []);
+
+  const handleOpenRegenHint = useCallback((messageId: number) => {
+    setRegenHintMsgId(messageId);
+    setRegenHintText('');
+  }, []);
+
+  const handleCloseRegenHint = useCallback(() => {
+    setRegenHintMsgId(null);
+    setRegenHintText('');
+  }, []);
 
   const renderSnippet = (snippet: string) => {
     const parts = snippet.split(/(<<|>>)/);
@@ -1405,11 +1638,39 @@ export function ChatPage() {
                 </div>
               </div>
             )}
-            <div className={s.messages}>
+            <div className={s.messages} ref={messagesScrollRef}>
               {loadingMessages && (
                 <div className={s.loadingRow}>Загрузка сообщений...</div>
               )}
+              {!loadingMessages && hasMoreMessages && (
+                <button className={s.loadOlderBtn} onClick={loadOlderMessages} disabled={loadingOlderMessages}>
+                  {loadingOlderMessages ? 'Загрузка...' : 'Загрузить старые сообщения'}
+                </button>
+              )}
               {messages.map((msg) => (
+                <MessageItem
+                  key={msg.id}
+                  msg={msg}
+                  isLastAssistant={msg.id === lastAssistantId}
+                  isTtsPlaying={ttsPlayingId === msg.id}
+                  isReasoningOpen={openReasoningId === msg.id}
+                  isRegenHintOpen={regenHintMsgId === msg.id}
+                  sending={sending}
+                  regenHintText={regenHintText}
+                  resolveImageUrl={resolveImageUrl}
+                  onSetMessages={setMessages}
+                  onSetViewerImageSrc={setViewerImageSrc}
+                  onDownloadImage={handleDownloadImage}
+                  onToggleReasoning={handleToggleReasoning}
+                  onRegenerate={handleRegenerate}
+                  onOpenRegenHint={handleOpenRegenHint}
+                  onCloseRegenHint={handleCloseRegenHint}
+                  onSetRegenHintText={setRegenHintText}
+                  onRegenerateWithHint={handleRegenerateWithHint}
+                  onMsgKebabClick={handleMsgKebabClick}
+                />
+              ))}
+              {false && messages.map((msg) => (
                 <div key={msg.id} className={`${s.messageGroup} ${openReasoningId === msg.id ? s.messageGroupRaised : ''}`}>
                   <div className={s.metaRow}>
                     <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatTime(msg.created_at)}</span>
