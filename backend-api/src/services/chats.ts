@@ -232,6 +232,43 @@ export const getChatMessageOwner = (messageId: number): number | null => {
   return row?.user_id ?? null;
 };
 
+export type ChatMediaItem = {
+  message_id: number;
+  url: string;
+  type: 'user_photo' | 'generated';
+  created_at: number;
+};
+
+export const getChatMedia = (userId: number, chatId: number, limit = 100, offset = 0): ChatMediaItem[] => {
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const rows = db.prepare(`
+    SELECT id, images, created_at
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ? AND images IS NOT NULL AND images != ''
+    ORDER BY id DESC
+    LIMIT ? OFFSET ?
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; images: string; created_at: string }>;
+
+  const items: ChatMediaItem[] = [];
+  for (const row of rows) {
+    try {
+      const imgs = JSON.parse(row.images) as MessageImage[];
+      for (const img of imgs) {
+        if (img.url) {
+          items.push({
+            message_id: row.id,
+            url: img.url,
+            type: img.type,
+            created_at: toUnix(row.created_at),
+          });
+        }
+      }
+    } catch { /* skip invalid JSON */ }
+  }
+  return items;
+};
+
 export const getHistoryForAi = (userId: number, chatId: number, limit: number) => db.prepare(`
   SELECT role, content
   FROM chat_messages

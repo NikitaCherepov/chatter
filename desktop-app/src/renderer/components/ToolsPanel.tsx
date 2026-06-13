@@ -18,6 +18,7 @@ import {
 import { NotebookTool } from './NotebookTool';
 import { TasksTool } from './TasksTool';
 import { MapTool } from './MapTool';
+import { GalleryTool } from './GalleryTool';
 import { FloatingWidget } from './FloatingWidget';
 import s from './ToolsPanel.module.scss';
 
@@ -56,6 +57,14 @@ const TOOL_ICON_MAP = (
   </svg>
 );
 
+const TOOL_ICON_GALLERY = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
 const buildTools = (contentMax: number): ToolEntry[] => [
   {
     id: 'notebook',
@@ -76,6 +85,12 @@ const buildTools = (contentMax: number): ToolEntry[] => [
     description: 'Места и маршруты',
     icon: TOOL_ICON_MAP,
   },
+  {
+    id: 'gallery',
+    title: 'Галерея',
+    description: 'Фото из чата',
+    icon: TOOL_ICON_GALLERY,
+  },
 ];
 
 // ── Component ────────────────────────────────────────────────────────────
@@ -83,6 +98,8 @@ const buildTools = (contentMax: number): ToolEntry[] => [
 type Props = {
   plan: string;
   isAdmin: number;
+  activeChatId?: number | null;
+  onImageClick?: (src: string) => void;
 };
 
 const CONTENT_LIMITS: Record<string, number> = {
@@ -91,7 +108,7 @@ const CONTENT_LIMITS: Record<string, number> = {
   pro: 3000,
 };
 
-export function ToolsPanel({ plan, isAdmin }: Props) {
+export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick }: Props) {
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
   const [openTools, setOpenTools] = useState<ToolId[]>(() => getToolsPanelState().openTools);
   // Per-tool layout states
@@ -193,6 +210,9 @@ export function ToolsPanel({ plan, isAdmin }: Props) {
     }
     if (toolId === 'map') {
       return <MapTool />;
+    }
+    if (toolId === 'gallery') {
+      return <GalleryTool chatId={activeChatId ?? null} onImageClick={onImageClick} />;
     }
     return null;
   };

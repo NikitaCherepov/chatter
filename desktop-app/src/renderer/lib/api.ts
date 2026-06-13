@@ -214,6 +214,25 @@ export async function deleteMessage(chatId: number, messageId: number): Promise<
   return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}`, { method: 'DELETE' });
 }
 
+export type ChatMediaItem = {
+  message_id: number;
+  url: string;
+  type: 'user_photo' | 'generated';
+  created_at: number;
+};
+
+export async function getChatMedia(chatId: number, limit = 100, offset = 0): Promise<{ media: ChatMediaItem[] }> {
+  return apiFetch(`/api/v1/chats/${chatId}/media?limit=${limit}&offset=${offset}`);
+}
+
+export function resolveImageUrl(url: string): string {
+  if (!url.startsWith('/')) return url;
+  const tokens = loadTokens();
+  const separator = url.includes('?') ? '&' : '?';
+  const authParam = tokens?.access_token ? `${separator}token=${tokens.access_token}` : '';
+  return `${API_BASE}${url}${authParam}`;
+}
+
 export async function sendMessageToTelegram(messageId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/messages/${messageId}/send-to-telegram`, { method: 'POST' });
 }
