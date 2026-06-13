@@ -292,6 +292,8 @@ ensureTaskColumn('notify_condition', 'ALTER TABLE tasks ADD COLUMN notify_condit
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
 ensureChatMessageColumn('chat_id', 'ALTER TABLE chat_messages ADD COLUMN chat_id INTEGER');
+ensureChatMessageColumn('archived', 'ALTER TABLE chat_messages ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
+ensureChatMessageColumn('archived_at', 'ALTER TABLE chat_messages ADD COLUMN archived_at DATETIME');
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS user_chats (
@@ -2290,24 +2292,38 @@ const deleteHistoryMessageByUserAndTelegramMessageId = (userId: number, telegram
     DELETE FROM chat_messages
     WHERE user_id = ? AND telegram_message_id = ?
 `).run(userId, telegramMessageId);
-const trimUserHistory = async (userId: number) => db.prepare(`
-    DELETE FROM chat_messages
-    WHERE user_id = ?
-      AND chat_id = ?
-      AND id NOT IN (
-        SELECT id
-        FROM chat_messages
+const trimUserHistory = async (userId: number) => {
+    const chatId = ensureActiveChatForUser(userId);
+    const limit = resolveEffectiveContextWindow(await getUser(userId));
+    const safeLimit = Math.max(1, Math.floor(limit));
+    // The "window" is the last N messages regardless of archived status.
+    // Messages inside the window → active (archived = 0).
+    // Messages outside the window → archived (archived = 1).
+    // Handles context window increases: previously archived messages that now
+    // fall within the window are automatically un-archived.
+    return db.prepare(`
+        UPDATE chat_messages
+        SET archived = CASE
+          WHEN id IN (
+            SELECT id FROM chat_messages
+            WHERE user_id = ? AND chat_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+          ) THEN 0
+          ELSE 1
+        END,
+        archived_at = CASE
+          WHEN id IN (
+            SELECT id FROM chat_messages
+            WHERE user_id = ? AND chat_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+          ) THEN archived_at
+          ELSE CASE WHEN archived = 0 THEN CURRENT_TIMESTAMP ELSE archived_at END
+        END
         WHERE user_id = ? AND chat_id = ?
-        ORDER BY id DESC
-        LIMIT ?
-      )
-`).run(
-    userId,
-    ensureActiveChatForUser(userId),
-    userId,
-    ensureActiveChatForUser(userId),
-    resolveEffectiveContextWindow(await getUser(userId))
-);
+    `).run(userId, chatId, safeLimit, userId, chatId, safeLimit, userId, chatId);
+};
 const clearActiveUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
     WHERE user_id = ? AND chat_id = ?

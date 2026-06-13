@@ -493,6 +493,7 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 - Старые сообщения подгружаются кнопкой "Загрузить старые сообщения" через `GET /api/v1/chats/:id/messages?limit=&offset=`.
 - При prepend старых сообщений ChatPage сохраняет `scrollHeight`/`scrollTop` и восстанавливает позицию через `useLayoutEffect`, чтобы экран не прыгал вниз.
 - Автоскролл вниз пропускается, если идет prepend старых сообщений.
+- Архивные сообщения (`msg.archived === true`) отображаются с пониженной прозрачностью (opacity 0.55) и меткой «архив» в metaRow. Архивные сообщения не отправляются в AI-контекст, но остаются в БД и доступны для просмотра и поиска.
 
 ### Reasoning и tool calls
 

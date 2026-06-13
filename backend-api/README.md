@@ -459,6 +459,17 @@ services/subagents/
 
 Админы (`is_admin = 1`) обходят дневные лимиты.
 
+### Архивация сообщений (soft delete)
+
+Когда количество активных сообщений в чате превышает `context_window_max`, старые сообщения **не удаляются**, а помечаются как архивные:
+
+- Колонки `chat_messages.archived` (INTEGER, 0/1) и `chat_messages.archived_at` (DATETIME).
+- `trimUserHistoryByChat()` выполняет `UPDATE ... SET archived = 1` вместо `DELETE` для сообщений, выходящих за пределы context window.
+- `getHistoryForAi()` выбирает только `archived = 0` — архив не отправляется в AI-контекст.
+- `getChatMessages()` возвращает **все** сообщения (включая архивные) с полем `archived: boolean` — десктоп показывает полную историю.
+- FTS-поиск продолжает работать по архивным сообщениям (триггер `AFTER DELETE` не срабатывает при UPDATE, поэтому записи остаются в `messages_fts`).
+- Удаление чата (`deleteUserChat`) и удаление конкретного сообщения (`deleteUserMessage`) выполняют физический `DELETE` — это не связано с архивацией.
+
 ## AI-инструменты
 
 Инструменты доступны AI через tool calling. Определены в `services/ai.ts` в `toolDefinitions`.
@@ -776,6 +787,19 @@ AI: execute_ssh_command(server_id, command)
 - Формат ответа: `USD (Доллар США): 89.5000 RUB (-0.5000)`
 
 ## Changelog
+
+### 2026-06-14: Soft Delete (Архивация сообщений)
+
+**Проблема:** При превышении `context_window_max` старые сообщения физически удалялись из БД (`DELETE FROM chat_messages`). Десктоп не мог загрузить старые сообщения через пагинацию — их просто не существовало.
+
+**Решение:**
+- `trimUserHistoryByChat()` переведён с `DELETE` на `UPDATE ... SET archived = 1, archived_at = CURRENT_TIMESTAMP`.
+- Добавлены колонки `chat_messages.archived` (INTEGER NOT NULL DEFAULT 0) и `chat_messages.archived_at` (DATETIME).
+- `getHistoryForAi()` фильтрует `WHERE archived = 0` — AI видит только активные сообщения.
+- `getChatMessages()` возвращает все сообщения с полем `archived: boolean`.
+- Индекс `idx_chat_messages_active` для эффективной фильтрации.
+- Desktop: архивный сообщения отображаются с пониженной прозрачностью (opacity 0.55) и меткой «архив».
+- FTS-поиск работает и по архивным сообщениям.
 
 ### 2026-06-13: Reasoning, Tool Calls & Regeneration Metadata
 

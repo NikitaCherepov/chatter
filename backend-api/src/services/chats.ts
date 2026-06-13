@@ -146,12 +146,12 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at
+    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -177,7 +177,8 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       audio: parsedAudio,
       telegram_chat_id: row.telegram_chat_id,
       telegram_message_id: row.telegram_message_id,
-      created_at: toUnix(row.created_at)
+      created_at: toUnix(row.created_at),
+      archived: row.archived === 1
     };
   });
 };
@@ -234,25 +235,40 @@ export const getChatMessageOwner = (messageId: number): number | null => {
 export const getHistoryForAi = (userId: number, chatId: number, limit: number) => db.prepare(`
   SELECT role, content
   FROM chat_messages
-  WHERE user_id = ? AND chat_id = ?
+  WHERE user_id = ? AND chat_id = ? AND archived = 0
   ORDER BY id DESC
   LIMIT ?
 `).all(userId, chatId, limit).reverse() as Array<{ role: ChatRole; content: string }>;
 
 export const trimUserHistoryByChat = (userId: number, chatId: number, limit: number) => {
   const safeLimit = Math.max(1, Math.floor(limit));
+  // The "window" is the last N messages regardless of archived status.
+  // Messages inside the window → active (archived = 0).
+  // Messages outside the window → archived (archived = 1).
+  // This handles context window increases correctly: previously archived messages
+  // that now fall within the window are automatically un-archived.
   return db.prepare(`
-    DELETE FROM chat_messages
-    WHERE user_id = ?
-      AND chat_id = ?
-      AND id NOT IN (
-        SELECT id
-        FROM chat_messages
+    UPDATE chat_messages
+    SET archived = CASE
+      WHEN id IN (
+        SELECT id FROM chat_messages
         WHERE user_id = ? AND chat_id = ?
         ORDER BY id DESC
         LIMIT ?
-      )
-  `).run(userId, chatId, userId, chatId, safeLimit);
+      ) THEN 0
+      ELSE 1
+    END,
+    archived_at = CASE
+      WHEN id IN (
+        SELECT id FROM chat_messages
+        WHERE user_id = ? AND chat_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+      ) THEN archived_at
+      ELSE CASE WHEN archived = 0 THEN CURRENT_TIMESTAMP ELSE archived_at END
+    END
+    WHERE user_id = ? AND chat_id = ?
+  `).run(userId, chatId, safeLimit, userId, chatId, safeLimit, userId, chatId);
 };
 
 export const updateUserContextWindow = (userId: number, contextWindow: number) => {

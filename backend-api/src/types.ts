@@ -69,6 +69,7 @@ export type MessageDto = {
   telegram_chat_id?: number | null;
   telegram_message_id?: number | null;
   created_at: number;
+  archived?: boolean;
 };
 
 export type NoteDto = {

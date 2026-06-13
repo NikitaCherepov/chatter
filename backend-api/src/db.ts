@@ -58,6 +58,13 @@ ensureChatMessageColumn('images', 'ALTER TABLE chat_messages ADD COLUMN images T
 ensureChatMessageColumn('audio', 'ALTER TABLE chat_messages ADD COLUMN audio TEXT');
 ensureChatMessageColumn('reasoning_content', 'ALTER TABLE chat_messages ADD COLUMN reasoning_content TEXT');
 ensureChatMessageColumn('tool_calls_json', 'ALTER TABLE chat_messages ADD COLUMN tool_calls_json TEXT');
+ensureChatMessageColumn('archived', 'ALTER TABLE chat_messages ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
+ensureChatMessageColumn('archived_at', 'ALTER TABLE chat_messages ADD COLUMN archived_at DATETIME');
+
+// Index for efficient filtering: active (non-archived) messages per chat
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_chat_messages_active'").get()) {
+  db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_active ON chat_messages(user_id, chat_id, archived, id DESC)");
+}
 
 db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
 

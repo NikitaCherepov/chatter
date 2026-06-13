@@ -101,9 +101,9 @@ const MessageItem = React.memo(function MessageItem({
   const hasToolCalls = msg.role === 'assistant' && Boolean(msg.tool_calls?.length);
 
   return (
-    <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen ? s.messageGroupRaised : ''}`}>
+    <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
       <div className={s.metaRow}>
-        <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatMessageTime(msg.created_at)}</span>
+        <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatMessageTime(msg.created_at)}{msg.archived ? ' \u00b7 архив' : ''}</span>
         <button
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
           onClick={(e) => {

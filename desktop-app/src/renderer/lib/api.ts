@@ -160,6 +160,7 @@ export type Message = {
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   created_at: number;
+  archived?: boolean;
 };
 
 export type ChatInfo = {
