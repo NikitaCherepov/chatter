@@ -409,6 +409,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .modelLabel {
@@ -419,6 +420,62 @@
 
 .modelSelectWrap {
   width: 220px;
+}
+
+.reasoningControl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+}
+
+.reasoningSlider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rangeInput {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 4px;
+  background: var(--border-medium);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+
+    &:hover {
+      transform: scale(1.2);
+    }
+  }
+
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+}
+
+.reasoningValue {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: left;
+  white-space: nowrap;
 }
 
 // ====== MESSAGES ======

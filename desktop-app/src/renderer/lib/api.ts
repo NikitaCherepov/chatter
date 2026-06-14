@@ -756,6 +756,20 @@ export async function setPreferredModel(modelId: string | null): Promise<{ ok: b
   });
 }
 
+export type ReasoningLevel = 'none' | 'low' | 'medium' | 'high' | 'max';
+
+export async function getReasoningLevel(): Promise<{ reasoning_level: ReasoningLevel | null }> {
+  return apiFetch('/api/v1/user/reasoning-level');
+}
+
+export async function setReasoningLevel(level: ReasoningLevel | null): Promise<{ ok: boolean; reasoning_level: ReasoningLevel | null }> {
+  return apiFetch('/api/v1/user/reasoning-level', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reasoning_level: level }),
+  });
+}
+
 // ---------- Feature flags (tool restrictions) ----------
 
 export type FeatureFlags = {

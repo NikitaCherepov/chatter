@@ -51,6 +51,7 @@ ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_co
 ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('preferred_model', 'ALTER TABLE users ADD COLUMN preferred_model TEXT');
 ensureUserColumn('feature_flags', 'ALTER TABLE users ADD COLUMN feature_flags TEXT');
+ensureUserColumn('reasoning_level', 'ALTER TABLE users ADD COLUMN reasoning_level TEXT');
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');

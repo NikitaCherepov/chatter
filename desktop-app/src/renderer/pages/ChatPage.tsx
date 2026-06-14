@@ -330,6 +330,7 @@ export function ChatPage() {
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
+  const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
   const [regenHintMsgId, setRegenHintMsgId] = useState<number | null>(null);
   const [regenHintText, setRegenHintText] = useState('');
   const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
@@ -340,13 +341,17 @@ export function ChatPage() {
     return ttsSubscribe((id) => setTtsPlayingId(id));
   }, []);
 
-  // Load models catalog
+  // Load models catalog + reasoning level
   useEffect(() => {
     (async () => {
       try {
         const res = await api.getModels();
         setModelsCatalog(res.models);
         setPreferredModel(res.preferred_model);
+      } catch {}
+      try {
+        const res = await api.getReasoningLevel();
+        setReasoningLevel(res.reasoning_level);
       } catch {}
     })();
   }, []);
@@ -1666,36 +1671,98 @@ export function ChatPage() {
           </div>
         ) : (
           <>
-            {modelsCatalog.length > 0 && (
-              <div className={s.chatTopBar}>
-                <div className={s.modelSelector}>
-                  <label className={s.modelLabel}>Модель:</label>
-                  <div className={s.modelSelectWrap}>
-                    <Select
-                      options={[
-                        { value: '', label: 'Авто', hint: 'Автоматический выбор' },
-                        ...modelsCatalog.map(m => ({
-                          value: m.id,
-                          label: m.name,
-                          hint: m.description || undefined,
-                        })),
-                      ]}
-                      value={preferredModel || ''}
-                      onChange={async (val) => {
-                        const modelId = val || null;
+            <div className={s.chatTopBar}>
+              <div className={s.modelSelector}>
+                {modelsCatalog.length > 0 && (
+                  <>
+                    <label className={s.modelLabel}>Модель:</label>
+                    <div className={s.modelSelectWrap}>
+                      <Select
+                        options={[
+                          { value: '', label: 'Авто', hint: 'Автоматический выбор' },
+                          ...modelsCatalog.map(m => ({
+                            value: m.id,
+                            label: m.name,
+                            hint: m.description || undefined,
+                          })),
+                        ]}
+                        value={preferredModel || ''}
+                        onChange={async (val) => {
+                          const modelId = val || null;
+                          try {
+                            await api.setPreferredModel(modelId);
+                            setPreferredModel(modelId);
+                          } catch {
+                            toast.error('Не удалось сменить модель');
+                          }
+                        }}
+                        placeholder="Авто"
+                      />
+                    </div>
+                  </>
+                )}
+                <div className={s.reasoningControl}>
+                  <label className={s.modelLabel} title="Глубина размышления модели">Размышление:</label>
+                  <div className={s.reasoningSlider}>
+                    <input
+                      type="range"
+                      min={0}
+                      max={5}
+                      step={1}
+                      value={
+                        reasoningLevel === 'none' ? 1 :
+                        reasoningLevel === 'low' ? 2 :
+                        reasoningLevel === 'medium' ? 3 :
+                        reasoningLevel === 'high' ? 4 :
+                        reasoningLevel === 'max' ? 5 : 0
+                      }
+                      onChange={(e) => {
+                        const idx = Number(e.target.value);
+                        const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
+                        setReasoningLevel(levels[idx]);
+                      }}
+                      onMouseUp={async (e) => {
+                        const idx = Number((e.target as HTMLInputElement).value);
+                        const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
                         try {
-                          await api.setPreferredModel(modelId);
-                          setPreferredModel(modelId);
+                          await api.setReasoningLevel(levels[idx]);
                         } catch {
-                          toast.error('Не удалось сменить модель');
+                          toast.error('Не удалось изменить уровень размышления');
                         }
                       }}
-                      placeholder="Авто"
+                      onTouchEnd={async (e) => {
+                        const idx = Number((e.target as HTMLInputElement).value);
+                        const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
+                        try {
+                          await api.setReasoningLevel(levels[idx]);
+                        } catch {
+                          toast.error('Не удалось изменить уровень размышления');
+                        }
+                      }}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          const idx = Number((e.target as HTMLInputElement).value);
+                          const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
+                          try {
+                            await api.setReasoningLevel(levels[idx]);
+                          } catch {
+                            toast.error('Не удалось изменить уровень размышления');
+                          }
+                        }
+                      }}
+                      className={s.rangeInput}
                     />
+                    <span className={s.reasoningValue}>
+                      {reasoningLevel === null ? 'Авто' :
+                       reasoningLevel === 'none' ? 'Выкл' :
+                       reasoningLevel === 'low' ? 'Низк' :
+                       reasoningLevel === 'medium' ? 'Ср' :
+                       reasoningLevel === 'high' ? 'Выс' : 'Макс'}
+                    </span>
                   </div>
                 </div>
               </div>
-            )}
+            </div>
             <div className={s.messages} ref={messagesScrollRef}>
               {loadingMessages && (
                 <div className={s.loadingRow}>Загрузка сообщений...</div>

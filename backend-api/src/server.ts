@@ -2075,6 +2075,28 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
   return res.json({ ok: true, preferred_model: modelId });
 });
 
+// ─── Reasoning level ────────────────────────────────────────────────────────
+
+const VALID_REASONING_LEVELS = ['none', 'low', 'medium', 'high', 'max'] as const;
+
+app.get('/api/v1/user/reasoning-level', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  return res.json({ reasoning_level: user?.reasoning_level || null });
+});
+
+app.put('/api/v1/user/reasoning-level', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const level = req.body?.reasoning_level ?? null;
+  if (level !== null) {
+    if (typeof level !== 'string' || !VALID_REASONING_LEVELS.includes(level as any)) {
+      return res.status(400).json({ error: 'bad_reasoning_level' });
+    }
+  }
+  db.prepare('UPDATE users SET reasoning_level = ? WHERE id = ?').run(level, userId);
+  return res.json({ ok: true, reasoning_level: level });
+});
+
 // ─── Feature flags (tool restrictions) ──────────────────────────────────────
 
 const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_internet', 'disable_personal', 'disable_subagents'] as const;
