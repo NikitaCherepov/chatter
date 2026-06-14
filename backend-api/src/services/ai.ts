@@ -214,10 +214,37 @@ export const getModelsCatalog = () => MANUAL_MODELS.map(m => ({
   id: m.id,
   name: m.name,
   description: m.description,
+  reasoning_levels: getReasoningLevelsForBaseURL(m.baseURL),
 }));
 
 export const resolveManualModel = (modelId: string): ManualModelEntry | undefined =>
   MANUAL_MODELS_MAP.get(modelId);
+
+const ALL_REASONING_LEVELS: ReasoningLevel[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+
+/**
+ * Определяет доступные уровни reasoning по baseURL провайдера.
+ * Возвращает null если reasoning control не поддерживается (ползунок скрыт).
+ */
+export const getReasoningLevelsForBaseURL = (baseURL: string): ReasoningLevel[] | null => {
+  const url = (baseURL || '').toLowerCase();
+
+  if (url.includes('openrouter.ai')) {
+    return ALL_REASONING_LEVELS; // none | minimal | low | medium | high | xhigh
+  }
+
+  if (url.includes('deepseek.com')) {
+    return ['none', 'high', 'xhigh']; // low/medium маппятся в high, xhigh → max
+  }
+
+  return null; // неизвестный провайдер — ползунок не показываем
+};
+
+/**
+ * Доступные уровни в auto-режиме (когда провайдер заранее неизвестен).
+ * Показываем все — адаптер на месте разберётся.
+ */
+export const getAutoReasoningLevels = (): ReasoningLevel[] => ALL_REASONING_LEVELS;
 
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
@@ -290,7 +317,7 @@ const getProviderErrorSummary = (err: any) => {
   };
 };
 
-export type ReasoningLevel = 'none' | 'low' | 'medium' | 'high' | 'max' | 'auto';
+export type ReasoningLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'auto';
 
 /**
  * Адаптирует requestBody под конкретного провайдера перед отправкой.
@@ -318,13 +345,15 @@ const adaptRequestBodyForProvider = (
   if (url.includes('deepseek.com')) {
     const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, ...body } = requestBody as any;
     if (!level || level === 'auto') return body;
-    if (level === 'none') {
+    if (level === 'none' || level === 'minimal') {
       body.thinking = { type: 'disabled' };
     } else if (level === 'low' || level === 'medium') {
       // DeepSeek маппит low/medium в high — отправляем high напрямую
       body.reasoning_effort = 'high';
+    } else if (level === 'xhigh') {
+      body.reasoning_effort = 'max';
     } else {
-      // high → high, max → max
+      // high → high
       body.reasoning_effort = level;
     }
     return body;

@@ -8,7 +8,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, create
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, activeGenerations } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, activeGenerations } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -2055,6 +2055,7 @@ app.get('/api/v1/models', (req: AuthedRequest, res) => {
   return res.json({
     models: catalog,
     preferred_model: user?.preferred_model || null,
+    auto_reasoning_levels: getAutoReasoningLevels(),
   });
 });
 
@@ -2077,7 +2078,7 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
 
 // ─── Reasoning level ────────────────────────────────────────────────────────
 
-const VALID_REASONING_LEVELS = ['none', 'low', 'medium', 'high', 'max'] as const;
+const VALID_REASONING_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 
 app.get('/api/v1/user/reasoning-level', (req: AuthedRequest, res) => {
   const userId = effectiveUserId(req);

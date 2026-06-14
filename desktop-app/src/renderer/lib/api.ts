@@ -742,9 +742,10 @@ export type ModelCatalogEntry = {
   id: string;
   name: string;
   description: string;
+  reasoning_levels?: ReasoningLevel[] | null;
 };
 
-export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null }> {
+export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; auto_reasoning_levels?: ReasoningLevel[] }> {
   return apiFetch('/api/v1/models');
 }
 
@@ -756,7 +757,7 @@ export async function setPreferredModel(modelId: string | null): Promise<{ ok: b
   });
 }
 
-export type ReasoningLevel = 'none' | 'low' | 'medium' | 'high' | 'max';
+export type ReasoningLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export async function getReasoningLevel(): Promise<{ reasoning_level: ReasoningLevel | null }> {
   return apiFetch('/api/v1/user/reasoning-level');

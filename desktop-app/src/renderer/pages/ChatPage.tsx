@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -331,6 +331,7 @@ export function ChatPage() {
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
   const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
+  const [autoReasoningLevels, setAutoReasoningLevels] = useState<api.ReasoningLevel[]>(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
   const [regenHintMsgId, setRegenHintMsgId] = useState<number | null>(null);
   const [regenHintText, setRegenHintText] = useState('');
   const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
@@ -348,6 +349,7 @@ export function ChatPage() {
         const res = await api.getModels();
         setModelsCatalog(res.models);
         setPreferredModel(res.preferred_model);
+        if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
       } catch {}
       try {
         const res = await api.getReasoningLevel();
@@ -358,6 +360,20 @@ export function ChatPage() {
 
   // Ref flag: when true, the next handleSend() call originated from voice input (wake word)
   const isVoiceInputRef = useRef(false);
+
+  // Доступные уровни reasoning: для ручной модели — по её capability, для auto — все
+  const availableLevels = useMemo<(api.ReasoningLevel | null)[]>(() => {
+    if (preferredModel) {
+      const model = modelsCatalog.find(m => m.id === preferredModel);
+      if (model?.reasoning_levels) return [null, ...model.reasoning_levels];
+      return [null]; // модель не поддерживает reasoning
+    }
+    return [null, ...autoReasoningLevels];
+  }, [preferredModel, modelsCatalog, autoReasoningLevels]);
+
+  const LEVEL_LABELS: Record<string, string> = {
+    'null': 'Авто', 'none': 'Выкл', 'minimal': 'Мин', 'low': 'Низк', 'medium': 'Ср', 'high': 'Выс', 'xhigh': 'Макс',
+  };
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
@@ -1701,40 +1717,32 @@ export function ChatPage() {
                     </div>
                   </>
                 )}
+                {availableLevels.length > 1 && (
                 <div className={s.reasoningControl}>
                   <label className={s.modelLabel} title="Глубина размышления модели">Размышление:</label>
                   <div className={s.reasoningSlider}>
                     <input
                       type="range"
                       min={0}
-                      max={5}
+                      max={availableLevels.length - 1}
                       step={1}
-                      value={
-                        reasoningLevel === 'none' ? 1 :
-                        reasoningLevel === 'low' ? 2 :
-                        reasoningLevel === 'medium' ? 3 :
-                        reasoningLevel === 'high' ? 4 :
-                        reasoningLevel === 'max' ? 5 : 0
-                      }
+                      value={Math.max(0, availableLevels.indexOf(reasoningLevel))}
                       onChange={(e) => {
                         const idx = Number(e.target.value);
-                        const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
-                        setReasoningLevel(levels[idx]);
+                        setReasoningLevel(availableLevels[idx] ?? null);
                       }}
                       onMouseUp={async (e) => {
                         const idx = Number((e.target as HTMLInputElement).value);
-                        const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
                         try {
-                          await api.setReasoningLevel(levels[idx]);
+                          await api.setReasoningLevel(availableLevels[idx] ?? null);
                         } catch {
                           toast.error('Не удалось изменить уровень размышления');
                         }
                       }}
                       onTouchEnd={async (e) => {
                         const idx = Number((e.target as HTMLInputElement).value);
-                        const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
                         try {
-                          await api.setReasoningLevel(levels[idx]);
+                          await api.setReasoningLevel(availableLevels[idx] ?? null);
                         } catch {
                           toast.error('Не удалось изменить уровень размышления');
                         }
@@ -1742,9 +1750,8 @@ export function ChatPage() {
                       onKeyDown={async (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           const idx = Number((e.target as HTMLInputElement).value);
-                          const levels: (api.ReasoningLevel | null)[] = [null, 'none', 'low', 'medium', 'high', 'max'];
                           try {
-                            await api.setReasoningLevel(levels[idx]);
+                            await api.setReasoningLevel(availableLevels[idx] ?? null);
                           } catch {
                             toast.error('Не удалось изменить уровень размышления');
                           }
@@ -1753,14 +1760,11 @@ export function ChatPage() {
                       className={s.rangeInput}
                     />
                     <span className={s.reasoningValue}>
-                      {reasoningLevel === null ? 'Авто' :
-                       reasoningLevel === 'none' ? 'Выкл' :
-                       reasoningLevel === 'low' ? 'Низк' :
-                       reasoningLevel === 'medium' ? 'Ср' :
-                       reasoningLevel === 'high' ? 'Выс' : 'Макс'}
+                      {LEVEL_LABELS[String(reasoningLevel)] ?? 'Авто'}
                     </span>
                   </div>
                 </div>
+                )}
               </div>
             </div>
             <div className={s.messages} ref={messagesScrollRef}>
