@@ -24,6 +24,7 @@ const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй е
 const MAX_TOOL_LOOPS = 80;
 const MAX_TOOL_LOOPS_VOICE = 10;
 const TOOL_RESULT_PREVIEW_MAX = 250;
+const PC_COMMAND_OUTPUT_MAX = 15_000;
 
 // Реестр активных генераций для остановки по userId
 export const activeGenerations = new Map<number, AbortController>();
@@ -2604,7 +2605,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         return JSON.stringify({
           status: 'success',
           command,
-          output: output.slice(-5000),
+          output: output.slice(-PC_COMMAND_OUTPUT_MAX),
         });
       } catch (err: any) {
         return JSON.stringify({ status: 'error', message: `Ошибка выполнения: ${err?.message || String(err)}`, command });
@@ -2671,7 +2672,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({
         status: 'success',
         command,
-        output: output.slice(-5000),
+        output: output.slice(-PC_COMMAND_OUTPUT_MAX),
       });
     } catch (err: any) {
       if (err?.message === 'rejected_by_user') {
