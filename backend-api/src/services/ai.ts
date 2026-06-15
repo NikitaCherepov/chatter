@@ -2607,24 +2607,36 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
 
-    sendToDesktop(user.id, {
+    // Wait for user response via WS -> POST /api/v1/pc-commands/approve.
+    // Register before sending so a very fast approval cannot race the pending store.
+    const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
+    const confirmationPromise = new Promise<any>((resolve, reject) => {
+      registerPendingPcConfirmation(confirmationId, {
+        userId: user.id,
+        command,
+        resolve,
+        reject,
+        createdAt: Date.now()
+      });
+    });
+
+    const sent = sendToDesktop(user.id, {
       type: 'desktop_action',
       action: 'pc_command_confirmation',
       value: { confirmation_id: confirmationId, command }
     });
 
-    // Wait for user response via WS → POST /api/v1/pc-commands/approve
-    const { registerPendingPcConfirmation } = await import('./pc-command-confirmations.js');
-    try {
-      const result = await new Promise<any>((resolve, reject) => {
-        registerPendingPcConfirmation(confirmationId, {
-          userId: user.id,
-          command,
-          resolve,
-          reject,
-          createdAt: Date.now()
-        });
+    if (!sent) {
+      deletePendingPcConfirmation(confirmationId);
+      return JSON.stringify({
+        status: 'error',
+        message: 'Не удалось доставить карточку подтверждения на десктоп. Проверь WebSocket-подключение приложения и попробуй ещё раз.',
+        command,
       });
+    }
+
+    try {
+      const result = await confirmationPromise;
 
       const output = typeof result === 'string' ? result : JSON.stringify(result);
       return JSON.stringify({

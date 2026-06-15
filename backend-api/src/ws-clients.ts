@@ -15,10 +15,22 @@ export type WsClient = {
 // When looking up, ai.ts passes effectiveUserId — which is what sendMessageThroughAi uses.
 export const wsClients = new Map<number, WsClient>();
 
+const wsStateName = (state: number): string => {
+  if (state === WebSocket.CONNECTING) return 'CONNECTING';
+  if (state === WebSocket.OPEN) return 'OPEN';
+  if (state === WebSocket.CLOSING) return 'CLOSING';
+  if (state === WebSocket.CLOSED) return 'CLOSED';
+  return `UNKNOWN(${state})`;
+};
+
 export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000, signal?: AbortSignal): Promise<any> {
   const client = wsClients.get(userId);
   if (!client) {
     console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} NOT FOUND in wsClients (keys: [${[...wsClients.keys()].join(',')}])`);
+    throw new Error('desktop_not_connected');
+  }
+  if (client.ws.readyState !== WebSocket.OPEN) {
+    console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} ws not open (${wsStateName(client.ws.readyState)})`);
     throw new Error('desktop_not_connected');
   }
 
@@ -47,22 +59,46 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
       reject: (err: Error) => { signal?.removeEventListener('abort', onAbort); clearTimeout(timer); reject(err); },
       timer,
     });
-    client.ws.send(JSON.stringify({ type: 'execute_ipc', request_id: requestId, ipc_type: ipcType, payload }));
+    try {
+      client.ws.send(JSON.stringify({ type: 'execute_ipc', request_id: requestId, ipc_type: ipcType, payload }), (err) => {
+        if (!err) return;
+        client.pendingIpc.delete(requestId);
+        signal?.removeEventListener('abort', onAbort);
+        clearTimeout(timer);
+        reject(err);
+      });
+    } catch (err: any) {
+      client.pendingIpc.delete(requestId);
+      signal?.removeEventListener('abort', onAbort);
+      clearTimeout(timer);
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
   });
 }
 
 export function isDesktopOnline(userId: number): boolean {
   const client = wsClients.get(userId);
-  console.log(`[DEBUG] isDesktopOnline(${userId}): ${client ? 'FOUND (apiUserId=' + client.apiUserId + ', effectiveUserId=' + client.effectiveUserId + ')' : 'NOT FOUND'} (wsClients keys: [${[...wsClients.keys()].join(',')}])`);
-  return !!client;
+  console.log(`[DEBUG] isDesktopOnline(${userId}): ${client ? 'FOUND (apiUserId=' + client.apiUserId + ', effectiveUserId=' + client.effectiveUserId + ', state=' + wsStateName(client.ws.readyState) + ')' : 'NOT FOUND'} (wsClients keys: [${[...wsClients.keys()].join(',')}])`);
+  return !!client && client.ws.readyState === WebSocket.OPEN;
 }
 
 /** Send a JSON message directly to a desktop client via WS. Returns false if not connected. */
 export function sendToDesktop(userId: number, data: any): boolean {
   const client = wsClients.get(userId);
   if (!client) return false;
-  client.ws.send(JSON.stringify(data));
-  return true;
+  if (client.ws.readyState !== WebSocket.OPEN) {
+    console.log(`[DEBUG] sendToDesktop: userId=${userId} ws not open (${wsStateName(client.ws.readyState)})`);
+    return false;
+  }
+  try {
+    client.ws.send(JSON.stringify(data), (err) => {
+      if (err) console.error(`[ws] sendToDesktop failed for userId=${userId}:`, err);
+    });
+    return true;
+  } catch (err) {
+    console.error(`[ws] sendToDesktop threw for userId=${userId}:`, err);
+    return false;
+  }
 }
 
 /** Register a WS client under both apiUserId and effectiveUserId keys. */
