@@ -2946,6 +2946,16 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   }
 
   const enabledMacros = getEnabledMacros(userId);
+  const sendWsJson = (payload: Record<string, unknown>) => new Promise<void>((resolve, reject) => {
+    if (client.ws.readyState !== WebSocket.OPEN) {
+      reject(new Error('desktop_not_connected'));
+      return;
+    }
+    client.ws.send(JSON.stringify(payload), (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
 
   try {
     const rawUserRecord = getUserById(userId);
@@ -2962,20 +2972,20 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       skipUserHistory: Boolean(msg.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
-      onIntermediateMessage: (stepText) => {
-        client.ws.send(JSON.stringify({ type: 'intermediate', text: stepText }));
+      onIntermediateMessage: async (stepText) => {
+        await sendWsJson({ type: 'intermediate', text: stepText });
       },
-      onStateChange: (state) => {
-        client.ws.send(JSON.stringify({ type: 'display_state', ...state }));
+      onStateChange: async (state) => {
+        await sendWsJson({ type: 'display_state', ...state });
       },
-      onDesktopAction: (action) => {
-        client.ws.send(JSON.stringify({ type: 'desktop_action', ...action }));
+      onDesktopAction: async (action) => {
+        await sendWsJson({ type: 'desktop_action', ...action });
       },
-      onToolStatus: (statusText) => {
-        client.ws.send(JSON.stringify({ type: 'tool_status', text: statusText }));
+      onToolStatus: async (statusText) => {
+        await sendWsJson({ type: 'tool_status', text: statusText });
       },
-      onMapUpdate: (data) => {
-        client.ws.send(JSON.stringify({ type: 'map_update', ...data }));
+      onMapUpdate: async (data) => {
+        await sendWsJson({ type: 'map_update', ...data });
       },
     });
 

@@ -2584,8 +2584,16 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     // Check auto-approve: settings + policies
     const { getPcCommandsSettings, isPcCommandAutoApproved } = await import('./pc-commands.js');
+    console.log('[pc_command] checking approval policy', { userId: user.id, command: command.slice(0, 300) });
     const settings = getPcCommandsSettings(user.id);
-    const autoOk = settings.auto_approve_all || isPcCommandAutoApproved(user.id, command);
+    const policyAutoOk = isPcCommandAutoApproved(user.id, command);
+    const autoOk = settings.auto_approve_all || policyAutoOk;
+    console.log('[pc_command] approval policy result', {
+      userId: user.id,
+      autoApproveAll: settings.auto_approve_all,
+      policyAutoOk,
+      autoOk,
+    });
 
     if (autoOk) {
       // Execute immediately via WS IPC
@@ -2620,10 +2628,31 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       });
     });
 
-    const sent = sendToDesktop(user.id, {
-      type: 'desktop_action',
+    const confirmationAction: DesktopActionPayload = {
       action: 'pc_command_confirmation',
       value: { confirmation_id: confirmationId, command }
+    };
+
+    let sent = false;
+    try {
+      if (subagentExtra?.onDesktopAction) {
+        await subagentExtra.onDesktopAction(confirmationAction);
+        sent = true;
+      } else {
+        sent = sendToDesktop(user.id, {
+          type: 'desktop_action',
+          ...confirmationAction
+        });
+      }
+    } catch (err) {
+      console.error('[pc_command] failed to send confirmation action:', err);
+    }
+
+    console.log('[pc_command] confirmation dispatch', {
+      userId: user.id,
+      confirmationId,
+      via: subagentExtra?.onDesktopAction ? 'current_ws_callback' : 'ws_registry',
+      sent,
     });
 
     if (!sent) {
