@@ -118,6 +118,7 @@ export function SettingsModal({ onClose }: Props) {
     disable_memory_write: false,
     disable_pc_control_lite: false,
     disable_pc_control_full: false,
+    disable_pc_commands: false,
     disable_internet: false,
     disable_personal: false,
     disable_subagents: false,
@@ -677,7 +678,25 @@ export function SettingsModal({ onClose }: Props) {
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>Ограниченный режим</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает SSH, выполнение команд, макросы, отправку писем, создание задач. Умный дом, карты, чтение почты и виджеты остаются.
+                          Отключает SSH, макросы, отправку писем, создание задач. Умный дом, карты, чтение почты и виджеты остаются.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_pc_commands}
+                        onChange={() => handleToggleFlag('disable_pc_commands')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без команд на ПК</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          Отключает только выполнение команд на компьютере (execute_pc_command). SSH, макросы и чтение файловой системы остаются.
                         </div>
                       </div>
                     </label>
@@ -695,7 +714,7 @@ export function SettingsModal({ onClose }: Props) {
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>Полная блокировка</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает всё десктопное: серверы, макросы, умный дом, почту, карты, виджеты, файловую систему.
+                          Отключает всё десктопное: серверы, макросы, умный дом, почту, карты, виджеты, файловую систему, команды на ПК.
                         </div>
                       </div>
                     </label>

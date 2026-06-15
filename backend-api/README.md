@@ -558,8 +558,9 @@ Desktop показывает эти поля как раскрывающиеся
 | Ключ | Название в UI | Отключаемые инструменты |
 |---|---|---|
 | `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
-| `disable_pc_control_lite` | Ограниченный режим | `execute_ssh_command`, `execute_pc_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
-| `disable_pc_control_full` | Полная блокировка | Всё из лайт + `control_smart_home`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
+| `disable_pc_control_lite` | Ограниченный режим | `execute_ssh_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
+| `disable_pc_commands` | Без команд на ПК | `execute_pc_command` |
+| `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command` + `control_smart_home`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
 | `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
 | `disable_personal` | Гостевой режим | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + скрытие промпта и горячей памяти из system prompt |
 | `disable_subagents` | Без субагентов | `invoke_subagent` |

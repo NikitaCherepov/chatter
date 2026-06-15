@@ -464,8 +464,9 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 | Ключ | Название | Отключает |
 |---|---|---|
 | `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note`. Hot memory (`update_core_memory`) остаётся доступной |
-| `disable_pc_control_lite` | Ограниченный режим | SSH, выполнение команд, макросы, отправка писем, задачи, серверы, runbooks. Умный дом, карты, чтение почты, виджеты, файловая система остаются |
-| `disable_pc_control_full` | Полная блокировка | Всё из лайт + умный дом, почта, карты, виджеты, файловая система |
+| `disable_pc_control_lite` | Ограниченный режим | SSH, макросы, отправка писем, задачи, серверы, runbooks. Умный дом, карты, чтение почты, виджеты, файловая система остаются |
+| `disable_pc_commands` | Без команд на ПК | Только `execute_pc_command`. SSH, макросы, файловая система остаются |
+| `disable_pc_control_full` | Полная блокировка | Всё из lite + команды на ПК + умный дом, почта, карты, виджеты, файловая система |
 | `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
 | `disable_personal` | Гостевой режим | Промпт, hot/cold memory, заметки, задачи. AI общается с чистого листа |
 | `disable_subagents` | Без субагентов | `invoke_subagent` |

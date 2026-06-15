@@ -3212,6 +3212,7 @@ export const sendMessageThroughAi = async (
       disable_memory_write?: boolean;
       disable_pc_control_lite?: boolean;
       disable_pc_control_full?: boolean;
+      disable_pc_commands?: boolean;
       disable_internet?: boolean;
       disable_personal?: boolean;
       disable_subagents?: boolean;
@@ -3299,10 +3300,13 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('save_note');
     disabledToolSet.add('delete_note');
   }
+  // Команды на ПК: отключает только execute_pc_command
+  if (flags?.disable_pc_commands) {
+    disabledToolSet.add('execute_pc_command');
+  }
   // Лайт: отключает опасное, оставляет read-only
   if (flags?.disable_pc_control_lite) {
     disabledToolSet.add('execute_ssh_command');
-    disabledToolSet.add('execute_pc_command');
     disabledToolSet.add('list_devops_servers');
     disabledToolSet.add('list_devops_runbooks');
     disabledToolSet.add('read_devops_runbook');

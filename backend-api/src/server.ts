@@ -2100,7 +2100,7 @@ app.put('/api/v1/user/reasoning-level', (req: AuthedRequest, res: any) => {
 
 // ─── Feature flags (tool restrictions) ──────────────────────────────────────
 
-const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_internet', 'disable_personal', 'disable_subagents'] as const;
+const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_subagents'] as const;
 
 app.get('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);

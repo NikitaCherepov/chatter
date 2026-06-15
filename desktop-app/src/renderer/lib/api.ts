@@ -777,6 +777,7 @@ export type FeatureFlags = {
   disable_memory_write: boolean;
   disable_pc_control_lite: boolean;
   disable_pc_control_full: boolean;
+  disable_pc_commands: boolean;
   disable_internet: boolean;
   disable_personal: boolean;
   disable_subagents: boolean;
