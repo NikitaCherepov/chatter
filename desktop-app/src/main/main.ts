@@ -509,7 +509,13 @@ function createWindow() {
       try {
         const { exec } = require('child_process');
         const execAsync = util.promisify(exec);
-        const { stdout, stderr } = await execAsync(cmd, {
+        // Fix кракозябр: на Windows кодируем вывод в UTF-8.
+        // chcp 65001 переключает кодовую страницу консоли перед выполнением команды.
+        const execCmd = process.platform === 'win32'
+          ? `chcp 65001 >nul 2>&1 && ${cmd}`
+          : cmd;
+        const { stdout, stderr } = await execAsync(execCmd, {
+          encoding: 'utf-8',
           timeout: 30000,
           maxBuffer: 1024 * 1024,
           windowsHide: true,

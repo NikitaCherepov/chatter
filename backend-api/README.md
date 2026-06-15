@@ -115,6 +115,30 @@ POST /tts/generate { text, voice_id, message_id }
 - `preferred_model` (в таблице `users`) — `NULL` = авто, `"tw-gpt4o"` = конкретная модель
 - Если выбранная модель недоступна — fallback на авто-роутинг + уведомление юзеру
 
+### Reasoning level (глубина размышления модели)
+
+Позволяет юзеру управлять глубиной reasoning/thinking модели. Хранится в `users.reasoning_level` (`NULL` = авто). Прокидывается через весь стек вызовов и применяется в `adaptRequestBodyForProvider` — адаптере, который определяет провайдера по `baseURL` и транслирует уровень в нативный параметр.
+
+**Поддерживаемые провайдеры:**
+
+| Провайдер (по `baseURL`) | Нативный параметр | Уровни | Маппинг |
+|---|---|---|---|
+| OpenRouter (`openrouter.ai`) | `reasoning: { effort: level }` | `none, minimal, low, medium, high, xhigh` | 1:1 |
+| DeepSeek direct (`deepseek.com`) | `reasoning_effort` / `thinking` | `none, high, xhigh` | `none`→`thinking:{type:"disabled"}`, `high`→`reasoning_effort:"high"`, `xhigh`→`reasoning_effort:"max"` |
+| Прочие (Timeweb, vLLM) | — | — | Не трогается, текущая логика (`thinking`/`clear_thinking`) |
+
+**Поведение в режимах:**
+- **Авто (`NULL`)** — адаптер не добавляет reasoning-параметры, провайдер использует поведение по умолчанию.
+- **LITE-router / `callLiteAi`** — всегда `'none'`, юзер не контролирует.
+- **PRO main/final completion** — уровень юзера (или `NULL` = авто).
+- **Ручная модель** — уровень юзера применяется, если `baseURL` модели поддерживается.
+
+**Capability API:** `GET /api/v1/models` возвращает `reasoning_levels` для каждой ручной модели (по `baseURL`) и `auto_reasoning_levels` для auto-режима. Если `reasoning_levels = null` — ползунок скрыт.
+
+**Эндпоинты:**
+- `GET /api/v1/user/reasoning-level` → `{ reasoning_level: string | null }`
+- `PUT /api/v1/user/reasoning-level` ← `{ reasoning_level: 'none'|'minimal'|'low'|'medium'|'high'|'xhigh'|null }`
+
 ### AI-провайдеры (vision, опционально)
 
 Vision-запросы (анализ фото) могут использовать отдельные модели/ключи. Если не заданы — fallback на основные PRO/LITE провайдеры.
