@@ -271,6 +271,7 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 | `execute_macro` | Выполнить макрос — команды приходят в `value.commands` из SSE payload. Если `target === '__explore_fs__'` — чтение директории через `readDirectory` IPC |
 | `suggest_macro` | Предложить макрос — рендерит карточку «Сохранить/Отклонить» в ChatPage |
 | `devops_confirmation` | Подтверждение SSH-команды — карточка с кнопками «Разрешить»/«Разрешить всегда»/«? Проверить»/«Отклонить» |
+| `pc_command_confirmation` | Подтверждение `execute_pc_command` — карточка команды на ПК. `ChatPage` обрабатывает её через общий `handleIncomingDesktopAction` во всех потоках `streamChatMessage`: обычная отправка, regenerate и regenerate-with-hint. |
 | `suggest_devops_runbook` | Предложение инструкции — карточка с кнопками «Сохранить»/«Проверить»/«Отклонить» |
 
 ## Макросы
@@ -292,7 +293,7 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 
 | IPC | Описание |
 |---|---|
-| `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. |
+| `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. Логирует batch/cmd start/done/error для диагностики зависаний команд. |
 | `read-directory` | Чтение содержимого директории (read-only). Возвращает `{ name, isDirectory, size, modifiedAt }[]`. |
 
 ### Поток выполнения
@@ -555,7 +556,7 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | `pong` | Ответ на ping |
 
 **Обратный канал (execute_ipc):**
-Сервер может запросить десктоп выполнить IPC-команду и вернуть результат. Используется для `return_output` макросов и `explore_fs`:
+Сервер может запросить десктоп выполнить IPC-команду и вернуть результат. Используется для `return_output` макросов, `explore_fs` и подтверждённых `execute_pc_command`. `lib/api.ts` логирует получение `execute_ipc` и отправку `ipc_result`; связка с backend-логами делается по `request_id`.
 1. Сервер шлёт `{ type: 'execute_ipc', request_id, ipc_type, payload }`
 2. Десктоп выполняет IPC (`executeCommands` / `readDirectory`)
 3. Десктоп отвечает `{ type: 'ipc_result', request_id, data }` или `{ error }`

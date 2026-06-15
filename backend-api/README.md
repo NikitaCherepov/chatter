@@ -600,6 +600,7 @@ Desktop показывает эти поля как раскрывающиеся
 | `list_my_macros` | Показывает список включённых макросов пользователя (id, title, description, commands). Lazy loading — AI вызывает инструмент, когда упоминается закреплённый макрос или пользователь просит выполнить макрос. |
 | `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). Доступен и из Telegram: если десктоп онлайн — команды пушатся через WS. |
 | `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). Доступен и из Telegram при подключённом десктопе. |
+| `execute_pc_command` | Выполняет команду на ПК пользователя через desktop IPC. Не-auto-approved команды требуют HitL-карточку `pc_command_confirmation`; pending регистрируется до отправки карточки, а сама карточка уходит через текущий WS callback активного `chat_send`. AI получает последние 15k символов stdout/stderr (`PC_COMMAND_OUTPUT_MAX`). |
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
 | `invoke_subagent` | Делегирует задачу специализированному субагенту. Динамически генерируется из реестра (`services/subagents/registry.ts`). Добавляется только при `isDesktop=true` и наличии зарегистрированных субагентов. |
 
@@ -904,9 +905,10 @@ AI: execute_ssh_command(server_id, command)
 - Обратный канал: сервер шлёт `execute_ipc` с `request_id` → десктоп выполняет IPC → отвечает `ipc_result`.
 
 **Архитектура:**
-- `ws-clients.ts` — общий реестр подключений (`wsClients` Map), `sendIpcToDesktop()`, `isDesktopOnline()`. Импортируется и server.ts (регистрация), и ai.ts (IPC).
-- `server.ts` — `WebSocketServer` на `/ws`, обработчики `chat_send` / `ipc_result` / `ping`.
-- `ai.ts` — `execute_macro` и `explore_fs` используют `sendIpcToDesktop()` для запросов с ожиданием результата.
+- `ws-clients.ts` — общий реестр подключений (`wsClients` Map), `sendIpcToDesktop()`, `sendToDesktop()`, `isDesktopOnline()`. Проверяется `WebSocket.OPEN`, поэтому stale/closing сокеты не считаются рабочими. Импортируется и server.ts (регистрация), и ai.ts (IPC).
+- `server.ts` — `WebSocketServer` на `/ws`, обработчики `chat_send` / `ipc_result` / `ping`. Realtime callbacks (`desktop_action`, `tool_status`, `execute_ipc`) отправляются с callback-ошибкой `ws.send`.
+- `ai.ts` — `execute_macro`, `explore_fs` и `execute_pc_command` используют desktop IPC для запросов с ожиданием результата; `execute_pc_command` с HitL отправляет confirmation через callback текущего `chat_send`.
+- Диагностика IPC пишет логи `[pc_command] ...` и `[ipc] ...` (dispatch, write complete, `ipc_result`, timeout, resolve/reject), связываемые по `request_id`.
 
 **Протокол WS-сообщений (JSON `{ type, ...data }`):**
 
