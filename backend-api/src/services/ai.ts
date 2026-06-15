@@ -3672,15 +3672,10 @@ PRO
       const finishReason = response?.choices?.[0]?.finish_reason;
 
       // Формируем ответ на выход из функции
-      if (finalAnswer) {
-        // Был финальный текст — возвращаем его
-        answer = finalAnswer;
-      } else if (fullDbHistory && options?.onIntermediateMessage) {
-        // Текст ушел через коллбэк, но финального текста нет (наш баг с улыбкой),
-        // возвращаем пустоту, чтобы роутер не дублировал сообщение
-        answer = '';
-      } else if (fullDbHistory) {
-        // Коллбэка не было, отдаем юзеру всё склеенное разом
+      if (fullDbHistory) {
+        // Всегда возвращаем полный текст (включая промежуточные шаги).
+        // Раньше при наличии finalAnswer возвращался только последний кусок,
+        // что приводило к перезаписи накопленного intermediate контента на десктопе.
         answer = fullDbHistory;
       } else if (toolOutputsForFallback.length) {
         answer = toolOutputsForFallback[toolOutputsForFallback.length - 1] || FALLBACK_ANSWER;
