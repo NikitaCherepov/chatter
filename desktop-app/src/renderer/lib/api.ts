@@ -383,7 +383,14 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'map_update': wsCallbacks.onMapUpdate?.(msg); break;
         case 'done': wsCallbacks.onDone?.(msg); break;
         case 'error': wsCallbacks.onError?.(msg.error); break;
-        case 'execute_ipc': handleExecuteIpc(msg); break;
+        case 'execute_ipc':
+          console.log('[ws] execute_ipc received', {
+            requestId: msg.request_id,
+            ipcType: msg.ipc_type,
+            payloadPreview: JSON.stringify(msg.payload).slice(0, 500),
+          });
+          handleExecuteIpc(msg);
+          break;
         case 'pong': break;
       }
     } catch { /* ignore malformed JSON */ }
@@ -568,18 +575,46 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
 
   try {
     let result: any;
+    console.log('[ipc] renderer start', {
+      requestId: request_id,
+      ipcType: ipc_type,
+      payloadPreview: JSON.stringify(payload).slice(0, 500),
+      hasElectronApi: Boolean((window as any).electronAPI),
+    });
 
     if (ipc_type === 'execute_commands') {
+      console.log('[ipc] renderer invoke executeCommands', {
+        requestId: request_id,
+        commands: Array.isArray(payload.commands) ? payload.commands : undefined,
+      });
       result = await (window as any).electronAPI?.executeCommands(payload.commands);
     } else if (ipc_type === 'read_directory') {
+      console.log('[ipc] renderer invoke readDirectory', {
+        requestId: request_id,
+        targetPath: payload.target_path,
+      });
       result = await (window as any).electronAPI?.readDirectory(payload.target_path);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }
 
+    console.log('[ipc] renderer result', {
+      requestId: request_id,
+      resultType: typeof result,
+      resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
+      wsReadyState: ws?.readyState,
+    });
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, data: result }));
+    console.log('[ipc] renderer ipc_result sent', { requestId: request_id });
   } catch (err: any) {
+    console.error('[ipc] renderer error', {
+      requestId: request_id,
+      ipcType: ipc_type,
+      error: err?.message || String(err),
+      wsReadyState: ws?.readyState,
+    });
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: err?.message || String(err) }));
+    console.log('[ipc] renderer ipc_result error sent', { requestId: request_id });
   }
 }
 

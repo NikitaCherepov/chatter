@@ -2771,14 +2771,23 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
 
+  console.log('[pc_command] approve request', { userId, confirmationId, approved });
+
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
 
   const pending = getPendingPcConfirmation(confirmationId);
-  if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
-  if (pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+  if (!pending) {
+    console.warn('[pc_command] approve missing pending confirmation', { userId, confirmationId, approved });
+    return res.status(404).json({ error: 'not_found_or_expired' });
+  }
+  if (pending.userId !== userId) {
+    console.warn('[pc_command] approve forbidden', { userId, pendingUserId: pending.userId, confirmationId });
+    return res.status(403).json({ error: 'forbidden' });
+  }
 
   if (!approved) {
     deletePendingPcConfirmation(confirmationId);
+    console.log('[pc_command] rejected by user', { userId, confirmationId });
     pending.reject(new Error('rejected_by_user'));
     return res.json({ ok: true, status: 'rejected' });
   }
@@ -2787,10 +2796,25 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   try {
     deletePendingPcConfirmation(confirmationId);
     const { sendIpcToDesktop } = await import('./ws-clients.js');
+    console.log('[pc_command] approved, executing via desktop ipc', {
+      userId,
+      confirmationId,
+      command: pending.command.slice(0, 500),
+    });
     const result = await sendIpcToDesktop(userId, 'execute_commands', { commands: [pending.command] }, 60000);
+    console.log('[pc_command] desktop ipc completed', {
+      userId,
+      confirmationId,
+      resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
+    });
     pending.resolve(result);
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {
+    console.error('[pc_command] desktop ipc failed', {
+      userId,
+      confirmationId,
+      error: err?.message || String(err),
+    });
     pending.reject(err);
     return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
   }
@@ -3001,6 +3025,15 @@ async function handleWsChatSend(client: WsClient, msg: any) {
 function handleIpcResult(client: WsClient, msg: any) {
   const { request_id, data, error } = msg;
   const pending = client.pendingIpc.get(request_id);
+  console.log('[ipc] ipc_result received', {
+    apiUserId: client.apiUserId,
+    effectiveUserId: client.effectiveUserId,
+    requestId: request_id,
+    hasPending: Boolean(pending),
+    hasError: Boolean(error),
+    dataType: typeof data,
+    dataPreview: typeof data === 'string' ? data.slice(0, 300) : undefined,
+  });
   if (!pending) return;
 
   clearTimeout(pending.timer);

@@ -473,6 +473,72 @@ export function ChatPage() {
     });
   }, []);
 
+  const handleIncomingDesktopAction = useCallback((action: api.DesktopActionPayload) => {
+    if (action.action === 'suggest_macro' && action.value) {
+      const val = action.value as { title?: string; description?: string; commands?: string[] };
+      if (val.title && val.commands?.length) {
+        setPendingMacros(prev => [...prev, { title: val.title!, description: val.description, commands: val.commands! }]);
+      }
+    }
+    if (action.action === 'devops_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; needs_sudo_password?: boolean; needs_new_password?: boolean; new_username?: string };
+      if (val.confirmation_id && val.command) {
+        setDevopsConfirmations(prev => [...prev, {
+          confirmation_id: val.confirmation_id!,
+          server_name: val.server_name || 'Unknown',
+          server_id: val.server_id || 0,
+          host: val.host || '',
+          command: val.command!,
+          needs_sudo_password: Boolean(val.needs_sudo_password),
+          needs_new_password: Boolean(val.needs_new_password),
+          new_username: val.new_username,
+        }]);
+      }
+    }
+    if (action.action === 'suggest_devops_runbook' && action.value) {
+      const val = action.value as { title?: string; content?: string; commands?: string[] };
+      if (val.title && val.content) {
+        setPendingRunbooks(prev => [...prev, { title: val.title!, content: val.content!, commands: val.commands || [] }]);
+      }
+    }
+    if (action.action === 'suggest_server_creds_update' && action.value) {
+      const val = action.value as { confirmation_id?: string; server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean };
+      if (val.server_id && val.new_username && val.reason) {
+        setPendingCredsUpdates(prev => [...prev, {
+          confirmation_id: val.confirmation_id,
+          server_id: val.server_id!,
+          server_name: val.server_name || '',
+          current_username: val.current_username || '',
+          new_username: val.new_username!,
+          reason: val.reason!,
+          use_ssh_key: val.use_ssh_key === true,
+          remove_password: val.remove_password || false,
+        }]);
+      }
+    }
+    if (action.action === 'pc_command_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; command?: string };
+      if (val.confirmation_id && val.command) {
+        setPcCommandConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            command: val.command!,
+          }];
+        });
+      }
+    }
+    if (action.action === 'chat_title_update' && action.value) {
+      const val = action.value as { chat_id?: number; title?: string };
+      if (val.chat_id && val.title) {
+        setChats(prev => prev.map(c =>
+          c.id === val.chat_id ? { ...c, title: val.title! } : c
+        ));
+      }
+    }
+    handleDesktopAction(action);
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     const hasImages = attachedImages.length > 0;
@@ -540,68 +606,7 @@ export function ChatPage() {
         onDisplayState: (state) => {
           dispatchAvatarState(state);
         },
-        onDesktopAction: (action) => {
-          if (action.action === 'suggest_macro' && action.value) {
-            const val = action.value as { title?: string; description?: string; commands?: string[] };
-            if (val.title && val.commands?.length) {
-              setPendingMacros(prev => [...prev, { title: val.title!, description: val.description, commands: val.commands! }]);
-            }
-          }
-          if (action.action === 'devops_confirmation' && action.value) {
-            const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; needs_sudo_password?: boolean; needs_new_password?: boolean; new_username?: string };
-            if (val.confirmation_id && val.command) {
-              setDevopsConfirmations(prev => [...prev, {
-                confirmation_id: val.confirmation_id!,
-                server_name: val.server_name || 'Unknown',
-                server_id: val.server_id || 0,
-                host: val.host || '',
-                command: val.command!,
-                needs_sudo_password: Boolean(val.needs_sudo_password),
-                needs_new_password: Boolean(val.needs_new_password),
-                new_username: val.new_username,
-              }]);
-            }
-          }
-          if (action.action === 'suggest_devops_runbook' && action.value) {
-            const val = action.value as { title?: string; content?: string; commands?: string[] };
-            if (val.title && val.content) {
-              setPendingRunbooks(prev => [...prev, { title: val.title!, content: val.content!, commands: val.commands || [] }]);
-            }
-          }
-          if (action.action === 'suggest_server_creds_update' && action.value) {
-            const val = action.value as { confirmation_id?: string; server_id?: number; server_name?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean };
-            if (val.server_id && val.new_username && val.reason) {
-              setPendingCredsUpdates(prev => [...prev, {
-                confirmation_id: val.confirmation_id,
-                server_id: val.server_id!,
-                server_name: val.server_name || '',
-                current_username: val.current_username || '',
-                new_username: val.new_username!,
-                reason: val.reason!,
-                use_ssh_key: val.use_ssh_key === true,
-                remove_password: val.remove_password || false,
-              }]);
-            }
-          }
-          if (action.action === 'pc_command_confirmation' && action.value) {
-            const val = action.value as { confirmation_id?: string; command?: string };
-            if (val.confirmation_id && val.command) {
-              setPcCommandConfirmations(prev => [...prev, {
-                confirmation_id: val.confirmation_id!,
-                command: val.command!,
-              }]);
-            }
-          }
-          if (action.action === 'chat_title_update' && action.value) {
-            const val = action.value as { chat_id?: number; title?: string };
-            if (val.chat_id && val.title) {
-              setChats(prev => prev.map(c =>
-                c.id === val.chat_id ? { ...c, title: val.title! } : c
-              ));
-            }
-          }
-          handleDesktopAction(action);
-        },
+        onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => {
           openTool('map');
           dispatchMapData(data);
@@ -691,7 +696,7 @@ export function ChatPage() {
       },
       isVoice ? { isVoice: true, preferredModel: preferredModel } : { preferredModel: preferredModel }
     );
-  }, [input, sending, activeChatId, attachedImages, preferredModel]);
+  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -979,7 +984,7 @@ export function ChatPage() {
         onIntermediate: (stepText) => appendToAssistant(stepText),
         onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
         onDisplayState: (state) => dispatchAvatarState(state),
-        onDesktopAction: (action) => handleDesktopAction(action),
+        onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDone: (res) => {
           if (res.aborted) {
@@ -1034,7 +1039,7 @@ export function ChatPage() {
       },
       { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true }
     );
-  }, [activeChatId, sending, messages, preferredModel]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction]);
 
   const handleRegenerateWithHint = useCallback(async (assistantMsgId: number, hint: string) => {
     if (!activeChatId || sending || !hint.trim()) return;
@@ -1089,7 +1094,7 @@ export function ChatPage() {
         onIntermediate: (stepText) => appendToAssistant(stepText),
         onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
         onDisplayState: (state) => dispatchAvatarState(state),
-        onDesktopAction: (action) => handleDesktopAction(action),
+        onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDone: (res) => {
           if (res.aborted) {
@@ -1144,7 +1149,7 @@ export function ChatPage() {
       },
       { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true }
     );
-  }, [activeChatId, sending, messages, preferredModel]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);

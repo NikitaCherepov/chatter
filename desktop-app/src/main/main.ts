@@ -487,6 +487,12 @@ function createWindow() {
   // ── Macro IPC: execute commands ──
 
   ipcMain.handle('execute-commands', async (_event, commands: string[]) => {
+    const batchStartedAt = Date.now();
+    console.log('[execute-commands] batch start', {
+      count: Array.isArray(commands) ? commands.length : 0,
+      commands,
+    });
+
     if (!Array.isArray(commands) || commands.length === 0) {
       throw new Error('commands_required');
     }
@@ -514,18 +520,45 @@ function createWindow() {
         const execCmd = process.platform === 'win32'
           ? `chcp 65001 >nul 2>&1 && ${cmd}`
           : cmd;
+        const cmdStartedAt = Date.now();
+        console.log('[execute-commands] cmd start', {
+          cmd,
+          execCmd,
+          timeoutMs: 30000,
+        });
         const { stdout, stderr } = await execAsync(execCmd, {
           encoding: 'utf-8',
           timeout: 30000,
           maxBuffer: 1024 * 1024,
           windowsHide: true,
         });
+        console.log('[execute-commands] cmd done', {
+          cmd,
+          durationMs: Date.now() - cmdStartedAt,
+          stdoutLength: stdout?.length || 0,
+          stderrLength: stderr?.length || 0,
+          stdoutPreview: stdout ? stdout.slice(0, 300) : undefined,
+          stderrPreview: stderr ? stderr.slice(0, 300) : undefined,
+        });
         results.push(stdout || stderr || '[no output]');
       } catch (err: any) {
+        console.error('[execute-commands] cmd error', {
+          cmd,
+          message: err?.message || String(err),
+          code: err?.code,
+          signal: err?.signal,
+          killed: err?.killed,
+          stdoutPreview: typeof err?.stdout === 'string' ? err.stdout.slice(0, 300) : undefined,
+          stderrPreview: typeof err?.stderr === 'string' ? err.stderr.slice(0, 300) : undefined,
+        });
         results.push(`[error] ${err?.message || String(err)}`);
       }
     }
 
+    console.log('[execute-commands] batch done', {
+      durationMs: Date.now() - batchStartedAt,
+      resultLength: results.join('\n---\n').length,
+    });
     return results.join('\n---\n');
   });
 

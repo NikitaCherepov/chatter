@@ -43,6 +43,13 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       client.pendingIpc.delete(requestId);
+      console.warn('[ipc] timeout waiting for desktop result', {
+        userId,
+        requestId,
+        ipcType,
+        timeoutMs,
+        pendingIpcCount: client.pendingIpc.size,
+      });
       reject(new Error('ipc_timeout'));
     }, timeoutMs);
 
@@ -50,27 +57,60 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
     const onAbort = () => {
       client.pendingIpc.delete(requestId);
       clearTimeout(timer);
+      console.warn('[ipc] aborted before desktop result', { userId, requestId, ipcType });
       reject(new DOMException('The user aborted a request.', 'AbortError'));
     };
     signal?.addEventListener('abort', onAbort, { once: true });
 
     client.pendingIpc.set(requestId, {
-      resolve: (data: any) => { signal?.removeEventListener('abort', onAbort); clearTimeout(timer); resolve(data); },
-      reject: (err: Error) => { signal?.removeEventListener('abort', onAbort); clearTimeout(timer); reject(err); },
+      resolve: (data: any) => {
+        signal?.removeEventListener('abort', onAbort);
+        clearTimeout(timer);
+        console.log('[ipc] desktop result resolved', {
+          userId,
+          requestId,
+          ipcType,
+          resultType: typeof data,
+          resultPreview: typeof data === 'string' ? data.slice(0, 300) : undefined,
+        });
+        resolve(data);
+      },
+      reject: (err: Error) => {
+        signal?.removeEventListener('abort', onAbort);
+        clearTimeout(timer);
+        console.warn('[ipc] desktop result rejected', { userId, requestId, ipcType, error: err.message });
+        reject(err);
+      },
       timer,
     });
     try {
+      console.log('[ipc] sending execute_ipc to desktop', {
+        userId,
+        requestId,
+        ipcType,
+        timeoutMs,
+        apiUserId: client.apiUserId,
+        effectiveUserId: client.effectiveUserId,
+        wsState: wsStateName(client.ws.readyState),
+        pendingIpcCount: client.pendingIpc.size,
+        payloadPreview: JSON.stringify(payload).slice(0, 500),
+      });
       client.ws.send(JSON.stringify({ type: 'execute_ipc', request_id: requestId, ipc_type: ipcType, payload }), (err) => {
-        if (!err) return;
+        if (!err) {
+          console.log('[ipc] execute_ipc write complete', { userId, requestId, ipcType });
+          return;
+        }
         client.pendingIpc.delete(requestId);
         signal?.removeEventListener('abort', onAbort);
         clearTimeout(timer);
+        console.error('[ipc] execute_ipc write failed', { userId, requestId, ipcType, error: err.message });
         reject(err);
       });
     } catch (err: any) {
       client.pendingIpc.delete(requestId);
       signal?.removeEventListener('abort', onAbort);
       clearTimeout(timer);
+      console.error('[ipc] execute_ipc send threw', { userId, requestId, ipcType, error: err?.message || String(err) });
       reject(err instanceof Error ? err : new Error(String(err)));
     }
   });
