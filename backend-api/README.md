@@ -312,9 +312,9 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - Ввод: `{ model_id: string | null }` (null = авто)
   - Вывод: `{ ok, preferred_model }`
 
-### DevOps Agent Runtime (JWT, desktop-only)
+### DevOps Agent Runtime (JWT)
 
-Управление SSH-серверами, политиками авто-разрешения и инструкциями (runbooks). Доступно только desktop-клиентам.
+Управление SSH-серверами, политиками авто-разрешения и инструкциями (runbooks). Доступно desktop-клиентам и Telegram (через SSE-стриминг и inline-кнопки подтверждения).
 
 **Серверы:**
 
@@ -349,7 +349,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 - `POST /api/v1/devops/servers/:id/attach-runbook` — привязать инструкцию к серверу (`{ runbook_id }`). Создаёт авто-разрешающие политики для каждой команды инструкции.
 
-### Subagent System (desktop-only)
+### Subagent System (desktop-only, `isDesktop`)
 
 Система специализированных вложенных агентов (субагентов). Главный AI-агент делегирует узкоспециализированные задачи субагентам через инструмент `invoke_subagent`. Каждый субагент имеет свой системный промпт, собственный набор инструментов и отдельный агентский цикл.
 
@@ -422,6 +422,10 @@ services/subagents/
 - Все эндпоинты ниже требуют `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
 - AI:
   - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options? }` -> `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
+  - `POST /internal/ai/stream` -> SSE-стриминг для Telegram: `{ user_id, text, chat_id?, options? }`
+    - События: `intermediate`, `tool_status`, `display_state`, `desktop_action`, `done`, `error` (см. [SSE-стриминг](#sse-striing-i-dual-delivery-podtverzhdeniy))
+    - Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`
+  - `POST /internal/ai/lite` -> `{ text }` -> `{ reply_text }` — LITE AI для проверки безопасности команд
   - `POST /internal/ai/admin-outreach` -> `{ target_user_id, admin_instruction }`
   - `POST /internal/ai/generate-image` -> `{ user_id, prompt }` -> `{ ok: true, image_base64, prompt_used }` (требует `PROXYAPI_KEY`)
   - `POST /internal/messages/bind-telegram` -> `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
@@ -468,6 +472,12 @@ services/subagents/
   - `GET /internal/models` -> `{ models: [{ id, name, description }] }`
   - `GET /internal/users/:id/preferred-model` -> `{ models, preferred_model }`
   - `PUT /internal/users/:id/preferred-model` -> `{ model_id: string | null }` -> `{ ok, preferred_model }`
+- PC Command confirmation (для TG-бота):
+  - `POST /internal/pc-commands/approve` -> `{ confirmation_id, approved, user_id }` -> `{ ok, status, result? }`
+  - `POST /internal/pc-commands/policies` -> `{ user_id, pattern }` -> `{ ok, id }` — создание auto-approve policy
+- DevOps SSH confirmation (для TG-бота):
+  - `POST /internal/devops/approve` -> `{ confirmation_id, approved, user_id, sudo_password?, new_password? }` -> `{ ok, status, result? }`
+  - `POST /internal/devops/servers/:id/policies` -> `{ user_id, pattern, auto_approve }` -> `{ id }` — создание SSH auto-approve policy
 
 ## Лимиты по планам
 
@@ -483,6 +493,33 @@ services/subagents/
 
 Админы (`is_admin = 1`) обходят дневные лимиты.
 
+### Хранение изображений
+
+Пользовательские и сгенерированные изображения сохраняются на сервере. Без этого base64 терялся, в истории чата картинки не отображались.
+
+**Сервис:** `services/image-storage.ts` (зависимость `sharp`):
+- `saveUserImageThumbnail()` — ресайзит до 512px, конвертирует в webp, сохраняет в `uploads/`.
+- `saveGeneratedImage()` — сохраняет PNG без сжатия.
+- API скачивания `GET /api/v1/images/:filename?token=<access_token>` — только для владельца. Статического роута `/uploads/` нет.
+
+**БД:**
+- Колонка `images TEXT` в `chat_messages` — JSON-массив `[{ "url": "/api/v1/images/abc.webp", "type": "user_photo" | "generated" }]`.
+- `appendChatMessage` принимает параметр `images[]`. `getChatMessages` парсит и возвращает `images` в ответе.
+
+**Токены AI:**
+- `getHistoryForAi()` не затронут — AI видит только текст `[Фото]caption`, картинки не отправляются повторно в контексте.
+- Разделение: "история для AI" = только текст, "история для отображения" = текст + images[].
+
+**Потоки данных:**
+- **Desktop отправляет фото:** base64 → сервер ресайзит + сохраняет thumbnail → оригинал в AI vision → в БД: `images: [{ url, type: "user_photo" }]`.
+- **Генерация изображения:** AI вызывает `generate_image` → b64 сохраняется на диск → возвращается `image_url` → в БД assistant-сообщения: `images: [{ url, type: "generated" }]`.
+- **Telegram фото:** бот скачивает фото → `/internal/photo/analyze` → thumbnail сохраняется → в БД user-сообщения.
+
+**Типы:**
+- `MessageImage` — `{ url: string; type: 'user_photo' | 'generated' }`.
+- `GeneratedImage` — добавлено поле `image_url`.
+- `ChatSendResponse` — добавлено поле `generated_images`.
+
 ### Архивация сообщений (soft delete)
 
 Когда количество активных сообщений в чате превышает `context_window_max`, старые сообщения **не удаляются**, а помечаются как архивные:
@@ -493,6 +530,8 @@ services/subagents/
 - `getChatMessages()` возвращает **все** сообщения (включая архивные) с полем `archived: boolean` — десктоп показывает полную историю.
 - FTS-поиск продолжает работать по архивным сообщениям (триггер `AFTER DELETE` не срабатывает при UPDATE, поэтому записи остаются в `messages_fts`).
 - Удаление чата (`deleteUserChat`) и удаление конкретного сообщения (`deleteUserMessage`) выполняют физический `DELETE` — это не связано с архивацией.
+- Индекс `idx_chat_messages_active` для эффективной фильтрации по `archived = 0`.
+- Desktop отображает архивные сообщения с пониженной прозрачностью (opacity 0.55) и меткой «архив».
 
 ## AI-инструменты
 
@@ -515,6 +554,13 @@ services/subagents/
 - `chat_messages.tool_calls_json TEXT` — JSON-массив tool calls для истории desktop-клиента.
 
 Desktop показывает эти поля как раскрывающиеся popover-кнопки у assistant-сообщения. Если reasoning или tool calls отсутствуют, соответствующая кнопка не отображается.
+
+### Регенерация сообщений
+
+Desktop может отправлять `regenerate_from_history: true` вместе с `skip_user_history`.
+
+- Backend удаляет из рабочей истории хвостовые assistant-сообщения, вынимает последнее user-сообщение и добавляет его обратно ровно один раз как текущий user request.
+- `regenerate_hint` дописывается в текущий user request и не сохраняется как новое пользовательское сообщение.
 
 | Инструмент | Описание |
 |---|---|
@@ -540,9 +586,11 @@ Desktop показывает эти поля как раскрывающиеся
 | `generate_image` | Генерация изображения (ProxyAPI, `b64_json`). Автоматически маршрутизируется через PRO. |
 | `get_exchange_rates` | Курсы валют ЦБ РФ с динамикой изменения. По умолчанию возвращает USD и EUR. |
 
-### Клиентские инструменты (desktop-only)
+### Клиентские инструменты (desktop + Telegram)
 
-Доступны только если в запросе передан `is_desktop: true`. Не показываются в Telegram.
+Большинство инструментов доступно как из desktop, так и из Telegram через SSE-стриминг. Разделение на `serverOnlyTools` и `desktopOnlyTools` описано в [Tool availability split](#tool-availability-split).
+
+**Desktop-only (не доступны из TG):** `desktop_action` (управление UI десктопа), `invoke_subagent` (субагенты).
 
 ### Feature Flags (ограничения инструментов)
 
@@ -604,11 +652,11 @@ Desktop показывает эти поля как раскрывающиеся
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
 | `invoke_subagent` | Делегирует задачу специализированному субагенту. Динамически генерируется из реестра (`services/subagents/registry.ts`). Добавляется только при `isDesktop=true` и наличии зарегистрированных субагентов. |
 
-### DevOps Agent Runtime (desktop-only)
+### DevOps Agent Runtime — продолжение
 
-Система удалённого выполнения SSH-команд на серверах пользователя с подтверждением через HitL (Human-in-the-Loop).
+Система удалённого выполнения SSH-команд на серверах пользователя с подтверждением через HitL (Human-in-the-Loop). Доступна из desktop и Telegram.
 
-**AI-инструменты (desktop-only):**
+**AI-инструменты (desktop + Telegram через SSE):**
 
 | Инструмент | Описание |
 |---|---|
@@ -625,7 +673,7 @@ Desktop показывает эти поля как раскрывающиеся
 **Архитектура безопасности:**
 
 - **Шифрование:** все учётные данные (SSH пароль, приватный ключ, sudo-пароль) шифруются через AES-256-CBC и хранятся в `devops_servers`. Дешифровка только in-memory в момент выполнения команды.
-- **Human-in-the-Loop:** каждая SSH-команда (кроме auto-approved) требует подтверждения пользователя. На десктопе появляется карточка с информацией о команде, сервере, и кнопками «Разрешить»/«Разрешить всегда»/«? Проверить»/«Отклонить».
+- **Human-in-the-Loop:** каждая SSH-команда (кроме auto-approved) требует подтверждения пользователя. Карточка с информацией о команде отправляется одновременно на десктоп (WS `desktop_action`) и в Telegram (SSE `desktop_action` → inline-кнопки). Кнопки: «Разрешить» / «Разрешить всегда» / «? Проверить» / «Отклонить».
 - **Auto-approve политики:** regex-паттерны для автоматического разрешения команд. Создаются вручную или при привязке инструкции к серверу. Точное совпадение: `^systemctl restart nginx$`.
 - **Опасные команды:** блокируются на уровне SSH-executor (`rm -rf /`, `mkfs`, `dd of=/dev/`, `shutdown`, `init 0/6`, `chmod 000 /`, `chown` root-директорий).
 - **Sudo:** если команда содержит `sudo` и в настройках сервера указан sudo-пароль — пароль передаётся через stdin stream (`sudo -S`), не виден в process list.
@@ -645,13 +693,14 @@ Desktop показывает эти поля как раскрывающиеся
 AI: execute_ssh_command(server_id, command)
   → ai.ts: проверка isAutoApproved()
     → Да: прямой вызов execSshCommand() → stdout/stderr/exitCode
-    → Нет: отправка WS desktop_action { action: 'devops_confirmation', value: { confirmation_id, server_name, host, command } }
-      → ai.ts: блокировка на Promise (ожидание ответа)
-      → Десктоп: карточка подтверждения
-        → Разрешить: POST /api/v1/devops/approve { approved: true }
-        → Разрешить всегда: создаёт политику + approve
-        → Проверить: POST /api/v1/devops/runbooks/review-commands (LITE AI)
-        → Отклонить: POST /api/v1/devops/approve { approved: false }
+    → Нет: dual-delivery карточки подтверждения:
+        ├─ TG (SSE): inline-кнопки Разрешить / Разрешить всегда / Проверить / Отклонить
+        └─ Desktop (WS): desktop_action { action: 'devops_confirmation' }
+      → ai.ts: блокировка на Promise (ожидание ответа из любого источника)
+      → Разрешить: POST /internal/devops/approve { approved: true }
+      → Разрешить всегда: создаёт политику + approve
+      → Проверить: POST /internal/ai/lite (LITE AI анализ безопасности)
+      → Отклонить: POST /internal/devops/approve { approved: false }
       → Promise резолвится → execSshCommand() → результат AI
 ```
 
@@ -812,105 +861,24 @@ AI: execute_ssh_command(server_id, command)
 - `get_exchange_rates` — возвращает курсы с динамикой. Если код не указан — по умолчанию USD и EUR.
 - Формат ответа: `USD (Доллар США): 89.5000 RUB (-0.5000)`
 
-## Changelog
+## WebSocket Transport
 
-### 2026-06-14: Soft Delete (Архивация сообщений)
+WebSocket сервер на том же порту (3050), путь `/ws`, аутентификация через JWT access token в query-параметре. Десктоп-клиент подключается при старте приложения, auto-reconnect (exponential backoff 1s → 30s). Эндпоинт `POST /api/v1/chat/send` работает через SSE (Server-Sent Events) и используется как fallback (если WS не подключён). Формат событий: `intermediate`, `tool_status`, `display_state`, `done`, `error`. Валидация изображений остаётся обычной HTTP-ошибкой (до переключения на SSE).
 
-**Проблема:** При превышении `context_window_max` старые сообщения физически удалялись из БД (`DELETE FROM chat_messages`). Десктоп не мог загрузить старые сообщения через пагинацию — их просто не существовало.
+### Архитектура
 
-**Решение:**
-- `trimUserHistoryByChat()` переведён с `DELETE` на `UPDATE ... SET archived = 1, archived_at = CURRENT_TIMESTAMP`.
-- Добавлены колонки `chat_messages.archived` (INTEGER NOT NULL DEFAULT 0) и `chat_messages.archived_at` (DATETIME).
-- `getHistoryForAi()` фильтрует `WHERE archived = 0` — AI видит только активные сообщения.
-- `getChatMessages()` возвращает все сообщения с полем `archived: boolean`.
-- Индекс `idx_chat_messages_active` для эффективной фильтрации.
-- Desktop: архивный сообщения отображаются с пониженной прозрачностью (opacity 0.55) и меткой «архив».
-- FTS-поиск работает и по архивным сообщениям.
-
-### 2026-06-13: Reasoning, Tool Calls & Regeneration Metadata
-
-**Reasoning:**
-- Backend извлекает reasoning/thinking из совместимых OpenAI-like ответов: `reasoning_content`, `reasoning`, Anthropic-style thinking blocks и Responses-like `output[].type="reasoning"`.
-- Reasoning сохраняется в `chat_messages.reasoning_content`, возвращается в `done`/JSON и показывается только в UI. В AI-history оно не отправляется.
-
-**Tool calls:**
-- Агентский цикл собирает вызовы инструментов из `message.tool_calls` в `tool_calls: [{ id, name, arguments, result_preview? }]`.
-- `result_preview` — первые 500 символов результата инструмента для desktop UI/debug. Полный tool response остаётся внутри текущего AI-цикла и не сохраняется в истории.
-- Tool-call список сохраняется в `chat_messages.tool_calls_json`, возвращается клиенту и отображается в desktop UI.
-
-**Regeneration:**
-- Desktop может отправлять `regenerate_from_history: true` вместе с `skip_user_history`.
-- Backend удаляет из рабочей истории хвостовые assistant-сообщения, вынимает последнее user-сообщение и добавляет его обратно ровно один раз как текущий user request.
-- `regenerate_hint` дописывается в текущий user request и не сохраняется как новое пользовательское сообщение.
-
-### 2025-05-03: Image Storage & Persistence
-
-**Проблема:** Пользовательские и сгенерированные изображения не сохранялись на сервере. После отправки картинки в AI vision или генерации через `generate_image` — base64 просто терялся. В истории чата (desktop/TG) картинки не отображались.
-
-**Решение — хранение изображений на сервере:**
-- Новый сервис `services/image-storage.ts` (зависимость `sharp`):
-  - `saveUserImageThumbnail()` — ресайзит до 512px, конвертирует в webp, сохраняет в `uploads/`.
-  - `saveGeneratedImage()` — сохраняет PNG без сжатия.
-- API скачивания `GET /api/v1/images/:filename?token=<access_token>` — только для владельца (JWT через query-параметр или Authorization header + проверка `images` в `chat_messages`).
-- Статического роута `/uploads/` нет — все запросы перенаправляются на /images.
-
-**БД:**
-- Колонка `images TEXT` в `chat_messages` — JSON-массив `[{ "url": "/api/v1/images/abc.webp", "type": "user_photo" | "generated" }]`.
-- `appendChatMessage` принимает параметр `images[]`.
-- `getChatMessages` парсит и возвращает `images` в ответе.
-
-**Токены AI:**
-- `getHistoryForAi()` **не тронут** — AI видит только текст `[Фото]caption`, картинки не отправляются повторно в контексте.
-- Разделение: "история для AI" = только текст, "история для отображения" = текст + images[].
-
-**Потоки данных:**
-- **Desktop отправляет фото:** base64 → сервер ресайзит + сохраняет thumbnail → оригинал в AI vision → в БД: `images: [{ url, type: "user_photo" }]`.
-- **Генерация изображения:** AI вызывает `generate_image` → b64 сохраняется на диск → возвращается `image_url` → в БД assistant-сообщения: `images: [{ url, type: "generated" }]`.
-- **Telegram фото:** бот скачивает фото → `/internal/photo/analyze` → thumbnail сохраняется → в БД user-сообщения.
-
-**Типы:**
-- `MessageImage` — `{ url: string; type: 'user_photo' | 'generated' }`.
-- `GeneratedImage` — добавлено поле `image_url`.
-- `ChatSendResponse` — добавлено поле `generated_images`.
-
-### 2025-05-03: Agent Loop Fix + SSE Streaming
-
-**Баг агентского цикла:**
-Когда AI-модель генерировала текст и одновременно вызывала tool call (например `set_display_state`), текст терялся. На следующем проходе модель возвращала `content: null` с `finish_reason: "stop"`, и код подхватывал JSON-ответ инструмента как финальный ответ юзеру.
-
-**Фикс в `services/ai.ts`:**
-- Добавлены переменные `fullDbHistory` (буфер всего текста для БД) и `finalAnswer` (последний текст для отправки).
-- `appendChatMessage` теперь получает `fullDbHistory || answer` — полная история сохраняется даже если текст ушёл через коллбэк.
-- Добавлены коллбэки в `sendMessageThroughAi`:
-  - `onIntermediateMessage` — текст, сгенерированный на промежуточных шагах (текст + tool call одновременно).
-  - `onStateChange` — мгновенная передача изменений аватара при вызове `set_display_state`.
-  - `onToolStatus` — статусы типа "Ищу информацию..." в реалтайме.
-
-**SSE Streaming для Desktop-клиента:**
-- Эндпоинт `POST /api/v1/chat/send` переведён с обычного JSON-ответа на SSE (Server-Sent Events).
-- Формат событий: `intermediate`, `tool_status`, `display_state`, `done`, `error`.
-- Валидация изображений остаётся обычной HTTP-ошибкой (до переключения на SSE).
-- Telegram-бот не затронут — он ходит через `/internal/ai/send`, который остался JSON.
-
-### 2025-05-31: WebSocket Transport
-
-**Миграция SSE → WebSocket для десктоп-клиента:**
-- WebSocket сервер на том же порту (3050), путь `/ws`, аутентификация через JWT access token в query-параметре.
-- Десктоп-клиент подключается при старте приложения, auto-reconnect (exponential backoff 1s → 30s).
-- SSE endpoint `POST /api/v1/chat/send` сохранён как fallback (если WS не подключён).
-
-**Разблокированные функции:**
-- `explore_fs` — AI получает листинг директории как tool response (ранее fire-and-forget).
-- `execute_macro` с `return_output: true` — AI получает stdout команд (ранее не работало).
-- Обратный канал: сервер шлёт `execute_ipc` с `request_id` → десктоп выполняет IPC → отвечает `ipc_result`.
-
-**Архитектура:**
 - `ws-clients.ts` — общий реестр подключений (`wsClients` Map), `sendIpcToDesktop()`, `sendToDesktop()`, `isDesktopOnline()`. Проверяется `WebSocket.OPEN`, поэтому stale/closing сокеты не считаются рабочими. Импортируется и server.ts (регистрация), и ai.ts (IPC).
 - `server.ts` — `WebSocketServer` на `/ws`, обработчики `chat_send` / `ipc_result` / `ping`. Realtime callbacks (`desktop_action`, `tool_status`, `execute_ipc`) отправляются с callback-ошибкой `ws.send`.
 - `ai.ts` — `execute_macro`, `explore_fs` и `execute_pc_command` используют desktop IPC для запросов с ожиданием результата; `execute_pc_command` с HitL отправляет confirmation через callback текущего `chat_send`.
 - Диагностика IPC пишет логи `[pc_command] ...` и `[ipc] ...` (dispatch, write complete, `ipc_result`, timeout, resolve/reject), связываемые по `request_id`.
 
-**Протокол WS-сообщений (JSON `{ type, ...data }`):**
+### Разблокированные функции (через IPC)
+
+- `explore_fs` — AI получает листинг директории как tool response (ранее fire-and-forget).
+- `execute_macro` с `return_output: true` — AI получает stdout команд (ранее не работало).
+- Обратный канал: сервер шлёт `execute_ipc` с `request_id` → десктоп выполняет IPC → отвечает `ipc_result`.
+
+### Протокол WS-сообщений (JSON `{ type, ...data }`)
 
 | Клиент → Сервер | Описание |
 |---|---|
@@ -931,12 +899,51 @@ AI: execute_ssh_command(server_id, command)
 | `execute_ipc` | Запрос выполнить IPC и вернуть результат |
 | `pong` | Ответ на ping |
 
-**Остановка генерации (`chat_stop` / `/api/v1/chat/stop`):**
+### Остановка генерации (`chat_stop` / `/api/v1/chat/stop`)
+
 - На каждый `sendMessageThroughAi` создаётся один `AbortController`, который сразу регистрируется в `activeGenerations` по `userId`.
 - `chat_stop` по WS и `POST /api/v1/chat/stop` делают одно и то же: находят controller пользователя и вызывают `abort()`.
 - Обычный маршрут запроса не меняется: `sendMessageThroughAi` → `runCompletion` → `runTool` → финальный `runCompletion`. `AbortSignal` только прокидывается в места ожидания.
 - Signal слушают OpenAI-запросы, retry-паузы, ожидание tool через `withAbort`, desktop IPC (`sendIpcToDesktop`) и web-search транспорт Tavily через `fetch(..., { signal })`.
 - `finally` удаляет controller из `activeGenerations` только если это тот же controller, чтобы старый завершившийся запрос не снёс controller нового запроса.
+
+## SSE-стриминг и Dual-Delivery подтверждений
+
+### SSE-эндпоинт `/internal/ai/stream`
+
+Потоковая передача AI-ответов для TG-бота (вместо обычного JSON `/internal/ai/send`). Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`, позволяя TG-боту получать процесс работы AI в реалтайме.
+
+**События SSE:**
+
+| Событие | Payload | Описание |
+|---|---|---|
+| `intermediate` | `{ text }` | Промежуточный текст AI |
+| `tool_status` | `{ text }` | Статус инструмента |
+| `display_state` | `{ state, ... }` | Состояние аватара |
+| `desktop_action` | `{ action, target?, value? }` | Карточка подтверждения / макрос |
+| `done` | `{ reply_text, chat_id, message_id, ... }` | Финальный ответ AI |
+| `error` | `{ error }` | Ошибка |
+
+### Dual-Delivery подтверждений
+
+Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`) отправляются **одновременно** через SSE-колбэк (в TG inline-кнопки) и через WS (`sendToDesktop` в desktop_action). Кто первый ответил — резолвит Promise, второй канал игнорируется.
+
+### Tool availability split
+
+Инструменты разделены на две группы:
+
+- **`serverOnlyTools`** (всегда доступны, без `isDesktop`): SSH, DevOps, PC commands, maps, transit.
+- **`desktopOnlyTools`** (только `isDesktop=true`): `desktop_action` (UI-управление).
+- `invoke_subagent` — только `isDesktop=true`.
+
+### Intermediate content: `fullDbHistory`
+
+`sendMessageThroughAi` всегда возвращает `fullDbHistory` (аккумулированный текст за весь цикл), а не `finalAnswer` (последний чанк). Это гарантирует что desktop `done` handler не затирает промежуточный контент последним чанком. Раньше если AI генерировал текст + tool call одновременно, текст уходил через `onIntermediateMessage`, а `done` содержал только последний чанк.
+
+**Колбэки real-time в `sendMessageThroughAi`:**
+- `onIntermediateMessage` — текст, сгенерированный на промежуточных шагах (текст + tool call одновременно).
+- `onStateChange` — мгновенная передача изменений аватара при вызове `set_display_state`.
+- `onToolStatus` — статусы типа "Ищу информацию..." в реалтайме.
 
 ## Система обновлений (Admin)
 
