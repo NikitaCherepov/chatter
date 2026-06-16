@@ -5498,7 +5498,6 @@ const processUserTextThroughAi = async (
                     const btn = action.value.button === 'right' ? 'правой' : 'левой';
                     const xPct = Math.round((action.value.x || 0) * 100);
                     const yPct = Math.round((action.value.y || 0) * 100);
-                    const previewUrl = action.value.preview_image_url || '';
                     pendingPcCommandTexts.set(`visual:${confirmationId}`, JSON.stringify({
                         display_id: action.value.display_id,
                         x: action.value.x,
@@ -5515,16 +5514,17 @@ const processUserTextThroughAi = async (
 
                     // If we have a preview image — send as photo with inline keyboard
                     let photoSent = false;
-                    if (previewUrl) {
+                    const previewB64 = action.value.preview_image_base64;
+                    if (previewB64) {
                         try {
-                            const fullUrl = previewUrl.startsWith('http') ? previewUrl : `${BACKEND_API_BASE_URL}${previewUrl}`;
+                            const imageBuffer = Buffer.from(previewB64, 'base64');
                             await ctx.replyWithPhoto(
-                                { url: fullUrl },
+                                { source: imageBuffer },
                                 { caption, ...keyboard }
                             );
                             photoSent = true;
-                        } catch {
-                            // fallback to text
+                        } catch (err) {
+                            console.error('[visual_click] failed to send preview photo:', err);
                         }
                     }
                     if (!photoSent) {

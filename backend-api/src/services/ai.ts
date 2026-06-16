@@ -2641,6 +2641,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     // Needs user confirmation — HitL
     // Take a fresh screenshot and draw a targeting circle for the confirmation card
     let previewImageUrl: string | undefined;
+    let previewImageBase64: string | undefined;
     try {
       const { default: sharpLib } = await import('sharp');
       const { saveGeneratedImage } = await import('./image-storage.js');
@@ -2673,8 +2674,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           }])
           .jpeg({ quality: 80 })
           .toBuffer();
-        const saved = await saveGeneratedImage(annotated.toString('base64'));
+        const annotatedB64 = annotated.toString('base64');
+        const saved = await saveGeneratedImage(annotatedB64);
         previewImageUrl = saved.url;
+        previewImageBase64 = annotatedB64;
       }
     } catch (err) {
       console.error('[visual_click] failed to create preview:', err);
@@ -2708,6 +2711,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         button: clickButton,
         reason,
         preview_image_url: previewImageUrl,
+        preview_image_base64: previewImageBase64,
       }
     };
 

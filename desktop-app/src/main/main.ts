@@ -662,15 +662,23 @@ function createWindow() {
       throw new Error('x_y_required');
     }
 
-    // Normalize coordinates: x,y are 0.0–1.0 relative to the display
+    // display_id from desktopCapturer may not match screen.Display.id
+    // Match by index: capture-screen returns sources in same order as getAllDisplays
     const displays = screen.getAllDisplays();
     let targetDisplay = displays[0];
 
     if (data.display_id) {
-      const match = displays.find(d =>
-        d.id !== undefined && String(d.id) === data.display_id
-      );
-      if (match) targetDisplay = match;
+      // Try matching by id string, then by index
+      const byId = displays.find(d => String(d.id) === data.display_id);
+      if (byId) {
+        targetDisplay = byId;
+      } else {
+        // display_id might be an index or source name — try parsing as number
+        const idx = parseInt(data.display_id, 10);
+        if (!isNaN(idx) && idx >= 0 && idx < displays.length) {
+          targetDisplay = displays[idx];
+        }
+      }
     }
 
     const globalX = Math.round(targetDisplay.bounds.x + data.x * targetDisplay.bounds.width);
@@ -683,10 +691,11 @@ function createWindow() {
       normalized: { x: data.x, y: data.y },
       global: { x: globalX, y: globalY },
       button,
+      targetDisplay: { id: targetDisplay.id, bounds: targetDisplay.bounds },
     });
 
     try {
-      const { mouse, Point, Button } = await import('@nut-tree-fork/nut-js');
+      const { mouse, Point } = await import('@nut-tree-fork/nut-js');
       mouse.config.mouseSpeed = 500;
       await mouse.setPosition(new Point(globalX, globalY));
       await new Promise(resolve => setTimeout(resolve, 150));
