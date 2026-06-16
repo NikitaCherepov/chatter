@@ -531,8 +531,10 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
   return content.trim();
 };
 
+const TOOL_USAGE_RULES = `\n\n[ПРАВИЛА ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ]\nЕсли пользователь просит тебя выполнить какое-либо действие, и у тебя есть для этого подходящий инструмент — ты ОБЯЗАН вызвать его.\nКАТЕГОРИЧЕСКИ ЗАПРЕЩАЕТСЯ описывать выполнение действия текстом, симулировать результат, писать "Открываю...", "Запускаю...", "Выполняю..." или фантазировать об итогах. Просто молча вызови инструмент. Если ни один из доступных инструментов не подходит — честно скажи об этом.`;
+
 const buildSystemPrompt = (prompt: string, userName: string, coreMemory: string) => {
-  return `${prompt}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${(coreMemory || '').trim() || 'Пока пусто.'}${COLD_MEMORY_PROMPT_HINT}`;
+  return `${prompt}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${(coreMemory || '').trim() || 'Пока пусто.'}${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}`;
 };
 
 const buildTimeContext = (timezoneOffset: number) => {
