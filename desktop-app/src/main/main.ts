@@ -515,11 +515,22 @@ function createWindow() {
       try {
         const { exec } = require('child_process');
         const execAsync = util.promisify(exec);
-        // Fix кракозябр: на Windows кодируем вывод в UTF-8.
-        // chcp 65001 переключает кодовую страницу консоли перед выполнением команды.
-        const execCmd = process.platform === 'win32'
-          ? `chcp 65001 >nul 2>&1 && ${cmd}`
-          : cmd;
+
+        // Fix кракозябр на Windows: cmd.exe получает аргументы в системной ANSI
+        // кодировке (cp1251), и chcp 65001 срабатывает уже после парсинга команды,
+        // поэтому кириллица ломается. Оборачиваем в PowerShell с UTF-8 output
+        // encoding: команда передаётся как Base64 (UTF-16LE), затем выполняется
+        // через `cmd /c` для сохранения совместимости с cmd-синтаксисом (&&, |, >).
+        let execCmd = cmd;
+        if (process.platform === 'win32') {
+          const psScript = [
+            '$OutputEncoding = [System.Text.Encoding]::UTF8',
+            '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+            'cmd /c ' + JSON.stringify(cmd),
+          ].join('; ');
+          const b64 = Buffer.from(psScript, 'utf16le').toString('base64');
+          execCmd = `powershell -NoProfile -EncodedCommand ${b64}`;
+        }
         const cmdStartedAt = Date.now();
         console.log('[execute-commands] cmd start', {
           cmd,
