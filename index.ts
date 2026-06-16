@@ -5082,6 +5082,104 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
 });
 
+// ── DevOps SSH Confirmation (Telegram inline buttons) ─────────────────────
+
+bot.action(/^devops:allow:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    try {
+        const resp = await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
+            { confirmation_id: confirmationId, approved: true, user_id: userId },
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+        );
+        const result = resp.data?.result;
+        const stdout = result?.stdout || '';
+        const stderr = result?.stderr || '';
+        const exitCode = result?.exit_code;
+        let output = '';
+        if (stdout) output += stdout.slice(0, 800);
+        if (stderr) output += (output ? '\n' : '') + stderr.slice(0, 400);
+        if (!output) output = `(нет вывода, exit_code=${exitCode ?? '?'})`;
+        await ctx.editMessageText(`✅ SSH выполнен.\n\n\`\`\`\n${output.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+            ctx.editMessageText(`✅ SSH выполнен.\n\n${output}`).catch(() => {});
+        });
+        await ctx.answerCbQuery('Разрешено');
+    } catch (err: any) {
+        const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
+        await ctx.editMessageText(`⚠️ Ошибка SSH: ${msg}`).catch(() => {});
+        await ctx.answerCbQuery('Ошибка');
+    }
+});
+
+bot.action(/^devops:reject:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    try {
+        await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
+            { confirmation_id: confirmationId, approved: false, user_id: userId },
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
+        );
+        await ctx.editMessageText('❌ SSH команда отклонена.');
+        await ctx.answerCbQuery('Отклонено');
+    } catch {
+        await ctx.answerCbQuery('Не удалось отклонить (истёк таймаут?).');
+    }
+});
+
+bot.action(/^devops:creds_apply:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    try {
+        const resp = await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
+            { confirmation_id: confirmationId, approved: true, user_id: userId },
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+        );
+        const result = resp.data?.result;
+        const output = typeof result === 'string' ? result.slice(0, 500) : '(выполнено)';
+        await ctx.editMessageText(`✅ Credentials обновлены.\n\n${output}`).catch(() => {});
+        await ctx.answerCbQuery('Применено');
+    } catch (err: any) {
+        const msg = err?.response?.data?.error || err?.message || 'ошибка';
+        await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+        await ctx.answerCbQuery('Ошибка');
+    }
+});
+
+bot.action(/^devops:creds_reject:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    try {
+        await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
+            { confirmation_id: confirmationId, approved: false, user_id: userId },
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
+        );
+        await ctx.editMessageText('❌ Обновление credentials отклонено.');
+        await ctx.answerCbQuery('Отклонено');
+    } catch {
+        await ctx.answerCbQuery('Не удалось отклонить.');
+    }
+});
+
 const processUserTextThroughAi = async (
     ctx: any,
     rawText: string,
@@ -5191,6 +5289,53 @@ const processUserTextThroughAi = async (
                     } catch {
                         try {
                             await ctx.reply(`🔐 Подтверждение команды на ПК\n\n${preview}\n\nРазрешить выполнение?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+                if (action?.action === 'devops_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const serverName = action.value.server_name || '';
+                    const command = action.value.command || '';
+                    const host = action.value.host || '';
+                    const preview = command.slice(0, 300);
+                    const escapedCmd = preview.replace(/`/g, '\\`');
+                    let msgText = `🖥 **SSH: ${serverName}** (${host})\n\n\`${escapedCmd}\`\n\nРазрешить выполнение?`;
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback('✅ Разрешить', `devops:allow:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `devops:reject:${confirmationId}`),
+                        ]
+                    ]);
+                    try {
+                        await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
+                    } catch {
+                        try {
+                            await ctx.reply(`🖥 SSH: ${serverName} (${host})\n\n${preview}\n\nРазрешить выполнение?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+                if (action?.action === 'suggest_server_creds_update' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const serverName = action.value.server_name || '';
+                    const reason = action.value.reason || '';
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback('✅ Применить', `devops:creds_apply:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `devops:creds_reject:${confirmationId}`),
+                        ]
+                    ]);
+                    try {
+                        await ctx.reply(
+                            `🔑 **Обновление credentials: ${serverName}**\n\n${reason}\n\nПрименить?`,
+                            { parse_mode: 'Markdown', ...keyboard }
+                        );
+                    } catch {
+                        try {
+                            await ctx.reply(`🔑 Обновление credentials: ${serverName}\n\n${reason}\n\nПрименить?`, keyboard);
                         } catch {
                             // ignore
                         }

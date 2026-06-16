@@ -2951,6 +2951,51 @@ app.post('/internal/ai/lite', internalAuth, async (req, res) => {
   }
 });
 
+// ── Internal: DevOps approve/reject (for TG bot) ──────────────────────────
+
+app.post('/internal/devops/approve', internalAuth, async (req, res) => {
+  const confirmationId = `${req.body?.confirmation_id || ''}`;
+  const approved = req.body?.approved === true;
+  const userId = Number(req.body?.user_id);
+  const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
+  const newPassword = typeof req.body?.new_password === 'string' ? req.body.new_password : undefined;
+
+  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+
+  const pending = getPendingConfirmation(confirmationId);
+  if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
+  if (Number.isFinite(userId) && pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+
+  if (!approved) {
+    deletePendingConfirmation(confirmationId);
+    pending.reject(new Error('rejected_by_user'));
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  const pendingServer = getServerById(pending.userId, pending.serverId);
+  const needsSudoPassword = pending.needsSudoPassword === true || (pendingServer?.username !== 'root' && /\bsudo\b/.test(pending.command));
+
+  if (needsSudoPassword && !serverHasSudoPassword(pending.userId, pending.serverId) && !sudoPassword) {
+    return res.status(400).json({ error: 'sudo_password_required' });
+  }
+  if (pending.needsNewPassword === true && !newPassword) {
+    return res.status(400).json({ error: 'new_password_required' });
+  }
+
+  try {
+    deletePendingConfirmation(confirmationId);
+    const execOptions = (sudoPassword || newPassword) ? { sudoPasswordOverride: sudoPassword, newPasswordOverride: newPassword } : undefined;
+    const result = pending.execute
+      ? await pending.execute(execOptions)
+      : await execSshCommand(pending.userId, pending.serverId, pending.command, execOptions);
+    pending.resolve(result);
+    return res.json({ ok: true, status: 'executed', result });
+  } catch (err: any) {
+    pending.reject(err);
+    return res.status(500).json({ error: 'ssh_exec_failed', details: err?.message });
+  }
+});
+
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error('API error:', err);
   res.status(500).json({ error: 'internal_error' });

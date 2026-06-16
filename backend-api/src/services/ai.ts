@@ -2502,23 +2502,29 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
     }
 
-    // Needs user confirmation — push to desktop via WS/SSE
-    // Desktop must be online for confirmation
-    if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение команды невозможно — попроси пользователя запустить приложение на ПК.' });
-    }
-
-    // Push confirmation request directly via WS (can't use desktopActionSink — it dispatches AFTER runTool returns, but we block here)
+    // Needs user confirmation — push via SSE callback (TG) and/or WS (desktop)
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
 
-    // Send WS message directly to desktop client
-    sendToDesktop(user.id, {
+    const devopsAction = {
       type: 'desktop_action',
       action: 'devops_confirmation',
       target: String(serverId),
       value: { confirmation_id: confirmationId, server_name: server.name, server_id: serverId, host: server.host, command, needs_sudo_password: needsSudoPasswordPrompt }
-    });
+    };
+
+    let devopsSent = false;
+    if (subagentExtra?.onDesktopAction) {
+      await subagentExtra.onDesktopAction(devopsAction);
+      devopsSent = true;
+    }
+    if (isDesktopOnline(user.id)) {
+      sendToDesktop(user.id, devopsAction);
+      devopsSent = true;
+    }
+    if (!devopsSent) {
+      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение команды невозможно.' });
+    }
 
     // Wait for user response via WS → POST /api/v1/devops/approve
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
@@ -2830,10 +2836,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       publicKey = resolvedPublicKey;
     }
 
-    if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение создания пользователя невозможно — попроси пользователя запустить приложение на ПК.' });
-    }
-
     const needsSudoPasswordPrompt = !serverHasSudoPassword(user.id, serverId);
     const previewCommand = [
       'create_server_user',
@@ -2848,7 +2850,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
 
-    sendToDesktop(user.id, {
+    const createUserAction = {
       type: 'desktop_action',
       action: 'devops_confirmation',
       target: String(serverId),
@@ -2861,7 +2863,20 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         needs_sudo_password: needsSudoPasswordPrompt,
         new_username: username,
       }
-    });
+    };
+
+    let createUserSent = false;
+    if (subagentExtra?.onDesktopAction) {
+      await subagentExtra.onDesktopAction(createUserAction);
+      createUserSent = true;
+    }
+    if (isDesktopOnline(user.id)) {
+      sendToDesktop(user.id, createUserAction);
+      createUserSent = true;
+    }
+    if (!createUserSent) {
+      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
+    }
 
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
     try {
@@ -2927,10 +2942,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
     }
 
-    if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение смены пароля невозможно — попроси пользователя запустить приложение на ПК.' });
-    }
-
     const needsSudoPasswordPrompt = server.username !== 'root' && !serverHasSudoPassword(user.id, serverId);
     const previewCommand = [
       'change_server_user_password',
@@ -2941,7 +2952,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
 
-    sendToDesktop(user.id, {
+    const changePwdAction = {
       type: 'desktop_action',
       action: 'devops_confirmation',
       target: String(serverId),
@@ -2955,7 +2966,20 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         needs_new_password: true,
         new_username: username,
       }
-    });
+    };
+
+    let changePwdSent = false;
+    if (subagentExtra?.onDesktopAction) {
+      await subagentExtra.onDesktopAction(changePwdAction);
+      changePwdSent = true;
+    }
+    if (isDesktopOnline(user.id)) {
+      sendToDesktop(user.id, changePwdAction);
+      changePwdSent = true;
+    }
+    if (!changePwdSent) {
+      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
+    }
 
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
     try {
@@ -3032,20 +3056,29 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
     };
 
-    if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Подтверждение обновления credentials невозможно — попроси пользователя запустить приложение на ПК.' });
-    }
-
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
     payload.value = { ...(payload.value as Record<string, unknown>), confirmation_id: confirmationId };
 
-    sendToDesktop(user.id, {
+    const credsAction = {
       type: 'desktop_action',
       action: 'suggest_server_creds_update',
       target: String(serverId),
       value: payload.value
-    });
+    };
+
+    let credsSent = false;
+    if (subagentExtra?.onDesktopAction) {
+      await subagentExtra.onDesktopAction(credsAction);
+      credsSent = true;
+    }
+    if (isDesktopOnline(user.id)) {
+      sendToDesktop(user.id, credsAction);
+      credsSent = true;
+    }
+    if (!credsSent) {
+      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
+    }
 
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
     try {
@@ -3434,7 +3467,24 @@ export const sendMessageThroughAi = async (
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
-  let executionTools: any[] = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool(), buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(), buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildExecutePcCommandTool(), buildListRunbooksTool(), buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(), buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool()] : []), ...(subagentTool ? [subagentTool] : []), ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[];
+  // Tools that work from the server (SSH, maps, DevOps DB) — available to ALL clients
+  const serverOnlyTools = [
+    buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(),
+    buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(),
+    buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
+    buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
+  ];
+  // Tools that require a desktop client (WS IPC) — only when isDesktop
+  const desktopOnlyTools = options?.isDesktop ? [
+    buildDesktopActionTool(), buildExecutePcCommandTool(),
+  ] : [];
+  let executionTools: any[] = [
+    ...toolDefinitions, buildDisplayStateTool(options?.displayManifest),
+    ...serverOnlyTools,
+    ...desktopOnlyTools,
+    ...(subagentTool ? [subagentTool] : []),
+    ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])
+  ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[];
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
