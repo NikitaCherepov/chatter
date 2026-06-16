@@ -1096,6 +1096,145 @@ const runBackendAiSend = async (
     };
 };
 
+type AiStreamCallbacks = {
+    onIntermediate?: (text: string) => Promise<void> | void;
+    onToolStatus?: (text: string) => Promise<void> | void;
+    onDesktopAction?: (action: any) => Promise<void> | void;
+};
+
+const runBackendAiStream = async (
+    userId: number,
+    text: string,
+    options?: {
+        forcePro?: boolean;
+        persistUserText?: string;
+        ignoreDailyLimit?: boolean;
+        countAsUserMessage?: boolean;
+        skipHistory?: boolean;
+        userTelegramChatId?: number | null;
+        userTelegramMessageId?: number | null;
+        assistantTelegramChatId?: number | null;
+    },
+    callbacks?: AiStreamCallbacks
+): Promise<{
+    message_id?: number;
+    reply_text?: string;
+    model_fallback_notice?: string | null;
+    tool_user_messages?: string[];
+    generated_images?: Array<{ image_base64: string; prompt_used: string }>;
+    usage?: {
+        tokens_used?: number;
+        used_model?: string;
+        used_provider?: string;
+    };
+    desktop_action?: any;
+}> => {
+    if (!BACKEND_INTERNAL_TOKEN) {
+        throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    }
+
+    const response = await axios.post(
+        `${BACKEND_API_BASE_URL}/internal/ai/stream`,
+        {
+            user_id: userId,
+            text,
+            options: {
+                forcePro: Boolean(options?.forcePro),
+                ignoreDailyLimit: Boolean(options?.ignoreDailyLimit),
+                countAsUserMessage: options?.countAsUserMessage === false ? false : true,
+                skipHistory: Boolean(options?.skipHistory),
+                persistUserText: typeof options?.persistUserText === 'string' ? options.persistUserText : undefined,
+                userTelegramChatId: Number.isFinite(Number(options?.userTelegramChatId)) ? Math.floor(Number(options?.userTelegramChatId)) : null,
+                userTelegramMessageId: Number.isFinite(Number(options?.userTelegramMessageId)) ? Math.floor(Number(options?.userTelegramMessageId)) : null,
+                assistantTelegramChatId: Number.isFinite(Number(options?.assistantTelegramChatId)) ? Math.floor(Number(options?.assistantTelegramChatId)) : null
+            }
+        },
+        {
+            headers: {
+                Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
+            },
+            responseType: 'stream',
+            timeout: BACKEND_TIMEOUT_AI_MS
+        }
+    );
+
+    const stream = response.data as NodeJS.ReadableStream;
+
+    return new Promise((resolve, reject) => {
+        let buffer = '';
+        let currentEvent = '';
+        let finalResult: any = null;
+        let streamError: string | null = null;
+
+        const processSSE = async (raw: string) => {
+            const lines = raw.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                    currentEvent = line.slice(7).trim();
+                } else if (line.startsWith('data: ')) {
+                    const dataStr = line.slice(6);
+                    try {
+                        const data = JSON.parse(dataStr);
+                        switch (currentEvent) {
+                            case 'intermediate':
+                                if (callbacks?.onIntermediate) await callbacks.onIntermediate(data.text);
+                                break;
+                            case 'tool_status':
+                                if (callbacks?.onToolStatus) await callbacks.onToolStatus(data.text);
+                                break;
+                            case 'desktop_action':
+                                if (callbacks?.onDesktopAction) await callbacks.onDesktopAction(data);
+                                break;
+                            case 'done':
+                                finalResult = data;
+                                break;
+                            case 'error':
+                                streamError = data.error || 'unknown_error';
+                                break;
+                        }
+                    } catch {
+                        // ignore JSON parse errors on partial chunks
+                    }
+                    currentEvent = '';
+                }
+            }
+        };
+
+        stream.on('data', async (chunk: Buffer) => {
+            buffer += chunk.toString();
+            // SSE events separated by double newline
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+            for (const part of parts) {
+                await processSSE(part);
+            }
+        });
+
+        stream.on('end', () => {
+            // Process any remaining buffered data
+            if (buffer.trim()) {
+                processSSE(buffer).then(() => {
+                    if (streamError) {
+                        reject(new Error(streamError));
+                    } else {
+                        resolve(finalResult || { reply_text: '' });
+                    }
+                });
+            } else {
+                if (streamError) {
+                    reject(new Error(streamError));
+                } else {
+                    resolve(finalResult || { reply_text: '' });
+                }
+            }
+        });
+
+        stream.on('error', (err: any) => {
+            reject(err);
+        });
+    });
+};
+
 const runBackendVoiceTurn = async (
     userId: number,
     audioBuffer: Buffer,
@@ -4783,6 +4922,166 @@ bot.action('model:cancel', async (ctx) => {
     await ctx.answerCbQuery();
 });
 
+// ── PC Command Confirmation (Telegram inline buttons) ─────────────────────
+
+bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    const confirmationId = ctx.match[2];
+    const userId = ctx.from?.id;
+
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка: пользователь не определён.');
+        return;
+    }
+
+    if (action === 'reject') {
+        try {
+            await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+                { confirmation_id: confirmationId, approved: false, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
+            );
+            await ctx.editMessageText('❌ Команда отклонена.');
+            await ctx.answerCbQuery('Отклонено');
+        } catch {
+            await ctx.answerCbQuery('Не удалось отклонить (истёк таймаут?).');
+        }
+        return;
+    }
+
+    if (action === 'allow') {
+        try {
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+            );
+            const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
+            const preview = output.slice(0, 500) || '(нет вывода)';
+            await ctx.editMessageText(`✅ Команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+                ctx.editMessageText(`✅ Команда выполнена.\n\n${preview}`).catch(() => {});
+            });
+            await ctx.answerCbQuery('Разрешено');
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка выполнения: ${msg}`).catch(() => {});
+            await ctx.answerCbQuery('Ошибка');
+        }
+        return;
+    }
+
+    if (action === 'always') {
+        // Confirm: "Are you sure?"
+        const keyboard = Markup.inlineKeyboard([
+            [
+                Markup.button.callback('✅ Да, разрешить всегда', `pcconfirm:always_confirm:${confirmationId}`),
+                Markup.button.callback('⬅️ Назад', `pcconfirm:always_cancel:${confirmationId}`),
+            ]
+        ]);
+        await ctx.editMessageText('⚠️ Создать постоянное правило для этой команды? Действие нельзя отменить.', keyboard);
+        await ctx.answerCbQuery();
+        return;
+    }
+
+    if (action === 'review') {
+        // Send command to LITE AI for safety review
+        await ctx.answerCbQuery('Отправляю на проверку...');
+        try {
+            // Get the pending confirmation to read the command
+            // We can't access pending from here directly, so we rely on the message text
+            // The command was in the original message; parse it
+            const msgText = (ctx.callbackQuery?.message as any)?.text || '';
+            // Extract command from between backticks
+            const cmdMatch = msgText.match(/`([^`]+)`/);
+            const cmd = cmdMatch ? cmdMatch[1] : '(неизвестная команда)';
+
+            const liteResp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/ai/lite`,
+                {
+                    text: `Оцени безопасность следующей команды для выполнения на ПК пользователя. Кратко объясни риски (1-2 предложения). Команда: ${cmd}`,
+                },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
+            );
+            const verdict = liteResp.data?.reply_text || liteResp.data?.text || '(нет ответа)';
+            await ctx.reply(`🔍 Проверка AI:\n\n${verdict}\n\n⬆️ Кнопки подтверждения выше остаются активными.`);
+        } catch (err: any) {
+            const msg = err?.message || 'ошибка';
+            await ctx.reply(`Не удалось проверить команду: ${msg}\n\n⬆️ Кнопки подтверждения выше остаются активными.`).catch(() => {});
+        }
+        return;
+    }
+});
+
+// "Always" confirmation sub-flow
+bot.action(/^pcconfirm:always_confirm:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+
+    try {
+        // First create an auto-approve policy, then approve
+        // Extract command from original message text
+        const msgText = (ctx.callbackQuery?.message as any)?.text || '';
+        const cmdMatch = msgText.match(/`([^`]+)`/) || msgText.match(/Команда на ПК\n\n(.+)/);
+        const cmd = cmdMatch ? cmdMatch[1] : '';
+
+        // Create exact-match policy via internal API
+        if (cmd) {
+            try {
+                await axios.post(
+                    `${BACKEND_API_BASE_URL}/internal/pc-commands/policies`,
+                    { user_id: userId, pattern: '^' + cmd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' },
+                    { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 10000 }
+                );
+            } catch {
+                // Non-critical — approve will still work
+            }
+        }
+
+        // Approve the command
+        const resp = await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+            { confirmation_id: confirmationId, approved: true, user_id: userId },
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+        );
+        const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
+        const preview = output.slice(0, 500) || '(нет вывода)';
+        await ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+            ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n${preview}`).catch(() => {});
+        });
+        await ctx.answerCbQuery('Разрешено всегда');
+    } catch (err: any) {
+        const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
+        await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+        await ctx.answerCbQuery('Ошибка');
+    }
+});
+
+bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
+    // Restore the original confirmation message with all 4 buttons
+    const confirmationId = ctx.match[1];
+    const msgText = (ctx.callbackQuery?.message as any)?.text || '';
+    const cmdMatch = msgText.match(/`([^`]+)`/) || msgText.match(/Команда на ПК\n\n(.+)/);
+    const cmd = cmdMatch ? cmdMatch[1] : '';
+    const keyboard = Markup.inlineKeyboard([
+        [
+            Markup.button.callback('✅ Разрешить', `pcconfirm:allow:${confirmationId}`),
+            Markup.button.callback('🔓 Разрешить всегда', `pcconfirm:always:${confirmationId}`),
+        ],
+        [
+            Markup.button.callback('❓ Проверить', `pcconfirm:review:${confirmationId}`),
+            Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
+        ]
+    ]);
+    await ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n\`${cmd}\`\n\nРазрешить выполнение?`, { parse_mode: 'Markdown', ...keyboard }).catch(() => {
+        ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n${cmd}\n\nРазрешить выполнение?`, keyboard).catch(() => {});
+    });
+    await ctx.answerCbQuery();
+});
+
 const processUserTextThroughAi = async (
     ctx: any,
     rawText: string,
@@ -4841,7 +5140,8 @@ const processUserTextThroughAi = async (
         await ctx.sendChatAction('typing');
         const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
         const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
-        const backend = await runBackendAiSend(userId, userText, {
+
+        const backend = await runBackendAiStream(userId, userText, {
             forcePro: forceProRoute,
             persistUserText: userTextForHistory,
             ignoreDailyLimit: options?.ignoreDailyLimit,
@@ -4850,7 +5150,55 @@ const processUserTextThroughAi = async (
             userTelegramChatId: userChatId,
             userTelegramMessageId: userMessageId,
             assistantTelegramChatId: userChatId
+        }, {
+            onIntermediate: async (stepText) => {
+                if (options?.suppressFinalReply) return;
+                try {
+                    await ctx.reply(stepText.slice(0, 4096));
+                } catch {
+                    // ignore
+                }
+            },
+            onToolStatus: async (statusText) => {
+                if (options?.suppressFinalReply) return;
+                try {
+                    await ctx.reply(`_${statusText}_`);
+                } catch {
+                    // ignore
+                }
+            },
+            onDesktopAction: async (action) => {
+                if (action?.action === 'pc_command_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const command = action.value.command || '';
+                    const preview = command.slice(0, 200);
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback('✅ Разрешить', `pcconfirm:allow:${confirmationId}`),
+                            Markup.button.callback('🔓 Разрешить всегда', `pcconfirm:always:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('❓ Проверить', `pcconfirm:review:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
+                        ]
+                    ]);
+                    const escapedCmd = preview.replace(/`/g, '\\`');
+                    try {
+                        await ctx.reply(
+                            `🔐 **Подтверждение команды на ПК**\n\n\`${escapedCmd}\`\n\nРазрешить выполнение?`,
+                            { parse_mode: 'Markdown', ...keyboard }
+                        );
+                    } catch {
+                        try {
+                            await ctx.reply(`🔐 Подтверждение команды на ПК\n\n${preview}\n\nРазрешить выполнение?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+            }
         });
+
         if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length > 0 && !options?.suppressFinalReply) {
             for (const msg of backend.tool_user_messages) {
                 const trimmed = typeof msg === 'string' ? msg.trim() : '';

@@ -156,6 +156,74 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
   }
 });
 
+// ── Internal: AI Send (SSE streaming for Telegram) ──────────────────────────
+
+app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
+  const userId = Number(req.body?.user_id);
+  const text = `${req.body?.text || ''}`;
+  const chatIdRaw = req.body?.chat_id;
+  const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
+  const optionsRaw = req.body?.options || {};
+  const options = {
+    forcePro: Boolean(optionsRaw.forcePro),
+    ignoreDailyLimit: Boolean(optionsRaw.ignoreDailyLimit),
+    countAsUserMessage: optionsRaw.countAsUserMessage === false ? false : true,
+    skipHistory: Boolean(optionsRaw.skipHistory),
+    persistUserText: typeof optionsRaw.persistUserText === 'string' ? optionsRaw.persistUserText : undefined,
+    userTelegramChatId: Number.isFinite(Number(optionsRaw.userTelegramChatId)) ? Math.floor(Number(optionsRaw.userTelegramChatId)) : null,
+    userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null,
+    assistantTelegramChatId: Number.isFinite(Number(optionsRaw.assistantTelegramChatId)) ? Math.floor(Number(optionsRaw.assistantTelegramChatId)) : null,
+    preferredModel: typeof optionsRaw.preferredModel === 'string' ? optionsRaw.preferredModel : undefined,
+  };
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.write(': connected\n\n');
+
+  try {
+    const enabledMacros = getEnabledMacros(userId);
+    const tgUser = getUserById(Math.floor(userId));
+    const result = await sendMessageThroughAi(Math.floor(userId), text, chatId, {
+      ...options,
+      activeMacros: enabledMacros,
+      featureFlags: tgUser ? parseFeatureFlags(tgUser) : undefined,
+      onIntermediateMessage: (stepText) => {
+        res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
+      },
+      onToolStatus: (statusText) => {
+        res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);
+      },
+      onDesktopAction: (action) => {
+        // Forward ALL desktop_actions (including pc_command_confirmation) to TG via SSE
+        res.write(`event: desktop_action\ndata: ${JSON.stringify(action)}\n\n`);
+      },
+      onStateChange: (state) => {
+        res.write(`event: display_state\ndata: ${JSON.stringify(state)}\n\n`);
+      },
+    });
+
+    // Push desktop_action via WS if desktop is also connected (TG→Desktop push pattern)
+    if (result.desktop_action && isDesktopOnline(userId)) {
+      const client = wsClients.get(userId);
+      if (client) {
+        client.ws.send(JSON.stringify({ type: 'desktop_action', ...result.desktop_action }));
+      }
+    }
+
+    res.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
+    res.end();
+  } catch (err: any) {
+    const code = `${err?.message || 'ai_send_failed'}`;
+    res.write(`event: error\ndata: ${JSON.stringify({ error: code })}\n\n`);
+    res.end();
+  }
+});
+
 app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
   const targetUserId = Number(req.body?.target_user_id);
   const adminInstruction = `${req.body?.admin_instruction || ''}`;
@@ -2817,6 +2885,69 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     });
     pending.reject(err);
     return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
+  }
+});
+
+// ── Internal: PC Command approve/reject (for TG bot) ──────────────────────
+
+app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
+  const confirmationId = `${req.body?.confirmation_id || ''}`;
+  const approved = req.body?.approved === true;
+  const userId = Number(req.body?.user_id);
+
+  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+
+  const pending = getPendingPcConfirmation(confirmationId);
+  if (!pending) {
+    return res.status(404).json({ error: 'not_found_or_expired' });
+  }
+  if (Number.isFinite(userId) && pending.userId !== userId) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  if (!approved) {
+    deletePendingPcConfirmation(confirmationId);
+    pending.reject(new Error('rejected_by_user'));
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  try {
+    deletePendingPcConfirmation(confirmationId);
+    const { sendIpcToDesktop } = await import('./ws-clients.js');
+    const result = await sendIpcToDesktop(pending.userId, 'execute_commands', { commands: [pending.command] }, 60000);
+    pending.resolve(result);
+    return res.json({ ok: true, status: 'executed', result });
+  } catch (err: any) {
+    pending.reject(err);
+    return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
+  }
+});
+
+// ── Internal: PC Command auto-approve policy create (for TG bot) ───────────
+
+app.post('/internal/pc-commands/policies', internalAuth, async (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const pattern = `${req.body?.pattern || ''}`;
+
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!pattern.trim()) return res.status(400).json({ error: 'pattern_required' });
+
+  const result = createPcCommandPolicy(userId, pattern);
+  if (!result.ok) return res.status(400).json({ error: (result as { ok: false; error: string }).error });
+  return res.json({ ok: true, id: result.id });
+});
+
+// ── Internal: LITE AI review (for TG bot safety check) ─────────────────────
+
+app.post('/internal/ai/lite', internalAuth, async (req, res) => {
+  const text = `${req.body?.text || ''}`;
+  if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
+
+  try {
+    const reply = await callLiteAi('Ты — эксперт по безопасности. Ответь кратко.', text);
+    return res.json({ reply_text: reply });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'lite_ai_failed', details: err?.message });
   }
 });
 

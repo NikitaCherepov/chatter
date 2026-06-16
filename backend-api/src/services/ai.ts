@@ -2637,8 +2637,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     let sent = false;
     try {
       if (subagentExtra?.onDesktopAction) {
+        // SSE callback (e.g. TG streaming) — confirmation goes to TG
         await subagentExtra.onDesktopAction(confirmationAction);
         sent = true;
+        // Also push to desktop WS if it's online — so both clients can confirm
+        if (isDesktopOnline(user.id)) {
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
       } else {
         sent = sendToDesktop(user.id, {
           type: 'desktop_action',
@@ -2652,7 +2657,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     console.log('[pc_command] confirmation dispatch', {
       userId: user.id,
       confirmationId,
-      via: subagentExtra?.onDesktopAction ? 'current_ws_callback' : 'ws_registry',
+      via: subagentExtra?.onDesktopAction ? 'callback+ws' : 'ws_registry',
       sent,
     });
 
@@ -2660,7 +2665,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       deletePendingPcConfirmation(confirmationId);
       return JSON.stringify({
         status: 'error',
-        message: 'Не удалось доставить карточку подтверждения на десктоп. Проверь WebSocket-подключение приложения и попробуй ещё раз.',
+        message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.',
         command,
       });
     }
