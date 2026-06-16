@@ -2074,7 +2074,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void }) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void }, screenCaptureSink?: { value: Array<{ display_id: string; data_url: string }> | null }) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -2513,7 +2513,44 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     try {
       const result = await sendIpcToDesktop(user.id, 'capture_screen', {}, 30000, signal);
       // result: { displays: [{ display_id, name, bounds, screenshot_base64, ... }] }
-      return JSON.stringify({ status: 'success', displays: result.displays });
+      const displays: any[] = result.displays || [];
+      if (displays.length === 0) {
+        return JSON.stringify({ status: 'error', message: 'Не удалось получить скриншоты мониторов.' });
+      }
+
+      // Compress each screenshot via sharp → JPEG data URL for vision model
+      const { default: sharpLib } = await import('sharp');
+      const captures: Array<{ display_id: string; data_url: string }> = [];
+
+      for (const disp of displays) {
+        try {
+          const buf = Buffer.from(disp.screenshot_base64, 'base64');
+          const compressed = await sharpLib(buf, { failOn: 'none' })
+            .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 70 })
+            .toBuffer();
+          const dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
+          captures.push({ display_id: disp.display_id, data_url: dataUrl });
+        } catch {
+          // skip failed screenshot
+        }
+      }
+
+      // Put captures into sink — the agent loop will add them as image_url to messages
+      if (screenCaptureSink && captures.length > 0) {
+        screenCaptureSink.value = captures;
+      }
+
+      // Return text summary for tool response (no base64 — keeps context clean)
+      return JSON.stringify({
+        status: 'success',
+        message: `Получено скриншотов: ${captures.length}. Скриншоты прикреплены к сообщению — используй их чтобы увидеть экран. Координаты для execute_visual_click: x,y — нормализованные (0.0–1.0) относительно выбранного монитора.`,
+        displays: displays.map((d: any) => ({
+          display_id: d.display_id,
+          name: d.name,
+          bounds: d.bounds,
+        })),
+      });
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Ошибка скриншота: ${err.message}` });
     }
@@ -3801,6 +3838,7 @@ PRO
   const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
   const desktopActionSink: { value: DesktopActionPayload | null } = { value: null };
   const mapUpdateSink: { value: MapUpdatePayload | null } = { value: null };
+  const screenCaptureSink: { value: Array<{ display_id: string; data_url: string }> | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
 
@@ -3982,7 +4020,8 @@ for (const toolCall of message.tool_calls) {
         mapUpdateSink,
         options?.activeMacros,
         abortController.signal,
-        { manualModel, onToolStatus: options?.onToolStatus, onDesktopAction: options?.onDesktopAction }
+        { manualModel, onToolStatus: options?.onToolStatus, onDesktopAction: options?.onDesktopAction },
+        screenCaptureSink
       ),
       abortController.signal
     );
@@ -4017,11 +4056,29 @@ for (const toolCall of message.tool_calls) {
     if (historyEntry) historyEntry.result_preview = resultPreview;
   }
 
-  currentMessages.push({
-    role: 'tool',
-    tool_call_id: toolCall.id,
-    content: toolContent
-  });
+  // If capture_screen returned screenshots — send them as image_url content
+  // so the vision model can actually "see" the screen
+  if (toolName === 'capture_screen' && screenCaptureSink.value && screenCaptureSink.value.length > 0) {
+    const imageContent: any[] = [
+      { type: 'text', text: toolContent },
+      ...screenCaptureSink.value.map(cap => ({
+        type: 'image_url',
+        image_url: { url: cap.data_url }
+      }))
+    ];
+    currentMessages.push({
+      role: 'tool',
+      tool_call_id: toolCall.id,
+      content: imageContent
+    });
+    screenCaptureSink.value = null; // consume
+  } else {
+    currentMessages.push({
+      role: 'tool',
+      tool_call_id: toolCall.id,
+      content: toolContent
+    });
+  }
 
   if (toolContent.trim()) {
     toolOutputsForFallback.push(toolContent.trim());
