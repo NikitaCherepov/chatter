@@ -3467,16 +3467,17 @@ export const sendMessageThroughAi = async (
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
-  // Tools that work from the server (SSH, maps, DevOps DB) — available to ALL clients
+  // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
   const serverOnlyTools = [
     buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(),
     buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(),
     buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
+    buildExecutePcCommandTool(),
   ];
-  // Tools that require a desktop client (WS IPC) — only when isDesktop
+  // Tools that require a desktop client UI — only when isDesktop
   const desktopOnlyTools = options?.isDesktop ? [
-    buildDesktopActionTool(), buildExecutePcCommandTool(),
+    buildDesktopActionTool(),
   ] : [];
   let executionTools: any[] = [
     ...toolDefinitions, buildDisplayStateTool(options?.displayManifest),
