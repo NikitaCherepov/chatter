@@ -531,7 +531,9 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
   return content.trim();
 };
 
-const TOOL_USAGE_RULES = `\n\n[ПРАВИЛА ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ]\nЕсли пользователь просит тебя выполнить какое-либо действие, и у тебя есть для этого подходящий инструмент — ты ОБЯЗАН вызвать его.\nКАТЕГОРИЧЕСКИ ЗАПРЕЩАЕТСЯ описывать выполнение действия текстом, симулировать результат, писать "Открываю...", "Запускаю...", "Выполняю..." или фантазировать об итогах. Просто молча вызови инструмент. Если ни один из доступных инструментов не подходит — честно скажи об этом.`;
+const TOOL_USAGE_RULES = `\n\n[CRITICAL DIRECTIVE: TOOL EXECUTION]
+If the user asks you to perform an action on their PC (create a file, open a website, check a service) or call a tool, YOU MUST CALL THE APPROPRIATE TOOL (e.g., execute_pc_command or else).
+UNDER NO CIRCUMSTANCES should you simulate the execution using text. Do NOT write "Открываю...", "Создаю...", or "Выполняю...". Do NOT roleplay the action. Just silently output the tool call JSON.`;
 
 const buildSystemPrompt = (prompt: string, userName: string, coreMemory: string) => {
   return `${prompt}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${(coreMemory || '').trim() || 'Пока пусто.'}${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}`;
