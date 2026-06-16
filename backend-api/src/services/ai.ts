@@ -1511,6 +1511,75 @@ const buildExecutePcCommandTool = () => {
   };
 };
 
+/** Build capture_screen tool — lets AI capture screenshots of all monitors */
+const buildCaptureScreenTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'capture_screen',
+      description: `Делает скриншоты всех мониторов компьютера пользователя. Возвращает массив с display_id, bounds (координаты и размер каждого монитора) и скриншот в base64.
+Используй когда:
+- Пользователь просит показать что на экране
+- Нужно найти элемент интерфейса для клика
+- Нужно понять текущее состояние экрана перед выполнением действия
+
+Важно: скриншоты тяжёлые (base64), не вызывай без необходимости. После получения скриншота используй execute_visual_click для клика по нужной точке.`,
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  };
+};
+
+/** Build execute_visual_click tool — lets AI click at normalized coordinates */
+const buildExecuteVisualClickTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'execute_visual_click',
+      description: `Кликает мышкой по указанной точке на экране пользователя. Координаты — нормализованные (0.0–1.0), где (0,0) — левый верхний угол монитора, (1,1) — правый нижний.
+Сначала вызови capture_screen чтобы получить display_id и скриншоты, затем определи точку клика по скриншоту и вызови этот инструмент.
+Требует подтверждения пользователя (через Telegram inline-кнопки).
+
+Параметры:
+- display_id: ID монитора из capture_screen
+- x: нормализованная X координата (0.0–1.0)
+- y: нормализованная Y координата (0.0–1.0)
+- button: "left" (по умолчанию) или "right"
+- reason: короткое объяснение зачем клик (показывается пользователю в карточке подтверждения)`,
+      parameters: {
+        type: 'object',
+        properties: {
+          display_id: {
+            type: 'string',
+            description: 'ID монитора (из ответа capture_screen).'
+          },
+          x: {
+            type: 'number',
+            description: 'Нормализованная X координата клика (0.0 = левый край, 1.0 = правый край).'
+          },
+          y: {
+            type: 'number',
+            description: 'Нормализованная Y координата клика (0.0 = верх, 1.0 = низ).'
+          },
+          button: {
+            type: 'string',
+            enum: ['left', 'right'],
+            description: 'Кнопка мыши: left или right. По умолчанию left.'
+          },
+          reason: {
+            type: 'string',
+            description: 'Короткое объяснение зачем этот клик (показывается пользователю для подтверждения). Например: "Нажать кнопку Сохранить".'
+          }
+        },
+        required: ['display_id', 'x', 'y']
+      }
+    }
+  };
+};
+
 const buildListRunbooksTool = () => {
   return {
     type: 'function' as const,
@@ -2435,6 +2504,107 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     return JSON.stringify({ status: 'success', message: `Запрос на чтение директории "${targetPath}" отправлен. Результат чтения будет доступен после подключения десктопа через WebSocket.`, target_path: targetPath });
   }
 
+  // ── Visual Control: capture screen ──────────────────────────────────────────
+
+  if (toolName === 'capture_screen') {
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Скриншот невозможен — попроси пользователя запустить приложение.' });
+    }
+    try {
+      const result = await sendIpcToDesktop(user.id, 'capture_screen', {}, 30000, signal);
+      // result: { displays: [{ display_id, name, bounds, screenshot_base64, ... }] }
+      return JSON.stringify({ status: 'success', displays: result.displays });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Ошибка скриншота: ${err.message}` });
+    }
+  }
+
+  // ── Visual Control: execute click (with HitL confirmation) ──────────────────
+
+  if (toolName === 'execute_visual_click') {
+    const displayId: string = typeof parsed.display_id === 'string' ? parsed.display_id : '';
+    const clickX: number = typeof parsed.x === 'number' ? parsed.x : NaN;
+    const clickY: number = typeof parsed.y === 'number' ? parsed.y : NaN;
+    const clickButton: string = parsed.button === 'right' ? 'right' : 'left';
+    const reason: string = typeof parsed.reason === 'string' ? parsed.reason : 'Клик по экрану';
+
+    if (!displayId) return JSON.stringify({ status: 'error', message: 'display_id обязателен. Сначала вызови capture_screen.' });
+    if (!Number.isFinite(clickX) || !Number.isFinite(clickY)) return JSON.stringify({ status: 'error', message: 'x и y обязательны (0.0–1.0)' });
+
+    // Validate ranges
+    if (clickX < 0 || clickX > 1 || clickY < 0 || clickY > 1) {
+      return JSON.stringify({ status: 'error', message: 'Координаты должны быть в диапазоне 0.0–1.0' });
+    }
+
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Клик невозможен.' });
+    }
+
+    // Needs user confirmation — HitL
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    const { registerPendingVisualClick, deletePendingVisualClick } = await import('./visual-click-confirmations.js');
+    const confirmationPromise = new Promise<any>((resolve, reject) => {
+      registerPendingVisualClick(confirmationId, {
+        userId: user.id,
+        display_id: displayId,
+        x: clickX,
+        y: clickY,
+        button: clickButton,
+        reason,
+        resolve,
+        reject,
+        createdAt: Date.now(),
+      });
+    });
+
+    const confirmationAction: DesktopActionPayload = {
+      action: 'visual_click_confirmation' as any,
+      value: {
+        confirmation_id: confirmationId,
+        display_id: displayId,
+        x: clickX,
+        y: clickY,
+        button: clickButton,
+        reason,
+      }
+    };
+
+    let sent = false;
+    try {
+      if (subagentExtra?.onDesktopAction) {
+        await subagentExtra.onDesktopAction(confirmationAction);
+        sent = true;
+        if (isDesktopOnline(user.id)) {
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
+      } else {
+        sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+      }
+    } catch (err) {
+      console.error('[visual_click] failed to send confirmation:', err);
+    }
+
+    if (!sent) {
+      deletePendingVisualClick(confirmationId);
+      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.' });
+    }
+
+    try {
+      const result = await confirmationPromise;
+      return JSON.stringify({ status: 'success', message: `Клик выполнен: ${reason}`, x: result.x, y: result.y, button: result.button });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил клик.' });
+      }
+      if (err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (60 секунд).' });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка: ${err?.message || String(err)}` });
+    }
+  }
+
   if (toolName === 'suggest_macro') {
     const title: string = typeof parsed.title === 'string' ? parsed.title : '';
     const description: string = typeof parsed.description === 'string' ? parsed.description : '';
@@ -3227,6 +3397,8 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'list_devops_servers') return 'Получаю список серверов...';
   if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
   if (toolName === 'execute_pc_command') return 'Выполняю команду на ПК...';
+  if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
+  if (toolName === 'execute_visual_click') return 'Жду подтверждения клика...';
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
@@ -3387,6 +3559,8 @@ export const sendMessageThroughAi = async (
   // Команды на ПК: отключает только execute_pc_command
   if (flags?.disable_pc_commands) {
     disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('capture_screen');
+    disabledToolSet.add('execute_visual_click');
   }
   // Лайт: отключает опасное, оставляет read-only
   if (flags?.disable_pc_control_lite) {
@@ -3428,6 +3602,8 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('read_email_content');
     disabledToolSet.add('get_my_tasks');
     disabledToolSet.add('explore_fs');
+    disabledToolSet.add('capture_screen');
+    disabledToolSet.add('execute_visual_click');
     disabledToolSet.add('desktop_action');
     disabledToolSet.add('map_control');
     disabledToolSet.add('get_map_pins');
@@ -3478,6 +3654,7 @@ export const sendMessageThroughAi = async (
     buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
     buildExecutePcCommandTool(),
+    buildCaptureScreenTool(), buildExecuteVisualClickTool(),
   ];
   // Tools that require a desktop client UI — only when isDesktop
   const desktopOnlyTools = options?.isDesktop ? [
@@ -3816,7 +3993,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 

@@ -594,6 +594,15 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         targetPath: payload.target_path,
       });
       result = await (window as any).electronAPI?.readDirectory(payload.target_path);
+    } else if (ipc_type === 'capture_screen') {
+      console.log('[ipc] renderer invoke captureScreen', { requestId: request_id });
+      result = await (window as any).electronAPI?.captureScreen();
+    } else if (ipc_type === 'visual_click') {
+      console.log('[ipc] renderer invoke visualClick', {
+        requestId: request_id,
+        payload,
+      });
+      result = await (window as any).electronAPI?.visualClick(payload);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }

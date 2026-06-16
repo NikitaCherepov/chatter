@@ -58,6 +58,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (targetPath: string) =>
     ipcRenderer.invoke('read-directory', targetPath),
 
+  // Visual Control: capture all monitors
+  captureScreen: () =>
+    ipcRenderer.invoke('capture-screen'),
+
+  // Visual Control: execute mouse click at normalized coordinates (0.0–1.0)
+  visualClick: (data: { display_id?: string; x: number; y: number; button?: string }) =>
+    ipcRenderer.invoke('visual-click', data),
+
   readSshKeys: () =>
     ipcRenderer.invoke('read-ssh-keys'),
 

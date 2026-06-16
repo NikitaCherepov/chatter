@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, net } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, net, screen } from 'electron';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -610,6 +610,96 @@ function createWindow() {
         };
       }
     });
+  });
+
+  // ── Visual Control: capture screen (all monitors) ──
+
+  ipcMain.handle('capture-screen', async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 },
+      fetchWindowIcons: false,
+    });
+
+    const displays = screen.getAllDisplays();
+
+    const result = sources.map((source, idx) => {
+      const display = displays[idx] || displays[0];
+      const thumb = source.thumbnail;
+      const pngBuffer = thumb.toPNG();
+      // Compress to JPEG via sharp if available, fallback to PNG base64
+      const base64 = pngBuffer.toString('base64');
+
+      return {
+        display_id: source.display_id || String(source.id),
+        name: source.name,
+        bounds: {
+          x: display.bounds.x,
+          y: display.bounds.y,
+          width: display.bounds.width,
+          height: display.bounds.height,
+        },
+        scale_factor: display.scaleFactor || 1,
+        screenshot_base64: base64,
+        screenshot_mime: 'image/png',
+        thumbnail_width: thumb.getSize().width,
+        thumbnail_height: thumb.getSize().height,
+      };
+    });
+
+    return { displays: result };
+  });
+
+  // ── Visual Control: execute mouse click ──
+
+  ipcMain.handle('visual-click', async (_event, data: {
+    display_id?: string;
+    x: number;
+    y: number;
+    button?: string;
+  }) => {
+    if (!data || typeof data.x !== 'number' || typeof data.y !== 'number') {
+      throw new Error('x_y_required');
+    }
+
+    // Normalize coordinates: x,y are 0.0–1.0 relative to the display
+    const displays = screen.getAllDisplays();
+    let targetDisplay = displays[0];
+
+    if (data.display_id) {
+      const match = displays.find(d =>
+        d.id !== undefined && String(d.id) === data.display_id
+      );
+      if (match) targetDisplay = match;
+    }
+
+    const globalX = Math.round(targetDisplay.bounds.x + data.x * targetDisplay.bounds.width);
+    const globalY = Math.round(targetDisplay.bounds.y + data.y * targetDisplay.bounds.height);
+
+    const button = data.button === 'right' ? 'right' : 'left';
+
+    console.log('[visual-click]', {
+      display_id: data.display_id,
+      normalized: { x: data.x, y: data.y },
+      global: { x: globalX, y: globalY },
+      button,
+    });
+
+    try {
+      const { mouse, Point, Button } = await import('@nut-tree-fork/nut-js');
+      mouse.config.mouseSpeed = 500;
+      await mouse.setPosition(new Point(globalX, globalY));
+      await new Promise(resolve => setTimeout(resolve, 150));
+      if (button === 'right') {
+        await mouse.rightClick();
+      } else {
+        await mouse.leftClick();
+      }
+      return { status: 'ok', x: globalX, y: globalY, button };
+    } catch (err: any) {
+      console.error('[visual-click] nut.js error:', err?.message || String(err));
+      throw new Error(`click_failed: ${err?.message || String(err)}`);
+    }
   });
 
   ipcMain.handle('read-ssh-keys', async () => {

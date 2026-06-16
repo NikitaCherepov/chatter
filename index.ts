@@ -5081,6 +5081,55 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
 });
 
+// ── Visual Click Confirmation (Telegram inline buttons) ───────────────────
+
+bot.action(/^vclick:(allow|reject):(.+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    const confirmationId = ctx.match[2];
+    const userId = ctx.from?.id;
+
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка: пользователь не определён.');
+        return;
+    }
+
+    if (action === 'reject') {
+        await ctx.answerCbQuery('Отклонено');
+        try {
+            await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/visual-click/approve`,
+                { confirmation_id: confirmationId, approved: false, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
+            );
+            await ctx.editMessageText('❌ Клик отменён.');
+        } catch {
+            await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+        }
+        return;
+    }
+
+    // action === 'allow'
+    await ctx.answerCbQuery('Кликаю...');
+    (async () => {
+        try {
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/visual-click/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
+            );
+            const data = resp.data?.result;
+            if (data?.status === 'ok') {
+                await ctx.editMessageText(`✅ Клик выполнен (${data.x}, ${data.y})`).catch(() => {});
+            } else {
+                await ctx.editMessageText('✅ Клик выполнен.').catch(() => {});
+            }
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка клика: ${msg}`).catch(() => {});
+        }
+    })();
+});
+
 // ── DevOps SSH Confirmation (Telegram inline buttons) ─────────────────────
 
 bot.action(/^devops:allow:(.+)$/, async (ctx) => {
@@ -5438,6 +5487,37 @@ const processUserTextThroughAi = async (
                     } catch {
                         try {
                             await ctx.reply(`🔑 Обновление credentials: ${serverName}\n\n${reason}\n\nПрименить?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+                if (action?.action === 'visual_click_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const reason = action.value.reason || 'Клик по экрану';
+                    const btn = action.value.button === 'right' ? 'правой' : 'левой';
+                    const xPct = Math.round((action.value.x || 0) * 100);
+                    const yPct = Math.round((action.value.y || 0) * 100);
+                    pendingPcCommandTexts.set(`visual:${confirmationId}`, JSON.stringify({
+                        display_id: action.value.display_id,
+                        x: action.value.x,
+                        y: action.value.y,
+                        button: action.value.button,
+                    }));
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback('✅ Кликнуть', `vclick:allow:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `vclick:reject:${confirmationId}`),
+                        ]
+                    ]);
+                    try {
+                        await ctx.reply(
+                            `🖱 **Клик по экрану**\n\n${reason}\nКоординаты: ${xPct}%, ${yPct}% (${btn} кнопка)\n\nПодтвердить?`,
+                            { parse_mode: 'Markdown', ...keyboard }
+                        );
+                    } catch {
+                        try {
+                            await ctx.reply(`🖱 Клик по экрану\n\n${reason}\nКоординаты: ${xPct}%, ${yPct}% (${btn} кнопка)\n\nПодтвердить?`, keyboard);
                         } catch {
                             // ignore
                         }

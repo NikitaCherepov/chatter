@@ -17,6 +17,7 @@ import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { getPcCommandsSettings, updatePcCommandsSettings, listPcCommandPolicies, createPcCommandPolicy, deletePcCommandPolicy } from './services/pc-commands.js';
 import { getPendingPcConfirmation, deletePendingPcConfirmation } from './services/pc-command-confirmations.js';
+import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -2935,6 +2936,46 @@ app.post('/internal/pc-commands/policies', internalAuth, async (req, res) => {
   const result = createPcCommandPolicy(userId, pattern);
   if (!result.ok) return res.status(400).json({ error: (result as { ok: false; error: string }).error });
   return res.json({ ok: true, id: result.id });
+});
+
+// ── Internal: Visual Click approve/reject (for TG bot) ──────────────────────
+
+app.post('/internal/visual-click/approve', internalAuth, async (req, res) => {
+  const confirmationId = `${req.body?.confirmation_id || ''}`;
+  const approved = req.body?.approved === true;
+  const userId = Number(req.body?.user_id);
+
+  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+
+  const pending = getPendingVisualClick(confirmationId);
+  if (!pending) {
+    return res.status(404).json({ error: 'not_found_or_expired' });
+  }
+  if (Number.isFinite(userId) && pending.userId !== userId) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  if (!approved) {
+    deletePendingVisualClick(confirmationId);
+    pending.reject(new Error('rejected_by_user'));
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  try {
+    deletePendingVisualClick(confirmationId);
+    const { sendIpcToDesktop } = await import('./ws-clients.js');
+    const result = await sendIpcToDesktop(
+      pending.userId,
+      'visual_click',
+      { display_id: pending.display_id, x: pending.x, y: pending.y, button: pending.button },
+      15000
+    );
+    pending.resolve(result);
+    return res.json({ ok: true, status: 'executed', result });
+  } catch (err: any) {
+    pending.reject(err);
+    return res.status(500).json({ error: 'visual_click_failed', details: err?.message });
+  }
 });
 
 // ── Internal: LITE AI review (for TG bot safety check) ─────────────────────
