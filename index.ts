@@ -5498,6 +5498,7 @@ const processUserTextThroughAi = async (
                     const btn = action.value.button === 'right' ? 'правой' : 'левой';
                     const xPct = Math.round((action.value.x || 0) * 100);
                     const yPct = Math.round((action.value.y || 0) * 100);
+                    const previewUrl = action.value.preview_image_url || '';
                     pendingPcCommandTexts.set(`visual:${confirmationId}`, JSON.stringify({
                         display_id: action.value.display_id,
                         x: action.value.x,
@@ -5510,14 +5511,25 @@ const processUserTextThroughAi = async (
                             Markup.button.callback('❌ Отклонить', `vclick:reject:${confirmationId}`),
                         ]
                     ]);
-                    try {
-                        await ctx.reply(
-                            `🖱 **Клик по экрану**\n\n${reason}\nКоординаты: ${xPct}%, ${yPct}% (${btn} кнопка)\n\nПодтвердить?`,
-                            { parse_mode: 'Markdown', ...keyboard }
-                        );
-                    } catch {
+                    const caption = `🖱 Клик по экрану\n\n${reason}\nКоординаты: ${xPct}%, ${yPct}% (${btn} кнопка)`;
+
+                    // If we have a preview image — send as photo with inline keyboard
+                    let photoSent = false;
+                    if (previewUrl) {
                         try {
-                            await ctx.reply(`🖱 Клик по экрану\n\n${reason}\nКоординаты: ${xPct}%, ${yPct}% (${btn} кнопка)\n\nПодтвердить?`, keyboard);
+                            const fullUrl = previewUrl.startsWith('http') ? previewUrl : `${BACKEND_API_BASE_URL}${previewUrl}`;
+                            await ctx.replyWithPhoto(
+                                { url: fullUrl },
+                                { caption, ...keyboard }
+                            );
+                            photoSent = true;
+                        } catch {
+                            // fallback to text
+                        }
+                    }
+                    if (!photoSent) {
+                        try {
+                            await ctx.reply(`${caption}\n\nПодтвердить?`, keyboard);
                         } catch {
                             // ignore
                         }

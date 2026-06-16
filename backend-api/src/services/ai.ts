@@ -1511,23 +1511,30 @@ const buildExecutePcCommandTool = () => {
   };
 };
 
-/** Build capture_screen tool — lets AI capture screenshots of all monitors */
+/** Build capture_screen tool — captures screenshot, sends to vision model with purpose */
 const buildCaptureScreenTool = () => {
   return {
     type: 'function' as const,
     function: {
       name: 'capture_screen',
-      description: `Делает скриншоты всех мониторов компьютера пользователя. Возвращает массив с display_id, bounds (координаты и размер каждого монитора) и скриншот в base64.
+      description: `Делает скриншот экрана пользователя и отправляет его vision-модели для анализа.
 Используй когда:
-- Пользователь просит показать что на экране
-- Нужно найти элемент интерфейса для клика
-- Нужно понять текущее состояние экрана перед выполнением действия
+- Нужно найти элемент на экране и получить его координаты
+- Нужно описать что находится на экране
+- Нужно определить текущее состояние интерфейса
 
-Важно: скриншоты тяжёлые (base64), не вызывай без необходимости. После получения скриншота используй execute_visual_click для клика по нужной точке.`,
+В параметре purpose укажи чёткую задачу для vision-модели.
+В ответ получишь текстовый результат (координаты, описание и т.д.).
+Координаты возвращаются в нормализованном виде (0.0–1.0) — используй их в execute_visual_click.`,
       parameters: {
         type: 'object',
-        properties: {},
-        required: []
+        properties: {
+          purpose: {
+            type: 'string',
+            description: 'Задача для vision-модели. Например: "Найди кнопку Сохранить и верни её координаты" или "Опиши подробно что открыто на экране" или "Найди поле ввода поиска".'
+          }
+        },
+        required: ['purpose']
       }
     }
   };
@@ -2074,7 +2081,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void }, screenCaptureSink?: { value: Array<{ display_id: string; data_url: string }> | null }) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void }) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -2504,23 +2511,27 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     return JSON.stringify({ status: 'success', message: `Запрос на чтение директории "${targetPath}" отправлен. Результат чтения будет доступен после подключения десктопа через WebSocket.`, target_path: targetPath });
   }
 
-  // ── Visual Control: capture screen ──────────────────────────────────────────
+  // ── Visual Control: capture screen → vision model analysis ─────────────────
 
   if (toolName === 'capture_screen') {
+    const purpose: string = typeof parsed.purpose === 'string' ? parsed.purpose.trim() : '';
+    if (!purpose) return JSON.stringify({ status: 'error', message: 'purpose обязателен — укажи что найти или описать на экране.' });
+
     if (!isDesktopOnline(user.id)) {
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Скриншот невозможен — попроси пользователя запустить приложение.' });
     }
     try {
+      // 1. Capture screenshots from desktop
       const result = await sendIpcToDesktop(user.id, 'capture_screen', {}, 30000, signal);
-      // result: { displays: [{ display_id, name, bounds, screenshot_base64, ... }] }
       const displays: any[] = result.displays || [];
       if (displays.length === 0) {
         return JSON.stringify({ status: 'error', message: 'Не удалось получить скриншоты мониторов.' });
       }
 
-      // Compress each screenshot via sharp → JPEG data URL for vision model
+      // 2. Compress via sharp → JPEG
       const { default: sharpLib } = await import('sharp');
-      const captures: Array<{ display_id: string; data_url: string }> = [];
+      const { saveGeneratedImage } = await import('./image-storage.js');
+      const captures: Array<{ display_id: string; name: string; data_url: string; compressed_b64: string }> = [];
 
       for (const disp of displays) {
         try {
@@ -2529,27 +2540,77 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
             .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
             .jpeg({ quality: 70 })
             .toBuffer();
-          const dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
-          captures.push({ display_id: disp.display_id, data_url: dataUrl });
+          const compressedB64 = compressed.toString('base64');
+          const dataUrl = `data:image/jpeg;base64,${compressedB64}`;
+          captures.push({ display_id: disp.display_id, name: disp.name || disp.display_id, data_url: dataUrl, compressed_b64: compressedB64 });
+
+          // Save to disk → show in chat (same as generate_image)
+          if (Array.isArray(generatedImages)) {
+            try {
+              const saved = await saveGeneratedImage(compressedB64);
+              generatedImages.push({
+                image_base64: compressedB64,
+                image_url: saved.url,
+                prompt_used: `Скриншот экрана: ${disp.name || disp.display_id}`,
+              });
+            } catch (err) {
+              console.error('[capture_screen] failed to save screenshot:', err);
+            }
+          }
         } catch {
           // skip failed screenshot
         }
       }
 
-      // Put captures into sink — the agent loop will add them as image_url to messages
-      if (screenCaptureSink && captures.length > 0) {
-        screenCaptureSink.value = captures;
+      if (captures.length === 0) {
+        return JSON.stringify({ status: 'error', message: 'Не удалось обработать скриншоты.' });
       }
 
-      // Return text summary for tool response (no base64 — keeps context clean)
+      // 3. Send each screenshot to vision model with purpose
+      const visionResults: any[] = [];
+      for (const cap of captures) {
+        try {
+          const visionMessages = [
+            {
+              role: 'system',
+              content: `Ты — vision-аналитик. Проанализируй скриншот экрана пользователя и выполни задачу.
+Если нужно найти элемент — верни координаты в нормализованном виде (0.0–1.0), где (0,0) левый верхний угол, (1,1) правый нижний.
+Формат ответа для координат: {"display_id": "...", "x": 0.5, "y": 0.5, "description": "..."}
+Если задача — описание, верни подробный текстовый ответ.`
+            },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: purpose },
+                { type: 'image_url', image_url: { url: cap.data_url } }
+              ]
+            }
+          ];
+
+          const visionResp = await runCompletion('vision-pro', {
+            messages: visionMessages,
+            max_tokens: 1000,
+          });
+
+          const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
+          visionResults.push({ display_id: cap.display_id, name: cap.name, result: visionText });
+        } catch (err: any) {
+          visionResults.push({ display_id: cap.display_id, name: cap.name, result: `Ошибка vision: ${err.message}` });
+        }
+      }
+
+      // 4. Return text summary to main model (no images in context)
+      const displayInfo = displays.map((d: any) => ({
+        display_id: d.display_id,
+        name: d.name,
+        bounds: d.bounds,
+      }));
+
       return JSON.stringify({
         status: 'success',
-        message: `Получено скриншотов: ${captures.length}. Скриншоты прикреплены к сообщению — используй их чтобы увидеть экран. Координаты для execute_visual_click: x,y — нормализованные (0.0–1.0) относительно выбранного монитора.`,
-        displays: displays.map((d: any) => ({
-          display_id: d.display_id,
-          name: d.name,
-          bounds: d.bounds,
-        })),
+        displays: displayInfo,
+        vision_results: visionResults,
+        message: `Скриншоты сделаны и проанализированы. Используй координаты из vision_results для execute_visual_click если нужен клик.`,
       });
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Ошибка скриншота: ${err.message}` });
@@ -2578,6 +2639,47 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     // Needs user confirmation — HitL
+    // Take a fresh screenshot and draw a targeting circle for the confirmation card
+    let previewImageUrl: string | undefined;
+    try {
+      const { default: sharpLib } = await import('sharp');
+      const { saveGeneratedImage } = await import('./image-storage.js');
+      const freshResult = await sendIpcToDesktop(user.id, 'capture_screen', {}, 15000, signal);
+      const freshDisplays: any[] = freshResult.displays || [];
+      const targetDisp = freshDisplays.find((d: any) => d.display_id === displayId) || freshDisplays[0];
+      if (targetDisp) {
+        const buf = Buffer.from(targetDisp.screenshot_base64, 'base64');
+        const imgMeta = await sharpLib(buf, { failOn: 'none' }).metadata();
+        const imgWidth = imgMeta.width || 1280;
+        const imgHeight = imgMeta.height || 720;
+        const drawW = imgWidth > 1280 ? 1280 : imgWidth;
+        const drawH = imgHeight > 720 ? 720 : imgHeight;
+        const cx = Math.round(clickX * drawW);
+        const cy = Math.round(clickY * drawH);
+        const circleRadius = Math.max(20, Math.round(Math.min(drawW, drawH) * 0.03));
+
+        const annotated = await sharpLib(buf, { failOn: 'none' })
+          .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
+          .composite([{
+            input: Buffer.from(
+              `<svg width="${drawW}" height="${drawH}" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="${cx}" cy="${cy}" r="${circleRadius}" fill="none" stroke="red" stroke-width="4"/>
+                <circle cx="${cx}" cy="${cy}" r="${circleRadius + 6}" fill="none" stroke="red" stroke-width="2" opacity="0.5"/>
+                <line x1="${cx - circleRadius - 10}" y1="${cy}" x2="${cx + circleRadius + 10}" y2="${cy}" stroke="red" stroke-width="2"/>
+                <line x1="${cx}" y1="${cy - circleRadius - 10}" x2="${cx}" y2="${cy + circleRadius + 10}" stroke="red" stroke-width="2"/>
+              </svg>`
+            ),
+            blend: 'over',
+          }])
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        const saved = await saveGeneratedImage(annotated.toString('base64'));
+        previewImageUrl = saved.url;
+      }
+    } catch (err) {
+      console.error('[visual_click] failed to create preview:', err);
+    }
+
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
 
@@ -2605,6 +2707,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         y: clickY,
         button: clickButton,
         reason,
+        preview_image_url: previewImageUrl,
       }
     };
 
@@ -3838,7 +3941,6 @@ PRO
   const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
   const desktopActionSink: { value: DesktopActionPayload | null } = { value: null };
   const mapUpdateSink: { value: MapUpdatePayload | null } = { value: null };
-  const screenCaptureSink: { value: Array<{ display_id: string; data_url: string }> | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
 
@@ -4020,8 +4122,7 @@ for (const toolCall of message.tool_calls) {
         mapUpdateSink,
         options?.activeMacros,
         abortController.signal,
-        { manualModel, onToolStatus: options?.onToolStatus, onDesktopAction: options?.onDesktopAction },
-        screenCaptureSink
+        { manualModel, onToolStatus: options?.onToolStatus, onDesktopAction: options?.onDesktopAction }
       ),
       abortController.signal
     );
@@ -4056,29 +4157,11 @@ for (const toolCall of message.tool_calls) {
     if (historyEntry) historyEntry.result_preview = resultPreview;
   }
 
-  // If capture_screen returned screenshots — send them as image_url content
-  // so the vision model can actually "see" the screen
-  if (toolName === 'capture_screen' && screenCaptureSink.value && screenCaptureSink.value.length > 0) {
-    const imageContent: any[] = [
-      { type: 'text', text: toolContent },
-      ...screenCaptureSink.value.map(cap => ({
-        type: 'image_url',
-        image_url: { url: cap.data_url }
-      }))
-    ];
-    currentMessages.push({
-      role: 'tool',
-      tool_call_id: toolCall.id,
-      content: imageContent
-    });
-    screenCaptureSink.value = null; // consume
-  } else {
-    currentMessages.push({
-      role: 'tool',
-      tool_call_id: toolCall.id,
-      content: toolContent
-    });
-  }
+  currentMessages.push({
+    role: 'tool',
+    tool_call_id: toolCall.id,
+    content: toolContent
+  });
 
   if (toolContent.trim()) {
     toolOutputsForFallback.push(toolContent.trim());
