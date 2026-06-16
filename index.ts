@@ -4934,7 +4934,9 @@ bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
         return;
     }
 
+    // Answer callback query immediately — Telegram requires it within ~15s
     if (action === 'reject') {
+        await ctx.answerCbQuery('Отклонено');
         try {
             await axios.post(
                 `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
@@ -4942,31 +4944,32 @@ bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
             );
             await ctx.editMessageText('❌ Команда отклонена.');
-            await ctx.answerCbQuery('Отклонено');
         } catch {
-            await ctx.answerCbQuery('Не удалось отклонить (истёк таймаут?).');
+            await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
         }
         return;
     }
 
     if (action === 'allow') {
-        try {
-            const resp = await axios.post(
-                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
-                { confirmation_id: confirmationId, approved: true, user_id: userId },
-                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
-            );
-            const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
-            const preview = output.slice(0, 500) || '(нет вывода)';
-            await ctx.editMessageText(`✅ Команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-                ctx.editMessageText(`✅ Команда выполнена.\n\n${preview}`).catch(() => {});
-            });
-            await ctx.answerCbQuery('Разрешено');
-        } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка выполнения: ${msg}`).catch(() => {});
-            await ctx.answerCbQuery('Ошибка');
-        }
+        await ctx.answerCbQuery('Выполняю...');
+        // Run in background — don't block Telegraf
+        (async () => {
+            try {
+                const resp = await axios.post(
+                    `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+                    { confirmation_id: confirmationId, approved: true, user_id: userId },
+                    { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+                );
+                const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
+                const preview = output.slice(0, 500) || '(нет вывода)';
+                await ctx.editMessageText(`✅ Команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+                    ctx.editMessageText(`✅ Команда выполнена.\n\n${preview}`).catch(() => {});
+                });
+            } catch (err: any) {
+                const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
+                await ctx.editMessageText(`⚠️ Ошибка выполнения: ${msg}`).catch(() => {});
+            }
+        })();
         return;
     }
 
@@ -4984,30 +4987,28 @@ bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
     }
 
     if (action === 'review') {
-        // Send command to LITE AI for safety review
         await ctx.answerCbQuery('Отправляю на проверку...');
-        try {
-            // Get the pending confirmation to read the command
-            // We can't access pending from here directly, so we rely on the message text
-            // The command was in the original message; parse it
-            const msgText = (ctx.callbackQuery?.message as any)?.text || '';
-            // Extract command from between backticks
-            const cmdMatch = msgText.match(/`([^`]+)`/);
-            const cmd = cmdMatch ? cmdMatch[1] : '(неизвестная команда)';
+        // Run in background
+        (async () => {
+            try {
+                const msgText = (ctx.callbackQuery?.message as any)?.text || '';
+                const cmdMatch = msgText.match(/`([^`]+)`/);
+                const cmd = cmdMatch ? cmdMatch[1] : '(неизвестная команда)';
 
-            const liteResp = await axios.post(
-                `${BACKEND_API_BASE_URL}/internal/ai/lite`,
-                {
-                    text: `Оцени безопасность следующей команды для выполнения на ПК пользователя. Кратко объясни риски (1-2 предложения). Команда: ${cmd}`,
-                },
-                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
-            );
-            const verdict = liteResp.data?.reply_text || liteResp.data?.text || '(нет ответа)';
-            await ctx.reply(`🔍 Проверка AI:\n\n${verdict}\n\n⬆️ Кнопки подтверждения выше остаются активными.`);
-        } catch (err: any) {
-            const msg = err?.message || 'ошибка';
-            await ctx.reply(`Не удалось проверить команду: ${msg}\n\n⬆️ Кнопки подтверждения выше остаются активными.`).catch(() => {});
-        }
+                const liteResp = await axios.post(
+                    `${BACKEND_API_BASE_URL}/internal/ai/lite`,
+                    {
+                        text: `Оцени безопасность следующей команды для выполнения на ПК пользователя. Кратко объясни риски (1-2 предложения). Команда: ${cmd}`,
+                    },
+                    { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
+                );
+                const verdict = liteResp.data?.reply_text || liteResp.data?.text || '(нет ответа)';
+                await ctx.reply(`🔍 Проверка AI:\n\n${verdict}\n\n⬆️ Кнопки подтверждения выше остаются активными.`);
+            } catch (err: any) {
+                const msg = err?.message || 'ошибка';
+                await ctx.reply(`Не удалось проверить команду: ${msg}\n\n⬆️ Кнопки подтверждения выше остаются активными.`).catch(() => {});
+            }
+        })();
         return;
     }
 });
@@ -5021,43 +5022,43 @@ bot.action(/^pcconfirm:always_confirm:(.+)$/, async (ctx) => {
         return;
     }
 
-    try {
-        // First create an auto-approve policy, then approve
-        // Extract command from original message text
-        const msgText = (ctx.callbackQuery?.message as any)?.text || '';
-        const cmdMatch = msgText.match(/`([^`]+)`/) || msgText.match(/Команда на ПК\n\n(.+)/);
-        const cmd = cmdMatch ? cmdMatch[1] : '';
+    await ctx.answerCbQuery('Выполняю...');
 
-        // Create exact-match policy via internal API
-        if (cmd) {
-            try {
-                await axios.post(
-                    `${BACKEND_API_BASE_URL}/internal/pc-commands/policies`,
-                    { user_id: userId, pattern: '^' + cmd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' },
-                    { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 10000 }
-                );
-            } catch {
-                // Non-critical — approve will still work
+    // Run in background — don't block Telegraf
+    (async () => {
+        try {
+            const msgText = (ctx.callbackQuery?.message as any)?.text || '';
+            const cmdMatch = msgText.match(/`([^`]+)`/) || msgText.match(/Команда на ПК\n\n(.+)/);
+            const cmd = cmdMatch ? cmdMatch[1] : '';
+
+            if (cmd) {
+                try {
+                    await axios.post(
+                        `${BACKEND_API_BASE_URL}/internal/pc-commands/policies`,
+                        { user_id: userId, pattern: '^' + cmd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' },
+                        { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 10000 }
+                    );
+                } catch {
+                    // Non-critical
+                }
             }
-        }
 
-        // Approve the command
-        const resp = await axios.post(
-            `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
-            { confirmation_id: confirmationId, approved: true, user_id: userId },
-            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
-        );
-        const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
-        const preview = output.slice(0, 500) || '(нет вывода)';
-        await ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-            ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n${preview}`).catch(() => {});
-        });
-        await ctx.answerCbQuery('Разрешено всегда');
-    } catch (err: any) {
-        const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
-        await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
-        await ctx.answerCbQuery('Ошибка');
-    }
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+            );
+            const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
+            const preview = output.slice(0, 500) || '(нет вывода)';
+            await ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+                ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n${preview}`).catch(() => {});
+            });
+            // answerCbQuery already sent above
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+        }
+    })();
 });
 
 bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
@@ -5091,29 +5092,30 @@ bot.action(/^devops:allow:(.+)$/, async (ctx) => {
         await ctx.answerCbQuery('Ошибка');
         return;
     }
-    try {
-        const resp = await axios.post(
-            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
-            { confirmation_id: confirmationId, approved: true, user_id: userId },
-            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
-        );
-        const result = resp.data?.result;
-        const stdout = result?.stdout || '';
-        const stderr = result?.stderr || '';
-        const exitCode = result?.exit_code;
-        let output = '';
-        if (stdout) output += stdout.slice(0, 800);
-        if (stderr) output += (output ? '\n' : '') + stderr.slice(0, 400);
-        if (!output) output = `(нет вывода, exit_code=${exitCode ?? '?'})`;
-        await ctx.editMessageText(`✅ SSH выполнен.\n\n\`\`\`\n${output.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-            ctx.editMessageText(`✅ SSH выполнен.\n\n${output}`).catch(() => {});
-        });
-        await ctx.answerCbQuery('Разрешено');
-    } catch (err: any) {
-        const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
-        await ctx.editMessageText(`⚠️ Ошибка SSH: ${msg}`).catch(() => {});
-        await ctx.answerCbQuery('Ошибка');
-    }
+    await ctx.answerCbQuery('Выполняю SSH...');
+    (async () => {
+        try {
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/devops/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+            );
+            const result = resp.data?.result;
+            const stdout = result?.stdout || '';
+            const stderr = result?.stderr || '';
+            const exitCode = result?.exit_code;
+            let output = '';
+            if (stdout) output += stdout.slice(0, 800);
+            if (stderr) output += (output ? '\n' : '') + stderr.slice(0, 400);
+            if (!output) output = `(нет вывода, exit_code=${exitCode ?? '?'})`;
+            await ctx.editMessageText(`✅ SSH выполнен.\n\n\`\`\`\n${output.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+                ctx.editMessageText(`✅ SSH выполнен.\n\n${output}`).catch(() => {});
+            });
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка SSH: ${msg}`).catch(() => {});
+        }
+    })();
 });
 
 bot.action(/^devops:reject:(.+)$/, async (ctx) => {
@@ -5123,6 +5125,7 @@ bot.action(/^devops:reject:(.+)$/, async (ctx) => {
         await ctx.answerCbQuery('Ошибка');
         return;
     }
+    await ctx.answerCbQuery('Отклонено');
     try {
         await axios.post(
             `${BACKEND_API_BASE_URL}/internal/devops/approve`,
@@ -5130,9 +5133,8 @@ bot.action(/^devops:reject:(.+)$/, async (ctx) => {
             { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
         );
         await ctx.editMessageText('❌ SSH команда отклонена.');
-        await ctx.answerCbQuery('Отклонено');
     } catch {
-        await ctx.answerCbQuery('Не удалось отклонить (истёк таймаут?).');
+        await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
     }
 });
 
@@ -5143,21 +5145,22 @@ bot.action(/^devops:creds_apply:(.+)$/, async (ctx) => {
         await ctx.answerCbQuery('Ошибка');
         return;
     }
-    try {
-        const resp = await axios.post(
-            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
-            { confirmation_id: confirmationId, approved: true, user_id: userId },
-            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
-        );
-        const result = resp.data?.result;
-        const output = typeof result === 'string' ? result.slice(0, 500) : '(выполнено)';
-        await ctx.editMessageText(`✅ Credentials обновлены.\n\n${output}`).catch(() => {});
-        await ctx.answerCbQuery('Применено');
-    } catch (err: any) {
-        const msg = err?.response?.data?.error || err?.message || 'ошибка';
-        await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
-        await ctx.answerCbQuery('Ошибка');
-    }
+    await ctx.answerCbQuery('Применяю...');
+    (async () => {
+        try {
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/devops/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+            );
+            const result = resp.data?.result;
+            const output = typeof result === 'string' ? result.slice(0, 500) : '(выполнено)';
+            await ctx.editMessageText(`✅ Credentials обновлены.\n\n${output}`).catch(() => {});
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+        }
+    })();
 });
 
 bot.action(/^devops:creds_reject:(.+)$/, async (ctx) => {
@@ -5167,6 +5170,7 @@ bot.action(/^devops:creds_reject:(.+)$/, async (ctx) => {
         await ctx.answerCbQuery('Ошибка');
         return;
     }
+    await ctx.answerCbQuery('Отклонено');
     try {
         await axios.post(
             `${BACKEND_API_BASE_URL}/internal/devops/approve`,
@@ -5174,9 +5178,8 @@ bot.action(/^devops:creds_reject:(.+)$/, async (ctx) => {
             { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
         );
         await ctx.editMessageText('❌ Обновление credentials отклонено.');
-        await ctx.answerCbQuery('Отклонено');
     } catch {
-        await ctx.answerCbQuery('Не удалось отклонить.');
+        await ctx.editMessageText('⚠️ Не удалось отклонить.').catch(() => {});
     }
 });
 
@@ -5706,7 +5709,10 @@ bot.on('text', async (ctx) => {
         return;
     }
 
-    await processUserTextThroughAi(ctx, userText);
+    // Fire-and-forget: don't block Telegraf from processing callback_query (inline buttons)
+    processUserTextThroughAi(ctx, userText).catch(err => {
+        console.error('Ошибка в processUserTextThroughAi:', err);
+    });
 });
 
 bot.on('voice', async (ctx) => {
