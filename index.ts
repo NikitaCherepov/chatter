@@ -4922,6 +4922,9 @@ bot.action('model:cancel', async (ctx) => {
     await ctx.answerCbQuery();
 });
 
+// Store full commands by confirmationId — Telegram message text loses Markdown backticks
+const pendingPcCommandTexts = new Map<string, string>();
+
 // ── PC Command Confirmation (Telegram inline buttons) ─────────────────────
 
 bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
@@ -4991,9 +4994,7 @@ bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
         // Run in background
         (async () => {
             try {
-                const msgText = (ctx.callbackQuery?.message as any)?.text || '';
-                const cmdMatch = msgText.match(/`([^`]+)`/);
-                const cmd = cmdMatch ? cmdMatch[1] : '(неизвестная команда)';
+                const cmd = pendingPcCommandTexts.get(confirmationId) || '(неизвестная команда)';
 
                 const liteResp = await axios.post(
                     `${BACKEND_API_BASE_URL}/internal/ai/lite`,
@@ -5027,9 +5028,7 @@ bot.action(/^pcconfirm:always_confirm:(.+)$/, async (ctx) => {
     // Run in background — don't block Telegraf
     (async () => {
         try {
-            const msgText = (ctx.callbackQuery?.message as any)?.text || '';
-            const cmdMatch = msgText.match(/`([^`]+)`/) || msgText.match(/Команда на ПК\n\n(.+)/);
-            const cmd = cmdMatch ? cmdMatch[1] : '';
+            const cmd = pendingPcCommandTexts.get(confirmationId) || '';
 
             if (cmd) {
                 try {
@@ -5062,11 +5061,9 @@ bot.action(/^pcconfirm:always_confirm:(.+)$/, async (ctx) => {
 });
 
 bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
-    // Restore the original confirmation message with all 4 buttons
     const confirmationId = ctx.match[1];
-    const msgText = (ctx.callbackQuery?.message as any)?.text || '';
-    const cmdMatch = msgText.match(/`([^`]+)`/) || msgText.match(/Команда на ПК\n\n(.+)/);
-    const cmd = cmdMatch ? cmdMatch[1] : '';
+    const cmd = pendingPcCommandTexts.get(confirmationId) || '';
+    const preview = cmd.slice(0, 200);
     const keyboard = Markup.inlineKeyboard([
         [
             Markup.button.callback('✅ Разрешить', `pcconfirm:allow:${confirmationId}`),
@@ -5077,8 +5074,9 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
             Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
         ]
     ]);
-    await ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n\`${cmd}\`\n\nРазрешить выполнение?`, { parse_mode: 'Markdown', ...keyboard }).catch(() => {
-        ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n${cmd}\n\nРазрешить выполнение?`, keyboard).catch(() => {});
+    const escapedPreview = preview.replace(/`/g, '\\`');
+    await ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n\`${escapedPreview}\`\n\nРазрешить выполнение?`, { parse_mode: 'Markdown', ...keyboard }).catch(() => {
+        ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n${preview}\n\nРазрешить выполнение?`, keyboard).catch(() => {});
     });
     await ctx.answerCbQuery();
 });
@@ -5272,6 +5270,7 @@ const processUserTextThroughAi = async (
                 if (action?.action === 'pc_command_confirmation' && action?.value?.confirmation_id) {
                     const confirmationId = action.value.confirmation_id;
                     const command = action.value.command || '';
+                    pendingPcCommandTexts.set(confirmationId, command);
                     const preview = command.slice(0, 200);
                     const keyboard = Markup.inlineKeyboard([
                         [
