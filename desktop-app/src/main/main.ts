@@ -517,19 +517,24 @@ function createWindow() {
         const execAsync = util.promisify(exec);
 
         // Fix кракозябр на Windows: cmd.exe получает аргументы в системной ANSI
-        // кодировке (cp1251), и chcp 65001 срабатывает уже после парсинга команды,
-        // поэтому кириллица ломается. Оборачиваем в PowerShell с UTF-8 output
-        // encoding: команда передаётся как Base64 (UTF-16LE), затем выполняется
-        // через `cmd /c` для сохранения совместимости с cmd-синтаксисом (&&, |, >).
+        // кодировке (cp1251/cp866), chcp 65001 срабатывает уже после парсинга.
+        // Решение: двойной Base64.
+        // 1) Исходная команда кодируется в Base64 (UTF-16LE для .NET) — защищает
+        //    от сломанных кавычек, спецсимволов, кириллицы в аргументах.
+        // 2) PowerShell-скрипт, который декодирует команду и выполняет её через
+        //    `cmd.exe /c` (сохраняем cmd-семантику &&, |, >), сам тоже пакуется в
+        //    Base64 и передаётся через -EncodedCommand.
         let execCmd = cmd;
         if (process.platform === 'win32') {
+          const cmdB64 = Buffer.from(cmd, 'utf16le').toString('base64');
           const psScript = [
             '$OutputEncoding = [System.Text.Encoding]::UTF8',
             '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-            'cmd /c ' + JSON.stringify(cmd),
+            `$decCmd = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${cmdB64}'))`,
+            'cmd.exe /c $decCmd',
           ].join('; ');
-          const b64 = Buffer.from(psScript, 'utf16le').toString('base64');
-          execCmd = `powershell -NoProfile -EncodedCommand ${b64}`;
+          const scriptB64 = Buffer.from(psScript, 'utf16le').toString('base64');
+          execCmd = `powershell -NoProfile -EncodedCommand ${scriptB64}`;
         }
         const cmdStartedAt = Date.now();
         console.log('[execute-commands] cmd start', {
