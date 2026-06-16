@@ -5136,6 +5136,99 @@ bot.action(/^devops:reject:(.+)$/, async (ctx) => {
     }
 });
 
+bot.action(/^devops:always:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    // Confirm: "Are you sure?"
+    const keyboard = Markup.inlineKeyboard([
+        [
+            Markup.button.callback('✅ Да, разрешить всегда', `devops:always_confirm:${confirmationId}`),
+            Markup.button.callback('⬅️ Назад', `devops:always_cancel:${confirmationId}`),
+        ]
+    ]);
+    await ctx.editMessageText('⚠️ Создать постоянное правило для этой SSH команды?', keyboard);
+    await ctx.answerCbQuery();
+});
+
+bot.action(/^devops:always_confirm:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    await ctx.answerCbQuery('Выполняю...');
+    (async () => {
+        try {
+            const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || '';
+            const serverId = pendingPcCommandTexts.get(`devops_server:${confirmationId}`) || '';
+            if (cmd && serverId) {
+                const escapedCmd = cmd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                await axios.post(
+                    `${BACKEND_API_BASE_URL}/internal/devops/servers/${serverId}/policies`,
+                    { user_id: userId, pattern: `^${escapedCmd}$`, auto_approve: true },
+                    { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 10000 }
+                );
+            }
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/devops/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+            );
+            const result = resp.data?.result;
+            const stdout = result?.stdout || '';
+            const stderr = result?.stderr || '';
+            let output = '';
+            if (stdout) output += stdout.slice(0, 800);
+            if (stderr) output += (output ? '\n' : '') + stderr.slice(0, 400);
+            if (!output) output = '(нет вывода)';
+            await ctx.editMessageText(`🔓 Разрешено всегда + SSH выполнен.\n\n\`\`\`\n${output.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+                ctx.editMessageText(`🔓 Разрешено всегда + SSH выполнен.\n\n${output}`).catch(() => {});
+            });
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+        }
+    })();
+});
+
+bot.action(/^devops:always_cancel:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    // Just go back — re-show would need original text, just leave as is
+    await ctx.editMessageText('↩️ Возвращены кнопки подтверждения.').catch(() => {});
+});
+
+bot.action(/^devops:review:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    await ctx.answerCbQuery('Отправляю на проверку...');
+    (async () => {
+        try {
+            const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || '(неизвестная команда)';
+            const liteResp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/ai/lite`,
+                {
+                    text: `Оцени безопасность следующей SSH команды для выполнения на сервере. Кратко объясни риски (1-2 предложения). Команда: ${cmd}`,
+                },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
+            );
+            const verdict = liteResp.data?.reply_text || liteResp.data?.text || '(нет ответа)';
+            await ctx.reply(`🔍 Проверка AI:\n\n${verdict}\n\n⬆️ Кнопки подтверждения выше остаются активными.`);
+        } catch (err: any) {
+            const msg = err?.message || 'ошибка';
+            await ctx.reply(`Не удалось проверить команду: ${msg}\n\n⬆️ Кнопки подтверждения выше остаются активными.`).catch(() => {});
+        }
+    })();
+});
+
 bot.action(/^devops:creds_apply:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
@@ -5299,14 +5392,21 @@ const processUserTextThroughAi = async (
                 if (action?.action === 'devops_confirmation' && action?.value?.confirmation_id) {
                     const confirmationId = action.value.confirmation_id;
                     const serverName = action.value.server_name || '';
+                    const serverId = action.value.server_id || '';
                     const command = action.value.command || '';
                     const host = action.value.host || '';
+                    pendingPcCommandTexts.set(`devops:${confirmationId}`, command);
+                    pendingPcCommandTexts.set(`devops_server:${confirmationId}`, String(serverId));
                     const preview = command.slice(0, 300);
                     const escapedCmd = preview.replace(/`/g, '\\`');
                     let msgText = `🖥 **SSH: ${serverName}** (${host})\n\n\`${escapedCmd}\`\n\nРазрешить выполнение?`;
                     const keyboard = Markup.inlineKeyboard([
                         [
                             Markup.button.callback('✅ Разрешить', `devops:allow:${confirmationId}`),
+                            Markup.button.callback('🔓 Разрешить всегда', `devops:always:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('❓ Проверить', `devops:review:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `devops:reject:${confirmationId}`),
                         ]
                     ]);

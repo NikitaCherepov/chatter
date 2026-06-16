@@ -2996,6 +2996,26 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
   }
 });
 
+// ── Internal: DevOps SSH auto-approve policy (for TG bot) ──────────────────
+
+app.post('/internal/devops/servers/:id/policies', internalAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const userId = Number(req.body?.user_id);
+  if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
+  if (!Number.isFinite(userId)) return res.status(400).json({ error: 'user_id_required' });
+
+  const pattern = `${req.body?.pattern || ''}`;
+  const autoApprove = req.body?.auto_approve === true;
+
+  const result = createPolicy(userId, serverId, pattern, autoApprove);
+  if (!result.ok) {
+    const code = (result as { ok: false; error: string }).error;
+    if (code === 'not_found') return res.status(404).json({ error: code });
+    return res.status(400).json({ error: code });
+  }
+  return res.status(201).json({ id: result.id });
+});
+
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error('API error:', err);
   res.status(500).json({ error: 'internal_error' });
