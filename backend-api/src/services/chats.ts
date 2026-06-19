@@ -2,6 +2,9 @@
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, ChatRole, UserRecord } from '../types.js';
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
+import { buildBaseSystemPromptForUser } from './system-prompt.js';
+import { resolvePromptForUser } from './prompts.js';
+import { getEnabledMacros } from './macros.js';
 
 const parseAdminId = (raw: string | undefined) => {
   if (!raw) return null;
@@ -848,16 +851,26 @@ export type ChatContextTokens = {
   active_messages: number;
   /** Количество архивных сообщений. */
   archived_messages: number;
+  /**
+   * Оценка токенов базового системного промпта (без надбавок за голос/аватар/изображения).
+   * Динамический — пересчитывается при каждом запросе, т.к. зависит от
+   * core_memory, pinned macros, timezone, выбранного промпта.
+   */
+  system_prompt_tokens: number;
 };
 
 /**
- * Суммарные токены контекста чата по БД (без системного промпта — он динамический).
+ * Суммарные токены контекста чата.
  *
- * Системный промпт считается отдельно на клиенте или в эндпоинте, т.к. он зависит
- * от core_memory, pinned_macros, feature flags и прочего динамического контекста.
- *
- * messages_tokens = SUM(token_count) WHERE archived = 0 — это базовая оценка
+ * messages_tokens = SUM(token_count) WHERE archived = 0 — базовая оценка
  * веса истории сообщений для AI-контекста.
+ *
+ * system_prompt_tokens = оценка базового системного промпта (без голоса/аватара).
+ * Эти токены НЕ плюсуются в messages_tokens — отображаются отдельно,
+ * т.к. промпт динамический и его размер меняется между запросами.
+ *
+ * Полный контекст запроса к AI ≈ messages_tokens + system_prompt_tokens
+ * (+ возможные надбавки за голос/аватар/изображения, которые здесь не учтены).
  */
 export const getChatContextTokens = (userId: number, chatId: number): ChatContextTokens => {
   const row = db.prepare(`
@@ -869,8 +882,26 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
       COALESCE(SUM(CASE WHEN archived = 1 THEN 1 ELSE 0 END), 0) AS archived_messages
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
-  `).get(userId, chatId) as ChatContextTokens;
-  return row;
+  `).get(userId, chatId) as Omit<ChatContextTokens, 'system_prompt_tokens'>;
+
+  // Считаем базовый системный промпт (динамический).
+  // Надбавки за голос/аватар/изображения не включены — они появляются только
+  // при конкретных типах запросов и не относятся к "базовому" контексту чата.
+  let system_prompt_tokens = 0;
+  const user = getUserById(userId);
+  if (user) {
+    const promptUser = user; // Для отображения используется тот же user, что и для запроса
+    const promptContent = resolvePromptForUser(promptUser).content;
+    const coreMemory = user.core_memory || '';
+    const pinnedMacros = getEnabledMacros(userId).filter(m => m.pinned);
+    const pinnedMacrosHint = pinnedMacros.length > 0
+      ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
+      : '';
+    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false);
+    system_prompt_tokens = countMessageTokens('system', systemPrompt);
+  }
+
+  return { ...row, system_prompt_tokens };
 };
 
 /**

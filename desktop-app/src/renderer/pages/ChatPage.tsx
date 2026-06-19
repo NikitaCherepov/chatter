@@ -2615,9 +2615,11 @@ export function ChatPage() {
             )}
 
             {activeChatId && contextTokens && (
-              <div className={s.contextTokensBar} title="Суммарные токены контекста чата (без системного промпта). Без reasoning.">
+              <div className={s.contextTokensBar} title="Суммарные токены контекста чата. Prompt — динамический (без надбавок за голос/аватар). Без reasoning.">
                 <span>Контекст:</span>
                 <strong>{contextTokens.messages_tokens.toLocaleString('ru-RU')}t</strong>
+                <span className={s.contextTokensMuted}>· prompt:</span>
+                <span className={s.contextTokensPrompt}>{contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}t</span>
                 {contextTokens.reasoning_tokens > 0 && (
                   <span className={s.contextTokensMuted}>+{contextTokens.reasoning_tokens.toLocaleString('ru-RU')}t reasoning</span>
                 )}

@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
-import { resolvePromptForUser, COLD_MEMORY_PROMPT_HINT, AVATAR_PROMPT_HINT } from './prompts.js';
+import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
@@ -624,20 +624,9 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
   return content.trim();
 };
 
-const TOOL_USAGE_RULES = `\n\n[CRITICAL DIRECTIVE: TOOL EXECUTION]
-If the user asks you to perform an action on their PC (create a file, open a website, check a service) or call a tool, YOU MUST CALL THE APPROPRIATE TOOL (e.g., execute_pc_command or else).
-UNDER NO CIRCUMSTANCES should you simulate the execution using text. Do NOT write "Открываю...", "Создаю...", or "Выполняю...". Do NOT roleplay the action. Just silently output the tool call JSON.`;
-
-const buildSystemPrompt = (prompt: string, userName: string, coreMemory: string) => {
-  return `${prompt}\n\nИмя {{user}}: ${userName}\n\n[ПОСТОЯННЫЕ ЗНАНИЯ О ПОЛЬЗОВАТЕЛЕ]\n${(coreMemory || '').trim() || 'Пока пусто.'}${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}`;
-};
-
-const buildTimeContext = (timezoneOffset: number) => {
-  const now = new Date();
-  const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
-  const sign = timezoneOffset >= 0 ? '+' : '';
-  return `\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ]\nТекущее Unix-время (в секундах): ${Math.floor(now.getTime() / 1000)}.\nЛокальное время пользователя: ${localTime.toISOString().replace('T', ' ').slice(0, 19)} (UTC${sign}${timezoneOffset}). При планировании задач используй local_time (HH:MM) или delay_seconds.`;
-};
+// Сборка system prompt вынесена в system-prompt.ts (используется также в chats.ts
+// для подсчёта токенов — без циклической зависимости).
+import { buildSystemPrompt, buildTimeContext } from './system-prompt.js';
 
 const isLitePlan = (plan: UserPlan) => plan === 'free' || plan === 'standart';
 const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;

@@ -912,6 +912,11 @@
   color: var(--text-hint);
 }
 
+.contextTokensPrompt {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .inputIcon {
   width: 20px;
   height: 20px;

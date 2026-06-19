@@ -282,6 +282,7 @@ export type ChatContextTokens = {
   archived_tokens: number;
   active_messages: number;
   archived_messages: number;
+  system_prompt_tokens: number;
 };
 
 export async function getChatContextTokens(chatId: number): Promise<ChatContextTokens> {
