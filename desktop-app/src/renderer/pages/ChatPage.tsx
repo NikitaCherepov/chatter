@@ -135,7 +135,7 @@ const MessageItem = React.memo(function MessageItem({
             }}
             title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
           >
-            <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens}t` : ''}</span>
+            <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -207,7 +207,7 @@ const MessageItem = React.memo(function MessageItem({
         )}
         {typeof msg.token_count === 'number' && msg.token_count > 0 && (
           <span className={s.tokenBadge} title="Локальная оценка токенов сообщения (без reasoning)">
-            {msg.token_count}t
+            {msg.token_count} tk
           </span>
         )}
       </div>
@@ -1768,6 +1768,15 @@ export function ChatPage() {
                 </div>
                 )}
               </div>
+              {contextTokens && (
+                <div className={s.contextTokensCompact} title={`Сообщений: ${contextTokens.active_messages} (архив: ${contextTokens.archived_messages})\nТокены промпта: ${contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}${contextTokens.reasoning_tokens > 0 ? `\nReasoning: ${contextTokens.reasoning_tokens.toLocaleString('ru-RU')}tk` : ''}`}>
+                  <span className={s.contextTokensValue}>{contextTokens.messages_tokens.toLocaleString('ru-RU')}</span>
+                  <span className={s.contextTokensLabel}> tk</span>
+                  <span className={s.contextTokensSep}>·</span>
+                  <span className={s.contextTokensPromptValue}>{contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}</span>
+                  <span className={s.contextTokensLabel}> prompt</span>
+                </div>
+              )}
             </div>
             <div className={s.messages} ref={messagesScrollRef}>
               {loadingMessages && (
@@ -1837,7 +1846,7 @@ export function ChatPage() {
                         }}
                         title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
                       >
-                        <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens}t` : ''}</span>
+                        <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <polyline points="6 9 12 15 18 9" />
                         </svg>
@@ -1927,7 +1936,7 @@ export function ChatPage() {
                     )}
                     {typeof msg.token_count === 'number' && msg.token_count > 0 && (
                       <span className={s.tokenBadge} title="Локальная оценка токенов сообщения (без reasoning)">
-                        {msg.token_count}t
+                        {msg.token_count} tk
                       </span>
                     )}
                   </div>
@@ -2611,22 +2620,6 @@ export function ChatPage() {
                 <button className={s.imageClearAll} onClick={clearAttachedImages}>
                   Очистить
                 </button>
-              </div>
-            )}
-
-            {activeChatId && contextTokens && (
-              <div className={s.contextTokensBar} title="Суммарные токены контекста чата. Prompt — динамический (без надбавок за голос/аватар). Без reasoning.">
-                <span>Контекст:</span>
-                <strong>{contextTokens.messages_tokens.toLocaleString('ru-RU')}t</strong>
-                <span className={s.contextTokensMuted}>· prompt:</span>
-                <span className={s.contextTokensPrompt}>{contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}t</span>
-                {contextTokens.reasoning_tokens > 0 && (
-                  <span className={s.contextTokensMuted}>+{contextTokens.reasoning_tokens.toLocaleString('ru-RU')}t reasoning</span>
-                )}
-                <span className={s.contextTokensMuted}>· {contextTokens.active_messages} сообщ.</span>
-                {contextTokens.archived_messages > 0 && (
-                  <span className={s.contextTokensMuted}>· архив: {contextTokens.archived_messages}</span>
-                )}
               </div>
             )}
 
