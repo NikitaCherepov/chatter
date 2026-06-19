@@ -25,6 +25,29 @@ const MAX_TOOL_LOOPS = 80;
 const MAX_TOOL_LOOPS_VOICE = 10;
 const TOOL_RESULT_PREVIEW_MAX = 250;
 const PC_COMMAND_OUTPUT_MAX = 15_000;
+// Лимит на сохраняемый полный результат инструмента в trace (для отправки в AI-контекст).
+// Всё что длиннее — обрезается с пометкой, чтобы tool_calls_json не разрастался бесконечно.
+const TOOL_RESULT_FULL_MAX = 40_000;
+
+/**
+ * Одна итерация агентского цикла (один runCompletion + последующие tool calls).
+ * Используется для сохранения полного trace в tool_calls_json,
+ * чтобы getHistoryForAi() могла развернуть его в корректную последовательность
+ * assistant(tool_calls) → tool(results) → assistant(tool_calls) → ...
+ *
+ * Поле `step` служит маркером нового формата: старые записи (плоский массив без step)
+ * обрабатываются как fallback для обратной совместимости.
+ */
+export type ToolIteration = {
+  step: number;
+  /** Текст, который модель сгенерила на этой итерации (intermediate content). Может быть "". */
+  content: string;
+  tool_calls: Array<{ id?: string; name: string; arguments: any }>;
+  /** Полные результаты runTool для каждого tool_call этой итерации. */
+  results: Array<{ id?: string; name: string; content: string }>;
+  /** true у финальной итерации без tool_calls (только текстовый ответ). */
+  is_final?: boolean;
+};
 
 // Реестр активных генераций для остановки по userId
 export const activeGenerations = new Map<number, AbortController>();
@@ -4041,6 +4064,9 @@ PRO
   let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
   const reasoningParts: string[] = [];
   const toolCallsHistory: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
+  // Полный trace цикла по итерациям — для корректного разворота в getHistoryForAi().
+  // Параллельно с toolCallsHistory (которая остаётся плоской проекцией для UI/клиентов).
+  const iterations: ToolIteration[] = [];
 
   while (loop < effectiveMaxLoops) {
     loop += 1;
@@ -4137,6 +4163,25 @@ PRO
       }
     }
 
+    // Создаём запись итерации для trace (наполнится results ниже в цикле tool_calls).
+    // Используем оригинальные tool_call объекты из message — в том же порядке, как их вернула модель.
+    const currentIteration: ToolIteration = {
+      step: loop,
+      content: stepContent,
+      tool_calls: (message.tool_calls || [])
+        .filter((tc: any) => tc.type === 'function')
+        .map((tc: any) => ({
+          id: tc.id,
+          name: tc.function?.name ?? tc.name ?? '',
+          arguments: (() => {
+            let a: any = tc.function?.arguments ?? tc.arguments;
+            if (typeof a === 'string') { try { a = JSON.parse(a); } catch { /* keep as string */ } }
+            return a;
+          })()
+        })),
+      results: []
+    };
+
     if (!message.tool_calls?.length) {
       const finishReason = response?.choices?.[0]?.finish_reason;
 
@@ -4153,6 +4198,9 @@ PRO
       if (finishReason === 'length') {
         console.warn(`[AI TRUNCATE] finish_reason=length, model=${completion.usedModel}, provider=${completion.usedProvider}, content_len=${stepContent.length}`);
       }
+      // Финальная итерация без tool_calls — фиксируем в trace.
+      currentIteration.is_final = true;
+      iterations.push(currentIteration);
       break;
     }
 
@@ -4249,6 +4297,13 @@ for (const toolCall of message.tool_calls) {
     if (historyEntry) historyEntry.result_preview = resultPreview;
   }
 
+  // Сохраняем полный результат инструмента в trace итерации (для корректного разворота
+  // в getHistoryForAi). Ограничиваем TOOL_RESULT_FULL_MAX, чтобы tool_calls_json не разрастался.
+  const fullResultContent = toolContent.length > TOOL_RESULT_FULL_MAX
+    ? toolContent.slice(0, TOOL_RESULT_FULL_MAX) + `\n\n[...результат обрезан, всего ${toolContent.length} символов]`
+    : toolContent;
+  currentIteration.results.push({ id: toolCall.id, name: toolName, content: fullResultContent });
+
   currentMessages.push({
     role: 'tool',
     tool_call_id: toolCall.id,
@@ -4261,6 +4316,7 @@ for (const toolCall of message.tool_calls) {
 }
 
 if (escalatedToPro) {
+  // При эскалации в PRO история пересоздаётся с нуля — текущая итерация не валидна для trace.
   continue;
 }
 
@@ -4268,6 +4324,10 @@ if (escalatedToPro) {
 if (abortController.signal.aborted) {
   throw createAbortError();
 }
+
+// Итерация полностью выполнена (все tool_calls обработаны, не прервана, не эскалирована) —
+// фиксируем её в trace.
+iterations.push(currentIteration);
   }
 
   // ── Tool loops exhausted — force a final answer ───────────────────────
@@ -4346,7 +4406,10 @@ if (abortController.signal.aborted) {
   const assistantMessageImages = generatedImages.length > 0
     ? generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const }))
     : null;
-  const tcJson = toolCallsHistory.length > 0 ? JSON.stringify(toolCallsHistory) : null;
+  // В БД сохраняем НОВЫЙ формат: массив итераций с полными результатами.
+  // getHistoryForAi() разворачивает его в корректную последовательность сообщений для API.
+  // Старый плоский формат (без `step`) поддерживается как fallback при чтении.
+  const tcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
   const assistantMessageId = options?.skipHistory
     ? 0
     : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent, tcJson);

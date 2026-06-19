@@ -1,5 +1,6 @@
 ﻿import { db, toUnix } from '../db.js';
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, ChatRole, UserRecord } from '../types.js';
+import type { ToolIteration } from './ai.js';
 
 const parseAdminId = (raw: string | undefined) => {
   if (!raw) return null;
@@ -164,7 +165,34 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
     }
     let parsedToolCalls: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null = null;
     if (row.tool_calls_json) {
-      try { parsedToolCalls = JSON.parse(row.tool_calls_json); } catch { parsedToolCalls = null; }
+      try {
+        const raw = JSON.parse(row.tool_calls_json);
+        // Поддержка двух форматов:
+        //   - Старый (плоский): [{ id, name, arguments, result_preview }, ...]
+        //   - Новый (trace):     [{ step, content, tool_calls, results, is_final? }, ...]
+        // Новый разворачиваем обратно в плоский массив для UI popover.
+        if (Array.isArray(raw) && raw.length > 0 && raw[0] && typeof raw[0].step === 'number') {
+          const flat: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
+          for (const iter of raw as ToolIteration[]) {
+            const calls = Array.isArray(iter.tool_calls) ? iter.tool_calls : [];
+            const results = Array.isArray(iter.results) ? iter.results : [];
+            for (const tc of calls) {
+              // Ищем результат по id (приоритет) или по name
+              const r = results.find(x => (tc.id && x.id === tc.id) || (!tc.id && x.name === tc.name));
+              flat.push({
+                id: tc.id,
+                name: tc.name,
+                arguments: tc.arguments,
+                // result_preview обрезаем так же, как formatToolResultPreview в ai.ts
+                result_preview: r?.content ? r.content.slice(0, 250) : undefined
+              });
+            }
+          }
+          parsedToolCalls = flat.length > 0 ? flat : null;
+        } else {
+          parsedToolCalls = raw;
+        }
+      } catch { parsedToolCalls = null; }
     }
     return {
       id: row.id,
@@ -269,13 +297,110 @@ export const getChatMedia = (userId: number, chatId: number, limit = 100, offset
   return items;
 };
 
-export const getHistoryForAi = (userId: number, chatId: number, limit: number) => db.prepare(`
-  SELECT role, content
-  FROM chat_messages
-  WHERE user_id = ? AND chat_id = ? AND archived = 0
-  ORDER BY id DESC
-  LIMIT ?
-`).all(userId, chatId, limit).reverse() as Array<{ role: ChatRole; content: string }>;
+/**
+ * История сообщений для отправки в AI.
+ *
+ * Разворачивает tool_calls_json (новый формат с `step`-итерациями) в корректную
+ * последовательность OpenAI-совместимых сообщений:
+ *   assistant(tool_calls) → tool(results) → assistant(tool_calls) → tool(results) → ... → assistant(text)
+ *
+ * Старый формат (плоский массив без `step`) и сообщения без tool_calls_json
+ * обрабатываются как fallback — отдаётся только {role, content}.
+ *
+ * Reasoning в API не отправляется (односторонний вывод модели).
+ */
+export const getHistoryForAi = (userId: number, chatId: number, limit: number): any[] => {
+  const rows = db.prepare(`
+    SELECT role, content, tool_calls_json
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ? AND archived = 0
+    ORDER BY id DESC
+    LIMIT ?
+  `).all(userId, chatId, limit).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null }>;
+
+  const messages: any[] = [];
+
+  for (const row of rows) {
+    if (row.role === 'user') {
+      messages.push({ role: row.role, content: row.content });
+      continue;
+    }
+
+    // role === 'assistant'
+    let parsed: any = null;
+    if (row.tool_calls_json) {
+      try { parsed = JSON.parse(row.tool_calls_json); } catch { parsed = null; }
+    }
+
+    // Нет tool_calls или пустой массив — обычное текстовое сообщение
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      messages.push({ role: 'assistant', content: row.content });
+      continue;
+    }
+
+    // Маркер нового формата: первый элемент содержит поле `step`
+    const isNewFormat = parsed[0] && typeof parsed[0].step === 'number';
+
+    if (!isNewFormat) {
+      // Старый плоский формат — нет данных о результатах, отдаём как простой текст.
+      // Модель потеряет tool-context, но чат не ломается.
+      messages.push({ role: 'assistant', content: row.content });
+      continue;
+    }
+
+    // Разворот trace по итерациям
+    const iterations = parsed as ToolIteration[];
+    for (const iter of iterations) {
+      const hasToolCalls = Array.isArray(iter.tool_calls) && iter.tool_calls.length > 0;
+
+      if (hasToolCalls) {
+        // assistant-сообщение с намерением вызвать инструменты.
+        // content: промежуточный текст итерации (если был), иначе null.
+        // ВАЖНО: OpenAI-совместимые API требуют content: null (не пустая строка),
+        // когда модель в этом сообщении только вызывает тулзы без текста.
+        messages.push({
+          role: 'assistant',
+          content: iter.content && iter.content.length > 0 ? iter.content : null,
+          tool_calls: iter.tool_calls.map(tc => ({
+            id: tc.id ?? `call_${iter.step}_${tc.name}`,
+            type: 'function',
+            function: {
+              name: tc.name,
+              arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {})
+            }
+          }))
+        });
+
+        // tool-сообщения с результатами. Их порядок должен соответствовать tool_calls.
+        // OpenAI требует: каждому tool_call_id соответствует ровно одно tool-сообщение.
+        const results = Array.isArray(iter.results) ? iter.results : [];
+        for (const tc of iter.tool_calls) {
+          // Ищем результат по id (приоритет) или по name
+          const result = results.find(r =>
+            (tc.id && r.id === tc.id) || (!tc.id && r.name === tc.name)
+          );
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id ?? `call_${iter.step}_${tc.name}`,
+            name: tc.name,
+            content: result?.content ?? '(нет результата)'
+          });
+        }
+      }
+
+      // Финальный текстовый ответ модели.
+      // Для итерации БЕЗ tool_calls — это её основной текстовый ответ, добавляем.
+      // Для итерации С tool_calls — content уже ушёл выше как assistant(tool_calls).content,
+      // поэтому не дублируем (даже если is_final=true, что означает что после tool_calls
+      // модель вернула финальный ответ БЕЗ новых tool_calls — это отдельная итерация).
+      if (!hasToolCalls && iter.content && iter.content.length > 0) {
+        messages.push({ role: 'assistant', content: iter.content });
+      }
+    }
+  }
+
+  return messages;
+};
 
 export const trimUserHistoryByChat = (userId: number, chatId: number, limit: number) => {
   const safeLimit = Math.max(1, Math.floor(limit));
