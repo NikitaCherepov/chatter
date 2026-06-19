@@ -139,6 +139,56 @@ POST /tts/generate { text, voice_id, message_id }
 - `GET /api/v1/user/reasoning-level` → `{ reasoning_level: string | null }`
 - `PUT /api/v1/user/reasoning-level` ← `{ reasoning_level: 'none'|'minimal'|'low'|'medium'|'high'|'xhigh'|null }`
 
+### Model Settings (параметры генерации)
+
+Позволяет юзеру настраивать параметры генерации (temperature, top_p, top_k, frequency_penalty, presence_penalty, repetition_penalty, max_tokens) для каждой ручной модели индивидуально. Хранится в `users.model_settings` (JSON-объект, ключ — `unique_id` модели). Применяется только для ручных моделей (не для авто-роутинга и не для LITE-режима).
+
+**Параметры (`MODEL_SETTINGS_RANGES`):**
+
+| Параметр | min | max | step | Описание |
+|---|---|---|---|---|
+| `temperature` | 0 | 2 | 0.05 | Температура генерации |
+| `top_p` | 0 | 1 | 0.05 | Nucleus sampling |
+| `top_k` | 0 | 500 | 1 | Top-K sampling |
+| `frequency_penalty` | -2 | 2 | 0.1 | Штраф за частоту |
+| `presence_penalty` | -2 | 2 | 0.1 | Штраф за присутствие |
+| `repetition_penalty` | 0 | 2 | 0.05 | Штраф за повторения |
+| `max_tokens` | 1 | 65536 | 1 | Лимит выходных токенов |
+
+Значение `null` для параметра = авто (не отправляется в API провайдера).
+
+**Фильтрация по провайдеру (`PROVIDER_SUPPORTED_PARAMS`):**
+
+Не все провайдеры поддерживают все параметры. Фильтрация происходит в `adaptRequestBodyForProvider`:
+
+| Провайдер (по `baseURL`) | Поддерживаемые параметры |
+|---|---|
+| OpenRouter (`openrouter.ai`) | Все 7 параметров |
+| DeepSeek direct (`deepseek.com`) | Все, кроме `top_k`, `repetition_penalty` |
+| Прочие (Timeweb, vLLM) | Все, кроме `top_k`, `repetition_penalty` |
+
+Функция `getProviderSupportedParams(baseURL)` возвращает Set поддерживаемых параметров. `applyModelSettingsToBody()` мержит только разрешённые параметры в тело запроса.
+
+**`supported_params` в каталоге моделей:**
+
+`GET /api/v1/models` возвращает `supported_params` для каждой модели (массив строк). Клиент использует его для отображения только релевантных слайдеров в настройках.
+
+**Поведение в режимах:**
+- **Авто-роутинг (PRO/LITE)** — настройки модели не применяются.
+- **LITE-режим** — настройки модели не применяются (передаётся `null`).
+- **Ручная модель** — настройки применяются в `adaptRequestBodyForProvider`.
+
+**Поток данных:**
+1. `sendMessageThroughAi` читает `user.model_settings` (JSON), находит настройки для `preferredModelId`.
+2. Передаёт `resolvedModelSettings` в `runCompletion` → `createCompletionWithModelFallback`.
+3. `adaptRequestBodyForProvider` вызывает `applyModelSettingsToBody(requestBody, baseURL, settings)`.
+4. Тело запроса мержится с настройками (отфильтрованными по провайдеру).
+
+**Эндпоинты:**
+- `GET /api/v1/user/model-settings` → `{ settings: { [modelId]: { temperature?: number, ... } } }`
+- `PUT /api/v1/user/model-settings` ← `{ model_id, settings: { temperature?, top_p?, ... } }` (merge с существующими настройками для модели)
+- `DELETE /api/v1/user/model-settings/:modelId` → `{ ok: true }`
+
 ### AI-провайдеры (vision, опционально)
 
 Vision-запросы (анализ фото) могут использовать отдельные модели/ключи. Если не заданы — fallback на основные PRO/LITE провайдеры.
@@ -307,10 +357,17 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - Ввод: `{ commands: string[], current_title?, current_description? }`
   - Вывод: `{ title: string, description: string }` — ИИ предлагает название/описание (лёгкий LITE-запрос)
 - `GET /api/v1/models`
-  - Вывод: `{ models: [{ id, name, description }], preferred_model }` — каталог моделей для ручного выбора + текущая модель юзера
+  - Вывод: `{ models: [{ id, name, description, supported_params? }], preferred_model }` — каталог моделей для ручного выбора + текущая модель юзера. `supported_params` — массив параметров генерации, поддерживаемых провайдером модели (см. [Model Settings](#model-settings-параметры-генерации)).
 - `PUT /api/v1/user/preferred-model`
   - Ввод: `{ model_id: string | null }` (null = авто)
   - Вывод: `{ ok, preferred_model }`
+- `GET /api/v1/user/model-settings`
+  - Вывод: `{ settings: { [modelId]: { temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, repetition_penalty?, max_tokens? } } }` — параметры генерации по моделям
+- `PUT /api/v1/user/model-settings`
+  - Ввод: `{ model_id: string, settings: { temperature?, ... } }` — merge с существующими настройками модели
+  - Вывод: `{ ok: true, settings }`
+- `DELETE /api/v1/user/model-settings/:modelId`
+  - Вывод: `{ ok: true }` — удаляет настройки для конкретной модели
 
 ### DevOps Agent Runtime (JWT)
 
@@ -537,7 +594,7 @@ services/subagents/
 
 Инструменты доступны AI через tool calling. Определены в `services/ai.ts` в `toolDefinitions`.
 
-Агентский цикл ограничен константами в `services/ai.ts`: `MAX_TOOL_LOOPS = 25`, `MAX_TOOL_LOOPS_VOICE = 10`. Это лимит итераций "модель → tool calls → модель", а не строгий лимит количества отдельных tool calls: за одну итерацию модель может вернуть несколько вызовов инструментов.
+Агентский цикл ограничен константами в `services/ai.ts`: `MAX_TOOL_LOOPS = 80`, `MAX_TOOL_LOOPS_VOICE = 10`. Это лимит итераций "модель → tool calls → модель", а не строгий лимит количества отдельных tool calls: за одну итерацию модель может вернуть несколько вызовов инструментов.
 
 ### Reasoning и tool-call metadata
 

@@ -511,6 +511,47 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 
 Добавить `disabledToolSet.add('tool_name')` в соответствующий блок флага в `ai.ts` (секция `Feature flags → disabled tools`). Фильтрация сработает автоматически.
 
+## Настройки моделей (Model Settings)
+
+Вкладка "Модели" в SettingsModal позволяет настраивать параметры генерации (temperature, penalties, top_p, top_k, max_tokens) для каждой кастомной модели из `MODELS_MANUAL`. Настройки хранятся на сервере (`users.model_settings`, JSON-мапа по `model_id`), применяются только для ручных моделей (не для auto-роутинга PRO/LITE).
+
+### UI
+
+`SettingsModal.tsx` → вкладка `models`:
+- Загружает каталог моделей (`GET /api/v1/models`) + сохранённые настройки (`GET /api/v1/user/model-settings`) при открытии вкладки
+- Для каждой модели — раскрывающийся блок с слайдерами параметров
+- Список параметров фильтруется по `supported_params` модели (зависит от провайдера)
+- Каждый параметр имеет чекбокс «авто» — если включён, параметр не отправляется (используется серверный дефолт)
+- Save оптимистичный — при отпускании слайдера отправляется `PUT /api/v1/user/model-settings`
+
+### Компоненты
+
+| Компонент | Роль |
+|---|---|
+| `components/Slider.tsx` | Переиспользуемый слайдер. Два режима: `numeric` (temperature и т.д.) и `discrete` (reasoning level в топбаре). |
+| `components/Checkbox.tsx` | Переиспользуемый чекбокс. Стили 1-в-1 как `macroCheckbox` из SettingsModal. |
+
+### Ключевые файлы
+
+| Файл | Роль |
+|---|---|
+| `lib/api.ts` | Типы `ModelSettings`, `ModelSettingsMap` + `getModelSettings()` / `setModelSettings()` / `deleteModelSettings()` |
+| `components/Slider.tsx` | Переиспользуемый слайдер (numeric + discrete режимы) |
+| `components/Checkbox.tsx` | Переиспользуемый чекбокс (auto toggle) |
+| `components/SettingsModal.tsx` | Вкладка `models`: grid из чекбокс + слайдер для каждого параметра |
+
+### Параметры
+
+| Параметр | Диапазон | Назначение |
+|---|---|---|
+| `temperature` | 0.0–2.0 | Креативность/детерминированность |
+| `top_p` | 0.0–1.0 | Nucleus sampling |
+| `top_k` | 1–100 | Ограничение выборки K токенами (OpenRouter only) |
+| `frequency_penalty` | -2.0–2.0 | Штраф за частоту токенов |
+| `presence_penalty` | -2.0–2.0 | Штраф за присутствие токенов |
+| `repetition_penalty` | 1.0–2.0 | Жёсткий штраф за повторения (OpenRouter only) |
+| `max_tokens` | 1–65536 | Лимит длины ответа |
+
 ## ChatPage Messages
 
 Основная лента чата живет в `pages/ChatPage.tsx`.
