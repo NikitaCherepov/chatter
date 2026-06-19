@@ -161,6 +161,10 @@ export type Message = {
   audio?: MessageAudio | null;
   created_at: number;
   archived?: boolean;
+  /** Токены сообщения (без reasoning_content) — локальный подсчёт бэкенда. */
+  token_count?: number;
+  /** Токены reasoning_content (только для assistant). */
+  reasoning_tokens?: number;
 };
 
 export type ChatInfo = {
@@ -268,7 +272,21 @@ export type ChatSendResponse = {
   model_fallback_notice?: string | null;
   aborted?: boolean;
   tool_calls?: ToolCall[];
+  token_count?: number;
+  reasoning_tokens?: number;
 };
+
+export type ChatContextTokens = {
+  messages_tokens: number;
+  reasoning_tokens: number;
+  archived_tokens: number;
+  active_messages: number;
+  archived_messages: number;
+};
+
+export async function getChatContextTokens(chatId: number): Promise<ChatContextTokens> {
+  return apiFetch(`/api/v1/chats/${chatId}/context-tokens`);
+}
 
 export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[], displayManifest?: { moods: string[]; reactions: string[] }): Promise<ChatSendResponse> {
   const body: Record<string, unknown> = { text };

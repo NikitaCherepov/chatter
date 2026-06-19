@@ -1,6 +1,7 @@
 ﻿import { db, toUnix } from '../db.js';
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, ChatRole, UserRecord } from '../types.js';
 import type { ToolIteration } from './ai.js';
+import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 
 const parseAdminId = (raw: string | undefined) => {
   if (!raw) return null;
@@ -147,12 +148,12 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived
+    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived, token_count, reasoning_tokens
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -206,7 +207,9 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       telegram_chat_id: row.telegram_chat_id,
       telegram_message_id: row.telegram_message_id,
       created_at: toUnix(row.created_at),
-      archived: row.archived === 1
+      archived: row.archived === 1,
+      token_count: row.token_count ?? 0,
+      reasoning_tokens: row.reasoning_tokens ?? 0
     };
   });
 };
@@ -225,10 +228,53 @@ export const appendChatMessage = (
   const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
   const reasoning = role === 'assistant' && reasoningContent?.trim() ? reasoningContent.trim() : null;
   const tcJson = role === 'assistant' && toolCallsJson?.trim() ? toolCallsJson.trim() : null;
+
+  // ── Token accounting ────────────────────────────────────────────────────
+  // token_count = вес сообщения в AI-контексте (не включает reasoning).
+  // reasoning_tokens = отдельный счётчик для reasoning_content (для UI-бейджа).
+  let tokenCount = 0;
+  let reasoningTokens = 0;
+
+  if (role === 'user') {
+    // Для user-сообщений считаем просто текст (images не уходят в контекст,
+    // только text-based [Фото]caption из getHistoryForAi).
+    tokenCount = countMessageTokens('user', content);
+  } else {
+    // assistant: считаем по развёрнутому trace (как в getHistoryForAi),
+    // чтобы оценка совпадала с реальным payload в API.
+    const expanded = expandAssistantMessage(content, tcJson);
+    for (const msg of expanded) {
+      if (msg.role === 'assistant') {
+        // assistant(content=null, tool_calls=[...]) или assistant(content=text)
+        let msgTokens = countMessageTokens('assistant', msg.content);
+        if (Array.isArray(msg.tool_calls)) {
+          for (const tc of msg.tool_calls) {
+            msgTokens += countToolCallTokens(
+              tc.function?.name ?? '',
+              tc.function?.arguments,
+              tc.id ?? ''
+            );
+          }
+        }
+        tokenCount += msgTokens;
+      } else if (msg.role === 'tool') {
+        tokenCount += countToolResultTokens(
+          msg.name ?? '',
+          msg.tool_call_id ?? '',
+          msg.content ?? ''
+        );
+      }
+    }
+    // Reasoning считается отдельно — он не уходит в контекст, но нужен для UI-бейджа.
+    if (reasoning) {
+      reasoningTokens = countTokens(reasoning);
+    }
+  }
+
   const inserted = db.prepare(`
-    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content, tool_calls_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning, tcJson);
+    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content, tool_calls_json, token_count, reasoning_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning, tcJson, tokenCount, reasoningTokens);
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return Number(inserted.lastInsertRowid);
 };
@@ -258,6 +304,16 @@ export const updateChatMessageAudio = (
 export const getChatMessageOwner = (messageId: number): number | null => {
   const row = db.prepare('SELECT user_id FROM chat_messages WHERE id = ?').get(messageId) as { user_id: number } | undefined;
   return row?.user_id ?? null;
+};
+
+/**
+ * Возвращает token_count и reasoning_tokens конкретного сообщения.
+ * Используется в sendMessageThroughAi для добавления токенов в AiSendResult,
+ * чтобы клиент получил их в `done` событии без повторного запроса.
+ */
+export const getMessageTokens = (messageId: number): { token_count: number; reasoning_tokens: number } => {
+  const row = db.prepare('SELECT token_count, reasoning_tokens FROM chat_messages WHERE id = ?').get(messageId) as { token_count: number; reasoning_tokens: number } | undefined;
+  return { token_count: row?.token_count ?? 0, reasoning_tokens: row?.reasoning_tokens ?? 0 };
 };
 
 export type ChatMediaItem = {
@@ -298,6 +354,75 @@ export const getChatMedia = (userId: number, chatId: number, limit = 100, offset
 };
 
 /**
+ * Разворачивает одну строку chat_messages (role + content + tool_calls_json)
+ * в массив OpenAI-совместимых сообщений. Используется и в getHistoryForAi()
+ * (сборка контекста для API), и в подсчёте token_count (чтобы оценка совпадала
+ * с реальным payload).
+ *
+ * Возвращает массив сообщений {role, content?, tool_calls?, tool_call_id?, name?}.
+ */
+function expandAssistantMessage(content: string, toolCallsJson: string | null): any[] {
+  // Нет tool_calls — обычное текстовое сообщение
+  let parsed: any = null;
+  if (toolCallsJson) {
+    try { parsed = JSON.parse(toolCallsJson); } catch { parsed = null; }
+  }
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return [{ role: 'assistant', content }];
+  }
+
+  // Маркер нового формата: первый элемент содержит поле `step`
+  const isNewFormat = parsed[0] && typeof parsed[0].step === 'number';
+
+  if (!isNewFormat) {
+    // Старый плоский формат — нет данных о результатах.
+    return [{ role: 'assistant', content }];
+  }
+
+  const iterations = parsed as ToolIteration[];
+  const messages: any[] = [];
+
+  for (const iter of iterations) {
+    const hasToolCalls = Array.isArray(iter.tool_calls) && iter.tool_calls.length > 0;
+
+    if (hasToolCalls) {
+      messages.push({
+        role: 'assistant',
+        content: iter.content && iter.content.length > 0 ? iter.content : null,
+        tool_calls: iter.tool_calls.map(tc => ({
+          id: tc.id ?? `call_${iter.step}_${tc.name}`,
+          type: 'function',
+          function: {
+            name: tc.name,
+            arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {})
+          }
+        }))
+      });
+
+      const results = Array.isArray(iter.results) ? iter.results : [];
+      for (const tc of iter.tool_calls) {
+        const result = results.find(r =>
+          (tc.id && r.id === tc.id) || (!tc.id && r.name === tc.name)
+        );
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id ?? `call_${iter.step}_${tc.name}`,
+          name: tc.name,
+          content: result?.content ?? '(нет результата)'
+        });
+      }
+    }
+
+    if (!hasToolCalls && iter.content && iter.content.length > 0) {
+      messages.push({ role: 'assistant', content: iter.content });
+    }
+  }
+
+  return messages;
+}
+
+/**
  * История сообщений для отправки в AI.
  *
  * Разворачивает tool_calls_json (новый формат с `step`-итерациями) в корректную
@@ -325,78 +450,8 @@ export const getHistoryForAi = (userId: number, chatId: number, limit: number): 
       messages.push({ role: row.role, content: row.content });
       continue;
     }
-
     // role === 'assistant'
-    let parsed: any = null;
-    if (row.tool_calls_json) {
-      try { parsed = JSON.parse(row.tool_calls_json); } catch { parsed = null; }
-    }
-
-    // Нет tool_calls или пустой массив — обычное текстовое сообщение
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      messages.push({ role: 'assistant', content: row.content });
-      continue;
-    }
-
-    // Маркер нового формата: первый элемент содержит поле `step`
-    const isNewFormat = parsed[0] && typeof parsed[0].step === 'number';
-
-    if (!isNewFormat) {
-      // Старый плоский формат — нет данных о результатах, отдаём как простой текст.
-      // Модель потеряет tool-context, но чат не ломается.
-      messages.push({ role: 'assistant', content: row.content });
-      continue;
-    }
-
-    // Разворот trace по итерациям
-    const iterations = parsed as ToolIteration[];
-    for (const iter of iterations) {
-      const hasToolCalls = Array.isArray(iter.tool_calls) && iter.tool_calls.length > 0;
-
-      if (hasToolCalls) {
-        // assistant-сообщение с намерением вызвать инструменты.
-        // content: промежуточный текст итерации (если был), иначе null.
-        // ВАЖНО: OpenAI-совместимые API требуют content: null (не пустая строка),
-        // когда модель в этом сообщении только вызывает тулзы без текста.
-        messages.push({
-          role: 'assistant',
-          content: iter.content && iter.content.length > 0 ? iter.content : null,
-          tool_calls: iter.tool_calls.map(tc => ({
-            id: tc.id ?? `call_${iter.step}_${tc.name}`,
-            type: 'function',
-            function: {
-              name: tc.name,
-              arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {})
-            }
-          }))
-        });
-
-        // tool-сообщения с результатами. Их порядок должен соответствовать tool_calls.
-        // OpenAI требует: каждому tool_call_id соответствует ровно одно tool-сообщение.
-        const results = Array.isArray(iter.results) ? iter.results : [];
-        for (const tc of iter.tool_calls) {
-          // Ищем результат по id (приоритет) или по name
-          const result = results.find(r =>
-            (tc.id && r.id === tc.id) || (!tc.id && r.name === tc.name)
-          );
-          messages.push({
-            role: 'tool',
-            tool_call_id: tc.id ?? `call_${iter.step}_${tc.name}`,
-            name: tc.name,
-            content: result?.content ?? '(нет результата)'
-          });
-        }
-      }
-
-      // Финальный текстовый ответ модели.
-      // Для итерации БЕЗ tool_calls — это её основной текстовый ответ, добавляем.
-      // Для итерации С tool_calls — content уже ушёл выше как assistant(tool_calls).content,
-      // поэтому не дублируем (даже если is_final=true, что означает что после tool_calls
-      // модель вернула финальный ответ БЕЗ новых tool_calls — это отдельная итерация).
-      if (!hasToolCalls && iter.content && iter.content.length > 0) {
-        messages.push({ role: 'assistant', content: iter.content });
-      }
-    }
+    messages.push(...expandAssistantMessage(row.content, row.tool_calls_json));
   }
 
   return messages;
@@ -780,4 +835,104 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
   }
 
   return results;
+};
+
+export type ChatContextTokens = {
+  /** Токены суммы неархивных сообщений (user + assistant, без reasoning). */
+  messages_tokens: number;
+  /** Токены reasoning_content (для info-цели, в контекст AI не входят). */
+  reasoning_tokens: number;
+  /** Токены архивных сообщений (для статистики, в контекст не входят). */
+  archived_tokens: number;
+  /** Количество неархивных сообщений. */
+  active_messages: number;
+  /** Количество архивных сообщений. */
+  archived_messages: number;
+};
+
+/**
+ * Суммарные токены контекста чата по БД (без системного промпта — он динамический).
+ *
+ * Системный промпт считается отдельно на клиенте или в эндпоинте, т.к. он зависит
+ * от core_memory, pinned_macros, feature flags и прочего динамического контекста.
+ *
+ * messages_tokens = SUM(token_count) WHERE archived = 0 — это базовая оценка
+ * веса истории сообщений для AI-контекста.
+ */
+export const getChatContextTokens = (userId: number, chatId: number): ChatContextTokens => {
+  const row = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN archived = 0 THEN token_count ELSE 0 END), 0) AS messages_tokens,
+      COALESCE(SUM(CASE WHEN archived = 0 THEN reasoning_tokens ELSE 0 END), 0) AS reasoning_tokens,
+      COALESCE(SUM(CASE WHEN archived = 1 THEN token_count ELSE 0 END), 0) AS archived_tokens,
+      COALESCE(SUM(CASE WHEN archived = 0 THEN 1 ELSE 0 END), 0) AS active_messages,
+      COALESCE(SUM(CASE WHEN archived = 1 THEN 1 ELSE 0 END), 0) AS archived_messages
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ?
+  `).get(userId, chatId) as ChatContextTokens;
+  return row;
+};
+
+/**
+ * Backfill token_count / reasoning_tokens для существующих сообщений.
+ * Запускается один раз при старте сервера (если есть строки без подсчёта).
+ * Работает порциями по BATCH, чтобы не блокировать event loop надолго.
+ *
+ * Возвращает количество обработанных строк.
+ */
+export const backfillMessageTokens = (batchSize = 500): number => {
+  // Берём строки, где token_count = 0 (default), начиная со старых.
+  // token_count=0 у нормальных сообщений практически невозможен (минимум 4 токена на обёртку).
+  const rows = db.prepare(`
+    SELECT id, role, content, reasoning_content, tool_calls_json
+    FROM chat_messages
+    WHERE token_count = 0
+    ORDER BY id ASC
+    LIMIT ?
+  `).all(batchSize) as Array<{ id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null }>;
+
+  if (rows.length === 0) return 0;
+
+  const updateStmt = db.prepare(`
+    UPDATE chat_messages SET token_count = ?, reasoning_tokens = ? WHERE id = ?
+  `);
+  const tx = db.transaction(() => {
+    for (const row of rows) {
+      let tokenCount = 0;
+      let reasoningTokens = 0;
+
+      if (row.role === 'user') {
+        tokenCount = countMessageTokens('user', row.content);
+      } else {
+        const expanded = expandAssistantMessage(row.content, row.tool_calls_json);
+        for (const msg of expanded) {
+          if (msg.role === 'assistant') {
+            let msgTokens = countMessageTokens('assistant', msg.content);
+            if (Array.isArray(msg.tool_calls)) {
+              for (const tc of msg.tool_calls) {
+                msgTokens += countToolCallTokens(
+                  tc.function?.name ?? '',
+                  tc.function?.arguments,
+                  tc.id ?? ''
+                );
+              }
+            }
+            tokenCount += msgTokens;
+          } else if (msg.role === 'tool') {
+            tokenCount += countToolResultTokens(
+              msg.name ?? '',
+              msg.tool_call_id ?? '',
+              msg.content ?? ''
+            );
+          }
+        }
+        if (row.reasoning_content) {
+          reasoningTokens = countTokens(row.reasoning_content);
+        }
+      }
+      updateStmt.run(tokenCount, reasoningTokens, row.id);
+    }
+  });
+  tx();
+  return rows.length;
 };

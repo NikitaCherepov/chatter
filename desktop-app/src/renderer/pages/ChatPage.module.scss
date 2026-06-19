@@ -608,6 +608,19 @@
   }
 }
 
+.tokenBadge {
+  font-size: 11px;
+  color: var(--text-hint);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-modal-hover);
+  flex-shrink: 0;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  cursor: help;
+}
+
 .regenHintOverlay {
   position: fixed;
   inset: 0;
@@ -875,6 +888,28 @@
   display: flex;
   align-items: flex-end;
   gap: 16px;
+}
+
+.contextTokensBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10%;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-light);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+
+  strong {
+    color: var(--text-body);
+    font-weight: 600;
+  }
+}
+
+.contextTokensMuted {
+  color: var(--text-hint);
 }
 
 .inputIcon {

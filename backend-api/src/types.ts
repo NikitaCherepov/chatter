@@ -72,6 +72,9 @@ export type MessageDto = {
   telegram_message_id?: number | null;
   created_at: number;
   archived?: boolean;
+  /** Локально посчитанные токены (без reasoning_content). См. MessageTokensDto. */
+  token_count?: number;
+  reasoning_tokens?: number;
 };
 
 export type NoteDto = {
@@ -101,6 +104,16 @@ export type UsageDto = {
   used_provider: string;
 };
 
+/**
+ * Токены сообщения, посчитанные локально через gpt-tokenizer (o200k_base).
+ *  - token_count: вес сообщения в AI-контексте (reasoning_content НЕ входит).
+ *  - reasoning_tokens: отдельный счётчик reasoning_content (только для assistant).
+ */
+export type MessageTokensDto = {
+  token_count: number;
+  reasoning_tokens: number;
+};
+
 export type GeneratedImage = {
   image_base64: string;
   image_url?: string;
@@ -121,6 +134,10 @@ export type AiSendResult = {
   aborted?: boolean;
   tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }>;
   usage: UsageDto;
+  /** Токены ответа ассистента (без reasoning). См. MessageTokensDto. */
+  token_count?: number;
+  /** Токены reasoning_content ответа ассистента. */
+  reasoning_tokens?: number;
 };
 
 export type DisplayStatePayload = {

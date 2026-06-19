@@ -135,7 +135,7 @@ const MessageItem = React.memo(function MessageItem({
             }}
             title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
           >
-            <span>Рассуждение</span>
+            <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens}t` : ''}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -204,6 +204,11 @@ const MessageItem = React.memo(function MessageItem({
               </button>
             )}
           </>
+        )}
+        {typeof msg.token_count === 'number' && msg.token_count > 0 && (
+          <span className={s.tokenBadge} title="Локальная оценка токенов сообщения (без reasoning)">
+            {msg.token_count}t
+          </span>
         )}
       </div>
       <div className={s.bubbleWrap}>
@@ -337,6 +342,7 @@ export function ChatPage() {
   const [regenHintText, setRegenHintText] = useState('');
   const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
   const [openToolCallsId, setOpenToolCallsId] = useState<number | null>(null);
+  const [contextTokens, setContextTokens] = useState<api.ChatContextTokens | null>(null);
 
   // Subscribe to TTS state
   useEffect(() => {
@@ -408,12 +414,22 @@ export function ChatPage() {
     }
   }, [activeChatId]);
 
+  const refreshContextTokens = useCallback(async (chatId: number) => {
+    try {
+      const tokens = await api.getChatContextTokens(chatId);
+      setContextTokens(tokens);
+    } catch (err) {
+      console.error('Failed to load context tokens:', err);
+    }
+  }, []);
+
   const loadMessages = async (chatId: number) => {
     setLoadingMessages(true);
     try {
       const res = await api.getMessages(chatId, MESSAGE_PAGE_SIZE);
       setMessages(res.messages);
       setHasMoreMessages(res.messages.length === MESSAGE_PAGE_SIZE);
+      refreshContextTokens(chatId);
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {
@@ -648,7 +664,9 @@ export function ChatPage() {
                   ...(res.reply_text ? { content: res.reply_text } : {}),
                   reasoning_content: res.reasoning_content ?? null,
                   tool_calls: res.tool_calls ?? null,
-                  ...(genImages ? { images: genImages } : {})
+                  ...(genImages ? { images: genImages } : {}),
+                  ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
+                  ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
                 };
               }
               // Replace temp user message id with real one from server
@@ -668,6 +686,8 @@ export function ChatPage() {
                 reasoning_content: res.reasoning_content ?? null,
                 tool_calls: res.tool_calls ?? null,
                 images: genImages,
+                ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
+                ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
               }];
             });
           }
@@ -678,6 +698,7 @@ export function ChatPage() {
             setActiveChatId(res.chat_id);
             loadChats();
           }
+          refreshContextTokens(res.chat_id);
 
           // Auto-speak response when triggered by voice input
           if (isVoice && res.reply_text) {
@@ -1014,7 +1035,7 @@ export function ChatPage() {
           if (assistantMsgCreated) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}), ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}), ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}) }
                 : m
             ));
           } else {
@@ -1023,6 +1044,8 @@ export function ChatPage() {
               reasoning_content: res.reasoning_content ?? null,
               tool_calls: res.tool_calls ?? null,
               images: genImages,
+              ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
+              ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
             }]);
           }
           setShowTyping(false);
@@ -1124,7 +1147,7 @@ export function ChatPage() {
           if (assistantMsgCreated) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}), ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}), ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}) }
                 : m
             ));
           } else {
@@ -1133,6 +1156,8 @@ export function ChatPage() {
               reasoning_content: res.reasoning_content ?? null,
               tool_calls: res.tool_calls ?? null,
               images: genImages,
+              ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
+              ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
             }]);
           }
           setShowTyping(false);
@@ -1812,7 +1837,7 @@ export function ChatPage() {
                         }}
                         title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
                       >
-                        <span>Рассуждение</span>
+                        <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens}t` : ''}</span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <polyline points="6 9 12 15 18 9" />
                         </svg>
@@ -1899,6 +1924,11 @@ export function ChatPage() {
                           </button>
                         )}
                       </>
+                    )}
+                    {typeof msg.token_count === 'number' && msg.token_count > 0 && (
+                      <span className={s.tokenBadge} title="Локальная оценка токенов сообщения (без reasoning)">
+                        {msg.token_count}t
+                      </span>
                     )}
                   </div>
                   <div className={s.bubbleWrap}>
@@ -2581,6 +2611,20 @@ export function ChatPage() {
                 <button className={s.imageClearAll} onClick={clearAttachedImages}>
                   Очистить
                 </button>
+              </div>
+            )}
+
+            {activeChatId && contextTokens && (
+              <div className={s.contextTokensBar} title="Суммарные токены контекста чата (без системного промпта). Без reasoning.">
+                <span>Контекст:</span>
+                <strong>{contextTokens.messages_tokens.toLocaleString('ru-RU')}t</strong>
+                {contextTokens.reasoning_tokens > 0 && (
+                  <span className={s.contextTokensMuted}>+{contextTokens.reasoning_tokens.toLocaleString('ru-RU')}t reasoning</span>
+                )}
+                <span className={s.contextTokensMuted}>· {contextTokens.active_messages} сообщ.</span>
+                {contextTokens.archived_messages > 0 && (
+                  <span className={s.contextTokensMuted}>· архив: {contextTokens.archived_messages}</span>
+                )}
               </div>
             )}
 

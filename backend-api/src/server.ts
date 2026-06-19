@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -891,6 +891,16 @@ app.get('/api/v1/chats/:id/media', (req: AuthedRequest, res) => {
   const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
   const media = getChatMedia(userId, chatId, limit, offset);
   res.json({ media, limit, offset });
+});
+
+// Суммарные токены контекста чата (сообщения без системного промпта).
+// Системный промпт динамический, считается отдельно при необходимости.
+app.get('/api/v1/chats/:id/context-tokens', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const tokens = getChatContextTokens(userId, chatId);
+  res.json(tokens);
 });
 
 app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
@@ -3169,6 +3179,30 @@ const server = app.listen(PORT, () => {
   }
   startTaskScheduler();
   initSubagentRunner({ runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions });
+
+  // ── Token accounting backfill ────────────────────────────────────────────
+  // Считаем token_count для старых сообщений (порциями, чтобы не блокировать старт).
+  // Запускается в фоне через setImmediate и крутит цикл пока есть строки без подсчёта.
+  setImmediate(async () => {
+    try {
+      const BATCH = 1000;
+      let total = 0;
+      let processed = 0;
+      do {
+        processed = backfillMessageTokens(BATCH);
+        total += processed;
+        if (processed > 0) {
+          // Отдаём event loop, чтобы не блокировать другие запросы во время бэкфилла.
+          await new Promise(resolve => setImmediate(resolve as () => void));
+        }
+      } while (processed > 0);
+      if (total > 0) {
+        console.log(`[tokens] backfill complete: ${total} messages updated`);
+      }
+    } catch (err) {
+      console.error('[tokens] backfill error:', err);
+    }
+  });
 });
 
 // Increase timeout for long-running AI requests (tool loops, streaming)
