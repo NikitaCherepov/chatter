@@ -2918,8 +2918,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (subagentExtra?.onDesktopAction) {
       await subagentExtra.onDesktopAction(devopsAction);
       devopsSent = true;
-    }
-    if (isDesktopOnline(user.id)) {
+    } else if (isDesktopOnline(user.id)) {
       sendToDesktop(user.id, devopsAction);
       devopsSent = true;
     }
@@ -3270,8 +3269,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (subagentExtra?.onDesktopAction) {
       await subagentExtra.onDesktopAction(createUserAction);
       createUserSent = true;
-    }
-    if (isDesktopOnline(user.id)) {
+    } else if (isDesktopOnline(user.id)) {
       sendToDesktop(user.id, createUserAction);
       createUserSent = true;
     }
@@ -3373,8 +3371,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (subagentExtra?.onDesktopAction) {
       await subagentExtra.onDesktopAction(changePwdAction);
       changePwdSent = true;
-    }
-    if (isDesktopOnline(user.id)) {
+    } else if (isDesktopOnline(user.id)) {
       sendToDesktop(user.id, changePwdAction);
       changePwdSent = true;
     }
@@ -3472,8 +3469,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (subagentExtra?.onDesktopAction) {
       await subagentExtra.onDesktopAction(credsAction);
       credsSent = true;
-    }
-    if (isDesktopOnline(user.id)) {
+    } else if (isDesktopOnline(user.id)) {
       sendToDesktop(user.id, credsAction);
       credsSent = true;
     }
@@ -4463,7 +4459,8 @@ iterations.push(currentIteration);
       used_model: usedModel,
       used_provider: usedProvider
     },
-    ...((assistantMessageId > 0) ? getMessageTokens(assistantMessageId) : {})
+    ...((assistantMessageId > 0) ? getMessageTokens(assistantMessageId) : {}),
+    ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {})
   };
   } catch (err: any) {
     if (isAbortError(err)) {

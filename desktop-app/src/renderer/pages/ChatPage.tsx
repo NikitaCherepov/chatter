@@ -500,16 +500,19 @@ export function ChatPage() {
     if (action.action === 'devops_confirmation' && action.value) {
       const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; needs_sudo_password?: boolean; needs_new_password?: boolean; new_username?: string };
       if (val.confirmation_id && val.command) {
-        setDevopsConfirmations(prev => [...prev, {
-          confirmation_id: val.confirmation_id!,
-          server_name: val.server_name || 'Unknown',
-          server_id: val.server_id || 0,
-          host: val.host || '',
-          command: val.command!,
-          needs_sudo_password: Boolean(val.needs_sudo_password),
-          needs_new_password: Boolean(val.needs_new_password),
-          new_username: val.new_username,
-        }]);
+        setDevopsConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            server_name: val.server_name || 'Unknown',
+            server_id: val.server_id || 0,
+            host: val.host || '',
+            command: val.command!,
+            needs_sudo_password: Boolean(val.needs_sudo_password),
+            needs_new_password: Boolean(val.needs_new_password),
+            new_username: val.new_username,
+          }];
+        });
       }
     }
     if (action.action === 'suggest_devops_runbook' && action.value) {
@@ -671,7 +674,11 @@ export function ChatPage() {
               }
               // Replace temp user message id with real one from server
               if (res.user_message_id && m.id === tempUserMsg.id) {
-                return { ...m, id: res.user_message_id };
+                return {
+                  ...m,
+                  id: res.user_message_id,
+                  ...(typeof res.user_token_count === 'number' ? { token_count: res.user_token_count } : {}),
+                };
               }
               return m;
             }));
@@ -679,7 +686,11 @@ export function ChatPage() {
             // Ни одного промежуточного сообщения не было — добавляем финальный ответ
             setMessages((prev) => {
               const updated = res.user_message_id
-                ? prev.map(m => m.id === tempUserMsg.id ? { ...m, id: res.user_message_id! } : m)
+                ? prev.map(m => m.id === tempUserMsg.id ? {
+                    ...m,
+                    id: res.user_message_id!,
+                    ...(typeof res.user_token_count === 'number' ? { token_count: res.user_token_count } : {}),
+                  } : m)
                 : prev;
               return [...updated, {
                 id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
@@ -1596,7 +1607,20 @@ export function ChatPage() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <div className={s.chatItemTitle}>{chat.title || 'Новый чат'}</div>
+                    <div className={s.chatItemTitle}>
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.span
+                          key={chat.title || 'Новый чат'}
+                          initial={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
+                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                          exit={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
+                          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                          style={{ display: 'inline-block' }}
+                        >
+                          {chat.title || 'Новый чат'}
+                        </motion.span>
+                      </AnimatePresence>
+                    </div>
                   )}
                   <button
                     className={s.kebabBtn}

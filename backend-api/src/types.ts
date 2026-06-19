@@ -138,6 +138,8 @@ export type AiSendResult = {
   token_count?: number;
   /** Токены reasoning_content ответа ассистента. */
   reasoning_tokens?: number;
+  /** Токены user-сообщения (если было сохранено новое). См. MessageTokensDto. */
+  user_token_count?: number;
 };
 
 export type DisplayStatePayload = {

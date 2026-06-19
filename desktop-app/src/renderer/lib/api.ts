@@ -274,6 +274,8 @@ export type ChatSendResponse = {
   tool_calls?: ToolCall[];
   token_count?: number;
   reasoning_tokens?: number;
+  /** Токены user-сообщения (если было сохранено новое). */
+  user_token_count?: number;
 };
 
 export type ChatContextTokens = {
