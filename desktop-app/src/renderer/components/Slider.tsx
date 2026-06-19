@@ -15,8 +15,6 @@ type NumericSliderProps = CommonProps & {
   onChange: (value: number | null) => void;
   onCommit?: () => void;
   formatValue?: (v: number) => string;
-  useDefault?: boolean;
-  onToggleDefault?: (useDefault: boolean) => void;
 };
 
 type DiscreteSliderProps = CommonProps & {
@@ -40,7 +38,7 @@ export default function Slider(props: SliderProps) {
     const idx = Math.max(0, values.indexOf(value));
 
     return (
-      <div className={s.row}>
+      <div className={s.rowCompact}>
         <label className={s.label}>{label}</label>
         <div className={s.slider}>
           <input
@@ -68,9 +66,7 @@ export default function Slider(props: SliderProps) {
   }
 
   // Numeric mode
-  const { min, max, step, value, onChange, label, disabled, formatValue, useDefault, onToggleDefault } = props;
-  const isDefault = useDefault === true;
-  const sliderValue = value ?? min;
+  const { min, max, step, value, onChange, label, disabled, formatValue } = props;
 
   return (
     <div className={s.row}>
@@ -82,8 +78,8 @@ export default function Slider(props: SliderProps) {
           min={min}
           max={max}
           step={step}
-          value={sliderValue}
-          disabled={disabled || isDefault}
+          value={value ?? min}
+          disabled={disabled}
           onChange={(e) => {
             onChange(Number(e.target.value));
           }}
@@ -94,19 +90,9 @@ export default function Slider(props: SliderProps) {
           }}
         />
         <span className={s.value}>
-          {isDefault ? 'авто' : (formatValue ? formatValue(value ?? min) : String(value ?? min))}
+          {value === null ? 'авто' : (formatValue ? formatValue(value) : String(value))}
         </span>
       </div>
-      {onToggleDefault && (
-        <label className={s.defaultToggle}>
-          <input
-            type="checkbox"
-            checked={isDefault}
-            onChange={(e) => onToggleDefault(e.target.checked)}
-          />
-          авто
-        </label>
-      )}
     </div>
   );
 }

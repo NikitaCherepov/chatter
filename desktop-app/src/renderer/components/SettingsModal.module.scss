@@ -592,3 +592,11 @@
   padding-right: 8px;
   align-self: center;
 }
+
+// Model settings: row with Checkbox (auto) + Slider
+.modelParamRow {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  align-items: center;
+  gap: 12px;
+}

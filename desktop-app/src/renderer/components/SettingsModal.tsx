@@ -9,6 +9,7 @@ import type { TtsSettings } from '../lib/tts';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
 import Slider from './Slider';
+import Checkbox from './Checkbox';
 import { MacroSettings } from './MacroSettings';
 import { ServerSettings } from './ServerSettings';
 import { RunbookSettings } from './RunbookSettings';
@@ -851,36 +852,40 @@ export function SettingsModal({ onClose }: Props) {
                             const currentVal = settings[param.key as keyof api.ModelSettings] ?? null;
                             const useDefault = currentVal === null;
                             return (
-                              <Slider
-                                key={param.key}
-                                mode="numeric"
-                                label={param.label}
-                                min={param.min}
-                                max={param.max}
-                                step={param.step}
-                                value={currentVal}
-                                useDefault={useDefault}
-                                formatValue={(v) => param.step < 1 ? v.toFixed(2) : String(v)}
-                                onChange={(v) => {
-                                  // optimistic local update
-                                  const updated = { ...settings, [param.key]: v };
-                                  setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
-                                }}
-                                onToggleDefault={(checked) => {
-                                  const updated = { ...settings };
-                                  if (checked) {
-                                    delete (updated as any)[param.key];
-                                  } else {
-                                    (updated as any)[param.key] = param.min;
-                                  }
-                                  setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
-                                  handleSaveModelSettings(model.id, updated);
-                                }}
-                                onCommit={() => {
-                                  const finalSettings = modelSettingsMap[model.id] || {};
-                                  handleSaveModelSettings(model.id, finalSettings);
-                                }}
-                              />
+                              <div key={param.key} className={s.modelParamRow}>
+                                <Checkbox
+                                  checked={useDefault}
+                                  label="авто"
+                                  onChange={(checked) => {
+                                    const updated = { ...settings };
+                                    if (checked) {
+                                      delete (updated as any)[param.key];
+                                    } else {
+                                      (updated as any)[param.key] = param.min;
+                                    }
+                                    setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
+                                    handleSaveModelSettings(model.id, updated);
+                                  }}
+                                />
+                                <Slider
+                                  mode="numeric"
+                                  label={param.label}
+                                  min={param.min}
+                                  max={param.max}
+                                  step={param.step}
+                                  value={currentVal}
+                                  disabled={useDefault}
+                                  formatValue={(v) => param.step < 1 ? v.toFixed(2) : String(v)}
+                                  onChange={(v) => {
+                                    const updated = { ...settings, [param.key]: v };
+                                    setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
+                                  }}
+                                  onCommit={() => {
+                                    const finalSettings = modelSettingsMap[model.id] || {};
+                                    handleSaveModelSettings(model.id, finalSettings);
+                                  }}
+                                />
+                              </div>
                             );
                           })}
                         </div>

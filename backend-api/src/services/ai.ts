@@ -438,6 +438,19 @@ const createCompletionWithModelFallback = async (
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         const providerRequestBody = adaptRequestBodyForProvider(requestBody, baseURL, model, reasoningLevel, modelSettings);
+        if (modelSettings) {
+          console.log('[ai][model-settings]', {
+            provider: providerName,
+            model,
+            temperature: providerRequestBody.temperature,
+            top_p: providerRequestBody.top_p,
+            top_k: providerRequestBody.top_k,
+            frequency_penalty: providerRequestBody.frequency_penalty,
+            presence_penalty: providerRequestBody.presence_penalty,
+            repetition_penalty: providerRequestBody.repetition_penalty,
+            max_tokens: providerRequestBody.max_tokens,
+          });
+        }
         const response = await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
         return { response, modelUsed: model, failedModels };
       } catch (err) {
