@@ -572,7 +572,7 @@ Assistant-сообщения могут иметь дополнительные 
 
 - `reasoning_content?: string | null`
 - `tool_calls?: Array<{ id?: string; name: string; arguments: unknown; result_preview?: string }>`
-- `result_preview` содержит до 500 символов ответа инструмента и показывается только во всплывашке инструментов.
+- `result_preview` — обрезанный результат инструмента (до 250 символов) для отображения в popover. При streaming приходит из `toolCallsHistory` (обрезка через `formatToolResultPreview`), при перезагрузке чата — реконструируется из trace-формата `tool_calls_json` (обрезка через `slice(0, 250)`).
 
 UI:
 

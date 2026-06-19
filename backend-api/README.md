@@ -564,8 +564,8 @@ services/subagents/
 - `appendChatMessage` принимает параметр `images[]`. `getChatMessages` парсит и возвращает `images` в ответе.
 
 **Токены AI:**
-- `getHistoryForAi()` не затронут — AI видит только текст `[Фото]caption`, картинки не отправляются повторно в контексте.
-- Разделение: "история для AI" = только текст, "история для отображения" = текст + images[].
+- Картинки не отправляются повторно в контексте — AI видит только текст `[Фото]caption`. В `getHistoryForAi()` это обеспечивается тем, что для user-сообщений выбирается только `content` (без `images`).
+- Разделение: "история для AI" = текст + развёрнутый trace tool calls (см. [Tool calls trace](#tool-calls-trace-и-контекст-для-ai)), "история для отображения" = текст + images[] + плоская проекция tool_calls.
 
 **Потоки данных:**
 - **Desktop отправляет фото:** base64 → сервер ресайзит + сохраняет thumbnail → оригинал в AI vision → в БД: `images: [{ url, type: "user_photo" }]`.
@@ -583,7 +583,7 @@ services/subagents/
 
 - Колонки `chat_messages.archived` (INTEGER, 0/1) и `chat_messages.archived_at` (DATETIME).
 - `trimUserHistoryByChat()` выполняет `UPDATE ... SET archived = 1` вместо `DELETE` для сообщений, выходящих за пределы context window.
-- `getHistoryForAi()` выбирает только `archived = 0` — архив не отправляется в AI-контекст.
+- `getHistoryForAi()` выбирает только `archived = 0` — архив не отправляется в AI-контекст. Развёрнутый trace tool_calls из неархивных assistant-сообщений попадает в контекст (см. [Tool calls trace](#tool-calls-trace-и-контекст-для-ai)).
 - `getChatMessages()` возвращает **все** сообщения (включая архивные) с полем `archived: boolean` — десктоп показывает полную историю.
 - FTS-поиск продолжает работать по архивным сообщениям (триггер `AFTER DELETE` не срабатывает при UPDATE, поэтому записи остаются в `messages_fts`).
 - Удаление чата (`deleteUserChat`) и удаление конкретного сообщения (`deleteUserMessage`) выполняют физический `DELETE` — это не связано с архивацией.
@@ -598,19 +598,68 @@ services/subagents/
 
 ### Reasoning и tool-call metadata
 
-`sendMessageThroughAi()` сохраняет дополнительную метаинформацию assistant-ответа для desktop UI:
+`sendMessageThroughAi()` сохраняет дополнительную метаинформацию assistant-ответа в двух разных форматах: **плоский** (для UI/клиентов) и **trace** (для AI-контекста).
 
 - `reasoning_content` — человекочитаемое reasoning/thinking, если провайдер его вернул. Извлекается из `message.reasoning_content` (DeepSeek/vLLM), `message.reasoning` (OpenRouter/vLLM), Anthropic-style `content[]` blocks с `type: "thinking"`, а также из `response.output[]` items с `type: "reasoning"` для Responses-like формата.
-- `tool_calls` — список вызванных инструментов `{ id, name, arguments, result_preview? }`, собранный из `message.tool_calls` на шагах агентского цикла. `result_preview` содержит первые 500 символов tool response для UI/debug и не считается полным результатом инструмента.
-- Оба поля возвращаются в `AiSendResult` / `ChatSendResponse`, уходят в WS/SSE `done` и сохраняются в `chat_messages`.
-- `getHistoryForAi()` выбирает только `role, content`, поэтому `reasoning_content`, `tool_calls_json` и `result_preview` не попадают обратно в AI-контекст.
+- `tool_calls` (в `AiSendResult` / `ChatSendResponse` / WS/SSE `done`) — **плоский** список `{ id, name, arguments, result_preview? }`, собирается параллельно с trace в `toolCallsHistory`. `result_preview` содержит до 250 символов tool response (через `formatToolResultPreview`) — только для popover десктопа.
+- `tool_calls_json` (в БД) — **trace**-формат (массив `ToolIteration`), см. [Tool calls trace и контекст для AI](#tool-calls-trace-и-контекст-для-ai).
+- `reasoning_content` **не отправляется** обратно в AI-контекст (односторонний вывод модели).
 
 БД:
 
 - `chat_messages.reasoning_content TEXT` — склеенный reasoning по шагам ответа.
-- `chat_messages.tool_calls_json TEXT` — JSON-массив tool calls для истории desktop-клиента.
+- `chat_messages.tool_calls_json TEXT` — JSON в trace-формате (массив `ToolIteration`). Старые записи (плоский массив без поля `step`) поддерживаются как fallback при чтении.
 
-Desktop показывает эти поля как раскрывающиеся popover-кнопки у assistant-сообщения. Если reasoning или tool calls отсутствуют, соответствующая кнопка не отображается.
+Desktop показывает эти поля как раскрывающиеся popover-кнопки у assistant-сообщения. Если reasoning или tool calls отсутствуют, соответствующая кнопка не отображается. `getChatMessages()` при чтении разворачивает trace-формат обратно в плоский массив с `result_preview` (обрезка `slice(0, 250)`).
+
+### Tool calls trace и контекст для AI
+
+Чтобы модель «помнила» результаты вызванных инструментов на следующих запросах в чате, в `tool_calls_json` сохраняется **полный trace** агентского цикла по итерациям (тип `ToolIteration` в `services/ai.ts`):
+
+```ts
+type ToolIteration = {
+  step: number;        // маркер нового формата + номер итерации
+  content: string;     // промежуточный текст модели на этой итерации (может быть "")
+  tool_calls: Array<{ id?: string; name: string; arguments: any }>;
+  results: Array<{ id?: string; name: string; content: string }>;  // полные результаты runTool (до TOOL_RESULT_FULL_MAX = 10000 символов)
+  is_final?: boolean;  // true у финальной итерации без tool_calls (только текст)
+};
+```
+
+Маркер нового формата — поле `step` у первого элемента массива. Старые записи (плоский `[{id, name, arguments, result_preview}]`) определяются по его отсутствию.
+
+**Сбор trace в `sendMessageThroughAi()`:**
+
+- На каждой итерации `while`-цикла создаётся `currentIteration` после `runCompletion`.
+- Из `message.tool_calls` заполняется `currentIteration.tool_calls` (в порядке, как вернула модель).
+- После каждого `runTool()` полный результат (`toolContent`, с обрезкой до 10000 символов и пометкой) добавляется в `currentIteration.results` в порядке вызовов.
+- Итерация push'ится в `iterations[]` после полного цикла tool_calls (если не было abort/escalation в PRO).
+- Финальная итерация без tool_calls помечается `is_final: true`.
+- При эскалации LITE→PRO (`escalate_to_pro`) текущая итерация **не сохраняется** — история пересоздаётся с нуля.
+
+**Разворот в `getHistoryForAi()` (`services/chats.ts`):**
+
+- SELECT добавлено поле `tool_calls_json`.
+- Для user-сообщений — `{role, content}` как раньше.
+- Для assistant с новым trace-форматом — каждая итерация разворачивается в корректную последовательность OpenAI-совместимых сообщений:
+  ```
+  assistant(content: intermediate_text | null, tool_calls: [...])
+    → tool(tool_call_id, name, content: полный результат) для каждого вызова
+    → ... (следующая итерация)
+    → assistant(content: финальный текст)  ← итерация без tool_calls
+  ```
+- `content` у assistant(tool_calls) = `intermediate content` итерации, либо `null` (когда модель только вызывала тулзы без текста). OpenAI-совместимые API требуют именно `null`, не пустую строку.
+- Если у tool_call нет `id` (некоторые провайдеры) — генерируется стабильный fallback `call_{step}_{name}`.
+- Для assistant со **старым плоским форматом** или без `tool_calls_json` — fallback `{role: 'assistant', content}`. Tool-context теряется (как было раньше), но чат не ломается.
+
+**Почему так:**
+
+- Решает «амнезию» модели — она видит всю цепочку: какие тулзы вызвала, что они вернули, какой промежуточный текст был между ними.
+- Не требует миграций БД: используется та же колонка `tool_calls_json TEXT`, просто другой JSON внутри.
+- Reasoning намеренно исключён — это односторонний вывод модели, не предназначенный для контекстуальной памяти.
+- Десктоп не затронут: UI popover по-прежнему работает с плоской проекцией, реконструируемой из trace в `getChatMessages()`.
+
+**Размер:** `results.content` ограничен `TOOL_RESULT_FULL_MAX = 10000` символов с пометкой об обрезке. Для типичных чатов этого достаточно; для экстремальных DevOps-сессий с 50+ итерациями — `MAX_TOOL_LOOPS` ограничивает длину trace сверху.
 
 ### Регенерация сообщений
 
