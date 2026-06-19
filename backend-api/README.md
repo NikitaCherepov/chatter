@@ -635,7 +635,7 @@ services/subagents/
   - `system_prompt_tokens` — оценка базового системного промпта (динамический, без голоса/аватара). **Не плюсуется** в `messages_tokens`.
   - Полный контекст запроса к AI ≈ `messages_tokens + system_prompt_tokens` (+ надбавки).
 - `MessageDto` (`GET /api/v1/chats/:id/messages`) включает `token_count` и `reasoning_tokens`.
-- `AiSendResult` (WS/SSE `done`, `/api/v1/chat/send`) включает `token_count` и `reasoning_tokens` для assistant-ответа.
+- `AiSendResult` (WS/SSE `done`, `/api/v1/chat/send`) включает `token_count` и `reasoning_tokens` для assistant-ответа, а также `user_token_count` для нового user-сообщения (если оно было сохранено).
 
 **Desktop отображение:**
 - Бейдж `Ntk` у каждого сообщения в metaRow (серый, справа).

@@ -1611,10 +1611,10 @@ export function ChatPage() {
                       <AnimatePresence mode="popLayout" initial={false}>
                         <motion.span
                           key={chat.title || 'Новый чат'}
-                          initial={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
-                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                          exit={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-                          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                          initial={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
+                          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                          exit={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
+                          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                           style={{ display: 'inline-block' }}
                         >
                           {chat.title || 'Новый чат'}
