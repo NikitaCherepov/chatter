@@ -295,6 +295,34 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 |---|---|
 | `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. Логирует batch/cmd start/done/error для диагностики зависаний команд. |
 | `read-directory` | Чтение содержимого директории (read-only). Возвращает `{ name, isDirectory, size, modifiedAt }[]`. |
+| `capture-screen` | Захват скриншотов всех мониторов через `desktopCapturer.getSources()`. Возвращает `{ displays: [{ display_id, name, bounds, screenshot_base64 }] }`. Используется инструментом `capture_screen` для visual control. |
+| `visual-click` | Клик мышкой по нормализованным координатам (0.0–1.0). Использует `@nut-tree-fork/nut-js` для перемещения курсора и клика. Переводит нормализованные координаты в глобальные через `display.bounds`. Поддерживает мульти-монитор (включая мониторы с отрицательными координатами). |
+
+### Visual Control (удалённое управление через скриншоты)
+
+Позволяет AI управлять мышкой пользователя через Telegram. Два инструмента работают вместе:
+
+**Pipeline:**
+```
+AI: capture_screen({ purpose: "Найди кнопку Сохранить" })
+  → Backend: sendIpcToDesktop('capture_screen') → desktopCapturer
+  → Backend: sharp (сжатие до 1280px, JPEG) → сохранение в чат
+  → Backend: runCompletion('vision-pro') со скриншотом + purpose
+  → Vision-модель возвращает координаты (0.0–1.0)
+  → AI получает текстовый ответ (без картинки в контексте)
+
+AI: execute_visual_click({ display_id, x: 0.63, y: 0.42 })
+  → Backend: свежий скриншот → sharp рисует красный прицел (SVG composite)
+  → SSE → TG: фото с прицелом + кнопки «Кликнуть» / «Отклонить»
+  → Юзер подтверждает → sendIpcToDesktop('visual_click')
+  → Desktop: nut.js mouse.setPosition() + leftClick/rightClick
+```
+
+**Безопасность:**
+- Каждый клик требует подтверждения (HitL) — TTL 60 секунд
+- Один клик за одно подтверждение (никаких серий)
+- Скриншот с прицелом отправляется в Telegram — юзер видит точку клика
+- Инструменты отключаются через feature flags `disable_pc_commands` и `disable_pc_control_full`
 
 ### Поток выполнения
 

@@ -513,10 +513,10 @@ export function SettingsModal({ onClose }: Props) {
                       <textarea
                         className={s.textareaInput}
                         value={customContent}
-                        onChange={(e) => setCustomContent(e.target.value.slice(0, 8000))}
+                        onChange={(e) => setCustomContent(e.target.value.slice(0, 10000))}
                         placeholder="Опишите стиль общения..."
                         rows={6}
-                        maxLength={8000}
+                        maxLength={10000}
                       />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <button
@@ -526,8 +526,8 @@ export function SettingsModal({ onClose }: Props) {
                         >
                           {promptSaving ? 'Сохранение...' : 'Сохранить промпт'}
                         </button>
-                        <span style={{ fontSize: '11px', color: customContent.length > 7500 ? '#e74c3c' : 'var(--text-hint)' }}>
-                          {customContent.length} / 8000
+                        <span style={{ fontSize: '11px', color: customContent.length >= 10000 ? '#e74c3c' : 'var(--text-hint)' }}>
+                          {customContent.length} / 10000
                         </span>
                       </div>
                     </div>
