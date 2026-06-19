@@ -590,6 +590,64 @@ services/subagents/
 - Индекс `idx_chat_messages_active` для эффективной фильтрации по `archived = 0`.
 - Desktop отображает архивные сообщения с пониженной прозрачностью (opacity 0.55) и меткой «архив».
 
+### Подсчёт токенов (token accounting)
+
+Локальная оценка размера сообщений и контекста через `gpt-tokenizer` (BPE `o200k_base`, чистый JS — без WASM-зависимостей). Используется для отображения, **не влияет на архивацию** (пока что).
+
+**БД:**
+
+| Колонка | Тип | Описание |
+|---|---|---|
+| `chat_messages.token_count` | INTEGER NOT NULL DEFAULT 0 | Токены сообщения в AI-контексте (без `reasoning_content`) |
+| `chat_messages.reasoning_tokens` | INTEGER NOT NULL DEFAULT 0 | Токены `reasoning_content` (только для assistant, отдельный счётчик) |
+
+**Когда считается:**
+
+- **При сохранении сообщения** (`appendChatMessage` в `services/chats.ts`):
+  - **user**: `countMessageTokens('user', content)` — только текст, без images (они не уходят в контекст).
+  - **assistant**: токены развёрнутого trace через `expandAssistantMessage()` — тот же хелпер, что использует `getHistoryForAi()`. Считаются `content`, `tool_calls` и `tool results` каждой итерации. `reasoning_content` **исключён**.
+  - **reasoning_tokens**: отдельный счётчик из `reasoning_content`.
+- **Backfill при старте сервера** (`backfillMessageTokens`): порциями по 1000 строк через `setImmediate`, чтобы не блокировать event loop. Лог: `[tokens] backfill complete: N messages updated`.
+- **Динамический системный промпт** не кешируется в БД — считается на лету в `getChatContextTokens()`.
+
+**Сервис:** `services/tokenizer.ts` — `countTokens()`, `countMessageTokens()`, `countToolCallTokens()`, `countToolResultTokens()`.
+
+**Сборка системного промпта** (`services/system-prompt.ts`):
+- `buildBaseSystemPromptForUser()` — базовый промпт без надбавок за голос/аватар/изображения.
+- Включает: выбранный промпт + core memory + cold memory hint + tool usage rules + временной контекст + pinned macros.
+- Вынесен в отдельный модуль, чтобы избежать цикла `ai.ts ↔ chats.ts`.
+- В `ai.ts` (`sendMessageThroughAi`) — полный промпт с надбавками (`voicePromptHint`, `avatarPromptHint`, images hint).
+
+**API:**
+
+- `GET /api/v1/chats/:id/context-tokens` — суммарные токены контекста чата:
+  ```json
+  {
+    "messages_tokens": 12345,
+    "reasoning_tokens": 678,
+    "archived_tokens": 910,
+    "active_messages": 15,
+    "archived_messages": 3,
+    "system_prompt_tokens": 1876
+  }
+  ```
+  - `messages_tokens` — сумма `token_count` неархивных сообщений (без reasoning).
+  - `system_prompt_tokens` — оценка базового системного промпта (динамический, без голоса/аватара). **Не плюсуется** в `messages_tokens`.
+  - Полный контекст запроса к AI ≈ `messages_tokens + system_prompt_tokens` (+ надбавки).
+- `MessageDto` (`GET /api/v1/chats/:id/messages`) включает `token_count` и `reasoning_tokens`.
+- `AiSendResult` (WS/SSE `done`, `/api/v1/chat/send`) включает `token_count` и `reasoning_tokens` для assistant-ответа.
+
+**Desktop отображение:**
+- Бейдж `Ntk` у каждого сообщения в metaRow (серый, справа).
+- `reasoning_tokens` — в кнопке «Рассуждение»: `Рассуждение · 1234tk`.
+- Compact-бейдж в top bar справа: `12 345tk · 1 876pk` (сообщения + промпт).
+
+**Что НЕ считается:**
+- `reasoning_content` в `token_count` (он не уходит в контекст AI).
+- `usage` от провайдеров (нестабилен при streaming/tool calls/fallback).
+- Надбавки системного промпта за голос/аватар/изображения в `/context-tokens` (они появляются только при конкретных типах запросов).
+- Images в user-сообщениях (в контекст уходит только текст `[Фото]caption`).
+
 ## AI-инструменты
 
 Инструменты доступны AI через tool calling. Определены в `services/ai.ts` в `toolDefinitions`.

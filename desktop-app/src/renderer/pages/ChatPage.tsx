@@ -1769,7 +1769,7 @@ export function ChatPage() {
                 )}
               </div>
               {contextTokens && (
-                <div className={s.contextTokensCompact} title={`Сообщений: ${contextTokens.active_messages} (архив: ${contextTokens.archived_messages})\nТокены промпта: ${contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}${contextTokens.reasoning_tokens > 0 ? `\nReasoning: ${contextTokens.reasoning_tokens.toLocaleString('ru-RU')}tk` : ''}`}>
+                <div className={s.contextTokensCompact} title={`Сообщений: ${contextTokens.active_messages} (архив: ${contextTokens.archived_messages})\nТокены промпта: ${contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}${contextTokens.reasoning_tokens > 0 ? `\nReasoning: ${contextTokens.reasoning_tokens.toLocaleString('ru-RU')} tk` : ''}`}>
                   <span className={s.contextTokensValue}>{contextTokens.messages_tokens.toLocaleString('ru-RU')}</span>
                   <span className={s.contextTokensLabel}> tk</span>
                   <span className={s.contextTokensSep}>·</span>

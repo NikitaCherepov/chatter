@@ -595,6 +595,35 @@ UI:
 
 WS это не ломает: `streamChatMessage()` по-прежнему получает `intermediate`, `tool_status`, `display_state`, `desktop_action`, `map_update`, `done`, `error`; memoized rendering влияет только на React-перерисовки.
 
+## Подсчёт токенов (token accounting)
+
+Отображение количества токенов в сообщениях и общий контекст чата. Считается на сервере (gpt-tokenizer, o200k_base), десктоп только отображает.
+
+### Где отображается
+
+| Место | Что показывает |
+|---|---|
+| metaRow каждого сообщения | `Ntk` — количество токенов в сообщении (считается от развёрнутого trace: контент + tool_calls + tool_results) |
+| Кнопка «Рассуждение» | `Рассуждение · Ntk` — токены reasoning_content (отдельно от основного token_count) |
+| Top bar (справа) | `12 345tk · 1 876pk` — суммарные токены всех активных сообщений (`tk`) + размер системного промпта (`pk`) |
+
+### Когда обновляется
+
+- При загрузке чата (`getChatMessages`) — токены приходят в DTO каждого сообщения + отдельный запрос `getChatContextTokens(chatId)` для top bar.
+- После ответа AI (`done` событие) — assistant-сообщение получает `token_count` и `reasoning_tokens` из ответа, top bar обновляется.
+- Токены user-сообщения появляются при следующей перезагрузке чата (считаются на сервере при сохранении, но в `done` не возвращаются).
+
+### API
+
+- `GET /api/v1/chats/:id/context-tokens` — возвращает `messages_tokens`, `reasoning_tokens`, `archived_tokens`, `active_messages`, `archived_messages`, `system_prompt_tokens`.
+- `ChatContextTokens` тип и `getChatContextTokens()` — в `lib/api.ts`.
+
+### Что НЕ считается
+
+- `reasoning_content` не входит в `token_count` сообщения — он отдельно в `reasoning_tokens`.
+- Архивированные сообщения не входят в `messages_tokens` (только в `archived_tokens`).
+- Аддоны промпта (voice, avatar, image) не входят в `system_prompt_tokens` — считается только base prompt (prompt content + core memory + pinned macros).
+
 ## WebSocket Transport
 
 Desktop-клиент использует **WebSocket** для двунаправленного обмена с сервером. Реализация в `lib/api.ts`.
