@@ -787,6 +787,7 @@ export type ModelCatalogEntry = {
   name: string;
   description: string;
   reasoning_levels?: ReasoningLevel[] | null;
+  supported_params?: string[];
 };
 
 export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; auto_reasoning_levels?: ReasoningLevel[] }> {

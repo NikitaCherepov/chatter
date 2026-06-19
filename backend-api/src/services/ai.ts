@@ -216,6 +216,7 @@ export const getModelsCatalog = () => MANUAL_MODELS.map(m => ({
   name: m.name,
   description: m.description,
   reasoning_levels: getReasoningLevelsForBaseURL(m.baseURL),
+  supported_params: [...getProviderSupportedParams(m.baseURL)],
 }));
 
 export const resolveManualModel = (modelId: string): ManualModelEntry | undefined =>
