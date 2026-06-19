@@ -815,6 +815,43 @@ export async function setReasoningLevel(level: ReasoningLevel | null): Promise<{
   });
 }
 
+// ---------- Model settings (temperature, penalties, etc.) ----------
+
+/**
+ * Per-model generation settings.
+ * Каждое поле опционально: null/undefined = использовать серверный дефолт.
+ */
+export type ModelSettings = {
+  temperature?: number | null;
+  top_p?: number | null;
+  top_k?: number | null;
+  frequency_penalty?: number | null;
+  presence_penalty?: number | null;
+  repetition_penalty?: number | null;
+  max_tokens?: number | null;
+};
+
+/** Map: modelId → settings */
+export type ModelSettingsMap = Record<string, ModelSettings>;
+
+export async function getModelSettings(): Promise<{ model_settings: ModelSettingsMap }> {
+  return apiFetch('/api/v1/user/model-settings');
+}
+
+export async function setModelSettings(modelId: string, settings: ModelSettings): Promise<{ ok: boolean; model_settings: ModelSettingsMap }> {
+  return apiFetch('/api/v1/user/model-settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: modelId, settings }),
+  });
+}
+
+export async function deleteModelSettings(modelId: string): Promise<{ ok: boolean; model_settings: ModelSettingsMap }> {
+  return apiFetch(`/api/v1/user/model-settings/${encodeURIComponent(modelId)}`, {
+    method: 'DELETE',
+  });
+}
+
 // ---------- Feature flags (tool restrictions) ----------
 
 export type FeatureFlags = {

@@ -8,6 +8,7 @@ import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPrevie
 import type { TtsSettings } from '../lib/tts';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
+import Slider from './Slider';
 import { MacroSettings } from './MacroSettings';
 import { ServerSettings } from './ServerSettings';
 import { RunbookSettings } from './RunbookSettings';
@@ -19,7 +20,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'restrictions';
+type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'restrictions' | 'models';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -49,6 +50,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'runbooks', label: 'Инструкции' },
   { key: 'sshkeys', label: 'SSH-ключи' },
   { key: 'restrictions', label: 'Ограничения' },
+  { key: 'models', label: 'Модели' },
   { key: 'app', label: 'Приложение' },
 ];
 
@@ -126,6 +128,12 @@ export function SettingsModal({ onClose }: Props) {
   const [flagsLoading, setFlagsLoading] = useState(false);
   const [flagsSaving, setFlagsSaving] = useState(false);
 
+  // Models (per-model generation settings)
+  const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
+  const [modelSettingsMap, setModelSettingsMap] = useState<api.ModelSettingsMap>({});
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsSavingId, setModelsSavingId] = useState<string | null>(null);
+
   // Load account data
   useEffect(() => {
     if (user) {
@@ -160,6 +168,33 @@ export function SettingsModal({ onClose }: Props) {
         .finally(() => setFlagsLoading(false));
     }
   }, [section]);
+
+  // Load models catalog + per-model settings when models tab opens
+  useEffect(() => {
+    if (section === 'models') {
+      setModelsLoading(true);
+      Promise.all([
+        api.getModels().catch(() => null),
+        api.getModelSettings().catch(() => null),
+      ]).then(([catRes, setRes]) => {
+        if (catRes) setModelsCatalog(catRes.models);
+        if (setRes) setModelSettingsMap(setRes.model_settings);
+      }).finally(() => setModelsLoading(false));
+    }
+  }, [section]);
+
+  // Save handler for a single model's settings
+  const handleSaveModelSettings = async (modelId: string, settings: api.ModelSettings) => {
+    setModelsSavingId(modelId);
+    try {
+      const res = await api.setModelSettings(modelId, settings);
+      setModelSettingsMap(res.model_settings);
+    } catch {
+      toast.error('Не удалось сохранить настройки модели');
+    } finally {
+      setModelsSavingId(null);
+    }
+  };
 
   const handleToggleFlag = async (key: keyof api.FeatureFlags) => {
     const newFlags = { ...featureFlags, [key]: !featureFlags[key] };
@@ -774,6 +809,84 @@ export function SettingsModal({ onClose }: Props) {
                     </label>
                   </div>
                 </>
+              )}
+            </div>
+          )}
+
+          {section === 'models' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>Настройки моделей</div>
+              <span className={s.fieldLabel} style={{ display: 'block', marginBottom: 12, marginTop: -4 }}>
+                Параметры генерации для каждой модели. «Авто» — использовать серверный дефолт.
+              </span>
+
+              {modelsLoading ? (
+                <div className={s.promptLoading}>Загрузка...</div>
+              ) : modelsCatalog.length === 0 ? (
+                <div className={s.fieldLabel}>Нет кастомных моделей. Добавьте модели через MODELS_MANUAL на сервере.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {modelsCatalog.map((model) => {
+                    const settings = modelSettingsMap[model.id] || {};
+                    const isSaving = modelsSavingId === model.id;
+                    return (
+                      <div key={model.id} style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: 12 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+                          {model.name}
+                          {isSaving && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-hint)' }}>сохранение...</span>}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {(
+                            [
+                              { key: 'temperature',        label: 'Temperature',        min: 0.0, max: 2.0,   step: 0.05 },
+                              { key: 'top_p',              label: 'Top P',              min: 0.0, max: 1.0,   step: 0.05 },
+                              { key: 'top_k',              label: 'Top K',              min: 1,   max: 100,   step: 1 },
+                              { key: 'frequency_penalty',  label: 'Frequency penalty',  min: -2.0, max: 2.0,  step: 0.05 },
+                              { key: 'presence_penalty',   label: 'Presence penalty',   min: -2.0, max: 2.0,  step: 0.05 },
+                              { key: 'repetition_penalty', label: 'Repetition penalty', min: 1.0, max: 2.0,   step: 0.05 },
+                              { key: 'max_tokens',         label: 'Max tokens',         min: 1,   max: 65536, step: 1 },
+                            ] as const
+                          ).map((param) => {
+                            const currentVal = settings[param.key as keyof api.ModelSettings] ?? null;
+                            const useDefault = currentVal === null;
+                            return (
+                              <Slider
+                                key={param.key}
+                                mode="numeric"
+                                label={param.label}
+                                min={param.min}
+                                max={param.max}
+                                step={param.step}
+                                value={currentVal}
+                                useDefault={useDefault}
+                                formatValue={(v) => param.step < 1 ? v.toFixed(2) : String(v)}
+                                onChange={(v) => {
+                                  // optimistic local update
+                                  const updated = { ...settings, [param.key]: v };
+                                  setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
+                                }}
+                                onToggleDefault={(checked) => {
+                                  const updated = { ...settings };
+                                  if (checked) {
+                                    delete (updated as any)[param.key];
+                                  } else {
+                                    (updated as any)[param.key] = param.min;
+                                  }
+                                  setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
+                                  handleSaveModelSettings(model.id, updated);
+                                }}
+                                onCommit={() => {
+                                  const finalSettings = modelSettingsMap[model.id] || {};
+                                  handleSaveModelSettings(model.id, finalSettings);
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}

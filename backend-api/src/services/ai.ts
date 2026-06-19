@@ -321,6 +321,58 @@ const getProviderErrorSummary = (err: any) => {
 export type ReasoningLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'auto';
 
 /**
+ * Per-model generation settings (temperature, penalties, etc.).
+ * Применяются только для ручных моделей. Каждое поле опционально.
+ */
+export type ModelSettings = {
+  temperature?: number | null;
+  top_p?: number | null;
+  top_k?: number | null;
+  frequency_penalty?: number | null;
+  presence_penalty?: number | null;
+  repetition_penalty?: number | null;
+  max_tokens?: number | null;
+};
+
+/**
+ * Параметры, которые поддерживает каждый провайдер.
+ * Параметры не из списка для данного провайдера отбрасываются.
+ */
+const PROVIDER_SUPPORTED_PARAMS: Record<string, Set<string>> = {
+  openrouter: new Set(['temperature', 'top_p', 'top_k', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'max_tokens']),
+  deepseek:   new Set(['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'max_tokens']),
+  default:    new Set(['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'max_tokens']),
+};
+
+const getProviderSupportedParams = (baseURL: string): Set<string> => {
+  const url = (baseURL || '').toLowerCase();
+  if (url.includes('openrouter.ai')) return PROVIDER_SUPPORTED_PARAMS.openrouter;
+  if (url.includes('deepseek.com')) return PROVIDER_SUPPORTED_PARAMS.deepseek;
+  return PROVIDER_SUPPORTED_PARAMS.default;
+};
+
+/**
+ * Мёрджит per-model settings в requestBody, фильтруя по поддержке провайдера.
+ * null/undefined значения пропускаются (используется серверный дефолт).
+ */
+const applyModelSettingsToBody = (
+  requestBody: Record<string, unknown>,
+  baseURL: string,
+  settings?: ModelSettings | null
+): Record<string, unknown> => {
+  if (!settings) return requestBody;
+  const supported = getProviderSupportedParams(baseURL);
+  const body = { ...requestBody };
+  for (const [key, val] of Object.entries(settings)) {
+    if (val === null || val === undefined) continue;
+    if (supported.has(key)) {
+      body[key] = val;
+    }
+  }
+  return body;
+};
+
+/**
  * Адаптирует requestBody под конкретного провайдера перед отправкой.
  * Только OpenRouter и DeepSeek direct получают специальные параметры.
  * Все остальные провайдеры — текущая логика без изменений.
@@ -329,7 +381,8 @@ const adaptRequestBodyForProvider = (
   requestBody: Record<string, unknown>,
   baseURL: string,
   model: string,
-  level?: ReasoningLevel | null
+  level?: ReasoningLevel | null,
+  modelSettings?: ModelSettings | null
 ): Record<string, unknown> => {
   const url = (baseURL || '').toLowerCase();
 
@@ -339,13 +392,15 @@ const adaptRequestBodyForProvider = (
     if (level && level !== 'auto') {
       body.reasoning = { effort: level };
     }
-    return body;
+    return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
 
   // ── DeepSeek direct ──
   if (url.includes('deepseek.com')) {
     const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, ...body } = requestBody as any;
-    if (!level || level === 'auto') return body;
+    if (!level || level === 'auto') {
+      return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
+    }
     if (level === 'none' || level === 'minimal') {
       body.thinking = { type: 'disabled' };
     } else if (level === 'low' || level === 'medium') {
@@ -357,11 +412,11 @@ const adaptRequestBodyForProvider = (
       // high → high
       body.reasoning_effort = level;
     }
-    return body;
+    return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
 
-  // ── Все остальные провайдеры: не трогаем ──
-  return requestBody;
+  // ── Все остальные провайдеры: не трогаем reasoning, но применяем model settings ──
+  return modelSettings ? applyModelSettingsToBody(requestBody, baseURL, modelSettings) : requestBody;
 };
 
 const createCompletionWithModelFallback = async (
@@ -371,7 +426,8 @@ const createCompletionWithModelFallback = async (
   providerName = 'default',
   baseURL = '',
   signal?: AbortSignal,
-  reasoningLevel?: ReasoningLevel | null
+  reasoningLevel?: ReasoningLevel | null,
+  modelSettings?: ModelSettings | null
 ) => {
   const failedModels: string[] = [];
   let lastError: unknown = null;
@@ -380,7 +436,7 @@ const createCompletionWithModelFallback = async (
     const attempts = RETRIES_PER_MODEL + 1;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const providerRequestBody = adaptRequestBodyForProvider(requestBody, baseURL, model, reasoningLevel);
+        const providerRequestBody = adaptRequestBodyForProvider(requestBody, baseURL, model, reasoningLevel, modelSettings);
         const response = await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
         return { response, modelUsed: model, failedModels };
       } catch (err) {
@@ -413,7 +469,7 @@ const createCompletionWithModelFallback = async (
   });
 };
 
-const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null) => {
+const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null) => {
   const failedProviders: string[] = [];
   const failedModels: string[] = [];
 
@@ -424,7 +480,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -460,7 +516,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
   throw Object.assign(new Error('pro_providers_failed'), { failedProviders, failedModels });
 };
 
-const createCompletionWithLiteProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null) => {
+const createCompletionWithLiteProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null) => {
   const failedProviders: string[] = [];
   const failedModels: string[] = [];
 
@@ -471,7 +527,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -1985,11 +2041,11 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
-export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null): Promise<CompletionMeta & { manualFallback?: boolean }> => {
+export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null): Promise<CompletionMeta & { manualFallback?: boolean }> => {
   // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
   if (manualModel) {
     try {
-      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel);
+      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel, modelSettings);
       return {
         response: completion.response,
         usedModel: completion.modelUsed,
@@ -2003,6 +2059,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
       console.warn(`[ai] manual model "${manualModel.apiModelName}" failed, falling back to auto`, err?.message || err);
       // Не бросаем ошибку — fallback на обычный роутинг
       // Продолжаем выполнение ниже как будто manualModel не задан
+      // При fallback на auto — modelSettings не применяются (только для ручной модели)
     }
   }
 
@@ -3648,6 +3705,23 @@ export const sendMessageThroughAi = async (
   // Резолв reasoning level: из options (явный запрос) или из профиля юзера
   const reasoningLevel: ReasoningLevel | null = options?.reasoningLevel ?? (user as any).reasoning_level ?? null;
 
+  // Резолв model settings: per-model настройки генерации (temperature, penalties, etc.).
+  // Применяются только для ручной модели (preferred_model). В lite-режиме и при fallback на auto — игнорируются.
+  let resolvedModelSettings: ModelSettings | null = null;
+  if (preferredModelId) {
+    try {
+      const raw = (user as any).model_settings as string | null | undefined;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && parsed[preferredModelId]) {
+          resolvedModelSettings = parsed[preferredModelId] as ModelSettings;
+        }
+      }
+    } catch {
+      // broken JSON — игнорируем, используем серверные дефолты
+    }
+  }
+
   const dailyLimit = normalizeDailyMessageLimit(user.daily_message_limit);
   const dailyCount = Math.max(0, Math.floor(Number(user.daily_message_count || 0)));
   if (!options?.ignoreDailyLimit && user.is_admin !== 1 && dailyLimit > 0 && dailyCount >= dailyLimit) throw new Error('daily_message_limit_reached');
@@ -3971,7 +4045,7 @@ PRO
       max_tokens: 16384,
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
-    }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel);
+    }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings);
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
@@ -4214,7 +4288,7 @@ if (abortController.signal.aborted) {
         max_tokens: 8192,
         thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
         clear_thinking: false
-      }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel);
+      }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings);
       const finalMessage = finalCompletion.response?.choices?.[0]?.message;
       if (finalMessage) {
         const finalReasoning = extractReasoning(finalMessage, finalCompletion.response);

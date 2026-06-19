@@ -11,6 +11,7 @@ import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import type { ImageItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
+import Slider from '../components/Slider';
 import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
@@ -1724,50 +1725,21 @@ export function ChatPage() {
                 )}
                 {availableLevels.length > 1 && (
                 <div className={s.reasoningControl}>
-                  <label className={s.modelLabel} title="Глубина размышления модели">Размышление:</label>
-                  <div className={s.reasoningSlider}>
-                    <input
-                      type="range"
-                      min={0}
-                      max={availableLevels.length - 1}
-                      step={1}
-                      value={Math.max(0, availableLevels.indexOf(reasoningLevel))}
-                      onChange={(e) => {
-                        const idx = Number(e.target.value);
-                        setReasoningLevel(availableLevels[idx] ?? null);
-                      }}
-                      onMouseUp={async (e) => {
-                        const idx = Number((e.target as HTMLInputElement).value);
-                        try {
-                          await api.setReasoningLevel(availableLevels[idx] ?? null);
-                        } catch {
-                          toast.error('Не удалось изменить уровень размышления');
-                        }
-                      }}
-                      onTouchEnd={async (e) => {
-                        const idx = Number((e.target as HTMLInputElement).value);
-                        try {
-                          await api.setReasoningLevel(availableLevels[idx] ?? null);
-                        } catch {
-                          toast.error('Не удалось изменить уровень размышления');
-                        }
-                      }}
-                      onKeyDown={async (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          const idx = Number((e.target as HTMLInputElement).value);
-                          try {
-                            await api.setReasoningLevel(availableLevels[idx] ?? null);
-                          } catch {
-                            toast.error('Не удалось изменить уровень размышления');
-                          }
-                        }
-                      }}
-                      className={s.rangeInput}
-                    />
-                    <span className={s.reasoningValue}>
-                      {LEVEL_LABELS[String(reasoningLevel)] ?? 'Авто'}
-                    </span>
-                  </div>
+                  <Slider
+                    mode="discrete"
+                    label="Размышление:"
+                    values={availableLevels}
+                    labels={LEVEL_LABELS}
+                    value={reasoningLevel}
+                    onChange={(v) => setReasoningLevel(v as api.ReasoningLevel | null)}
+                    onCommit={async () => {
+                      try {
+                        await api.setReasoningLevel(reasoningLevel);
+                      } catch {
+                        toast.error('Не удалось изменить уровень размышления');
+                      }
+                    }}
+                  />
                 </div>
                 )}
               </div>

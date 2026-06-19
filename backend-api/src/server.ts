@@ -2167,6 +2167,94 @@ app.put('/api/v1/user/reasoning-level', (req: AuthedRequest, res: any) => {
   return res.json({ ok: true, reasoning_level: level });
 });
 
+// ─── Model settings (temperature, penalties, etc.) ─────────────────────────
+
+/**
+ * Schema for per-model generation settings.
+ * Каждое поле опционально. Если поле отсутствует или null — используется серверный дефолт.
+ * Хранится в users.model_settings как JSON: { "model_id": { temperature: 0.7, ... } }
+ */
+const MODEL_SETTINGS_RANGES: Record<string, { min: number; max: number; step: number }> = {
+  temperature:        { min: 0.0, max: 2.0,    step: 0.05 },
+  top_p:              { min: 0.0, max: 1.0,    step: 0.05 },
+  top_k:              { min: 1,   max: 100,    step: 1 },
+  frequency_penalty:  { min: -2.0, max: 2.0,   step: 0.05 },
+  presence_penalty:   { min: -2.0, max: 2.0,   step: 0.05 },
+  repetition_penalty: { min: 1.0, max: 2.0,    step: 0.05 },
+  max_tokens:         { min: 1,   max: 65536,  step: 1 },
+};
+
+const parseModelSettings = (raw: string | null | undefined): Record<string, any> => {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+app.get('/api/v1/user/model-settings', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  const settings = parseModelSettings(user?.model_settings);
+  return res.json({ model_settings: settings });
+});
+
+app.put('/api/v1/user/model-settings', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  const modelId = req.body?.model_id;
+  const incoming = req.body?.settings;
+
+  if (typeof modelId !== 'string' || !modelId.trim()) {
+    return res.status(400).json({ error: 'bad_model_id' });
+  }
+  if (typeof incoming !== 'object' || incoming === null || Array.isArray(incoming)) {
+    return res.status(400).json({ error: 'bad_settings' });
+  }
+
+  // Валидация: оставляем только разрешённые ключи с корректными значениями
+  const cleaned: Record<string, number> = {};
+  for (const [key, rawVal] of Object.entries(incoming)) {
+    const range = MODEL_SETTINGS_RANGES[key];
+    if (!range) continue; // неизвестный параметр — отбрасываем
+    if (rawVal === null || rawVal === undefined) continue; // null = удалить параметр
+    const num = Number(rawVal);
+    if (!Number.isFinite(num)) {
+      return res.status(400).json({ error: `bad_${key}` });
+    }
+    if (num < range.min || num > range.max) {
+      return res.status(400).json({ error: `${key}_out_of_range` });
+    }
+    // Округляем до step
+    const rounded = Math.round(num / range.step) * range.step;
+    cleaned[key] = Math.max(range.min, Math.min(range.max, Number(rounded.toFixed(4))));
+  }
+
+  const current = parseModelSettings(user.model_settings);
+  current[modelId] = cleaned;
+  db.prepare('UPDATE users SET model_settings = ? WHERE id = ?').run(JSON.stringify(current), userId);
+  return res.json({ ok: true, model_settings: current });
+});
+
+app.delete('/api/v1/user/model-settings/:modelId', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  const modelId = req.params.modelId;
+  const current = parseModelSettings(user.model_settings);
+  if (!(modelId in current)) {
+    return res.json({ ok: true, model_settings: current });
+  }
+  delete current[modelId];
+  db.prepare('UPDATE users SET model_settings = ? WHERE id = ?').run(JSON.stringify(current), userId);
+  return res.json({ ok: true, model_settings: current });
+});
+
 // ─── Feature flags (tool restrictions) ──────────────────────────────────────
 
 const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_subagents'] as const;
