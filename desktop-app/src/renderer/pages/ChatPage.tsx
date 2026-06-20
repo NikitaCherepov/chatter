@@ -2466,7 +2466,7 @@ export function ChatPage() {
                   <div style={{ fontSize: '12px', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto' }}>
                     <MarkdownRenderer content={conf.body} />
                   </div>
-                  <div className={s.suggestMacroActions}>
+                  <div className={s.suggestMacroActions} style={{ marginTop: 10 }}>
                     <button
                       className={s.suggestMacroSaveBtn}
                       onClick={async () => {

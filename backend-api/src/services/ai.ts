@@ -7,7 +7,7 @@ import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
 import { runSmartHomeControl, type SmartHomeArgs, SMART_HOME_DEVICE_OPTIONS_TEXT } from './smart-home.js';
-import { runEmailCheck, runEmailRead, runEmailSend } from './mail.js';
+import { runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
@@ -2307,20 +2307,21 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     // Wait for user response via WS/SSE → POST /api/v1/email/approve or /internal/email/approve
     const { registerPendingEmailConfirmation } = await import('./email-confirmations.js');
     try {
-      await new Promise<void>((resolve, reject) => {
+      // Email is sent by /approve endpoint (server.ts) which resolves this Promise with the result.
+      // We must NOT call runEmailSend here — that would send the email a second time.
+      const result = await new Promise<any>((resolve, reject) => {
         registerPendingEmailConfirmation(confirmationId, {
           userId: user.id,
           to,
           subject,
           body,
           provider,
-          resolve: () => resolve(),
+          resolve,
           reject,
           createdAt: Date.now()
         });
       });
-      // Approved — actually send the email
-      return runEmailSend(user.id, to, subject, body, provider);
+      return typeof result === 'string' ? result : JSON.stringify({ status: 'success', message: 'Письмо отправлено.', to, subject });
     } catch (err: any) {
       if (err?.message === 'rejected_by_user') {
         return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил отправку письма.', to, subject });
