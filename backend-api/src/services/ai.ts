@@ -3777,6 +3777,7 @@ export const sendMessageThroughAi = async (
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
+    onDiceRoll?: (roll: number) => Promise<void> | void;
     activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>;
     preferredModel?: string | null;
     featureFlags?: {
@@ -3976,12 +3977,15 @@ export const sendMessageThroughAi = async (
   const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
 
   // ── Dice Roll Mode (d20 roleplay) ──
-  // Бэкенд кидает кубик и инджектит результат в промпт.
-  // На всех клиентах результат приходит в AiSendResult.dice_roll.
+  // Бэкенд кидает кубик и сразу пушит результат клиентам через onDiceRoll
+  // (клиент останавливает анимацию на значении). В AiSendResult.dice_roll
+  // результат дублируется для восстановления в done-событии.
   let dicePromptHint = '';
   if (options?.diceRollMode) {
     diceRollValue = Math.floor(Math.random() * 20) + 1; // 1..20
     dicePromptHint = buildDiceRollPrompt(diceRollValue);
+    // Отправляем результат сразу — клиент зафиксирует значение и остановит анимацию.
+    try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
   const proSystemPrompt = `${voicePromptHint}${dicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${pinnedHintForPrompt}`;

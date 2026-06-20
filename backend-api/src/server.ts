@@ -209,6 +209,9 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       onStateChange: (state) => {
         res.write(`event: display_state\ndata: ${JSON.stringify(state)}\n\n`);
       },
+      onDiceRoll: (roll) => {
+        res.write(`event: dice_roll\ndata: ${JSON.stringify({ roll })}\n\n`);
+      },
     });
 
     // Push desktop_action via WS if desktop is also connected (TG→Desktop push pattern)
@@ -1010,6 +1013,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       },
       onMapUpdate: (data) => {
         res.write(`event: map_update\ndata: ${JSON.stringify(data)}\n\n`);
+      },
+      onDiceRoll: (roll) => {
+        res.write(`event: dice_roll\ndata: ${JSON.stringify({ roll })}\n\n`);
       }
     });
 
@@ -3491,6 +3497,9 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       },
       onMapUpdate: async (data) => {
         await sendWsJson({ type: 'map_update', ...data });
+      },
+      onDiceRoll: async (roll) => {
+        await sendWsJson({ type: 'dice_roll', roll });
       },
     });
 

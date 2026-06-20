@@ -644,6 +644,7 @@ export function ChatPage() {
   }, []);
 
   // ── Dice Roll: фиксация результата с цветом ──
+  // Результат сохраняется в sessionStorage и не исчезает до следующего броска.
   const finishDiceRoll = useCallback((roll: number) => {
     if (diceAnimTimer.current) {
       clearTimeout(diceAnimTimer.current);
@@ -651,15 +652,27 @@ export function ChatPage() {
     }
     setDiceValue(roll);
     setDiceRolling(false);
-    if (roll === 1) setDiceStatus('crit_fail');
-    else if (roll === 20) setDiceStatus('crit');
-    else if (roll >= 11) setDiceStatus('success');
-    else setDiceStatus('fail');
-    // Скрывать результат через 6 секунд
-    diceAnimTimer.current = setTimeout(() => {
-      setDiceStatus('idle');
-      setDiceValue(null);
-    }, 6000);
+    let status: 'success' | 'crit' | 'fail' | 'crit_fail';
+    if (roll === 1) status = 'crit_fail';
+    else if (roll === 20) status = 'crit';
+    else if (roll >= 11) status = 'success';
+    else status = 'fail';
+    setDiceStatus(status);
+    try { sessionStorage.setItem('chatter_dice_roll', JSON.stringify({ roll, status })); } catch { /* ignore */ }
+  }, []);
+
+  // Восстанавливаем последний результат кубика из sessionStorage при монтировании
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('chatter_dice_roll');
+      if (saved) {
+        const parsed = JSON.parse(saved) as { roll: number; status: 'success' | 'crit' | 'fail' | 'crit_fail' };
+        if (typeof parsed.roll === 'number' && parsed.roll >= 1 && parsed.roll <= 20) {
+          setDiceValue(parsed.roll);
+          setDiceStatus(parsed.status);
+        }
+      }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -743,9 +756,13 @@ export function ChatPage() {
           openTool('map');
           dispatchMapData(data);
         },
+        onDiceRoll: (roll) => {
+          // Сервер прислал результат броска — сразу останавливаем анимацию на значении.
+          finishDiceRoll(roll);
+        },
         onDone: (res) => {
-          // Dice Roll Mode: фиксируем результат (даже при abort)
-          if (typeof res.dice_roll === 'number') {
+          // Dice Roll Mode: fallback — если событие dice_roll не дошло, используем done-поле
+          if (typeof res.dice_roll === 'number' && diceRolling) {
             finishDiceRoll(res.dice_roll);
           }
           // Если генерация была остановлена пользователем
@@ -841,16 +858,18 @@ export function ChatPage() {
           }
           setShowTyping(false);
           setSending(false);
-          // Сбрасываем кубик при ошибке
-          if (diceAnimTimer.current) { clearTimeout(diceAnimTimer.current); diceAnimTimer.current = null; }
-          setDiceRolling(false);
-          setDiceStatus('idle');
-          setDiceValue(null);
+          // Сбрасываем кубик только если он ещё крутится (результат не успел прийти)
+          if (diceStatus === 'rolling') {
+            if (diceAnimTimer.current) { clearTimeout(diceAnimTimer.current); diceAnimTimer.current = null; }
+            setDiceRolling(false);
+            setDiceStatus('idle');
+            setDiceValue(null);
+          }
         }
       },
       isVoice ? { isVoice: true, preferredModel: preferredModel } : { preferredModel: preferredModel }
     );
-  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll]);
+  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1143,8 +1162,10 @@ export function ChatPage() {
         onDisplayState: (state) => dispatchAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
+        onDiceRoll: (roll) => finishDiceRoll(roll),
         onDone: (res) => {
-          if (typeof res.dice_roll === 'number') finishDiceRoll(res.dice_roll);
+          // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
+          if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
             if (assistantMsgCreated) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
@@ -1259,8 +1280,10 @@ export function ChatPage() {
         onDisplayState: (state) => dispatchAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
+        onDiceRoll: (roll) => finishDiceRoll(roll),
         onDone: (res) => {
-          if (typeof res.dice_roll === 'number') finishDiceRoll(res.dice_roll);
+          // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
+          if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
             if (assistantMsgCreated) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));

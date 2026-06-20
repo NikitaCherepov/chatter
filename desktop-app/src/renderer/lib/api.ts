@@ -357,6 +357,7 @@ export type StreamCallbacks = {
   onDesktopAction?: (action: DesktopActionPayload) => void;
   onToolStatus?: (text: string) => void;
   onMapUpdate?: (data: MapUpdatePayload) => void;
+  onDiceRoll?: (roll: number) => void;
   onDone?: (result: ChatSendResponse) => void;
   onError?: (err: string) => void;
 };
@@ -411,6 +412,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           break;
         case 'tool_status': wsCallbacks.onToolStatus?.(msg.text); break;
         case 'map_update': wsCallbacks.onMapUpdate?.(msg); break;
+        case 'dice_roll': wsCallbacks.onDiceRoll?.(Number(msg.roll)); break;
         case 'done': wsCallbacks.onDone?.(msg); break;
         case 'error': wsCallbacks.onError?.(msg.error); break;
         case 'execute_ipc':
@@ -580,6 +582,7 @@ async function streamChatMessageSSE(
             else if (eventName === 'display_state' && callbacks?.onDisplayState) callbacks.onDisplayState(data);
             else if (eventName === 'desktop_action' && callbacks?.onDesktopAction) callbacks.onDesktopAction(data);
             else if (eventName === 'map_update' && callbacks?.onMapUpdate) callbacks.onMapUpdate(data);
+            else if (eventName === 'dice_roll' && callbacks?.onDiceRoll) callbacks.onDiceRoll(Number(data.roll));
             else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
             else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
             else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error);
