@@ -294,6 +294,7 @@ export function ChatPage() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
   const showTokens = user?.ui_settings?.show_tokens !== false;
+  const diceRollEnabled = Boolean(user?.ui_settings?.dice_roll_enabled);
 
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
@@ -311,6 +312,11 @@ export function ChatPage() {
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  // ── Dice Roll Mode (d20) ──
+  const [diceRolling, setDiceRolling] = useState(false);
+  const [diceValue, setDiceValue] = useState<number | null>(null);
+  const [diceStatus, setDiceStatus] = useState<'idle' | 'rolling' | 'success' | 'crit' | 'fail' | 'crit_fail'>('idle');
+  const diceAnimTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -578,6 +584,55 @@ export function ChatPage() {
     handleDesktopAction(action);
   }, []);
 
+  // ── Dice Roll: запуск анимации (быстрые случайные числа → замедление → фиксация) ──
+  const startDiceRollAnimation = useCallback(() => {
+    if (diceAnimTimer.current) clearTimeout(diceAnimTimer.current);
+    setDiceRolling(true);
+    setDiceStatus('rolling');
+    setDiceValue(null);
+
+    // Быстро крутим случайные числа, постепенно замедляясь.
+    // Общая длительность ~1.2с.
+    const totalDuration = 1200;
+    const startTs = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startTs;
+      // Замедление: интервал растёт от 50мс до 220мс к концу
+      const progress = Math.min(1, elapsed / totalDuration);
+      const interval = 50 + Math.pow(progress, 2) * 170;
+      setDiceValue(Math.floor(Math.random() * 20) + 1);
+      if (elapsed < totalDuration) {
+        diceAnimTimer.current = setTimeout(tick, interval);
+      }
+    };
+    tick();
+  }, []);
+
+  // ── Dice Roll: фиксация результата с цветом ──
+  const finishDiceRoll = useCallback((roll: number) => {
+    if (diceAnimTimer.current) {
+      clearTimeout(diceAnimTimer.current);
+      diceAnimTimer.current = null;
+    }
+    setDiceValue(roll);
+    setDiceRolling(false);
+    if (roll === 1) setDiceStatus('crit_fail');
+    else if (roll === 20) setDiceStatus('crit');
+    else if (roll >= 11) setDiceStatus('success');
+    else setDiceStatus('fail');
+    // Скрывать результат через 6 секунд
+    diceAnimTimer.current = setTimeout(() => {
+      setDiceStatus('idle');
+      setDiceValue(null);
+    }, 6000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (diceAnimTimer.current) clearTimeout(diceAnimTimer.current);
+    };
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     const hasImages = attachedImages.length > 0;
@@ -589,6 +644,9 @@ export function ChatPage() {
     setInput('');
     setSending(true);
     setShowTyping(true);
+
+    // Dice Roll Mode: запускаем анимацию сразу при отправке
+    if (diceRollEnabled) startDiceRollAnimation();
 
     const imagesToSend = attachedImages.map((img) => ({
       base64: img.base64,
@@ -651,6 +709,10 @@ export function ChatPage() {
           dispatchMapData(data);
         },
         onDone: (res) => {
+          // Dice Roll Mode: фиксируем результат (даже при abort)
+          if (typeof res.dice_roll === 'number') {
+            finishDiceRoll(res.dice_roll);
+          }
           // Если генерация была остановлена пользователем
           if (res.aborted) {
             if (assistantMsgCreated) {
@@ -744,11 +806,16 @@ export function ChatPage() {
           }
           setShowTyping(false);
           setSending(false);
+          // Сбрасываем кубик при ошибке
+          if (diceAnimTimer.current) { clearTimeout(diceAnimTimer.current); diceAnimTimer.current = null; }
+          setDiceRolling(false);
+          setDiceStatus('idle');
+          setDiceValue(null);
         }
       },
       isVoice ? { isVoice: true, preferredModel: preferredModel } : { preferredModel: preferredModel }
     );
-  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction]);
+  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1009,6 +1076,9 @@ export function ChatPage() {
     setSending(true);
     setShowTyping(true);
 
+    // Dice Roll Mode: regenerate тоже бросает кубик (флаг серверный)
+    if (diceRollEnabled) startDiceRollAnimation();
+
     let assistantMsgCreated = false;
     const tempAssistantId = -Date.now() - 1;
     const appendToAssistant = (text: string) => {
@@ -1039,6 +1109,7 @@ export function ChatPage() {
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDone: (res) => {
+          if (typeof res.dice_roll === 'number') finishDiceRoll(res.dice_roll);
           if (res.aborted) {
             if (assistantMsgCreated) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
@@ -1093,7 +1164,7 @@ export function ChatPage() {
       },
       { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true }
     );
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll]);
 
   const handleRegenerateWithHint = useCallback(async (assistantMsgId: number, hint: string) => {
     if (!activeChatId || sending || !hint.trim()) return;
@@ -1120,6 +1191,9 @@ export function ChatPage() {
 
     setSending(true);
     setShowTyping(true);
+
+    // Dice Roll Mode: regenerate тоже бросает кубик (флаг серверный)
+    if (diceRollEnabled) startDiceRollAnimation();
 
     let assistantMsgCreated = false;
     const tempAssistantId = -Date.now() - 1;
@@ -1151,6 +1225,7 @@ export function ChatPage() {
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDone: (res) => {
+          if (typeof res.dice_roll === 'number') finishDiceRoll(res.dice_roll);
           if (res.aborted) {
             if (assistantMsgCreated) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
@@ -1205,7 +1280,7 @@ export function ChatPage() {
       },
       { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true }
     );
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);
@@ -2737,6 +2812,30 @@ export function ChatPage() {
             )}
 
             <div className={s.inputArea}>
+              {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
+              {diceRollEnabled && (
+                <div
+                  className={
+                    diceStatus === 'rolling' ? `${s.diceRoll} ${s.diceRolling}`
+                    : diceStatus === 'crit' ? `${s.diceRoll} ${s.diceRollCrit}`
+                    : diceStatus === 'success' ? `${s.diceRoll} ${s.diceRollSuccess}`
+                    : diceStatus === 'fail' ? `${s.diceRoll} ${s.diceRollFail}`
+                    : diceStatus === 'crit_fail' ? `${s.diceRoll} ${s.diceRollCritFail}`
+                    : `${s.diceRoll} ${s.diceRollIdle}`
+                  }
+                  title={
+                    diceStatus === 'rolling' ? 'Бросок d20...'
+                    : diceStatus === 'crit' ? `Критический успех! (${diceValue})`
+                    : diceStatus === 'success' ? `Успех (${diceValue})`
+                    : diceStatus === 'fail' ? `Неудача (${diceValue})`
+                    : diceStatus === 'crit_fail' ? `Критический провал! (${diceValue})`
+                    : 'Режим кубика d20'
+                  }
+                >
+                  {diceRolling || diceValue !== null ? diceValue : '🎲'}
+                </div>
+              )}
+
               {maxImages > 0 ? (
                 <svg
                   className={s.inputIcon}

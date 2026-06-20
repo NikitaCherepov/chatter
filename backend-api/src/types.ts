@@ -141,6 +141,8 @@ export type AiSendResult = {
   reasoning_tokens?: number;
   /** Токены user-сообщения (если было сохранено новое). См. MessageTokensDto. */
   user_token_count?: number;
+  /** Результат броска d20 (1..20) в режиме Dice Roll Mode, иначе отсутствует. */
+  dice_roll?: number;
 };
 
 export type DisplayStatePayload = {

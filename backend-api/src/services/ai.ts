@@ -782,6 +782,21 @@ const formatRollLine = (roll: { rolls: number[]; rollsSum: number; modifier: num
   return `броски [${roll.rolls.join(', ')}] => ${roll.rollsSum}${modifierText} = ${roll.total}`;
 };
 
+/** Промпт для Dice Roll Mode. Инжектируется в начало system prompt бота. */
+const buildDiceRollPrompt = (diceRoll: number) => `
+[DICE ROLL MODE: ACTIVE]
+The user rolled a d20 dice for this specific message.
+Dice Roll Result: ${diceRoll} out of 20.
+
+You MUST adapt the narrative tone and flavor of your response based strictly on this result:
+- 1 (Critical Failure): Describe the attempt as an epic, ridiculous, or hilarious disaster. Let the tone be dramatic, absurd, sarcastic, or darkly humorous as appropriate to the scene.
+- 2–9 (Failure): The action failed, ran into annoying obstacles, or turned out clumsy and poorly executed.
+- 10–19 (Success): Everything went smoothly. Standard, successful and clean execution.
+- 20 (Critical Success): Absolute triumph! Execute the task with epic grandeur, highly praise the user, or drop a fun easter egg.
+
+CRITICAL SYSTEM RULE: Regardless of the roll result (even on a 1), if a tool call is required to fulfill the user's request, you MUST still initiate and execute the tool call normally to process actual data. The dice roll affects ONLY your narrative style and how you flavor the outcome, but it MUST NOT sabotage, block, or bypass the actual system mechanics or tool execution.
+`;
+
 const runRandomRoll = (parsed: Record<string, any>) => {
   const rollType = `${parsed.roll_type || ''}`;
   if (rollType !== 'coin' && rollType !== 'dice') return 'Ошибка инструмента: roll_type должен быть coin или dice.';
@@ -3751,6 +3766,7 @@ export const sendMessageThroughAi = async (
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
     isDesktop?: boolean;
     isVoice?: boolean;
+    diceRollMode?: boolean;
     onDesktopAction?: (action: DesktopActionPayload) => Promise<void> | void;
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
@@ -3834,6 +3850,7 @@ export const sendMessageThroughAi = async (
   let totalTokens = 0;
   let usedModel = '';
   let usedProvider = '';
+  let diceRollValue: number | null = null;
 
   try {
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
@@ -3955,7 +3972,17 @@ export const sendMessageThroughAi = async (
   const promptContent = isGuestMode ? '' : resolvePromptForUser(promptUser).content;
   const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
   const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${pinnedHintForPrompt}`;
+
+  // ── Dice Roll Mode (d20 roleplay) ──
+  // Бэкенд кидает кубик и инджектит результат в промпт.
+  // На всех клиентах результат приходит в AiSendResult.dice_roll.
+  let dicePromptHint = '';
+  if (options?.diceRollMode) {
+    diceRollValue = Math.floor(Math.random() * 20) + 1; // 1..20
+    dicePromptHint = buildDiceRollPrompt(diceRollValue);
+  }
+
+  const proSystemPrompt = `${voicePromptHint}${dicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${pinnedHintForPrompt}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
@@ -4534,7 +4561,8 @@ iterations.push(currentIteration);
       used_provider: usedProvider
     },
     ...((assistantMessageId > 0) ? getMessageTokens(assistantMessageId) : {}),
-    ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {})
+    ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
+    ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
   };
   } catch (err: any) {
     if (isAbortError(err)) {
@@ -4545,7 +4573,8 @@ iterations.push(currentIteration);
         chat_id: chatId,
         message_id: 0,
         aborted: true,
-        usage: { tokens_used: totalTokens, used_model: usedModel, used_provider: usedProvider }
+        usage: { tokens_used: totalTokens, used_model: usedModel, used_provider: usedProvider },
+        ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
       };
     }
     throw err;

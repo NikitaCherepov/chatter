@@ -923,6 +923,69 @@
   margin-bottom: 10px;
 }
 
+// ── Dice Roll Mode (d20) ──
+.diceRoll {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  margin-bottom: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid var(--border-medium);
+  background-color: var(--bg-input);
+  color: var(--text-body);
+  user-select: none;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+}
+
+.diceRollIdle {
+  border-color: var(--border-medium);
+  color: var(--text-muted);
+}
+
+.diceRolling {
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: diceSpin 0.4s linear infinite;
+}
+
+.diceRollSuccess {
+  border-color: #4caf50;
+  background-color: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.diceRollCrit {
+  border-color: #ffc107;
+  background-color: rgba(255, 193, 7, 0.18);
+  color: #ffa000;
+  box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+}
+
+.diceRollFail {
+  border-color: #ff9800;
+  background-color: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+}
+
+.diceRollCritFail {
+  border-color: #e53935;
+  background-color: rgba(229, 57, 53, 0.18);
+  color: #e53935;
+  box-shadow: 0 0 8px rgba(229, 57, 53, 0.5);
+}
+
+@keyframes diceSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
 .textarea {
   flex: 1;
   padding: 12px 16px;

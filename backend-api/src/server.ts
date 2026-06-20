@@ -134,6 +134,7 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
       ...options,
       activeMacros: enabledMacros,
       featureFlags: tgUser ? parseFeatureFlags(tgUser) : undefined,
+      diceRollMode: tgUser ? Boolean(parseUiSettings(tgUser).dice_roll_enabled) : false,
     });
 
     // If AI triggered a desktop_action and desktop is online — push via WS
@@ -194,6 +195,7 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       ...options,
       activeMacros: enabledMacros,
       featureFlags: tgUser ? parseFeatureFlags(tgUser) : undefined,
+      diceRollMode: tgUser ? Boolean(parseUiSettings(tgUser).dice_roll_enabled) : false,
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
       },
@@ -449,12 +451,13 @@ const parseFeatureFlags = (user: UserRecord): Record<string, boolean> => {
   } catch { return {}; }
 };
 
-/** UI settings: configurable display options stored per-user. Default: show_tokens = true. */
-export const parseUiSettings = (user: UserRecord): { show_tokens?: boolean } => {
+/** UI settings: configurable display options stored per-user. */
+export const parseUiSettings = (user: UserRecord): { show_tokens?: boolean; dice_roll_enabled?: boolean } => {
   try {
     const parsed = JSON.parse(user.ui_settings || '{}');
     return {
       ...(typeof parsed.show_tokens === 'boolean' ? { show_tokens: parsed.show_tokens } : {}),
+      ...(typeof parsed.dice_roll_enabled === 'boolean' ? { dice_roll_enabled: parsed.dice_roll_enabled } : {}),
     };
   } catch { return {}; }
 };
@@ -987,6 +990,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       regenerateFromHistory: Boolean(req.body?.regenerate_from_history),
       skipUserHistory: Boolean(req.body?.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
+      diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
@@ -2311,13 +2315,13 @@ app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
 
 // ─── UI settings (display options stored per user) ──────────────────────────
 
-const VALID_UI_KEYS = ['show_tokens'] as const;
+const VALID_UI_KEYS = ['show_tokens', 'dice_roll_enabled'] as const;
 
 app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  const settings: Record<string, boolean> = { show_tokens: true };
+  const settings: Record<string, boolean> = { show_tokens: true, dice_roll_enabled: false };
   try {
     const raw = JSON.parse(user.ui_settings || '{}');
     for (const key of VALID_UI_KEYS) {
@@ -3467,6 +3471,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       regenerateFromHistory: Boolean(regenerate_from_history),
       skipUserHistory: Boolean(msg.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
+      diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: async (stepText) => {
         await sendWsJson({ type: 'intermediate', text: stepText });

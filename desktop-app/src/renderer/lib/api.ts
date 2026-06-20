@@ -11,6 +11,7 @@ type Tokens = {
 
 export type UiSettings = {
   show_tokens?: boolean;
+  dice_roll_enabled?: boolean;
 };
 
 type User = {
@@ -281,6 +282,8 @@ export type ChatSendResponse = {
   reasoning_tokens?: number;
   /** Токены user-сообщения (если было сохранено новое). */
   user_token_count?: number;
+  /** Результат броска d20 (1..20) в режиме Dice Roll Mode, иначе отсутствует. */
+  dice_roll?: number;
 };
 
 export type ChatContextTokens = {

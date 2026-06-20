@@ -217,6 +217,25 @@ export function SettingsModal({ onClose }: Props) {
     }
   };
 
+  const handleToggleDiceRoll = async () => {
+    const newValue = !uiSettings.dice_roll_enabled;
+    const prev = uiSettings;
+    setUiSettingsState({ dice_roll_enabled: newValue });
+    setUiSettingsSaving(true);
+    try {
+      const res = await api.setUiSettings({ dice_roll_enabled: newValue });
+      setUiSettingsState(res.settings);
+      if (user) {
+        setUser({ ...user, ui_settings: res.settings });
+      }
+    } catch {
+      setUiSettingsState(prev); // rollback
+      toast.error('Не удалось сохранить настройку');
+    } finally {
+      setUiSettingsSaving(false);
+    }
+  };
+
   // Save handler for a single model's settings
   const handleSaveModelSettings = async (modelId: string, settings: api.ModelSettings) => {
     setModelsSavingId(modelId);
@@ -977,6 +996,18 @@ export function SettingsModal({ onClose }: Props) {
                   label="Показывать токены"
                   disabled={uiSettingsSaving}
                 />
+              </div>
+
+              <div className={s.fieldGroup}>
+                <Checkbox
+                  checked={Boolean(uiSettings.dice_roll_enabled)}
+                  onChange={handleToggleDiceRoll}
+                  label="🎲 Режим кубика (d20 Roleplay)"
+                  disabled={uiSettingsSaving}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  Добавляет кубик d20 рядом с полем ввода. Ответы ИИ зависят от вашей удачи.
+                </div>
               </div>
             </div>
           )}
