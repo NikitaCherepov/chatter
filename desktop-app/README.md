@@ -512,6 +512,53 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 
 Добавить `disabledToolSet.add('tool_name')` в соответствующий блок флага в `ai.ts` (секция `Feature flags → disabled tools`). Фильтрация сработает автоматически.
 
+## Dice Roll Mode (d20 Roleplay)
+
+Режим «кубика» для roleplay-фана. Включается чекбоксом «Режим кубика (d20)» во вкладке настроек «Приложение». Сохраняется в `users.ui_settings.dice_roll_enabled` (boolean, default `false`), синхронизируется между desktop и Telegram.
+
+### Логика работы
+
+1. При отправке сообщения (или regenerate) десктоп **сразу** запускает анимацию кружка-кубика.
+2. Бэкенд бросает d20 (`1..20`) до запроса к LLM и мгновенно пушит результат отдельным событием `dice_roll` (WS: `{ type: 'dice_roll', roll }`, SSE: `event: dice_roll`).
+3. Десктоп ловит `onDiceRoll` → **тут же** останавливает анимацию на значении и красит кружок в цвет результата.
+4. Сам ответ AI приходит позже в `done` — кубик к этому моменту уже давно остановился. В `done` поле `dice_roll` дублируется как fallback.
+5. Результат сохраняется в `sessionStorage` (`chatter_dice_roll`) и не исчезает до следующего броска. Восстанавливается при перезагрузке страницы.
+
+### Цвета результата
+
+| Roll | Цвет | Значение |
+|---|---|---|
+| 1 | красный (`#e53935`) + glow | Критический провал |
+| 2–10 | оранжевый (`#ff9800`) | Неудача |
+| 11–19 | зелёный (`#4caf50`) | Успех |
+| 20 | жёлтый (`#ffc107`) + glow | Критический успех |
+
+### UI
+
+Кружок 30x30px (`border-radius: 50%`) слева от иконки вложений (вне блока `inputArea`, рендерится только если `diceRollEnabled`). Состояния:
+- `idle` — эмодзи
+- `rolling` — анимация `diceSpin` (быстрые случайные числа 1..20, постепенно замедляется, ~1.2с общая длительность)
+- `success` / `crit` / `fail` / `crit_fail` — зафиксированное число с цветом
+
+### Анимация броска
+
+Реализована через `setTimeout`-chain в `startDiceRollAnimation()`. Интервал тика растёт от 50мс до 220мс к концу (`50 + progress² · 170`), на каждом тике показывается `Math.floor(Math.random() * 20) + 1`. Общая длительность ~1.2с, но **анимация может быть остановлена раньше**, если `dice_roll` событие пришло быстрее (что и происходит — сервер шлёт результат мгновенно).
+
+### Промпт бота
+
+Бэкенд инджектит в начало `proSystemPrompt` хинт с результатом броска. Кубик влияет **только** на нарративный тон ответа (насмешка при 1, триумф при 20 и т.д.), но **не** блокирует tool calls — даже при roll=1, если требуется `execute_ssh_command`, бот его выполнит.
+
+### Ключевые файлы
+
+| Файл | Роль |
+|---|---|
+| `pages/ChatPage.tsx` | State кубика (`diceRolling`, `diceValue`, `diceStatus`), `startDiceRollAnimation`, `finishDiceRoll`, рендер кружка |
+| `pages/ChatPage.module.scss` | `.diceRoll` + состояния (`.diceRolling`, `.diceRollCrit`, `.diceRollSuccess`, `.diceRollFail`, `.diceRollCritFail`) + `@keyframes diceSpin` |
+| `lib/api.ts` | `onDiceRoll` в `StreamCallbacks`, обработка WS `type: 'dice_roll'` и SSE `event: dice_roll` |
+| `components/SettingsModal.tsx` | Чекбокс во вкладке `app`, `handleToggleDiceRoll` |
+| `backend-api/src/services/ai.ts` | `buildDiceRollPrompt()`, бросок в `sendMessageThroughAi`, `onDiceRoll` callback |
+| `backend-api/src/server.ts` | Проброс `diceRollMode` в 3 точках (SSE/WS/TG), отправка `dice_roll` события |
+
 ## Настройки моделей (Model Settings)
 
 Вкладка "Модели" в SettingsModal позволяет настраивать параметры генерации (temperature, penalties, top_p, top_k, max_tokens) для каждой кастомной модели из `MODELS_MANUAL`. Настройки хранятся на сервере (`users.model_settings`, JSON-мапа по `model_id`), применяются только для ручных моделей (не для auto-роутинга PRO/LITE).
@@ -563,6 +610,7 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 - Активные состояния передаются в `MessageItem` как booleans (`isTtsPlaying`, `isReasoningOpen`, `isToolCallsOpen`, `isRegenHintOpen`), а не как глобальные id. Так при переключении TTS/reasoning/tool calls изменяются только затронутые сообщения.
 - Начальная загрузка истории берет последние `MESSAGE_PAGE_SIZE = 50` сообщений.
 - Старые сообщения подгружаются кнопкой "Загрузить старые сообщения" через `GET /api/v1/chats/:id/messages?limit=&offset=`.
+- Левое меню чатов грузит список порциями по `CHAT_PAGE_SIZE = 50` через `GET /api/v1/chats?limit=&offset=`; поиск чатов остается отдельным `/api/v1/chats/search` без этой пагинации.
 - При prepend старых сообщений ChatPage сохраняет `scrollHeight`/`scrollTop` и восстанавливает позицию через `useLayoutEffect`, чтобы экран не прыгал вниз.
 - Автоскролл вниз пропускается, если идет prepend старых сообщений.
 - Архивные сообщения (`msg.archived === true`) отображаются с пониженной прозрачностью (opacity 0.55) и меткой «архив» в metaRow. Архивные сообщения не отправляются в AI-контекст, но остаются в БД и доступны для просмотра и поиска.
@@ -649,7 +697,8 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | `display_state` | Изменение состояния аватара |
 | `desktop_action` | Команда управления UI / макрос |
 | `map_update` | Данные карты |
-| `done` | Финальный ответ: `reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?`, `display_state?` |
+| `dice_roll` | Результат броска d20 (Dice Roll Mode). Приходит сразу после броска, десктоп останавливает анимацию и фиксирует значение. См. [Dice Roll Mode](#dice-roll-mode-d20-roleplay) |
+| `done` | Финальный ответ: `reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?`, `display_state?`, `dice_roll?` (fallback если realtime-событие потерялось) |
 | `error` | Ошибка |
 | `execute_ipc` | Запрос сервера выполнить IPC и вернуть результат |
 | `pong` | Ответ на ping |

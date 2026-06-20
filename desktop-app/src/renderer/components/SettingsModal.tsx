@@ -1002,7 +1002,7 @@ export function SettingsModal({ onClose }: Props) {
                 <Checkbox
                   checked={Boolean(uiSettings.dice_roll_enabled)}
                   onChange={handleToggleDiceRoll}
-                  label="🎲 Режим кубика (d20 Roleplay)"
+                  label="Режим кубика (d20)"
                   disabled={uiSettingsSaving}
                 />
                 <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>

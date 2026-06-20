@@ -284,9 +284,9 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - `POST /api/v1/auth/refresh`
   - Ввод: `{ refresh_token }`
   - Вывод: `{ access_token, refresh_token, access_expires_in, refresh_expires_in }`
-- `GET /api/v1/chats`
-  - Ввод: без body
-  - Вывод: `{ chats, active_chat_id }`
+- `GET /api/v1/chats?limit=&offset=`
+  - Ввод: query `limit` по умолчанию 50, максимум 100; `offset` по умолчанию 0
+  - Вывод: `{ chats, active_chat_id, limit, offset }`
 - `GET /api/v1/chats/search?q=&limit=`
   - Полнотекстовый поиск по сообщениям (FTS5). Возвращает чаты, в которых есть совпадения, со сниппетом найденного текста.
   - Минимальная длина запроса: 3 символа. `limit` по умолчанию 20, максимум 50.
@@ -813,12 +813,57 @@ UI-настройки (отображение в десктопе) хранят�
 | Ключ | Тип | Default | Описание |
 |---|---|---|---|
 | `show_tokens` | boolean | `true` | Показывать счётчики токенов (бейджи у сообщений, reasoning-бейдж, топ-бар контекста) |
+| `dice_roll_enabled` | boolean | `false` | Режим кубика d20 (roleplay). При каждом сообщении бэкенд бросает d20 и инджектит результат в system prompt бота, влияя только на нарративный тон ответа (не на выполнение tool calls). Результат броска пушится клиентам через отдельное событие `dice_roll` сразу после броска. См. [Dice Roll Mode](#dice-roll-mode-d20). |
 
 **API:**
 
-- `GET /api/v1/user/ui-settings` — `{ settings: { show_tokens: true } }` (merge с дефолтами)
-- `PUT /api/v1/user/ui-settings` — `{ settings: { show_tokens: false } }` (валидация по whitelist `VALID_UI_KEYS`, merge с существующими)
+- `GET /api/v1/user/ui-settings` — `{ settings: { show_tokens: true, dice_roll_enabled: false } }` (merge с дефолтами)
+- `PUT /api/v1/user/ui-settings` — `{ settings: { show_tokens: false, dice_roll_enabled: true } }` (валидация по whitelist `VALID_UI_KEYS`, merge с существующими)
 - Поле `ui_settings` также включено в `/api/v1/auth/me` (через `toAuthUserDto`)
+
+### Dice Roll Mode (d20)
+
+Режим «кубика» для roleplay-фана. Включается чекбоксом во вкладке настроек «Приложение» (`dice_roll_enabled` в `users.ui_settings`). Флаг серверный — применяется для всех клиентов (desktop + Telegram).
+
+**Поток броска:**
+
+1. Пользователь отправляет сообщение.
+2. `sendMessageThroughAi` читает `ui_settings.dice_roll_enabled` (через `parseUiSettings`), передаётся как `diceRollMode: true`.
+3. Если включено — сервер **до начала запроса к LLM** бросает `Math.floor(Math.random() * 20) + 1` (1..20).
+4. Сразу после броска вызывается `onDiceRoll(roll)` — клиент получает результат мгновенно, не дожидаясь ответа AI.
+5. Результат инджектится в начало `proSystemPrompt` через `buildDiceRollPrompt(roll)` (полный текст хинта см. в `services/ai.ts`).
+6. После завершения генерации `dice_roll` дублируется в `done` payload (как fallback на случай потери realtime-события).
+
+**Промпт dice hint:**
+
+```text
+[DICE ROLL MODE: ACTIVE]
+The user rolled a d20 dice for this specific message.
+Dice Roll Result: {roll} out of 20.
+
+You MUST adapt the narrative tone and flavor of your response based strictly on this result:
+- 1 (Critical Failure): эпический провал, насмешка
+- 2–9 (Failure): провал, препятствия
+- 10–19 (Success): стандартный успех
+- 20 (Critical Success): триумф, восторг
+
+CRITICAL SYSTEM RULE: даже при roll=1, если требуется tool call — он выполняется. Кубик влияет ТОЛЬКО на стиль ответа, не на механику.
+```
+
+**Событие `dice_roll` (WS + SSE):**
+
+| Канал | Формат |
+|---|---|
+| WS (`chat_send` ответ) | `{ type: 'dice_roll', roll: number }` |
+| SSE `/api/v1/chat/send` | `event: dice_roll\ndata: { "roll": 13 }` |
+| SSE `/internal/ai/stream` (TG) | `event: dice_roll\ndata: { "roll": 13 }` |
+
+Поле `dice_roll` также включается в `AiSendResult` (`done` payload) для восстановления в случае потери realtime-события.
+
+**Точки проброса `diceRollMode`:**
+- `/api/v1/chat/send` (SSE desktop) — `parseUiSettings(rawUserRecord).dice_roll_enabled`
+- WS `chat_send` — то же
+- `/internal/ai/send` и `/internal/ai/stream` (TG) — `parseUiSettings(tgUser).dice_roll_enabled`
 
 ### Клиентские инструменты — продолжение
 
@@ -1079,6 +1124,7 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 | `desktop_action` | Команда UI / макрос |
 | `tool_status` | Статус выполнения инструмента |
 | `map_update` | Данные карты |
+| `dice_roll` | Результат броска d20 в Dice Roll Mode (приходит сразу после броска, до `done`) |
 | `done` | Финальный ответ |
 | `error` | Ошибка |
 | `execute_ipc` | Запрос выполнить IPC и вернуть результат |
@@ -1106,7 +1152,8 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 | `tool_status` | `{ text }` | Статус инструмента |
 | `display_state` | `{ state, ... }` | Состояние аватара |
 | `desktop_action` | `{ action, target?, value? }` | Карточка подтверждения / макрос |
-| `done` | `{ reply_text, chat_id, message_id, ... }` | Финальный ответ AI |
+| `dice_roll` | `{ roll }` | Результат броска d20 (только если включён `dice_roll_enabled`), приходит сразу после броска |
+| `done` | `{ reply_text, chat_id, message_id, dice_roll?, ... }` | Финальный ответ AI |
 | `error` | `{ error }` | Ошибка |
 
 ### Dual-Delivery подтверждений
