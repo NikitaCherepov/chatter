@@ -2274,13 +2274,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       fromAddress = acct?.imap_user || userRow?.imap_user || '';
     } catch { /* ignore — non-critical preview */ }
 
-    // HitL confirmation: push desktop_action and wait for user decision
+    // HitL confirmation: push via SSE callback (TG) and/or WS (desktop)
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
 
     const emailAction = {
       type: 'desktop_action',
-      action: 'email_confirmation',
+      action: 'email_confirmation' as const,
       target: 'email',
       value: {
         confirmation_id: confirmationId,
@@ -2292,6 +2292,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
     };
 
+    // SSE path (TG): write into desktopActionSink — sendMessageThroughAi will propagate it via options.onDesktopAction
+    if (desktopActionSink) desktopActionSink.value = emailAction;
+
+    // WS path (desktop): push directly if desktop is online
     let emailSent = false;
     if (subagentExtra?.onDesktopAction) {
       await subagentExtra.onDesktopAction(emailAction);
@@ -2300,7 +2304,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       sendToDesktop(user.id, emailAction);
       emailSent = true;
     }
-    if (!emailSent) {
+    if (!emailSent && !desktopActionSink) {
       return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение отправки письма невозможно.' });
     }
 
@@ -4334,7 +4338,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'send_email' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 
