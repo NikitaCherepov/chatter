@@ -2264,14 +2264,12 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     // Basic validation before asking user
     if (!to || !subject || !body) return JSON.stringify({ status: 'error', message: 'Нужны to, subject и body.' });
 
-    // Determine sender address for preview (best-effort, do not fail if not found)
+    // Determine sender address for preview — same logic as runEmailSend uses
     let fromAddress = '';
     try {
-      const { getMailAccountForUser, normalizeMailProvider } = await import('./mail.js');
-      const userRow = getUserById(user.id) as any;
-      const activeProvider = normalizeMailProvider(userRow?.imap_provider) || normalizeMailProvider(provider);
-      const acct = activeProvider ? getMailAccountForUser(user.id, activeProvider) : undefined;
-      fromAddress = acct?.imap_user || userRow?.imap_user || '';
+      const { resolveUserMailAccount } = await import('./mail.js');
+      const acct = resolveUserMailAccount(user.id, provider);
+      fromAddress = acct?.imap_user || '';
     } catch { /* ignore — non-critical preview */ }
 
     // HitL confirmation: push via SSE callback (TG) and/or WS (desktop)

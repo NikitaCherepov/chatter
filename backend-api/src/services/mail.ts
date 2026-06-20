@@ -50,7 +50,7 @@ const getMailAccountForUser = (userId: number, provider: MailProvider) => db.pre
   WHERE user_id = ? AND provider = ?
 `).get(userId, provider) as MailAccountRecord | undefined;
 
-const resolveUserMailAccount = (userId: number, preferredProviderRaw?: string | null) => {
+export const resolveUserMailAccount = (userId: number, preferredProviderRaw?: string | null) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
   if (!user) return null;
 
