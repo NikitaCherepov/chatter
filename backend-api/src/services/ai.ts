@@ -794,6 +794,8 @@ You MUST adapt the narrative tone and flavor of your response based strictly on 
 - 10–19 (Success): Everything went smoothly. Standard, successful and clean execution.
 - 20 (Critical Success): Absolute triumph! Execute the task with epic grandeur, highly praise the user, or drop a fun easter egg.
 
+It MUST SEVERELY affect the story. This is the PRIORITY.
+
 CRITICAL SYSTEM RULE: Regardless of the roll result (even on a 1), if a tool call is required to fulfill the user's request, you MUST still initiate and execute the tool call normally to process actual data. The dice roll affects ONLY your narrative style and how you flavor the outcome, but it MUST NOT sabotage, block, or bypass the actual system mechanics or tool execution.
 `;
 
