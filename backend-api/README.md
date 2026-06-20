@@ -1090,7 +1090,7 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 
 ### Dual-Delivery подтверждений
 
-Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`) отправляются **одновременно** через SSE-колбэк (в TG inline-кнопки) и через WS (`sendToDesktop` в desktop_action). Кто первый ответил — резолвит Promise, второй канал игнорируется.
+Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`) доставляются через **один** из двух каналов: либо через `onDesktopAction` колбэк (если он передан — SSE для TG или WS для desktop), либо через `sendToDesktop` напрямую (fallback, если колбэка нет). Если одновременно онлайн и TG (через SSE), и desktop (через WS) — карточка уходит в оба канала, кто первый ответил — резолвит Promise, второй игнорируется. Дедупликация по `confirmation_id` на стороне клиента защищает от возможных дублей.
 
 ### Tool availability split
 
