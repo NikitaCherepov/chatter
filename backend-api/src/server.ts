@@ -18,6 +18,7 @@ import { getPendingConfirmation, deletePendingConfirmation } from './services/de
 import { getPcCommandsSettings, updatePcCommandsSettings, listPcCommandPolicies, createPcCommandPolicy, deletePcCommandPolicy } from './services/pc-commands.js';
 import { getPendingPcConfirmation, deletePendingPcConfirmation } from './services/pc-command-confirmations.js';
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
+import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -26,7 +27,7 @@ import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { VectorMemoryService } from './services/vector-memory.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt } from './services/prompts.js';
-import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret } from './services/mail.js';
+import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret, runEmailSend } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
@@ -2940,6 +2941,37 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   }
 });
 
+// ─── Email Send: Approve/reject pending email ──────────────────────────────
+
+app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const confirmationId = `${req.body?.confirmation_id || ''}`;
+  const approved = req.body?.approved === true;
+
+  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+
+  const pending = getPendingEmailConfirmation(confirmationId);
+  if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
+  if (pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+
+  if (!approved) {
+    deletePendingEmailConfirmation(confirmationId);
+    pending.reject(new Error('rejected_by_user'));
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  // Send the approved email
+  try {
+    deletePendingEmailConfirmation(confirmationId);
+    const result = await runEmailSend(userId, pending.to, pending.subject, pending.body, pending.provider);
+    pending.resolve(result);
+    return res.json({ ok: true, status: 'sent', result });
+  } catch (err: any) {
+    pending.reject(err);
+    return res.status(500).json({ error: 'email_send_failed', details: err?.message });
+  }
+});
+
 // ─── PC Commands: Settings ─────────────────────────────────────────────────
 
 app.get('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => {
@@ -3183,6 +3215,36 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
   } catch (err: any) {
     pending.reject(err);
     return res.status(500).json({ error: 'ssh_exec_failed', details: err?.message });
+  }
+});
+
+// ── Internal: Email Send confirmation (for TG bot) ─────────────────────────
+
+app.post('/internal/email/approve', internalAuth, async (req, res) => {
+  const confirmationId = `${req.body?.confirmation_id || ''}`;
+  const approved = req.body?.approved === true;
+  const userId = Number(req.body?.user_id);
+
+  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+
+  const pending = getPendingEmailConfirmation(confirmationId);
+  if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
+  if (Number.isFinite(userId) && pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+
+  if (!approved) {
+    deletePendingEmailConfirmation(confirmationId);
+    pending.reject(new Error('rejected_by_user'));
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  try {
+    deletePendingEmailConfirmation(confirmationId);
+    const result = await runEmailSend(pending.userId, pending.to, pending.subject, pending.body, pending.provider);
+    pending.resolve(result);
+    return res.json({ ok: true, status: 'sent', result });
+  } catch (err: any) {
+    pending.reject(err);
+    return res.status(500).json({ error: 'email_send_failed', details: err?.message });
   }
 });
 

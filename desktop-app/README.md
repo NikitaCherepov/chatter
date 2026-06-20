@@ -272,6 +272,7 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 | `suggest_macro` | Предложить макрос — рендерит карточку «Сохранить/Отклонить» в ChatPage |
 | `devops_confirmation` | Подтверждение SSH-команды — карточка с кнопками «Разрешить»/«Разрешить всегда»/«? Проверить»/«Отклонить» |
 | `pc_command_confirmation` | Подтверждение `execute_pc_command` — карточка команды на ПК. `ChatPage` обрабатывает её через общий `handleIncomingDesktopAction` во всех потоках `streamChatMessage`: обычная отправка, regenerate и regenerate-with-hint. |
+| `email_confirmation` | Подтверждение `send_email` — карточка с From, To, Subject и превью Body (через MarkdownRenderer). Кнопки «Отправить» / «Отклонить». Дедупликация по `confirmation_id`. |
 | `suggest_devops_runbook` | Предложение инструкции — карточка с кнопками «Сохранить»/«Проверить»/«Отклонить» |
 
 ## Макросы

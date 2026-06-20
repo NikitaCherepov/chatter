@@ -5185,6 +5185,50 @@ bot.action(/^devops:reject:(.+)$/, async (ctx) => {
     }
 });
 
+bot.action(/^email:allow:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    await ctx.answerCbQuery('Отправляю...');
+    (async () => {
+        try {
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/email/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 60000 }
+            );
+            const result = typeof resp.data?.result === 'string' ? resp.data.result : '';
+            await ctx.editMessageText(`✅ Письмо отправлено.\n${result ? `\n${result}` : ''}`).catch(() => {});
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка отправки письма: ${msg}`).catch(() => {});
+        }
+    })();
+});
+
+bot.action(/^email:reject:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    await ctx.answerCbQuery('Отклонено');
+    try {
+        await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/email/approve`,
+            { confirmation_id: confirmationId, approved: false, user_id: userId },
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
+        );
+        await ctx.editMessageText('❌ Отправка письма отклонена.');
+    } catch {
+        await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+    }
+});
+
 bot.action(/^devops:always:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
@@ -5487,6 +5531,30 @@ const processUserTextThroughAi = async (
                     } catch {
                         try {
                             await ctx.reply(`🔑 Обновление credentials: ${serverName}\n\n${reason}\n\nПрименить?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+                if (action?.action === 'email_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const fromAddr = action.value.from || '';
+                    const toAddr = action.value.to || '';
+                    const subject = action.value.subject || '';
+                    const bodyPreview = (action.value.body || '').slice(0, 1000);
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback('✅ Отправить', `email:allow:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `email:reject:${confirmationId}`),
+                        ]
+                    ]);
+                    const fromLine = fromAddr ? `От: ${fromAddr}\n` : '';
+                    const msgText = `📧 **Отправка письма**\n\n${fromLine}Кому: ${toAddr}\nТема: ${subject}\n\n\`\`\`\n${bodyPreview.replace(/```/g, "'''")}\n\`\`\`\n\nОтправить?`;
+                    try {
+                        await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
+                    } catch {
+                        try {
+                            await ctx.reply(`📧 Отправка письма\n\n${fromLine}Кому: ${toAddr}\nТема: ${subject}\n\n${bodyPreview}\n\nОтправить?`, keyboard);
                         } catch {
                             // ignore
                         }

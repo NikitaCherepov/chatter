@@ -392,6 +392,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 **Подтверждение команд (HitL):**
 
 - `POST /api/v1/devops/approve` — подтвердить/отклонить выполнение команды (`{ confirmation_id, approved: boolean, sudo_password?, save_sudo_password?, new_password? }`)
+- `POST /api/v1/email/approve` — подтвердить/отклонить отправку письма (`{ confirmation_id, approved: boolean }`). Резолвит pending Promise, при approve — вызывает `runEmailSend`.
 
 **Инструкции (runbooks):**
 
@@ -535,6 +536,8 @@ services/subagents/
 - DevOps SSH confirmation (для TG-бота):
   - `POST /internal/devops/approve` -> `{ confirmation_id, approved, user_id, sudo_password?, new_password? }` -> `{ ok, status, result? }`
   - `POST /internal/devops/servers/:id/policies` -> `{ user_id, pattern, auto_approve }` -> `{ id }` — создание SSH auto-approve policy
+- Email Send confirmation (для TG-бота):
+  - `POST /internal/email/approve` -> `{ confirmation_id, approved, user_id }` -> `{ ok, status, result? }`
 
 ## Лимиты по планам
 
@@ -737,7 +740,7 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `set_user_timezone` | Установка часового пояса |
 | `check_emails` | Поиск писем в почте |
 | `read_email_content` | Чтение содержимого письма |
-| `send_email` | Отправка письма |
+| `send_email` | Отправка письма (требует подтверждения пользователя — HitL-карточка `email_confirmation`) |
 | `save_note` | Сохранение заметки |
 | `list_my_notes` | Список заметок |
 | `read_note` | Чтение заметки |
@@ -1108,7 +1111,7 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 
 ### Dual-Delivery подтверждений
 
-Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`) доставляются через **один** из двух каналов: либо через `onDesktopAction` колбэк (если он передан — SSE для TG или WS для desktop), либо через `sendToDesktop` напрямую (fallback, если колбэка нет). Если одновременно онлайн и TG (через SSE), и desktop (через WS) — карточка уходит в оба канала, кто первый ответил — резолвит Promise, второй игнорируется. Дедупликация по `confirmation_id` на стороне клиента защищает от возможных дублей.
+Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `email_confirmation`) доставляются через **один** из двух каналов: либо через `onDesktopAction` колбэк (если он передан — SSE для TG или WS для desktop), либо через `sendToDesktop` напрямую (fallback, если колбэка нет). Если одновременно онлайн и TG (через SSE), и desktop (через WS) — карточка уходит в оба канала, кто первый ответил — резолвит Promise, второй игнорируется. Дедупликация по `confirmation_id` на стороне клиента защищает от возможных дублей.
 
 ### Tool availability split
 

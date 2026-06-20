@@ -337,6 +337,7 @@ export function ChatPage() {
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [emailConfirmations, setEmailConfirmations] = useState<Array<{ confirmation_id: string; from: string; to: string; subject: string; body: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
   const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
@@ -547,6 +548,21 @@ export function ChatPage() {
           return [...prev, {
             confirmation_id: val.confirmation_id!,
             command: val.command!,
+          }];
+        });
+      }
+    }
+    if (action.action === 'email_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; from?: string; to?: string; subject?: string; body?: string };
+      if (val.confirmation_id && val.to && val.subject && val.body) {
+        setEmailConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            from: val.from || '',
+            to: val.to!,
+            subject: val.subject!,
+            body: val.body!,
           }];
         });
       }
@@ -2409,6 +2425,75 @@ export function ChatPage() {
                           });
                         } catch {}
                         setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                      }}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Email Confirmation cards */}
+              {emailConfirmations.map((conf, confIdx) => (
+                <div key={`email-${confIdx}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>Отправка письма</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  {conf.from && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                      От: <span style={{ color: 'var(--text-primary)' }}>{conf.from}</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                    Кому: <span style={{ color: 'var(--text-primary)' }}>{conf.to}</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                    Тема: <span style={{ color: 'var(--text-primary)' }}>{conf.subject}</span>
+                  </div>
+                  <div style={{ fontSize: '12px', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                    <MarkdownRenderer content={conf.body} />
+                  </div>
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/email/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success('Письмо отправлено');
+                          setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка отправки письма');
+                        }
+                      }}
+                    >
+                      Отправить
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/email/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                          });
+                        } catch {}
+                        setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
                     >
                       Отклонить

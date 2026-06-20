@@ -2255,7 +2255,82 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   }
 
   if (toolName === 'read_email_content') return runEmailRead(user.id, typeof parsed.subject_part === 'string' ? parsed.subject_part : '', typeof parsed.provider === 'string' ? parsed.provider : '');
-  if (toolName === 'send_email') return runEmailSend(user.id, typeof parsed.to === 'string' ? parsed.to : '', typeof parsed.subject === 'string' ? parsed.subject : '', typeof parsed.body === 'string' ? parsed.body : '', typeof parsed.provider === 'string' ? parsed.provider : '');
+  if (toolName === 'send_email') {
+    const to: string = typeof parsed.to === 'string' ? parsed.to.trim() : '';
+    const subject: string = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';
+    const body: string = typeof parsed.body === 'string' ? parsed.body : '';
+    const provider: string = typeof parsed.provider === 'string' ? parsed.provider : '';
+
+    // Basic validation before asking user
+    if (!to || !subject || !body) return JSON.stringify({ status: 'error', message: 'Нужны to, subject и body.' });
+
+    // Determine sender address for preview (best-effort, do not fail if not found)
+    let fromAddress = '';
+    try {
+      const { getMailAccountForUser, normalizeMailProvider } = await import('./mail.js');
+      const userRow = getUserById(user.id) as any;
+      const activeProvider = normalizeMailProvider(userRow?.imap_provider) || normalizeMailProvider(provider);
+      const acct = activeProvider ? getMailAccountForUser(user.id, activeProvider) : undefined;
+      fromAddress = acct?.imap_user || userRow?.imap_user || '';
+    } catch { /* ignore — non-critical preview */ }
+
+    // HitL confirmation: push desktop_action and wait for user decision
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    const emailAction = {
+      type: 'desktop_action',
+      action: 'email_confirmation',
+      target: 'email',
+      value: {
+        confirmation_id: confirmationId,
+        from: fromAddress,
+        to,
+        subject,
+        body,
+        provider
+      }
+    };
+
+    let emailSent = false;
+    if (subagentExtra?.onDesktopAction) {
+      await subagentExtra.onDesktopAction(emailAction);
+      emailSent = true;
+    } else if (isDesktopOnline(user.id)) {
+      sendToDesktop(user.id, emailAction);
+      emailSent = true;
+    }
+    if (!emailSent) {
+      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение отправки письма невозможно.' });
+    }
+
+    // Wait for user response via WS/SSE → POST /api/v1/email/approve or /internal/email/approve
+    const { registerPendingEmailConfirmation } = await import('./email-confirmations.js');
+    try {
+      await new Promise<void>((resolve, reject) => {
+        registerPendingEmailConfirmation(confirmationId, {
+          userId: user.id,
+          to,
+          subject,
+          body,
+          provider,
+          resolve: () => resolve(),
+          reject,
+          createdAt: Date.now()
+        });
+      });
+      // Approved — actually send the email
+      return runEmailSend(user.id, to, subject, body, provider);
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил отправку письма.', to, subject });
+      }
+      if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', to, subject });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка подтверждения: ${err?.message || String(err)}`, to, subject });
+    }
+  }
   if (toolName === 'search_cold_memory') {
     const query = typeof parsed.query === 'string' ? parsed.query : '';
     const topK = Number.isFinite(Number(parsed.top_k)) ? Number(parsed.top_k) : 5;

@@ -153,7 +153,7 @@ export type DisplayStatePayload = {
 };
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'pc_command_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'chat_title_update';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'pc_command_confirmation' | 'email_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'chat_title_update';
   target?: 'notebook' | string;
   value?: unknown;
 };
