@@ -320,6 +320,13 @@ export function ChatPage() {
   const [diceRolling, setDiceRolling] = useState(false);
   const [diceValue, setDiceValue] = useState<number | null>(null);
   const [diceStatus, setDiceStatus] = useState<'idle' | 'rolling' | 'success' | 'crit' | 'fail' | 'crit_fail'>('idle');
+  const [diceMode, setDiceMode] = useState<'normal' | 'always_one' | 'always_twenty'>(() => {
+    try {
+      const saved = localStorage.getItem('chatter_dice_mode');
+      if (saved === 'always_one' || saved === 'always_twenty') return saved;
+    } catch { /* ignore */ }
+    return 'normal';
+  });
   const diceAnimTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -619,6 +626,15 @@ export function ChatPage() {
     handleDesktopAction(action);
   }, []);
 
+  // ── Dice Roll: переключение режима кубика по клику (normal → always_one → always_twenty → normal) ──
+  const cycleDiceMode = useCallback(() => {
+    setDiceMode((prev) => {
+      const next = prev === 'normal' ? 'always_one' : prev === 'always_one' ? 'always_twenty' : 'normal';
+      try { localStorage.setItem('chatter_dice_mode', next); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
   // ── Dice Roll: запуск анимации (быстрые случайные числа → замедление → фиксация) ──
   const startDiceRollAnimation = useCallback(() => {
     if (diceAnimTimer.current) clearTimeout(diceAnimTimer.current);
@@ -655,7 +671,7 @@ export function ChatPage() {
     let status: 'success' | 'crit' | 'fail' | 'crit_fail';
     if (roll === 1) status = 'crit_fail';
     else if (roll === 20) status = 'crit';
-    else if (roll >= 11) status = 'success';
+    else if (roll >= 10) status = 'success';
     else status = 'fail';
     setDiceStatus(status);
     try { sessionStorage.setItem('chatter_dice_roll', JSON.stringify({ roll, status })); } catch { /* ignore */ }
@@ -867,9 +883,9 @@ export function ChatPage() {
           }
         }
       },
-      isVoice ? { isVoice: true, preferredModel: preferredModel } : { preferredModel: preferredModel }
+      isVoice ? { isVoice: true, preferredModel: preferredModel, dice_mode: diceMode } : { preferredModel: preferredModel, dice_mode: diceMode }
     );
-  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus]);
+  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1218,9 +1234,9 @@ export function ChatPage() {
           setSending(false);
         },
       },
-      { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true }
+      { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode }
     );
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode]);
 
   const handleRegenerateWithHint = useCallback(async (assistantMsgId: number, hint: string) => {
     if (!activeChatId || sending || !hint.trim()) return;
@@ -1336,9 +1352,9 @@ export function ChatPage() {
           setSending(false);
         },
       },
-      { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true }
+      { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode }
     );
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);
@@ -2886,18 +2902,24 @@ export function ChatPage() {
                     : diceStatus === 'success' ? `${s.diceRoll} ${s.diceRollSuccess}`
                     : diceStatus === 'fail' ? `${s.diceRoll} ${s.diceRollFail}`
                     : diceStatus === 'crit_fail' ? `${s.diceRoll} ${s.diceRollCritFail}`
+                    : diceMode === 'always_one' ? `${s.diceRoll} ${s.diceRollForceFail}`
+                    : diceMode === 'always_twenty' ? `${s.diceRoll} ${s.diceRollForceCrit}`
                     : `${s.diceRoll} ${s.diceRollIdle}`
                   }
+                  onClick={cycleDiceMode}
+                  style={{ cursor: 'pointer' }}
                   title={
                     diceStatus === 'rolling' ? 'Бросок d20...'
                     : diceStatus === 'crit' ? `Критический успех! (${diceValue})`
                     : diceStatus === 'success' ? `Успех (${diceValue})`
                     : diceStatus === 'fail' ? `Неудача (${diceValue})`
                     : diceStatus === 'crit_fail' ? `Критический провал! (${diceValue})`
-                    : 'Режим кубика d20'
+                    : diceMode === 'always_one' ? 'Режим: всегда 1 (крит. провал). Клик для смены.'
+                    : diceMode === 'always_twenty' ? 'Режим: всегда 20 (крит. успех). Клик для смены.'
+                    : 'Режим кубика d20. Клик для смены режима.'
                   }
                 >
-                  {diceRolling || diceValue !== null ? diceValue : '🎲'}
+                  {diceRolling || diceValue !== null ? diceValue : (diceMode === 'always_one' ? '1' : diceMode === 'always_twenty' ? '20' : '🎲')}
                 </div>
               )}
 

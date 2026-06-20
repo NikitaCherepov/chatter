@@ -998,6 +998,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       skipUserHistory: Boolean(req.body?.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
+      ...(() => { const fv = resolveDiceForceValue(req.body?.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
@@ -2327,6 +2328,13 @@ app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
 
 const VALID_UI_KEYS = ['show_tokens', 'dice_roll_enabled'] as const;
 
+/** Преобразует dice_mode из body запроса в форсированное значение d20. */
+const resolveDiceForceValue = (mode: unknown): number | undefined => {
+  if (mode === 'always_one') return 1;
+  if (mode === 'always_twenty') return 20;
+  return undefined; // 'normal' или невалидное — случайный бросок
+};
+
 app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
   const user = getUserById(userId);
@@ -3482,6 +3490,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       skipUserHistory: Boolean(msg.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
+      ...(() => { const fv = resolveDiceForceValue(msg.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
       ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: async (stepText) => {
         await sendWsJson({ type: 'intermediate', text: stepText });

@@ -980,6 +980,22 @@
   box-shadow: 0 0 8px rgba(229, 57, 53, 0.5);
 }
 
+.diceRollForceFail {
+  border-color: #e53935;
+  border-style: dashed;
+  background-color: rgba(229, 57, 53, 0.08);
+  color: #e53935;
+  opacity: 0.85;
+}
+
+.diceRollForceCrit {
+  border-color: #ffc107;
+  border-style: dashed;
+  background-color: rgba(255, 193, 7, 0.08);
+  color: #ffa000;
+  opacity: 0.85;
+}
+
 @keyframes diceSpin {
   0% { transform: rotate(0deg) scale(1); }
   50% { transform: rotate(180deg) scale(1.1); }

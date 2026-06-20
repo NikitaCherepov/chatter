@@ -829,7 +829,7 @@ UI-настройки (отображение в десктопе) хранят�
 
 1. Пользователь отправляет сообщение.
 2. `sendMessageThroughAi` читает `ui_settings.dice_roll_enabled` (через `parseUiSettings`), передаётся как `diceRollMode: true`.
-3. Если включено — сервер **до начала запроса к LLM** бросает `Math.floor(Math.random() * 20) + 1` (1..20).
+3. Если включено — сервер **до начала запроса к LLM** бросает `Math.floor(Math.random() * 20) + 1` (1..20). Если клиент прислал `dice_mode: 'always_one' | 'always_twenty'` в body, сервер форсирует результат (1 или 20) через `diceRollForceValue` (хелпер `resolveDiceForceValue`). Режим хранится только на клиенте (localStorage десктопа), бэк stateless относительно режима.
 4. Сразу после броска вызывается `onDiceRoll(roll)` — клиент получает результат мгновенно, не дожидаясь ответа AI.
 5. Результат инджектится в начало `proSystemPrompt` через `buildDiceRollPrompt(roll)` (полный текст хинта см. в `services/ai.ts`).
 6. После завершения генерации `dice_roll` дублируется в `done` payload (как fallback на случай потери realtime-события).

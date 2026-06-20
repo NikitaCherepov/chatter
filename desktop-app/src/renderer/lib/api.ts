@@ -468,7 +468,7 @@ export async function streamChatMessage(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' }
 ) {
   // Update callbacks for this request
   if (callbacks) {
@@ -486,6 +486,7 @@ export async function streamChatMessage(
     if (options?.regenerate_hint) msg.regenerate_hint = options.regenerate_hint;
     if (options?.skip_user_history) msg.skip_user_history = true;
     if (options?.regenerate_from_history) msg.regenerate_from_history = true;
+    if (options?.dice_mode) msg.dice_mode = options.dice_mode;
     ws.send(JSON.stringify(msg));
     return;
   }
@@ -515,7 +516,7 @@ async function streamChatMessageSSE(
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' }
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
@@ -531,6 +532,7 @@ async function streamChatMessageSSE(
     if (options?.regenerate_hint) body.regenerate_hint = options.regenerate_hint;
     if (options?.skip_user_history) body.skip_user_history = true;
     if (options?.regenerate_from_history) body.regenerate_from_history = true;
+    if (options?.dice_mode) body.dice_mode = options.dice_mode;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',

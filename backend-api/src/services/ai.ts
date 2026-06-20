@@ -3769,6 +3769,7 @@ export const sendMessageThroughAi = async (
     isDesktop?: boolean;
     isVoice?: boolean;
     diceRollMode?: boolean;
+    diceRollForceValue?: number;
     onDesktopAction?: (action: DesktopActionPayload) => Promise<void> | void;
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
@@ -3982,7 +3983,12 @@ export const sendMessageThroughAi = async (
   // результат дублируется для восстановления в done-событии.
   let dicePromptHint = '';
   if (options?.diceRollMode) {
-    diceRollValue = Math.floor(Math.random() * 20) + 1; // 1..20
+    const force = options?.diceRollForceValue;
+    if (typeof force === 'number' && force >= 1 && force <= 20) {
+      diceRollValue = Math.floor(force);
+    } else {
+      diceRollValue = Math.floor(Math.random() * 20) + 1; // 1..20
+    }
     dicePromptHint = buildDiceRollPrompt(diceRollValue);
     // Отправляем результат сразу — клиент зафиксирует значение и остановит анимацию.
     try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
