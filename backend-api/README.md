@@ -799,6 +799,24 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 
 Новый инструмент автоматически попадёт под фильтрацию если его `function.name` совпадает с именем, добавленным в `disabledToolSet`. Нужно добавить имя инструмента в соответствующий блок флага в `ai.ts` (секция `// ── Feature flags → disabled tools ──`).
 
+### UI Settings
+
+UI-настройки (отображение в десктопе) хранятся в БД (`users.ui_settings`, JSON), привязаны к `effectiveUser` (linked TG user или сам user). Применяются на клиенте, сервер только хранит.
+
+Хелпер `parseUiSettings(user)` парсит JSON-колонку, фильтрует невалидные ключи/типы, возвращает объект. На клиенте `user?.ui_settings?.show_tokens !== false` означает «по умолчанию включено».
+
+**Ключи:**
+
+| Ключ | Тип | Default | Описание |
+|---|---|---|---|
+| `show_tokens` | boolean | `true` | Показывать счётчики токенов (бейджи у сообщений, reasoning-бейдж, топ-бар контекста) |
+
+**API:**
+
+- `GET /api/v1/user/ui-settings` — `{ settings: { show_tokens: true } }` (merge с дефолтами)
+- `PUT /api/v1/user/ui-settings` — `{ settings: { show_tokens: false } }` (валидация по whitelist `VALID_UI_KEYS`, merge с существующими)
+- Поле `ui_settings` также включено в `/api/v1/auth/me` (через `toAuthUserDto`)
+
 ### Клиентские инструменты — продолжение
 
 | Инструмент | Описание |
