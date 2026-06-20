@@ -179,13 +179,14 @@ export type ChatInfo = {
   created_at: number;
 };
 
-export async function getChats(): Promise<{ chats: ChatInfo[]; active_chat_id: number | null }> {
-  return apiFetch('/api/v1/chats');
+export async function getChats(limit = 25, offset = 0): Promise<{ chats: ChatInfo[]; active_chat_id: number | null }> {
+  return apiFetch(`/api/v1/chats?limit=${limit}&offset=${offset}`);
 }
 
 export type ChatSearchResult = {
   chat_id: number;
   chat_title: string;
+  created_at: number;
   snippet: string;
   rank: number;
 };

@@ -86,14 +86,19 @@ export const ensureActiveChat = (userId: number) => {
   return chatId;
 };
 
-export const listUserChats = (userId: number): ChatDto[] => {
+export const listUserChats = (userId: number, limit = 50, offset = 0): ChatDto[] => {
   const activeId = ensureActiveChat(userId);
+  const parsedLimit = Number.isFinite(limit) ? Math.floor(limit) : 50;
+  const parsedOffset = Number.isFinite(offset) ? Math.floor(offset) : 0;
+  const safeLimit = Math.max(1, Math.min(100, parsedLimit));
+  const safeOffset = Math.max(0, parsedOffset);
   const rows = db.prepare(`
     SELECT id, title, created_at, updated_at
     FROM user_chats
     WHERE user_id = ?
     ORDER BY updated_at DESC, id DESC
-  `).all(userId) as Array<{ id: number; title: string; created_at: string; updated_at: string }>;
+    LIMIT ? OFFSET ?
+  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; title: string; created_at: string; updated_at: string }>;
 
   return rows.map(row => ({
     id: row.id,
@@ -789,6 +794,7 @@ export const getLinkCodeForUser = (userId: number) => {
 export type SearchResult = {
   chat_id: number;
   chat_title: string;
+  created_at: number;
   snippet: string;
   rank: number;
 };
@@ -826,12 +832,13 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
 
   const results: SearchResult[] = [];
   for (const hit of chatHits) {
-    const chat = db.prepare('SELECT title FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string } | undefined;
+    const chat = db.prepare('SELECT title, created_at FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string; created_at: string } | undefined;
     if (!chat) continue;
     const snip = snippetStmt.get(userId, hit.chat_id, ftsQuery) as { snippet: string } | undefined;
     results.push({
       chat_id: hit.chat_id,
       chat_title: chat.title || 'Чат',
+      created_at: toUnix(chat.created_at),
       snippet: snip?.snippet || '',
       rank: hit.best_rank,
     });

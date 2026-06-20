@@ -726,9 +726,13 @@ app.delete('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
 
 app.get('/api/v1/chats', (req: AuthedRequest, res) => {
   const userId = effectiveUserId(req);
-  const chats = listUserChats(userId);
+  const limit = Number.parseInt(`${req.query.limit || '50'}`, 10);
+  const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
+  const chats = listUserChats(userId, limit, offset);
   const activeChatId = ensureActiveChat(userId);
-  res.json({ chats, active_chat_id: activeChatId });
+  const safeLimit = Math.max(1, Math.min(100, Number.isFinite(limit) ? limit : 50));
+  const safeOffset = Math.max(0, Number.isFinite(offset) ? offset : 0);
+  res.json({ chats, active_chat_id: activeChatId, limit: safeLimit, offset: safeOffset });
 });
 
 app.get('/api/v1/chats/search', (req: AuthedRequest, res) => {

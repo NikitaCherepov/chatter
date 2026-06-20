@@ -34,6 +34,7 @@ const MAX_IMAGES_STANDART = 5;
 const MAX_IMAGES_PRO = 10;
 const MAX_IMAGES_ADMIN = 20;
 const MESSAGE_PAGE_SIZE = 50;
+const CHAT_PAGE_SIZE = 25;
 
 const reasoningPanelVariants = {
   hidden: { opacity: 0, y: -16 },
@@ -305,6 +306,9 @@ export function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [loadingMoreChats, setLoadingMoreChats] = useState(false);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
@@ -402,9 +406,11 @@ export function ChatPage() {
   };
 
   const loadChats = async () => {
+    setLoadingChats(true);
     try {
-      const res = await api.getChats();
+      const res = await api.getChats(CHAT_PAGE_SIZE);
       setChats(res.chats);
+      setHasMoreChats(res.chats.length === CHAT_PAGE_SIZE);
       if (res.active_chat_id) {
         setActiveChatId(res.active_chat_id);
       } else if (res.chats.length > 0) {
@@ -412,8 +418,37 @@ export function ChatPage() {
       }
     } catch (err) {
       console.error('Failed to load chats:', err);
+    } finally {
+      setLoadingChats(false);
     }
   };
+
+  const loadMoreChats = useCallback(async () => {
+    if (loadingMoreChats || !hasMoreChats || searchQuery.trim().length >= 3) return;
+    setLoadingMoreChats(true);
+    try {
+      const res = await api.getChats(CHAT_PAGE_SIZE, chats.length);
+      setHasMoreChats(res.chats.length === CHAT_PAGE_SIZE);
+      if (res.chats.length > 0) {
+        setChats(prev => {
+          const seen = new Set(prev.map(chat => chat.id));
+          const next = res.chats.filter(chat => !seen.has(chat.id));
+          return [...prev, ...next];
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load more chats:', err);
+    } finally {
+      setLoadingMoreChats(false);
+    }
+  }, [loadingMoreChats, hasMoreChats, searchQuery, chats.length]);
+
+  const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+      loadMoreChats();
+    }
+  }, [loadMoreChats]);
 
   useEffect(() => { loadChats(); checkLinkStatus(); }, []);
 
@@ -1650,6 +1685,7 @@ export function ChatPage() {
 
         <motion.div
           className={s.sidebarContentBody}
+          onScroll={handleSidebarScroll}
           animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
           transition={{ duration: 0.15 }}
           style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
@@ -1667,6 +1703,9 @@ export function ChatPage() {
                   key={result.chat_id}
                   className={`${s.chatItem} ${result.chat_id === activeChatId ? s.chatItemActive : ''}`}
                   onClick={() => {
+                    setChats(prev => prev.some(chat => chat.id === result.chat_id)
+                      ? prev
+                      : [{ id: result.chat_id, title: result.chat_title, created_at: result.created_at }, ...prev]);
                     selectChat(result.chat_id);
                     handleSearchClear();
                   }}
@@ -1734,7 +1773,10 @@ export function ChatPage() {
               </div>
             ))}
             {chats.length === 0 && (
-              <div className={s.emptyChats}>Нет чатов</div>
+              <div className={s.emptyChats}>{loadingChats ? 'Загрузка...' : 'Нет чатов'}</div>
+            )}
+            {loadingMoreChats && (
+              <div className={s.emptyChats}>Загрузка...</div>
             )}
           </div>
           )}
