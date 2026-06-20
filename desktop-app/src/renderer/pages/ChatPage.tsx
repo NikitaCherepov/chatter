@@ -628,6 +628,11 @@ export function ChatPage() {
 
   // ── Dice Roll: переключение режима кубика по клику (normal → always_one → always_twenty → normal) ──
   const cycleDiceMode = useCallback(() => {
+    if (diceAnimTimer.current) { clearTimeout(diceAnimTimer.current); diceAnimTimer.current = null; }
+    setDiceRolling(false);
+    setDiceValue(null);
+    setDiceStatus('idle');
+    try { sessionStorage.removeItem('chatter_dice_roll'); } catch { /* ignore */ }
     setDiceMode((prev) => {
       const next = prev === 'normal' ? 'always_one' : prev === 'always_one' ? 'always_twenty' : 'normal';
       try { localStorage.setItem('chatter_dice_mode', next); } catch { /* ignore */ }
