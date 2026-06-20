@@ -448,6 +448,16 @@ const parseFeatureFlags = (user: UserRecord): Record<string, boolean> => {
   } catch { return {}; }
 };
 
+/** UI settings: configurable display options stored per-user. Default: show_tokens = true. */
+export const parseUiSettings = (user: UserRecord): { show_tokens?: boolean } => {
+  try {
+    const parsed = JSON.parse(user.ui_settings || '{}');
+    return {
+      ...(typeof parsed.show_tokens === 'boolean' ? { show_tokens: parsed.show_tokens } : {}),
+    };
+  } catch { return {}; }
+};
+
 const toAuthUserDto = (user: UserRecord) => {
   const linkedTelegramUser = getLinkedTelegramUser(user);
   const effectiveUser = linkedTelegramUser || user;
@@ -462,6 +472,7 @@ const toAuthUserDto = (user: UserRecord) => {
     selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
     core_memory: effectiveUser.core_memory ?? null,
+    ui_settings: parseUiSettings(effectiveUser),
   };
 };
 
@@ -2295,6 +2306,46 @@ app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
   }
   db.prepare('UPDATE users SET feature_flags = ? WHERE id = ?').run(JSON.stringify(flags), userId);
   return res.json({ ok: true, flags });
+});
+
+// ─── UI settings (display options stored per user) ──────────────────────────
+
+const VALID_UI_KEYS = ['show_tokens'] as const;
+
+app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const settings: Record<string, boolean> = { show_tokens: true };
+  try {
+    const raw = JSON.parse(user.ui_settings || '{}');
+    for (const key of VALID_UI_KEYS) {
+      if (typeof raw[key] === 'boolean') settings[key] = raw[key];
+    }
+  } catch { /* defaults */ }
+  return res.json({ settings });
+});
+
+app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const incoming = req.body?.settings;
+  if (!incoming || typeof incoming !== 'object') {
+    return res.status(400).json({ error: 'bad_settings' });
+  }
+  // load-merge: читаем существующие и мержим только валидные ключи
+  const user = getUserById(userId);
+  const existing: Record<string, boolean> = {};
+  try {
+    const raw = JSON.parse(user?.ui_settings || '{}');
+    for (const key of VALID_UI_KEYS) {
+      if (typeof raw[key] === 'boolean') existing[key] = raw[key];
+    }
+  } catch { /* empty */ }
+  for (const key of VALID_UI_KEYS) {
+    if (typeof incoming[key] === 'boolean') existing[key] = incoming[key];
+  }
+  db.prepare('UPDATE users SET ui_settings = ? WHERE id = ?').run(JSON.stringify(existing), userId);
+  return res.json({ ok: true, settings: existing });
 });
 
 // ─── Macros CRUD ────────────────────────────────────────────────────────────

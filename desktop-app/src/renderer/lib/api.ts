@@ -9,6 +9,10 @@ type Tokens = {
   refresh_expires_in: number;
 };
 
+export type UiSettings = {
+  show_tokens?: boolean;
+};
+
 type User = {
   id: number;
   name: string | null;
@@ -19,6 +23,7 @@ type User = {
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
   core_memory: string | null;
+  ui_settings?: UiSettings;
 };
 
 // ---------- Token storage ----------
@@ -895,6 +900,20 @@ export async function setFeatureFlags(flags: Partial<FeatureFlags>): Promise<{ o
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ flags }),
+  });
+}
+
+// ---------- UI settings ----------
+
+export async function getUiSettings(): Promise<{ settings: UiSettings }> {
+  return apiFetch('/api/v1/user/ui-settings');
+}
+
+export async function setUiSettings(settings: Partial<UiSettings>): Promise<{ ok: boolean; settings: UiSettings }> {
+  return apiFetch('/api/v1/user/ui-settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ settings }),
   });
 }
 

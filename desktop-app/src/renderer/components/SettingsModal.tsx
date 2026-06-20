@@ -135,6 +135,10 @@ export function SettingsModal({ onClose }: Props) {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsSavingId, setModelsSavingId] = useState<string | null>(null);
 
+  // UI settings (app tab)
+  const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
+  const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
+
   // Load account data
   useEffect(() => {
     if (user) {
@@ -183,6 +187,35 @@ export function SettingsModal({ onClose }: Props) {
       }).finally(() => setModelsLoading(false));
     }
   }, [section]);
+
+  // Load UI settings when app tab opens
+  useEffect(() => {
+    if (section === 'app') {
+      api.getUiSettings()
+        .then((res) => setUiSettingsState(res.settings))
+        .catch(() => {});
+    }
+  }, [section]);
+
+  const handleToggleShowTokens = async () => {
+    const newValue = !(uiSettings.show_tokens !== false);
+    const prev = uiSettings;
+    setUiSettingsState({ show_tokens: newValue });
+    setUiSettingsSaving(true);
+    try {
+      const res = await api.setUiSettings({ show_tokens: newValue });
+      setUiSettingsState(res.settings);
+      // Обновляем user в AuthProvider чтобы ChatPage сразу перерисовался
+      if (user) {
+        setUser({ ...user, ui_settings: res.settings });
+      }
+    } catch {
+      setUiSettingsState(prev); // rollback
+      toast.error('Не удалось сохранить настройку');
+    } finally {
+      setUiSettingsSaving(false);
+    }
+  };
 
   // Save handler for a single model's settings
   const handleSaveModelSettings = async (modelId: string, settings: api.ModelSettings) => {
@@ -935,6 +968,15 @@ export function SettingsModal({ onClose }: Props) {
                     </svg>
                   </button>
                 </div>
+              </div>
+
+              <div className={s.fieldGroup}>
+                <Checkbox
+                  checked={uiSettings.show_tokens !== false}
+                  onChange={handleToggleShowTokens}
+                  label="Показывать токены"
+                  disabled={uiSettingsSaving}
+                />
               </div>
             </div>
           )}

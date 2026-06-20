@@ -38,6 +38,7 @@ export type UserRecord = {
   feature_flags?: string | null;
   reasoning_level?: string | null;
   model_settings?: string | null;
+  ui_settings?: string | null;
 };
 
 export type ChatDto = {

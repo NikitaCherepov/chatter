@@ -61,6 +61,7 @@ type MessageItemProps = {
   isRegenHintOpen: boolean;
   sending: boolean;
   regenHintText: string;
+  showTokens: boolean;
   resolveImageUrl: (url: string) => string;
   onSetMessages: React.Dispatch<React.SetStateAction<api.Message[]>>;
   onSetViewerImageSrc: (src: string) => void;
@@ -84,6 +85,7 @@ const MessageItem = React.memo(function MessageItem({
   isRegenHintOpen,
   sending,
   regenHintText,
+  showTokens,
   resolveImageUrl,
   onSetMessages,
   onSetViewerImageSrc,
@@ -135,7 +137,7 @@ const MessageItem = React.memo(function MessageItem({
             }}
             title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
           >
-            <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
+            <span>Рассуждение{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -205,7 +207,7 @@ const MessageItem = React.memo(function MessageItem({
             )}
           </>
         )}
-        {typeof msg.token_count === 'number' && msg.token_count > 0 && (
+        {showTokens && typeof msg.token_count === 'number' && msg.token_count > 0 && (
           <span className={s.tokenBadge} title="Локальная оценка токенов сообщения (без reasoning)">
             {msg.token_count} tk
           </span>
@@ -291,6 +293,7 @@ function getMaxImagesForPlan(plan: string, isAdmin: number): number {
 export function ChatPage() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
+  const showTokens = user?.ui_settings?.show_tokens !== false;
 
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
@@ -1792,7 +1795,7 @@ export function ChatPage() {
                 </div>
                 )}
               </div>
-              {contextTokens && (
+              {showTokens && contextTokens && (
                 <div className={s.contextTokensCompact} title={`Сообщений: ${contextTokens.active_messages} (архив: ${contextTokens.archived_messages})\nТокены промпта: ${contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}${contextTokens.reasoning_tokens > 0 ? `\nReasoning: ${contextTokens.reasoning_tokens.toLocaleString('ru-RU')} tk` : ''}`}>
                   <span className={s.contextTokensValue}>{contextTokens.messages_tokens.toLocaleString('ru-RU')}</span>
                   <span className={s.contextTokensLabel}> tk</span>
@@ -1822,6 +1825,7 @@ export function ChatPage() {
                   isRegenHintOpen={regenHintMsgId === msg.id}
                   sending={sending}
                   regenHintText={regenHintText}
+                  showTokens={showTokens}
                   resolveImageUrl={resolveImageUrl}
                   onSetMessages={setMessages}
                   onSetViewerImageSrc={setViewerImageSrc}
@@ -1870,7 +1874,7 @@ export function ChatPage() {
                         }}
                         title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
                       >
-                        <span>Рассуждение{typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
+                        <span>Рассуждение{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <polyline points="6 9 12 15 18 9" />
                         </svg>
