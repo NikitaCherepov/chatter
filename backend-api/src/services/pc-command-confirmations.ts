@@ -15,8 +15,8 @@ type ExecutePayload = {
 };
 
 type FileActionPayload = {
-  ipcType: 'read_file' | 'write_file';
-  ipcPayload: { file_path: string; start_line?: number; max_lines?: number; content?: string; mode?: 'overwrite' | 'append' };
+  ipcType: 'read_file' | 'write_file' | 'edit_file_lines';
+  ipcPayload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean; content?: string; mode?: 'overwrite' | 'append'; end_line?: number; new_content?: string };
 };
 
 type ActionPayload = ExecutePayload | FileActionPayload;

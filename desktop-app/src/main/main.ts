@@ -612,14 +612,15 @@ function createWindow() {
     });
   });
 
-  // ── File Action: read file natively (UTF-8, paginated, .docx supported) ──
+  // ── File Action: read file natively (UTF-8, paginated, .docx supported, line numbers) ──
 
-  ipcMain.handle('read-file', async (_event, payload: { file_path: string; start_line?: number; max_lines?: number }) => {
+  ipcMain.handle('read-file', async (_event, payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => {
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
 
     const startLine = typeof payload?.start_line === 'number' && payload.start_line > 0 ? Math.floor(payload.start_line) : 1;
     const maxLines = typeof payload?.max_lines === 'number' && payload.max_lines > 0 ? Math.min(Math.floor(payload.max_lines), 2000) : 500;
+    const showLineNumbers = payload?.line_numbers === true;
 
     const resolved = path.resolve(filePath);
 
@@ -639,15 +640,20 @@ function createWindow() {
       const allLines = fullText.split('\n');
       const totalLines = allLines.length;
       const endLine = Math.min(startLine + maxLines - 1, totalLines);
-      const lines = allLines.slice(startLine - 1, endLine);
+      const sliced = allLines.slice(startLine - 1, endLine);
+
+      const formatted = showLineNumbers
+        ? sliced.map((line, i) => `${String(startLine + i).padStart(6, ' ')}\t${line}`)
+        : sliced;
 
       return {
-        content: lines.join('\n'),
+        content: formatted.join('\n'),
         start_line: startLine,
-        read_lines: lines.length,
+        read_lines: sliced.length,
         total_lines: totalLines,
         encoding: 'utf-8',
         format: 'docx',
+        line_numbers: showLineNumbers,
       };
     }
 
@@ -673,12 +679,17 @@ function createWindow() {
     const totalLines = currentLine; // last line number seen
     fileStream.destroy();
 
+    const formatted = showLineNumbers
+      ? lines.map((line, i) => `${String(startLine + i).padStart(6, ' ')}\t${line}`)
+      : lines;
+
     return {
-      content: lines.join('\n'),
+      content: formatted.join('\n'),
       start_line: startLine,
       read_lines: lines.length,
       total_lines: totalLines,
       encoding: 'utf-8',
+      line_numbers: showLineNumbers,
     };
   });
 
@@ -737,6 +748,53 @@ function createWindow() {
 
     const bytesWritten = Buffer.byteLength(content, 'utf-8');
     return { ok: true, bytes_written: bytesWritten, mode };
+  });
+
+  // ── File Action: edit file lines (surgical splice) ──
+
+  ipcMain.handle('edit-file-lines', async (_event, payload: { file_path: string; start_line: number; end_line: number; new_content: string }) => {
+    const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
+    if (!filePath) throw new Error('file_path_required');
+
+    const startLine = typeof payload?.start_line === 'number' ? Math.floor(payload.start_line) : 0;
+    const endLine = typeof payload?.end_line === 'number' ? Math.floor(payload.end_line) : 0;
+    const newContent = typeof payload?.new_content === 'string' ? payload.new_content : '';
+
+    if (startLine < 1) throw new Error('start_line must be >= 1');
+
+    const resolved = path.resolve(filePath);
+
+    // Read entire file and split into lines
+    const rawData = await fs.promises.readFile(resolved, 'utf-8');
+    const lines = rawData.split('\n');
+    const totalLinesBefore = lines.length;
+
+    // Bounds check
+    if (startLine > lines.length + 1) {
+      throw new Error(`start_line (${startLine}) выходит за пределы файла (всего строк: ${lines.length})`);
+    }
+
+    // Convert 1-indexed line numbers to 0-indexed array positions
+    const startIndex = startLine - 1;
+    const deleteCount = endLine >= startLine ? endLine - startLine + 1 : 0;
+
+    // Split new content into lines
+    const newLines = newContent ? newContent.split('\n') : [];
+
+    // Splice: remove old lines, insert new ones
+    lines.splice(startIndex, deleteCount, ...newLines);
+
+    // Write back
+    await fs.promises.writeFile(resolved, lines.join('\n'), { encoding: 'utf-8' });
+
+    const totalLinesAfter = lines.length;
+    return {
+      ok: true,
+      lines_removed: deleteCount,
+      lines_added: newLines.length,
+      total_lines_before: totalLinesBefore,
+      total_lines_after: totalLinesAfter,
+    };
   });
 
   // ── Visual Control: capture screen (all monitors) ──

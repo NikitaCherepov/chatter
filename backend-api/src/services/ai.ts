@@ -1623,9 +1623,12 @@ const buildReadFileTool = () => {
 - Нужно прочитать содержимое файла (код, конфиг, лог, текст, Word-документ)
 - Пользователь просит показать или проанализировать файл
 - Нужно прочитать часть большого файла (постранично)
+- Нужно узнать точные номера строк перед использованием edit_file_lines
 
 Возвращает UTF-8 текст с указанием номера начальной строки и общего количества строк.
-Поддерживает пагинацию: если файл большой, читай его частями через start_line/max_lines.`,
+Поддерживает пагинацию: если файл большой, читай его частями через start_line/max_lines.
+
+ВАЖНО для edit_file_lines: Перед редактированием ВСЕГДА вызывай read_file с line_numbers=true и нужным start_line/max_lines, чтобы увидеть точные номера строк. Это исключит ошибки при указании start_line/end_line в edit_file_lines.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1635,11 +1638,15 @@ const buildReadFileTool = () => {
           },
           start_line: {
             type: 'number',
-            description: 'С какой строки начинать чтение (нумерация с 1). По умолчанию 1.'
+            description: 'С какой строки начинать чтение (нумерация с 1). По умолчанию 1. Используй для чтения конкретного фрагмента файла.'
           },
           max_lines: {
             type: 'number',
-            description: 'Максимум строк для чтения за один вызов (по умолчанию 500, максимум 2000).'
+            description: 'Сколько строк прочитать (по умолчанию 500, максимум 2000). Чтобы прочитать строки 10–25: start_line=10, max_lines=16.'
+          },
+          line_numbers: {
+            type: 'boolean',
+            description: 'Если true — каждая строка в контенте будет иметь префикс с номером строки (формат: "     1\\tсодержимое"). Обязательно используй true перед edit_file_lines, чтобы увидеть точные номера строк. По умолчанию false.'
           }
         },
         required: ['file_path']
@@ -1682,6 +1689,49 @@ const buildWriteFileTool = () => {
           }
         },
         required: ['file_path', 'content']
+      }
+    }
+  };
+};
+
+/** Build edit_file_lines tool — surgically replace specific lines in a file */
+const buildEditFileLinesTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'edit_file_lines',
+      description: `Точечно заменяет строки в файле на новый текст. Работает как хирургический скальпель — не перезаписывает файл целиком.
+Поддерживает текстовые файлы (.txt, .md, .log, .json, .js, .ts, .py и т.д.). Для .docx используй read_file + write_file (overwrite).
+
+ВАЖНО: Сначала ВСЕГДА используй read_file (с start_line и max_lines), чтобы узнать точные номера строк. Нумерация строк начинается с 1.
+
+Сценарии:
+- Заменить строки 10-15 на новый текст: start_line=10, end_line=15, new_content="новый текст"
+- Вставить текст после строки 5 (без удаления): start_line=6, end_line=5, new_content="вставленный текст"
+- Удалить строки 20-30: start_line=20, end_line=30, new_content=""
+
+Всегда требует подтверждения пользователя (HitL-карточка с diff-превью).`,
+      parameters: {
+        type: 'object',
+        properties: {
+          file_path: {
+            type: 'string',
+            description: 'Полный путь к файлу на ПК пользователя.'
+          },
+          start_line: {
+            type: 'number',
+            description: 'Номер строки, с которой начать замену (включительно, нумерация с 1).'
+          },
+          end_line: {
+            type: 'number',
+            description: 'Номер строки, на которой закончить замену (включительно). Чтобы вставить текст без удаления, укажи end_line = start_line - 1.'
+          },
+          new_content: {
+            type: 'string',
+            description: 'Новый текст для вставки вместо старых строк. Пустая строка = удаление строк.'
+          }
+        },
+        required: ['file_path', 'start_line', 'end_line', 'new_content']
       }
     }
   };
@@ -3274,6 +3324,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     const startLine = typeof parsed.start_line === 'number' && parsed.start_line > 0 ? Math.floor(parsed.start_line) : 1;
     const maxLines = typeof parsed.max_lines === 'number' && parsed.max_lines > 0 ? Math.min(Math.floor(parsed.max_lines), 2000) : 500;
+    const lineNumbers = parsed.line_numbers === true;
 
     // Desktop must be online
     if (!isDesktopOnline(user.id)) {
@@ -3287,7 +3338,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (settings.file_read_enabled) {
       // Execute immediately via WS IPC
       try {
-        const result = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: startLine, max_lines: maxLines }, 30000, signal);
+        const result = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: startLine, max_lines: maxLines, line_numbers: lineNumbers }, 30000, signal);
         return JSON.stringify({
           status: 'success',
           file_path: filePath,
@@ -3308,7 +3359,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         userId: user.id,
         kind: 'file_action',
         label: `read: ${filePath}`,
-        payload: { ipcType: 'read_file', ipcPayload: { file_path: filePath, start_line: startLine, max_lines: maxLines } },
+        payload: { ipcType: 'read_file', ipcPayload: { file_path: filePath, start_line: startLine, max_lines: maxLines, line_numbers: lineNumbers } },
         resolve,
         reject,
         createdAt: Date.now()
@@ -3482,6 +3533,136 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
       }
       return JSON.stringify({ status: 'error', message: `Ошибка записи файла: ${err?.message || String(err)}`, file_path: filePath });
+    }
+  }
+
+  // ── File Action: edit_file_lines (surgical line replacement, always HitL) ──
+
+  if (toolName === 'edit_file_lines') {
+    const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+
+    const startLine = typeof parsed.start_line === 'number' ? Math.floor(parsed.start_line) : 0;
+    const endLine = typeof parsed.end_line === 'number' ? Math.floor(parsed.end_line) : 0;
+    const newContent: string = typeof parsed.new_content === 'string' ? parsed.new_content : '';
+
+    if (startLine < 1) return JSON.stringify({ status: 'error', message: 'start_line должен быть >= 1' });
+    if (endLine < 0) return JSON.stringify({ status: 'error', message: 'end_line должен быть >= 0' });
+    if (endLine !== 0 && endLine < startLine - 1) {
+      return JSON.stringify({ status: 'error', message: 'end_line должен быть >= start_line - 1 (для вставки укажи end_line = start_line - 1)' });
+    }
+
+    // Block .docx — use read_file + write_file instead
+    const ext = filePath.toLowerCase().split('.').pop();
+    if (ext === 'docx') {
+      return JSON.stringify({ status: 'error', message: 'edit_file_lines не поддерживает .docx. Используй read_file + write_file (overwrite).' });
+    }
+
+    // Desktop must be online
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Редактирование файла невозможно.' });
+    }
+
+    // Pre-read old lines for diff preview (via IPC read_file)
+    let oldLinesPreview = '';
+    try {
+      const readResult = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: 1, max_lines: 5000 }, 30000, signal);
+      const fullContent = typeof readResult === 'object' && readResult !== null && 'content' in readResult
+        ? String((readResult as any).content)
+        : typeof readResult === 'string' ? readResult : '';
+      const allLines = fullContent.split('\n');
+      const totalLines = allLines.length;
+
+      if (startLine > totalLines + 1) {
+        return JSON.stringify({ status: 'error', message: `start_line (${startLine}) выходит за пределы файла (всего строк: ${totalLines}).` });
+      }
+
+      const sliceStart = startLine - 1;
+      const sliceEnd = endLine >= startLine ? Math.min(endLine, totalLines) : startLine - 1;
+      const oldSlice = allLines.slice(sliceStart, sliceEnd);
+      oldLinesPreview = oldSlice.join('\n');
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Не удалось прочитать файл для diff: ${err?.message || String(err)}`, file_path: filePath });
+    }
+
+    // Always requires user confirmation — HitL
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
+    const confirmationPromise = new Promise<any>((resolve, reject) => {
+      registerPendingPcConfirmation(confirmationId, {
+        userId: user.id,
+        kind: 'file_action',
+        label: `edit lines ${startLine}-${endLine}: ${filePath}`,
+        payload: { ipcType: 'edit_file_lines', ipcPayload: { file_path: filePath, start_line: startLine, end_line: endLine, new_content: newContent } },
+        resolve,
+        reject,
+        createdAt: Date.now()
+      });
+    });
+
+    const newContentPreview = newContent.slice(0, 2000);
+    const oldLinesPreviewTruncated = oldLinesPreview.slice(0, 2000);
+
+    const confirmationAction: DesktopActionPayload = {
+      action: 'edit_file_lines_confirmation',
+      value: {
+        confirmation_id: confirmationId,
+        file_path: filePath,
+        start_line: startLine,
+        end_line: endLine,
+        old_content_preview: oldLinesPreviewTruncated,
+        new_content_preview: newContentPreview,
+      }
+    };
+
+    let sent = false;
+    try {
+      if (subagentExtra?.onDesktopAction) {
+        await subagentExtra.onDesktopAction(confirmationAction);
+        sent = true;
+        if (isDesktopOnline(user.id)) {
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
+      } else {
+        sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+      }
+    } catch (err) {
+      console.error('[edit_file_lines] failed to send confirmation action:', err);
+    }
+
+    console.log('[edit_file_lines] confirmation dispatch', {
+      userId: user.id,
+      confirmationId,
+      filePath,
+      startLine,
+      endLine,
+      via: subagentExtra?.onDesktopAction ? 'callback+ws' : 'ws_registry',
+      sent,
+    });
+
+    if (!sent) {
+      deletePendingPcConfirmation(confirmationId);
+      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+    }
+
+    try {
+      const result = await confirmationPromise;
+      return JSON.stringify({
+        status: 'success',
+        file_path: filePath,
+        ...(typeof result === 'object' && result !== null ? result : {}),
+        message: `Строки ${startLine}-${endLine} заменены в файле: ${filePath}`,
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил редактирование файла.', file_path: filePath });
+      }
+      if (err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка редактирования файла: ${err?.message || String(err)}`, file_path: filePath });
     }
   }
 
@@ -4011,6 +4192,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'execute_pc_command') return 'Выполняю команду на ПК...';
   if (toolName === 'read_file') return 'Читаю файл...';
   if (toolName === 'write_file') return 'Записываю файл...';
+  if (toolName === 'edit_file_lines') return 'Редактирую файл...';
   if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
   if (toolName === 'execute_visual_click') return 'Жду подтверждения клика...';
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
@@ -4196,6 +4378,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('execute_pc_command');
     disabledToolSet.add('read_file');
     disabledToolSet.add('write_file');
+    disabledToolSet.add('edit_file_lines');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
   }
@@ -4224,6 +4407,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('execute_pc_command');
     disabledToolSet.add('read_file');
     disabledToolSet.add('write_file');
+    disabledToolSet.add('edit_file_lines');
     disabledToolSet.add('suggest_devops_runbook');
     disabledToolSet.add('install_ssh_public_key');
     disabledToolSet.add('suggest_server_creds_update');
@@ -4311,7 +4495,7 @@ export const sendMessageThroughAi = async (
     buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
     buildExecutePcCommandTool(),
-    buildReadFileTool(), buildWriteFileTool(),
+    buildReadFileTool(), buildWriteFileTool(), buildEditFileLinesTool(),
     buildCaptureScreenTool(), buildExecuteVisualClickTool(),
   ];
   // Tools that require a desktop client UI — only when isDesktop
@@ -4676,7 +4860,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'write_file' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 

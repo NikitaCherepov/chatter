@@ -5577,6 +5577,42 @@ const processUserTextThroughAi = async (
                         }
                     }
                 }
+                if (action?.action === 'edit_file_lines_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const filePath = action.value.file_path || '';
+                    const startLine = action.value.start_line || 0;
+                    const endLine = action.value.end_line || 0;
+                    const oldPreview = (action.value.old_content_preview || '').slice(0, 600);
+                    const newPreview = (action.value.new_content_preview || '').slice(0, 600);
+
+                    let msgText = `✏️ **Редактирование файла**\n\n\`${filePath.replace(/`/g, '\\`')}\`\nСтроки: ${startLine}–${endLine}\n`;
+                    if (oldPreview) {
+                        msgText += `\n❌ **Удаляется:**\n\`\`\`\n${oldPreview.replace(/```/g, "'''")}\n\`\`\``;
+                    }
+                    if (newPreview) {
+                        msgText += `\n✅ **Добавляется:**\n\`\`\`\n${newPreview.replace(/```/g, "'''")}\n\`\`\``;
+                    }
+                    if (!newPreview && oldPreview) {
+                        msgText += `\n_(строки будут удалены)_`;
+                    }
+                    msgText += '\n\nПрименить изменения?';
+
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback('✅ Применить', `fileconfirm:allow:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `fileconfirm:reject:${confirmationId}`),
+                        ]
+                    ]);
+                    try {
+                        await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
+                    } catch {
+                        try {
+                            await ctx.reply(`✏️ Редактирование файла\n\n${filePath}\nСтроки: ${startLine}–${endLine}\n\nПрименить изменения?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
                 if (action?.action === 'devops_confirmation' && action?.value?.confirmation_id) {
                     const confirmationId = action.value.confirmation_id;
                     const serverName = action.value.server_name || '';

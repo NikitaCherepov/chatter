@@ -355,6 +355,7 @@ export function ChatPage() {
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
+  const [editFileLinesConfirmations, setEditFileLinesConfirmations] = useState<Array<{ confirmation_id: string; file_path: string; start_line: number; end_line: number; old_content_preview?: string; new_content_preview?: string }>>([]);
   const [emailConfirmations, setEmailConfirmations] = useState<Array<{ confirmation_id: string; from: string; to: string; subject: string; body: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
@@ -615,6 +616,22 @@ export function ChatPage() {
             content_preview: val.content_preview,
             start_line: val.start_line,
             max_lines: val.max_lines,
+          }];
+        });
+      }
+    }
+    if (action.action === 'edit_file_lines_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; file_path?: string; start_line?: number; end_line?: number; old_content_preview?: string; new_content_preview?: string };
+      if (val.confirmation_id && val.file_path) {
+        setEditFileLinesConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            file_path: val.file_path!,
+            start_line: val.start_line || 0,
+            end_line: val.end_line || 0,
+            old_content_preview: val.old_content_preview,
+            new_content_preview: val.new_content_preview,
           }];
         });
       }
@@ -2681,6 +2698,87 @@ export function ChatPage() {
                           });
                         } catch {}
                         setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                      }}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Edit File Lines Confirmation cards */}
+              {editFileLinesConfirmations.map((conf, confIdx) => (
+                <div key={`edit-${confIdx}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                    <span className={s.suggestMacroTitle}>
+                      Редактирование: строки {conf.start_line}–{conf.end_line}
+                    </span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.file_path}</code>
+                  </div>
+                  {conf.old_content_preview && (
+                    <div style={{ fontSize: '12px', marginTop: '6px' }}>
+                      <div style={{ color: '#e74c3c', marginBottom: '2px', fontWeight: 600 }}>Удаляется (строки {conf.start_line}–{conf.end_line}):</div>
+                      <div style={{ padding: '8px', background: 'rgba(231, 76, 60, 0.08)', borderRadius: '6px', borderLeft: '3px solid #e74c3c', maxHeight: '150px', overflow: 'auto' }}>
+                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.old_content_preview.slice(0, 1000)}</pre>
+                      </div>
+                    </div>
+                  )}
+                  {conf.new_content_preview && (
+                    <div style={{ fontSize: '12px', marginTop: '6px' }}>
+                      <div style={{ color: '#27ae60', marginBottom: '2px', fontWeight: 600 }}>Добавляется:</div>
+                      <div style={{ padding: '8px', background: 'rgba(39, 174, 96, 0.08)', borderRadius: '6px', borderLeft: '3px solid #27ae60', maxHeight: '150px', overflow: 'auto' }}>
+                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.new_content_preview.slice(0, 1000)}</pre>
+                      </div>
+                    </div>
+                  )}
+                  {!conf.new_content_preview && conf.old_content_preview && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', fontStyle: 'italic' }}>
+                      (новый контент пуст — строки будут удалены)
+                    </div>
+                  )}
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success('Строки заменены');
+                          setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка выполнения');
+                        }
+                      }}
+                    >
+                      Применить
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                          });
+                        } catch {}
+                        setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
                     >
                       Отклонить
