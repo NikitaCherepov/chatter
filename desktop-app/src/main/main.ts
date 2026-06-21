@@ -612,7 +612,7 @@ function createWindow() {
     });
   });
 
-  // ── File Action: read file natively (UTF-8, paginated) ──
+  // ── File Action: read file natively (UTF-8, paginated, .docx supported) ──
 
   ipcMain.handle('read-file', async (_event, payload: { file_path: string; start_line?: number; max_lines?: number }) => {
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
@@ -629,7 +629,29 @@ function createWindow() {
       throw new Error('not_a_file');
     }
 
-    // Read file line by line using readline (memory-efficient for large files)
+    const ext = path.extname(resolved).toLowerCase();
+
+    // .docx: extract text via mammoth, then paginate by lines
+    if (ext === '.docx') {
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ path: resolved });
+      const fullText: string = result.value || '';
+      const allLines = fullText.split('\n');
+      const totalLines = allLines.length;
+      const endLine = Math.min(startLine + maxLines - 1, totalLines);
+      const lines = allLines.slice(startLine - 1, endLine);
+
+      return {
+        content: lines.join('\n'),
+        start_line: startLine,
+        read_lines: lines.length,
+        total_lines: totalLines,
+        encoding: 'utf-8',
+        format: 'docx',
+      };
+    }
+
+    // Default: read text file line by line (memory-efficient for large files)
     const readline = require('readline');
     const fileStream = fs.createReadStream(resolved, { encoding: 'utf-8' });
     const rl = readline.createInterface({
