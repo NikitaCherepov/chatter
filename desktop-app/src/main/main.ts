@@ -682,7 +682,7 @@ function createWindow() {
     };
   });
 
-  // ── File Action: write file natively (UTF-8, overwrite or append) ──
+  // ── File Action: write file natively (UTF-8, overwrite or append, .docx supported) ──
 
   ipcMain.handle('write-file', async (_event, payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => {
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
@@ -692,6 +692,7 @@ function createWindow() {
     const mode = payload?.mode === 'append' ? 'append' : 'overwrite';
 
     const resolved = path.resolve(filePath);
+    const ext = path.extname(resolved).toLowerCase();
 
     // Ensure parent directory exists
     const parentDir = path.dirname(resolved);
@@ -699,6 +700,35 @@ function createWindow() {
       fs.mkdirSync(parentDir, { recursive: true });
     }
 
+    // .docx: generate valid Word document via docx package
+    if (ext === '.docx') {
+      if (mode === 'append') {
+        throw new Error("Режим 'append' не поддерживается для .docx. Прочитайте файл через read_file, добавьте текст и используйте 'overwrite'.");
+      }
+
+      const { Document, Packer, Paragraph, TextRun } = require('docx');
+
+      // Split plain text into paragraphs by newlines
+      const paragraphs = content.split('\n').map((line: string) =>
+        new Paragraph({
+          children: [new TextRun(line)],
+        })
+      );
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: paragraphs,
+        }],
+      });
+
+      const buffer = await Packer.toBuffer(doc);
+      await fs.promises.writeFile(resolved, buffer);
+
+      return { ok: true, bytes_written: buffer.length, mode, format: 'docx' };
+    }
+
+    // Default: plain text write
     if (mode === 'append') {
       await fs.promises.appendFile(resolved, content, { encoding: 'utf-8' });
     } else {
