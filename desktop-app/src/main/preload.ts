@@ -58,6 +58,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (targetPath: string) =>
     ipcRenderer.invoke('read-directory', targetPath),
 
+  // File Action: read file natively (UTF-8, paginated)
+  readFile: (payload: { file_path: string; start_line?: number; max_lines?: number }) =>
+    ipcRenderer.invoke('read-file', payload),
+
+  // File Action: write file natively (UTF-8, overwrite or append)
+  writeFile: (payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) =>
+    ipcRenderer.invoke('write-file', payload),
+
   // Visual Control: capture all monitors
   captureScreen: () =>
     ipcRenderer.invoke('capture-screen'),

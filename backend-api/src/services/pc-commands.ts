@@ -16,6 +16,13 @@ db.exec(`
   )
 `);
 
+// Migration: add file_read_enabled column (default 1 — allow reads without confirmation by default)
+try {
+  db.exec(`ALTER TABLE pc_commands_settings ADD COLUMN file_read_enabled INTEGER NOT NULL DEFAULT 1`);
+} catch (_e) {
+  // Column already exists
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS pc_commands_policies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,6 +40,7 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_pc_commands_policies_user ON pc_commands
 export type PcCommandsSettings = {
   fs_scan_enabled: boolean;
   auto_approve_all: boolean;
+  file_read_enabled: boolean;
 };
 
 export type PcCommandPolicy = {
@@ -45,35 +53,38 @@ export type PcCommandPolicy = {
 // ── Settings CRUD ──────────────────────────────────────────────────────────
 
 export const getPcCommandsSettings = (userId: number): PcCommandsSettings => {
-  const row = db.prepare('SELECT fs_scan_enabled, auto_approve_all FROM pc_commands_settings WHERE user_id = ?').get(userId) as
-    | { fs_scan_enabled: number; auto_approve_all: number }
+  const row = db.prepare('SELECT fs_scan_enabled, auto_approve_all, file_read_enabled FROM pc_commands_settings WHERE user_id = ?').get(userId) as
+    | { fs_scan_enabled: number; auto_approve_all: number; file_read_enabled: number }
     | undefined;
   if (!row) {
-    return { fs_scan_enabled: false, auto_approve_all: false };
+    return { fs_scan_enabled: false, auto_approve_all: false, file_read_enabled: true };
   }
   return {
     fs_scan_enabled: row.fs_scan_enabled === 1,
     auto_approve_all: row.auto_approve_all === 1,
+    file_read_enabled: row.file_read_enabled === 1,
   };
 };
 
 export const updatePcCommandsSettings = (
   userId: number,
-  updates: { fs_scan_enabled?: boolean; auto_approve_all?: boolean },
+  updates: { fs_scan_enabled?: boolean; auto_approve_all?: boolean; file_read_enabled?: boolean },
 ): void => {
   const current = getPcCommandsSettings(userId);
   const fsScan = updates.fs_scan_enabled !== undefined ? updates.fs_scan_enabled : current.fs_scan_enabled;
   const autoApproveAll = updates.auto_approve_all !== undefined ? updates.auto_approve_all : current.auto_approve_all;
+  const fileReadEnabled = updates.file_read_enabled !== undefined ? updates.file_read_enabled : current.file_read_enabled;
   const now = getNowUnix();
 
   db.prepare(`
-    INSERT INTO pc_commands_settings (user_id, fs_scan_enabled, auto_approve_all, updated_at)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO pc_commands_settings (user_id, fs_scan_enabled, auto_approve_all, file_read_enabled, updated_at)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       fs_scan_enabled = excluded.fs_scan_enabled,
       auto_approve_all = excluded.auto_approve_all,
+      file_read_enabled = excluded.file_read_enabled,
       updated_at = excluded.updated_at
-  `).run(userId, fsScan ? 1 : 0, autoApproveAll ? 1 : 0, now);
+  `).run(userId, fsScan ? 1 : 0, autoApproveAll ? 1 : 0, fileReadEnabled ? 1 : 0, now);
 };
 
 // ── Policies CRUD ──────────────────────────────────────────────────────────

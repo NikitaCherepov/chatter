@@ -5081,6 +5081,60 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
 });
 
+// ── File Action Confirmation (Telegram inline buttons) ────────────────────
+
+bot.action(/^fileconfirm:(allow|reject):(.+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    const confirmationId = ctx.match[2];
+    const userId = ctx.from?.id;
+
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка: пользователь не определён.');
+        return;
+    }
+
+    if (action === 'reject') {
+        await ctx.answerCbQuery('Отклонено');
+        try {
+            await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+                { confirmation_id: confirmationId, approved: false, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
+            );
+            await ctx.editMessageText('❌ Действие с файлом отклонено.');
+        } catch {
+            await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+        }
+        return;
+    }
+
+    // action === 'allow'
+    await ctx.answerCbQuery('Выполняю...');
+    (async () => {
+        try {
+            const resp = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
+            );
+            const result = resp.data?.result;
+            // For read_file — show content preview; for write_file — show success
+            if (result && typeof result === 'object' && result.content) {
+                const contentPreview = typeof result.content === 'string' ? result.content.slice(0, 3000) : '';
+                const linesInfo = result.total_lines ? `\nВсего строк: ${result.total_lines}` : '';
+                await ctx.editMessageText(`✅ Файл прочитан.${linesInfo}\n\n\`\`\`\n${contentPreview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
+                    ctx.editMessageText(`✅ Файл прочитан.${linesInfo}\n\n${contentPreview}`).catch(() => {});
+                });
+            } else {
+                await ctx.editMessageText('✅ Файл записан.').catch(() => {});
+            }
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
+            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+        }
+    })();
+});
+
 // ── Visual Click Confirmation (Telegram inline buttons) ───────────────────
 
 bot.action(/^vclick:(allow|reject):(.+)$/, async (ctx) => {
@@ -5477,6 +5531,47 @@ const processUserTextThroughAi = async (
                     } catch {
                         try {
                             await ctx.reply(`🔐 Подтверждение команды на ПК\n\n${preview}\n\nРазрешить выполнение?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+                if (action?.action === 'file_action_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const actionType = action.value.action_type || 'read';
+                    const filePath = action.value.file_path || '';
+                    const mode = action.value.mode || 'overwrite';
+                    const sizeBytes = action.value.size_bytes || 0;
+                    const contentPreview = action.value.content_preview || '';
+
+                    const isWrite = actionType === 'write';
+                    const titleIcon = isWrite ? '📝' : '📖';
+                    const titleText = isWrite
+                        ? `Запись файла${mode === 'append' ? ' (добавление)' : ''}`
+                        : 'Чтение файла';
+
+                    const sizeLine = isWrite && sizeBytes > 0
+                        ? `\nРазмер: ${(sizeBytes / 1024).toFixed(1)} КБ`
+                        : '';
+
+                    let msgText = `${titleIcon} **${titleText}**\n\n\`${filePath.replace(/`/g, '\\`')}\`${sizeLine}`;
+                    if (contentPreview) {
+                        const preview = contentPreview.slice(0, 800).replace(/```/g, "'''");
+                        msgText += `\n\n\`\`\`\n${preview}\n\`\`\``;
+                    }
+                    msgText += `\n\n${isWrite ? 'Разрешить запись?' : 'Разрешить чтение?'}`;
+
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback(`✅ ${isWrite ? 'Записать' : 'Прочитать'}`, `fileconfirm:allow:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `fileconfirm:reject:${confirmationId}`),
+                        ]
+                    ]);
+                    try {
+                        await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
+                    } catch {
+                        try {
+                            await ctx.reply(`${titleIcon} ${titleText}\n\n${filePath}${sizeLine}\n\n${isWrite ? 'Разрешить запись?' : 'Разрешить чтение?'}`, keyboard);
                         } catch {
                             // ignore
                         }

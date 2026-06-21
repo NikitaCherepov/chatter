@@ -354,6 +354,7 @@ export function ChatPage() {
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
   const [emailConfirmations, setEmailConfirmations] = useState<Array<{ confirmation_id: string; from: string; to: string; subject: string; body: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
@@ -596,6 +597,24 @@ export function ChatPage() {
           return [...prev, {
             confirmation_id: val.confirmation_id!,
             command: val.command!,
+          }];
+        });
+      }
+    }
+    if (action.action === 'file_action_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; action_type?: 'read' | 'write'; file_path?: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number };
+      if (val.confirmation_id && val.file_path && val.action_type) {
+        setFileActionConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            action_type: val.action_type!,
+            file_path: val.file_path!,
+            mode: val.mode,
+            size_bytes: val.size_bytes,
+            content_preview: val.content_preview,
+            start_line: val.start_line,
+            max_lines: val.max_lines,
           }];
         });
       }
@@ -2586,6 +2605,82 @@ export function ChatPage() {
                           });
                         } catch {}
                         setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                      }}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* File Action Confirmation cards */}
+              {fileActionConfirmations.map((conf, confIdx) => (
+                <div key={`file-${confIdx}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span className={s.suggestMacroTitle}>
+                      {conf.action_type === 'write' ? `Запись файла${conf.mode === 'append' ? ' (добавление)' : ''}` : 'Чтение файла'}
+                    </span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.file_path}</code>
+                  </div>
+                  {conf.action_type === 'write' && conf.size_bytes !== undefined && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Размер: {(conf.size_bytes / 1024).toFixed(1)} КБ
+                      {conf.mode === 'append' ? ' · режим: добавление в конец' : ' · режим: перезапись'}
+                    </div>
+                  )}
+                  {conf.action_type === 'read' && conf.start_line !== undefined && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Строки {conf.start_line}–{(conf.start_line + (conf.max_lines || 500) - 1)}
+                    </div>
+                  )}
+                  {conf.content_preview && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', maxHeight: '200px', overflow: 'auto' }}>
+                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.content_preview.slice(0, 1500)}</pre>
+                    </div>
+                  )}
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(conf.action_type === 'write' ? 'Файл записан' : 'Файл прочитан');
+                          setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка выполнения');
+                        }
+                      }}
+                    >
+                      {conf.action_type === 'write' ? 'Записать' : 'Прочитать'}
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                          });
+                        } catch {}
+                        setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
                     >
                       Отклонить

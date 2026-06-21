@@ -3068,13 +3068,14 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   try {
     deletePendingPcConfirmation(confirmationId);
     const { sendIpcToDesktop } = await import('./ws-clients.js');
-    console.log('[pc_command] approved, executing via desktop ipc', {
+    console.log('[pc_action] approved, executing via desktop ipc', {
       userId,
       confirmationId,
-      command: pending.command.slice(0, 500),
+      kind: pending.kind,
+      label: pending.label.slice(0, 500),
     });
-    const result = await sendIpcToDesktop(userId, 'execute_commands', { commands: [pending.command] }, 60000);
-    console.log('[pc_command] desktop ipc completed', {
+    const result = await sendIpcToDesktop(userId, pending.payload.ipcType, pending.payload.ipcPayload, 60000);
+    console.log('[pc_action] desktop ipc completed', {
       userId,
       confirmationId,
       resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
@@ -3082,7 +3083,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     pending.resolve(result);
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {
-    console.error('[pc_command] desktop ipc failed', {
+    console.error('[pc_action] desktop ipc failed', {
       userId,
       confirmationId,
       error: err?.message || String(err),
@@ -3118,7 +3119,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
   try {
     deletePendingPcConfirmation(confirmationId);
     const { sendIpcToDesktop } = await import('./ws-clients.js');
-    const result = await sendIpcToDesktop(pending.userId, 'execute_commands', { commands: [pending.command] }, 60000);
+    const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, pending.payload.ipcPayload, 60000);
     pending.resolve(result);
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {

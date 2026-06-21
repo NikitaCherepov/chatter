@@ -612,6 +612,81 @@ function createWindow() {
     });
   });
 
+  // ── File Action: read file natively (UTF-8, paginated) ──
+
+  ipcMain.handle('read-file', async (_event, payload: { file_path: string; start_line?: number; max_lines?: number }) => {
+    const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
+    if (!filePath) throw new Error('file_path_required');
+
+    const startLine = typeof payload?.start_line === 'number' && payload.start_line > 0 ? Math.floor(payload.start_line) : 1;
+    const maxLines = typeof payload?.max_lines === 'number' && payload.max_lines > 0 ? Math.min(Math.floor(payload.max_lines), 2000) : 500;
+
+    const resolved = path.resolve(filePath);
+
+    // Verify path exists and is a file
+    const stat = fs.statSync(resolved);
+    if (!stat.isFile()) {
+      throw new Error('not_a_file');
+    }
+
+    // Read file line by line using readline (memory-efficient for large files)
+    const readline = require('readline');
+    const fileStream = fs.createReadStream(resolved, { encoding: 'utf-8' });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    const lines: string[] = [];
+    let currentLine = 0;
+    const endLine = startLine + maxLines - 1;
+
+    for await (const line of rl) {
+      currentLine++;
+      if (currentLine < startLine) continue;
+      if (currentLine > endLine) break;
+      lines.push(line);
+    }
+
+    const totalLines = currentLine; // last line number seen
+    fileStream.destroy();
+
+    return {
+      content: lines.join('\n'),
+      start_line: startLine,
+      read_lines: lines.length,
+      total_lines: totalLines,
+      encoding: 'utf-8',
+    };
+  });
+
+  // ── File Action: write file natively (UTF-8, overwrite or append) ──
+
+  ipcMain.handle('write-file', async (_event, payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => {
+    const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
+    if (!filePath) throw new Error('file_path_required');
+
+    const content = typeof payload?.content === 'string' ? payload.content : '';
+    const mode = payload?.mode === 'append' ? 'append' : 'overwrite';
+
+    const resolved = path.resolve(filePath);
+
+    // Ensure parent directory exists
+    const parentDir = path.dirname(resolved);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
+    if (mode === 'append') {
+      await fs.promises.appendFile(resolved, content, { encoding: 'utf-8' });
+    } else {
+      await fs.promises.writeFile(resolved, content, { encoding: 'utf-8' });
+    }
+
+    const bytesWritten = Buffer.byteLength(content, 'utf-8');
+    return { ok: true, bytes_written: bytesWritten, mode };
+  });
+
   // ── Visual Control: capture screen (all monitors) ──
 
   ipcMain.handle('capture-screen', async () => {

@@ -272,6 +272,7 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 | `suggest_macro` | Предложить макрос — рендерит карточку «Сохранить/Отклонить» в ChatPage |
 | `devops_confirmation` | Подтверждение SSH-команды — карточка с кнопками «Разрешить»/«Разрешить всегда»/«? Проверить»/«Отклонить» |
 | `pc_command_confirmation` | Подтверждение `execute_pc_command` — карточка команды на ПК. `ChatPage` обрабатывает её через общий `handleIncomingDesktopAction` во всех потоках `streamChatMessage`: обычная отправка, regenerate и regenerate-with-hint. |
+| `file_action_confirmation` | Подтверждение `read_file` (когда `file_read_enabled=false`) или `write_file` (всегда). Карточка показывает путь, режим (overwrite/append), размер и превью контента. Кнопки «Записать»/«Прочитать» и «Отклонить». TG-бот рендерит через inline-кнопки `fileconfirm:allow`/`fileconfirm:reject`. |
 | `email_confirmation` | Подтверждение `send_email` — карточка с From, To, Subject и превью Body (через MarkdownRenderer). Кнопки «Отправить» / «Отклонить». Дедупликация по `confirmation_id`. |
 | `suggest_devops_runbook` | Предложение инструкции — карточка с кнопками «Сохранить»/«Проверить»/«Отклонить» |
 
@@ -296,6 +297,8 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 |---|---|
 | `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. Логирует batch/cmd start/done/error для диагностики зависаний команд. На Windows команды оборачиваются в PowerShell с UTF-8 I/O для корректной кириллицы (см. ниже). |
 | `read-directory` | Чтение содержимого директории (read-only). Возвращает `{ name, isDirectory, size, modifiedAt }[]`. |
+| `read-file` | Нативное чтение файла через `fs.createReadStream` + `readline` (UTF-8, с пагинацией). Параметры: `{ file_path, start_line?, max_lines? }`. Возвращает `{ content, start_line, read_lines, total_lines, encoding }`. Не загружает весь файл в память — построчное чтение. |
+| `write-file` | Нативная запись файла через `fs.promises.writeFile`/`appendFile` (UTF-8). Параметры: `{ file_path, content, mode? }`. Создаёт родительские директории при отсутствии. Возвращает `{ ok, bytes_written, mode }`. |
 | `capture-screen` | Захват скриншотов всех мониторов через `desktopCapturer.getSources()`. Возвращает `{ displays: [{ display_id, name, bounds, screenshot_base64 }] }`. Используется инструментом `capture_screen` для visual control. |
 | `visual-click` | Клик мышкой по нормализованным координатам (0.0–1.0). Использует `@nut-tree-fork/nut-js` для перемещения курсора и клика. Переводит нормализованные координаты в глобальные через `display.bounds`. Поддерживает мульти-монитор (включая мониторы с отрицательными координатами). |
 
@@ -381,6 +384,30 @@ AI: explore_fs(target_path)
   → IPC readDirectory(target_path) → entries[]
   → WS: ipc_result { request_id, data: entries }
   → Backend резолвит Promise → AI получает listing как tool response
+```
+
+**Чтение файла (read_file, через WS):**
+```
+AI: read_file(file_path, start_line?, max_lines?)
+  → Если file_read_enabled=true:
+    Backend: sendIpcToDesktop('read_file', { file_path, start_line, max_lines })
+    → WS: execute_ipc → IPC readFile() → { content, start_line, read_lines, total_lines }
+    → AI получает контент как tool response
+  → Если file_read_enabled=false:
+    HitL-карточка file_action_confirmation → пользователь подтверждает →
+    затем тот же IPC-поток через /api/v1/pc-commands/approve
+```
+
+**Запись файла (write_file, через WS, всегда HitL):**
+```
+AI: write_file(file_path, content, mode?)
+  → Backend: регистрирует pending в pc-command-confirmations (kind: 'file_action')
+  → Desktop action: file_action_confirmation { confirmation_id, action_type: 'write', file_path, mode, size_bytes, content_preview }
+  → Карточка в ChatPage / inline-кнопки в TG
+  → Пользователь подтверждает → POST /api/v1/pc-commands/approve
+  → Backend: sendIpcToDesktop('write_file', { file_path, content, mode })
+  → IPC writeFile() → { ok, bytes_written, mode }
+  → AI получает результат как tool response
 ```
 
 ### Предложение макроса
@@ -731,9 +758,9 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | `pong` | Ответ на ping |
 
 **Обратный канал (execute_ipc):**
-Сервер может запросить десктоп выполнить IPC-команду и вернуть результат. Используется для `return_output` макросов, `explore_fs` и подтверждённых `execute_pc_command`. `lib/api.ts` логирует получение `execute_ipc` и отправку `ipc_result`; связка с backend-логами делается по `request_id`.
+Сервер может запросить десктоп выполнить IPC-команду и вернуть результат. Используется для `return_output` макросов, `explore_fs`, `read_file`, `write_file` и подтверждённых `execute_pc_command`. `lib/api.ts` логирует получение `execute_ipc` и отправку `ipc_result`; связка с backend-логами делается по `request_id`.
 1. Сервер шлёт `{ type: 'execute_ipc', request_id, ipc_type, payload }`
-2. Десктоп выполняет IPC (`executeCommands` / `readDirectory`)
+2. Десктоп выполняет IPC (`executeCommands` / `readDirectory` / `readFile` / `writeFile`)
 3. Десктоп отвечает `{ type: 'ipc_result', request_id, data }` или `{ error }`
 4. Сервер резолвит pending Promise → AI получает результат как tool response
 

@@ -5,6 +5,7 @@ import s from './SettingsModal.module.scss';
 type PcSettings = {
   fs_scan_enabled: boolean;
   auto_approve_all: boolean;
+  file_read_enabled: boolean;
 };
 
 type PcPolicy = {
@@ -15,7 +16,7 @@ type PcPolicy = {
 };
 
 export function PCSettings() {
-  const [settings, setSettings] = useState<PcSettings>({ fs_scan_enabled: false, auto_approve_all: false });
+  const [settings, setSettings] = useState<PcSettings>({ fs_scan_enabled: false, auto_approve_all: false, file_read_enabled: true });
   const [policies, setPolicies] = useState<PcPolicy[]>([]);
   const [newPattern, setNewPattern] = useState('');
   const [loading, setLoading] = useState(true);
@@ -98,6 +99,26 @@ export function PCSettings() {
           <span className={s.fieldLabel} style={{ color: 'var(--text-body)' }}>
             Разрешить ИИ сканировать файловую систему (ls/dir/cd)
           </span>
+        </label>
+      </div>
+
+      <div className={s.fieldGroup}>
+        <label className={s.macroToggleLabel}>
+          <input
+            type="checkbox"
+            checked={settings.file_read_enabled}
+            onChange={(e) => updateSetting('file_read_enabled', e.target.checked)}
+            className={s.macroCheckbox}
+            disabled={saving}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-body)' }}>
+              Разрешить чтение файлов без подтверждения
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              ИИ сможет читать файлы на вашем ПК без запроса разрешения. Запись всегда требует подтверждения.
+            </span>
+          </div>
         </label>
       </div>
 

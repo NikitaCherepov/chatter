@@ -1,11 +1,34 @@
 /**
- * Shared in-memory store for pending PC command confirmations.
+ * Shared in-memory store for pending PC action confirmations.
  * Used by ai.ts (registers) and server.ts (resolves/rejects via /approve endpoint).
+ *
+ * Supports two kinds of pending actions:
+ *  - 'pc_command': execute a shell command on user's PC
+ *  - 'file_action': read or write a file on user's PC via native fs
  */
+
+export type PendingActionKind = 'pc_command' | 'file_action';
+
+type ExecutePayload = {
+  ipcType: 'execute_commands';
+  ipcPayload: { commands: string[] };
+};
+
+type FileActionPayload = {
+  ipcType: 'read_file' | 'write_file';
+  ipcPayload: { file_path: string; start_line?: number; max_lines?: number; content?: string; mode?: 'overwrite' | 'append' };
+};
+
+type ActionPayload = ExecutePayload | FileActionPayload;
 
 export type PendingPcCommandConfirmation = {
   userId: number;
-  command: string;
+  /** What kind of action this confirmation represents. */
+  kind: PendingActionKind;
+  /** Human-readable label for logs (command text, file path, etc.). */
+  label: string;
+  /** IPC command to execute after approval. */
+  payload: ActionPayload;
   resolve: (result: any) => void;
   reject: (err: Error) => void;
   createdAt: number;

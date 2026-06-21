@@ -314,7 +314,7 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
 // ---------- SSE Streaming (fallback, kept for reference) ----------
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'pc_command_confirmation' | 'email_confirmation' | 'chat_title_update';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'pc_command_confirmation' | 'file_action_confirmation' | 'email_confirmation' | 'chat_title_update';
   target?: string;
   value?: { title?: string; content?: string; note_id?: number; macro_name?: string; target_path?: string; description?: string; commands?: string[]; confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean; chat_id?: number; from?: string; to?: string; subject?: string; body?: string };
 };
@@ -638,6 +638,20 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         payload,
       });
       result = await (window as any).electronAPI?.visualClick(payload);
+    } else if (ipc_type === 'read_file') {
+      console.log('[ipc] renderer invoke readFile', {
+        requestId: request_id,
+        filePath: payload?.file_path,
+      });
+      result = await (window as any).electronAPI?.readFile(payload);
+    } else if (ipc_type === 'write_file') {
+      console.log('[ipc] renderer invoke writeFile', {
+        requestId: request_id,
+        filePath: payload?.file_path,
+        mode: payload?.mode,
+        contentLength: typeof payload?.content === 'string' ? payload.content.length : 0,
+      });
+      result = await (window as any).electronAPI?.writeFile(payload);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }

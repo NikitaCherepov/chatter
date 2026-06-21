@@ -1610,6 +1610,79 @@ const buildExecutePcCommandTool = () => {
   };
 };
 
+/** Build read_file tool — reads a file on user's PC natively via Node.js fs (no terminal) */
+const buildReadFileTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'read_file',
+      description: `Читает содержимое файла на компьютере пользователя нативно через Node.js fs (в обход терминала, без проблем с кодировками).
+Используй когда:
+- Нужно прочитать содержимое файла (код, конфиг, лог, текст)
+- Пользователь просит показать или проанализировать файл
+- Нужно прочитать часть большого файла (постранично)
+
+Возвращает UTF-8 текст с указанием номера начальной строки и общего количества строк.
+Поддерживает пагинацию: если файл большой, читай его частями через start_line/max_lines.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          file_path: {
+            type: 'string',
+            description: 'Полный путь к файлу на ПК пользователя (например "C:\\\\Users\\\\user\\\\file.txt" или "/home/user/file.txt").'
+          },
+          start_line: {
+            type: 'number',
+            description: 'С какой строки начинать чтение (нумерация с 1). По умолчанию 1.'
+          },
+          max_lines: {
+            type: 'number',
+            description: 'Максимум строк для чтения за один вызов (по умолчанию 500, максимум 2000).'
+          }
+        },
+        required: ['file_path']
+      }
+    }
+  };
+};
+
+/** Build write_file tool — writes content to a file on user's PC natively via Node.js fs (no terminal) */
+const buildWriteFileTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'write_file',
+      description: `Записывает содержимое в файл на компьютере пользователя нативно через Node.js fs (в обход терминала, без лимитов длины команды).
+Используй когда:
+- Нужно создать или перезаписать файл (код, конфиг, текст)
+- Пользователь просит сохранить что-то в файл
+- Нужно дописать данные в конец существующего файла (mode: append)
+
+Всегда требует подтверждения пользователя (HitL-карточка).
+Запись в системные директории (C:\\Windows, /etc, /usr, /bin) заблокирована.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          file_path: {
+            type: 'string',
+            description: 'Полный путь к файлу на ПК пользователя (например "C:\\\\Users\\\\user\\\\new_file.txt" или "/home/user/script.sh").'
+          },
+          content: {
+            type: 'string',
+            description: 'Содержимое для записи в файл (UTF-8 текст).'
+          },
+          mode: {
+            type: 'string',
+            enum: ['overwrite', 'append'],
+            description: 'Режим записи: "overwrite" (перезаписать файл целиком, по умолчанию) или "append" (дописать в конец).'
+          }
+        },
+        required: ['file_path', 'content']
+      }
+    }
+  };
+};
+
 /** Build capture_screen tool — captures screenshot, sends to vision model with purpose */
 const buildCaptureScreenTool = () => {
   return {
@@ -3119,7 +3192,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const confirmationPromise = new Promise<any>((resolve, reject) => {
       registerPendingPcConfirmation(confirmationId, {
         userId: user.id,
-        command,
+        kind: 'pc_command',
+        label: command,
+        payload: { ipcType: 'execute_commands', ipcPayload: { commands: [command] } },
         resolve,
         reject,
         createdAt: Date.now()
@@ -3184,6 +3259,225 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', command });
       }
       return JSON.stringify({ status: 'error', message: `Ошибка выполнения: ${err?.message || String(err)}`, command });
+    }
+  }
+
+  // ── File Action: read_file (native fs, optional HitL) ─────────────────────
+
+  if (toolName === 'read_file') {
+    const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+
+    const startLine = typeof parsed.start_line === 'number' && parsed.start_line > 0 ? Math.floor(parsed.start_line) : 1;
+    const maxLines = typeof parsed.max_lines === 'number' && parsed.max_lines > 0 ? Math.min(Math.floor(parsed.max_lines), 2000) : 500;
+
+    // Desktop must be online
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Чтение файла невозможно — попроси пользователя запустить приложение.' });
+    }
+
+    // Check if reads without confirmation are allowed
+    const { getPcCommandsSettings } = await import('./pc-commands.js');
+    const settings = getPcCommandsSettings(user.id);
+
+    if (settings.file_read_enabled) {
+      // Execute immediately via WS IPC
+      try {
+        const result = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: startLine, max_lines: maxLines }, 30000, signal);
+        return JSON.stringify({
+          status: 'success',
+          file_path: filePath,
+          ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
+        });
+      } catch (err: any) {
+        return JSON.stringify({ status: 'error', message: `Ошибка чтения файла: ${err?.message || String(err)}`, file_path: filePath });
+      }
+    }
+
+    // Needs user confirmation — same HitL flow as pc_command
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
+    const confirmationPromise = new Promise<any>((resolve, reject) => {
+      registerPendingPcConfirmation(confirmationId, {
+        userId: user.id,
+        kind: 'file_action',
+        label: `read: ${filePath}`,
+        payload: { ipcType: 'read_file', ipcPayload: { file_path: filePath, start_line: startLine, max_lines: maxLines } },
+        resolve,
+        reject,
+        createdAt: Date.now()
+      });
+    });
+
+    const confirmationAction: DesktopActionPayload = {
+      action: 'file_action_confirmation',
+      value: {
+        confirmation_id: confirmationId,
+        action_type: 'read',
+        file_path: filePath,
+        start_line: startLine,
+        max_lines: maxLines,
+      }
+    };
+
+    let sent = false;
+    try {
+      if (subagentExtra?.onDesktopAction) {
+        await subagentExtra.onDesktopAction(confirmationAction);
+        sent = true;
+        if (isDesktopOnline(user.id)) {
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
+      } else {
+        sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+      }
+    } catch (err) {
+      console.error('[read_file] failed to send confirmation action:', err);
+    }
+
+    if (!sent) {
+      deletePendingPcConfirmation(confirmationId);
+      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+    }
+
+    try {
+      const result = await confirmationPromise;
+      return JSON.stringify({
+        status: 'success',
+        file_path: filePath,
+        ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил чтение файла.', file_path: filePath });
+      }
+      if (err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка чтения файла: ${err?.message || String(err)}`, file_path: filePath });
+    }
+  }
+
+  // ── File Action: write_file (native fs, always HitL) ──────────────────────
+
+  if (toolName === 'write_file') {
+    const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+
+    const content: string = typeof parsed.content === 'string' ? parsed.content : '';
+    const mode: 'overwrite' | 'append' = parsed.mode === 'append' ? 'append' : 'overwrite';
+
+    // Size limit: 5 MB
+    const WRITE_FILE_MAX_SIZE = 5 * 1024 * 1024;
+    if (Buffer.byteLength(content, 'utf-8') > WRITE_FILE_MAX_SIZE) {
+      return JSON.stringify({ status: 'error', message: `Контент слишком большой (лимит 5 МБ). Используй меньший объём данных.`, file_path: filePath });
+    }
+
+    // Block writes to system directories
+    const blockedPathPatterns = [
+      /^[cC]:[\\/]Windows[\\/]/i,
+      /^[cC]:[\\/]Program Files[\\/]/i,
+      /^[cC]:[\\/]Program Files \(x86\)[\\/]/i,
+      /^\/etc[\\/]/i,
+      /^\/usr[\\/]/i,
+      /^\/bin[\\/]/i,
+      /^\/sbin[\\/]/i,
+      /^\/boot[\\/]/i,
+      /^\/dev[\\/]/i,
+      /^\/proc[\\/]/i,
+      /^\/sys[\\/]/i,
+    ];
+    if (blockedPathPatterns.some(p => p.test(filePath))) {
+      return JSON.stringify({ status: 'error', message: 'Запись в системные директории заблокирована. Это ограничение безопасности, его нельзя обойти.', file_path: filePath });
+    }
+
+    // Desktop must be online
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Запись файла невозможна — попроси пользователя запустить приложение.' });
+    }
+
+    // Always requires user confirmation — HitL
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
+    const confirmationPromise = new Promise<any>((resolve, reject) => {
+      registerPendingPcConfirmation(confirmationId, {
+        userId: user.id,
+        kind: 'file_action',
+        label: `write ${mode}: ${filePath}`,
+        payload: { ipcType: 'write_file', ipcPayload: { file_path: filePath, content, mode } },
+        resolve,
+        reject,
+        createdAt: Date.now()
+      });
+    });
+
+    // Build a short preview for the confirmation card
+    const contentPreview = content.slice(0, 2000);
+    const sizeBytes = Buffer.byteLength(content, 'utf-8');
+
+    const confirmationAction: DesktopActionPayload = {
+      action: 'file_action_confirmation',
+      value: {
+        confirmation_id: confirmationId,
+        action_type: 'write',
+        file_path: filePath,
+        mode,
+        size_bytes: sizeBytes,
+        content_preview: contentPreview,
+      }
+    };
+
+    let sent = false;
+    try {
+      if (subagentExtra?.onDesktopAction) {
+        await subagentExtra.onDesktopAction(confirmationAction);
+        sent = true;
+        if (isDesktopOnline(user.id)) {
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
+      } else {
+        sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+      }
+    } catch (err) {
+      console.error('[write_file] failed to send confirmation action:', err);
+    }
+
+    console.log('[write_file] confirmation dispatch', {
+      userId: user.id,
+      confirmationId,
+      filePath,
+      mode,
+      sizeBytes,
+      via: subagentExtra?.onDesktopAction ? 'callback+ws' : 'ws_registry',
+      sent,
+    });
+
+    if (!sent) {
+      deletePendingPcConfirmation(confirmationId);
+      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+    }
+
+    try {
+      const result = await confirmationPromise;
+      return JSON.stringify({
+        status: 'success',
+        file_path: filePath,
+        mode,
+        ...(typeof result === 'object' && result !== null ? result : {}),
+        message: `Файл ${mode === 'append' ? 'обновлён (добавлено в конец)' : 'записан'}: ${filePath}`,
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил запись файла.', file_path: filePath });
+      }
+      if (err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка записи файла: ${err?.message || String(err)}`, file_path: filePath });
     }
   }
 
@@ -3711,6 +4005,8 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'list_devops_servers') return 'Получаю список серверов...';
   if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
   if (toolName === 'execute_pc_command') return 'Выполняю команду на ПК...';
+  if (toolName === 'read_file') return 'Читаю файл...';
+  if (toolName === 'write_file') return 'Записываю файл...';
   if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
   if (toolName === 'execute_visual_click') return 'Жду подтверждения клика...';
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
@@ -3894,6 +4190,8 @@ export const sendMessageThroughAi = async (
   // Команды на ПК: отключает только execute_pc_command
   if (flags?.disable_pc_commands) {
     disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('read_file');
+    disabledToolSet.add('write_file');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
   }
@@ -3920,6 +4218,8 @@ export const sendMessageThroughAi = async (
     // Всё из лайта
     disabledToolSet.add('execute_ssh_command');
     disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('read_file');
+    disabledToolSet.add('write_file');
     disabledToolSet.add('suggest_devops_runbook');
     disabledToolSet.add('install_ssh_public_key');
     disabledToolSet.add('suggest_server_creds_update');
@@ -4007,6 +4307,7 @@ export const sendMessageThroughAi = async (
     buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
     buildExecutePcCommandTool(),
+    buildReadFileTool(), buildWriteFileTool(),
     buildCaptureScreenTool(), buildExecuteVisualClickTool(),
   ];
   // Tools that require a desktop client UI — only when isDesktop
@@ -4371,7 +4672,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'write_file' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 
