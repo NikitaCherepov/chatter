@@ -294,10 +294,25 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 
 | IPC | Описание |
 |---|---|
-| `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. Логирует batch/cmd start/done/error для диагностики зависаний команд. |
+| `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. Логирует batch/cmd start/done/error для диагностики зависаний команд. На Windows команды оборачиваются в PowerShell с UTF-8 I/O для корректной кириллицы (см. ниже). |
 | `read-directory` | Чтение содержимого директории (read-only). Возвращает `{ name, isDirectory, size, modifiedAt }[]`. |
 | `capture-screen` | Захват скриншотов всех мониторов через `desktopCapturer.getSources()`. Возвращает `{ displays: [{ display_id, name, bounds, screenshot_base64 }] }`. Используется инструментом `capture_screen` для visual control. |
 | `visual-click` | Клик мышкой по нормализованным координатам (0.0–1.0). Использует `@nut-tree-fork/nut-js` для перемещения курсора и клика. Переводит нормализованные координаты в глобальные через `display.bounds`. Поддерживает мульти-монитор (включая мониторы с отрицательными координатами). |
+
+### Кодировка команд на Windows (fix кракозябр)
+
+`execute-commands` на Windows оборачивает каждую команду в PowerShell-обёртку с UTF-8 I/O, чтобы кириллица в stdout не превращалась в мусор (`�ਢ��`).
+
+**Проблема:** `child_process.exec` на Windows запускает `cmd.exe /d /s /c "..."`. Cmd получает аргументы в системной ANSI-кодировке (cp1251 в русской локали) **до** выполнения `chcp`, поэтому `chcp 65001 && echo Привет` не помогает — к моменту переключения кодовой страницы команда уже искажена.
+
+**Решение — двойной Base64** (`src/main/main.ts`, хендлер `execute-commands`):
+
+1. Исходная команда кодируется в Base64 (UTF-16LE для .NET): `Buffer.from(cmd, 'utf16le').toString('base64')`.
+2. PowerShell-скрипт декодирует её через `[Text.Encoding]::Unicode.GetString(...)` и выполняет через `cmd.exe /c $decCmd` — это сохраняет cmd-семантику (`&&`, `|`, `>`, `echo`, `ver`, builtin-команды).
+3. В PS форсируется UTF-8: `$OutputEncoding` и `[Console]::OutputEncoding`.
+4. Весь PS-скрипт пакуется во второй Base64 (UTF-16LE) и передаётся через `powershell -NoProfile -EncodedCommand`.
+
+На Linux/macOS обёртка не применяется — `execCmd = cmd` как есть.
 
 ### Visual Control (удалённое управление через скриншоты)
 
