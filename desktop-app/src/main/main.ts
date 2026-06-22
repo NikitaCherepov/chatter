@@ -695,6 +695,75 @@ function createWindow() {
 
   // ── File Action: write file natively (UTF-8, overwrite or append, .docx supported) ──
 
+  ipcMain.handle('search-file-keywords', async (_event, payload: { file_path: string; query: string; max_matches?: number }) => {
+    const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
+    if (!filePath) throw new Error('file_path_required');
+
+    const query = typeof payload?.query === 'string' ? payload.query.trim() : '';
+    if (!query) throw new Error('query_required');
+
+    const maxMatches = typeof payload?.max_matches === 'number' && payload.max_matches > 0
+      ? Math.min(Math.floor(payload.max_matches), 500)
+      : 100;
+    const normalizedQuery = query.toLowerCase();
+    const resolved = path.resolve(filePath);
+
+    const stat = fs.statSync(resolved);
+    if (!stat.isFile()) {
+      throw new Error('not_a_file');
+    }
+
+    const matches: Array<{ line_number: number; line: string }> = [];
+    let totalLines = 0;
+
+    const visitLine = (line: string) => {
+      totalLines++;
+      if (matches.length >= maxMatches) return;
+      if (line.toLowerCase().includes(normalizedQuery)) {
+        matches.push({ line_number: totalLines, line: line.trim() });
+      }
+    };
+
+    const ext = path.extname(resolved).toLowerCase();
+    if (ext === '.docx') {
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ path: resolved });
+      const fullText: string = result.value || '';
+      for (const line of fullText.split('\n')) {
+        visitLine(line);
+      }
+    } else {
+      const readline = require('readline');
+      const fileStream = fs.createReadStream(resolved, { encoding: 'utf-8' });
+      const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity,
+      });
+
+      for await (const line of rl) {
+        visitLine(line);
+      }
+
+      fileStream.destroy();
+    }
+
+    const content = matches.length === 0
+      ? `No matches for query "${query}".`
+      : `Found ${matches.length}${matches.length >= maxMatches ? '+' : ''} matches:\n` +
+        matches.map(match => `[Line ${match.line_number}]: ${match.line}`).join('\n');
+
+    return {
+      content,
+      matches,
+      match_count: matches.length,
+      truncated: matches.length >= maxMatches,
+      total_lines: totalLines,
+      query,
+      encoding: 'utf-8',
+      format: ext === '.docx' ? 'docx' : 'text',
+    };
+  });
+
   ipcMain.handle('write-file', async (_event, payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => {
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');

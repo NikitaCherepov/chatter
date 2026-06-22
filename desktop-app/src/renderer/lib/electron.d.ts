@@ -18,6 +18,10 @@ declare global {
       readSoundFile: (fileName: string) => Promise<ArrayBuffer | Uint8Array | null>;
       executeCommands: (commands: string[]) => Promise<string>;
       readDirectory: (targetPath: string) => Promise<{ name: string; isDirectory: boolean; size?: number }[]>;
+      readFile: (payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => Promise<any>;
+      searchFileKeywords: (payload: { file_path: string; query: string; max_matches?: number }) => Promise<any>;
+      writeFile: (payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => Promise<any>;
+      editFileLines: (payload: { file_path: string; start_line: number; end_line: number; new_content: string }) => Promise<any>;
       readSshKeys: () => Promise<{ name: string; filename: string; publicKey?: string; privateKey?: string }[]>;
       updateCheck: () => Promise<{
         updateAvailable?: boolean;

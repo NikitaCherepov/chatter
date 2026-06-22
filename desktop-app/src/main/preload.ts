@@ -62,6 +62,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) =>
     ipcRenderer.invoke('read-file', payload),
 
+  // File Action: search matching lines in a file
+  searchFileKeywords: (payload: { file_path: string; query: string; max_matches?: number }) =>
+    ipcRenderer.invoke('search-file-keywords', payload),
+
   // File Action: write file natively (UTF-8, overwrite or append)
   writeFile: (payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) =>
     ipcRenderer.invoke('write-file', payload),

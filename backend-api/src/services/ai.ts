@@ -1655,6 +1655,37 @@ const buildReadFileTool = () => {
   };
 };
 
+/** Build search_file_keywords tool — searches matching lines in a file on user's PC */
+const buildSearchFileKeywordsTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'search_file_keywords',
+      description: `Ищет ключевые слова или фразы в конкретном файле на компьютере пользователя и возвращает только строки с совпадениями и их номерами.
+Используй, когда файл слишком большой, чтобы читать его целиком через read_file, или когда нужно быстро найти место в логе/коде/тексте.
+Поиск регистронезависимый. Для чтения контекста вокруг найденных строк после этого используй read_file со start_line/max_lines.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          file_path: {
+            type: 'string',
+            description: 'Полный путь к файлу на ПК пользователя.'
+          },
+          query: {
+            type: 'string',
+            description: 'Ключевое слово или фраза для поиска.'
+          },
+          max_matches: {
+            type: 'number',
+            description: 'Максимум совпадений вернуть (по умолчанию 100, максимум 500).'
+          }
+        },
+        required: ['file_path', 'query']
+      }
+    }
+  };
+};
+
 /** Build write_file tool — writes content to a file on user's PC natively via Node.js fs (no terminal) */
 const buildWriteFileTool = () => {
   return {
@@ -3415,6 +3446,104 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
   }
 
+  // ── File Action: search_file_keywords (native fs, optional HitL) ──────────
+
+  if (toolName === 'search_file_keywords') {
+    const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
+    const query: string = typeof parsed.query === 'string' ? parsed.query.trim() : '';
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+    if (!query) return JSON.stringify({ status: 'error', message: 'query обязателен' });
+
+    const maxMatches = typeof parsed.max_matches === 'number' && parsed.max_matches > 0 ? Math.min(Math.floor(parsed.max_matches), 500) : 100;
+
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Поиск по файлу невозможен — попроси пользователя запустить приложение.' });
+    }
+
+    const { getPcCommandsSettings } = await import('./pc-commands.js');
+    const settings = getPcCommandsSettings(user.id);
+    const ipcPayload = { file_path: filePath, query, max_matches: maxMatches };
+
+    if (settings.file_read_enabled) {
+      try {
+        const result = await sendIpcToDesktop(user.id, 'search_file_keywords', ipcPayload, 30000, signal);
+        return JSON.stringify({
+          status: 'success',
+          file_path: filePath,
+          query,
+          ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
+        });
+      } catch (err: any) {
+        return JSON.stringify({ status: 'error', message: `Ошибка поиска по файлу: ${err?.message || String(err)}`, file_path: filePath, query });
+      }
+    }
+
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
+    const confirmationPromise = new Promise<any>((resolve, reject) => {
+      registerPendingPcConfirmation(confirmationId, {
+        userId: user.id,
+        kind: 'file_action',
+        label: `search "${query}": ${filePath}`,
+        payload: { ipcType: 'search_file_keywords', ipcPayload },
+        resolve,
+        reject,
+        createdAt: Date.now()
+      });
+    });
+
+    const confirmationAction: DesktopActionPayload = {
+      action: 'file_action_confirmation',
+      value: {
+        confirmation_id: confirmationId,
+        action_type: 'read',
+        file_path: filePath,
+        max_lines: maxMatches,
+        content_preview: `Поиск: ${query}`,
+      }
+    };
+
+    let sent = false;
+    try {
+      if (subagentExtra?.onDesktopAction) {
+        await subagentExtra.onDesktopAction(confirmationAction);
+        sent = true;
+        if (isDesktopOnline(user.id)) {
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
+      } else {
+        sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+      }
+    } catch (err) {
+      console.error('[search_file_keywords] failed to send confirmation action:', err);
+    }
+
+    if (!sent) {
+      deletePendingPcConfirmation(confirmationId);
+      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+    }
+
+    try {
+      const result = await confirmationPromise;
+      return JSON.stringify({
+        status: 'success',
+        file_path: filePath,
+        query,
+        ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
+      });
+    } catch (err: any) {
+      if (err?.message === 'rejected_by_user') {
+        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил поиск по файлу.', file_path: filePath, query });
+      }
+      if (err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath, query });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка поиска по файлу: ${err?.message || String(err)}`, file_path: filePath, query });
+    }
+  }
+
   // ── File Action: write_file (native fs, always HitL) ──────────────────────
 
   if (toolName === 'write_file') {
@@ -4191,6 +4320,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
   if (toolName === 'execute_pc_command') return 'Выполняю команду на ПК...';
   if (toolName === 'read_file') return 'Читаю файл...';
+  if (toolName === 'search_file_keywords') return 'Ищу в файле...';
   if (toolName === 'write_file') return 'Записываю файл...';
   if (toolName === 'edit_file_lines') return 'Редактирую файл...';
   if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
@@ -4377,6 +4507,7 @@ export const sendMessageThroughAi = async (
   if (flags?.disable_pc_commands) {
     disabledToolSet.add('execute_pc_command');
     disabledToolSet.add('read_file');
+    disabledToolSet.add('search_file_keywords');
     disabledToolSet.add('write_file');
     disabledToolSet.add('edit_file_lines');
     disabledToolSet.add('capture_screen');
@@ -4406,6 +4537,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('execute_ssh_command');
     disabledToolSet.add('execute_pc_command');
     disabledToolSet.add('read_file');
+    disabledToolSet.add('search_file_keywords');
     disabledToolSet.add('write_file');
     disabledToolSet.add('edit_file_lines');
     disabledToolSet.add('suggest_devops_runbook');
@@ -4495,7 +4627,7 @@ export const sendMessageThroughAi = async (
     buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
     buildExecutePcCommandTool(),
-    buildReadFileTool(), buildWriteFileTool(), buildEditFileLinesTool(),
+    buildReadFileTool(), buildSearchFileKeywordsTool(), buildWriteFileTool(), buildEditFileLinesTool(),
     buildCaptureScreenTool(), buildExecuteVisualClickTool(),
   ];
   // Tools that require a desktop client UI — only when isDesktop
@@ -4860,7 +4992,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 
