@@ -969,6 +969,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
   // Parse optional display manifest from desktop client
   const displayManifest = req.body?.display_manifest;
+  const currentDisplayState = req.body?.current_display_state ?? null;
   const isDesktop = Boolean(req.body?.is_desktop);
   const isVoice = Boolean(req.body?.is_voice);
 
@@ -989,6 +990,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       ...(images.length > 0 ? { images } : {}),
       userImages: savedUserImages,
       displayManifest,
+      currentDisplayState,
       isDesktop,
       isVoice,
       activeMacros: enabledMacros,
@@ -3482,6 +3484,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       ...(parsedImages.length > 0 ? { images: parsedImages } : {}),
       userImages: savedUserImages,
       displayManifest: display_manifest,
+      currentDisplayState: msg.current_display_state ?? null,
       isDesktop: true,
       isVoice: Boolean(is_voice),
       activeMacros: enabledMacros,

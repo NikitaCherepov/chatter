@@ -390,6 +390,16 @@ export function ChatPage() {
 
   // Ref flag: when true, the next handleSend() call originated from voice input (wake word)
   const isVoiceInputRef = useRef(false);
+  const currentAvatarStateRef = useRef<SetDisplayStatePayload | null>(null);
+
+  const applyAvatarState = useCallback((state: SetDisplayStatePayload) => {
+    currentAvatarStateRef.current = {
+      ...(currentAvatarStateRef.current || {}),
+      ...state,
+      ...(state.clear_loop ? { loop_reaction: undefined } : {}),
+    };
+    dispatchAvatarState(state);
+  }, []);
 
   // Доступные уровни reasoning: для ручной модели — по её capability, для auto — все
   const availableLevels = useMemo<(api.ReasoningLevel | null)[]>(() => {
@@ -798,6 +808,7 @@ export function ChatPage() {
       activeChatId ?? undefined,
       imagesToSend.length > 0 ? imagesToSend : undefined,
       getAvatarManifest(),
+      currentAvatarStateRef.current,
       {
         onIntermediate: (stepText) => {
           appendToAssistant(stepText);
@@ -806,7 +817,7 @@ export function ChatPage() {
           appendToAssistant(`_${statusText}_`);
         },
         onDisplayState: (state) => {
-          dispatchAvatarState(state);
+          applyAvatarState(state);
         },
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => {
@@ -894,7 +905,7 @@ export function ChatPage() {
           }
           setShowTyping(false);
           setSending(false);
-          if (res.display_state) dispatchAvatarState(res.display_state);
+          if (res.display_state) applyAvatarState(res.display_state);
           if (!activeChatId || res.chat_id !== activeChatId) {
             setActiveChatId(res.chat_id);
             loadChats();
@@ -926,7 +937,7 @@ export function ChatPage() {
       },
       isVoice ? { isVoice: true, preferredModel: preferredModel, dice_mode: diceMode } : { preferredModel: preferredModel, dice_mode: diceMode }
     );
-  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode]);
+  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1213,10 +1224,11 @@ export function ChatPage() {
       activeChatId,
       undefined,
       getAvatarManifest(),
+      currentAvatarStateRef.current,
       {
         onIntermediate: (stepText) => appendToAssistant(stepText),
         onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
-        onDisplayState: (state) => dispatchAvatarState(state),
+        onDisplayState: (state) => applyAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDiceRoll: (roll) => finishDiceRoll(roll),
@@ -1264,7 +1276,7 @@ export function ChatPage() {
           }
           setShowTyping(false);
           setSending(false);
-          if (res.display_state) dispatchAvatarState(res.display_state);
+          if (res.display_state) applyAvatarState(res.display_state);
         },
         onError: (err) => {
           console.error('Regenerate error:', err);
@@ -1277,7 +1289,7 @@ export function ChatPage() {
       },
       { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode }
     );
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState]);
 
   const handleRegenerateWithHint = useCallback(async (assistantMsgId: number, hint: string) => {
     if (!activeChatId || sending || !hint.trim()) return;
@@ -1331,10 +1343,11 @@ export function ChatPage() {
       activeChatId,
       undefined,
       getAvatarManifest(),
+      currentAvatarStateRef.current,
       {
         onIntermediate: (stepText) => appendToAssistant(stepText),
         onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
-        onDisplayState: (state) => dispatchAvatarState(state),
+        onDisplayState: (state) => applyAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDiceRoll: (roll) => finishDiceRoll(roll),
@@ -1382,7 +1395,7 @@ export function ChatPage() {
           }
           setShowTyping(false);
           setSending(false);
-          if (res.display_state) dispatchAvatarState(res.display_state);
+          if (res.display_state) applyAvatarState(res.display_state);
         },
         onError: (err) => {
           console.error('Regenerate with hint error:', err);
@@ -1395,7 +1408,7 @@ export function ChatPage() {
       },
       { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode }
     );
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);
@@ -1473,8 +1486,10 @@ export function ChatPage() {
   // Start looping "think" reaction while AI is generating, stop when response arrives
   useEffect(() => {
     if (sending) {
+      currentAvatarStateRef.current = { ...(currentAvatarStateRef.current || {}), loop_reaction: 'think' };
       startAvatarLoop('think');
     } else {
+      currentAvatarStateRef.current = { ...(currentAvatarStateRef.current || {}), loop_reaction: undefined };
       stopAvatarLoop();
     }
   }, [sending]);
@@ -1482,10 +1497,10 @@ export function ChatPage() {
   // Listen for avatar state from Electron main process (IPC)
   useEffect(() => {
     const unsub = window.electronAPI?.onAvatarState?.((payload) => {
-      dispatchAvatarState(payload as SetDisplayStatePayload);
+      applyAvatarState(payload as SetDisplayStatePayload);
     });
     return () => unsub?.();
-  }, []);
+  }, [applyAvatarState]);
 
   // ── Wake word: start Python listener, react to detections ───────────────
   const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);

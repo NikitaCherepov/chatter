@@ -626,7 +626,7 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
 
 // Сборка system prompt вынесена в system-prompt.ts (используется также в chats.ts
 // для подсчёта токенов — без циклической зависимости).
-import { buildSystemPrompt, buildTimeContext } from './system-prompt.js';
+import { buildSystemPrompt } from './system-prompt.js';
 
 const isLitePlan = (plan: UserPlan) => plan === 'free' || plan === 'standart';
 const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;
@@ -782,7 +782,20 @@ const formatRollLine = (roll: { rolls: number[]; rollsSum: number; modifier: num
   return `броски [${roll.rolls.join(', ')}] => ${roll.rollsSum}${modifierText} = ${roll.total}`;
 };
 
-/** Промпт для Dice Roll Mode. Инжектируется в начало system prompt бота. */
+const getUserTimePayload = (timezoneOffset: number) => {
+  const now = new Date();
+  const localTime = new Date(now.getTime() + timezoneOffset * 3600 * 1000);
+  const sign = timezoneOffset >= 0 ? '+' : '';
+  return {
+    unix_time_seconds: Math.floor(now.getTime() / 1000),
+    local_time: localTime.toISOString().replace('T', ' ').slice(0, 19),
+    timezone_offset: timezoneOffset,
+    timezone_label: `UTC${sign}${timezoneOffset}`,
+    scheduling_hint: 'Для schedule_task предпочитай local_time (HH:MM) или delay_seconds.'
+  };
+};
+
+/** Промпт для Dice Roll Mode. Держим в конце system prompt, потому что значение меняется каждый запрос. */
 const buildDiceRollPrompt = (diceRoll: number) => `
 [DICE ROLL MODE: ACTIVE]
 The user rolled a d20 dice for this specific message.
@@ -1005,6 +1018,28 @@ const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
 };
 
 export const toolDefinitions = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_user_time',
+      description: 'Возвращает текущее Unix-время и локальное время пользователя. Используй, когда нужно узнать текущую дату/время или перед планированием задач.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_avatar_state',
+      description: 'Возвращает текущее состояние пиксельного аватара и доступные mood/reaction значения. Используй, когда нужно узнать состояние аватара перед изменением или синхронизацией.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
   {
     type: 'function',
     function: {
@@ -2361,9 +2396,22 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void }) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null }) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
+
+  if (toolName === 'get_user_time') {
+    return JSON.stringify(getUserTimePayload(timezoneOffset), null, 2);
+  }
+
+  if (toolName === 'get_avatar_state') {
+    return JSON.stringify({
+      current_state: displayStateSink?.value ?? subagentExtra?.currentDisplayState ?? null,
+      state_source: displayStateSink?.value ? 'current_request' : (subagentExtra?.currentDisplayState ? 'client_snapshot' : 'unknown'),
+      available_moods: subagentExtra?.displayManifest?.moods ?? [],
+      available_reactions: subagentExtra?.displayManifest?.reactions ?? []
+    }, null, 2);
+  }
 
   if (toolName === 'search_web') {
     const query = `${parsed.query || ''}`.trim();
@@ -4423,6 +4471,7 @@ export const sendMessageThroughAi = async (
     userTelegramMessageId?: number | null;
     assistantTelegramChatId?: number | null;
     displayManifest?: { moods?: string[]; reactions?: string[] } | null;
+    currentDisplayState?: DisplayStatePayload | null;
     isDesktop?: boolean;
     isVoice?: boolean;
     diceRollMode?: boolean;
@@ -4529,6 +4578,7 @@ export const sendMessageThroughAi = async (
   }
   const isRegeneratingFromHistory = Boolean(regenerateUserText);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
+  const dynamicContextToolHint = `\n\n[ДИНАМИЧЕСКИЙ КОНТЕКСТ]\nТекущее время пользователя доступно через tool get_user_time. Не угадывай текущую дату/время: вызывай get_user_time, когда это важно для ответа или планирования.\nТекущее состояние пиксельного аватара доступно через tool get_avatar_state. Для изменения эмоций используй set_display_state.`;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
   const promptUser = options?.promptUserId ? getUserById(options.promptUserId) ?? user : user;
   const voicePromptHint = options?.isVoice ? `\n\nСТРОГО, ОБЯЗАТЕЛЬНО СЕЙЧАС, ОБЯЗАТЕЛЬНО!!! соблюдай:\n1. Отвечай МАКСИМАЛЬНО кратко. МАКСИМАЛЬНО КРАТКО и естественно, как в устном диалоге.\n2. НИКАКИХ длинных списков, Markdown-таблиц или блоков кода, если только об этом не попросили напрямую.\n3. Используй разговорный стиль. МАКСИМАЛЬНО краткий, УДОБНЫЙ к прослушиванию и содержательный. 4. Замена символов словами: Заменяй любые технические знаки, аббревиатуры и единицы измерения их полными словесными названиями. 
@@ -4661,7 +4711,7 @@ export const sendMessageThroughAi = async (
     try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${dicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${buildTimeContext(timezone)}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${pinnedHintForPrompt}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${dicePromptHint}`;
 
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
@@ -4781,7 +4831,7 @@ PRO
     if (allowedToolNames.length && !allowedToolNames.some(n => disabledToolSet.has(n))) {
       executionTools = buildLiteExecutionTools(allowedToolNames);
       executionHistory = [];
-      executionSystemPrompt = `${LITE_ROUTER_INSTRUCTIONS}${buildTimeContext(timezone)}`;
+      executionSystemPrompt = LITE_ROUTER_INSTRUCTIONS;
       executionMode = 'lite';
     }
   }
@@ -5028,7 +5078,13 @@ for (const toolCall of message.tool_calls) {
         mapUpdateSink,
         options?.activeMacros,
         abortController.signal,
-        { manualModel, onToolStatus: options?.onToolStatus, onDesktopAction: options?.onDesktopAction }
+        {
+          manualModel,
+          onToolStatus: options?.onToolStatus,
+          onDesktopAction: options?.onDesktopAction,
+          displayManifest: options?.displayManifest,
+          currentDisplayState: options?.currentDisplayState
+        }
       ),
       abortController.signal
     );

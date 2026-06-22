@@ -46,6 +46,5 @@ export const buildBaseSystemPromptForUser = (
 ): string => {
   if (isGuestMode) return '';
   const userName = user.name || user.tg_username || 'Пользователь';
-  const timezone = user.timezone_offset ?? 3;
-  return `${buildSystemPrompt(promptContent, userName, coreMemory || '')}${buildTimeContext(timezone)}${pinnedMacrosHint}`;
+  return `${buildSystemPrompt(promptContent, userName, coreMemory || '')}${pinnedMacrosHint}`;
 };

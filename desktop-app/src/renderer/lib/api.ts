@@ -300,11 +300,12 @@ export async function getChatContextTokens(chatId: number): Promise<ChatContextT
   return apiFetch(`/api/v1/chats/${chatId}/context-tokens`);
 }
 
-export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[], displayManifest?: { moods: string[]; reactions: string[] }): Promise<ChatSendResponse> {
+export async function sendChatMessage(text: string, chatId?: number, images?: ChatSendImage[], displayManifest?: { moods: string[]; reactions: string[] }, currentDisplayState?: DisplayStatePayload | null): Promise<ChatSendResponse> {
   const body: Record<string, unknown> = { text };
   if (chatId) body.chat_id = chatId;
   if (images && images.length > 0) body.images = images;
   if (displayManifest) body.display_manifest = displayManifest;
+  if (currentDisplayState) body.current_display_state = currentDisplayState;
   return apiFetch('/api/v1/chat/send', {
     method: 'POST',
     body: JSON.stringify(body),
@@ -467,6 +468,7 @@ export async function streamChatMessage(
   chatId?: number,
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
+  currentDisplayState?: DisplayStatePayload | null,
   callbacks?: StreamCallbacks,
   options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' }
 ) {
@@ -481,6 +483,7 @@ export async function streamChatMessage(
     if (chatId) msg.chat_id = chatId;
     if (images?.length) msg.images = images;
     if (displayManifest) msg.display_manifest = displayManifest;
+    if (currentDisplayState) msg.current_display_state = currentDisplayState;
     if (options?.isVoice) msg.is_voice = true;
     if (options?.preferredModel) msg.preferred_model = options.preferredModel;
     if (options?.regenerate_hint) msg.regenerate_hint = options.regenerate_hint;
@@ -492,7 +495,7 @@ export async function streamChatMessage(
   }
 
   // Fallback: SSE
-  await streamChatMessageSSE(text, chatId, images, displayManifest, callbacks, options);
+  await streamChatMessageSSE(text, chatId, images, displayManifest, currentDisplayState, callbacks, options);
 }
 
 // ── Stop chat generation ──
@@ -515,6 +518,7 @@ async function streamChatMessageSSE(
   chatId?: number,
   images?: ChatSendImage[],
   displayManifest?: { moods: string[]; reactions: string[] },
+  currentDisplayState?: DisplayStatePayload | null,
   callbacks?: StreamCallbacks,
   options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' }
 ) {
@@ -527,6 +531,7 @@ async function streamChatMessageSSE(
     if (chatId) body.chat_id = chatId;
     if (images && images.length > 0) body.images = images;
     if (displayManifest) body.display_manifest = displayManifest;
+    if (currentDisplayState) body.current_display_state = currentDisplayState;
     if (options?.isVoice) body.is_voice = true;
     if (options?.preferredModel) body.preferred_model = options.preferredModel;
     if (options?.regenerate_hint) body.regenerate_hint = options.regenerate_hint;
