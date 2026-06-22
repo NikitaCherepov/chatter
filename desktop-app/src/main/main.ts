@@ -614,6 +614,37 @@ function createWindow() {
 
   // ── File Action: read file natively (UTF-8, paginated, .docx supported, line numbers) ──
 
+  ipcMain.handle('get-file-info', async (_event, payload: { file_path: string }) => {
+    const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
+    if (!filePath) throw new Error('file_path_required');
+
+    const resolved = path.resolve(filePath);
+    if (!fs.existsSync(resolved)) {
+      return {
+        exists: false,
+        file_path: filePath,
+        resolved_path: resolved,
+      };
+    }
+
+    const stat = fs.statSync(resolved);
+    const isFile = stat.isFile();
+    const isDirectory = stat.isDirectory();
+
+    return {
+      exists: true,
+      file_path: filePath,
+      resolved_path: resolved,
+      name: path.basename(resolved),
+      extension: isFile ? path.extname(resolved).toLowerCase() : '',
+      is_file: isFile,
+      is_directory: isDirectory,
+      size_bytes: stat.size,
+      modified_at: stat.mtime.toISOString(),
+      created_at: stat.birthtime.toISOString(),
+    };
+  });
+
   ipcMain.handle('read-file', async (_event, payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => {
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');

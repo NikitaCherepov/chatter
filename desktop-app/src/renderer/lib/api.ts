@@ -629,6 +629,12 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         targetPath: payload.target_path,
       });
       result = await (window as any).electronAPI?.readDirectory(payload.target_path);
+    } else if (ipc_type === 'get_file_info') {
+      console.log('[ipc] renderer invoke getFileInfo', {
+        requestId: request_id,
+        filePath: payload?.file_path,
+      });
+      result = await (window as any).electronAPI?.getFileInfo(payload);
     } else if (ipc_type === 'capture_screen') {
       console.log('[ipc] renderer invoke captureScreen', { requestId: request_id });
       result = await (window as any).electronAPI?.captureScreen();

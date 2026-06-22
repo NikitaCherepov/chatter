@@ -1686,6 +1686,28 @@ const buildSearchFileKeywordsTool = () => {
   };
 };
 
+/** Build get_file_info tool — returns metadata for a path on user's PC without reading content */
+const buildGetFileInfoTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'get_file_info',
+      description: `Возвращает метаданные файла или папки на компьютере пользователя без чтения содержимого: существует ли путь, тип, размер в байтах, даты изменения/создания, расширение.
+Используй перед read_file/search_file_keywords, когда нужно понять размер файла или проверить путь без загрузки содержимого.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          file_path: {
+            type: 'string',
+            description: 'Полный путь к файлу или папке на ПК пользователя.'
+          }
+        },
+        required: ['file_path']
+      }
+    }
+  };
+};
+
 /** Build write_file tool — writes content to a file on user's PC natively via Node.js fs (no terminal) */
 const buildWriteFileTool = () => {
   return {
@@ -2841,6 +2863,28 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (desktopActionSink) desktopActionSink.value = payload;
 
     return JSON.stringify({ status: 'success', message: `Запрос на чтение директории "${targetPath}" отправлен. Результат чтения будет доступен после подключения десктопа через WebSocket.`, target_path: targetPath });
+  }
+
+  if (toolName === 'get_file_info') {
+    const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+
+    const { getPcCommandsSettings } = await import('./pc-commands.js');
+    const pcSettings = getPcCommandsSettings(user.id);
+    if (!pcSettings.fs_scan_enabled) {
+      return JSON.stringify({ status: 'error', message: 'Чтение файловой системы отключено в настройках "Управление ПК". Попроси пользователя включить галочку "Разрешить ИИ сканировать файловую систему".' });
+    }
+
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Получение информации о файле невозможно — попроси пользователя запустить приложение.' });
+    }
+
+    try {
+      const result = await sendIpcToDesktop(user.id, 'get_file_info', { file_path: filePath }, 30000, signal);
+      return JSON.stringify({ status: 'success', file_path: filePath, ...(typeof result === 'object' && result !== null ? result : {}) });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: err.message, file_path: filePath });
+    }
   }
 
   // ── Visual Control: capture screen → vision model analysis ─────────────────
@@ -4319,6 +4363,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'list_devops_servers') return 'Получаю список серверов...';
   if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
   if (toolName === 'execute_pc_command') return 'Выполняю команду на ПК...';
+  if (toolName === 'get_file_info') return 'Проверяю файл...';
   if (toolName === 'read_file') return 'Читаю файл...';
   if (toolName === 'search_file_keywords') return 'Ищу в файле...';
   if (toolName === 'write_file') return 'Записываю файл...';
@@ -4506,6 +4551,7 @@ export const sendMessageThroughAi = async (
   // Команды на ПК: отключает только execute_pc_command
   if (flags?.disable_pc_commands) {
     disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('get_file_info');
     disabledToolSet.add('read_file');
     disabledToolSet.add('search_file_keywords');
     disabledToolSet.add('write_file');
@@ -4536,6 +4582,7 @@ export const sendMessageThroughAi = async (
     // Всё из лайта
     disabledToolSet.add('execute_ssh_command');
     disabledToolSet.add('execute_pc_command');
+    disabledToolSet.add('get_file_info');
     disabledToolSet.add('read_file');
     disabledToolSet.add('search_file_keywords');
     disabledToolSet.add('write_file');
@@ -4626,7 +4673,7 @@ export const sendMessageThroughAi = async (
     buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(),
     buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
-    buildExecutePcCommandTool(),
+    buildExecutePcCommandTool(), buildGetFileInfoTool(),
     buildReadFileTool(), buildSearchFileKeywordsTool(), buildWriteFileTool(), buildEditFileLinesTool(),
     buildCaptureScreenTool(), buildExecuteVisualClickTool(),
   ];
@@ -4992,7 +5039,7 @@ for (const toolCall of message.tool_calls) {
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
       await options.onDesktopAction(desktopActionSink.value);
     }
 
