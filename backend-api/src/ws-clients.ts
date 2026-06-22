@@ -9,11 +9,20 @@ export type WsClient = {
   apiUserId: number;        // JWT subject — the API account that connected
   effectiveUserId: number;  // linked_tg_id || apiUserId — the user AI operates on
   pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>;
+  connectionId: string;
+  connectedAt: number;
+  lastMessageAt: number;
+  lastPingAt: number;
+  lastPongAt: number;
+  missedPongs: number;
 };
 
 // Keyed by BOTH apiUserId and effectiveUserId (they can differ when TG account is linked).
 // When looking up, ai.ts passes effectiveUserId — which is what sendMessageThroughAi uses.
 export const wsClients = new Map<number, WsClient>();
+
+export const WS_HEARTBEAT_INTERVAL_MS = 25_000;
+export const WS_HEARTBEAT_GRACE_MS = 75_000;
 
 const wsStateName = (state: number): string => {
   if (state === WebSocket.CONNECTING) return 'CONNECTING';
@@ -32,6 +41,16 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
   if (client.ws.readyState !== WebSocket.OPEN) {
     console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} ws not open (${wsStateName(client.ws.readyState)})`);
     throw new Error('desktop_not_connected');
+  }
+  const now = Date.now();
+  if (now - client.lastPongAt > WS_HEARTBEAT_GRACE_MS) {
+    console.warn('[ipc] refusing stale desktop ws', {
+      userId,
+      connectionId: client.connectionId,
+      lastPongAgeMs: now - client.lastPongAt,
+      lastMessageAgeMs: now - client.lastMessageAt,
+    });
+    throw new Error('desktop_connection_stale');
   }
 
   // Если уже отменено — не отправляем вообще
@@ -92,6 +111,8 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
         apiUserId: client.apiUserId,
         effectiveUserId: client.effectiveUserId,
         wsState: wsStateName(client.ws.readyState),
+        connectionId: client.connectionId,
+        lastPongAgeMs: Date.now() - client.lastPongAt,
         pendingIpcCount: client.pendingIpc.size,
         payloadPreview: JSON.stringify(payload).slice(0, 500),
       });
@@ -118,8 +139,10 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
 
 export function isDesktopOnline(userId: number): boolean {
   const client = wsClients.get(userId);
-  console.log(`[DEBUG] isDesktopOnline(${userId}): ${client ? 'FOUND (apiUserId=' + client.apiUserId + ', effectiveUserId=' + client.effectiveUserId + ', state=' + wsStateName(client.ws.readyState) + ')' : 'NOT FOUND'} (wsClients keys: [${[...wsClients.keys()].join(',')}])`);
-  return !!client && client.ws.readyState === WebSocket.OPEN;
+  const now = Date.now();
+  const fresh = !!client && now - client.lastPongAt <= WS_HEARTBEAT_GRACE_MS;
+  console.log(`[DEBUG] isDesktopOnline(${userId}): ${client ? 'FOUND (apiUserId=' + client.apiUserId + ', effectiveUserId=' + client.effectiveUserId + ', state=' + wsStateName(client.ws.readyState) + ', connectionId=' + client.connectionId + ', lastPongAgeMs=' + (now - client.lastPongAt) + ')' : 'NOT FOUND'} (wsClients keys: [${[...wsClients.keys()].join(',')}])`);
+  return !!client && client.ws.readyState === WebSocket.OPEN && fresh;
 }
 
 /** Send a JSON message directly to a desktop client via WS. Returns false if not connected. */
@@ -128,6 +151,14 @@ export function sendToDesktop(userId: number, data: any): boolean {
   if (!client) return false;
   if (client.ws.readyState !== WebSocket.OPEN) {
     console.log(`[DEBUG] sendToDesktop: userId=${userId} ws not open (${wsStateName(client.ws.readyState)})`);
+    return false;
+  }
+  if (Date.now() - client.lastPongAt > WS_HEARTBEAT_GRACE_MS) {
+    console.warn('[ws] sendToDesktop skipped stale connection', {
+      userId,
+      connectionId: client.connectionId,
+      lastPongAgeMs: Date.now() - client.lastPongAt,
+    });
     return false;
   }
   try {

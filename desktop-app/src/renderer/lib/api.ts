@@ -393,6 +393,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
 
   ws.onopen = () => {
     reconnectDelay = 1000;
+    console.log('[ws] connected');
     wsCallbacks.onConnect?.();
   };
 
@@ -424,12 +425,18 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           });
           handleExecuteIpc(msg);
           break;
+        case 'ping':
+          if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'pong', t: msg.t || Date.now() }));
+          }
+          break;
         case 'pong': break;
       }
     } catch { /* ignore malformed JSON */ }
   };
 
   ws.onclose = (ev) => {
+    console.warn('[ws] closed', { code: ev.code, reason: ev.reason });
     ws = null;
     wsCallbacks.onDisconnect?.();
 
@@ -442,7 +449,9 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     }
   };
 
-  ws.onerror = () => { /* onclose will fire */ };
+  ws.onerror = () => {
+    console.warn('[ws] error');
+  };
 }
 
 export function closeWebSocket() {

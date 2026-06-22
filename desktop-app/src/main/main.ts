@@ -550,7 +550,7 @@ function createWindow() {
             detached: true,
             stdio: 'ignore',
             shell: true,
-            windowsHide: false,
+            windowsHide: true,
           });
           child.unref();
           console.log('[execute-commands] cmd background launched', {

@@ -2,7 +2,7 @@
 import path from 'path';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
-import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, type WsClient } from './ws-clients.js';
+import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
@@ -3385,12 +3385,30 @@ wss.on('connection', (ws, req) => {
   // 2. Kick existing connection for this user
   const existing = wsClients.get(apiUserId);
   if (existing) {
+    unregisterWsClient(existing);
+    for (const [, pending] of existing.pendingIpc) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('ws_replaced'));
+    }
+    existing.pendingIpc.clear();
     existing.ws.removeAllListeners();
     existing.ws.close(4002, 'replaced');
   }
 
   // 3. Register client (under both apiUserId and effectiveUserId)
-  const client: WsClient = { ws, apiUserId, effectiveUserId, pendingIpc: new Map() };
+  const now = Date.now();
+  const client: WsClient = {
+    ws,
+    apiUserId,
+    effectiveUserId,
+    pendingIpc: new Map(),
+    connectionId: `${apiUserId}:${now}:${Math.random().toString(36).slice(2, 8)}`,
+    connectedAt: now,
+    lastMessageAt: now,
+    lastPingAt: 0,
+    lastPongAt: now,
+    missedPongs: 0,
+  };
   registerWsClient(client);
   console.log(`[ws] user ${apiUserId} (effective: ${effectiveUserId}) connected, total: ${wsClients.size}`);
 
@@ -3398,6 +3416,7 @@ wss.on('connection', (ws, req) => {
   ws.on('message', async (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
+      client.lastMessageAt = Date.now();
 
       if (msg.type === 'chat_send') {
         await handleWsChatSend(client, msg);
@@ -3411,7 +3430,12 @@ wss.on('connection', (ws, req) => {
       } else if (msg.type === 'ipc_result') {
         handleIpcResult(client, msg);
       } else if (msg.type === 'ping') {
+        client.lastPongAt = Date.now();
+        client.missedPongs = 0;
         ws.send(JSON.stringify({ type: 'pong' }));
+      } else if (msg.type === 'pong') {
+        client.lastPongAt = Date.now();
+        client.missedPongs = 0;
       }
     } catch (err) {
       console.error('[ws] message error:', err);
@@ -3428,6 +3452,40 @@ wss.on('connection', (ws, req) => {
     console.log(`[ws] user ${apiUserId} (effective: ${effectiveUserId}) disconnected, total: ${wsClients.size}`);
   });
 });
+
+setInterval(() => {
+  const uniqueClients = new Set<WsClient>(wsClients.values());
+  const now = Date.now();
+  for (const client of uniqueClients) {
+    if (client.ws.readyState !== WebSocket.OPEN) continue;
+
+    const lastPongAgeMs = now - client.lastPongAt;
+    if (lastPongAgeMs > WS_HEARTBEAT_GRACE_MS) {
+      console.warn('[ws] heartbeat stale, terminating connection', {
+        apiUserId: client.apiUserId,
+        effectiveUserId: client.effectiveUserId,
+        connectionId: client.connectionId,
+        lastPongAgeMs,
+        pendingIpcCount: client.pendingIpc.size,
+      });
+      client.ws.terminate();
+      continue;
+    }
+
+    client.lastPingAt = now;
+    client.missedPongs += 1;
+    client.ws.send(JSON.stringify({ type: 'ping', t: now }), (err) => {
+      if (err) {
+        console.warn('[ws] heartbeat ping failed', {
+          apiUserId: client.apiUserId,
+          effectiveUserId: client.effectiveUserId,
+          connectionId: client.connectionId,
+          error: err.message,
+        });
+      }
+    });
+  }
+}, WS_HEARTBEAT_INTERVAL_MS);
 
 // ── WS chat_send handler ────────────────────────────────────────────────────
 
