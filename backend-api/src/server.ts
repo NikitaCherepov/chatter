@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -790,6 +790,19 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res
   const ok = deleteUserMessage(userId, chatId, messageId);
   if (!ok) return res.status(404).json({ error: 'message_not_found' });
   return res.json({ ok: true });
+});
+
+app.put('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  const messageId = Number.parseInt(req.params.messageId, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
+  const newContent = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+  if (!newContent) return res.status(400).json({ error: 'bad_content' });
+  const result = editUserMessage(userId, chatId, messageId, newContent);
+  if (!result.ok) return res.status(404).json({ error: 'message_not_found' });
+  return res.json({ ok: true, token_count: result.token_count });
 });
 
 app.delete('/api/v1/chats/:chatId', (req: AuthedRequest, res) => {

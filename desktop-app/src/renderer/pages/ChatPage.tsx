@@ -61,6 +61,8 @@ type MessageItemProps = {
   isReasoningOpen: boolean;
   isToolCallsOpen: boolean;
   isRegenHintOpen: boolean;
+  isEditing: boolean;
+  editingText: string;
   sending: boolean;
   regenHintText: string;
   showTokens: boolean;
@@ -76,6 +78,9 @@ type MessageItemProps = {
   onSetRegenHintText: (value: string) => void;
   onRegenerateWithHint: (messageId: number, hint: string) => void;
   onMsgKebabClick: (e: React.MouseEvent, messageId: number) => void;
+  onSetEditingText: (value: string) => void;
+  onSaveEdit: (messageId: number) => void;
+  onCancelEdit: () => void;
 };
 
 const MessageItem = React.memo(function MessageItem({
@@ -85,6 +90,8 @@ const MessageItem = React.memo(function MessageItem({
   isReasoningOpen,
   isToolCallsOpen,
   isRegenHintOpen,
+  isEditing,
+  editingText,
   sending,
   regenHintText,
   showTokens,
@@ -100,6 +107,9 @@ const MessageItem = React.memo(function MessageItem({
   onSetRegenHintText,
   onRegenerateWithHint,
   onMsgKebabClick,
+  onSetEditingText,
+  onSaveEdit,
+  onCancelEdit,
 }: MessageItemProps) {
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
@@ -236,10 +246,39 @@ const MessageItem = React.memo(function MessageItem({
               })}
             </div>
           )}
-          {msg.role === 'assistant'
-            ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
-            : <div className={s.bubbleTextPlain}>{msg.content}</div>
-          }
+          {isEditing ? (
+            <div className={s.editWrap}>
+              <textarea
+                className={s.editTextarea}
+                value={editingText}
+                onChange={(e) => onSetEditingText(e.target.value)}
+                autoFocus
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    onSaveEdit(msg.id);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    onCancelEdit();
+                  }
+                }}
+              />
+              <div className={s.editActions}>
+                <button className={s.editSaveBtn} onClick={() => onSaveEdit(msg.id)}>Сохранить</button>
+                <button className={s.editCancelBtn} onClick={onCancelEdit}>Отмена</button>
+              </div>
+            </div>
+          ) : (
+            msg.role === 'assistant'
+              ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
+              : <div className={s.bubbleTextPlain}>{msg.content}</div>
+          )}
         </div>
         <AnimatePresence>
           {hasReasoning && reasoningOpen && (
@@ -336,6 +375,8 @@ export function ChatPage() {
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
   const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const msgMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState('');
   const [renamingChatId, setRenamingChatId] = useState<number | null>(null);
   const [renamingTitle, setRenamingTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
@@ -1171,6 +1212,40 @@ export function ChatPage() {
       console.error('Failed to delete message:', err);
       setMessages(snapshot);
     }
+  };
+
+  const handleStartEdit = (messageId: number) => {
+    closeMsgMenu();
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    setEditingMsgId(messageId);
+    setEditingText(msg.content);
+  };
+
+  const handleSaveEdit = async (messageId: number) => {
+    if (!activeChatId || !editingMsgId) return;
+    const trimmed = editingText.trim();
+    if (!trimmed) return;
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    const oldContent = msg.content;
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: trimmed } : m));
+    setEditingMsgId(null);
+    setEditingText('');
+    try {
+      const result = await api.editMessage(activeChatId, messageId, trimmed);
+      if (typeof result.token_count === 'number') {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, token_count: result.token_count } : m));
+      }
+    } catch (err) {
+      console.error('Failed to edit message:', err);
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: oldContent } : m));
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMsgId(null);
+    setEditingText('');
   };
 
   const handleRegenerate = useCallback(async (assistantMsgId: number) => {
@@ -2052,6 +2127,8 @@ export function ChatPage() {
                   isReasoningOpen={openReasoningId === msg.id}
                   isToolCallsOpen={openToolCallsId === msg.id}
                   isRegenHintOpen={regenHintMsgId === msg.id}
+                  isEditing={editingMsgId === msg.id}
+                  editingText={editingText}
                   sending={sending}
                   regenHintText={regenHintText}
                   showTokens={showTokens}
@@ -2067,6 +2144,9 @@ export function ChatPage() {
                   onSetRegenHintText={setRegenHintText}
                   onRegenerateWithHint={handleRegenerateWithHint}
                   onMsgKebabClick={handleMsgKebabClick}
+                  onSetEditingText={setEditingText}
+                  onSaveEdit={handleSaveEdit}
+                  onCancelEdit={handleCancelEdit}
                 />
               ))}
               {false && messages.map((msg) => (
@@ -3066,6 +3146,13 @@ export function ChatPage() {
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
                   Отправить в Telegram
+                </button>
+                <button className={s.contextMenuItem} onClick={() => handleStartEdit(msgMenuId)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  Редактировать
                 </button>
                 <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleDeleteMessage(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

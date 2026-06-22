@@ -152,6 +152,32 @@ export const deleteUserMessage = (userId: number, chatId: number, messageId: num
   return result.changes > 0;
 };
 
+export const editUserMessage = (
+  userId: number,
+  chatId: number,
+  messageId: number,
+  newContent: string
+): { ok: boolean; token_count?: number } => {
+  const row = db.prepare(
+    'SELECT role FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
+  ).get(messageId, userId, chatId) as { role: ChatRole } | undefined;
+  if (!row) return { ok: false };
+
+  // Пересчитываем токены для нового content
+  const tokenCount = countMessageTokens(row.role, newContent);
+
+  db.prepare(
+    'UPDATE chat_messages SET content = ?, token_count = ? WHERE id = ? AND user_id = ? AND chat_id = ?'
+  ).run(newContent, tokenCount, messageId, userId, chatId);
+
+  // FTS: триггеры покрывают только INSERT/DELETE, обновляем вручную
+  db.prepare(
+    'UPDATE messages_fts SET content = ? WHERE message_id = ?'
+  ).run(newContent, messageId);
+
+  return { ok: true, token_count: tokenCount };
+};
+
 export const getChatMessages = (userId: number, chatId: number, limit = 20, offset = 0): MessageDto[] => {
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));

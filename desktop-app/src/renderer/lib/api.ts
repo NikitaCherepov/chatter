@@ -225,6 +225,14 @@ export async function deleteMessage(chatId: number, messageId: number): Promise<
   return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}`, { method: 'DELETE' });
 }
 
+export async function editMessage(chatId: number, messageId: number, content: string): Promise<{ ok: boolean; token_count: number }> {
+  return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+}
+
 export type ChatMediaItem = {
   message_id: number;
   url: string;
