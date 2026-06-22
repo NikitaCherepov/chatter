@@ -134,10 +134,11 @@ src/
     │   ├── TasksTool      # Просмотр задач
     │   ├── MapTool        # Карта (Leaflet + react-leaflet)
     │   ├── RadioGroup     # Переиспользуемый радио-селектор
-    │   ├── SettingsModal  # Настройки (аккаунт, промпт, голос, приложение, макросы, серверы, инструкции)
+    │   ├── SettingsModal  # Настройки (аккаунт, промпт, голос, приложение, макросы, серверы, инструкции, умный дом)
     │   ├── MacroSettings  # Управление макросами (CRUD + AI explain/describe)
     │   ├── ServerSettings # Управление SSH-серверами DevOps (CRUD + политики + привязка инструкций)
     │   ├── RunbookSettings # Управление инструкциями DevOps (CRUD + AI extraction/review)
+    │   ├── SmartHomeSettings # Управление умным домом (токен Яндекса, синхронизация устройств)
     │   ├── Select         # Универсальный select-компонент
     │   ├── PromptSelector # Выбор промпта
     │   ├── MarkdownRenderer
@@ -540,6 +541,30 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 - `sudo_password` is used for `sudo -S` and as the password source for `create_server_user` when saved.
 - `default_ssh_key_id` is the key used for installation and optional key login.
 - `use_ssh_key_for_login` is the explicit login-mode checkbox: password login or key login.
+
+## Умный дом (Smart Home)
+
+Вкладка "Умный дом" в SettingsModal — управление устройствами умного дома через Яндекс.Умный дом.
+
+`SmartHomeSettings.tsx` — UI управления:
+- Поле ввода OAuth-токена Яндекса (шифруется на сервере через `ENCRYPTION_KEY`)
+- Кнопка синхронизации — загружает актуальный список устройств и групп из Яндекса
+- Список устройств: имя, комната, бейдж "группа", capabilities, тип
+
+**Настройка:**
+1. Получить отладочный OAuth-токен на `oauth.yandex.ru` (права: «API Умного дома Яндекса»)
+2. Вставить токен во вкладке "Умный дом" → "Сохранить"
+3. Нажать "Синхронизировать" — устройства появятся в списке
+4. После этого AI может управлять устройствами: `get_smart_devices()` → `control_smart_home({ device_id, action })`
+
+**Файлы:**
+
+| Файл | Назначение |
+|---|---|
+| `components/SmartHomeSettings.tsx` | Вкладка настроек: токен, синхронизация, список устройств |
+| `lib/api.ts` | Типы `SmartDeviceDto`, `SmartHomeSettingsDto` + API-функции |
+
+Подробности архитектуры бэкенда: [backend-api/README.md → Smart Home](../backend-api/README.md#smart-home-умный-дом).
 
 ## Feature Flags (ограничения инструментов)
 

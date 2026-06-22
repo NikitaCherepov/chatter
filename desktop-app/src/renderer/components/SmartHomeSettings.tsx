@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import type { SmartDeviceDto, SmartHomeSettingsDto } from '../lib/api';
@@ -23,7 +23,7 @@ export function SmartHomeSettings() {
       ]);
       setSettings(settingsRes.settings);
       setDevices(devicesRes.devices || []);
-    } catch (err: any) {
+    } catch {
       toast.error('Не удалось загрузить настройки умного дома');
     } finally {
       setLoading(false);
@@ -41,7 +41,7 @@ export function SmartHomeSettings() {
       toast.success('Токен сохранён');
       setTokenInput('');
       await loadData();
-    } catch (err: any) {
+    } catch {
       toast.error('Ошибка сохранения токена');
     } finally {
       setSavingToken(false);
@@ -76,18 +76,20 @@ export function SmartHomeSettings() {
     }
   };
 
-  if (loading) return <div className={s.panelTitle}>Загрузка...</div>;
+  if (loading) {
+    return <div className={s.panel}><div className={s.promptLoading}>Загрузка...</div></div>;
+  }
 
   const hasToken = !!settings?.has_token;
 
   return (
-    <div>
+    <div className={s.panel}>
       <div className={s.panelTitle}>Умный дом (Яндекс)</div>
 
-      {/* Token section */}
+      {/* Token input */}
       <div className={s.fieldGroup}>
         <label className={s.fieldLabel}>OAuth-токен Яндекса</label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className={s.commandRow}>
           <input
             className={s.fieldInput}
             type={showToken ? 'text' : 'password'}
@@ -97,14 +99,26 @@ export function SmartHomeSettings() {
             onKeyDown={e => { if (e.key === 'Enter' && !savingToken) handleSaveToken(); }}
           />
           <button
-            className={s.zoomBtn}
+            className={s.macroActionBtn}
             onClick={() => setShowToken(v => !v)}
             title={showToken ? 'Скрыть' : 'Показать'}
           >
-            {showToken ? '🙈' : '👁'}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {showToken ? (
+                <>
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </>
+              ) : (
+                <>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </>
+              )}
+            </svg>
           </button>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
           <button
             className={s.saveBtn}
             onClick={handleSaveToken}
@@ -114,100 +128,108 @@ export function SmartHomeSettings() {
           </button>
           {hasToken && (
             <button
-              className={s.macroActionBtn}
-              onClick={() => setConfirmDelete(true)}
+              className={s.cancelBtn}
               style={{ color: '#e74c3c' }}
+              onClick={() => setConfirmDelete(true)}
             >
-              Удалить токен
+              Удалить
             </button>
           )}
         </div>
         {settings?.synced_at && (
-          <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6 }}>
+          <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
             Последняя синхронизация: {new Date(settings.synced_at * 1000).toLocaleString('ru-RU')}
           </div>
         )}
       </div>
 
-      {/* Sync button */}
+      {/* Sync + devices */}
       {hasToken && (
-        <div className={s.fieldGroup}>
-          <button
-            className={s.saveBtn}
-            onClick={handleSync}
-            disabled={syncing}
-          >
-            {syncing ? 'Синхронизация...' : '🔄 Синхронизировать устройства'}
-          </button>
-        </div>
-      )}
+        <>
+          <div className={s.macroFormDivider} />
 
-      {/* Device list */}
-      {devices.length > 0 && (
-        <div className={s.fieldGroup}>
-          <label className={s.fieldLabel}>Устройства ({devices.length})</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {devices.map(d => (
-              <div key={d.id} className={s.macroCard} style={{ padding: '12px 14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontWeight: 600 }}>{d.name}</span>
-                    {d.room_name && (
-                      <span style={{ opacity: 0.6, marginLeft: 8 }}>📍 {d.room_name}</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {d.is_group && (
-                      <span style={{
-                        fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                        background: 'rgba(255,255,255,0.08)', color: '#aaa',
-                      }}>
-                        группа
-                      </span>
-                    )}
-                    <span style={{ fontSize: 11, opacity: 0.5 }}>
-                      {d.provider}
-                    </span>
-                  </div>
-                </div>
-                {d.capabilities.length > 0 && (
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
-                    {d.capabilities.map(c => (
-                      <span key={c} style={{
-                        fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                        background: 'rgba(255,255,255,0.06)', color: '#999',
-                      }}>
-                        {c}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div style={{ fontSize: 11, opacity: 0.3, marginTop: 4, fontFamily: 'monospace' }}>
-                  {d.id}
-                </div>
-              </div>
-            ))}
+          <div className={s.fieldGroup}>
+            <span className={s.fieldLabel} style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px', display: 'block' }}>
+              Синхронизация устройств
+            </span>
+            <span className={s.fieldLabel} style={{ marginBottom: '8px', display: 'block' }}>
+              Загрузить актуальный список устройств и групп из Яндекса
+            </span>
+            <button
+              className={s.saveBtn}
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? 'Синхронизация...' : 'Синхронизировать'}
+            </button>
           </div>
-        </div>
-      )}
 
-      {/* Empty state */}
-      {hasToken && devices.length === 0 && !syncing && (
-        <div className={s.fieldGroup} style={{ opacity: 0.6, textAlign: 'center' }}>
-          Устройства не синхронизированы. Нажмите кнопку выше.
-        </div>
+          {devices.length > 0 && (
+            <div className={s.fieldGroup}>
+              <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>
+                Устройства ({devices.length})
+              </div>
+              {devices.map(d => (
+                <div key={d.id} className={s.macroCard}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: 500, fontSize: '13px' }}>{d.name}</span>
+                      {d.is_group && (
+                        <span style={{
+                          fontSize: '10px', padding: '1px 6px', borderRadius: '3px',
+                          background: 'var(--border-light)', color: 'var(--text-muted)',
+                        }}>
+                          группа
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {d.room_name ? `📍 ${d.room_name}` : ''}
+                      {d.room_name && d.type ? ' · ' : ''}
+                      {d.type ? d.type.replace('devices.types.', '') : ''}
+                    </div>
+                    {d.capabilities.length > 0 && (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                        {d.capabilities.map(c => (
+                          <code key={c} style={{
+                            fontSize: '10px', color: 'var(--accent)',
+                            padding: '1px 6px', borderRadius: '3px',
+                            background: 'var(--bg-elevated)',
+                          }}>
+                            {c}
+                          </code>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {devices.length === 0 && !syncing && (
+            <div className={s.fieldGroup}>
+              <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
+                Устройства не синхронизированы. Нажмите кнопку выше.
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Help */}
       {!hasToken && (
-        <div className={s.fieldGroup} style={{ opacity: 0.6, fontSize: 13, lineHeight: 1.6 }}>
-          <p style={{ margin: '0 0 8px' }}><b>Как получить токен:</b></p>
-          <ol style={{ margin: 0, paddingLeft: 20 }}>
-            <li>Перейдите на oauth.yandex.ru</li>
-            <li>Создайте приложение (платформа — веб-сервисы)</li>
-            <li>Права: «API Умного дома Яндекса»</li>
-            <li>Получите отладочный OAuth-токен (y0_...)</li>
-          </ol>
+        <div className={s.fieldGroup}>
+          <div className={s.macroFormDivider} />
+          <span className={s.fieldLabel} style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: '8px' }}>
+            Как получить токен
+          </span>
+          <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.6 }}>
+            1. Перейдите на <code style={{ color: 'var(--accent)' }}>oauth.yandex.ru</code><br />
+            2. Создайте приложение (платформа — веб-сервисы)<br />
+            3. Права: «API Умного дома Яндекса»<br />
+            4. Получите отладочный OAuth-токен (<code style={{ color: 'var(--accent)' }}>y0_...</code>)
+          </div>
         </div>
       )}
 

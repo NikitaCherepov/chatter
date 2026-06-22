@@ -65,7 +65,7 @@ npm run logs
 
 - **search_web** - поиск в интернете (Tavily).
 - **read_webpage** - чтение и очистка текста веб-страницы.
-- **control_smart_home** - управление устройствами умного дома.
+- **get_smart_devices** / **control_smart_home** - управление умным домом (Яндекс). Два инструмента: первый возвращает список устройств из БД, второй управляет по device_id. Токен и устройства настраиваются через UI (Настройки → Умный дом).
 - **schedule_task** / **get_my_tasks** / **delete_my_task** - планирование задач и напоминаний.
 - **set_user_timezone** - установка часового пояса.
 - **check_emails** / **read_email_content** / **send_email** - работа с почтой.

@@ -736,7 +736,8 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 |---|---|
 | `search_web` | Поиск в интернете (Tavily) |
 | `read_webpage` | Чтение текста веб-страницы по URL |
-| `control_smart_home` | Управление устройствами умного дома |
+| `control_smart_home` | Управление устройством умного дома по device_id (сначала вызывается `get_smart_devices`) |
+| `get_smart_devices` | Возвращает список устройств, комнат и их ID из БД |
 | `schedule_task` | Создание задачи/напоминания |
 | `get_my_tasks` | Список задач пользователя |
 | `delete_my_task` | Удаление задачи |
@@ -762,6 +763,31 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 
 **Desktop-only (не доступны из TG):** `desktop_action` (управление UI десктопа), `invoke_subagent` (субагенты).
 
+### Smart Home (Умный дом)
+
+Архитектура: DB-driven, провайдер-агностик (сейчас реализован Яндекс, заложен фундамент для Zigbee2MQTT).
+
+**Два AI-инструмента:**
+- `get_smart_devices` — возвращает JSON-массив устройств из БД (`id`, `name`, `room`, `type`, `capabilities`). AI вызывает первым.
+- `control_smart_home` — управляет устройством по `device_id` (полученному из `get_smart_devices`). Actions: `on`, `off`, `set_color`, `set_brightness`.
+
+**Поток:** `get_smart_devices()` → AI выбирает устройство → `control_smart_home({ device_id, action })` → `POST api.iot.yandex.net/v1.0/devices/actions`.
+
+**Таблицы БД:**
+- `smart_home_settings` — OAuth-токен провайдера (шифрование aes-256-cbc через `ENCRYPTION_KEY`), `synced_at`.
+- `smart_devices` — плоский список устройств: группы и одиночные девайсы. Группы приоритетнее — устройства внутри групп не дублируются. Поля: `id` (`yandex_group_*` / `yandex_device_*`), `name`, `room_name`, `provider`, `is_group`, `target_ids` (JSON-массив реальных UUID для API), `capabilities`.
+
+**API эндпоинты:**
+- `GET /api/v1/smart-home/settings` — статус (есть ли токен, `synced_at`)
+- `GET /api/v1/smart-home/devices` — список устройств
+- `POST /api/v1/smart-home/token` — сохранить токен `{ token }`
+- `DELETE /api/v1/smart-home/token` — удалить токен + устройства
+- `POST /api/v1/smart-home/sync` — синхронизация с Яндексом (запрос `/user/info` → парсинг → upsert в БД)
+
+**Синхронизация:** парсер берёт группы Яндекса как приоритетные сущности. Устройства, входящие в группы, не добавляются отдельно — это предотвращает дублирование для AI.
+
+**Маршрутизация AI:** Smart Home идёт через LITE-роутер (cheap-route `SMART_HOME`), не требует PRO-модели.
+
 ### Feature Flags (ограничения инструментов)
 
 Система позволяет пользователю выборочно отключать AI-инструменты через галочки в настройках десктоп-приложения. Флаги хранятся в БД (`users.feature_flags`, JSON) и применяются сервером при каждом запросе к AI.
@@ -778,7 +804,7 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
 | `disable_pc_control_lite` | Ограниченный режим | `execute_ssh_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
 | `disable_pc_commands` | Без команд на ПК | `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` |
-| `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
+| `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
 | `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
 | `disable_personal` | Гостевой режим | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + скрытие промпта и горячей памяти из system prompt |
 | `disable_subagents` | Без субагентов | `invoke_subagent` |
