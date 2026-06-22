@@ -14,6 +14,7 @@ import { MacroSettings } from './MacroSettings';
 import { ServerSettings } from './ServerSettings';
 import { RunbookSettings } from './RunbookSettings';
 import { SshKeySettings } from './SshKeySettings';
+import { SmartHomeSettings } from './SmartHomeSettings';
 import { PCSettings } from './PCSettings';
 import s from './SettingsModal.module.scss';
 
@@ -21,7 +22,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'restrictions' | 'models';
+type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'smart_home' | 'restrictions' | 'models';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -50,6 +51,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'servers', label: 'Серверы' },
   { key: 'runbooks', label: 'Инструкции' },
   { key: 'sshkeys', label: 'SSH-ключи' },
+  { key: 'smart_home', label: 'Умный дом' },
   { key: 'restrictions', label: 'Ограничения' },
   { key: 'models', label: 'Модели' },
   { key: 'app', label: 'Приложение' },
@@ -723,6 +725,10 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'sshkeys' && (
             <SshKeySettings />
+          )}
+
+          {section === 'smart_home' && (
+            <SmartHomeSettings />
           )}
 
           {section === 'restrictions' && (

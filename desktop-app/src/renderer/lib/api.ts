@@ -1036,3 +1036,45 @@ export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
   if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`);
   return res.arrayBuffer();
 }
+
+// ---------- Smart Home ----------
+
+export type SmartDeviceDto = {
+  id: string;
+  name: string;
+  room_name: string | null;
+  provider: string;
+  is_group: boolean;
+  type: string | null;
+  capabilities: string[];
+};
+
+export type SmartHomeSettingsDto = {
+  provider: string;
+  has_token: boolean;
+  synced_at: number | null;
+};
+
+export async function getSmartHomeSettings(): Promise<{ settings: SmartHomeSettingsDto | null }> {
+  return apiFetch('/api/v1/smart-home/settings');
+}
+
+export async function getSmartHomeDevices(): Promise<{ devices: SmartDeviceDto[] }> {
+  return apiFetch('/api/v1/smart-home/devices');
+}
+
+export async function setSmartHomeToken(token: string): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/smart-home/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function deleteSmartHomeToken(): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/smart-home/token', { method: 'DELETE' });
+}
+
+export async function syncSmartHomeDevices(): Promise<{ synced: number }> {
+  return apiFetch('/api/v1/smart-home/sync', { method: 'POST' });
+}
