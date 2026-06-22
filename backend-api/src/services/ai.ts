@@ -6,7 +6,7 @@ import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
-import { runSmartHomeControl, type SmartHomeArgs, SMART_HOME_DEVICE_OPTIONS_TEXT } from './smart-home.js';
+import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from './smart-home.js';
 import { runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
@@ -1093,14 +1093,25 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'get_smart_devices',
+      description: 'Возвращает список всех устройств умного дома пользователя с их ID, названиями, комнатами и возможностями. ВЫЗЫВАЙ ПЕРВЫМ, если не знаешь точный device_id устройства.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'control_smart_home',
-      description: 'Управляет устройствами умного дома. Используй ТОЛЬКО при явной просьбе включить/выключить устройство или изменить цвет/яркость.',
+      description: 'Управляет устройством умного дома по его device_id. Сначала вызови get_smart_devices, чтобы получить ID нужного устройства.',
       parameters: {
         type: 'object',
         properties: {
-          device_name: {
+          device_id: {
             type: 'string',
-            description: `Название устройства. Доступные варианты: ${SMART_HOME_DEVICE_OPTIONS_TEXT}.`
+            description: 'ID устройства, полученный из get_smart_devices (например, "yandex_group_d3866e23-..." или "yandex_device_65b9c366-...").'
           },
           action: {
             type: 'string',
@@ -1116,7 +1127,7 @@ export const toolDefinitions = [
             description: 'Уровень яркости от 1 до 100. Используется только с action=set_brightness.'
           }
         },
-        required: ['device_name', 'action']
+        required: ['device_id', 'action']
       }
     }
   },
@@ -1132,7 +1143,7 @@ export const toolDefinitions = [
           delay_seconds: { type: 'number', description: 'Задержка в секундах от текущего момента, например 60.' },
           execute_at: { type: 'number', description: 'Legacy-поле: Unix timestamp в секундах. Используй только если local_time/delay_seconds не подходят.' },
           task_type: { type: 'string', enum: ['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'], description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете, email_check - запланированная проверка почты, ai_instruction - запуск AI-инструкции по расписанию.' },
-          payload: { type: 'string', description: 'Для message: текст. Для smart_home: JSON-строка с параметрами умного дома. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":10, "offset":10, "date_from":"2026-04-01","date_to":"2026-04-30"} или просто строка запроса. Для ai_instruction: текст инструкции, которую AI выполнит по расписанию.' },
+          payload: { type: 'string', description: 'Для message: текст. Для smart_home: JSON-строка вида {"device_id":"yandex_group_...","action":"on"|"off"|"set_color"|"set_brightness","color":"#RRGGBB","brightness":50}. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":10, "offset":10, "date_from":"2026-04-01","date_to":"2026-04-30"} или просто строка запроса. Для ai_instruction: текст инструкции, которую AI выполнит по расписанию.' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Тип расписания: once - один раз, daily - каждый день, weekly - каждую неделю.' },
           recurrence_weekday: { type: 'number', description: 'День недели для weekly: 1=понедельник ... 7=воскресенье.' },
           notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'Режим уведомлений: always - всегда писать о результате, never - никогда не писать, on_match - писать только если результат содержит notify_condition как подстроку, on_condition - ИИ проверит условие notify_condition и решит, отправлять уведомление или нет.' },
@@ -2462,6 +2473,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
   }
 
+  if (toolName === 'get_smart_devices') return listSmartDevicesForAi(user.id);
   if (toolName === 'control_smart_home') return runSmartHomeControl(user.id, parsed as SmartHomeArgs);
   if (toolName === 'set_user_timezone') return runSetUserTimezone(user.id, parsed as SetTimezoneArgs);
   if (toolName === 'random_roll') return runRandomRoll(parsed);
@@ -4419,6 +4431,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'search_web') return 'Ищу информацию в сети...';
   if (toolName === 'read_webpage') return 'Открываю страницу и извлекаю текст...';
+  if (toolName === 'get_smart_devices') return '🏠 Получаю список устройств...';
   if (toolName === 'control_smart_home') return '🏠 Выполняю команду умного дома...';
   if (toolName === 'random_roll') {
     try {
@@ -4697,6 +4710,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('delete_my_task');
     // Плюс read-only десктоп
     disabledToolSet.add('control_smart_home');
+    disabledToolSet.add('get_smart_devices');
     disabledToolSet.add('check_emails');
     disabledToolSet.add('read_email_content');
     disabledToolSet.add('get_my_tasks');
@@ -4785,6 +4799,7 @@ export const sendMessageThroughAi = async (
     ...(subagentTool ? [subagentTool] : []),
     ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])
   ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[];
+
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 
@@ -4821,7 +4836,7 @@ PRO
   type CheapRoute = 'SMART_HOME' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
 
   const cheapMap: Record<Exclude<CheapRoute, 'PRO'>, string[]> = {
-    SMART_HOME: ['control_smart_home'],
+    SMART_HOME: ['control_smart_home', 'get_smart_devices'],
     QUICK_SEARCH: ['search_web'],
     TIMEZONE: ['set_user_timezone'],
     RANDOM: ['random_roll']

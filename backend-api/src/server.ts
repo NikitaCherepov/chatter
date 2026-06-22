@@ -20,6 +20,7 @@ import { getPendingPcConfirmation, deletePendingPcConfirmation } from './service
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
+import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
@@ -2928,6 +2929,45 @@ app.delete('/api/v1/devops/ssh-keys/:id', (req: AuthedRequest, res: any) => {
   const ok = deleteSshKey(userId, keyId);
   if (!ok) return res.status(404).json({ error: 'not_found' });
   return res.json({ ok: true });
+});
+
+// ── Smart Home ─────────────────────────────────────────────────────────────
+
+app.get('/api/v1/smart-home/settings', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const settings = getSmartHomeSettings(userId);
+  return res.json({ settings });
+});
+
+app.get('/api/v1/smart-home/devices', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const devices = listSmartDevices(userId);
+  return res.json({ devices });
+});
+
+app.post('/api/v1/smart-home/token', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  if (!token) return res.status(400).json({ error: 'token_required' });
+  setSmartHomeToken(userId, token);
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/smart-home/token', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  deleteSmartHomeToken(userId);
+  return res.json({ ok: true });
+});
+
+app.post('/api/v1/smart-home/sync', async (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  try {
+    const result = await syncSmartHomeDevices(userId);
+    return res.json(result);
+  } catch (err: any) {
+    if (err?.message === 'no_token') return res.status(400).json({ error: 'no_token' });
+    return res.status(502).json({ error: 'sync_failed', detail: err?.message || String(err) });
+  }
 });
 
 // ─── DevOps: Approve/reject pending command (from desktop via WS) ───────────

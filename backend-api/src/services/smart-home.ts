@@ -1,99 +1,109 @@
-﻿import dotenv from 'dotenv';
+import crypto from 'node:crypto';
+import { db, getNowUnix } from '../db.js';
 
-dotenv.config();
+// ── Encryption (uses shared ENCRYPTION_KEY, same as mail.ts) ─────────────────
 
-const parseAdminId = (raw: string | undefined) => {
-  if (!raw) return null;
-  const normalized = raw.replace(/[^\d-]/g, '').trim();
-  if (!normalized) return null;
-  const parsed = Number.parseInt(normalized, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed;
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod').digest();
+const IV_LENGTH = 16;
+const DELIMITER = ':';
+
+const encrypt = (text: string): string => {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  return `${iv.toString('hex')}${DELIMITER}${encrypted.toString('hex')}`;
 };
 
-const parseCsv = (raw: string | undefined) => {
-  if (!raw) return [] as string[];
-  return raw.split(/[,\n;]+/).map(v => v.trim()).filter(Boolean);
+const decrypt = (text: string): string => {
+  const parts = text.split(DELIMITER);
+  if (parts.length !== 2) return text;
+  const iv = Buffer.from(parts[0], 'hex');
+  const encryptedText = Buffer.from(parts[1], 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
+  return decrypted.toString('utf8');
 };
 
-const normalizeAlias = (v: string) => v.trim().toLowerCase();
+// ── DB Tables ───────────────────────────────────────────────────────────────
 
-const ADMIN_IDS = (() => {
-  const ids = new Set<number>();
-  for (const raw of (process.env.ADMIN_IDS || '').split(/[,\s;]+/)) {
-    const id = parseAdminId(raw);
-    if (id) ids.add(id);
-  }
-  const one = parseAdminId(process.env.ADMIN_ID);
-  if (one) ids.add(one);
-  return ids;
-})();
+db.exec(`
+  CREATE TABLE IF NOT EXISTS smart_home_settings (
+    user_id INTEGER NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'yandex',
+    token_enc TEXT NOT NULL,
+    synced_at INTEGER,
+    PRIMARY KEY (user_id, provider)
+  )
+`);
 
-const SMART_HOME_ALLOWED_IDS = (() => {
-  const ids = new Set<number>();
-  for (const raw of parseCsv(process.env.SMART_HOME_ALLOWED_IDS)) {
-    const id = parseAdminId(raw);
-    if (id) ids.add(id);
-  }
-  const one = parseAdminId(process.env.SMART_HOME_ALLOWED_ID);
-  if (one) ids.add(one);
-  return ids;
-})();
+db.exec(`
+  CREATE TABLE IF NOT EXISTS smart_devices (
+    id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    room_name TEXT,
+    provider TEXT NOT NULL DEFAULT 'yandex',
+    is_group INTEGER NOT NULL DEFAULT 0,
+    native_id TEXT NOT NULL,
+    type TEXT,
+    capabilities TEXT NOT NULL DEFAULT '[]',
+    target_ids TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, id)
+  )
+`);
 
-const SMART_HOME_DEVICES_FALLBACK: Record<string, string[]> = {
-  'свет': [
-    '20c0fb1b-f5e4-4daf-b121-0ee0fb326586',
-    '619facb9-4ce8-4ed6-b66a-923f01c8e0a4',
-    'e3d027ee-3ca4-4776-9e92-f23c7e6dc926'
-  ],
-  'увлажнитель': [
-    '65b9c366-cb0c-4dfd-8624-1473a811752f'
-  ]
-};
+db.exec('CREATE INDEX IF NOT EXISTS idx_smart_devices_user ON smart_devices(user_id)');
 
-const SMART_HOME_DEVICES: Record<string, string[]> = (() => {
-  const devices: Record<string, string[]> = {};
-  for (const [alias, ids] of Object.entries(SMART_HOME_DEVICES_FALLBACK)) {
-    devices[normalizeAlias(alias)] = ids.map(v => v.trim()).filter(Boolean);
-  }
+// ── Types ───────────────────────────────────────────────────────────────────
 
-  const jsonRaw = process.env.SMART_HOME_DEVICES_JSON;
-  if (jsonRaw) {
-    try {
-      const parsed = JSON.parse(jsonRaw) as Record<string, string[] | string>;
-      for (const [alias, value] of Object.entries(parsed)) {
-        const ids = Array.isArray(value) ? value.map(v => `${v}`.trim()).filter(Boolean) : parseCsv(`${value}`);
-        if (!ids.length) continue;
-        devices[normalizeAlias(alias)] = ids;
-      }
-    } catch {
-      // ignore malformed JSON
-    }
-  }
+export type SmartHomeAction = 'on' | 'off' | 'set_color' | 'set_brightness';
 
-  for (const [key, value] of Object.entries(process.env)) {
-    if (!key.startsWith('SMART_HOME_DEVICE_')) continue;
-    const alias = normalizeAlias(key.replace('SMART_HOME_DEVICE_', '').replace(/__/g, '-').replace(/_/g, ' '));
-    const ids = parseCsv(value);
-    if (!ids.length) continue;
-    devices[alias] = ids;
-  }
-
-  return devices;
-})();
-
-const SMART_HOME_DEVICE_NAMES = Object.keys(SMART_HOME_DEVICES);
-export const SMART_HOME_DEVICE_OPTIONS_TEXT = SMART_HOME_DEVICE_NAMES.length
-  ? SMART_HOME_DEVICE_NAMES.join(', ')
-  : 'не настроены (добавь SMART_HOME_DEVICE_* в .env)';
-
-type SmartHomeAction = 'on' | 'off' | 'set_color' | 'set_brightness';
 export type SmartHomeArgs = {
-  device_name?: string;
+  device_id?: string;
   action?: SmartHomeAction;
   color?: string;
   brightness?: number;
 };
+
+export type SmartDeviceDto = {
+  id: string;
+  name: string;
+  room_name: string | null;
+  provider: string;
+  is_group: boolean;
+  type: string | null;
+  capabilities: string[];
+};
+
+export type SmartHomeSettingsDto = {
+  provider: string;
+  has_token: boolean;
+  synced_at: number | null;
+};
+
+type SmartDeviceRow = {
+  id: string;
+  user_id: number;
+  name: string;
+  room_name: string | null;
+  provider: string;
+  is_group: number;
+  native_id: string;
+  type: string | null;
+  capabilities: string;
+  target_ids: string;
+  created_at: number;
+};
+
+type SmartHomeSettingsRow = {
+  user_id: number;
+  provider: string;
+  token_enc: string;
+  synced_at: number | null;
+};
+
+// ── Color helpers (unchanged) ───────────────────────────────────────────────
 
 const COLOR_NAME_TO_HEX: Record<string, string> = {
   red: '#FF0000',
@@ -160,22 +170,253 @@ const parseColorToHsv = (value: string) => {
   return { h: Math.round(h * 360), s: Math.round(s * 100), v: Math.round(v * 100) };
 };
 
-export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) => {
-  const canControl = ADMIN_IDS.has(userId) || SMART_HOME_ALLOWED_IDS.has(userId);
-  if (!canControl) return 'Ошибка доступа: у тебя нет прав на управление умным домом.';
-  if (!process.env.YANDEX_IOT_TOKEN) return 'Ошибка конфигурации: не задан YANDEX_IOT_TOKEN.';
+// ── Yandex data parser ──────────────────────────────────────────────────────
 
-  const deviceName = normalizeAlias(args.device_name || '');
-  if (!deviceName) return 'Ошибка инструмента: не передано имя устройства.';
+type YandexCapability = {
+  type: string;
+  parameters?: any;
+  state?: any;
+};
 
-  const deviceIds = SMART_HOME_DEVICES[deviceName];
-  if (!deviceIds?.length) return `Ошибка: устройство "${args.device_name}" не найдено.`;
+type YandexDevice = {
+  id: string;
+  name: string;
+  type: string;
+  room?: string;
+  capabilities?: YandexCapability[];
+};
+
+type YandexGroup = {
+  id: string;
+  name: string;
+  type: string;
+  devices: string[];
+  capabilities?: YandexCapability[];
+};
+
+type YandexRoom = {
+  id: string;
+  name: string;
+  devices?: string[];
+};
+
+type YandexInfoResponse = {
+  rooms?: YandexRoom[];
+  groups?: YandexGroup[];
+  devices?: YandexDevice[];
+};
+
+type ParsedDevice = {
+  id: string;
+  name: string;
+  room_name: string | null;
+  provider: string;
+  is_group: number;
+  native_id: string;
+  type: string | null;
+  capabilities: string;
+  target_ids: string;
+};
+
+/** Strip "devices.capabilities." prefix → short name */
+const capShort = (type: string): string => type.replace('devices.capabilities.', '');
+
+/**
+ * Parse Yandex /user/info response into flat device list.
+ * Groups take priority — devices already inside a group are skipped as standalone.
+ */
+function parseYandexData(userId: number, data: YandexInfoResponse): ParsedDevice[] {
+  const entities: ParsedDevice[] = [];
+  const now = getNowUnix();
+
+  // room_id → room_name
+  const roomMap = new Map<string, string>();
+  for (const r of data.rooms || []) roomMap.set(r.id, r.name);
+
+  // device_id → device object
+  const deviceMap = new Map<string, YandexDevice>();
+  for (const d of data.devices || []) deviceMap.set(d.id, d);
+
+  // Track UUIDs already inside groups (to skip standalone)
+  const groupedDeviceIds = new Set<string>();
+
+  // 1. Groups first (e.g. "Свет" containing 3 lamps)
+  for (const g of data.groups || []) {
+    for (const id of g.devices || []) groupedDeviceIds.add(id);
+
+    // Resolve room from first member device
+    const firstDevice = deviceMap.get(g.devices?.[0] || '');
+    const roomName = firstDevice?.room ? roomMap.get(firstDevice.room) || null : null;
+
+    const caps = (g.capabilities || []).map(c => capShort(c.type));
+
+    entities.push({
+      id: `yandex_group_${g.id}`,
+      name: g.name,
+      room_name: roomName,
+      provider: 'yandex',
+      is_group: 1,
+      native_id: g.id,
+      type: g.type || null,
+      capabilities: JSON.stringify(caps),
+      target_ids: JSON.stringify(g.devices || []),
+    });
+  }
+
+  // 2. Standalone devices not in any group (e.g. "Увлажнитель")
+  for (const d of data.devices || []) {
+    if (groupedDeviceIds.has(d.id)) continue;
+
+    const roomName = d.room ? roomMap.get(d.room) || null : null;
+    const caps = (d.capabilities || []).map(c => capShort(c.type));
+
+    entities.push({
+      id: `yandex_device_${d.id}`,
+      name: d.name,
+      room_name: roomName,
+      provider: 'yandex',
+      is_group: 0,
+      native_id: d.id,
+      type: d.type || null,
+      capabilities: JSON.stringify(caps),
+      target_ids: JSON.stringify([d.id]),
+    });
+  }
+
+  return entities;
+}
+
+// ── Settings CRUD ───────────────────────────────────────────────────────────
+
+export const getSmartHomeSettings = (userId: number): SmartHomeSettingsDto | null => {
+  const row = db.prepare(`SELECT * FROM smart_home_settings WHERE user_id = ? AND provider = 'yandex'`)
+    .get(userId) as SmartHomeSettingsRow | undefined;
+  if (!row) return null;
+  return {
+    provider: row.provider,
+    has_token: !!row.token_enc,
+    synced_at: row.synced_at ?? null,
+  };
+};
+
+export const getYandexToken = (userId: number): string | null => {
+  const row = db.prepare(`SELECT token_enc FROM smart_home_settings WHERE user_id = ? AND provider = 'yandex'`)
+    .get(userId) as SmartHomeSettingsRow | undefined;
+  if (!row?.token_enc) return null;
+  try {
+    return decrypt(row.token_enc);
+  } catch {
+    return null;
+  }
+};
+
+export const setSmartHomeToken = (userId: number, token: string): void => {
+  const enc = encrypt(token);
+  db.prepare(`
+    INSERT INTO smart_home_settings (user_id, provider, token_enc, synced_at)
+    VALUES (?, 'yandex', ?, NULL)
+    ON CONFLICT (user_id, provider) DO UPDATE SET token_enc = excluded.token_enc, synced_at = NULL
+  `).run(userId, enc);
+};
+
+export const deleteSmartHomeToken = (userId: number): void => {
+  db.prepare(`DELETE FROM smart_home_settings WHERE user_id = ? AND provider = 'yandex'`).run(userId);
+  // Also wipe synced devices
+  db.prepare(`DELETE FROM smart_devices WHERE user_id = ?`).run(userId);
+};
+
+// ── Device CRUD ─────────────────────────────────────────────────────────────
+
+const rowToDto = (row: SmartDeviceRow): SmartDeviceDto => ({
+  id: row.id,
+  name: row.name,
+  room_name: row.room_name,
+  provider: row.provider,
+  is_group: row.is_group === 1,
+  type: row.type,
+  capabilities: JSON.parse(row.capabilities || '[]'),
+});
+
+export const listSmartDevices = (userId: number): SmartDeviceDto[] => {
+  const rows = db.prepare(`SELECT * FROM smart_devices WHERE user_id = ? ORDER BY name COLLATE NOCASE`)
+    .all(userId) as SmartDeviceRow[];
+  return rows.map(rowToDto);
+};
+
+/** Compact JSON for AI tool response (get_smart_devices) */
+export const listSmartDevicesForAi = (userId: number): string => {
+  const devices = listSmartDevices(userId);
+  if (!devices.length) return 'Устройства не найдены. Попросите пользователя добавить токен и синхронизировать устройства в настройках.';
+  const compact = devices.map(d => ({
+    id: d.id,
+    name: d.name,
+    room: d.room_name,
+    type: d.type,
+    capabilities: d.capabilities,
+  }));
+  return JSON.stringify(compact, null, 2);
+};
+
+// ── Sync from Yandex ────────────────────────────────────────────────────────
+
+export const syncSmartHomeDevices = async (userId: number): Promise<{ synced: number }> => {
+  const token = getYandexToken(userId);
+  if (!token) throw new Error('no_token');
+
+  const response = await fetch('https://api.iot.yandex.net/v1.0/user/info', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const raw = await response.text().catch(() => '');
+    throw new Error(`yandex_api_${response.status}: ${raw || 'empty'}`);
+  }
+
+  const data = await response.json() as YandexInfoResponse;
+  const parsed = parseYandexData(userId, data);
+
+  // Replace all devices for this user atomically
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM smart_devices WHERE user_id = ?`).run(userId);
+    const now = getNowUnix();
+    const insert = db.prepare(`
+      INSERT INTO smart_devices (id, user_id, name, room_name, provider, is_group, native_id, type, capabilities, target_ids, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const d of parsed) {
+      insert.run(d.id, userId, d.name, d.room_name, d.provider, d.is_group, d.native_id, d.type, d.capabilities, d.target_ids, now);
+    }
+    db.prepare(`UPDATE smart_home_settings SET synced_at = ? WHERE user_id = ? AND provider = 'yandex'`)
+      .run(now, userId);
+  });
+  tx();
+
+  return { synced: parsed.length };
+};
+
+// ── Control ─────────────────────────────────────────────────────────────────
+
+const findDeviceById = (userId: number, deviceId: string): SmartDeviceRow | null => {
+  return (db.prepare(`SELECT * FROM smart_devices WHERE user_id = ? AND id = ?`)
+    .get(userId, deviceId) as SmartDeviceRow | undefined) || null;
+};
+
+export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): Promise<string> => {
+  const token = getYandexToken(userId);
+  if (!token) return 'Ошибка: не настроен токен умного дома. Добавьте его в настройках.';
+
+  const deviceId = (args.device_id || '').trim();
+  if (!deviceId) return 'Ошибка инструмента: не передан device_id. Сначала вызовите get_smart_devices.';
+
+  const device = findDeviceById(userId, deviceId);
+  if (!device) return `Ошибка: устройство с id "${deviceId}" не найдено. Выполните синхронизацию в настройках.`;
 
   const action = args.action;
   if (!action || !['on', 'off', 'set_color', 'set_brightness'].includes(action)) {
     return 'Ошибка инструмента: неизвестное действие.';
   }
 
+  // Build Yandex capability payloads
   const onOffPayload = (value: boolean) => ({
     type: 'devices.capabilities.on_off',
     state: { instance: 'on', value }
@@ -191,6 +432,7 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) =
 
   let actionsPayload: any[] = [];
   let brightnessValue: number | null = null;
+
   if (action === 'on') actionsPayload = [onOffPayload(true)];
   if (action === 'off') actionsPayload = [onOffPayload(false)];
   if (action === 'set_color') {
@@ -209,13 +451,16 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) =
     actionsPayload = [onOffPayload(true), brightnessPayload(br)];
   }
 
-  const devicesPayload = deviceIds.map(id => ({ id, actions: actionsPayload }));
+  // For groups: Yandex expects group id; for single devices: device id
+  // The /devices/actions endpoint accepts both device and group IDs
+  const targetIds: string[] = JSON.parse(device.target_ids);
+  const devicesPayload = targetIds.map(id => ({ id, actions: actionsPayload }));
 
   try {
     const response = await fetch('https://api.iot.yandex.net/v1.0/devices/actions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.YANDEX_IOT_TOKEN}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ devices: devicesPayload })
@@ -227,14 +472,14 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) =
 
     if (!response.ok) return `Ошибка API Яндекса (${response.status}): ${raw || 'пустой ответ'}`;
 
-    const devices = Array.isArray(data?.devices) ? data.devices : [];
-    const failed = devices.filter((device: any) =>
-      Array.isArray(device?.capabilities)
-      && device.capabilities.some((cap: any) => cap?.state?.action_result?.status === 'ERROR')
+    const resultDevices = Array.isArray(data?.devices) ? data.devices : [];
+    const failed = resultDevices.filter((d: any) =>
+      Array.isArray(d?.capabilities) &&
+      d.capabilities.some((cap: any) => cap?.state?.action_result?.status === 'ERROR')
     );
 
     if (failed.length) {
-      const failedIds = failed.map((item: any) => item?.id).filter(Boolean).join(', ');
+      const failedIds = failed.map((d: any) => d?.id).filter(Boolean).join(', ');
       return `Команда выполнена частично. Ошибка у устройств: ${failedIds || 'неизвестно'}.`;
     }
 
@@ -243,9 +488,9 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs) =
       : action === 'off'
         ? 'выключено'
         : action === 'set_color'
-          ? `цвет изменен на ${args.color}`
+          ? `цвет изменён на ${args.color}`
           : `яркость установлена на ${brightnessValue ?? args.brightness}%`;
-    return `Успешно: "${args.device_name}" -> ${actionText}.`;
+    return `Успешно: "${device.name}" → ${actionText}.`;
   } catch (err: any) {
     return `Техническая ошибка при управлении умным домом: ${err?.message || String(err)}`;
   }
