@@ -43,6 +43,11 @@ const BACKEND_INTERNAL_TOKEN = `${process.env.BACKEND_INTERNAL_TOKEN || ''}`.tri
 
 app.use(express.json({ limit: '20mb' }));
 
+const buildRejectedByUserError = (commentRaw: unknown) => {
+  const comment = typeof commentRaw === 'string' ? commentRaw.trim().slice(0, 1000) : '';
+  return new Error(comment ? `rejected_by_user:${comment}` : 'rejected_by_user');
+};
+
 // CORS
 app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -2918,6 +2923,7 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
+  const rejectionComment = req.body?.rejection_comment;
   const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
   const newPassword = typeof req.body?.new_password === 'string' ? req.body.new_password : undefined;
   const saveSudoPassword = req.body?.save_sudo_password === true;
@@ -2931,7 +2937,7 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
 
   if (!approved) {
     deletePendingConfirmation(confirmationId);
-    pending.reject(new Error('rejected_by_user'));
+    pending.reject(buildRejectedByUserError(rejectionComment));
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -2971,6 +2977,7 @@ app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
+  const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
 
@@ -2980,7 +2987,7 @@ app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
 
   if (!approved) {
     deletePendingEmailConfirmation(confirmationId);
-    pending.reject(new Error('rejected_by_user'));
+    pending.reject(buildRejectedByUserError(rejectionComment));
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -3044,6 +3051,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   const userId = effectiveUserId(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
+  const rejectionComment = req.body?.rejection_comment;
 
   console.log('[pc_command] approve request', { userId, confirmationId, approved });
 
@@ -3062,7 +3070,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   if (!approved) {
     deletePendingPcConfirmation(confirmationId);
     console.log('[pc_command] rejected by user', { userId, confirmationId });
-    pending.reject(new Error('rejected_by_user'));
+    pending.reject(buildRejectedByUserError(rejectionComment));
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -3101,6 +3109,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
   const userId = Number(req.body?.user_id);
+  const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
 
@@ -3114,7 +3123,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
 
   if (!approved) {
     deletePendingPcConfirmation(confirmationId);
-    pending.reject(new Error('rejected_by_user'));
+    pending.reject(buildRejectedByUserError(rejectionComment));
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -3206,6 +3215,7 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
   const userId = Number(req.body?.user_id);
   const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
   const newPassword = typeof req.body?.new_password === 'string' ? req.body.new_password : undefined;
+  const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
 
@@ -3215,7 +3225,7 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
 
   if (!approved) {
     deletePendingConfirmation(confirmationId);
-    pending.reject(new Error('rejected_by_user'));
+    pending.reject(buildRejectedByUserError(rejectionComment));
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -3249,6 +3259,7 @@ app.post('/internal/email/approve', internalAuth, async (req, res) => {
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
   const userId = Number(req.body?.user_id);
+  const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
 
@@ -3258,7 +3269,7 @@ app.post('/internal/email/approve', internalAuth, async (req, res) => {
 
   if (!approved) {
     deletePendingEmailConfirmation(confirmationId);
-    pending.reject(new Error('rejected_by_user'));
+    pending.reject(buildRejectedByUserError(rejectionComment));
     return res.json({ ok: true, status: 'rejected' });
   }
 

@@ -51,6 +51,7 @@ export type ToolIteration = {
 
 // Реестр активных генераций для остановки по userId
 export const activeGenerations = new Map<number, AbortController>();
+export const activeHitlWaits = new Set<number>();
 const MAX_PENDING_TASKS_PER_USER = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
@@ -1017,6 +1018,27 @@ const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
   return `Заметка #${Math.floor(noteId)} удалена.\n\nОбновлённый список:\n${updated}`;
 };
 
+const getRejectionComment = (err: any): string | undefined => {
+  const raw = typeof err?.message === 'string' ? err.message : '';
+  if (!raw.startsWith('rejected_by_user')) return undefined;
+  const comment = raw.slice('rejected_by_user'.length).replace(/^:/, '').trim();
+  return comment || undefined;
+};
+
+const withRejectionComment = <T extends Record<string, unknown>>(payload: T, err: any): T => {
+  const comment = getRejectionComment(err);
+  return comment ? { ...payload, user_comment: comment } : payload;
+};
+
+const waitForHitlConfirmation = async <T>(userId: number, promise: Promise<T>): Promise<T> => {
+  activeHitlWaits.add(userId);
+  try {
+    return await promise;
+  } finally {
+    activeHitlWaits.delete(userId);
+  }
+};
+
 export const toolDefinitions = [
   {
     type: 'function',
@@ -1735,6 +1757,10 @@ const buildGetFileInfoTool = () => {
           file_path: {
             type: 'string',
             description: 'Полный путь к файлу или папке на ПК пользователя.'
+          },
+          include_line_count: {
+            type: 'boolean',
+            description: 'Если true и путь указывает на файл, дополнительно посчитать количество строк. Это читает файл построчно, поэтому используй только когда число строк действительно нужно.'
           }
         },
         required: ['file_path']
@@ -2566,8 +2592,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       });
       return typeof result === 'string' ? result : JSON.stringify({ status: 'success', message: 'Письмо отправлено.', to, subject });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил отправку письма.', to, subject });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил отправку письма.', to, subject }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', to, subject });
@@ -2916,6 +2942,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'get_file_info') {
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
     if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+    const includeLineCount = parsed.include_line_count === true;
 
     const { getPcCommandsSettings } = await import('./pc-commands.js');
     const pcSettings = getPcCommandsSettings(user.id);
@@ -2928,7 +2955,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     try {
-      const result = await sendIpcToDesktop(user.id, 'get_file_info', { file_path: filePath }, 30000, signal);
+      const result = await sendIpcToDesktop(user.id, 'get_file_info', { file_path: filePath, include_line_count: includeLineCount }, 30000, signal);
       return JSON.stringify({ status: 'success', file_path: filePath, ...(typeof result === 'object' && result !== null ? result : {}) });
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: err.message, file_path: filePath });
@@ -3160,11 +3187,11 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     try {
-      const result = await confirmationPromise;
+      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
       return JSON.stringify({ status: 'success', message: `Клик выполнен: ${reason}`, x: result.x, y: result.y, button: result.button });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил клик.' });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил клик.' }, err));
       }
       if (err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (60 секунд).' });
@@ -3290,8 +3317,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         exit_code: result.exitCode
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', server: server.name, command });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', server: server.name, command }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, command });
@@ -3420,7 +3447,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     try {
-      const result = await confirmationPromise;
+      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
 
       const output = typeof result === 'string' ? result : JSON.stringify(result);
       return JSON.stringify({
@@ -3429,8 +3456,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         output: output.slice(-PC_COMMAND_OUTPUT_MAX),
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', command });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', command }, err));
       }
       if (err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', command });
@@ -3521,15 +3548,15 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     try {
-      const result = await confirmationPromise;
+      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
       return JSON.stringify({
         status: 'success',
         file_path: filePath,
         ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил чтение файла.', file_path: filePath });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил чтение файла.', file_path: filePath }, err));
       }
       if (err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
@@ -3618,7 +3645,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     try {
-      const result = await confirmationPromise;
+      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
       return JSON.stringify({
         status: 'success',
         file_path: filePath,
@@ -3626,8 +3653,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил поиск по файлу.', file_path: filePath, query });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил поиск по файлу.', file_path: filePath, query }, err));
       }
       if (err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath, query });
@@ -3738,7 +3765,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     try {
-      const result = await confirmationPromise;
+      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
       return JSON.stringify({
         status: 'success',
         file_path: filePath,
@@ -3747,8 +3774,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         message: `Файл ${mode === 'append' ? 'обновлён (добавлено в конец)' : 'записан'}: ${filePath}`,
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил запись файла.', file_path: filePath });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил запись файла.', file_path: filePath }, err));
       }
       if (err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
@@ -3869,7 +3896,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     try {
-      const result = await confirmationPromise;
+      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
       return JSON.stringify({
         status: 'success',
         file_path: filePath,
@@ -3877,8 +3904,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         message: `Строки ${startLine}-${endLine} заменены в файле: ${filePath}`,
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил редактирование файла.', file_path: filePath });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил редактирование файла.', file_path: filePath }, err));
       }
       if (err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
@@ -4103,8 +4130,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         nopasswd_sudo: result.nopasswdSudo
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил создание server user.', server: server.name, username });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил создание server user.', server: server.name, username }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, username });
@@ -4201,8 +4228,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         changed: result.changed === true
       });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил смену пароля.', server: server.name, username });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил смену пароля.', server: server.name, username }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, username });
@@ -4293,8 +4320,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
       return JSON.stringify({ status: 'success', message: `Credentials для "${server.name}" обновлены.`, result });
     } catch (err: any) {
-      if (err?.message === 'rejected_by_user') {
-        return JSON.stringify({ status: 'rejected', message: 'Пользователь отклонил обновление credentials.', server: server.name });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил обновление credentials.', server: server.name }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
         return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name });
@@ -4550,6 +4577,19 @@ export const sendMessageThroughAi = async (
 
   const previousController = activeGenerations.get(userId);
   if (previousController && !previousController.signal.aborted) {
+    if (activeHitlWaits.has(userId)) {
+      const waitingChatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
+      return {
+        reply_text: 'Я жду твоего ответа на карточку подтверждения выше. Нажми «Разрешить», «Отклонить» или «Отклонить с комментарием» — и я продолжу тот запрос.',
+        chat_id: waitingChatId,
+        message_id: 0,
+        usage: {
+          tokens_used: 0,
+          used_model: 'system',
+          used_provider: 'local'
+        }
+      };
+    }
     previousController.abort();
   }
 

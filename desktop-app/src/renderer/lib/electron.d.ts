@@ -18,7 +18,7 @@ declare global {
       readSoundFile: (fileName: string) => Promise<ArrayBuffer | Uint8Array | null>;
       executeCommands: (commands: string[]) => Promise<string>;
       readDirectory: (targetPath: string) => Promise<{ name: string; isDirectory: boolean; size?: number }[]>;
-      getFileInfo: (payload: { file_path: string }) => Promise<any>;
+      getFileInfo: (payload: { file_path: string; include_line_count?: boolean }) => Promise<any>;
       readFile: (payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => Promise<any>;
       searchFileKeywords: (payload: { file_path: string; query: string; max_matches?: number }) => Promise<any>;
       writeFile: (payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => Promise<any>;

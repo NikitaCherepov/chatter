@@ -1183,7 +1183,11 @@ const runBackendAiStream = async (
                                 if (callbacks?.onToolStatus) await callbacks.onToolStatus(data.text);
                                 break;
                             case 'desktop_action':
-                                if (callbacks?.onDesktopAction) await callbacks.onDesktopAction(data);
+                                if (callbacks?.onDesktopAction) {
+                                    Promise.resolve(callbacks.onDesktopAction(data)).catch((err: any) => {
+                                        console.warn('[tg][sse] desktop_action callback failed:', err?.message || err);
+                                    });
+                                }
                                 break;
                             case 'done':
                                 finalResult = data;
@@ -4925,9 +4929,49 @@ bot.action('model:cancel', async (ctx) => {
 // Store full commands by confirmationId — Telegram message text loses Markdown backticks
 const pendingPcCommandTexts = new Map<string, string>();
 
+type PendingRejectionComment = {
+    endpoint: string;
+    confirmationId: string;
+    label: string;
+};
+
+const pendingRejectionComments = new Map<number, PendingRejectionComment>();
+
+const requestRejectionComment = async (
+    ctx: any,
+    endpoint: string,
+    confirmationId: string,
+    label: string,
+) => {
+    const userId = ctx.from?.id;
+    if (!userId) {
+        await ctx.answerCbQuery('Ошибка');
+        return;
+    }
+    pendingRejectionComments.set(userId, { endpoint, confirmationId, label });
+    await ctx.answerCbQuery('Жду комментарий');
+    await ctx.reply(`Напиши комментарий для отклонения: ${label}\n\nНапример: "не тот файл" или "сначала покажи diff". Для отмены: /cancel`);
+};
+
+const rejectWithOptionalComment = async (
+    endpoint: string,
+    confirmationId: string,
+    userId: number,
+    rejectionComment = '',
+) => axios.post(
+    `${BACKEND_API_BASE_URL}${endpoint}`,
+    {
+        confirmation_id: confirmationId,
+        approved: false,
+        user_id: userId,
+        ...(rejectionComment.trim() ? { rejection_comment: rejectionComment.trim() } : {}),
+    },
+    { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
+);
+
 // ── PC Command Confirmation (Telegram inline buttons) ─────────────────────
 
-bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
+bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const confirmationId = ctx.match[2];
     const userId = ctx.from?.id;
@@ -4941,15 +4985,17 @@ bot.action(/^pcconfirm:(allow|always|review|reject):(.+)$/, async (ctx) => {
     if (action === 'reject') {
         await ctx.answerCbQuery('Отклонено');
         try {
-            await axios.post(
-                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
-                { confirmation_id: confirmationId, approved: false, user_id: userId },
-                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
-            );
+            await rejectWithOptionalComment('/internal/pc-commands/approve', confirmationId, userId);
             await ctx.editMessageText('❌ Команда отклонена.');
         } catch {
             await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
         }
+        return;
+    }
+
+    if (action === 'reject_comment') {
+        const cmd = pendingPcCommandTexts.get(confirmationId) || 'команды на ПК';
+        await requestRejectionComment(ctx, '/internal/pc-commands/approve', confirmationId, cmd.slice(0, 120));
         return;
     }
 
@@ -5072,6 +5118,7 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
         [
             Markup.button.callback('❓ Проверить', `pcconfirm:review:${confirmationId}`),
             Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
+            Markup.button.callback('💬 Отклонить с комментарием', `pcconfirm:reject_comment:${confirmationId}`),
         ]
     ]);
     const escapedPreview = preview.replace(/`/g, '\\`');
@@ -5083,7 +5130,7 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
 
 // ── File Action Confirmation (Telegram inline buttons) ────────────────────
 
-bot.action(/^fileconfirm:(allow|reject):(.+)$/, async (ctx) => {
+bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const confirmationId = ctx.match[2];
     const userId = ctx.from?.id;
@@ -5096,15 +5143,16 @@ bot.action(/^fileconfirm:(allow|reject):(.+)$/, async (ctx) => {
     if (action === 'reject') {
         await ctx.answerCbQuery('Отклонено');
         try {
-            await axios.post(
-                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
-                { confirmation_id: confirmationId, approved: false, user_id: userId },
-                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
-            );
+            await rejectWithOptionalComment('/internal/pc-commands/approve', confirmationId, userId);
             await ctx.editMessageText('❌ Действие с файлом отклонено.');
         } catch {
             await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
         }
+        return;
+    }
+
+    if (action === 'reject_comment') {
+        await requestRejectionComment(ctx, '/internal/pc-commands/approve', confirmationId, 'действия с файлом');
         return;
     }
 
@@ -5228,15 +5276,17 @@ bot.action(/^devops:reject:(.+)$/, async (ctx) => {
     }
     await ctx.answerCbQuery('Отклонено');
     try {
-        await axios.post(
-            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
-            { confirmation_id: confirmationId, approved: false, user_id: userId },
-            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
-        );
+        await rejectWithOptionalComment('/internal/devops/approve', confirmationId, userId);
         await ctx.editMessageText('❌ SSH команда отклонена.');
     } catch {
         await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
     }
+});
+
+bot.action(/^devops:reject_comment:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || 'SSH команды';
+    await requestRejectionComment(ctx, '/internal/devops/approve', confirmationId, cmd.slice(0, 120));
 });
 
 bot.action(/^email:allow:(.+)$/, async (ctx) => {
@@ -5272,15 +5322,16 @@ bot.action(/^email:reject:(.+)$/, async (ctx) => {
     }
     await ctx.answerCbQuery('Отклонено');
     try {
-        await axios.post(
-            `${BACKEND_API_BASE_URL}/internal/email/approve`,
-            { confirmation_id: confirmationId, approved: false, user_id: userId },
-            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
-        );
+        await rejectWithOptionalComment('/internal/email/approve', confirmationId, userId);
         await ctx.editMessageText('❌ Отправка письма отклонена.');
     } catch {
         await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
     }
+});
+
+bot.action(/^email:reject_comment:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    await requestRejectionComment(ctx, '/internal/email/approve', confirmationId, 'отправки письма');
 });
 
 bot.action(/^devops:always:(.+)$/, async (ctx) => {
@@ -5410,15 +5461,16 @@ bot.action(/^devops:creds_reject:(.+)$/, async (ctx) => {
     }
     await ctx.answerCbQuery('Отклонено');
     try {
-        await axios.post(
-            `${BACKEND_API_BASE_URL}/internal/devops/approve`,
-            { confirmation_id: confirmationId, approved: false, user_id: userId },
-            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
-        );
+        await rejectWithOptionalComment('/internal/devops/approve', confirmationId, userId);
         await ctx.editMessageText('❌ Обновление credentials отклонено.');
     } catch {
         await ctx.editMessageText('⚠️ Не удалось отклонить.').catch(() => {});
     }
+});
+
+bot.action(/^devops:creds_reject_comment:(.+)$/, async (ctx) => {
+    const confirmationId = ctx.match[1];
+    await requestRejectionComment(ctx, '/internal/devops/approve', confirmationId, 'обновления credentials');
 });
 
 const processUserTextThroughAi = async (
@@ -5521,6 +5573,10 @@ const processUserTextThroughAi = async (
                             Markup.button.callback('❓ Проверить', `pcconfirm:review:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
                         ]
+                        ,
+                        [
+                            Markup.button.callback('💬 Отклонить с комментарием', `pcconfirm:reject_comment:${confirmationId}`),
+                        ]
                     ]);
                     const escapedCmd = preview.replace(/`/g, '\\`');
                     try {
@@ -5554,10 +5610,10 @@ const processUserTextThroughAi = async (
                         ? `\nРазмер: ${(sizeBytes / 1024).toFixed(1)} КБ`
                         : '';
 
-                    let msgText = `${titleIcon} **${titleText}**\n\n\`${filePath.replace(/`/g, '\\`')}\`${sizeLine}`;
+                    let msgText = `${titleIcon} ${titleText}\n\n${filePath}${sizeLine}`;
                     if (contentPreview) {
                         const preview = contentPreview.slice(0, 800).replace(/```/g, "'''");
-                        msgText += `\n\n\`\`\`\n${preview}\n\`\`\``;
+                        msgText += `\n\n${preview}`;
                     }
                     msgText += `\n\n${isWrite ? 'Разрешить запись?' : 'Разрешить чтение?'}`;
 
@@ -5565,15 +5621,25 @@ const processUserTextThroughAi = async (
                         [
                             Markup.button.callback(`✅ ${isWrite ? 'Записать' : 'Прочитать'}`, `fileconfirm:allow:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `fileconfirm:reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('💬 Отклонить с комментарием', `fileconfirm:reject_comment:${confirmationId}`),
                         ]
                     ]);
+                    console.log('[tg][desktop_action] file_action_confirmation', {
+                        confirmationId,
+                        actionType,
+                        filePath
+                    });
                     try {
-                        await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
-                    } catch {
+                        await ctx.reply(msgText, keyboard);
+                    } catch (err: any) {
+                        console.warn('[tg][desktop_action] file_action reply failed:', err?.message || err);
                         try {
                             await ctx.reply(`${titleIcon} ${titleText}\n\n${filePath}${sizeLine}\n\n${isWrite ? 'Разрешить запись?' : 'Разрешить чтение?'}`, keyboard);
-                        } catch {
-                            // ignore
+                        } catch (fallbackErr: any) {
+                            console.warn('[tg][desktop_action] file_action fallback reply failed:', fallbackErr?.message || fallbackErr);
+                            throw fallbackErr;
                         }
                     }
                 }
@@ -5585,15 +5651,15 @@ const processUserTextThroughAi = async (
                     const oldPreview = (action.value.old_content_preview || '').slice(0, 600);
                     const newPreview = (action.value.new_content_preview || '').slice(0, 600);
 
-                    let msgText = `✏️ **Редактирование файла**\n\n\`${filePath.replace(/`/g, '\\`')}\`\nСтроки: ${startLine}–${endLine}\n`;
+                    let msgText = `✏️ Редактирование файла\n\n${filePath}\nСтроки: ${startLine}–${endLine}\n`;
                     if (oldPreview) {
-                        msgText += `\n❌ **Удаляется:**\n\`\`\`\n${oldPreview.replace(/```/g, "'''")}\n\`\`\``;
+                        msgText += `\n❌ Удаляется:\n${oldPreview.replace(/```/g, "'''")}\n`;
                     }
                     if (newPreview) {
-                        msgText += `\n✅ **Добавляется:**\n\`\`\`\n${newPreview.replace(/```/g, "'''")}\n\`\`\``;
+                        msgText += `\n✅ Добавляется:\n${newPreview.replace(/```/g, "'''")}\n`;
                     }
                     if (!newPreview && oldPreview) {
-                        msgText += `\n_(строки будут удалены)_`;
+                        msgText += `\n(строки будут удалены)`;
                     }
                     msgText += '\n\nПрименить изменения?';
 
@@ -5601,15 +5667,26 @@ const processUserTextThroughAi = async (
                         [
                             Markup.button.callback('✅ Применить', `fileconfirm:allow:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `fileconfirm:reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('💬 Отклонить с комментарием', `fileconfirm:reject_comment:${confirmationId}`),
                         ]
                     ]);
+                    console.log('[tg][desktop_action] edit_file_lines_confirmation', {
+                        confirmationId,
+                        filePath,
+                        startLine,
+                        endLine
+                    });
                     try {
-                        await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
-                    } catch {
+                        await ctx.reply(msgText, keyboard);
+                    } catch (err: any) {
+                        console.warn('[tg][desktop_action] edit_file_lines reply failed:', err?.message || err);
                         try {
                             await ctx.reply(`✏️ Редактирование файла\n\n${filePath}\nСтроки: ${startLine}–${endLine}\n\nПрименить изменения?`, keyboard);
-                        } catch {
-                            // ignore
+                        } catch (fallbackErr: any) {
+                            console.warn('[tg][desktop_action] edit_file_lines fallback reply failed:', fallbackErr?.message || fallbackErr);
+                            throw fallbackErr;
                         }
                     }
                 }
@@ -5632,6 +5709,9 @@ const processUserTextThroughAi = async (
                         [
                             Markup.button.callback('❓ Проверить', `devops:review:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `devops:reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('💬 Отклонить с комментарием', `devops:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     try {
@@ -5652,6 +5732,9 @@ const processUserTextThroughAi = async (
                         [
                             Markup.button.callback('✅ Применить', `devops:creds_apply:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `devops:creds_reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('💬 Отклонить с комментарием', `devops:creds_reject_comment:${confirmationId}`),
                         ]
                     ]);
                     try {
@@ -5677,6 +5760,9 @@ const processUserTextThroughAi = async (
                         [
                             Markup.button.callback('✅ Отправить', `email:allow:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `email:reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('💬 Отклонить с комментарием', `email:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     const fromLine = fromAddr ? `От: ${fromAddr}\n` : '';
@@ -5802,6 +5888,28 @@ bot.on('text', async (ctx) => {
     if (directMessageTargetId) {
         adminAiMessageFlow.delete(userId);
         await handleAiDirectMessage(ctx, directMessageTargetId, userText);
+        return;
+    }
+
+    const pendingRejection = pendingRejectionComments.get(userId);
+    if (pendingRejection) {
+        if (userText.toLowerCase() === '/cancel' || userText.toLowerCase() === 'отмена') {
+            pendingRejectionComments.delete(userId);
+            await ctx.reply('Отклонение с комментарием отменено. Кнопки подтверждения выше остаются активными.');
+            return;
+        }
+        pendingRejectionComments.delete(userId);
+        try {
+            await rejectWithOptionalComment(
+                pendingRejection.endpoint,
+                pendingRejection.confirmationId,
+                userId,
+                userText,
+            );
+            await ctx.reply('❌ Отклонено с комментарием.');
+        } catch {
+            await ctx.reply('⚠️ Не удалось отклонить (возможно, подтверждение уже истекло или было обработано).');
+        }
         return;
     }
 

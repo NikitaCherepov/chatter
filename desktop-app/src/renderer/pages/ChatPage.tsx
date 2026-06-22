@@ -9,6 +9,7 @@ import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
+import { RejectWithComment } from '../components/RejectWithComment';
 import type { ImageItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
 import Slider from '../components/Slider';
@@ -2521,20 +2522,18 @@ export function ChatPage() {
                     >
                       {conf._reviewing ? 'Проверяю...' : 'Проверить'}
                     </button>
-                    <button
+                    <RejectWithComment
                       className={s.suggestMacroDismissBtn}
-                      onClick={async () => {
+                      onReject={async (comment) => {
                         try {
                           await api.apiFetch('/api/v1/devops/approve', {
                             method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
                         } catch {}
                         setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
-                    >
-                      Отклонить
-                    </button>
+                    />
                   </div>
                 </div>
               ))}
@@ -2627,20 +2626,18 @@ export function ChatPage() {
                     >
                       {conf._reviewing ? 'Проверяю...' : 'Проверить'}
                     </button>
-                    <button
+                    <RejectWithComment
                       className={s.suggestMacroDismissBtn}
-                      onClick={async () => {
+                      onReject={async (comment) => {
                         try {
                           await api.apiFetch('/api/v1/pc-commands/approve', {
                             method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
                         } catch {}
                         setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
-                    >
-                      Отклонить
-                    </button>
+                    />
                   </div>
                 </div>
               ))}
@@ -2703,20 +2700,18 @@ export function ChatPage() {
                     >
                       {conf.action_type === 'write' ? 'Записать' : 'Прочитать'}
                     </button>
-                    <button
+                    <RejectWithComment
                       className={s.suggestMacroDismissBtn}
-                      onClick={async () => {
+                      onReject={async (comment) => {
                         try {
                           await api.apiFetch('/api/v1/pc-commands/approve', {
                             method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
                         } catch {}
                         setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
-                    >
-                      Отклонить
-                    </button>
+                    />
                   </div>
                 </div>
               ))}
@@ -2784,20 +2779,18 @@ export function ChatPage() {
                     >
                       Применить
                     </button>
-                    <button
+                    <RejectWithComment
                       className={s.suggestMacroDismissBtn}
-                      onClick={async () => {
+                      onReject={async (comment) => {
                         try {
                           await api.apiFetch('/api/v1/pc-commands/approve', {
                             method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
                         } catch {}
                         setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
-                    >
-                      Отклонить
-                    </button>
+                    />
                   </div>
                 </div>
               ))}
@@ -2853,20 +2846,18 @@ export function ChatPage() {
                     >
                       Отправить
                     </button>
-                    <button
+                    <RejectWithComment
                       className={s.suggestMacroDismissBtn}
-                      onClick={async () => {
+                      onReject={async (comment) => {
                         try {
                           await api.apiFetch('/api/v1/email/approve', {
                             method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
                         } catch {}
                         setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                       }}
-                    >
-                      Отклонить
-                    </button>
+                    />
                   </div>
                 </div>
               ))}
@@ -3024,22 +3015,20 @@ export function ChatPage() {
                     >
                       Применить
                     </button>
-                    <button
+                    <RejectWithComment
                       className={s.suggestMacroDismissBtn}
-                      onClick={async () => {
+                      onReject={async (comment) => {
                         if (upd.confirmation_id) {
                           try {
                             await api.apiFetch('/api/v1/devops/approve', {
                               method: 'POST',
-                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: false }),
+                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: false, rejection_comment: comment }),
                             });
                           } catch {}
                         }
                         setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx));
                       }}
-                    >
-                      Отклонить
-                    </button>
+                    />
                   </div>
                 </div>
               ))}

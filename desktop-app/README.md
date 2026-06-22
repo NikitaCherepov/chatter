@@ -277,6 +277,8 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 | `email_confirmation` | Подтверждение `send_email` — карточка с From, To, Subject и превью Body (через MarkdownRenderer). Кнопки «Отправить» / «Отклонить». Дедупликация по `confirmation_id`. |
 | `suggest_devops_runbook` | Предложение инструкции — карточка с кнопками «Сохранить»/«Проверить»/«Отклонить» |
 
+Reject UX: desktop confirmation cards use shared `RejectWithComment`; clicking reject opens a short textarea. The comment is sent as `rejection_comment`, and backend returns it to AI as `user_comment` in the rejected tool result.
+
 ## Макросы
 
 Пользовательские наборы консольных команд, которые AI может запускать на десктопе. Хранятся на сервере (SQLite), не в localStorage.
@@ -386,6 +388,25 @@ AI: explore_fs(target_path)
   → IPC readDirectory(target_path) → entries[]
   → WS: ipc_result { request_id, data: entries }
   → Backend резолвит Promise → AI получает listing как tool response
+```
+
+**Метаданные файла (get_file_info, через WS):**
+
+```text
+AI: get_file_info(file_path, include_line_count?)
+    Backend: sendIpcToDesktop('get_file_info', { file_path, include_line_count })
+    → Desktop: get-file-info IPC → fs.statSync()
+    → AI получает exists/type/size_bytes/timestamps/name/extension.
+      Если include_line_count=true и это файл, desktop дополнительно считает line_count потоковым чтением.
+```
+
+**Поиск по файлу (search_file_keywords, через WS):**
+
+```text
+AI: search_file_keywords(file_path, query, max_matches?)
+    Backend: sendIpcToDesktop('search_file_keywords', { file_path, query, max_matches })
+    → Desktop: search-file-keywords IPC → readline/mammoth
+    → AI получает только строки с совпадениями и номерами строк.
 ```
 
 **Чтение файла (read_file, через WS):**

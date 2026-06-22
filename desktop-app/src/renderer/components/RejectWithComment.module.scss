@@ -1,0 +1,56 @@
+.rejectBox {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.rejectInput {
+  width: 100%;
+  resize: vertical;
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.rejectInput:focus {
+  border-color: var(--accent);
+}
+
+.rejectActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sendBtn,
+.cancelBtn {
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sendBtn {
+  background: var(--accent);
+  color: white;
+}
+
+.cancelBtn {
+  background: var(--bg-modal-hover);
+  color: var(--text-primary);
+}
+
+.sendBtn:disabled,
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

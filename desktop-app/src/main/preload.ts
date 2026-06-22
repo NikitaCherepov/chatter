@@ -59,7 +59,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('read-directory', targetPath),
 
   // File metadata: stat a file or directory without reading content
-  getFileInfo: (payload: { file_path: string }) =>
+  getFileInfo: (payload: { file_path: string; include_line_count?: boolean }) =>
     ipcRenderer.invoke('get-file-info', payload),
 
   // File Action: read file natively (UTF-8, paginated, line numbers)

@@ -614,7 +614,7 @@ function createWindow() {
 
   // ── File Action: read file natively (UTF-8, paginated, .docx supported, line numbers) ──
 
-  ipcMain.handle('get-file-info', async (_event, payload: { file_path: string }) => {
+  ipcMain.handle('get-file-info', async (_event, payload: { file_path: string; include_line_count?: boolean }) => {
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
 
@@ -631,7 +631,7 @@ function createWindow() {
     const isFile = stat.isFile();
     const isDirectory = stat.isDirectory();
 
-    return {
+    const info: Record<string, unknown> = {
       exists: true,
       file_path: filePath,
       resolved_path: resolved,
@@ -643,6 +643,23 @@ function createWindow() {
       modified_at: stat.mtime.toISOString(),
       created_at: stat.birthtime.toISOString(),
     };
+
+    if (isFile && payload?.include_line_count === true) {
+      const readline = require('readline');
+      const fileStream = fs.createReadStream(resolved, { encoding: 'utf-8' });
+      const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity,
+      });
+      let lineCount = 0;
+      for await (const _line of rl) {
+        lineCount++;
+      }
+      fileStream.destroy();
+      info.line_count = lineCount;
+    }
+
+    return info;
   });
 
   ipcMain.handle('read-file', async (_event, payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => {
