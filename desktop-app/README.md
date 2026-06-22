@@ -306,6 +306,8 @@ Reject UX: desktop confirmation cards use shared `RejectWithComment`; clicking r
 | `capture-screen` | Захват скриншотов всех мониторов через `desktopCapturer.getSources()`. Возвращает `{ displays: [{ display_id, name, bounds, screenshot_base64 }] }`. Используется инструментом `capture_screen` для visual control. |
 | `visual-click` | Клик мышкой по нормализованным координатам (0.0–1.0). Использует `@nut-tree-fork/nut-js` для перемещения курсора и клика. Переводит нормализованные координаты в глобальные через `display.bounds`. Поддерживает мульти-монитор (включая мониторы с отрицательными координатами). |
 
+**Фоновый режим execute-commands:** `electronAPI.executeCommands(commands, { background: true })` используется инструментом `execute_pc_command` для GUI/open-команд, где не нужен stdout. В этом режиме main process запускает detached-процесс через `spawn(..., { shell: true, stdio: 'ignore', windowsHide: true })` и `child.unref()`, затем сразу возвращает `[background] launched: ...`. Обычные команды по-прежнему используют `exec()` и ждут stdout/stderr.
+
 ### Кодировка команд на Windows (fix кракозябр)
 
 `execute-commands` на Windows оборачивает каждую команду в PowerShell-обёртку с UTF-8 I/O, чтобы кириллица в stdout не превращалась в мусор (`�ਢ��`).
@@ -760,6 +762,7 @@ Desktop-клиент использует **WebSocket** для двунапра�
 - Auto-reconnect с exponential backoff (1s → 2s → 4s → ... → 30s)
 - При refresh токена (401 в apiFetch) → `reconnectWebSocket()` с новым токеном
 - При logout → `closeWebSocket()` (code 1000, без реконнекта)
+- Heartbeat: backend каждые 25s отправляет `{ type: 'ping' }`, desktop отвечает `{ type: 'pong' }`. Backend считает desktop online только если `lastPongAt` свежий (grace window 75s); stale-соединение не получает `execute_ipc`.
 
 **Отправка сообщений:**
 - `streamChatMessage()` при подключённом WS отправляет `{ type: 'chat_send', text, ... }`
@@ -778,6 +781,7 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | `done` | Финальный ответ: `reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?`, `display_state?`, `dice_roll?` (fallback если realtime-событие потерялось) |
 | `error` | Ошибка |
 | `execute_ipc` | Запрос сервера выполнить IPC и вернуть результат |
+| `ping` | Серверный heartbeat; клиент должен ответить `pong` |
 | `pong` | Ответ на ping |
 
 **Обратный канал (execute_ipc):**

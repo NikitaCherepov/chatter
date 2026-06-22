@@ -879,7 +879,7 @@ CRITICAL SYSTEM RULE: даже при roll=1, если требуется tool c
 | `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). Доступен и из Telegram: если десктоп онлайн — команды пушатся через WS. |
 | `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). Доступен и из Telegram при подключённом десктопе. |
 | `get_file_info` | Возвращает метаданные пути на ПК без чтения содержимого: `exists`, тип, `size_bytes`, timestamps, имя и расширение. Параметр `include_line_count=true` дополнительно считает строки потоковым проходом по файлу и возвращает `line_count`; использовать только когда число строк реально нужно. Требует включённый `fs_scan_enabled`, как `explore_fs`. |
-| `execute_pc_command` | Выполняет команду на ПК пользователя через desktop IPC. Не-auto-approved команды требуют HitL-карточку `pc_command_confirmation`; pending регистрируется до отправки карточки, а сама карточка уходит через текущий WS callback активного `chat_send`. AI получает последние 15k символов stdout/stderr (`PC_COMMAND_OUTPUT_MAX`). |
+| `execute_pc_command` | Выполняет команду на ПК пользователя через desktop IPC. Параметры: `command` и опциональный `background`. Для GUI/open-сценариев (`notepad`, `code`, браузер, открыть файл/папку), где не нужен stdout/stderr, AI должен ставить `background: true`: desktop запускает команду detached и сразу возвращает результат. Обычные команды с выводом идут с `background=false`/без параметра. Не-auto-approved команды требуют HitL-карточку `pc_command_confirmation`; pending регистрируется до отправки карточки, а сама карточка уходит через текущий WS callback активного `chat_send`. AI получает последние 15k символов stdout/stderr (`PC_COMMAND_OUTPUT_MAX`). |
 | `read_file` | Читает файл на ПК пользователя нативно через Node.js fs (в обход терминала). Параметры: `file_path`, `start_line` (по умолчанию 1), `max_lines` (по умолчанию 500, макс. 2000), `line_numbers` (по умолчанию false). При `line_numbers=true` каждая строка имеет префикс с номером (формат `cat -n`). Возвращает UTF-8 контент с пагинацией. Поддерживает `.docx` через mammoth. Если `file_read_enabled=true` — выполняется сразу; иначе требует HitL-карточку `file_action_confirmation`. |
 | `search_file_keywords` | Ищет ключевые слова/фразы в конкретном файле на ПК и возвращает только строки с совпадениями и номерами строк. Параметры: `file_path`, `query`, `max_matches` (по умолчанию 100, максимум 500). Удобен для больших файлов перед точечным `read_file`. |
 | `write_file` | Записывает файл на ПК пользователя нативно через Node.js fs. Параметры: `file_path`, `content`, `mode` (`overwrite`/`append`). Поддерживает `.docx` — генерирует валидный Word-документ (каждая строка = абзац, только `overwrite`). **Всегда требует HitL-карточку `file_action_confirmation`** (игнорирует auto-approve). Лимит контента: 5 МБ. Запись в системные директории (`C:\Windows`, `/etc`, `/usr`, `/bin`) заблокирована. |
@@ -1104,8 +1104,8 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 
 ### Архитектура
 
-- `ws-clients.ts` — общий реестр подключений (`wsClients` Map), `sendIpcToDesktop()`, `sendToDesktop()`, `isDesktopOnline()`. Проверяется `WebSocket.OPEN`, поэтому stale/closing сокеты не считаются рабочими. Импортируется и server.ts (регистрация), и ai.ts (IPC).
-- `server.ts` — `WebSocketServer` на `/ws`, обработчики `chat_send` / `ipc_result` / `ping`. Realtime callbacks (`desktop_action`, `tool_status`, `execute_ipc`) отправляются с callback-ошибкой `ws.send`.
+- `ws-clients.ts` — общий реестр подключений (`wsClients` Map), `sendIpcToDesktop()`, `sendToDesktop()`, `isDesktopOnline()`. Для каждого подключения хранится `connectionId`, `connectedAt`, `lastMessageAt`, `lastPingAt`, `lastPongAt`, `missedPongs`. Online-проверка требует `WebSocket.OPEN` и свежий `lastPongAt` (grace window 75s), поэтому stale-сокет не считается рабочим.
+- `server.ts` — `WebSocketServer` на `/ws`, обработчики `chat_send` / `ipc_result` / `ping` / `pong`. Серверный heartbeat каждые 25s шлёт `{ type: 'ping' }`; если `pong` не приходит дольше grace window, соединение `terminate()`-ится, а pending IPC отклоняются. Realtime callbacks (`desktop_action`, `tool_status`, `execute_ipc`) отправляются с callback-ошибкой `ws.send`.
 - `ai.ts` — `execute_macro`, `explore_fs` и `execute_pc_command` используют desktop IPC для запросов с ожиданием результата; `execute_pc_command` с HitL отправляет confirmation через callback текущего `chat_send`.
 - Диагностика IPC пишет логи `[pc_command] ...` и `[ipc] ...` (dispatch, write complete, `ipc_result`, timeout, resolve/reject), связываемые по `request_id`.
 
@@ -1123,6 +1123,7 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 | `chat_stop` | Остановить текущую генерацию AI для пользователя |
 | `ipc_result` | Результат IPC-команды |
 | `ping` | Keepalive |
+| `pong` | Ответ на серверный heartbeat `ping` |
 
 | Сервер → Клиент | Описание |
 |---|---|
@@ -1135,7 +1136,8 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 | `done` | Финальный ответ |
 | `error` | Ошибка |
 | `execute_ipc` | Запрос выполнить IPC и вернуть результат |
-| `pong` | Ответ на ping |
+| `ping` | Серверный heartbeat; desktop должен ответить `pong` |
+| `pong` | Ответ на клиентский `ping` |
 
 ### Остановка генерации (`chat_stop` / `/api/v1/chat/stop`)
 

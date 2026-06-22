@@ -74,7 +74,7 @@ npm run logs
 - **search_cold_memory** / **save_to_cold_memory** / **delete_from_cold_memory** - векторный архив памяти.
 - **random_roll** - бросок монетки/кубиков.
 - **generate_image** - генерация изображений по текстовому описанию. Вызывается при явном намерении ("нарисуй", "сгенерируй картинку"). Промпт автоматически переводится на английский. Изображение отправляется в Telegram как фото.
-- **execute_pc_command** - выполнение команды на ПК пользователя. Требует подтверждения через inline-кнопки (если десктоп подключён).
+- **execute_pc_command** - выполнение команды на ПК пользователя. Требует подтверждения через inline-кнопки (если десктоп подключён). Опциональный `background: true` используется для открытия GUI-приложений (VS Code, Notepad, браузер), когда не нужен stdout/stderr и не надо ждать закрытия окна.
 - **execute_ssh_command** - выполнение SSH-команды на сервере. Требует подтверждения через inline-кнопки.
 - **list_devops_servers** / **list_devops_runbooks** / **read_devops_runbook** / **suggest_devops_runbook** - DevOps инструменты.
 - **install_ssh_public_key** / **create_server_user** / **change_server_user_password** / **suggest_server_creds_update** - управление SSH-доступом.
@@ -170,6 +170,12 @@ npm run logs
 
 Карточки отправляются одновременно в Telegram (inline-кнопки) и на десктоп (WS). Кто первый ответил — выполняется, второй канал игнорируется.
 Если пользователь отклоняет с комментарием, backend возвращает этот текст модели в rejected tool result как `user_comment`, чтобы AI мог скорректировать следующий шаг.
+
+### PC-команды в фоне
+
+`execute_pc_command` поддерживает флаг `background`. AI должен ставить `background: true` только для GUI/open-сценариев, где не нужен консольный вывод: открыть VS Code, Notepad, браузер, файл или папку. На desktop это запускается через detached `spawn(..., { shell: true, stdio: 'ignore', windowsHide: true })` + `unref()`, поэтому Telegram/AI получает быстрый результат и не ждёт закрытия окна.
+
+Обычные диагностические команды (`where`, `dir`, `ipconfig`, `tasklist`, скрипты с stdout) должны идти с `background: false` или без параметра.
 
 ### Архитектура Telegraf (fire-and-forget)
 
