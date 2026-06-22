@@ -51,8 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('read-sound-file', fileName),
 
   // Macro: execute an array of shell commands sequentially
-  executeCommands: (commands: string[]) =>
-    ipcRenderer.invoke('execute-commands', commands),
+  executeCommands: (commands: string[], options?: { background?: boolean }) =>
+    ipcRenderer.invoke('execute-commands', commands, options),
 
   // Macro: read directory listing (read-only, ls-like)
   readDirectory: (targetPath: string) =>

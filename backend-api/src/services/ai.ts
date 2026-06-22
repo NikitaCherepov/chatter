@@ -1659,6 +1659,10 @@ const buildExecutePcCommandTool = () => {
           command: {
             type: 'string',
             description: 'Команда для выполнения на ПК пользователя (например "dir C:\\Users", "tasklist", "ipconfig").'
+          },
+          background: {
+            type: 'boolean',
+            description: 'Set to true ONLY if opening a UI application (like notepad, browser) where you do not need to read the console output. Default is false.'
           }
         },
         required: ['command']
@@ -3331,6 +3335,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'execute_pc_command') {
     const command: string = typeof parsed.command === 'string' ? parsed.command.trim() : '';
+    const background = parsed.background === true;
     if (!command) return JSON.stringify({ status: 'error', message: 'command обязательна' });
 
     // Block dangerous commands (Linux + Windows)
@@ -3373,12 +3378,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (autoOk) {
       // Execute immediately via WS IPC
       try {
-        const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: [command] }, 60000, signal);
+        const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: [command], background }, 60000, signal);
         // result is a string (stdout/stderr joined by \n---\n)
         const output = typeof result === 'string' ? result : JSON.stringify(result);
         return JSON.stringify({
           status: 'success',
           command,
+          background,
           output: output.slice(-PC_COMMAND_OUTPUT_MAX),
         });
       } catch (err: any) {
@@ -3398,7 +3404,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         userId: user.id,
         kind: 'pc_command',
         label: command,
-        payload: { ipcType: 'execute_commands', ipcPayload: { commands: [command] } },
+        payload: { ipcType: 'execute_commands', ipcPayload: { commands: [command], background } },
         resolve,
         reject,
         createdAt: Date.now()
@@ -3407,7 +3413,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     const confirmationAction: DesktopActionPayload = {
       action: 'pc_command_confirmation',
-      value: { confirmation_id: confirmationId, command }
+      value: { confirmation_id: confirmationId, command, background }
     };
 
     let sent = false;
@@ -3453,6 +3459,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({
         status: 'success',
         command,
+        background,
         output: output.slice(-PC_COMMAND_OUTPUT_MAX),
       });
     } catch (err: any) {

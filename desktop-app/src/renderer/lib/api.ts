@@ -626,8 +626,9 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       console.log('[ipc] renderer invoke executeCommands', {
         requestId: request_id,
         commands: Array.isArray(payload.commands) ? payload.commands : undefined,
+        background: payload?.background === true,
       });
-      result = await (window as any).electronAPI?.executeCommands(payload.commands);
+      result = await (window as any).electronAPI?.executeCommands(payload.commands, { background: payload?.background === true });
     } else if (ipc_type === 'read_directory') {
       console.log('[ipc] renderer invoke readDirectory', {
         requestId: request_id,

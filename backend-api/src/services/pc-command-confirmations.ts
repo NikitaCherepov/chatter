@@ -11,7 +11,7 @@ export type PendingActionKind = 'pc_command' | 'file_action';
 
 type ExecutePayload = {
   ipcType: 'execute_commands';
-  ipcPayload: { commands: string[] };
+  ipcPayload: { commands: string[]; background?: boolean };
 };
 
 type FileActionPayload = {

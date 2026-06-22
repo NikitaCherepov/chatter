@@ -486,10 +486,12 @@ function createWindow() {
 
   // ── Macro IPC: execute commands ──
 
-  ipcMain.handle('execute-commands', async (_event, commands: string[]) => {
+  ipcMain.handle('execute-commands', async (_event, commands: string[], options?: { background?: boolean }) => {
     const batchStartedAt = Date.now();
+    const background = options?.background === true;
     console.log('[execute-commands] batch start', {
       count: Array.isArray(commands) ? commands.length : 0,
+      background,
       commands,
     });
 
@@ -541,7 +543,24 @@ function createWindow() {
           cmd,
           execCmd,
           timeoutMs: 30000,
+          background,
         });
+        if (background) {
+          const child = spawn(execCmd, [], {
+            detached: true,
+            stdio: 'ignore',
+            shell: true,
+            windowsHide: false,
+          });
+          child.unref();
+          console.log('[execute-commands] cmd background launched', {
+            cmd,
+            durationMs: Date.now() - cmdStartedAt,
+            pid: child.pid,
+          });
+          results.push(`[background] launched: ${cmd}`);
+          continue;
+        }
         const { stdout, stderr } = await execAsync(execCmd, {
           encoding: 'utf-8',
           timeout: 30000,
