@@ -302,6 +302,9 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - `GET /api/v1/chats/:id/messages?limit=&offset=`
   - Ввод: path/query
   - Вывод: `{ messages, limit, offset }`
+- `PUT /api/v1/chats/:chatId/messages/:messageId`
+  - Ввод: `{ content }`
+  - Вывод: `{ ok, token_count }` — редактирование текста сообщения (user или assistant). Пересчитывает `token_count`, обновляет FTS-индекс.
 - `POST /api/v1/chat/send`
   - Ввод: `{ text, chat_id? }`
   - Вывод: AI-ответ (`reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?` и метрики в зависимости от сервиса AI)
