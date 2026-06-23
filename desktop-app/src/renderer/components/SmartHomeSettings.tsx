@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import type { SmartDeviceDto, SmartHomeSettingsDto } from '../lib/api';
@@ -14,6 +15,7 @@ export function SmartHomeSettings() {
   const [savingToken, setSavingToken] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -217,21 +219,76 @@ export function SmartHomeSettings() {
         </>
       )}
 
-      {/* Help */}
-      {!hasToken && (
-        <div className={s.fieldGroup}>
-          <div className={s.macroFormDivider} />
-          <span className={s.fieldLabel} style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: '8px' }}>
-            Как получить токен
-          </span>
-          <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.6 }}>
-            1. Перейдите на <code style={{ color: 'var(--accent)' }}>oauth.yandex.ru</code><br />
-            2. Создайте приложение (платформа — веб-сервисы)<br />
-            3. Права: «API Умного дома Яндекса»<br />
-            4. Получите отладочный OAuth-токен (<code style={{ color: 'var(--accent)' }}>y0_...</code>)
+      {/* Guide */}
+      <div className={s.fieldGroup}>
+        <div className={s.macroFormDivider} />
+        <button
+          onClick={() => setShowGuide(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: showGuide ? 'var(--accent-icon)' : 'var(--text-muted)',
+            fontSize: '13px', fontWeight: 500, padding: 0,
+            transition: 'color 0.1s',
+          }}
+        >
+          <span>Как получить токен Яндекс.Умного Дома</span>
+          <svg
+            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transition: 'transform 0.15s', transform: showGuide ? 'rotate(180deg)' : 'none' }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        <AnimatePresence initial={false}>
+          {showGuide && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto', transition: { duration: 0.2, ease: 'easeOut' } }}
+              exit={{ opacity: 0, height: 0, transition: { duration: 0.15 } }}
+              style={{ overflow: 'hidden' }}
+            >
+            <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.7, marginTop: '10px' }}>
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>1. Создание приложения</span><br />
+              Перейдите на сайт <code style={{ color: 'var(--accent)' }}>oauth.yandex.ru</code>. Нажмите «Создать приложение».
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>2. Параметры</span><br />
+              Название: любое (например, Chatter IoT). Платформа: «Веб-сервисы».<br />
+              Redirect URI: <code style={{ color: 'var(--accent)' }}>https://oauth.yandex.ru/verification_code</code>
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>3. Доступы</span><br />
+              В блоке «Умный дом Яндекса» отметьте:<br />
+              — <code style={{ color: 'var(--accent)' }}>iot:view</code> (просмотр устройств)<br />
+              — <code style={{ color: 'var(--accent)' }}>iot:control</code> (управление)<br />
+              Нажмите «Создать приложение».
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>4. Получение токена</span><br />
+              Скопируйте <code style={{ color: 'var(--accent)' }}>Client ID</code>. Подставьте его в ссылку и перейдите:<br />
+              <code style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>https://oauth.yandex.ru/authorize?response_type=token&client_id=ВАШ_CLIENT_ID</code><br />
+              Нажмите «Разрешить» — откроется страница с токеном.
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>5. Готово</span><br />
+              Скопируйте токен (начинается с <code style={{ color: 'var(--accent)' }}>y0_...</code>) и вставьте в поле выше.
+            </div>
+            <div style={{
+              padding: '8px 10px', borderRadius: '6px',
+              background: 'var(--bg-modal-hover)', fontSize: '11px',
+              color: 'var(--text-muted)',
+            }}>
+              Токен хранится на сервере в зашифрованном виде (AES-256). Никому не передавайте его — он даёт полный доступ к управлению устройствами.
+            </div>
           </div>
-        </div>
-      )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {confirmDelete && (
         <ConfirmDialog
