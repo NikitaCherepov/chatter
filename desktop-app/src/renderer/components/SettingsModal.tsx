@@ -140,6 +140,8 @@ export function SettingsModal({ onClose }: Props) {
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
+  const [contextTokenLimit, setContextTokenLimitState] = useState<api.ContextTokenLimit | null>(null);
+  const [contextTokenLimitSaving, setContextTokenLimitSaving] = useState(false);
 
   // Load account data
   useEffect(() => {
@@ -196,6 +198,9 @@ export function SettingsModal({ onClose }: Props) {
       api.getUiSettings()
         .then((res) => setUiSettingsState(res.settings))
         .catch(() => {});
+      api.getContextTokenLimit()
+        .then((res) => setContextTokenLimitState(res))
+        .catch(() => {});
     }
   }, [section]);
 
@@ -235,6 +240,26 @@ export function SettingsModal({ onClose }: Props) {
       toast.error('Не удалось сохранить настройку');
     } finally {
       setUiSettingsSaving(false);
+    }
+  };
+
+  // Context token limit handler
+  const TOKEN_STEPS = [5000, 10000, 20000, 30000, 60000, 128000, 256000, 512000, 1000000];
+
+  const handleContextTokenLimitChange = async (value: number) => {
+    if (!contextTokenLimit) return;
+    const clamped = Math.min(value, contextTokenLimit.max_context_tokens_limit);
+    const prev = contextTokenLimit;
+    setContextTokenLimitState({ ...contextTokenLimit, max_context_tokens: clamped });
+    setContextTokenLimitSaving(true);
+    try {
+      const res = await api.setContextTokenLimit(clamped);
+      setContextTokenLimitState(res);
+    } catch {
+      setContextTokenLimitState(prev);
+      toast.error('Не удалось сохранить лимит токенов');
+    } finally {
+      setContextTokenLimitSaving(false);
     }
   };
 
@@ -1003,6 +1028,70 @@ export function SettingsModal({ onClose }: Props) {
                   disabled={uiSettingsSaving}
                 />
               </div>
+
+              {/* Context Token Limit */}
+              {contextTokenLimit && (
+                <div className={s.fieldGroup}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+                    Лимит контекста чата
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Slider
+                      mode="numeric"
+                      label=""
+                      min={Math.min(...TOKEN_STEPS.filter(s => s <= contextTokenLimit.max_context_tokens_limit), 5000)}
+                      max={contextTokenLimit.max_context_tokens_limit}
+                      step={1000}
+                      value={contextTokenLimit.max_context_tokens}
+                      onChange={(v) => {
+                        if (v !== null) handleContextTokenLimitChange(v);
+                      }}
+                      disabled={contextTokenLimitSaving}
+                      formatValue={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
+                    />
+                    <input
+                      type="number"
+                      min={1000}
+                      max={contextTokenLimit.max_context_tokens_limit}
+                      step={1000}
+                      value={contextTokenLimit.max_context_tokens}
+                      disabled={contextTokenLimitSaving}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (Number.isFinite(v) && v >= 1000) handleContextTokenLimitChange(v);
+                      }}
+                      style={{
+                        width: 90, padding: '4px 8px', fontSize: 12,
+                        background: 'var(--bg-input)', border: '1px solid var(--border-medium)',
+                        borderRadius: 6, color: 'var(--text-primary)', outline: 'none',
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
+                    Старые сообщения архивируются, когда контекст превышает лимит. При превышении контекст схлопывается до 50%. Максимум для тарифа: {(contextTokenLimit.max_context_tokens_limit / 1000).toFixed(0)}k токенов.
+                  </div>
+                  {/* Quick presets */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    {TOKEN_STEPS
+                      .filter(step => step <= contextTokenLimit.max_context_tokens_limit)
+                      .map(step => (
+                        <button
+                          key={step}
+                          onClick={() => handleContextTokenLimitChange(step)}
+                          disabled={contextTokenLimitSaving}
+                          style={{
+                            padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                            borderRadius: 6, border: '1px solid var(--border-medium)',
+                            background: contextTokenLimit.max_context_tokens === step ? 'var(--accent)' : 'var(--bg-input)',
+                            color: contextTokenLimit.max_context_tokens === step ? '#fff' : 'var(--text-body)',
+                          }}
+                        >
+                          {step >= 1000 ? `${step / 1000}k` : step}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               <div className={s.fieldGroup}>
                 <Checkbox

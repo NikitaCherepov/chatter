@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, resolveMaxContextTokens, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -4591,9 +4591,8 @@ export const sendMessageThroughAi = async (
     }
   }
 
-  const dailyLimit = normalizeDailyMessageLimit(user.daily_message_limit);
-  const dailyCount = Math.max(0, Math.floor(Number(user.daily_message_count || 0)));
-  if (!options?.ignoreDailyLimit && user.is_admin !== 1 && dailyLimit > 0 && dailyCount >= dailyLimit) throw new Error('daily_message_limit_reached');
+  // Daily message limit removed — switched to token-based context limits.
+  // Token counting remains for statistics only.
 
   const previousController = activeGenerations.get(userId);
   if (previousController && !previousController.signal.aborted) {
@@ -4625,6 +4624,7 @@ export const sendMessageThroughAi = async (
   try {
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
   const contextWindow = resolveEffectiveContextWindow(user);
+  const maxContextTokens = resolveMaxContextTokens(user);
   let history = getHistoryForAi(userId, chatId, contextWindow);
   let regenerateUserText: string | null = null;
   if (requestedRegenerateFromHistory) {
@@ -5323,7 +5323,7 @@ iterations.push(currentIteration);
     `).run(safeTokens, safeTokens, costRub, costRub, userId);
   }
 
-  trimUserHistoryByChat(userId, chatId, contextWindow);
+  trimUserHistoryByChat(userId, chatId, maxContextTokens);
 
   // Auto-title: if chat was empty, generate title via LITE AI (fire-and-forget)
   if (history.length === 0 && userTextForHistory.trim()) {

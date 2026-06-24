@@ -39,6 +39,8 @@ export type UserRecord = {
   reasoning_level?: string | null;
   model_settings?: string | null;
   ui_settings?: string | null;
+  max_context_tokens_limit?: number;
+  max_context_tokens?: number;
 };
 
 export type ChatDto = {

@@ -468,14 +468,16 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
  *
  * Reasoning в API не отправляется (односторонний вывод модели).
  */
-export const getHistoryForAi = (userId: number, chatId: number, limit: number): any[] => {
+export const getHistoryForAi = (userId: number, chatId: number, limit?: number): any[] => {
+  // LIMIT больше не используется для ограничения контекста —
+  // Epoch Trimming (trimUserHistoryByChat) контролирует размер через архивацию по токенам.
+  // Параметр limit оставлен для обратной совместимости, но игнорируется.
   const rows = db.prepare(`
     SELECT role, content, tool_calls_json
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ? AND archived = 0
     ORDER BY id DESC
-    LIMIT ?
-  `).all(userId, chatId, limit).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null }>;
+  `).all(userId, chatId).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null }>;
 
   const messages: any[] = [];
 
@@ -491,35 +493,88 @@ export const getHistoryForAi = (userId: number, chatId: number, limit: number): 
   return messages;
 };
 
-export const trimUserHistoryByChat = (userId: number, chatId: number, limit: number) => {
-  const safeLimit = Math.max(1, Math.floor(limit));
-  // The "window" is the last N messages regardless of archived status.
-  // Messages inside the window → active (archived = 0).
-  // Messages outside the window → archived (archived = 1).
-  // This handles context window increases correctly: previously archived messages
-  // that now fall within the window are automatically un-archived.
-  return db.prepare(`
+/**
+ * Epoch Trimming — архивация по токенам, а не по количеству сообщений.
+ *
+ * Алгоритм:
+ * 1. Считаем SUM(token_count) всех неархивных сообщений + system_prompt_tokens.
+ * 2. Если сумма ≤ maxContextTokens — ничего не делаем.
+ * 3. Если превышено — архивируем самые старые сообщения, пока контекст
+ *    не схлопнется до ~50% от лимита. Один UPDATE, минимум дёрганья кэша.
+ *
+ * возвращает { archived_count, tokens_before, tokens_after } для логирования.
+ */
+export const trimUserHistoryByChat = (userId: number, chatId: number, maxContextTokens: number): { archived_count: number; tokens_before: number; tokens_after: number } => {
+  const tokenLimit = Math.max(1000, Math.floor(maxContextTokens));
+
+  // 1. Берём все неархивные сообщения (id, token_count), старые → новые.
+  const rows = db.prepare(`
+    SELECT id, token_count
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ? AND archived = 0
+    ORDER BY id ASC
+  `).all(userId, chatId) as Array<{ id: number; token_count: number }>;
+
+  if (rows.length === 0) return { archived_count: 0, tokens_before: 0, tokens_after: 0 };
+
+  // 2. Считаем системный промпт (динамический).
+  let systemPromptTokens = 0;
+  const user = getUserById(userId);
+  if (user) {
+    const promptContent = resolvePromptForUser(user).content;
+    const coreMemory = user.core_memory || '';
+    const pinnedMacros = getEnabledMacros(userId).filter(m => m.pinned);
+    const pinnedMacrosHint = pinnedMacros.length > 0
+      ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
+      : '';
+    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false);
+    systemPromptTokens = countMessageTokens('system', systemPrompt);
+  }
+
+  // 3. Сумма токенов всех неархивных сообщений.
+  const totalMessageTokens = rows.reduce((sum, r) => sum + (r.token_count || 0), 0);
+  const totalContextTokens = totalMessageTokens + systemPromptTokens;
+
+  // 4. Если контекст в пределах лимита — ничего не делаем.
+  if (totalContextTokens <= tokenLimit) {
+    return { archived_count: 0, tokens_before: totalContextTokens, tokens_after: totalContextTokens };
+  }
+
+  // 5. Схлопываем до 50% лимита.
+  const targetTokens = Math.floor(tokenLimit * 0.5);
+  // Сколько токенов нужно срезать (минимум, чтобы оказаться в районе target).
+  const tokensToArchive = totalMessageTokens - Math.max(0, targetTokens - systemPromptTokens);
+
+  // 6. Идём от самых старых, собираем ID для архивации.
+  const idsToArchive: number[] = [];
+  let accumulated = 0;
+  for (const row of rows) {
+    if (accumulated >= tokensToArchive) break;
+    idsToArchive.push(row.id);
+    accumulated += row.token_count || 0;
+  }
+
+  // Гарантия: всегда оставляем хотя бы 1 сообщение активным.
+  if (idsToArchive.length >= rows.length) {
+    idsToArchive.pop(); // оставляем самое свежее из тех, что попали в список
+  }
+
+  if (idsToArchive.length === 0) {
+    return { archived_count: 0, tokens_before: totalContextTokens, tokens_after: totalContextTokens };
+  }
+
+  // 7. Один пакетный UPDATE.
+  const placeholders = idsToArchive.map(() => '?').join(',');
+  db.prepare(`
     UPDATE chat_messages
-    SET archived = CASE
-      WHEN id IN (
-        SELECT id FROM chat_messages
-        WHERE user_id = ? AND chat_id = ?
-        ORDER BY id DESC
-        LIMIT ?
-      ) THEN 0
-      ELSE 1
-    END,
-    archived_at = CASE
-      WHEN id IN (
-        SELECT id FROM chat_messages
-        WHERE user_id = ? AND chat_id = ?
-        ORDER BY id DESC
-        LIMIT ?
-      ) THEN archived_at
-      ELSE CASE WHEN archived = 0 THEN CURRENT_TIMESTAMP ELSE archived_at END
-    END
-    WHERE user_id = ? AND chat_id = ?
-  `).run(userId, chatId, safeLimit, userId, chatId, safeLimit, userId, chatId);
+    SET archived = 1,
+        archived_at = CURRENT_TIMESTAMP
+    WHERE id IN (${placeholders})
+  `).run(...idsToArchive);
+
+  const tokensAfter = totalContextTokens - accumulated;
+
+  return { archived_count: idsToArchive.length, tokens_before: totalContextTokens, tokens_after: Math.max(0, tokensAfter) };
 };
 
 export const updateUserContextWindow = (userId: number, contextWindow: number) => {
@@ -571,9 +626,32 @@ export const resetUsersPromptIfDeleted = (promptId: number) => db
   .run(promptId);
 
 export const resolveEffectiveContextWindow = (user: UserRecord) => {
-  const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0 ? Math.floor(user.context_window_max) : 10;
+  const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0 ? Math.floor(user.context_window_max) : 9999;
   const current = Number.isFinite(user.context_window) && user.context_window > 0 ? Math.floor(user.context_window) : maxWindow;
   return Math.max(1, Math.min(current, maxWindow));
+};
+
+/**
+ * Резолвит эффективный лимит контекста в токенах для пользователя.
+ * Берёт min(max_context_tokens, max_context_tokens_limit).
+ * Fallback на константу из PLAN_LIMITS для плана пользователя.
+ */
+export const resolveMaxContextTokens = (user: UserRecord): number => {
+  const planLimit = PLAN_LIMITS[user.plan]?.max_context_tokens ?? PLAN_LIMITS['free'].max_context_tokens;
+  const hardLimit = Number.isFinite(user.max_context_tokens_limit) && user.max_context_tokens_limit! > 0
+    ? Math.floor(user.max_context_tokens_limit!) : planLimit;
+  const userChoice = Number.isFinite(user.max_context_tokens) && user.max_context_tokens! > 0
+    ? Math.floor(user.max_context_tokens!) : hardLimit;
+  return Math.max(1000, Math.min(userChoice, hardLimit));
+};
+
+export const updateUserMaxContextTokens = (userId: number, maxContextTokens: number) => {
+  const safeValue = Math.max(1000, Math.floor(maxContextTokens));
+  return db.prepare(`
+    UPDATE users
+    SET max_context_tokens = ?
+    WHERE id = ?
+  `).run(safeValue, userId);
 };
 
 export const getPromptForUser = (user: UserRecord) => {
@@ -593,10 +671,10 @@ export const getPromptForUser = (user: UserRecord) => {
 export type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 export type UserPlan = 'free' | 'standart' | 'pro';
 
-const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number; daily_image_gen_limit: number; max_images_per_request: number }> = {
-  free: { context_window_max: 10, daily_message_limit: 10, daily_web_search_limit: 0, daily_image_gen_limit: 0, max_images_per_request: 0 },
-  standart: { context_window_max: 20, daily_message_limit: 20, daily_web_search_limit: 5, daily_image_gen_limit: 2, max_images_per_request: 5 },
-  pro: { context_window_max: 50, daily_message_limit: 50, daily_web_search_limit: 20, daily_image_gen_limit: 5, max_images_per_request: 10 }
+const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number; daily_image_gen_limit: number; max_images_per_request: number; max_context_tokens: number }> = {
+  free:     { context_window_max: 9999, daily_message_limit: 0, daily_web_search_limit: 0,  daily_image_gen_limit: 0, max_images_per_request: 0,  max_context_tokens: 30_000 },
+  standart: { context_window_max: 9999, daily_message_limit: 0, daily_web_search_limit: 5,  daily_image_gen_limit: 2, max_images_per_request: 5,  max_context_tokens: 60_000 },
+  pro:      { context_window_max: 9999, daily_message_limit: 0, daily_web_search_limit: 20, daily_image_gen_limit: 5, max_images_per_request: 10, max_context_tokens: 1_000_000 }
 };
 
 export const getMaxImagesForPlan = (plan: string): number => {
@@ -618,8 +696,9 @@ export const upsertTelegramUser = (
 
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
-      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit)
-    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?)
+      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit,
+      max_context_tokens_limit, max_context_tokens)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       role = excluded.role,
@@ -628,7 +707,8 @@ export const upsertTelegramUser = (
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(tgId, name, effectiveRole, effectiveIsAdmin, status, tgUsername, defaultPromptId,
-    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit);
+    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
+    limits.max_context_tokens, limits.max_context_tokens);
 
   ensureActiveChat(tgId);
   return result;
@@ -643,14 +723,16 @@ export const createPendingTelegramUser = (
   const limits = PLAN_LIMITS['free'];
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
-      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit)
-    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?)
+      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit,
+      max_context_tokens_limit, max_context_tokens)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       name = COALESCE(excluded.name, users.name),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(tgId, name, tgUsername, defaultPromptId,
-    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit);
+    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
+    limits.max_context_tokens, limits.max_context_tokens);
 
   ensureActiveChat(tgId);
   return result;
@@ -737,14 +819,15 @@ export const updateUserPlan = (userId: number, plan: UserPlan) => {
         daily_message_limit = ?,
         daily_web_search_limit = ?,
         daily_image_gen_limit = ?,
-        context_window = CASE
-          WHEN COALESCE(context_window, 0) <= 0 THEN ?
-          WHEN context_window > ? THEN ?
-          ELSE context_window
+        max_context_tokens_limit = ?,
+        max_context_tokens = CASE
+          WHEN COALESCE(max_context_tokens, 0) <= 0 THEN ?
+          WHEN max_context_tokens > ? THEN ?
+          ELSE max_context_tokens
         END
     WHERE id = ?
   `).run(plan, limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
-    limits.context_window_max, limits.context_window_max, limits.context_window_max, userId);
+    limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, userId);
 };
 
 export const syncAllUsersPlanLimits = () => {
@@ -755,14 +838,15 @@ export const syncAllUsersPlanLimits = () => {
           daily_message_limit = ?,
           daily_web_search_limit = ?,
           daily_image_gen_limit = ?,
-          context_window = CASE
-            WHEN COALESCE(context_window, 0) <= 0 THEN ?
-            WHEN context_window > ? THEN ?
-            ELSE context_window
+          max_context_tokens_limit = ?,
+          max_context_tokens = CASE
+            WHEN COALESCE(max_context_tokens, 0) <= 0 THEN ?
+            WHEN max_context_tokens > ? THEN ?
+            ELSE max_context_tokens
           END
       WHERE plan = ?
     `).run(limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
-      limits.context_window_max, limits.context_window_max, limits.context_window_max, plan);
+      limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, plan);
   }
 };
 

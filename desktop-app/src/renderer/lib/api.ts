@@ -985,6 +985,25 @@ export async function setUiSettings(settings: Partial<UiSettings>): Promise<{ ok
   });
 }
 
+// ---------- Context Token Limit ----------
+
+export type ContextTokenLimit = {
+  max_context_tokens: number;
+  max_context_tokens_limit: number;
+};
+
+export async function getContextTokenLimit(): Promise<ContextTokenLimit> {
+  return apiFetch('/api/v1/user/context-tokens-limit');
+}
+
+export async function setContextTokenLimit(maxContextTokens: number): Promise<ContextTokenLimit> {
+  return apiFetch('/api/v1/user/context-tokens-limit', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ max_context_tokens: maxContextTokens }),
+  });
+}
+
 // ---------- TTS (Cartesia cloud) ----------
 
 export type CartesiaVoice = {

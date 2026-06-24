@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -1586,6 +1586,33 @@ app.post('/internal/user/context-window', internalAuth, (req, res) => {
   return res.json({ ok: true });
 });
 
+// ── Internal: Context Token Limit (for TG bot) ─────────────────────────────
+
+app.get('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
+  const userId = Number(req.query?.user_id || req.body?.user_id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({
+    max_context_tokens: resolveMaxContextTokens(user),
+    max_context_tokens_limit: user.max_context_tokens_limit || 30000,
+  });
+});
+
+app.post('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const maxContextTokens = Number(req.body?.max_context_tokens);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(maxContextTokens) || maxContextTokens < 1000) return res.status(400).json({ error: 'bad_max_context_tokens' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const hardLimit = Number.isFinite(user.max_context_tokens_limit) && user.max_context_tokens_limit! > 0
+    ? Math.floor(user.max_context_tokens_limit!) : 30000;
+  const clamped = Math.min(Math.floor(maxContextTokens), hardLimit);
+  updateUserMaxContextTokens(userId, clamped);
+  return res.json({ ok: true, max_context_tokens: clamped, max_context_tokens_limit: hardLimit });
+});
+
 // ── Internal: Mail Accounts Management ────────────────────────────────────
 
 app.post('/internal/mail/setup', internalAuth, (req, res) => {
@@ -2390,6 +2417,31 @@ app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
   }
   db.prepare('UPDATE users SET ui_settings = ? WHERE id = ?').run(JSON.stringify(existing), userId);
   return res.json({ ok: true, settings: existing });
+});
+
+// ─── Context Token Limit ────────────────────────────────────────────────────
+
+app.get('/api/v1/user/context-tokens-limit', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({
+    max_context_tokens: resolveMaxContextTokens(user),
+    max_context_tokens_limit: user.max_context_tokens_limit || 30000,
+  });
+});
+
+app.put('/api/v1/user/context-tokens-limit', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const requested = Number(req.body?.max_context_tokens);
+  if (!Number.isFinite(requested) || requested < 1000) return res.status(400).json({ error: 'bad_max_context_tokens' });
+  const hardLimit = Number.isFinite(user.max_context_tokens_limit) && user.max_context_tokens_limit! > 0
+    ? Math.floor(user.max_context_tokens_limit!) : 30000;
+  const clamped = Math.min(Math.floor(requested), hardLimit);
+  updateUserMaxContextTokens(userId, clamped);
+  return res.json({ ok: true, max_context_tokens: clamped, max_context_tokens_limit: hardLimit });
 });
 
 // ─── Macros CRUD ────────────────────────────────────────────────────────────

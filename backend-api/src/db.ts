@@ -104,6 +104,10 @@ db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
 // linked_tg_id column on users — stores TG user_id when linked
 ensureUserColumn('linked_tg_id', 'ALTER TABLE users ADD COLUMN linked_tg_id INTEGER');
 
+// Token-based context limit (replaces message-count-based context_window_max)
+ensureUserColumn('max_context_tokens_limit', 'ALTER TABLE users ADD COLUMN max_context_tokens_limit INTEGER NOT NULL DEFAULT 30000');
+ensureUserColumn('max_context_tokens', 'ALTER TABLE users ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT 30000');
+
 // ── FTS5 full-text search index on chat_messages ────────────────────────────
 
 const hasFtsTable = () => {
