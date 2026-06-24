@@ -246,14 +246,19 @@ export function SettingsModal({ onClose }: Props) {
   // Context token limit handler
   const TOKEN_STEPS = [5000, 10000, 20000, 30000, 60000, 128000, 256000, 512000, 1000000];
 
-  const handleContextTokenLimitChange = async (value: number) => {
+  const handleContextTokenLimitChange = (value: number) => {
     if (!contextTokenLimit) return;
     const clamped = Math.min(value, contextTokenLimit.max_context_tokens_limit);
-    const prev = contextTokenLimit;
     setContextTokenLimitState({ ...contextTokenLimit, max_context_tokens: clamped });
+  };
+
+  const handleContextTokenLimitCommit = async (value?: number) => {
+    if (!contextTokenLimit) return;
+    const commitValue = value ?? contextTokenLimit.max_context_tokens;
+    const prev = contextTokenLimit;
     setContextTokenLimitSaving(true);
     try {
-      const res = await api.setContextTokenLimit(clamped);
+      const res = await api.setContextTokenLimit(commitValue);
       setContextTokenLimitState(res);
     } catch {
       setContextTokenLimitState(prev);
@@ -1046,6 +1051,7 @@ export function SettingsModal({ onClose }: Props) {
                       onChange={(v) => {
                         if (v !== null) handleContextTokenLimitChange(v);
                       }}
+                      onCommit={handleContextTokenLimitCommit}
                       disabled={contextTokenLimitSaving}
                       formatValue={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
                     />
@@ -1060,6 +1066,8 @@ export function SettingsModal({ onClose }: Props) {
                         const v = Number(e.target.value);
                         if (Number.isFinite(v) && v >= 1000) handleContextTokenLimitChange(v);
                       }}
+                      onBlur={() => handleContextTokenLimitCommit()}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleContextTokenLimitCommit(); }}
                       style={{
                         width: 90, padding: '4px 8px', fontSize: 12,
                         background: 'var(--bg-input)', border: '1px solid var(--border-medium)',
@@ -1077,7 +1085,10 @@ export function SettingsModal({ onClose }: Props) {
                       .map(step => (
                         <button
                           key={step}
-                          onClick={() => handleContextTokenLimitChange(step)}
+                          onClick={() => {
+                            handleContextTokenLimitChange(step);
+                            handleContextTokenLimitCommit(step);
+                          }}
                           disabled={contextTokenLimitSaving}
                           style={{
                             padding: '3px 10px', fontSize: 11, cursor: 'pointer',
