@@ -535,6 +535,46 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
   const totalMessageTokens = rows.reduce((sum, r) => sum + (r.token_count || 0), 0);
   const totalContextTokens = totalMessageTokens + systemPromptTokens;
 
+  // 3b. РАЗАРХИВАЦИЯ: если лимит позволяет, возвращаем свежие архивные сообщения.
+  // Критически важно чтобы пользователь мог увеличить лимит и получить историю назад.
+  // Используем 80% лимита как порог разархивации (буфер, чтобы не разархивировать
+  // и тут же заархивировать в одном проходе).
+  if (totalContextTokens < tokenLimit) {
+    const unarchiveThreshold = Math.floor(tokenLimit * 0.8);
+    const availableBudget = unarchiveThreshold - totalContextTokens;
+
+    if (availableBudget > 0) {
+      // Берём архивные сообщения, свежие → старые (id DESC).
+      const archivedRows = db.prepare(`
+        SELECT id, token_count
+        FROM chat_messages
+        WHERE user_id = ? AND chat_id = ? AND archived = 1
+        ORDER BY id DESC
+      `).all(userId, chatId) as Array<{ id: number; token_count: number }>;
+
+      if (archivedRows.length > 0) {
+        const idsToUnarchive: number[] = [];
+        let unarchiveAccumulated = 0;
+
+        for (const row of archivedRows) {
+          if (unarchiveAccumulated + (row.token_count || 0) > availableBudget) break;
+          idsToUnarchive.push(row.id);
+          unarchiveAccumulated += row.token_count || 0;
+        }
+
+        if (idsToUnarchive.length > 0) {
+          const ph = idsToUnarchive.map(() => '?').join(',');
+          db.prepare(`
+            UPDATE chat_messages
+            SET archived = 0,
+                archived_at = NULL
+            WHERE id IN (${ph})
+          `).run(...idsToUnarchive);
+        }
+      }
+    }
+  }
+
   // 4. Если контекст в пределах лимита — ничего не делаем.
   if (totalContextTokens <= tokenLimit) {
     return { archived_count: 0, tokens_before: totalContextTokens, tokens_after: totalContextTokens };
