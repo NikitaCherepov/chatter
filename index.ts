@@ -6,7 +6,7 @@ import axios from 'axios';
 
 dotenv.config();
 
-const MAX_HISTORY_ITEMS = 10;
+const MAX_HISTORY_ITEMS = 9999;
 const USER_PLANS = ['free', 'standart', 'pro'] as const;
 type UserPlan = typeof USER_PLANS[number];
 const PLAN_LABELS: Record<UserPlan, string> = {
@@ -14,15 +14,10 @@ const PLAN_LABELS: Record<UserPlan, string> = {
     standart: 'STANDART',
     pro: 'PRO'
 };
-const PLAN_CONTEXT_LIMITS: Record<UserPlan, number> = {
-    free: MAX_HISTORY_ITEMS,
-    standart: 20,
-    pro: 50
-};
-const PLAN_DAILY_MESSAGE_LIMITS: Record<UserPlan, number> = {
-    free: 10,
-    standart: 20,
-    pro: 50
+const PLAN_MAX_CONTEXT_TOKENS: Record<UserPlan, number> = {
+    free: 30_000,
+    standart: 60_000,
+    pro: 1_000_000
 };
 const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<UserPlan, number> = {
     free: 0,
@@ -111,7 +106,7 @@ db.exec(`
         timezone_confirmed INTEGER NOT NULL DEFAULT 0,
         daily_message_count INTEGER NOT NULL DEFAULT 0,
         total_message_length INTEGER NOT NULL DEFAULT 0,
-        daily_message_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]},
+        daily_message_limit INTEGER NOT NULL DEFAULT 0,
         daily_tokens_used INTEGER NOT NULL DEFAULT 0,
         total_tokens_used INTEGER NOT NULL DEFAULT 0,
         daily_cost_rub REAL NOT NULL DEFAULT 0,
@@ -119,8 +114,10 @@ db.exec(`
         daily_web_search_count INTEGER NOT NULL DEFAULT 0,
         daily_web_search_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]},
         total_web_search_count INTEGER NOT NULL DEFAULT 0,
-        context_window INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]},
-        context_window_max INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]},
+        context_window INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS},
+        context_window_max INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS},
+        max_context_tokens_limit INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]},
+        max_context_tokens INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]},
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -273,7 +270,7 @@ ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offse
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_message_limit', `ALTER TABLE users ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]}`);
+ensureUserColumn('daily_message_limit', `ALTER TABLE users ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT 0`);
 ensureUserColumn('daily_tokens_used', 'ALTER TABLE users ADD COLUMN daily_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
@@ -281,8 +278,10 @@ ensureUserColumn('total_cost_rub', 'ALTER TABLE users ADD COLUMN total_cost_rub 
 ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_web_search_limit', `ALTER TABLE users ADD COLUMN daily_web_search_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`);
 ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('context_window', `ALTER TABLE users ADD COLUMN context_window INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]}`);
-ensureUserColumn('context_window_max', `ALTER TABLE users ADD COLUMN context_window_max INTEGER NOT NULL DEFAULT ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]}`);
+ensureUserColumn('context_window', `ALTER TABLE users ADD COLUMN context_window INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS}`);
+ensureUserColumn('context_window_max', `ALTER TABLE users ADD COLUMN context_window_max INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS}`);
+ensureUserColumn('max_context_tokens_limit', `ALTER TABLE users ADD COLUMN max_context_tokens_limit INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]}`);
+ensureUserColumn('max_context_tokens', `ALTER TABLE users ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]}`);
 
 ensureTaskColumn('recurrence_type', `ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'`);
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
@@ -360,7 +359,7 @@ if (hasUserColumn('daily_message_count')) {
     db.exec(`UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL`);
 }
 if (hasUserColumn('daily_message_limit')) {
-    db.exec(`UPDATE users SET daily_message_limit = ${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]} WHERE daily_message_limit IS NULL OR daily_message_limit < 0`);
+    db.exec(`UPDATE users SET daily_message_limit = 0 WHERE daily_message_limit IS NULL OR daily_message_limit < 0`);
 }
 if (hasUserColumn('total_message_length')) {
     db.exec(`UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL`);
@@ -399,28 +398,31 @@ if (hasUserColumn('mail_check_limit')) {
     db.exec(`UPDATE users SET mail_check_limit = 10 WHERE mail_check_limit IS NULL OR mail_check_limit <= 0`);
 }
 if (hasUserColumn('context_window_max')) {
-    db.exec(`UPDATE users SET context_window_max = ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]} WHERE context_window_max IS NULL OR context_window_max <= 0`);
+    db.exec(`UPDATE users SET context_window_max = ${MAX_HISTORY_ITEMS} WHERE context_window_max IS NULL OR context_window_max <= 0`);
 }
-if (hasUserColumn('plan') && hasUserColumn('context_window_max')) {
+if (hasUserColumn('max_context_tokens_limit')) {
     db.exec(`
         UPDATE users
-        SET context_window_max = CASE
-            WHEN plan = 'pro' THEN ${PLAN_CONTEXT_LIMITS.pro}
-            WHEN plan = 'standart' THEN ${PLAN_CONTEXT_LIMITS.standart}
-            ELSE ${PLAN_CONTEXT_LIMITS.free}
+        SET max_context_tokens_limit = CASE
+            WHEN plan = 'pro' THEN ${PLAN_MAX_CONTEXT_TOKENS.pro}
+            WHEN plan = 'standart' THEN ${PLAN_MAX_CONTEXT_TOKENS.standart}
+            ELSE ${PLAN_MAX_CONTEXT_TOKENS.free}
+        END
+        WHERE max_context_tokens_limit IS NULL OR max_context_tokens_limit <= 0
+    `);
+}
+if (hasUserColumn('max_context_tokens')) {
+    db.exec(`
+        UPDATE users
+        SET max_context_tokens = CASE
+            WHEN max_context_tokens IS NULL OR max_context_tokens <= 0 THEN max_context_tokens_limit
+            WHEN max_context_tokens > max_context_tokens_limit THEN max_context_tokens_limit
+            ELSE max_context_tokens
         END
     `);
 }
 if (hasUserColumn('plan') && hasUserColumn('daily_message_limit')) {
-    db.exec(`
-        UPDATE users
-        SET daily_message_limit = CASE
-            WHEN plan = 'pro' THEN ${PLAN_DAILY_MESSAGE_LIMITS.pro}
-            WHEN plan = 'standart' THEN ${PLAN_DAILY_MESSAGE_LIMITS.standart}
-            ELSE ${PLAN_DAILY_MESSAGE_LIMITS.free}
-        END
-        WHERE daily_message_limit IS NULL OR daily_message_limit < 0
-    `);
+    db.exec(`UPDATE users SET daily_message_limit = 0 WHERE daily_message_limit IS NULL OR daily_message_limit < 0`);
 }
 if (hasUserColumn('plan') && hasUserColumn('daily_web_search_limit')) {
     db.exec(`
@@ -436,7 +438,7 @@ if (hasUserColumn('plan') && hasUserColumn('daily_web_search_limit')) {
 if (hasUserColumn('context_window')) {
     db.exec(`
         UPDATE users
-        SET context_window = COALESCE(context_window_max, ${PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN]})
+        SET context_window = COALESCE(context_window_max, ${MAX_HISTORY_ITEMS})
         WHERE context_window IS NULL OR context_window <= 0
     `);
     db.exec(`
@@ -652,6 +654,8 @@ type UserRecord = {
     total_image_gen_count: number;
     context_window: number;
     context_window_max: number;
+    max_context_tokens_limit?: number;
+    max_context_tokens?: number;
     preferred_model?: string | null;
 };
 type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
@@ -1427,6 +1431,12 @@ const runBackendSetContextWindow = async (userId: number, contextWindow: number,
     return response.data as { ok: boolean };
 };
 
+const runBackendSetContextTokens = async (userId: number, maxContextTokens: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/context-tokens-limit`, { user_id: userId, max_context_tokens: maxContextTokens }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: boolean; max_context_tokens: number; max_context_tokens_limit: number };
+};
+
 const runBackendMailSetup = async (userId: number, provider: string, email: string, appPassword: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/setup`, { user_id: userId, provider, email, app_password: appPassword }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
@@ -1872,14 +1882,7 @@ const processPhotoAlbum = async (albumKey: string) => {
         return;
     }
 
-    if (ctx.state.role !== 'admin') {
-        const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
-        const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
-        if (dailyLimit > 0 && dailyCount >= dailyLimit) {
-            await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
-            return;
-        }
-    }
+    // Daily message limit removed — switched to token-based context limits.
 
     try {
         await ctx.sendChatAction('typing');
@@ -2124,11 +2127,10 @@ const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
     if (raw === 'free' || raw === 'standart' || raw === 'pro') return raw;
     return DEFAULT_USER_PLAN;
 };
-const getPlanContextLimit = (plan: UserPlan) => PLAN_CONTEXT_LIMITS[plan] || PLAN_CONTEXT_LIMITS[DEFAULT_USER_PLAN];
-const getPlanDailyMessageLimit = (plan: UserPlan) => PLAN_DAILY_MESSAGE_LIMITS[plan] ?? PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN];
+const getPlanMaxContextTokens = (plan: UserPlan) => PLAN_MAX_CONTEXT_TOKENS[plan] || PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN];
 const getPlanDailyWebSearchLimit = (plan: UserPlan) => PLAN_DAILY_WEB_SEARCH_LIMITS[plan] ?? PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN];
 const normalizeDailyMessageLimit = (value: number | null | undefined) => {
-    if (!Number.isFinite(value)) return getPlanDailyMessageLimit(DEFAULT_USER_PLAN);
+    if (!Number.isFinite(value)) return 0;
     return Math.max(0, Math.floor(value as number));
 };
 const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
@@ -2245,14 +2247,14 @@ const removeUserPlanSubscriptions = (id: number) => db.prepare('DELETE FROM user
 const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
 const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
 const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, daily_web_search_limit, total_web_search_count, daily_image_gen_count, daily_image_gen_limit, total_image_gen_count, context_window, context_window_max
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, daily_web_search_limit, total_web_search_count, daily_image_gen_count, daily_image_gen_limit, total_image_gen_count, context_window, context_window_max, max_context_tokens_limit, max_context_tokens
     FROM users
     ORDER BY id ASC
     LIMIT ? OFFSET ?
 `).all(limit, offset) as UserRecord[];
 const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
 const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, daily_web_search_limit, daily_image_gen_limit, context_window, context_window_max, created_at
+    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, daily_web_search_limit, daily_image_gen_limit, context_window, context_window_max, max_context_tokens_limit, max_context_tokens, created_at
     FROM users
     WHERE status = 'none'
     ORDER BY id ASC
@@ -2260,7 +2262,7 @@ const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
 `).all(limit, offset) as PendingUserRow[];
 const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
 const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.daily_web_search_limit, u.daily_image_gen_limit, u.context_window, u.context_window_max, b.reason, b.banned_at
+    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.daily_web_search_limit, u.daily_image_gen_limit, u.context_window, u.context_window_max, u.max_context_tokens_limit, u.max_context_tokens, b.reason, b.banned_at
     FROM users u
     LEFT JOIN bans b ON b.user_id = u.id
     WHERE u.status = 'banned'
@@ -2330,14 +2332,18 @@ const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', li
 };
 const isTimezoneConfigured = (user: UserRecord) => user.timezone_confirmed === 1;
 const resolveEffectiveContextWindow = (user: UserRecord | undefined) => {
+    // Legacy — still used for message-count fallback, но context control теперь через токены.
     if (!user) return MAX_HISTORY_ITEMS;
-    const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0
-        ? Math.floor(user.context_window_max)
-        : getPlanContextLimit(parsePlanFromDb(user.plan));
-    const currentWindow = Number.isFinite(user.context_window) && user.context_window > 0
-        ? Math.floor(user.context_window)
-        : maxWindow;
-    return Math.max(1, Math.min(currentWindow, maxWindow));
+    return MAX_HISTORY_ITEMS;
+};
+const resolveMaxContextTokens = (user: UserRecord | undefined): number => {
+    if (!user) return PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN];
+    const planLimit = getPlanMaxContextTokens(parsePlanFromDb(user.plan));
+    const mctl = user.max_context_tokens_limit ?? 0;
+    const mct = user.max_context_tokens ?? 0;
+    const hardLimit = Number.isFinite(mctl) && mctl > 0 ? Math.floor(mctl) : planLimit;
+    const userChoice = Number.isFinite(mct) && mct > 0 ? Math.floor(mct) : hardLimit;
+    return Math.max(1000, Math.min(userChoice, hardLimit));
 };
 const createUserChat = (userId: number, title: string) => {
     const normalized = title.trim() || 'Новый чат';
@@ -2436,36 +2442,44 @@ const deleteHistoryMessageByUserAndTelegramMessageId = (userId: number, telegram
     WHERE user_id = ? AND telegram_message_id = ?
 `).run(userId, telegramMessageId);
 const trimUserHistory = async (userId: number) => {
+    // Epoch Trimming — архивация по токенам.
+    // Контроль контекста делегирован на backend-api (trimUserHistoryByChat),
+    // но TG-бот тоже может архивировать при смене тарифа/лимита.
     const chatId = ensureActiveChatForUser(userId);
-    const limit = resolveEffectiveContextWindow(await getUser(userId));
-    const safeLimit = Math.max(1, Math.floor(limit));
-    // The "window" is the last N messages regardless of archived status.
-    // Messages inside the window → active (archived = 0).
-    // Messages outside the window → archived (archived = 1).
-    // Handles context window increases: previously archived messages that now
-    // fall within the window are automatically un-archived.
-    return db.prepare(`
+    const maxContextTokens = resolveMaxContextTokens(await getUser(userId));
+
+    const rows = db.prepare(`
+        SELECT id, token_count
+        FROM chat_messages
+        WHERE user_id = ? AND chat_id = ? AND archived = 0
+        ORDER BY id ASC
+    `).all(userId, chatId) as Array<{ id: number; token_count: number }>;
+
+    if (rows.length === 0) return;
+
+    const totalMessageTokens = rows.reduce((sum, r) => sum + (r.token_count || 0), 0);
+    if (totalMessageTokens <= maxContextTokens) return;
+
+    const targetTokens = Math.floor(maxContextTokens * 0.5);
+    const tokensToArchive = totalMessageTokens - targetTokens;
+
+    const idsToArchive: number[] = [];
+    let accumulated = 0;
+    for (const row of rows) {
+        if (accumulated >= tokensToArchive) break;
+        idsToArchive.push(row.id);
+        accumulated += row.token_count || 0;
+    }
+
+    if (idsToArchive.length >= rows.length) idsToArchive.pop();
+    if (idsToArchive.length === 0) return;
+
+    const placeholders = idsToArchive.map(() => '?').join(',');
+    db.prepare(`
         UPDATE chat_messages
-        SET archived = CASE
-          WHEN id IN (
-            SELECT id FROM chat_messages
-            WHERE user_id = ? AND chat_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-          ) THEN 0
-          ELSE 1
-        END,
-        archived_at = CASE
-          WHEN id IN (
-            SELECT id FROM chat_messages
-            WHERE user_id = ? AND chat_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-          ) THEN archived_at
-          ELSE CASE WHEN archived = 0 THEN CURRENT_TIMESTAMP ELSE archived_at END
-        END
-        WHERE user_id = ? AND chat_id = ?
-    `).run(userId, chatId, safeLimit, userId, chatId, safeLimit, userId, chatId);
+        SET archived = 1, archived_at = CURRENT_TIMESTAMP
+        WHERE id IN (${placeholders})
+    `).run(...idsToArchive);
 };
 const clearActiveUserHistory = (userId: number) => db.prepare(`
     DELETE FROM chat_messages
@@ -2641,11 +2655,11 @@ const showMenu = async (ctx: any) => {
     const userPlan = userRecord ? parsePlanFromDb(userRecord.plan) : DEFAULT_USER_PLAN;
     const planLine = `💳 План: ${getPlanLabel(userPlan)}`;
     const contextLine = userRecord
-        ? `🗂 Контекст (текущий/доступный): ${getContextWindowText(userRecord)}`
-        : `🗂 Контекст: ${MAX_HISTORY_ITEMS}/${MAX_HISTORY_ITEMS}`;
+        ? `🗂 Контекст (токены): ${getContextWindowText(userRecord)}`
+        : `🗂 Контекст: ${(PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN] / 1000).toFixed(0)}k`;
     const messageLimitLine = userRecord
         ? `📨 Сообщения сегодня: ${getDailyMessageLimitText(userRecord)}`
-        : `📨 Сообщения сегодня: 0/${PLAN_DAILY_MESSAGE_LIMITS[DEFAULT_USER_PLAN]}`;
+        : `📨 Сообщения: безлимит`;
     const webLimitLine = userRecord
         ? `🌐 Web-поиск сегодня: ${getDailyWebSearchLimitText(userRecord)}`
         : `🌐 Web-поиск сегодня: 0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`;
@@ -2866,16 +2880,12 @@ const getStatusLabel = (status: UserStatus) => {
 };
 const getPlanLabel = (plan: UserPlan) => PLAN_LABELS[plan] || PLAN_LABELS[DEFAULT_USER_PLAN];
 const getContextWindowText = (user: UserRecord) => {
-    const effective = resolveEffectiveContextWindow(user);
-    const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0
-        ? Math.floor(user.context_window_max)
-        : getPlanContextLimit(parsePlanFromDb(user.plan));
-    return `${effective}/${maxWindow}`;
+    const effective = resolveMaxContextTokens(user);
+    const hardLimit = (user.max_context_tokens_limit ?? 0) > 0
+        ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
+    return `${(effective / 1000).toFixed(0)}k/${(hardLimit / 1000).toFixed(0)}k`;
 };
-const getDailyMessageLimitText = (user: UserRecord) => {
-    const limit = normalizeDailyMessageLimit(user.daily_message_limit);
-    return limit === 0 ? 'безлимит' : `${user.daily_message_count ?? 0}/${limit}`;
-};
+const getDailyMessageLimitText = (_user: UserRecord) => 'безлимит';
 const getDailyWebSearchLimitText = (user: UserRecord) => {
     const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
     return `${user.daily_web_search_count ?? 0}/${limit}`;
@@ -2921,10 +2931,10 @@ const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: nu
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
         const planTag = getPlanLabel(parsePlanFromDb(row.plan));
-        const messageLimit = normalizeDailyMessageLimit(row.daily_message_limit);
         const webLimit = normalizeDailyWebSearchLimit(row.daily_web_search_limit);
         const notesStats = noteStatsMap.get(row.id) || { user_id: row.id, notes_count: 0, notes_chars: 0 };
-        const usageTag = `msg:${row.daily_message_count ?? 0}/${messageLimit === 0 ? '∞' : messageLimit} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} web:${row.daily_web_search_count ?? 0}/${webLimit} img:${row.daily_image_gen_count ?? 0}/${row.daily_image_gen_limit ?? 0} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
+        const ctxTokens = (row.max_context_tokens && row.max_context_tokens > 0) ? `${(row.max_context_tokens / 1000).toFixed(0)}k` : 'auto';
+        const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} ctx:${ctxTokens} web:${row.daily_web_search_count ?? 0}/${webLimit} img:${row.daily_image_gen_count ?? 0}/${row.daily_image_gen_limit ?? 0} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -2956,9 +2966,9 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number) => {
     ]);
 };
 const buildAdminPlanChoiceKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
-    [Markup.button.callback(`FREE (ctx ${PLAN_CONTEXT_LIMITS.free}, msg ${PLAN_DAILY_MESSAGE_LIMITS.free}, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
-    [Markup.button.callback(`STANDART (ctx ${PLAN_CONTEXT_LIMITS.standart}, msg ${PLAN_DAILY_MESSAGE_LIMITS.standart}, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
-    [Markup.button.callback(`PRO (ctx ${PLAN_CONTEXT_LIMITS.pro}, msg ${PLAN_DAILY_MESSAGE_LIMITS.pro}, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
+    [Markup.button.callback(`FREE (${PLAN_MAX_CONTEXT_TOKENS.free / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
+    [Markup.button.callback(`STANDART (${PLAN_MAX_CONTEXT_TOKENS.standart / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
+    [Markup.button.callback(`PRO (${PLAN_MAX_CONTEXT_TOKENS.pro / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
     [Markup.button.callback('⬅️ Назад к пользователю', `usr:view:${userId}:${page}`)]
 ]);
 const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan) => Markup.inlineKeyboard([
@@ -3073,8 +3083,8 @@ const renderAdminPlanChoiceCard = async (ctx: any, user: UserRecord, page: numbe
 const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: number, plan: UserPlan, mode: 'reply' | 'edit' = 'edit') => {
     const text = `Пользователь #${user.id}
 Новый план: ${getPlanLabel(plan)}
-Лимит контекста у плана: ${PLAN_CONTEXT_LIMITS[plan]}
-Лимит сообщений в день у плана: ${PLAN_DAILY_MESSAGE_LIMITS[plan]}
+Лимит контекста у плана: ${PLAN_MAX_CONTEXT_TOKENS[plan] / 1000}k токенов
+Сообщения в день: безлимит
 Лимит web-поиска в день у плана: ${PLAN_DAILY_WEB_SEARCH_LIMITS[plan]}
 Лимит заметок: ${getPlanNotesLimit(plan)}
 Лимит символов на заметку: ${getPlanNoteContentLimit(plan)}
@@ -4090,8 +4100,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
             await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
             return;
         }
+        const currentTokens = resolveMaxContextTokens(user);
+        const maxTokens = (user.max_context_tokens_limit ?? 0) > 0
+            ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
         await ctx.reply(
-            `🗂 Размер контекста\nТекущий: ${resolveEffectiveContextWindow(user)}\nДоступно максимум: ${Math.max(1, user.context_window_max || getPlanContextLimit(parsePlanFromDb(user.plan)))}\nПлан: ${getPlanLabel(parsePlanFromDb(user.plan))}`,
+            `🗂 Лимит контекста (токены)\nТекущий: ${(currentTokens / 1000).toFixed(0)}k\nМаксимум для тарифа: ${(maxTokens / 1000).toFixed(0)}k\nПлан: ${getPlanLabel(parsePlanFromDb(user.plan))}`,
             buildContextSettingsKeyboard()
         );
         return;
@@ -4153,8 +4166,10 @@ bot.action('context:change', async (ctx) => {
 
     contextLimitFlows.set(userId, 'await_limit');
     await ctx.answerCbQuery('Ожидаю число');
+    const maxTokens = (user.max_context_tokens_limit ?? 0) > 0
+        ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
     await ctx.reply(
-        `Введите новый размер контекста.\nСейчас: ${resolveEffectiveContextWindow(user)}\nМаксимум для вас: ${Math.max(1, user.context_window_max || getPlanContextLimit(parsePlanFromDb(user.plan)))}\nДля отмены: "отмена".`
+        `Введите лимит контекста в токенах (например: 30000).\nСейчас: ${(resolveMaxContextTokens(user) / 1000).toFixed(0)}k\nМаксимум для тарифа: ${(maxTokens / 1000).toFixed(0)}k\nДля отмены: "отмена".`
     );
 });
 
@@ -4597,8 +4612,10 @@ bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
 
     adminUserContextLimitFlows.set(adminId, { targetUserId, page: Number.isNaN(page) ? 0 : page });
     await ctx.answerCbQuery('Ожидаю число');
+    const maxTokens = (user.max_context_tokens_limit ?? 0) > 0
+        ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
     await ctx.reply(
-        `Введите новый текущий размер контекста для пользователя #${targetUserId}.\nСейчас: ${resolveEffectiveContextWindow(user)}\nМаксимум по плану: ${Math.max(1, user.context_window_max || getPlanContextLimit(parsePlanFromDb(user.plan)))}\nДля админа ограничений нет.\nДля отмены: "отмена".`
+        `Введите лимит контекста в токенах для пользователя #${targetUserId}.\nСейчас: ${(resolveMaxContextTokens(user) / 1000).toFixed(0)}k\nМаксимум по тарифу: ${(maxTokens / 1000).toFixed(0)}k\nДля админа ограничений нет.\nДля отмены: "отмена".`
     );
 });
 
@@ -4619,10 +4636,9 @@ bot.action(/^usr:msg:ask:(\d+):(\d+)$/, async (ctx) => {
     }
 
     adminUserMessageLimitFlows.set(adminId, { targetUserId, page: Number.isNaN(page) ? 0 : page });
-    const plan = parsePlanFromDb(user.plan);
     await ctx.answerCbQuery('Ожидаю число');
     await ctx.reply(
-        `Введите лимит сообщений в день для пользователя #${targetUserId}.\nТекущий: ${normalizeDailyMessageLimit(user.daily_message_limit)}\nСегодня отправлено: ${user.daily_message_count ?? 0}\nПо плану ${getPlanLabel(plan)}: ${PLAN_DAILY_MESSAGE_LIMITS[plan]}\n0 = безлимит.\nДля отмены: "отмена".`
+        `Введите лимит сообщений в день для пользователя #${targetUserId}.\nТекущий: безлимит\nСегодня отправлено: ${user.daily_message_count ?? 0}\n0 = безлимит.\nДля отмены: "отмена".`
     );
 });
 
@@ -5516,16 +5532,7 @@ const processUserTextThroughAi = async (
         }
         return null;
     }
-    if (!options?.ignoreDailyLimit && ctx.state.role !== 'admin') {
-        const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
-        const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
-        if (dailyLimit > 0 && dailyCount >= dailyLimit) {
-            if (!options?.suppressFinalReply) {
-                await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
-            }
-            return null;
-        }
-    }
+    // Daily message limit removed — switched to token-based context limits.
 
     try {
         await ctx.sendChatAction('typing');
@@ -5960,8 +5967,8 @@ bot.on('text', async (ctx) => {
         }
 
         const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            return ctx.reply('Нужно ввести положительное число. Например: 25. Для отмены: "отмена".');
+        if (!Number.isFinite(parsed) || parsed < 1000) {
+            return ctx.reply('Нужно ввести число от 1000. Например: 30000. Для отмены: "отмена".');
         }
 
         const targetUser = await getUser(adminContextFlow.targetUserId);
@@ -5970,22 +5977,20 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Пользователь не найден.');
         }
 
-        const nextValue = Math.max(1, Math.floor(parsed));
-        try { await runBackendSetContextWindow(adminContextFlow.targetUserId, nextValue, true); } catch {}
-        const targetBefore = await getUser(adminContextFlow.targetUserId);
-        if (targetBefore && nextValue > (targetBefore.context_window_max || 10)) {
-            updateUserContextWindowMax(adminContextFlow.targetUserId, nextValue);
-        }
-        updateUserContextWindow(adminContextFlow.targetUserId, nextValue);
+        const nextValue = Math.max(1000, Math.floor(parsed));
+        try { await runBackendSetContextTokens(adminContextFlow.targetUserId, nextValue); } catch {}
+        db.prepare('UPDATE users SET max_context_tokens = ? WHERE id = ?').run(nextValue, adminContextFlow.targetUserId);
         await trimUserHistory(adminContextFlow.targetUserId);
         adminUserContextLimitFlows.delete(userId);
         const refreshed = await getUser(adminContextFlow.targetUserId);
         if (refreshed) {
-            await ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${resolveEffectiveContextWindow(refreshed)} (макс: ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))})`);
+            const maxTokens = (refreshed.max_context_tokens_limit ?? 0) > 0
+                ? Math.floor(refreshed.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(refreshed.plan));
+            await ctx.reply(`✅ Лимит токенов пользователя #${adminContextFlow.targetUserId}: ${(resolveMaxContextTokens(refreshed) / 1000).toFixed(0)}k (макс: ${(maxTokens / 1000).toFixed(0)}k)`);
             await renderAdminUserCard(ctx, refreshed, adminContextFlow.page, 'reply');
             return;
         }
-        return ctx.reply(`✅ Контекст пользователя #${adminContextFlow.targetUserId} обновлён: ${nextValue}.`);
+        return ctx.reply(`✅ Лимит токенов пользователя #${adminContextFlow.targetUserId}: ${nextValue}.`);
     }
 
     const adminMessageLimitFlow = adminUserMessageLimitFlows.get(userId);
@@ -6140,8 +6145,8 @@ bot.on('text', async (ctx) => {
         }
 
         const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
+        if (!Number.isFinite(parsed) || parsed < 1000) {
+            return ctx.reply('Нужно ввести число от 1000. Например: 30000. Для отмены: "отмена".');
         }
 
         const userRecord = await getUser(userId);
@@ -6150,24 +6155,25 @@ bot.on('text', async (ctx) => {
             return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
         }
 
-        const maxAllowed = Math.max(1, userRecord.context_window_max || getPlanContextLimit(parsePlanFromDb(userRecord.plan)));
+        const maxAllowed = (userRecord.max_context_tokens_limit ?? 0) > 0
+            ? Math.floor(userRecord.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(userRecord.plan));
         const isUserAdmin = ADMIN_IDS.has(userId) || userRecord.role === 'admin';
         if (!isUserAdmin && parsed > maxAllowed) {
-            return ctx.reply(`Для тебя доступно максимум ${maxAllowed}. Введи число от 1 до ${maxAllowed}.`);
+            return ctx.reply(`Для тебя доступно максимум ${(maxAllowed / 1000).toFixed(0)}k токенов.`);
         }
 
-        const ctxValue = Math.floor(parsed);
-        try { await runBackendSetContextWindow(userId, ctxValue, isUserAdmin); } catch {}
-        updateUserContextWindow(userId, ctxValue);
+        const ctxValue = Math.max(1000, Math.floor(parsed));
+        try { await runBackendSetContextTokens(userId, ctxValue); } catch {}
+        db.prepare('UPDATE users SET max_context_tokens = ? WHERE id = ?').run(ctxValue, userId);
         await trimUserHistory(userId);
         contextLimitFlows.delete(userId);
         const refreshed = await getUser(userId);
         if (refreshed) {
             return ctx.reply(
-                `✅ Размер контекста обновлён: ${resolveEffectiveContextWindow(refreshed)} из ${Math.max(1, refreshed.context_window_max || getPlanContextLimit(parsePlanFromDb(refreshed.plan)))}.`
+                `✅ Лимит контекста обновлён: ${(resolveMaxContextTokens(refreshed) / 1000).toFixed(0)}k из ${(maxAllowed / 1000).toFixed(0)}k токенов.`
             );
         }
-        return ctx.reply(`✅ Размер контекста обновлён: ${Math.floor(parsed)}.`);
+        return ctx.reply(`✅ Лимит контекста обновлён: ${ctxValue} токенов.`);
     }
 
     const noteEditFlow = noteEditFlows.get(userId);
