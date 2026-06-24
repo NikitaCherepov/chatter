@@ -816,6 +816,25 @@ app.delete('/api/v1/chats/:chatId', (req: AuthedRequest, res) => {
 });
 
 // ── Send message to linked Telegram account ──
+
+/** Split text into chunks <= maxLen for Telegram sendMessage (limit 4096). */
+const splitTextForTelegram = (text: string, maxLen = 4000): string[] => {
+  const source = typeof text === 'string' ? text : String(text ?? '');
+  if (source.length <= maxLen) return [source];
+
+  const chunks: string[] = [];
+  let remaining = source;
+  while (remaining.length > maxLen) {
+    // Try to split at last newline within the limit for cleaner breaks
+    let cut = remaining.lastIndexOf('\n', maxLen);
+    if (cut <= 0) cut = maxLen;
+    chunks.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut).replace(/^\n/, '');
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+};
+
 app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res) => {
   const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
   if (!TELEGRAM_TOKEN) return res.status(500).json({ error: 'telegram_not_configured' });
@@ -863,15 +882,27 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
 
       if (imageFiles.length > 0) {
         if (imageFiles.length === 1) {
-          // Single photo with caption
+          // Single photo with caption (caption limit 1024)
           const formData = new FormData();
           formData.append('chat_id', String(linkedTgId));
           formData.append('photo', new Blob([new Uint8Array(imageFiles[0])]), 'photo.webp');
           if (text) formData.append('caption', text.slice(0, 1024));
 
           await fetch(`${tgApiBase}/sendPhoto`, { method: 'POST', body: formData });
+
+          // Send remaining text beyond the 1024 caption limit as separate messages
+          if (text.length > 1024) {
+            const remainder = splitTextForTelegram(text.slice(1024));
+            for (const chunk of remainder) {
+              await fetch(`${tgApiBase}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
+              });
+            }
+          }
         } else {
-          // Multiple photos via sendMediaGroup
+          // Multiple photos via sendMediaGroup (caption limit 1024)
           const media = imageFiles.map((buf, i) => ({
             type: 'photo',
             media: `attach://photo_${i}`,
@@ -886,25 +917,42 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
           });
 
           await fetch(`${tgApiBase}/sendMediaGroup`, { method: 'POST', body: formData });
+
+          // Send remaining text beyond the 1024 caption limit as separate messages
+          if (text.length > 1024) {
+            const remainder = splitTextForTelegram(text.slice(1024));
+            for (const chunk of remainder) {
+              await fetch(`${tgApiBase}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
+              });
+            }
+          }
         }
       } else {
-        // Images existed but files not found on disk — send text only
-        const payload = { chat_id: linkedTgId, text: text || '(изображение недоступно)' };
+        // Images existed but files not found on disk — send text only (chunked)
+        const fallbackText = text || '(изображение недоступно)';
+        const chunks = splitTextForTelegram(fallbackText);
+        for (const chunk of chunks) {
+          await fetch(`${tgApiBase}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
+          });
+        }
+      }
+    } else {
+      // Text only — split into chunks (Telegram limit is 4096, use 4000 with margin)
+      if (!text) return res.status(400).json({ error: 'empty_message' });
+      const chunks = splitTextForTelegram(text);
+      for (const chunk of chunks) {
         await fetch(`${tgApiBase}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
         });
       }
-    } else {
-      // Text only
-      if (!text) return res.status(400).json({ error: 'empty_message' });
-      const payload = { chat_id: linkedTgId, text };
-      await fetch(`${tgApiBase}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
     }
 
     return res.json({ ok: true });
