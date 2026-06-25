@@ -28,6 +28,7 @@
     "leaflet": "^1.9.4",
     "mammoth": "^1.12.0",
     "marked": "^18.0.2",
+    "onnxruntime-node": "^1.27.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
@@ -55,12 +56,11 @@
     "productName": "Chatter",
     "files": [
       "dist/**/*",
-      "!dist/wakeword-listener.exe",
-      "!dist/wakeword-listener/**/*",
       ".env"
     ],
     "asarUnpack": [
-      "node_modules/ffmpeg-static/**/*"
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/onnxruntime-node/**/*"
     ],
     "directories": {
       "output": "release"
@@ -76,13 +76,6 @@
       {
         "from": "wakeword",
         "to": "wakeword",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": ".venv-wakeword",
-        "to": ".venv-wakeword",
         "filter": [
           "**/*"
         ]

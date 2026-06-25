@@ -12,6 +12,7 @@ declare global {
       transcribeAudio: (arrayBuffer: ArrayBuffer) => Promise<string>;
       startWakeWord: () => Promise<{ ok: boolean; alreadyRunning?: boolean; error?: string }>;
       stopWakeWord: () => Promise<{ ok: boolean; alreadyStopped?: boolean }>;
+      sendWakeWordAudioChunk: (buffer: ArrayBuffer) => void;
       onWakeWordDetected: (callback: (payload: unknown) => void) => () => void;
       ttsGenerate: (text: string, voiceId?: string) => Promise<ArrayBuffer | null>;
       getSoundsPath: () => Promise<string>;

@@ -29,21 +29,28 @@ npm run build
 
 ### Wake word
 
-Wake word обрабатывается отдельным Python-listener:
+Wake word обрабатывается без Python, через `onnxruntime-node` в Electron main process:
 
-- Исходник: `wakeword/listener.py`
-- Dev-запуск: `.venv-wakeword/Scripts/python.exe wakeword/listener.py`
-- Packaged-запуск: `resources/.venv-wakeword/Scripts/python.exe resources/wakeword/listener.py`
+- ONNX runtime: `src/main/wakeword.ts`
+- Renderer audio stream: `src/renderer/lib/wakeWordAudio.ts`
+- ONNX resources: `wakeword/models/*.onnx`
 
-В packaged-приложении намеренно используется встроенный `.venv-wakeword`, а не собранный через PyInstaller `wakeword-listener.exe`. PyInstaller проверялся, но frozen-exe падал при загрузке `onnxruntime_pybind11_state`; тот же listener, запущенный через Python из venv, работает стабильно и доходит до состояния `listening`.
+Renderer держит поток микрофона через Web Audio API, ресемплит через `AudioContext({ sampleRate: 16000 })`, режет PCM на чанки по 1280 samples (80 ms) и отправляет их в main process через IPC `wakeword-audio-chunk`.
 
-Electron main запускает listener через IPC `wakeword:start`. Listener пишет JSON-строки в stdout:
+Main process повторяет openWakeWord pipeline:
+
+1. `melspectrogram.onnx`
+2. `embedding_model.onnx`
+3. wake-word модели (`alexa`, `hey_jarvis`, `hey_mycroft`, `hey_rhasspy`, `timer`, `weather`)
+4. `silero_vad.onnx` для VAD-фильтра
+
+При срабатывании main process формирует payload:
 
 ```json
 {"type":"wakeword","name":"...","score":0.9,"ts":1710000000}
 ```
 
-Main process парсит эти строки и отправляет события:
+И отправляет события:
 
 - `wakeword:detected` в renderer
 - `pixel-avatar:state` со `state: "listening"`
@@ -56,9 +63,8 @@ Main process парсит эти строки и отправляет событ
 
 - `models/` как `resources/models`
 - `wakeword/` как `resources/wakeword`
-- `.venv-wakeword/` как `resources/.venv-wakeword`
 
-Не стоит полагаться на `dist/wakeword-listener.exe` для production wake word, пока проблема PyInstaller/onnxruntime не решена. Текущий `files` config явно исключает старые wakeword listener binaries из `dist`.
+`onnxruntime-node` должен быть распакован из `app.asar`; это настроено через `asarUnpack` в `package.json`.
 
 ## TTS (Text-to-Speech)
 
@@ -953,7 +959,7 @@ Minor подходит для всего, что живёт внутри `app.as
 - assets, импортируемые Vite, например `src/renderer/assets/faces`.
 
 Major нужен для всего, что лежит вне `app.asar`:
-- `extraResources` (`models`, `wakeword`, `.venv-wakeword`, `sounds`);
+- `extraResources` (`models`, `wakeword`, `sounds`);
 - новые exe/dll/native runtime-файлы;
 - изменения installer/electron-builder config;
 - обновление Electron или зависимостей, требующих новой unpacked/native структуры.

@@ -25,12 +25,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   transcribeAudio: (arrayBuffer: ArrayBuffer) =>
     ipcRenderer.invoke('transcribe-audio', arrayBuffer),
 
-  // Wakeword: start/stop Python openWakeWord listener process
+  // Wakeword: start/stop ONNX openWakeWord pipeline and stream PCM chunks
   startWakeWord: () =>
     ipcRenderer.invoke('wakeword:start'),
 
   stopWakeWord: () =>
     ipcRenderer.invoke('wakeword:stop'),
+
+  sendWakeWordAudioChunk: (buffer: ArrayBuffer) =>
+    ipcRenderer.send('wakeword-audio-chunk', buffer),
 
   onWakeWordDetected: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

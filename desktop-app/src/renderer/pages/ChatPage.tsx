@@ -19,6 +19,7 @@ import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
+import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import s from './ChatPage.module.scss';
 
@@ -1578,19 +1579,29 @@ export function ChatPage() {
     return () => unsub?.();
   }, [applyAvatarState]);
 
-  // ── Wake word: start Python listener, react to detections ───────────────
+  // ── Wake word: stream mic chunks to ONNX listener, react to detections ──
   const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);
 
   useEffect(() => {
-    void window.electronAPI.startWakeWord().then((result) => {
-      if (!result.ok) {
-        console.error('[wakeword] failed to start:', result.error);
+    let disposed = false;
+
+    void (async () => {
+      try {
+        const result = await window.electronAPI.startWakeWord();
+        if (!result.ok) {
+          console.error('[wakeword] failed to start:', result.error);
+          toast.error('Не удалось запустить wake word');
+          return;
+        }
+
+        if (!disposed) {
+          await startWakeWordAudioStream();
+        }
+      } catch (error) {
+        console.error('[wakeword] failed to start:', error);
         toast.error('Не удалось запустить wake word');
       }
-    }).catch((error) => {
-      console.error('[wakeword] failed to start:', error);
-      toast.error('Не удалось запустить wake word');
-    });
+    })();
 
     const unsubscribe = window.electronAPI.onWakeWordDetected(async (payload) => {
       console.log('[wakeword] detected:', payload);
@@ -1666,8 +1677,10 @@ export function ChatPage() {
     });
 
     return () => {
+      disposed = true;
       unsubscribe();
-      window.electronAPI.stopWakeWord();
+      void stopWakeWordAudioStream();
+      void window.electronAPI.stopWakeWord();
       speechRecorderRef.current?.stop();
       speechRecorderRef.current = null;
     };

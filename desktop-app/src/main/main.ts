@@ -3,10 +3,11 @@ import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { execFile, spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import util from 'util';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
+import { WakeWordOnnxService } from './wakeword';
 
 const originalFs = require('original-fs') as typeof fs;
 const execFileAsync = util.promisify(execFile);
@@ -44,143 +45,38 @@ try {
   console.error('[ffmpeg] failed to resolve binary:', error);
 }
 
-// ── Wakeword (openWakeWord Python process) ────────────────────────────────
+// ── Wakeword (openWakeWord ONNX pipeline in Electron main) ────────────────
 
-type WakewordCommand = {
-  command: string;
-  args: string[];
-  cwd: string;
+const getWakewordModelsDir = () => {
+  return requireExistingPath('wakeword ONNX models directory', [
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'wakeword', 'models')
+      : path.join(__dirname, '..', '..', 'wakeword', 'models'),
+  ]);
 };
 
-const getWakewordCommand = (): WakewordCommand => {
-  const listenerArgs = [
-    '--threshold', '0.55',
-    '--debounce', '2.0',
-    '--vad-threshold', '0.45',
-  ];
+let wakewordService: WakeWordOnnxService | null = null;
 
-  if (app.isPackaged) {
-    const packagedPythonPath = firstExistingPath([
-      path.join(process.resourcesPath, '.venv-wakeword', 'Scripts', 'python.exe'),
-      path.join(process.resourcesPath, 'wakeword', 'python.exe'),
-    ]);
-    const packagedScriptPath = firstExistingPath([
-      path.join(process.resourcesPath, 'wakeword', 'listener.py'),
-    ]);
+function getWakewordService() {
+  if (!wakewordService) {
+    wakewordService = new WakeWordOnnxService({
+      threshold: 0.55,
+      debounceMs: 2000,
+      vadThreshold: 0.45,
+      modelsDir: getWakewordModelsDir(),
+      onDetected: (payload) => {
+        console.log('[wakeword] detected:', payload);
 
-    if (packagedPythonPath && packagedScriptPath) {
-      return {
-        command: packagedPythonPath,
-        args: [packagedScriptPath, ...listenerArgs],
-        cwd: path.dirname(packagedScriptPath),
-      };
-    }
-
-    const bundledExe = path.join(process.resourcesPath, 'wakeword', 'wakeword-listener.exe');
-    if (fs.existsSync(bundledExe)) {
-      return {
-        command: bundledExe,
-        args: listenerArgs,
-        cwd: path.dirname(bundledExe),
-      };
-    }
-
-    throw new Error(`wakeword runtime not found. Checked Python: ${[
-      path.join(process.resourcesPath, '.venv-wakeword', 'Scripts', 'python.exe'),
-      path.join(process.resourcesPath, 'wakeword', 'python.exe'),
-    ].join('; ')}. Checked script: ${path.join(process.resourcesPath, 'wakeword', 'listener.py')}. Checked exe: ${bundledExe}`);
+        mainWindow?.webContents.send('wakeword:detected', payload);
+        mainWindow?.webContents.send('pixel-avatar:state', {
+          state: 'listening',
+          source: 'wakeword',
+        });
+      },
+    });
   }
 
-  const pythonPath = requireExistingPath('wakeword Python', [
-    path.join(__dirname, '..', '..', '.venv-wakeword', 'Scripts', 'python.exe'),
-  ]);
-  const scriptPath = requireExistingPath('wakeword listener script', [
-    path.join(__dirname, '..', '..', 'wakeword', 'listener.py'),
-  ]);
-
-  return {
-    command: pythonPath,
-    args: [scriptPath, ...listenerArgs],
-    cwd: path.dirname(scriptPath),
-  };
-};
-
-let wakewordProcess: ChildProcessWithoutNullStreams | null = null;
-
-function startWakewordListener() {
-  if (wakewordProcess) {
-    return { ok: true, alreadyRunning: true };
-  }
-
-  let wakewordCommand: WakewordCommand;
-  try {
-    wakewordCommand = getWakewordCommand();
-  } catch (error) {
-    console.error('[wakeword] failed to resolve listener:', error);
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
-  }
-
-  console.log('[wakeword] starting:', wakewordCommand.command);
-
-  wakewordProcess = spawn(wakewordCommand.command, wakewordCommand.args, {
-    cwd: wakewordCommand.cwd,
-    windowsHide: true,
-  });
-
-  wakewordProcess.stdout.on('data', (chunk: Buffer) => {
-    const lines = chunk.toString('utf-8').split(/\r?\n/).filter(Boolean);
-
-    for (const line of lines) {
-      try {
-        const payload = JSON.parse(line);
-
-        if (payload.type === 'wakeword') {
-          console.log('[wakeword] detected:', payload);
-
-          mainWindow?.webContents.send('wakeword:detected', payload);
-
-          // Visually wake up the avatar
-          mainWindow?.webContents.send('pixel-avatar:state', {
-            state: 'listening',
-            source: 'wakeword',
-          });
-        }
-
-        if (payload.type === 'error') {
-          console.error('[wakeword] listener error:', payload.message);
-        }
-      } catch {
-        console.log('[wakeword stdout]', line);
-      }
-    }
-  });
-
-  wakewordProcess.stderr.on('data', (chunk: Buffer) => {
-    console.log('[wakeword stderr]', chunk.toString('utf-8'));
-  });
-
-  wakewordProcess.on('close', (code) => {
-    console.log('[wakeword] process closed:', code);
-    wakewordProcess = null;
-  });
-
-  wakewordProcess.on('error', (error) => {
-    console.error('[wakeword] process error:', error);
-    wakewordProcess = null;
-  });
-
-  return { ok: true, alreadyRunning: false };
-}
-
-function stopWakewordListener() {
-  if (!wakewordProcess) {
-    return { ok: true, alreadyStopped: true };
-  }
-
-  wakewordProcess.kill();
-  wakewordProcess = null;
-
-  return { ok: true, alreadyStopped: false };
+  return wakewordService;
 }
 
 // Dynamic model path: dev vs packaged
@@ -391,12 +287,21 @@ function createWindow() {
   });
 
   // ── IPC: wakeword start/stop ─────────────────────────────────────────────
-  ipcMain.handle('wakeword:start', () => {
-    return startWakewordListener();
+  ipcMain.handle('wakeword:start', async () => {
+    try {
+      return await getWakewordService().start();
+    } catch (error) {
+      console.error('[wakeword] failed to start ONNX listener:', error);
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   ipcMain.handle('wakeword:stop', () => {
-    return stopWakewordListener();
+    return getWakewordService().stop();
+  });
+
+  ipcMain.on('wakeword-audio-chunk', (_event, buffer: ArrayBuffer | Uint8Array) => {
+    getWakewordService().processAudioChunk(buffer);
   });
 
   // ── IPC: tts:generate (text → piper.exe → WAV buffer) ──────────────────
