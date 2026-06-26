@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../lib/auth';
+import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
@@ -340,6 +341,7 @@ export function ChatPage() {
 
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
+  const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
   const [messages, setMessages] = useState<api.Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -517,9 +519,44 @@ export function ChatPage() {
   useEffect(() => {
     if (activeChatId) {
       prevMsgCountRef.current = 0;
+      markAsRead(activeChatId);
       loadMessages(activeChatId);
     }
   }, [activeChatId]);
+
+  // Register global handler for scheduler task_result events
+  useEffect(() => {
+    api.onTaskResult((data) => {
+      // If new chat was created — refresh sidebar
+      if (data.is_new_chat) {
+        loadChats();
+      }
+
+      if (data.chat_id && data.chat_id === activeChatId) {
+        // Task belongs to currently open chat — append message to feed
+        setMessages((prev) => [...prev, {
+          id: Date.now(),
+          chat_id: data.chat_id,
+          role: 'assistant',
+          content: data.text,
+          created_at: Math.floor(Date.now() / 1000),
+        }]);
+      } else {
+        // Task is from a different chat — increment unread + show toast
+        if (data.chat_id) incrementUnread(data.chat_id);
+        const chat = chats.find((c) => c.id === data.chat_id);
+        const chatName = chat?.title || (data.is_new_chat ? 'Новый чат' : 'Другой чат');
+        toast.info(`🤖 Задача выполнена в чате "${chatName}"`, {
+          description: data.text.slice(0, 200) + (data.text.length > 200 ? '...' : ''),
+          duration: 8000,
+          action: data.chat_id ? {
+            label: 'Открыть',
+            onClick: () => setActiveChatId(data.chat_id),
+          } : undefined,
+        });
+      }
+    });
+  }, [activeChatId, chats]);
 
   const refreshContextTokens = useCallback(async (chatId: number) => {
     try {
@@ -1938,6 +1975,9 @@ export function ChatPage() {
                         </motion.span>
                       </AnimatePresence>
                     </div>
+                  )}
+                  {getUnread(chat.id) > 0 && (
+                    <span className={s.unreadBadge}>{getUnread(chat.id)}</span>
                   )}
                   <button
                     className={s.kebabBtn}

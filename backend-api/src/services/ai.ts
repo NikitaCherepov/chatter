@@ -1135,15 +1135,17 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'schedule_task',
-      description: 'Создает задачу по времени (одноразовую или по расписанию): напоминания, отложенные команды дома, запланированный веб-поиск, регулярная проверка почты. Для времени предпочитай local_time (HH:MM) или delay_seconds, не вычисляй Unix timestamp вручную.',
+      description: 'Создает задачу по времени (одноразовую или по расписанию): напоминания, отложенные команды умного дома, запуск AI-инструкций. Для времени предпочитай local_time (HH:MM) или delay_seconds, не вычисляй Unix timestamp вручную.',
       parameters: {
         type: 'object',
         properties: {
           local_time: { type: 'string', description: 'Локальное время пользователя в формате HH:MM, например 02:07.' },
           delay_seconds: { type: 'number', description: 'Задержка в секундах от текущего момента, например 60.' },
           execute_at: { type: 'number', description: 'Legacy-поле: Unix timestamp в секундах. Используй только если local_time/delay_seconds не подходят.' },
-          task_type: { type: 'string', enum: ['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'], description: 'message - напоминание, smart_home - команда умного дома, web_search - запланированный поиск в интернете, email_check - запланированная проверка почты, ai_instruction - запуск AI-инструкции по расписанию.' },
-          payload: { type: 'string', description: 'Для message: текст. Для smart_home: JSON-строка вида {"device_id":"yandex_group_...","action":"on"|"off"|"set_color"|"set_brightness","color":"#RRGGBB","brightness":50}. Для web_search: поисковый запрос. Для email_check: JSON-строка {"provider":"yandex|google","search_query":"...", "limit":10, "offset":10, "date_from":"2026-04-01","date_to":"2026-04-30"} или просто строка запроса. Для ai_instruction: текст инструкции, которую AI выполнит по расписанию.' },
+          task_type: { type: 'string', enum: ['message', 'smart_home', 'ai_instruction'], description: 'message - напоминание, smart_home - команда умного дома, ai_instruction - запуск AI-инструкции по расписанию (поиск в интернете, проверка почты, анализ данных и т.д. — AI сам вызовет нужные инструменты).' },
+          payload: { type: 'string', description: 'Для message: текст напоминания. Для smart_home: JSON-строка вида {"device_id":"yandex_group_...","action":"on"|"off"|"set_color"|"set_brightness","color":"#RRGGBB","brightness":50}. Для ai_instruction: текст инструкции, которую AI выполнит по расписанию.' },
+          target_chat_id: { type: 'number', description: 'ID чата, в который будет сохранён и отправлен результат задачи (только для ai_instruction). Если не указан — используется активный чат.' },
+          create_new_chat: { type: 'boolean', description: 'Создать новый чат для результата задачи (только для ai_instruction). Если true — будет создан новый чат. target_chat_id игнорируется.' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Тип расписания: once - один раз, daily - каждый день, weekly - каждую неделю.' },
           recurrence_weekday: { type: 'number', description: 'День недели для weekly: 1=понедельник ... 7=воскресенье.' },
           notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'Режим уведомлений: always - всегда писать о результате, never - никогда не писать, on_match - писать только если результат содержит notify_condition как подстроку, on_condition - ИИ проверит условие notify_condition и решит, отправлять уведомление или нет.' },
@@ -2437,7 +2439,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null }) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null }, autoRejectHitl?: boolean) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -2492,9 +2494,29 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (user.timezone_confirmed !== 1) return 'Ошибка планирования: часовой пояс пользователя не настроен. Попроси пользователя назвать город/страну или указать UTC-смещение, затем вызови set_user_timezone.';
 
     const taskType = `${parsed.task_type || ''}` as TaskType;
-    if (!['message', 'smart_home', 'web_search', 'email_check', 'ai_instruction'].includes(taskType)) return 'Ошибка: Некорректный task_type';
+    if (!['message', 'smart_home', 'ai_instruction'].includes(taskType)) return 'Ошибка: Некорректный task_type';
     let payload = `${parsed.payload || ''}`.trim();
     if (!payload) return 'Ошибка: payload_required';
+
+    // Для ai_instruction: упаковываем target_chat_id / create_new_chat в payload JSON
+    if (taskType === 'ai_instruction') {
+      const targetChatId = Number.isFinite(Number(parsed.target_chat_id)) ? Math.floor(Number(parsed.target_chat_id)) : null;
+      const createNewChat = parsed.create_new_chat === true;
+      if (targetChatId !== null || createNewChat) {
+        try {
+          const payloadObj = JSON.parse(payload);
+          if (targetChatId !== null) payloadObj._target_chat_id = targetChatId;
+          if (createNewChat) payloadObj._create_new_chat = true;
+          payload = JSON.stringify(payloadObj);
+        } catch {
+          // payload — не JSON, оборачиваем
+          const payloadObj: Record<string, unknown> = { instruction: payload };
+          if (targetChatId !== null) payloadObj._target_chat_id = targetChatId;
+          if (createNewChat) payloadObj._create_new_chat = true;
+          payload = JSON.stringify(payloadObj);
+        }
+      }
+    }
 
     const recurrenceType = `${parsed.recurrence_type || 'once'}` as TaskRecurrenceType;
     if (!['once', 'daily', 'weekly'].includes(recurrenceType)) return 'Ошибка: Некорректный recurrence_type';
@@ -2588,6 +2610,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (!emailSent) {
       return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение отправки письма невозможно.' });
     }
+
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. Email sending confirmation was automatically rejected.', to, subject });
 
     // Wait for user response via WS/SSE → POST /api/v1/email/approve or /internal/email/approve
     const { registerPendingEmailConfirmation } = await import('./email-confirmations.js');
@@ -3153,6 +3178,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
 
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. Visual click confirmation was automatically rejected.' });
+
     const { registerPendingVisualClick, deletePendingVisualClick } = await import('./visual-click-confirmations.js');
     const confirmationPromise = new Promise<any>((resolve, reject) => {
       registerPendingVisualClick(confirmationId, {
@@ -3287,6 +3315,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
     }
 
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. This command is not in the auto-approve policies for this server, so it was automatically rejected.', server: server.name, command });
+
     // Needs user confirmation — push via SSE callback (TG) and/or WS (desktop)
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
@@ -3404,6 +3435,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
     }
 
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. This command is not in the auto-approve policies, so it was automatically rejected.', command });
+
     // Needs user confirmation — push to desktop via WS
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
@@ -3517,6 +3551,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         return JSON.stringify({ status: 'error', message: `Ошибка чтения файла: ${err?.message || String(err)}`, file_path: filePath });
       }
     }
+
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. File read confirmation was automatically rejected.', file_path: filePath });
 
     // Needs user confirmation — same HitL flow as pc_command
     const { randomUUID } = await import('node:crypto');
@@ -3720,6 +3757,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Запись файла невозможна — попроси пользователя запустить приложение.' });
     }
 
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. File write confirmation was automatically rejected.', file_path: filePath });
+
     // Always requires user confirmation — HitL
     const { randomUUID } = await import('node:crypto');
     const confirmationId = randomUUID();
@@ -3851,6 +3891,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Не удалось прочитать файл для diff: ${err?.message || String(err)}`, file_path: filePath });
     }
+
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. File edit confirmation was automatically rejected.', file_path: filePath });
 
     // Always requires user confirmation — HitL
     const { randomUUID } = await import('node:crypto');
@@ -4114,6 +4157,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
     }
 
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. Create server user confirmation was automatically rejected.' });
+
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
     try {
       const result = await new Promise<any>((resolve, reject) => {
@@ -4216,6 +4262,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
     }
 
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. Change server user password confirmation was automatically rejected.' });
+
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
     try {
       const result = await new Promise<any>((resolve, reject) => {
@@ -4313,6 +4362,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (!credsSent) {
       return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
     }
+
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. Server credentials update confirmation was automatically rejected.' });
 
     const { registerPendingConfirmation } = await import('./devops-confirmations.js');
     try {
@@ -4546,6 +4598,7 @@ export const sendMessageThroughAi = async (
     regenerateHint?: string;
     regenerateFromHistory?: boolean;
     reasoningLevel?: ReasoningLevel | null;
+    autoRejectHitl?: boolean;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -5146,7 +5199,8 @@ for (const toolCall of message.tool_calls) {
           onDesktopAction: options?.onDesktopAction,
           displayManifest: options?.displayManifest,
           currentDisplayState: options?.currentDisplayState
-        }
+        },
+        options?.autoRejectHitl
       ),
       abortController.signal
     );

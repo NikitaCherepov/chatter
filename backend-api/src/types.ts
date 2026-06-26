@@ -1,7 +1,7 @@
 ﻿export type UserPlan = 'free' | 'standart' | 'pro';
 export type ChatRole = 'user' | 'assistant';
 export type TaskStatus = 'pending' | 'done' | 'error';
-export type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check' | 'ai_instruction';
+export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 export type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
 

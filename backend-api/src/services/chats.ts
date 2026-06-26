@@ -67,7 +67,7 @@ export const createApiAccount = (userId: number, login: string, passwordSalt: st
   VALUES (?, ?, ?, ?)
 `).run(userId, login, passwordSalt, passwordHash);
 
-const createChat = (userId: number, title: string) => db.prepare(`
+export const createChat = (userId: number, title: string) => db.prepare(`
   INSERT INTO user_chats (user_id, title)
   VALUES (?, ?)
 `).run(userId, title);

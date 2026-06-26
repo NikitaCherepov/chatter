@@ -28,8 +28,6 @@ const RECURRENCE_LABELS: Record<string, string> = {
 const TASK_TYPE_LABELS: Record<string, string> = {
   message: 'Сообщение',
   ai_instruction: 'AI-задача',
-  web_search: 'Поиск в сети',
-  email_check: 'Проверка почты',
   smart_home: 'Умный дом',
 };
 

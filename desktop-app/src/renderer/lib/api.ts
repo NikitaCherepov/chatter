@@ -381,9 +381,15 @@ const MAX_RECONNECT_DELAY = 30000;
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
   onDisconnect?: () => void;
+  onTaskResult?: (data: { chat_id: number; text: string; is_new_chat: boolean }) => void;
 };
 
 let wsCallbacks: WsCallbacks = {};
+
+/** Register a global handler for task_result events (scheduler push). */
+export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
+  wsCallbacks.onTaskResult = cb;
+}
 
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = callbacks;
@@ -425,6 +431,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'dice_roll': wsCallbacks.onDiceRoll?.(Number(msg.roll)); break;
         case 'done': wsCallbacks.onDone?.(msg); break;
         case 'error': wsCallbacks.onError?.(msg.error); break;
+        case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
         case 'execute_ipc':
           console.log('[ws] execute_ipc received', {
             requestId: msg.request_id,
@@ -815,7 +822,7 @@ export async function deleteNote(noteId: number): Promise<{ ok: boolean }> {
 
 // ---------- Tasks ----------
 
-export type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check' | 'ai_instruction';
+export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskStatus = 'pending' | 'done' | 'error';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 

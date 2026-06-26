@@ -660,7 +660,7 @@ type UserRecord = {
 };
 type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
-type TaskType = 'message' | 'smart_home' | 'web_search' | 'email_check' | 'ai_instruction';
+type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
 type TaskRecord = {
@@ -847,6 +847,8 @@ type ScheduleTaskArgs = {
     execute_at?: number;
     task_type?: TaskType;
     payload?: string;
+    target_chat_id?: number;
+    create_new_chat?: boolean;
     recurrence_type?: TaskRecurrenceType;
     recurrence_weekday?: number;
     notify_mode?: TaskNotifyMode;

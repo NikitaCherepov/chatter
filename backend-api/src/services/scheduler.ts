@@ -1,13 +1,12 @@
 import OpenAI from 'openai';
-import { tavily } from '@tavily/core';
 import type { TaskRecurrenceType } from '../types.js';
-import { getPromptForUser, getUserById } from './chats.js';
-import { runEmailCheck } from './mail.js';
+import { getUserById, ensureActiveChat, createChat, appendChatMessage } from './chats.js';
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
 import { getDueTasks, updateTaskNextExecution, updateTaskStatus } from './tasks.js';
 import { sendMessageThroughAi } from './ai.js';
 import { db } from '../db.js';
 import { fetchAndSaveCurrencyRates } from './currency.js';
+import { sendToDesktop, isDesktopOnline } from '../ws-clients.js';
 
 const PRO_MODEL_CHAIN = (process.env.TIMEWEB_MODEL || 'gemini/gemini-3.1-flash-lite-preview')
   .split(',')
@@ -17,7 +16,6 @@ const PRO_CLIENT = new OpenAI({
   apiKey: process.env.TIMEWEB_API_KEY,
   baseURL: process.env.TIMEWEB_BASE_URL
 });
-const tvly = process.env.TAVILY_API_KEY ? tavily({ apiKey: process.env.TAVILY_API_KEY }) : null;
 const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
 const SCHEDULER_INTERVAL_MS = Math.max(5_000, Number.parseInt(process.env.BACKEND_SCHEDULER_INTERVAL_MS || '30000', 10) || 30_000);
 
@@ -50,7 +48,9 @@ const incrementUserTokenUsage = (userId: number, tokensUsed: number) => {
   `).run(safeTokens, safeTokens, costRub, costRub, userId);
 };
 
-const safeSendToUser = async (chatId: number, text: string) => {
+// ── Delivery: unified push for task results ─────────────────────────────────
+
+const sendToTelegram = async (chatId: number, text: string) => {
   if (!TELEGRAM_TOKEN) return;
   const payload = { chat_id: chatId, text, parse_mode: 'Markdown' };
   try {
@@ -70,6 +70,29 @@ const safeSendToUser = async (chatId: number, text: string) => {
   } catch {
     // ignore
   }
+};
+
+/**
+ * Unified delivery: push task result to desktop (if online) AND Telegram (always).
+ */
+const deliverTaskResult = (
+  userId: number,
+  text: string,
+  chatId: number,
+  isNewChat: boolean,
+) => {
+  // Push to desktop via WS (if connected)
+  if (isDesktopOnline(userId)) {
+    sendToDesktop(userId, {
+      type: 'task_result',
+      chat_id: chatId,
+      text,
+      is_new_chat: isNewChat,
+    });
+  }
+
+  // Always push to Telegram
+  sendToTelegram(userId, text);
 };
 
 const getIsoWeekday = (date: Date) => {
@@ -116,82 +139,64 @@ const computeNextRecurringExecuteAt = (
   return null;
 };
 
-const runScheduledWebSearchTask = async (task: { user_id: number; payload: string }) => {
-  const query = task.payload.trim();
-  if (!query) return 'Не получилось выполнить поиск: пустой запрос в задаче.';
-  if (!tvly) return `Запрос: ${query}\n\nОшибка: web search отключен (нет TAVILY_API_KEY).`;
+const runScheduledAiInstructionTask = async (task: { user_id: number; payload: string }): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
+  const rawPayload = task.payload.trim();
+  if (!rawPayload) return { reply_text: 'Не получилось выполнить AI-инструкцию: пустой payload задачи.', chat_id: 0, is_new_chat: false };
 
-  const webResult = await tvly.search(query, { searchDepth: 'basic', maxResults: 5, includeAnswer: true });
-  const sources = (webResult.results || []).map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.content}\nИсточник: ${r.url}`).join('\n\n');
-  const raw = `${webResult.answer ? `Сводка: ${webResult.answer}\n\n` : ''}${sources || 'Ничего не найдено.'}`;
-
-  const userRecord = getUserById(task.user_id);
-  if (!userRecord) return `Запрос: ${query}\n\n${raw}`;
-  const prompt = getPromptForUser(userRecord);
-  const userName = userRecord.name || userRecord.tg_username || 'Пользователь';
+  // Parse payload: may contain _target_chat_id / _create_new_chat metadata
+  let instruction = rawPayload;
+  let targetChatId: number | null = null;
+  let createNewChat = false;
 
   try {
-    const response = await createCompletionWithFallback({
-      messages: [
-        { role: 'system', content: `${prompt}\n\nИмя {{user}}: ${userName}` },
-        { role: 'user', content: `Сработала отложенная задача веб-поиска.\nЗапрос пользователя: "${query}".\n\nРезультаты поиска:\n${raw}\n\nСформулируй итог для пользователя на русском: кратко, 3-6 пунктов, затем блок "Источники:".` }
-      ],
-      thinking: { type: 'enabled' }
-    });
-    const tokens = Number(response?.usage?.total_tokens || 0);
-    incrementUserTokenUsage(task.user_id, tokens);
-    const final = `${response?.choices?.[0]?.message?.content || ''}`.trim();
-    return final || `Запрос: ${query}\n\n${raw}`;
+    const parsed = JSON.parse(rawPayload);
+    if (parsed && typeof parsed === 'object') {
+      instruction = typeof parsed.instruction === 'string' ? parsed.instruction : (typeof parsed._instruction === 'string' ? parsed._instruction : rawPayload);
+      targetChatId = Number.isFinite(Number(parsed._target_chat_id)) ? Math.floor(Number(parsed._target_chat_id)) : null;
+      createNewChat = parsed._create_new_chat === true;
+    }
   } catch {
-    return `Запрос: ${query}\n\n${raw}`;
+    // payload is plain text — use as-is
   }
-};
 
-const runScheduledEmailCheckTask = async (task: { user_id: number; payload: string }) => {
-  let searchQuery = '';
-  let limit = 5;
-  let provider = '';
-  let offset = 0;
-  let dateFrom = '';
-  let dateTo = '';
+  instruction = instruction.trim();
+  if (!instruction) return { reply_text: 'Не получилось выполнить AI-инструкцию: пустая инструкция.', chat_id: 0, is_new_chat: false };
 
-  const raw = task.payload.trim();
-  if (raw) {
-    if (raw.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(raw) as { provider?: string; search_query?: string; limit?: number; offset?: number; date_from?: string; date_to?: string };
-        provider = typeof parsed.provider === 'string' ? parsed.provider : '';
-        searchQuery = typeof parsed.search_query === 'string' ? parsed.search_query : '';
-        limit = typeof parsed.limit === 'number' ? parsed.limit : 5;
-        offset = typeof parsed.offset === 'number' ? parsed.offset : 0;
-        dateFrom = typeof parsed.date_from === 'string' ? parsed.date_from : '';
-        dateTo = typeof parsed.date_to === 'string' ? parsed.date_to : '';
-      } catch {
-        searchQuery = raw;
-      }
-    } else {
-      searchQuery = raw;
+  // Determine chat: create new, use specified, or fallback to active
+  let chatId: number | undefined;
+  let isNewChat = false;
+
+  if (createNewChat) {
+    const chatTitle = instruction.slice(0, 60);
+    const result = createChat(task.user_id, chatTitle);
+    chatId = Number(result.lastInsertRowid);
+    isNewChat = true;
+  } else if (targetChatId) {
+    // Verify chat belongs to user
+    const chat = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(task.user_id, targetChatId) as { id: number } | undefined;
+    if (chat) {
+      chatId = chat.id;
     }
   }
 
-  const result = await runEmailCheck(task.user_id, searchQuery, limit, provider, offset, dateFrom, dateTo);
-  const title = searchQuery
-    ? `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''} (запрос: ${searchQuery})`
-    : `📬 *Запланированная проверка почты*${provider ? ` (${provider})` : ''}`;
-  return `${title}\n\n${result}`;
-};
+  if (!chatId) {
+    chatId = ensureActiveChat(task.user_id);
+  }
 
-const runScheduledAiInstructionTask = async (task: { user_id: number; payload: string }) => {
-  const instruction = task.payload.trim();
-  if (!instruction) return 'Не получилось выполнить AI-инструкцию: пустой payload задачи.';
-  const result = await sendMessageThroughAi(task.user_id, `!!! ${instruction}`, undefined, {
+  const result = await sendMessageThroughAi(task.user_id, `!!! ${instruction}`, chatId, {
     forcePro: true,
     ignoreDailyLimit: true,
     countAsUserMessage: false,
     skipHistory: true,
-    persistUserText: `[AI-инструкция по расписанию] ${instruction}`
+    persistUserText: `[AI-инструкция по расписанию] ${instruction}`,
+    autoRejectHitl: true,
   });
-  return (result.reply_text || '').trim();
+
+  return {
+    reply_text: (result.reply_text || '').trim(),
+    chat_id: result.chat_id || chatId,
+    is_new_chat: isNewChat,
+  };
 };
 
 const shouldNotifyByAiCondition = async (
@@ -241,24 +246,28 @@ const tick = async () => {
   for (const task of pendingTasks) {
     try {
       let successMessage = '';
+      let chatId = 0;
+      let isNewChat = false;
+
       if (task.task_type === 'message') {
         successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
+        chatId = ensureActiveChat(task.user_id);
+        appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
       } else if (task.task_type === 'smart_home') {
         const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
         const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
         successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
-      } else if (task.task_type === 'web_search') {
-        const result = await runScheduledWebSearchTask(task);
-        successMessage = `🔎 *Запланированный поиск выполнен:*\n\n${result}`;
-      } else if (task.task_type === 'email_check') {
-        successMessage = await runScheduledEmailCheckTask(task);
+        chatId = ensureActiveChat(task.user_id);
+        appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
       } else if (task.task_type === 'ai_instruction') {
         const result = await runScheduledAiInstructionTask(task);
-        successMessage = result ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result}` : '';
+        successMessage = result.reply_text ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result.reply_text}` : '';
+        chatId = result.chat_id;
+        isNewChat = result.is_new_chat;
       }
 
       if (successMessage && await shouldNotifyTaskResult(task, successMessage)) {
-        await safeSendToUser(task.user_id, successMessage);
+        deliverTaskResult(task.user_id, successMessage, chatId, isNewChat);
       }
 
       if (task.recurrence_type === 'once') {
