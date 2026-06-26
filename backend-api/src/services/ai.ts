@@ -4599,6 +4599,7 @@ export const sendMessageThroughAi = async (
     regenerateFromHistory?: boolean;
     reasoningLevel?: ReasoningLevel | null;
     autoRejectHitl?: boolean;
+    isBackgroundTask?: boolean;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -4666,7 +4667,9 @@ export const sendMessageThroughAi = async (
   }
 
   const abortController = new AbortController();
-  activeGenerations.set(userId, abortController);
+  if (!options?.isBackgroundTask) {
+    activeGenerations.set(userId, abortController);
+  }
 
   let chatId = 0;
   let totalTokens = 0;
