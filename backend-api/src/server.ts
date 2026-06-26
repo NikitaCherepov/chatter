@@ -27,6 +27,7 @@ import { startTaskScheduler } from './services/scheduler.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { VectorMemoryService } from './services/vector-memory.js';
+import { splitTextForTelegram, sendTelegramMessage, sendTelegramPhoto } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret, runEmailSend } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
@@ -817,23 +818,6 @@ app.delete('/api/v1/chats/:chatId', (req: AuthedRequest, res) => {
 
 // ── Send message to linked Telegram account ──
 
-/** Split text into chunks <= maxLen for Telegram sendMessage (limit 4096). */
-const splitTextForTelegram = (text: string, maxLen = 4000): string[] => {
-  const source = typeof text === 'string' ? text : String(text ?? '');
-  if (source.length <= maxLen) return [source];
-
-  const chunks: string[] = [];
-  let remaining = source;
-  while (remaining.length > maxLen) {
-    // Try to split at last newline within the limit for cleaner breaks
-    let cut = remaining.lastIndexOf('\n', maxLen);
-    if (cut <= 0) cut = maxLen;
-    chunks.push(remaining.slice(0, cut));
-    remaining = remaining.slice(cut).replace(/^\n/, '');
-  }
-  if (remaining) chunks.push(remaining);
-  return chunks;
-};
 
 app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res) => {
   const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();

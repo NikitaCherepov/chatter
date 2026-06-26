@@ -7,6 +7,7 @@ import { sendMessageThroughAi } from './ai.js';
 import { db } from '../db.js';
 import { fetchAndSaveCurrencyRates } from './currency.js';
 import { sendToDesktop, isDesktopOnline } from '../ws-clients.js';
+import { sendTelegramMessage } from './telegram-send.js';
 
 const PRO_MODEL_CHAIN = (process.env.TIMEWEB_MODEL || 'gemini/gemini-3.1-flash-lite-preview')
   .split(',')
@@ -16,7 +17,6 @@ const PRO_CLIENT = new OpenAI({
   apiKey: process.env.TIMEWEB_API_KEY,
   baseURL: process.env.TIMEWEB_BASE_URL
 });
-const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
 const SCHEDULER_INTERVAL_MS = Math.max(5_000, Number.parseInt(process.env.BACKEND_SCHEDULER_INTERVAL_MS || '30000', 10) || 30_000);
 
 const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * (102 / 500_000);
@@ -50,28 +50,6 @@ const incrementUserTokenUsage = (userId: number, tokensUsed: number) => {
 
 // ── Delivery: unified push for task results ─────────────────────────────────
 
-const sendToTelegram = async (chatId: number, text: string) => {
-  if (!TELEGRAM_TOKEN) return;
-  const payload = { chat_id: chatId, text, parse_mode: 'Markdown' };
-  try {
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || data?.ok === false) {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text })
-      });
-    }
-  } catch {
-    // ignore
-  }
-};
-
 /**
  * Unified delivery: push task result to desktop (if online) AND Telegram (always).
  */
@@ -92,7 +70,7 @@ const deliverTaskResult = (
   }
 
   // Always push to Telegram
-  sendToTelegram(userId, text);
+  sendTelegramMessage(userId, text);
 };
 
 const getIsoWeekday = (date: Date) => {
