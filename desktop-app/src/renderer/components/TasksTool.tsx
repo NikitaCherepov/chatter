@@ -56,10 +56,68 @@ export function TasksTool() {
     return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
-  const preview = (text: string, max = 60) => {
-    const compact = text.replace(/\s+/g, ' ').trim();
+  const preview = (task: api.TaskDto, max = 140) => {
+    const raw = (task.payload || '').trim();
+
+    // ai_instruction: payload may be JSON with metadata
+    if (task.task_type === 'ai_instruction') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          const instruction = typeof parsed.instruction === 'string'
+            ? parsed.instruction
+            : (typeof parsed._instruction === 'string' ? parsed._instruction : '');
+          const createNewChat = parsed._create_new_chat === true;
+          const targetChatId = Number.isFinite(Number(parsed._target_chat_id)) ? Math.floor(Number(parsed._target_chat_id)) : null;
+          const parts: string[] = [];
+          if (instruction) parts.push(instruction.replace(/\s+/g, ' ').trim());
+          if (createNewChat) parts.push('⟨новый чат⟩');
+          if (targetChatId) parts.push(`→ чат #${targetChatId}`);
+          const text = parts.join(' · ');
+          if (!text) return 'Без описания';
+          return text.length <= max ? text : text.slice(0, max) + '…';
+        }
+      } catch {
+        // not JSON — show as plain text
+      }
+    }
+
+    // smart_home: payload is JSON like { device_id, action, color?, brightness? }
+    if (task.task_type === 'smart_home') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          const action = typeof parsed.action === 'string' ? parsed.action : '';
+          const deviceId = typeof parsed.device_id === 'string' ? parsed.device_id : '';
+          const color = typeof parsed.color === 'string' ? parsed.color : '';
+          const brightness = Number.isFinite(Number(parsed.brightness)) ? Math.round(Number(parsed.brightness)) : null;
+
+          // Human-readable action label
+          const ACTION_LABELS: Record<string, string> = {
+            on: 'Включить',
+            off: 'Выключить',
+            set_color: 'Цвет',
+            set_brightness: 'Яркость',
+          };
+          const actionLabel = ACTION_LABELS[action] || action;
+
+          const parts: string[] = [];
+          if (actionLabel) parts.push(actionLabel);
+          if (color) parts.push(color);
+          if (brightness !== null) parts.push(`${brightness}%`);
+          if (deviceId) parts.push(deviceId);
+          const text = parts.join(' · ');
+          if (!text) return 'Без описания';
+          return text.length <= max ? text : text.slice(0, max) + '…';
+        }
+      } catch {
+        // not JSON — show as plain text
+      }
+    }
+
+    const compact = raw.replace(/\s+/g, ' ').trim();
     if (!compact) return 'Без описания';
-    return compact.length <= max ? compact : compact.slice(0, max) + '...';
+    return compact.length <= max ? compact : compact.slice(0, max) + '…';
   };
 
   const statusDot = (status: api.TaskStatus) => {
@@ -124,7 +182,7 @@ export function TasksTool() {
                   </div>
                   <span className={s.taskItemDate}>{formatTs(task.execute_at)}</span>
                 </div>
-                <div className={s.taskItemPreview}>{preview(task.payload, 80)}</div>
+                <div className={s.taskItemPreview}>{preview(task)}</div>
                 <div className={s.taskItemMeta}>
                   <span className={s.taskItemRecurrence}>
                     {RECURRENCE_LABELS[task.recurrence_type] || task.recurrence_type}

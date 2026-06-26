@@ -221,11 +221,29 @@ API: `GET/POST/DELETE /api/v1/notes`. Обновление = delete + create (н
 
 ## Задачи (TasksTool)
 
-Read-only просмотр задач с фильтрами по статусу (pending/done/all). Каждая карточка показывает статус, тип, дату, payload preview, recurrence badge. Кнопка удаления (появляется при наведении).
+Read-only просмотр задач с фильтрами по статусу (pending/done/all). Каждая карточка показывает статус, тип (`message`, `smart_home`, `ai_instruction`), дату, payload preview, recurrence badge. Кнопка удаления (появляется при наведении).
 
 API: `GET /api/v1/tasks?status=&limit=`, `DELETE /api/v1/tasks/:id`.
 
 Бот может открывать задачи через `desktop_action` с `action: open_widget, target: tasks`.
+
+### Scheduler task_result (push от сервера)
+
+Когда scheduler выполняет задачу, результат пушится в десктоп через WS `{ type: 'task_result', chat_id, text, is_new_chat }`. Обработка в `ChatPage.tsx`:
+
+- Если чат открыт — сообщения перезагружаются из БД
+- Если другой чат — инкрементируется бейдж непрочитанных через `useUnreadChats` hook
+- При `is_new_chat: true` — обновляется список чатов в сайдбаре
+
+### useUnreadChats hook
+
+`lib/useUnreadChats.ts` — переиспользуемый hook для отслеживания непрочитанных сообщений по чатам:
+- `incrementUnread(chatId)` — добавить непрочитанное
+- `markAsRead(chatId)` — очистить при открытии чата
+- `getUnread(chatId)` — получить счётчик
+- `totalUnread` — всего непрочитанных
+
+Бейдж (`.unreadBadge`) рендерится в сайдбаре рядом с названием чата.
 
 ## Карта (MapTool)
 
@@ -820,6 +838,7 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | `desktop_action` | Команда управления UI / макрос |
 | `map_update` | Данные карты |
 | `dice_roll` | Результат броска d20 (Dice Roll Mode). Приходит сразу после броска, десктоп останавливает анимацию и фиксирует значение. См. [Dice Roll Mode](#dice-roll-mode-d20-roleplay) |
+| `task_result` | Результат выполнения scheduler-задачи: `{ chat_id, text, is_new_chat }`. Если открыт тот же чат — перезагрузка сообщений; если другой — бейдж непрочитанных. См. [Задачи](#задачи-taskstool) |
 | `done` | Финальный ответ: `reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?`, `display_state?`, `dice_roll?` (fallback если realtime-событие потерялось) |
 | `error` | Ошибка |
 | `execute_ipc` | Запрос сервера выполнить IPC и вернуть результат |

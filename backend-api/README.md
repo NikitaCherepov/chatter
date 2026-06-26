@@ -738,7 +738,7 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `read_webpage` | Чтение текста веб-страницы по URL |
 | `control_smart_home` | Управление устройством умного дома по device_id (сначала вызывается `get_smart_devices`) |
 | `get_smart_devices` | Возвращает список устройств, комнат и их ID из БД |
-| `schedule_task` | Создание задачи/напоминания |
+| `schedule_task` | Создание задачи/напоминания по времени. Типы: `message` (напоминание), `smart_home` (команда умному дому), `ai_instruction` (AI-инструкция — поиск, проверка почты, анализ и т.д., AI сам вызывает нужные инструменты). Для `ai_instruction` поддерживает `target_chat_id` (в какой чат сохранить результат) и `create_new_chat` (создать новый чат). |
 | `get_my_tasks` | Список задач пользователя |
 | `delete_my_task` | Удаление задачи |
 | `set_user_timezone` | Установка часового пояса |
@@ -1162,6 +1162,7 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 | `tool_status` | Статус выполнения инструмента |
 | `map_update` | Данные карты |
 | `dice_roll` | Результат броска d20 в Dice Roll Mode (приходит сразу после броска, до `done`) |
+| `task_result` | Результат выполнения scheduler-задачи: `{ chat_id, text, is_new_chat }`. Если чат открыт — десктоп перезагружает сообщения; если другой чат — инкрементируется бейдж непрочитанных. |
 | `done` | Финальный ответ |
 | `error` | Ошибка |
 | `execute_ipc` | Запрос выполнить IPC и вернуть результат |
@@ -1178,7 +1179,37 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 
 ## SSE-стриминг и Dual-Delivery подтверждений
 
-### SSE-эндпоинт `/internal/ai/stream`
+### Scheduler (задачи по расписанию)
+
+Scheduler выполняет отложенные задачи. Живёт в `services/scheduler.ts`, запускается через `setInterval` (по умолчанию каждые 30 сек, настраивается через `BACKEND_SCHEDULER_INTERVAL_MS`). Включается через `BACKEND_SCHEDULER_ENABLED=1`.
+
+**Типы задач:**
+
+| task_type | Что делает |
+|---|---|
+| `message` | Возвращает payload как напоминание, сохраняет в чат как assistant-сообщение |
+| `smart_home` | Управляет устройством через `runSmartHomeControl()`, сохраняет результат в чат |
+| `ai_instruction` | Вызывает `sendMessageThroughAi()` с инструкцией из payload. AI сам вызывает нужные инструменты (`search_web`, `check_emails` и т.д.). Сохраняет полный ответ (включая tool_calls, reasoning) в чат. |
+
+**Параметры `ai_instruction` в payload:**
+- `_target_chat_id` — ID чата для результата. Если не указан — используется активный чат.
+- `_create_new_chat` — `true` создаёт новый чат. `_target_chat_id` игнорируется.
+
+**Auto-reject HitL (автоматическое отклонение подтверждений):**
+
+Задачи выполняются в авто-режиме — подтверждения (HitL) автоматически отклоняются, если команда не проходит auto-approve. Реализовано через флаг `autoRejectHitl: true` в `sendMessageThroughAi`, который пробрасывается в `runTool`. Проверка стоит перед каждым `registerPending*` вызовом (10 точек). Auto-approve политики (`auto_approve_all`, regex patterns) срабатывают как обычно — до проверки `autoRejectHitl`.
+
+**Доставка результатов (`deliverTaskResult`):**
+- Если десктоп онлайн — пуш через WS: `{ type: 'task_result', chat_id, text, is_new_chat }`
+- Всегда — отправка в Telegram через `sendTelegramMessage()` (с Markdown-форматированием и разбивкой длинных текстов)
+
+**Изоляция от обычного чата:**
+- Флаг `isBackgroundTask: true` — scheduler-задача не регистрируется в `activeGenerations`, и обычное сообщение юзера её не отменяет.
+- `forcePro: true`, `ignoreDailyLimit: true` — использует PRO-модель, не упирается в дневные лимиты.
+
+**Общая утилита отправки в Telegram:** `services/telegram-send.ts` — `sendTelegramMessage()`, `splitTextForTelegram()`, `formatForTelegram()`. Используется scheduler'ом и endpoint'ом `send-to-telegram`.
+
+### SSE-стриминг
 
 Потоковая передача AI-ответов для TG-бота (вместо обычного JSON `/internal/ai/send`). Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`, позволяя TG-боту получать процесс работы AI в реалтайме.
 
