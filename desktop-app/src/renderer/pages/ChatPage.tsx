@@ -533,27 +533,11 @@ export function ChatPage() {
       }
 
       if (data.chat_id && data.chat_id === activeChatId) {
-        // Task belongs to currently open chat — append message to feed
-        setMessages((prev) => [...prev, {
-          id: Date.now(),
-          chat_id: data.chat_id,
-          role: 'assistant',
-          content: data.text,
-          created_at: Math.floor(Date.now() / 1000),
-        }]);
-      } else {
-        // Task is from a different chat — increment unread + show toast
-        if (data.chat_id) incrementUnread(data.chat_id);
-        const chat = chats.find((c) => c.id === data.chat_id);
-        const chatName = chat?.title || (data.is_new_chat ? 'Новый чат' : 'Другой чат');
-        toast.info(`🤖 Задача выполнена в чате "${chatName}"`, {
-          description: data.text.slice(0, 200) + (data.text.length > 200 ? '...' : ''),
-          duration: 8000,
-          action: data.chat_id ? {
-            label: 'Открыть',
-            onClick: () => setActiveChatId(data.chat_id),
-          } : undefined,
-        });
+        // Task belongs to currently open chat — reload messages from DB
+        loadMessages(data.chat_id);
+      } else if (data.chat_id) {
+        // Task is from a different chat — increment unread badge
+        incrementUnread(data.chat_id);
       }
     });
   }, [activeChatId, chats]);

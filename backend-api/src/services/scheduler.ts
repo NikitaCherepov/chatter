@@ -187,7 +187,6 @@ const runScheduledAiInstructionTask = async (task: { user_id: number; payload: s
     forcePro: true,
     ignoreDailyLimit: true,
     countAsUserMessage: false,
-    skipHistory: true,
     persistUserText: `[AI-инструкция по расписанию] ${instruction}`,
     autoRejectHitl: true,
   });
