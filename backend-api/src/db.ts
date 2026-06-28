@@ -55,6 +55,7 @@ ensureUserColumn('reasoning_level', 'ALTER TABLE users ADD COLUMN reasoning_leve
 ensureUserColumn('model_settings', 'ALTER TABLE users ADD COLUMN model_settings TEXT');
 ensureUserColumn('ui_settings', 'ALTER TABLE users ADD COLUMN ui_settings TEXT');
 ensureUserColumn('subagent_mode', "ALTER TABLE users ADD COLUMN subagent_mode TEXT NOT NULL DEFAULT 'auto'");
+ensureUserColumn('subagent_reasoning_level', 'ALTER TABLE users ADD COLUMN subagent_reasoning_level TEXT');
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');

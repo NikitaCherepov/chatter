@@ -17,6 +17,7 @@ import { SshKeySettings } from './SshKeySettings';
 import { SmartHomeSettings } from './SmartHomeSettings';
 import { PCSettings } from './PCSettings';
 import s from './SettingsModal.module.scss';
+import chatS from '../pages/ChatPage.module.scss';
 
 type Props = {
   onClose: () => void;
@@ -29,6 +30,16 @@ const CUSTOM_PROMPT_ID = -1;
 const ZOOM_STEP_PCT = 5;
 const ZOOM_MIN_PCT = 40;
 const ZOOM_MAX_PCT = 200;
+
+const REASONING_LEVEL_LABELS: Record<string, string> = {
+  null: 'Авто',
+  none: 'Выкл',
+  minimal: 'Мин',
+  low: 'Низк',
+  medium: 'Ср',
+  high: 'Выс',
+  xhigh: 'Макс',
+};
 
 const overlayVariants = {
   hidden: { opacity: 0 },
@@ -143,6 +154,9 @@ export function SettingsModal({ onClose }: Props) {
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
   const [subagentModel, setSubagentModelState] = useState<string | null>(null);
   const [subagentModelSaving, setSubagentModelSaving] = useState(false);
+  const [subagentReasoningLevel, setSubagentReasoningLevelState] = useState<api.ReasoningLevel | null>(null);
+  const [subagentReasoningSaving, setSubagentReasoningSaving] = useState(false);
+  const [autoReasoningLevels, setAutoReasoningLevels] = useState<api.ReasoningLevel[]>([]);
   const [contextTokenLimit, setContextTokenLimitState] = useState<api.ContextTokenLimit | null>(null);
   const [contextTokenLimitSaving, setContextTokenLimitSaving] = useState(false);
   const [attachmentTokenLimit, setAttachmentTokenLimitState] = useState<api.AttachmentTokenLimit | null>(null);
@@ -204,10 +218,16 @@ export function SettingsModal({ onClose }: Props) {
         .then((res) => setUiSettingsState(res.settings))
         .catch(() => {});
       api.getModels()
-        .then((res) => setModelsCatalog(res.models))
+        .then((res) => {
+          setModelsCatalog(res.models);
+          if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
+        })
         .catch(() => {});
       api.getSubagentModel()
         .then((res) => setSubagentModelState(res.subagent_model))
+        .catch(() => {});
+      api.getSubagentReasoningLevel()
+        .then((res) => setSubagentReasoningLevelState(res.reasoning_level))
         .catch(() => {});
       api.getContextTokenLimit()
         .then((res) => setContextTokenLimitState(res))
@@ -273,6 +293,31 @@ export function SettingsModal({ onClose }: Props) {
       toast.error('Не удалось сохранить модель субагентов');
     } finally {
       setSubagentModelSaving(false);
+    }
+  };
+
+  const subagentAvailableReasoningLevels = useMemo<(api.ReasoningLevel | null)[]>(() => {
+    if (subagentModel) {
+      const model = modelsCatalog.find(m => m.id === subagentModel);
+      if (model?.reasoning_levels) return [null, ...model.reasoning_levels];
+      return [null];
+    }
+    return [null, ...autoReasoningLevels];
+  }, [subagentModel, modelsCatalog, autoReasoningLevels]);
+
+  const handleSubagentReasoningCommit = async () => {
+    const level = subagentReasoningLevel;
+    setSubagentReasoningSaving(true);
+    try {
+      const res = await api.setSubagentReasoningLevel(level);
+      setSubagentReasoningLevelState(res.reasoning_level);
+      if (user) {
+        setUser({ ...user, subagent_reasoning_level: res.reasoning_level });
+      }
+    } catch {
+      toast.error('Не удалось сохранить уровень размышления субагентов');
+    } finally {
+      setSubagentReasoningSaving(false);
     }
   };
 
@@ -1111,25 +1156,45 @@ export function SettingsModal({ onClose }: Props) {
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Модель субагентов</label>
-                <div className={s.voiceSelect}>
-                  <Select
-                    options={[
-                      { value: '', label: 'Авто', hint: 'Автоматический выбор' },
-                      ...modelsCatalog.map(m => ({
-                        value: m.id,
-                        label: m.name,
-                        hint: m.description || undefined,
-                      })),
-                    ]}
-                    value={subagentModel || ''}
-                    onChange={handleSubagentModelChange}
-                    placeholder="Авто"
-                    disabled={subagentModelSaving}
-                  />
+                <div className={chatS.modelSelector}>
+                  {modelsCatalog.length > 0 && (
+                    <>
+                      <label className={chatS.modelLabel}>Модель субагентов:</label>
+                      <div className={chatS.modelSelectWrap}>
+                        <Select
+                          options={[
+                            { value: '', label: 'Авто', hint: 'Автоматический выбор' },
+                            ...modelsCatalog.map(m => ({
+                              value: m.id,
+                              label: m.name,
+                              hint: m.description || undefined,
+                            })),
+                          ]}
+                          value={subagentModel || ''}
+                          onChange={handleSubagentModelChange}
+                          placeholder="Авто"
+                          disabled={subagentModelSaving}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {subagentAvailableReasoningLevels.length > 1 && (
+                    <div className={chatS.reasoningControl}>
+                      <Slider
+                        mode="discrete"
+                        label="Размышление:"
+                        values={subagentAvailableReasoningLevels}
+                        labels={REASONING_LEVEL_LABELS}
+                        value={subagentReasoningLevel}
+                        onChange={(v) => setSubagentReasoningLevelState(v as api.ReasoningLevel | null)}
+                        onCommit={handleSubagentReasoningCommit}
+                        disabled={subagentReasoningSaving}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  Отдельный выбор модели для субагентов. В tool call модель режим не выбирает.
+                  Отдельные модель и размышление для субагентов. В tool call модель режим не выбирает.
                 </div>
               </div>
 

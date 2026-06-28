@@ -23,7 +23,7 @@ let _throwIfAborted: typeof import('../ai.js').throwIfAborted;
 let _withAbort: typeof import('../ai.js').withAbort;
 let _toolDefinitions: typeof import('../ai.js').toolDefinitions;
 
-type RunCompletionFn = (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: any, signal?: AbortSignal) => Promise<any>;
+type RunCompletionFn = (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: any, signal?: AbortSignal, reasoningLevel?: any) => Promise<any>;
 type RunToolFn = (user: any, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (payload: Record<string, unknown>) => Promise<any>, generatedImages?: any[], displayStateSink?: any, desktopActionSink?: any, mapUpdateSink?: any, activeMacros?: any[], signal?: AbortSignal) => Promise<string>;
 
 /**
@@ -116,6 +116,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
 
   // Resolve user's preferred model (manual model selection)
   const manualModel = ctx.subagentMode === 'manual' ? (ctx.manualModel || undefined) : undefined;
+  const reasoningLevel = (ctx.subagentReasoningLevel === 'auto' ? null : (ctx.subagentReasoningLevel ?? null)) as import('../ai.js').ReasoningLevel | null;
 
   // 1. Resolve agent config — either from registry or direct (ad-hoc)
   const agent: RegisteredSubagent = directAgent || getSubagent(agentName!);
@@ -165,13 +166,17 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     console.log(`[subagent:${resolvedAgentName}] === loop ${loop + 1}/${maxLoops} === (messages: ${messages.length})`);
 
     // Call AI — use user's preferred model if set, otherwise agent's configured mode
-    const completion = await _withAbort(
-      _runCompletion(mode, {
+    const requestPayload: Record<string, unknown> = {
         messages,
-        tools: allToolDefs,
-        tool_choice: 'auto',
         max_tokens: 8192,
-      }, manualModel, ctx.signal),
+      };
+      if (allToolDefs.length > 0) {
+        requestPayload.tools = allToolDefs;
+        requestPayload.tool_choice = 'auto';
+      }
+
+    const completion = await _withAbort(
+      _runCompletion(mode, requestPayload, manualModel, ctx.signal, reasoningLevel),
       ctx.signal,
     );
 
@@ -263,7 +268,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
               toolName,
               argsRaw,
               // aiCall — used by some tools like update_core_memory for sub-AI calls
-              (payload) => _runCompletion(mode, payload, manualModel, ctx.signal),
+              (payload) => _runCompletion(mode, payload, manualModel, ctx.signal, reasoningLevel),
               [],       // generatedImages
               undefined, // displayStateSink
               ctx.desktopActionSink, // desktopActionSink — enables HitL confirmations

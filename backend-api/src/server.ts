@@ -568,6 +568,7 @@ const toAuthUserDto = (user: UserRecord) => {
     core_memory: effectiveUser.core_memory ?? null,
     ui_settings: parseUiSettings(effectiveUser),
     subagent_model: effectiveUser.subagent_mode && effectiveUser.subagent_mode !== 'auto' ? effectiveUser.subagent_mode : null,
+    subagent_reasoning_level: effectiveUser.subagent_reasoning_level ?? null,
   };
 };
 
@@ -2484,6 +2485,24 @@ app.put('/api/v1/user/reasoning-level', (req: AuthedRequest, res: any) => {
     }
   }
   db.prepare('UPDATE users SET reasoning_level = ? WHERE id = ?').run(level, userId);
+  return res.json({ ok: true, reasoning_level: level });
+});
+
+app.get('/api/v1/user/subagent-reasoning-level', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  return res.json({ reasoning_level: user?.subagent_reasoning_level || null });
+});
+
+app.put('/api/v1/user/subagent-reasoning-level', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const level = req.body?.reasoning_level ?? null;
+  if (level !== null) {
+    if (typeof level !== 'string' || !VALID_REASONING_LEVELS.includes(level as any)) {
+      return res.status(400).json({ error: 'bad_reasoning_level' });
+    }
+  }
+  db.prepare('UPDATE users SET subagent_reasoning_level = ? WHERE id = ?').run(level, userId);
   return res.json({ ok: true, reasoning_level: level });
 });
 

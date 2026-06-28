@@ -38,6 +38,7 @@ export type UserRecord = {
   subagent_mode?: string | null;
   feature_flags?: string | null;
   reasoning_level?: string | null;
+  subagent_reasoning_level?: string | null;
   model_settings?: string | null;
   ui_settings?: string | null;
   max_context_tokens_limit?: number;

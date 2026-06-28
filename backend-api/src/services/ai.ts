@@ -23,6 +23,7 @@ dotenv.config();
 const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const MAX_TOOL_LOOPS = 80;
 const MAX_TOOL_LOOPS_VOICE = 10;
+const MAX_PARALLEL_SPAWN_SUBAGENTS = 3;
 const TOOL_RESULT_PREVIEW_MAX = 250;
 const PC_COMMAND_OUTPUT_MAX = 15_000;
 // Лимит на сохраняемый полный результат инструмента в trace (для отправки в AI-контекст).
@@ -2357,8 +2358,8 @@ const buildSpawnSubagentTool = (): any => {
       name: 'spawn_subagent',
       description:
         'Создай и запусти нового субагента «на лету» с твоим собственным системным промптом, ' +
-        'набором инструментов и лимитом итераций. Субагент выполнит узкую задачу и вернёт результат.\n\n' +
-        'Используй когда: задача требует специализированного подхода с конкретным набором инструментов, ' +
+        'опциональным набором инструментов и лимитом итераций. Субагент выполнит узкую задачу и вернёт результат.\n\n' +
+        'Используй когда: задача требует специализированного подхода, отдельного анализа или конкретного набора инструментов, ' +
         'и нет готового субагента в реестре. Субагент НЕ может вызывать других субагентов.\n\n' +
         `Доступные инструменты для передачи субагенту: ${availableToolNames.join(', ')}`,
       parameters: {
@@ -2375,14 +2376,14 @@ const buildSpawnSubagentTool = (): any => {
           tools: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Массив имён инструментов которые субагент может использовать',
+            description: 'Опциональный массив имён инструментов которые субагент может использовать. Если не указан или пустой, субагент работает без инструментов.',
           },
           max_loops: {
             type: 'number',
             description: 'Максимум итераций цикла субагента (1–50, по умолчанию 20)',
           },
         },
-        required: ['task', 'tools'],
+        required: ['task'],
       },
     },
   };
@@ -2490,7 +2491,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void }, autoRejectHitl?: boolean) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void }, autoRejectHitl?: boolean) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -4511,6 +4512,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           onToolStatus: subagentExtra?.onToolStatus,
           manualModel: subagentExtra?.manualModel,
           subagentMode: subagentExtra?.subagentMode,
+          subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
         },
       });
 
@@ -4541,7 +4543,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       : 20;
 
     if (!task) return JSON.stringify({ status: 'error', message: 'task (описание задачи) обязательно' });
-    if (requestedTools.length === 0) return JSON.stringify({ status: 'error', message: 'tools (массив имён инструментов) обязательно' });
 
     // Если бот не передал промпт — используем дефолтный
     const effectivePrompt = systemPrompt || 'Ты специализированный AI-ассистент. Выполни поставленную задачу, используя предоставленные тебе инструменты. Действуй последовательно и эффективно.';
@@ -4554,7 +4555,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     const validTools = requestedTools.filter(t => knownToolNames.has(t));
     const rejectedTools = requestedTools.filter(t => !knownToolNames.has(t));
-    if (validTools.length === 0) {
+    if (requestedTools.length > 0 && validTools.length === 0) {
       return JSON.stringify({
         status: 'error',
         message: `Ни один из запрошенных инструментов не существует. Неизвестные: ${rejectedTools.join(', ')}`,
@@ -4584,6 +4585,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           onToolStatus: subagentExtra?.onToolStatus,
           manualModel: subagentExtra?.manualModel,
           subagentMode: subagentExtra?.subagentMode,
+          subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
           onSubagentTrace: subagentExtra?.onSubagentTrace,
         },
       });
@@ -4793,6 +4795,7 @@ export const sendMessageThroughAi = async (
 
   // Резолв reasoning level: из options (явный запрос) или из профиля юзера
   const reasoningLevel: ReasoningLevel | null = options?.reasoningLevel ?? (user as any).reasoning_level ?? null;
+  const subagentReasoningLevel: ReasoningLevel | null = ((user as any).subagent_reasoning_level || null) as ReasoningLevel | null;
 
   // Резолв model settings: per-model настройки генерации (temperature, penalties, etc.).
   // Применяются только для ручной модели (preferred_model). В lite-режиме и при fallback на auto — игнорируются.
@@ -5339,40 +5342,21 @@ PRO
 
 let escalatedToPro = false;
 
-for (const toolCall of message.tool_calls) {
-  if (abortController.signal.aborted) break;
-  if (toolCall.type !== 'function') continue;
+type ExecutedToolCall = {
+  toolCall: any;
+  toolName: string;
+  toolContent: string;
+  localSubagentTraces: typeof subagentTraces;
+};
+
+const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<ExecutedToolCall> => {
+  throwIfAborted(abortController.signal);
 
   const toolName = `${toolCall.function?.name || ''}`;
-
-  if (toolName === 'escalate_to_pro') {
-    let originalQuery = text;
-
-    try {
-      const parsed = JSON.parse(toolCall.function?.arguments || '{}');
-      if (typeof parsed.original_query === 'string' && parsed.original_query.trim()) {
-        originalQuery = parsed.original_query.trim();
-      }
-    } catch {
-      // ignore
-    }
-
-    executionMode = 'pro';
-    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
-    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
-    currentMessages.length = 0;
-    currentMessages.push(
-      { role: 'system', content: proSystemPrompt },
-      ...history,
-      { role: 'user', content: originalQuery }
-    );
-
-    escalatedToPro = true;
-    break;
-  }
+  const localSubagentTraces: typeof subagentTraces = [];
 
   const toolUserMessage = getToolUserMessage(toolName, toolCall.function?.arguments || '{}');
-  if (toolUserMessage) {
+  if (emitStatus && toolUserMessage) {
     toolUserMessages.push(toolUserMessage);
     if (options?.onToolStatus) await options.onToolStatus(toolUserMessage);
   }
@@ -5398,11 +5382,12 @@ for (const toolCall of message.tool_calls) {
         {
           manualModel: subagentManualModel,
           subagentMode,
+          subagentReasoningLevel,
           onToolStatus: options?.onToolStatus,
           onDesktopAction: options?.onDesktopAction,
           displayManifest: options?.displayManifest,
           currentDisplayState: options?.currentDisplayState,
-          onSubagentTrace: (trace: any) => { subagentTraces.push(trace); }
+          onSubagentTrace: (trace: any) => { localSubagentTraces.push(trace); }
         },
         options?.autoRejectHitl
       ),
@@ -5425,12 +5410,15 @@ for (const toolCall of message.tool_calls) {
     }
     }
   } catch (err: any) {
-    if (isAbortError(err)) break; // Прерываем цикл tool_calls
+    if (isAbortError(err)) throw err;
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
   }
 
-  if (abortController.signal.aborted) break;
+  return { toolCall, toolName, toolContent, localSubagentTraces };
+};
 
+const applyExecutedToolCall = (executed: ExecutedToolCall) => {
+  const { toolCall, toolName, toolContent, localSubagentTraces } = executed;
   const resultPreview = formatToolResultPreview(toolContent);
   if (resultPreview) {
     const historyEntry = [...toolCallsHistory]
@@ -5454,6 +5442,93 @@ for (const toolCall of message.tool_calls) {
 
   if (toolContent.trim()) {
     toolOutputsForFallback.push(toolContent.trim());
+  }
+  if (localSubagentTraces.length > 0) {
+    subagentTraces.push(...localSubagentTraces);
+  }
+};
+
+const runSpawnBatch = async (batch: any[]) => {
+  for (const toolCall of batch) {
+    const toolUserMessage = getToolUserMessage('spawn_subagent', toolCall.function?.arguments || '{}');
+    if (toolUserMessage) {
+      toolUserMessages.push(toolUserMessage);
+      if (options?.onToolStatus) await options.onToolStatus(toolUserMessage);
+    }
+  }
+
+  const results: ExecutedToolCall[] = new Array(batch.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(MAX_PARALLEL_SPAWN_SUBAGENTS, batch.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (!abortController.signal.aborted) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= batch.length) break;
+      results[index] = await runOneToolCall(batch[index], false);
+    }
+  }));
+
+  for (const result of results) {
+    if (!result || abortController.signal.aborted) break;
+    applyExecutedToolCall(result);
+  }
+};
+
+const toolCalls = (message.tool_calls || []).filter((tc: any) => tc.type === 'function');
+for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1) {
+  if (abortController.signal.aborted) break;
+
+  const toolCall = toolCalls[toolCallIndex];
+  const toolName = `${toolCall.function?.name || ''}`;
+
+  if (toolName === 'escalate_to_pro') {
+    let originalQuery = text;
+
+    try {
+      const parsed = JSON.parse(toolCall.function?.arguments || '{}');
+      if (typeof parsed.original_query === 'string' && parsed.original_query.trim()) {
+        originalQuery = parsed.original_query.trim();
+      }
+    } catch {
+      // ignore
+    }
+
+    executionMode = 'pro';
+    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
+    currentMessages.length = 0;
+    currentMessages.push(
+      { role: 'system', content: proSystemPrompt },
+      ...history,
+      { role: 'user', content: originalQuery }
+    );
+
+    escalatedToPro = true;
+    break;
+  }
+
+  if (toolName === 'spawn_subagent') {
+    const batch = [toolCall];
+    while (toolCallIndex + 1 < toolCalls.length) {
+      const nextToolCall = toolCalls[toolCallIndex + 1];
+      const nextToolName = `${nextToolCall.function?.name || ''}`;
+      if (nextToolName !== 'spawn_subagent') break;
+      batch.push(nextToolCall);
+      toolCallIndex += 1;
+    }
+    await runSpawnBatch(batch);
+    continue;
+  }
+
+  try {
+    const result = await runOneToolCall(toolCall);
+    if (abortController.signal.aborted) break;
+    applyExecutedToolCall(result);
+  } catch (err: any) {
+    if (isAbortError(err)) break;
+    const toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
+    applyExecutedToolCall({ toolCall, toolName, toolContent, localSubagentTraces: [] });
   }
 }
 

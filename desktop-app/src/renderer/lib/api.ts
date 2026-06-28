@@ -26,6 +26,7 @@ type User = {
   core_memory: string | null;
   ui_settings?: UiSettings;
   subagent_model?: string | null;
+  subagent_reasoning_level?: ReasoningLevel | null;
 };
 
 // ---------- Token storage ----------
@@ -960,6 +961,18 @@ export async function getReasoningLevel(): Promise<{ reasoning_level: ReasoningL
 
 export async function setReasoningLevel(level: ReasoningLevel | null): Promise<{ ok: boolean; reasoning_level: ReasoningLevel | null }> {
   return apiFetch('/api/v1/user/reasoning-level', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reasoning_level: level }),
+  });
+}
+
+export async function getSubagentReasoningLevel(): Promise<{ reasoning_level: ReasoningLevel | null }> {
+  return apiFetch('/api/v1/user/subagent-reasoning-level');
+}
+
+export async function setSubagentReasoningLevel(level: ReasoningLevel | null): Promise<{ ok: boolean; reasoning_level: ReasoningLevel | null }> {
+  return apiFetch('/api/v1/user/subagent-reasoning-level', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reasoning_level: level }),

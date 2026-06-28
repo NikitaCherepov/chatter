@@ -41,6 +41,8 @@ export interface SubagentContext {
   manualModel?: any;
   /** User's subagent mode preference: 'auto' (inherit from main agent) or 'manual' (use user's preferred_model). */
   subagentMode?: SubagentMode;
+  /** User's reasoning level preference for subagent completions. */
+  subagentReasoningLevel?: string | null;
   /** Extra context data passed from the main agent when invoking the subagent (e.g. server_id, api_token, port). */
   subagentContext?: Record<string, any>;
   /** Optional: called by spawn_subagent handler when the subagent finishes, to capture the full trace for UI display. */
