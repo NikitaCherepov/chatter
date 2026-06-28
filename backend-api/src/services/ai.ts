@@ -4590,12 +4590,24 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         },
       });
 
+      const subagentTrace = {
+        task,
+        system_prompt: effectivePrompt.slice(0, 2000),
+        tools: validTools,
+        tools_used: result.toolCallsHistory.map(t => t.tool),
+        answer: result.answer,
+        summary: result.summary,
+        aborted: result.aborted,
+        trace: result.toolCallsHistory,
+      };
+
       const response: any = {
         status: 'success',
         answer: result.answer,
         summary: result.summary,
         tools_used: result.toolCallsHistory.map(t => t.tool),
         tools_granted: validTools,
+        subagentTrace,
       };
       if (rejectedTools.length > 0) {
         response.tools_rejected = rejectedTools;
@@ -5346,14 +5358,12 @@ type ExecutedToolCall = {
   toolCall: any;
   toolName: string;
   toolContent: string;
-  localSubagentTraces: typeof subagentTraces;
 };
 
 const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<ExecutedToolCall> => {
   throwIfAborted(abortController.signal);
 
   const toolName = `${toolCall.function?.name || ''}`;
-  const localSubagentTraces: typeof subagentTraces = [];
 
   const toolUserMessage = getToolUserMessage(toolName, toolCall.function?.arguments || '{}');
   if (emitStatus && toolUserMessage) {
@@ -5387,7 +5397,6 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           onDesktopAction: options?.onDesktopAction,
           displayManifest: options?.displayManifest,
           currentDisplayState: options?.currentDisplayState,
-          onSubagentTrace: (trace: any) => { localSubagentTraces.push(trace); }
         },
         options?.autoRejectHitl
       ),
@@ -5414,11 +5423,11 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
   }
 
-  return { toolCall, toolName, toolContent, localSubagentTraces };
+  return { toolCall, toolName, toolContent };
 };
 
 const applyExecutedToolCall = (executed: ExecutedToolCall) => {
-  const { toolCall, toolName, toolContent, localSubagentTraces } = executed;
+  const { toolCall, toolName, toolContent } = executed;
   const resultPreview = formatToolResultPreview(toolContent);
   if (resultPreview) {
     const historyEntry = [...toolCallsHistory]
@@ -5443,8 +5452,13 @@ const applyExecutedToolCall = (executed: ExecutedToolCall) => {
   if (toolContent.trim()) {
     toolOutputsForFallback.push(toolContent.trim());
   }
-  if (localSubagentTraces.length > 0) {
-    subagentTraces.push(...localSubagentTraces);
+  if (toolName === 'spawn_subagent') {
+    try {
+      const parsed = JSON.parse(toolContent);
+      if (parsed?.subagentTrace && typeof parsed.subagentTrace === 'object') {
+        subagentTraces.push(parsed.subagentTrace);
+      }
+    } catch {}
   }
 };
 
@@ -5528,7 +5542,7 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
   } catch (err: any) {
     if (isAbortError(err)) break;
     const toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
-    applyExecutedToolCall({ toolCall, toolName, toolContent, localSubagentTraces: [] });
+    applyExecutedToolCall({ toolCall, toolName, toolContent });
   }
 }
 
