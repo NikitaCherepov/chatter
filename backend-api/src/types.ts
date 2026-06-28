@@ -41,6 +41,7 @@ export type UserRecord = {
   ui_settings?: string | null;
   max_context_tokens_limit?: number;
   max_context_tokens?: number;
+  attachment_max_tokens?: number;
 };
 
 export type ChatDto = {
@@ -54,6 +55,15 @@ export type ChatDto = {
 export type MessageImage = {
   url: string;
   type: 'user_photo' | 'generated';
+};
+
+export type MessageAttachment = {
+  name: string;
+  size_bytes: number;
+  mime_type: string;
+  extracted_text: string;
+  url: string;
+  filename: string;
 };
 
 export type MessageAudio = {
@@ -78,6 +88,7 @@ export type MessageDto = {
   /** Локально посчитанные токены (без reasoning_content). См. MessageTokensDto. */
   token_count?: number;
   reasoning_tokens?: number;
+  attachments?: MessageAttachment[] | null;
 };
 
 export type NoteDto = {

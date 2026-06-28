@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, getApiAccountByLogin, getChatMessages, getChatMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -33,6 +33,8 @@ import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updat
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
+import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
+import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
 import { resolveAudioFile, saveTtsAudio } from './services/audio-storage.js';
 import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './services/tts-cartesia.js';
 import type { UserRecord } from './types.js';
@@ -595,6 +597,42 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
   res.sendFile(filepath);
 });
 
+// ── Attachment (document) download API (owner-only, supports ?token= query param) ─
+app.get('/api/v1/attachments/:filename', (req: AuthedRequest, res) => {
+  const queryToken = `${req.query.token || ''}`.trim();
+  const authHeader = `${req.headers.authorization || ''}`;
+  const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const token = queryToken || headerToken;
+
+  if (!token) return res.status(401).json({ error: 'unauthorized' });
+
+  const payload = verifyToken(token, 'access');
+  if (!payload) return res.status(401).json({ error: 'unauthorized' });
+
+  const userId = payload.sub;
+  const rawUser = getUserById(userId);
+  const effectiveId = rawUser?.linked_tg_id || userId;
+  const filename = path.basename(req.params.filename || '');
+  if (!filename) return res.status(400).json({ error: 'bad_filename' });
+
+  const filepath = resolveAttachmentFile(filename);
+  if (!filepath) return res.status(404).json({ error: 'attachment_not_found' });
+
+  // Verify ownership: check that this attachment belongs to a message owned by this user
+  const likePattern = `%${filename}%`;
+  const row = db.prepare(`
+    SELECT 1 FROM chat_messages
+    WHERE user_id = ? AND attachments LIKE ?
+    LIMIT 1
+  `).get(effectiveId, likePattern) as { 1: number } | undefined;
+
+  if (!row) {
+    return res.status(403).json({ error: 'access_denied' });
+  }
+
+  res.sendFile(filepath);
+});
+
 // ── Audio download API (owner-only, supports ?token= query param for <audio src>) ─
 app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
   const queryToken = `${req.query.token || ''}`.trim();
@@ -791,6 +829,29 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res
   if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
   const ok = deleteUserMessage(userId, chatId, messageId);
   if (!ok) return res.status(404).json({ error: 'message_not_found' });
+  return res.json({ ok: true });
+});
+
+// List all attachments in a chat (for ToolsPanel "Documents" view)
+app.get('/api/v1/chats/:chatId/attachments', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const attachments = getChatAttachments(userId, chatId);
+  return res.json({ attachments });
+});
+
+// Delete a single attachment from a message by filename
+app.delete('/api/v1/chats/:chatId/messages/:messageId/attachments/:filename', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  const messageId = Number.parseInt(req.params.messageId, 10);
+  const filename = path.basename(decodeURIComponent(req.params.filename || ''));
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
+  if (!filename) return res.status(400).json({ error: 'bad_filename' });
+  const result = deleteMessageAttachment(userId, chatId, messageId, filename);
+  if (!result.ok) return res.status(404).json({ error: 'attachment_not_found' });
   return res.json({ ok: true });
 });
 
@@ -1018,6 +1079,44 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     }
   }
 
+  // Parse optional documents array (attachments)
+  const documentsRaw: Array<any> = Array.isArray(req.body?.documents) ? req.body.documents : [];
+  let savedUserAttachments: any[] | null = null;
+  if (documentsRaw.length > 0) {
+    try {
+      const { saveUserDocument } = await import('./services/attachment-storage.js');
+      const saved: any[] = [];
+      for (const doc of documentsRaw) {
+        const base64 = `${doc?.base64 || ''}`.trim();
+        const filename = `${doc?.filename || 'document'}`.trim();
+        if (!base64) continue;
+        const buf = Buffer.from(base64, 'base64');
+        if (!buf.length) continue;
+        if (buf.length > MAX_ATTACHMENT_BYTES) {
+          return res.status(413).json({ error: 'document_too_large', filename });
+        }
+        const ext = filename.split('.').pop()?.toLowerCase() || '';
+        if (!SUPPORTED_EXTENSIONS.has(ext)) {
+          return res.status(400).json({ error: 'unsupported_document_format', filename, ext });
+        }
+        const extractedText = await parseDocument(buf, filename);
+        const stored = await saveUserDocument(buf, filename);
+        saved.push({
+          name: filename,
+          size_bytes: buf.length,
+          mime_type: guessMimeType(filename),
+          extracted_text: extractedText,
+          url: stored.url,
+          filename: stored.filename,
+        });
+      }
+      savedUserAttachments = saved.length > 0 ? saved : null;
+    } catch (err: any) {
+      console.error('[chat/send] failed to save documents:', err);
+      return res.status(400).json({ error: 'document_parse_failed', detail: err?.message || String(err) });
+    }
+  }
+
   // Parse optional display manifest from desktop client
   const displayManifest = req.body?.display_manifest;
   const currentDisplayState = req.body?.current_display_state ?? null;
@@ -1040,6 +1139,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     const result = await sendMessageThroughAi(userId, text, chatId, {
       ...(images.length > 0 ? { images } : {}),
       userImages: savedUserImages,
+      ...(savedUserAttachments ? { userAttachments: savedUserAttachments } : {}),
       displayManifest,
       currentDisplayState,
       isDesktop,
@@ -2476,6 +2576,35 @@ app.put('/api/v1/user/context-tokens-limit', (req: AuthedRequest, res: any) => {
   return res.json({ ok: true, max_context_tokens: clamped, max_context_tokens_limit: hardLimit });
 });
 
+// ─── Attachment tokens limit (documents injection budget) ────────────────────
+
+app.get('/api/v1/user/attachment-tokens-limit', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const maxCtx = resolveMaxContextTokens(user);
+  const hardCap = Math.floor(maxCtx * 0.9);
+  return res.json({
+    attachment_max_tokens: resolveAttachmentMaxTokens(user),
+    attachment_max_tokens_limit: hardCap,
+    max_context_tokens: maxCtx,
+  });
+});
+
+app.put('/api/v1/user/attachment-tokens-limit', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const requested = Number(req.body?.attachment_max_tokens);
+  // 0 = auto (90% of max_context_tokens)
+  if (!Number.isFinite(requested) || requested < 0) return res.status(400).json({ error: 'bad_attachment_max_tokens' });
+  const maxCtx = resolveMaxContextTokens(user);
+  const hardCap = Math.floor(maxCtx * 0.9);
+  const clamped = Math.min(Math.floor(requested), hardCap);
+  updateUserAttachmentMaxTokens(userId, clamped);
+  return res.json({ ok: true, attachment_max_tokens: clamped, attachment_max_tokens_limit: hardCap });
+});
+
 // ─── Macros CRUD ────────────────────────────────────────────────────────────
 
 app.get('/api/v1/macros', (req: AuthedRequest, res: any) => {
@@ -3627,7 +3756,7 @@ setInterval(() => {
 // ── WS chat_send handler ────────────────────────────────────────────────────
 
 async function handleWsChatSend(client: WsClient, msg: any) {
-  const { text, chat_id, images, display_manifest, is_voice, preferred_model, regenerate_hint, regenerate_from_history } = msg;
+  const { text, chat_id, images, documents, display_manifest, is_voice, preferred_model, regenerate_hint, regenerate_from_history } = msg;
   if (!text?.trim()) {
     client.ws.send(JSON.stringify({ type: 'error', error: 'empty_text' }));
     return;
@@ -3672,6 +3801,47 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     }
   }
 
+  // Parse, validate & save documents (attachments)
+  let savedUserAttachments: any[] | null = null;
+  const documentsRaw: Array<any> = Array.isArray(documents) ? documents : [];
+  if (documentsRaw.length > 0) {
+    try {
+      const { saveUserDocument } = await import('./services/attachment-storage.js');
+      const saved: any[] = [];
+      for (const doc of documentsRaw) {
+        const base64 = `${doc?.base64 || ''}`.trim();
+        const filename = `${doc?.filename || 'document'}`.trim();
+        if (!base64) continue;
+        const buf = Buffer.from(base64, 'base64');
+        if (!buf.length) continue;
+        if (buf.length > MAX_ATTACHMENT_BYTES) {
+          client.ws.send(JSON.stringify({ type: 'error', error: 'document_too_large', filename }));
+          return;
+        }
+        const ext = filename.split('.').pop()?.toLowerCase() || '';
+        if (!SUPPORTED_EXTENSIONS.has(ext)) {
+          client.ws.send(JSON.stringify({ type: 'error', error: 'unsupported_document_format', filename, ext }));
+          return;
+        }
+        const extractedText = await parseDocument(buf, filename);
+        const stored = await saveUserDocument(buf, filename);
+        saved.push({
+          name: filename,
+          size_bytes: buf.length,
+          mime_type: guessMimeType(filename),
+          extracted_text: extractedText,
+          url: stored.url,
+          filename: stored.filename,
+        });
+      }
+      savedUserAttachments = saved.length > 0 ? saved : null;
+    } catch (err: any) {
+      console.error('[ws] failed to save documents:', err);
+      client.ws.send(JSON.stringify({ type: 'error', error: 'document_parse_failed', detail: err?.message || String(err) }));
+      return;
+    }
+  }
+
   const enabledMacros = getEnabledMacros(userId);
   const sendWsJson = (payload: Record<string, unknown>) => new Promise<void>((resolve, reject) => {
     if (client.ws.readyState !== WebSocket.OPEN) {
@@ -3689,6 +3859,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     const result = await sendMessageThroughAi(userId, text, chat_id, {
       ...(parsedImages.length > 0 ? { images: parsedImages } : {}),
       userImages: savedUserImages,
+      ...(savedUserAttachments ? { userAttachments: savedUserAttachments } : {}),
       displayManifest: display_manifest,
       currentDisplayState: msg.current_display_state ?? null,
       isDesktop: true,

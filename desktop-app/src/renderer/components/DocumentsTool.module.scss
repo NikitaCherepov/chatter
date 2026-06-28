@@ -1,0 +1,124 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  gap: 6px;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.docItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background-color: var(--bg-secondary);
+  transition: border-color 0.12s ease;
+}
+
+.docIcon {
+  flex-shrink: 0;
+  color: var(--accent-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docName {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.docMeta {
+  font-size: 11px;
+  color: var(--text-hint);
+  display: flex;
+  gap: 8px;
+}
+
+.docActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.docBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+  }
+
+  &.danger:hover {
+    color: var(--color-error);
+  }
+}
+
+.confirmDelete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-error);
+  background-color: var(--bg-secondary);
+}
+
+.confirmText {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.confirmBtn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  font-size: 11px;
+  cursor: pointer;
+
+  &.yes {
+    background-color: var(--color-error);
+    color: #fff;
+  }
+
+  &.no {
+    background-color: transparent;
+    border: 1px solid var(--border-medium);
+    color: var(--text-secondary);
+  }
+}

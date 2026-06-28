@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, resolveMaxContextTokens, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment } from '../types.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -4578,6 +4578,7 @@ export const sendMessageThroughAi = async (
     onDesktopAction?: (action: DesktopActionPayload) => Promise<void> | void;
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
+    userAttachments?: MessageAttachment[] | null;
     promptUserId?: number;
     onIntermediateMessage?: (text: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
@@ -4681,7 +4682,8 @@ export const sendMessageThroughAi = async (
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
   const contextWindow = resolveEffectiveContextWindow(user);
   const maxContextTokens = resolveMaxContextTokens(user);
-  let history = getHistoryForAi(userId, chatId, contextWindow);
+  const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
+  let history = getHistoryForAi(userId, chatId, contextWindow, attachmentMaxTokens);
   let regenerateUserText: string | null = null;
   if (requestedRegenerateFromHistory) {
     history = [...history];
@@ -4972,6 +4974,20 @@ PRO
       userMessageContent += hintText;
     } else if (Array.isArray(userMessageContent)) {
       userMessageContent = [...userMessageContent, { type: 'text', text: hintText }];
+    }
+  }
+
+  // Append user attachments (documents) as text injection into the current request.
+  // The same injection is replayed from history via getHistoryForAi, but for the
+  // fresh message we add it here since it hasn't been saved yet.
+  if (options?.userAttachments && options.userAttachments.length > 0) {
+    const attText = injectAttachments(options.userAttachments, attachmentMaxTokens);
+    if (attText) {
+      if (typeof userMessageContent === 'string') {
+        userMessageContent += '\n\n' + attText;
+      } else if (Array.isArray(userMessageContent)) {
+        userMessageContent = [...userMessageContent, { type: 'text', text: '\n\n' + attText }];
+      }
     }
   }
 
@@ -5335,7 +5351,8 @@ iterations.push(currentIteration);
       ? Math.floor(Number(options?.userTelegramMessageId))
       : null;
     const userMessageImages = options?.userImages?.length ? options.userImages : null;
-    userMessageId = appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages);
+    const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
+    userMessageId = appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
   }
   const assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))

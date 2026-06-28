@@ -1,5 +1,5 @@
 ﻿import { db, toUnix } from '../db.js';
-import type { ChatDto, MessageDto, MessageImage, MessageAudio, ChatRole, UserRecord } from '../types.js';
+import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord } from '../types.js';
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
@@ -178,21 +178,121 @@ export const editUserMessage = (
   return { ok: true, token_count: tokenCount };
 };
 
+/**
+ * List all attachments in a chat (for ToolsPanel "Documents" view).
+ * Returns newest first.
+ */
+export const getChatAttachments = (
+  userId: number,
+  chatId: number
+): Array<{ message_id: number; name: string; size_bytes: number; mime_type: string; url: string; filename: string; created_at: number }> => {
+  const rows = db.prepare(`
+    SELECT id, attachments, created_at
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ? AND attachments IS NOT NULL
+    ORDER BY id DESC
+  `).all(userId, chatId) as Array<{ id: number; attachments: string; created_at: string }>;
+
+  const result: Array<{ message_id: number; name: string; size_bytes: number; mime_type: string; url: string; filename: string; created_at: number }> = [];
+  for (const row of rows) {
+    try {
+      const atts = JSON.parse(row.attachments) as MessageAttachment[];
+      if (!Array.isArray(atts)) continue;
+      for (const a of atts) {
+        result.push({
+          message_id: row.id,
+          name: a.name,
+          size_bytes: a.size_bytes,
+          mime_type: a.mime_type,
+          url: a.url,
+          filename: a.filename,
+          created_at: toUnix(row.created_at),
+        });
+      }
+    } catch { /* skip */ }
+  }
+  return result;
+};
+
+/**
+ * Delete a single attachment from a message by filename.
+ * Removes the file from disk, removes the entry from the JSON array,
+ * and recalculates token_count for the message.
+ *
+ * Returns { ok: true } if found & deleted, { ok: false } otherwise.
+ */
+export const deleteMessageAttachment = (
+  userId: number,
+  chatId: number,
+  messageId: number,
+  filename: string
+): { ok: boolean } => {
+  const row = db.prepare(
+    'SELECT role, content, attachments FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
+  ).get(messageId, userId, chatId) as { role: ChatRole; content: string; attachments: string | null } | undefined;
+
+  if (!row || !row.attachments) return { ok: false };
+
+  let atts: MessageAttachment[];
+  try {
+    atts = JSON.parse(row.attachments);
+  } catch {
+    return { ok: false };
+  }
+
+  const target = atts.find(a => a.filename === filename);
+  if (!target) return { ok: false };
+
+  // 1. Remove file from disk
+  try {
+    const { deleteAttachmentFile } = require('./attachment-storage.js');
+    deleteAttachmentFile(target.filename);
+  } catch { /* best-effort */ }
+
+  // 2. Remove from array
+  const remaining = atts.filter(a => a.filename !== filename);
+  const newJson = remaining.length > 0 ? JSON.stringify(remaining) : null;
+
+  // 3. Recalculate token_count for user messages (attachments affect token count)
+  let newTokenCount: number | undefined;
+  if (row.role === 'user') {
+    const injected = remaining.length > 0 ? injectAttachments(remaining) : '';
+    newTokenCount = countMessageTokens('user', row.content + (injected ? '\n\n' + injected : ''));
+  }
+
+  // 4. UPDATE
+  if (newTokenCount !== undefined) {
+    db.prepare(
+      'UPDATE chat_messages SET attachments = ?, token_count = ? WHERE id = ? AND user_id = ? AND chat_id = ?'
+    ).run(newJson, newTokenCount, messageId, userId, chatId);
+  } else {
+    db.prepare(
+      'UPDATE chat_messages SET attachments = ? WHERE id = ? AND user_id = ? AND chat_id = ?'
+    ).run(newJson, messageId, userId, chatId);
+  }
+
+  return { ok: true };
+};
+
 export const getChatMessages = (userId: number, chatId: number, limit = 20, offset = 0): MessageDto[] => {
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived, token_count, reasoning_tokens
+    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived, token_count, reasoning_tokens, attachments
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
     if (row.images) {
       try { parsedImages = JSON.parse(row.images); } catch { parsedImages = null; }
+    }
+    let parsedAttachments: MessageAttachment[] | null = null;
+    if (row.attachments) {
+      try { parsedAttachments = JSON.parse(row.attachments); } catch { parsedAttachments = null; }
     }
     let parsedAudio: MessageAudio | null = null;
     if (row.audio) {
@@ -237,6 +337,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       reasoning_content: row.reasoning_content,
       tool_calls: parsedToolCalls,
       images: parsedImages,
+      attachments: parsedAttachments,
       audio: parsedAudio,
       telegram_chat_id: row.telegram_chat_id,
       telegram_message_id: row.telegram_message_id,
@@ -248,6 +349,54 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   });
 };
 
+/**
+ * Build text injection for user attachments.
+ *
+ * Each attachment becomes:
+ *   [Пользователь прикрепил файл: server_logs.txt]
+ *   --- НАЧАЛО ФАЙЛА ---
+ *   ...
+ *   --- КОНЕЦ ФАЙЛА ---
+ *
+ * Blocks are separated by blank lines. Order matches array order.
+ *
+ * If `maxTokens` > 0, files are added sequentially and trimmed once the
+ * cumulative token budget is reached. Files that don't fit are omitted from
+ * the injection (caller validates at upload time, but this is a safety net
+ * for archived history where the user's limit may have shrunk).
+ */
+export const injectAttachments = (
+  attachments: MessageAttachment[],
+  maxTokens = 0
+): string => {
+  if (!attachments || attachments.length === 0) return '';
+
+  const blocks: string[] = [];
+  let usedTokens = 0;
+
+  for (const att of attachments) {
+    const block = `[Пользователь прикрепил файл: ${att.name}]\n--- НАЧАЛО ФАЙЛА ---\n${att.extracted_text}\n--- КОНЕЦ ФАЙЛА ---`;
+    if (maxTokens > 0) {
+      const blockTokens = countTokens(block);
+      if (usedTokens + blockTokens > maxTokens) {
+        // Trim this block to what's left, if anything.
+        const remaining = maxTokens - usedTokens;
+        if (remaining <= 50) break; // not enough room to be useful
+        // Rough char-based trim (~4 chars/token) then re-clamp by tokens.
+        const charBudget = remaining * 4;
+        const head = block.slice(0, Math.max(0, charBudget - 60));
+        blocks.push(`${head}\n…[обрезано по лимиту]…\n--- КОНЕЦ ФАЙЛА ---`);
+        usedTokens = maxTokens;
+        break;
+      }
+      usedTokens += blockTokens;
+    }
+    blocks.push(block);
+  }
+
+  return blocks.join('\n\n');
+};
+
 export const appendChatMessage = (
   userId: number,
   chatId: number,
@@ -257,9 +406,11 @@ export const appendChatMessage = (
   telegramMessageId: number | null = null,
   images: MessageImage[] | null = null,
   reasoningContent: string | null = null,
-  toolCallsJson: string | null = null
+  toolCallsJson: string | null = null,
+  attachments: MessageAttachment[] | null = null
 ) => {
   const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
+  const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
   const reasoning = role === 'assistant' && reasoningContent?.trim() ? reasoningContent.trim() : null;
   const tcJson = role === 'assistant' && toolCallsJson?.trim() ? toolCallsJson.trim() : null;
 
@@ -270,9 +421,10 @@ export const appendChatMessage = (
   let reasoningTokens = 0;
 
   if (role === 'user') {
-    // Для user-сообщений считаем просто текст (images не уходят в контекст,
-    // только text-based [Фото]caption из getHistoryForAi).
-    tokenCount = countMessageTokens('user', content);
+    // Для user-сообщений считаем текст + инъекцию attachments
+    // (images не уходят в контекст — только text-based [Фото]caption).
+    const injected = attachments && attachments.length > 0 ? injectAttachments(attachments) : '';
+    tokenCount = countMessageTokens('user', content + (injected ? '\n\n' + injected : ''));
   } else {
     // assistant: считаем по развёрнутому trace (как в getHistoryForAi),
     // чтобы оценка совпадала с реальным payload в API.
@@ -306,9 +458,9 @@ export const appendChatMessage = (
   }
 
   const inserted = db.prepare(`
-    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content, tool_calls_json, token_count, reasoning_tokens)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning, tcJson, tokenCount, reasoningTokens);
+    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content, tool_calls_json, token_count, reasoning_tokens, attachments)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning, tcJson, tokenCount, reasoningTokens, attachmentsJson);
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return Number(inserted.lastInsertRowid);
 };
@@ -468,22 +620,31 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
  *
  * Reasoning в API не отправляется (односторонний вывод модели).
  */
-export const getHistoryForAi = (userId: number, chatId: number, limit?: number): any[] => {
+export const getHistoryForAi = (userId: number, chatId: number, limit?: number, attachmentMaxTokens = 0): any[] => {
   // LIMIT больше не используется для ограничения контекста —
   // Epoch Trimming (trimUserHistoryByChat) контролирует размер через архивацию по токенам.
   // Параметр limit оставлен для обратной совместимости, но игнорируется.
   const rows = db.prepare(`
-    SELECT role, content, tool_calls_json
+    SELECT role, content, tool_calls_json, attachments
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ? AND archived = 0
     ORDER BY id DESC
-  `).all(userId, chatId).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null }>;
+  `).all(userId, chatId).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null }>;
 
   const messages: any[] = [];
 
   for (const row of rows) {
     if (row.role === 'user') {
-      messages.push({ role: row.role, content: row.content });
+      // Достаём attachments (если есть) и инъектируем в content.
+      let parsedAttachments: MessageAttachment[] | null = null;
+      if (row.attachments) {
+        try { parsedAttachments = JSON.parse(row.attachments); } catch { parsedAttachments = null; }
+      }
+      const injected = parsedAttachments && parsedAttachments.length > 0
+        ? injectAttachments(parsedAttachments, attachmentMaxTokens)
+        : '';
+      const finalContent = injected ? `${row.content}\n\n${injected}` : row.content;
+      messages.push({ role: row.role, content: finalContent });
       continue;
     }
     // role === 'assistant'
@@ -690,6 +851,28 @@ export const updateUserMaxContextTokens = (userId: number, maxContextTokens: num
   return db.prepare(`
     UPDATE users
     SET max_context_tokens = ?
+    WHERE id = ?
+  `).run(safeValue, userId);
+};
+
+/**
+ * Резолвит эффективный лимит токенов для инъекции attachments.
+ * - 0 = авто: 90% от max_context_tokens.
+ * - Иначе — значение юзера, но не больше 90% от max_context_tokens.
+ */
+export const resolveAttachmentMaxTokens = (user: UserRecord): number => {
+  const maxCtx = resolveMaxContextTokens(user);
+  const hardCap = Math.floor(maxCtx * 0.9);
+  const userChoice = Number.isFinite(user.attachment_max_tokens) && user.attachment_max_tokens! > 0
+    ? Math.floor(user.attachment_max_tokens!) : hardCap;
+  return Math.max(0, Math.min(userChoice, hardCap));
+};
+
+export const updateUserAttachmentMaxTokens = (userId: number, attachmentMaxTokens: number) => {
+  const safeValue = Math.max(0, Math.floor(attachmentMaxTokens));
+  return db.prepare(`
+    UPDATE users
+    SET attachment_max_tokens = ?
     WHERE id = ?
   `).run(safeValue, userId);
 };

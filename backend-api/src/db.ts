@@ -66,6 +66,8 @@ ensureChatMessageColumn('archived_at', 'ALTER TABLE chat_messages ADD COLUMN arc
 // Token accounting (фаза 1: отображение). token_count не включает reasoning_content.
 ensureChatMessageColumn('token_count', 'ALTER TABLE chat_messages ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0');
 ensureChatMessageColumn('reasoning_tokens', 'ALTER TABLE chat_messages ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0');
+// Attachments (documents) — text files injected into AI context
+ensureChatMessageColumn('attachments', 'ALTER TABLE chat_messages ADD COLUMN attachments TEXT');
 
 // Index for efficient filtering: active (non-archived) messages per chat
 if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_chat_messages_active'").get()) {
@@ -107,6 +109,8 @@ ensureUserColumn('linked_tg_id', 'ALTER TABLE users ADD COLUMN linked_tg_id INTE
 // Token-based context limit (replaces message-count-based context_window_max)
 ensureUserColumn('max_context_tokens_limit', 'ALTER TABLE users ADD COLUMN max_context_tokens_limit INTEGER NOT NULL DEFAULT 30000');
 ensureUserColumn('max_context_tokens', 'ALTER TABLE users ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT 30000');
+// Attachment token limit (0 = auto: 90% of max_context_tokens)
+ensureUserColumn('attachment_max_tokens', 'ALTER TABLE users ADD COLUMN attachment_max_tokens INTEGER NOT NULL DEFAULT 0');
 
 // ── FTS5 full-text search index on chat_messages ────────────────────────────
 

@@ -142,6 +142,8 @@ export function SettingsModal({ onClose }: Props) {
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
   const [contextTokenLimit, setContextTokenLimitState] = useState<api.ContextTokenLimit | null>(null);
   const [contextTokenLimitSaving, setContextTokenLimitSaving] = useState(false);
+  const [attachmentTokenLimit, setAttachmentTokenLimitState] = useState<api.AttachmentTokenLimit | null>(null);
+  const [attachmentTokenLimitSaving, setAttachmentTokenLimitSaving] = useState(false);
 
   // Load account data
   useEffect(() => {
@@ -200,6 +202,9 @@ export function SettingsModal({ onClose }: Props) {
         .catch(() => {});
       api.getContextTokenLimit()
         .then((res) => setContextTokenLimitState(res))
+        .catch(() => {});
+      api.getAttachmentTokenLimit()
+        .then((res) => setAttachmentTokenLimitState(res))
         .catch(() => {});
     }
   }, [section]);
@@ -260,11 +265,36 @@ export function SettingsModal({ onClose }: Props) {
     try {
       const res = await api.setContextTokenLimit(commitValue);
       setContextTokenLimitState(res);
+      // Refresh attachment limit too (hardCap depends on context tokens)
+      api.getAttachmentTokenLimit().then(setAttachmentTokenLimitState).catch(() => {});
     } catch {
       setContextTokenLimitState(prev);
       toast.error('Не удалось сохранить лимит токенов');
     } finally {
       setContextTokenLimitSaving(false);
+    }
+  };
+
+  // ── Attachment token limit ──
+  const handleAttachmentTokenLimitChange = (value: number) => {
+    if (!attachmentTokenLimit) return;
+    const clamped = Math.min(value, attachmentTokenLimit.attachment_max_tokens_limit);
+    setAttachmentTokenLimitState({ ...attachmentTokenLimit, attachment_max_tokens: clamped });
+  };
+
+  const handleAttachmentTokenLimitCommit = async (value?: number) => {
+    if (!attachmentTokenLimit) return;
+    const commitValue = value ?? attachmentTokenLimit.attachment_max_tokens;
+    const prev = attachmentTokenLimit;
+    setAttachmentTokenLimitSaving(true);
+    try {
+      const res = await api.setAttachmentTokenLimit(commitValue);
+      setAttachmentTokenLimitState(res);
+    } catch {
+      setAttachmentTokenLimitState(prev);
+      toast.error('Не удалось сохранить лимит документов');
+    } finally {
+      setAttachmentTokenLimitSaving(false);
     }
   };
 
@@ -1100,6 +1130,53 @@ export function SettingsModal({ onClose }: Props) {
                           {step >= 1000 ? `${step / 1000}k` : step}
                         </button>
                       ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Attachment Token Limit */}
+              {attachmentTokenLimit && (
+                <div className={s.fieldGroup}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+                    Лимит документов
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Slider
+                      mode="numeric"
+                      label=""
+                      min={0}
+                      max={attachmentTokenLimit.attachment_max_tokens_limit}
+                      step={1000}
+                      value={attachmentTokenLimit.attachment_max_tokens}
+                      onChange={(v) => {
+                        if (v !== null) handleAttachmentTokenLimitChange(v);
+                      }}
+                      onCommit={handleAttachmentTokenLimitCommit}
+                      disabled={attachmentTokenLimitSaving}
+                      formatValue={(v) => v === 0 ? 'Авто' : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={attachmentTokenLimit.attachment_max_tokens_limit}
+                      step={1000}
+                      value={attachmentTokenLimit.attachment_max_tokens}
+                      disabled={attachmentTokenLimitSaving}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (Number.isFinite(v) && v >= 0) handleAttachmentTokenLimitChange(v);
+                      }}
+                      onBlur={() => handleAttachmentTokenLimitCommit()}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAttachmentTokenLimitCommit(); }}
+                      style={{
+                        width: 90, padding: '4px 8px', fontSize: 12,
+                        background: 'var(--bg-input)', border: '1px solid var(--border-medium)',
+                        borderRadius: 6, color: 'var(--text-primary)', outline: 'none',
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
+                    Сколько токенов из контекста может занимать содержимое прикреплённых документов. 0 = авто (90% от лимита контекста). Максимум: {(attachmentTokenLimit.attachment_max_tokens_limit / 1000).toFixed(0)}k токенов.
                   </div>
                 </div>
               )}

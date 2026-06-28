@@ -583,6 +583,66 @@ services/subagents/
 - `GeneratedImage` — добавлено поле `image_url`.
 - `ChatSendResponse` — добавлено поле `generated_images`.
 
+### Документы (attachments)
+
+Пользователь может прикреплять текстовые документы к сообщениям. В отличие от фото, документы **инджектятся в AI-контекст каждый раз** как текстовые блоки (а не показываются один раз через vision).
+
+**Поддерживаемые форматы:**
+- Текстовые: txt, md, json, csv, log, xml, yaml, ini, toml, код (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css и т.д.)
+- DOCX (через `mammoth`)
+- PDF (через `pdf-parse`)
+- RTF
+
+**Лимиты:**
+- Размер raw-файла: **5 МБ** (`MAX_RAW_FILE_SIZE`)
+- Извлечённый текст обрезается до **500 000 символов** (`MAX_EXTRACTED_TEXT_CHARS`) — сохраняются head + tail
+- Токен-бюджет на документы: `attachment_max_tokens` (user setting). `0` = авто (90% от `max_context_tokens`). Лимит можно менять в настройках (slider, 0 = Авто).
+
+**Сервисы:**
+- `services/document-parser.ts` — извлечение текста (`parseDocument`), MIME-типы (`guessMimeType`)
+- `services/attachment-storage.ts` — сохранение/удаление файлов (`saveUserDocument`, `resolveAttachmentFile`, `deleteAttachmentFile`)
+
+**БД:**
+- Колонка `attachments TEXT` в `chat_messages` — JSON-массив `[MessageAttachment]`.
+- Колонка `attachment_max_tokens INTEGER NOT NULL DEFAULT 0` в `users`.
+- `MessageAttachment`: `{ name, size_bytes, mime_type, extracted_text, url, filename }`.
+
+**Хранение файлов:**
+- Файлы сохраняются как `<id>_<sanitized_name>` в `uploads/` (рядом с изображениями).
+- API скачивания `GET /api/v1/attachments/:filename?token=<access_token>` — только для владельца (проверка через JSON `attachments LIKE`).
+- Удаление через `DELETE /api/v1/chats/:chatId/messages/:messageId/attachments/:filename` — удаляет файл с диска, убирает из JSON, пересчитывает `token_count`.
+
+**Инъекция в AI-контекст:**
+- `injectAttachments()` форматирует каждый документ как:
+  ```
+  [Пользователь прикрепил файл: server_logs.txt]
+  --- НАЧАЛО ФАЙЛА ---
+  <содержимое>
+  --- КОНЕЦ ФАЙЛА ---
+  ```
+- `getHistoryForAi()` инджектит attachments для каждого user-сообщения в истории.
+- Текущий запрос (`sendMessageThroughAi`) инджектит attachments в `userMessageContent`.
+- Бюджет `attachmentMaxTokens` передаётся в `getHistoryForAi()` для ограничения объёма инъекции.
+
+**Токен-учёт:**
+- `appendChatMessage()` считает `token_count` включая injected attachments для user-сообщений.
+- `getChatAttachments(userId, chatId)` — список всех attachments чата для ToolsPanel.
+
+**Поток данных:**
+- **Desktop:** drag-and-drop/выбор файлов → base64 → POST `/api/v1/chat/send` (`documents[]`) или WS `chat_send` → сервер парсит, сохраняет файл, сохраняет extracted_text → инджектит в AI.
+- **Telegram:** не поддерживается (только desktop).
+- **Удаление:** ToolsPanel → DELETE → файл с диска + JSON в БД → пересчёт токенов → инъекция прекращается.
+
+**API:**
+
+| Эндпоинт | Метод | Описание |
+|---|---|---|
+| `/api/v1/attachments/:filename` | GET | Скачивание файла (owner-only) |
+| `/api/v1/chats/:chatId/attachments` | GET | Список всех attachments чата |
+| `/api/v1/chats/:chatId/messages/:messageId/attachments/:filename` | DELETE | Удаление attachment (файл + БД + инъекция) |
+| `/api/v1/user/attachment-tokens-limit` | GET | Текущий лимит токенов на документы |
+| `/api/v1/user/attachment-tokens-limit` | PUT | Установка лимита (0 = Авто) |
+
 ### Архивация сообщений (soft delete)
 
 Когда количество активных сообщений в чате превышает `context_window_max`, старые сообщения **не удаляются**, а помечаются как архивные:

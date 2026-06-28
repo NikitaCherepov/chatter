@@ -139,6 +139,8 @@ src/
     │   ├── NotebookTool   # Виджет блокнота
     │   ├── TasksTool      # Просмотр задач
     │   ├── MapTool        # Карта (Leaflet + react-leaflet)
+    │   ├── DocumentsTool  # Документы чата (attachments)
+    │   ├── GalleryTool    # Галерея фото из чата
     │   ├── RadioGroup     # Переиспользуемый радио-селектор
     │   ├── SettingsModal  # Настройки (аккаунт, промпт, голос, приложение, макросы, серверы, инструкции, умный дом)
     │   ├── MacroSettings  # Управление макросами (CRUD + AI explain/describe)
@@ -270,6 +272,49 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 | `poi_search` | `places[], query` | Фиолетовые маркеры POI (имя, адрес, часы) + `flyTo` к первому |
 
 **API пинов:** `GET/POST/PUT/DELETE /api/v1/map-pins[/:id]`. Координаты шифруются на бэкенде через `MAP_PINS_ENCRYPTION_KEY`.
+
+## Документы (DocumentsTool)
+
+Инструмент в правой панели для просмотра и управления прикреплёнными документами в чате. Зеркало «Галереи» для фотографий.
+
+### Прикрепление документов
+
+- Кнопка «Прикрепить документы» (иконка документа слева от поля ввода) открывает `DocumentAttachModal`.
+- Drag-and-drop или выбор файлов через диалог.
+- Поддерживаемые форматы: txt, md, json, csv, log, xml, yaml, ini, toml, код (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css и т.д.), **docx**, **pdf**, rtf.
+- Лимит: **5 МБ** на файл.
+- Превью выбранных файлов отображается над полем ввода (как превью фото).
+- При отправке документы передаются на сервер как base64, сервер парсит текст и сохраняет файл.
+
+### DocumentsTool (ToolsPanel)
+
+`DocumentsTool.tsx` — список всех документов в текущем чате:
+- Загружается через `GET /api/v1/chats/:chatId/attachments`.
+- Каждый элемент: иконка файла, имя, размер, дата.
+- Кнопка скачивания (через `resolveImageUrl(item.url)` для auth-token).
+- Кнопка удаления с подтверждением → `DELETE /api/v1/chats/:chatId/messages/:messageId/attachments/:filename`.
+
+### Отображение в сообщениях
+
+- В user-сообщениях с attachments показывается список файлов с иконкой, именем, размером и кнопкой скачивания.
+- Скачивание использует `resolveImageUrl(att.url)` для подстановки JWT-токена.
+
+### Настройки лимита токенов
+
+Вкладка «Приложение» в SettingsModal — слайдер «Лимит документов»:
+- `0` = Авто (90% от `max_context_tokens`).
+- Ручной ввод от 1000 до `max_context_tokens` токенов.
+- Сохраняется через `PUT /api/v1/user/attachment-tokens-limit`.
+
+### Ключевые файлы
+
+| Файл | Роль |
+|---|---|
+| `components/DocumentsTool.tsx` | ToolsPanel-компонент: список документов, удаление, скачивание |
+| `components/DocumentAttachModal.tsx` | Модалка прикрепления файлов: drag-drop, превью, валидация |
+| `pages/ChatPage.tsx` | Кнопка прикрепления, превью, рендер attachments в сообщениях |
+| `components/SettingsModal.tsx` | Слайдер лимита токенов на документы |
+| `lib/api.ts` | Типы `MessageAttachment`, `ChatAttachmentItem`, `AttachmentTokenLimit` + API-функции |
 
 ## RadioGroup
 

@@ -149,6 +149,15 @@ export type MessageImage = {
   type: 'user_photo' | 'generated';
 };
 
+export type MessageAttachment = {
+  name: string;
+  size_bytes: number;
+  mime_type: string;
+  extracted_text: string;
+  url: string;
+  filename: string;
+};
+
 export type MessageAudio = {
   url: string;
   tts_type: string;
@@ -171,6 +180,7 @@ export type Message = {
   token_count?: number;
   /** Токены reasoning_content (только для assistant). */
   reasoning_tokens?: number;
+  attachments?: MessageAttachment[] | null;
 };
 
 export type ChatInfo = {
@@ -259,6 +269,12 @@ export async function sendMessageToTelegram(messageId: number): Promise<{ ok: bo
 export type ChatSendImage = {
   base64: string;
   mime_type: string;
+};
+
+export type ChatSendDocument = {
+  base64: string;
+  filename: string;
+  mime_type?: string;
 };
 
 export type DisplayStatePayload = {
@@ -494,7 +510,8 @@ export async function streamChatMessage(
   displayManifest?: { moods: string[]; reactions: string[] },
   currentDisplayState?: DisplayStatePayload | null,
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' },
+  documents?: ChatSendDocument[]
 ) {
   // Update callbacks for this request
   if (callbacks) {
@@ -506,6 +523,7 @@ export async function streamChatMessage(
     const msg: Record<string, unknown> = { type: 'chat_send', text };
     if (chatId) msg.chat_id = chatId;
     if (images?.length) msg.images = images;
+    if (documents?.length) msg.documents = documents;
     if (displayManifest) msg.display_manifest = displayManifest;
     if (currentDisplayState) msg.current_display_state = currentDisplayState;
     if (options?.isVoice) msg.is_voice = true;
@@ -519,7 +537,7 @@ export async function streamChatMessage(
   }
 
   // Fallback: SSE
-  await streamChatMessageSSE(text, chatId, images, displayManifest, currentDisplayState, callbacks, options);
+  await streamChatMessageSSE(text, chatId, images, displayManifest, currentDisplayState, callbacks, options, documents);
 }
 
 // ── Stop chat generation ──
@@ -544,7 +562,8 @@ async function streamChatMessageSSE(
   displayManifest?: { moods: string[]; reactions: string[] },
   currentDisplayState?: DisplayStatePayload | null,
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' }
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' },
+  documents?: ChatSendDocument[]
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
@@ -554,6 +573,7 @@ async function streamChatMessageSSE(
     const body: Record<string, unknown> = { text, is_desktop: true };
     if (chatId) body.chat_id = chatId;
     if (images && images.length > 0) body.images = images;
+    if (documents && documents.length > 0) body.documents = documents;
     if (displayManifest) body.display_manifest = displayManifest;
     if (currentDisplayState) body.current_display_state = currentDisplayState;
     if (options?.isVoice) body.is_voice = true;
@@ -1008,6 +1028,48 @@ export async function setContextTokenLimit(maxContextTokens: number): Promise<Co
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ max_context_tokens: maxContextTokens }),
+  });
+}
+
+// ---------- Attachment Token Limit ----------
+
+export type AttachmentTokenLimit = {
+  attachment_max_tokens: number;
+  attachment_max_tokens_limit: number;
+  max_context_tokens: number;
+};
+
+export async function getAttachmentTokenLimit(): Promise<AttachmentTokenLimit> {
+  return apiFetch('/api/v1/user/attachment-tokens-limit');
+}
+
+export async function setAttachmentTokenLimit(attachmentMaxTokens: number): Promise<AttachmentTokenLimit> {
+  return apiFetch('/api/v1/user/attachment-tokens-limit', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attachment_max_tokens: attachmentMaxTokens }),
+  });
+}
+
+// ---------- Chat Attachments (Documents) ----------
+
+export type ChatAttachmentItem = {
+  message_id: number;
+  name: string;
+  size_bytes: number;
+  mime_type: string;
+  url: string;
+  filename: string;
+  created_at: number;
+};
+
+export async function getChatAttachments(chatId: number): Promise<{ attachments: ChatAttachmentItem[] }> {
+  return apiFetch(`/api/v1/chats/${chatId}/attachments`);
+}
+
+export async function deleteAttachment(chatId: number, messageId: number, filename: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}/attachments/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
   });
 }
 

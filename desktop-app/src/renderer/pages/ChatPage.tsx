@@ -10,8 +10,10 @@ import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
+import { DocumentAttachModal } from '../components/DocumentAttachModal';
 import { RejectWithComment } from '../components/RejectWithComment';
 import type { ImageItem } from '../components/AttachModal';
+import type { DocumentItem } from '../components/DocumentAttachModal';
 import { Select } from '../components/Select';
 import Slider from '../components/Slider';
 import { SettingsModal } from '../components/SettingsModal';
@@ -248,6 +250,38 @@ const MessageItem = React.memo(function MessageItem({
               })}
             </div>
           )}
+          {msg.attachments && msg.attachments.length > 0 && (
+            <div className={s.messageImages} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px', marginTop: '6px' }}>
+              {msg.attachments.map((att, i) => {
+                const downloadUrl = resolveImageUrl(att.url);
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', fontSize: '12px' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                      {att.name}
+                    </span>
+                    <span style={{ color: 'var(--text-hint)', fontSize: '11px' }}>
+                      {(att.size_bytes / 1024).toFixed(1)} KB
+                    </span>
+                    <button
+                      style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', lineHeight: 1, display: 'flex' }}
+                      onClick={(e) => { e.stopPropagation(); onDownloadImage(downloadUrl); }}
+                      title="Скачать"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {isEditing ? (
             <div className={s.editWrap}>
               <textarea
@@ -356,6 +390,8 @@ export function ChatPage() {
   const [isLinked, setIsLinked] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [attachedDocuments, setAttachedDocuments] = useState<DocumentItem[]>([]);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -815,7 +851,8 @@ export function ChatPage() {
   const handleSend = useCallback(async () => {
     const text = input.trim();
     const hasImages = attachedImages.length > 0;
-    if ((!text && !hasImages) || sending) return;
+    const hasDocuments = attachedDocuments.length > 0;
+    if ((!text && !hasImages && !hasDocuments) || sending) return;
 
     const isVoice = isVoiceInputRef.current;
     isVoiceInputRef.current = false;
@@ -832,10 +869,16 @@ export function ChatPage() {
       mime_type: img.mime_type,
     }));
 
-    // Clear attached images immediately
-    setAttachedImages([]);
+    const documentsToSend = attachedDocuments.map((doc) => ({
+      base64: doc.base64,
+      filename: doc.filename,
+    }));
 
-    const displayText = text || (hasImages ? '[Image]' : '');
+    // Clear attached images and documents immediately
+    setAttachedImages([]);
+    setAttachedDocuments([]);
+
+    const displayText = text || (hasImages ? '[Image]' : '') || (hasDocuments ? '[Document]' : '');
     // Build temporary images for user message (preview URLs from attached files)
     const tempUserImages: api.MessageImage[] | undefined = hasImages
       ? attachedImages.map((img) => ({ url: img.preview, type: 'user_photo' as const }))
@@ -999,9 +1042,10 @@ export function ChatPage() {
           }
         }
       },
-      isVoice ? { isVoice: true, preferredModel: preferredModel, dice_mode: diceMode } : { preferredModel: preferredModel, dice_mode: diceMode }
+      isVoice ? { isVoice: true, preferredModel: preferredModel, dice_mode: diceMode } : { preferredModel: preferredModel, dice_mode: diceMode },
+      documentsToSend.length > 0 ? documentsToSend : undefined
     );
-  }, [input, sending, activeChatId, attachedImages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState]);
+  }, [input, sending, activeChatId, attachedImages, attachedDocuments, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -2345,6 +2389,38 @@ export function ChatPage() {
                           })}
                         </div>
                       )}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={s.messageImages} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px', marginBottom: '6px' }}>
+                          {msg.attachments.map((att, i) => {
+                            const downloadUrl = resolveImageUrl(att.url);
+                            return (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', fontSize: '12px' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                </svg>
+                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                                  {att.name}
+                                </span>
+                                <span style={{ color: 'var(--text-hint)', fontSize: '11px' }}>
+                                  {(att.size_bytes / 1024).toFixed(1)} KB
+                                </span>
+                                <button
+                                  style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', lineHeight: 1, display: 'flex' }}
+                                  onClick={(e) => { e.stopPropagation(); handleDownloadImage(downloadUrl); }}
+                                  title="Скачать"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {msg.role === 'assistant'
                         ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
                         : <div className={s.bubbleTextPlain}>{msg.content}</div>
@@ -3218,6 +3294,36 @@ export function ChatPage() {
               </div>
             )}
 
+            {/* Document previews above input */}
+            {attachedDocuments.length > 0 && (
+              <div className={s.imagePreviews} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
+                {attachedDocuments.map((doc, i) => (
+                  <div key={i} className={s.docPreviewItem} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', fontSize: '12px' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                      {doc.filename}
+                    </span>
+                    <span style={{ color: 'var(--text-hint)', fontSize: '11px' }}>
+                      {(doc.size_bytes / 1024).toFixed(1)} KB
+                    </span>
+                    <button
+                      style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '16px', padding: '0 4px', lineHeight: 1 }}
+                      onClick={() => setAttachedDocuments((prev) => prev.filter((_, idx) => idx !== i))}
+                      title="Удалить"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+                <button className={s.imageClearAll} onClick={() => setAttachedDocuments([])}>
+                  Очистить
+                </button>
+              </div>
+            )}
+
             <div className={s.inputArea}>
               {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
               {diceRollEnabled && (
@@ -3263,6 +3369,21 @@ export function ChatPage() {
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                 </svg>
               )}
+
+              {/* Document attach button */}
+              <span title="Прикрепить документы" style={{ display: 'inline-flex' }}>
+                <svg
+                  className={s.inputIcon}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setShowDocumentModal(true)}
+                  viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+              </span>
 
               <textarea
                 ref={textareaRef}
@@ -3353,6 +3474,17 @@ export function ChatPage() {
             onAttach={handleAttachFromModal}
             currentCount={attachedImages.length}
             maxCount={maxImages}
+          />
+        )}
+
+        {showDocumentModal && (
+          <DocumentAttachModal
+            key="document-modal"
+            onClose={() => setShowDocumentModal(false)}
+            onAttach={(docs) => {
+              setAttachedDocuments((prev) => [...prev, ...docs]);
+              setShowDocumentModal(false);
+            }}
           />
         )}
 
