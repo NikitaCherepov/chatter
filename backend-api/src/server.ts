@@ -852,7 +852,7 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId/attachments/:filename', (r
   if (!filename) return res.status(400).json({ error: 'bad_filename' });
   const result = deleteMessageAttachment(userId, chatId, messageId, filename);
   if (!result.ok) return res.status(404).json({ error: 'attachment_not_found' });
-  return res.json({ ok: true });
+  return res.json({ ok: true, token_count: result.token_count });
 });
 
 app.put('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) => {

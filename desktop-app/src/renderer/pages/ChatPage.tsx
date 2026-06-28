@@ -10,10 +10,8 @@ import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
-import { DocumentAttachModal } from '../components/DocumentAttachModal';
 import { RejectWithComment } from '../components/RejectWithComment';
-import type { ImageItem } from '../components/AttachModal';
-import type { DocumentItem } from '../components/DocumentAttachModal';
+import type { ImageItem, DocumentItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
 import Slider from '../components/Slider';
 import { SettingsModal } from '../components/SettingsModal';
@@ -85,6 +83,7 @@ type MessageItemProps = {
   onSetEditingText: (value: string) => void;
   onSaveEdit: (messageId: number) => void;
   onCancelEdit: () => void;
+  onDeleteAttachment: (messageId: number, filename: string) => void;
 };
 
 const MessageItem = React.memo(function MessageItem({
@@ -114,6 +113,7 @@ const MessageItem = React.memo(function MessageItem({
   onSetEditingText,
   onSaveEdit,
   onCancelEdit,
+  onDeleteAttachment,
 }: MessageItemProps) {
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
@@ -251,32 +251,38 @@ const MessageItem = React.memo(function MessageItem({
             </div>
           )}
           {msg.attachments && msg.attachments.length > 0 && (
-            <div className={s.messageImages} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px', marginTop: '6px' }}>
+            <div className={s.messageImages}>
               {msg.attachments.map((att, i) => {
-                const downloadUrl = resolveImageUrl(att.url);
+                const downloadUrl = att.url ? resolveImageUrl(att.url) : null;
                 return (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', fontSize: '12px' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                    </svg>
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
-                      {att.name}
-                    </span>
-                    <span style={{ color: 'var(--text-hint)', fontSize: '11px' }}>
-                      {(att.size_bytes / 1024).toFixed(1)} KB
-                    </span>
-                    <button
-                      style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', lineHeight: 1, display: 'flex' }}
-                      onClick={(e) => { e.stopPropagation(); onDownloadImage(downloadUrl); }}
-                      title="Скачать"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
+                  <div key={i} className={s.attachmentCard}>
+                    <div className={s.attachmentIcon}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
                       </svg>
-                    </button>
+                    </div>
+                    <div className={s.attachmentInfo}>
+                      <span className={s.attachmentName}>{att.name}</span>
+                      <span className={s.attachmentSize}>{att.size_bytes < 1024 * 1024 ? `${(att.size_bytes / 1024).toFixed(1)} KB` : `${(att.size_bytes / (1024 * 1024)).toFixed(1)} MB`}</span>
+                    </div>
+                    {downloadUrl && (
+                      <button className={s.attachmentDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(downloadUrl); }} title="Скачать">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </button>
+                    )}
+                    {msg.id > 0 && att.filename && (
+                      <button className={s.attachmentDelete} onClick={(e) => { e.stopPropagation(); onDeleteAttachment(msg.id, att.filename); }} title="Удалить">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -390,7 +396,6 @@ export function ChatPage() {
   const [isLinked, setIsLinked] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
-  const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [attachedDocuments, setAttachedDocuments] = useState<DocumentItem[]>([]);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -886,6 +891,9 @@ export function ChatPage() {
     const tempUserMsg: api.Message = {
       id: -Date.now(), role: 'user', content: displayText, created_at: Math.floor(Date.now() / 1000),
       images: tempUserImages,
+      attachments: hasDocuments
+        ? attachedDocuments.map((doc) => ({ name: doc.filename, size_bytes: doc.size_bytes, mime_type: '', extracted_text: '', url: '', filename: doc.filename }))
+        : undefined,
     };
 
     setMessages((prev) => [...prev, tempUserMsg]);
@@ -1143,18 +1151,42 @@ export function ChatPage() {
     }
   }, [attachedImages.length, maxImages]);
 
-  const handleAttachFromModal = useCallback((images: ImageItem[]) => {
-    setAttachedImages((prev) => {
-      const combined = [...prev, ...images];
-      if (combined.length > maxImages) {
-        // Trim to max
-        const excess = combined.splice(maxImages);
-        excess.forEach((img) => URL.revokeObjectURL(img.preview));
-      }
-      return combined;
-    });
+  const handleAttachFromModal = useCallback((items: { images: ImageItem[]; documents: DocumentItem[] }) => {
+    if (items.images.length > 0) {
+      setAttachedImages((prev) => {
+        const combined = [...prev, ...items.images];
+        if (combined.length > maxImages) {
+          const excess = combined.splice(maxImages);
+          excess.forEach((img) => URL.revokeObjectURL(img.preview));
+        }
+        return combined;
+      });
+    }
+    if (items.documents.length > 0) {
+      setAttachedDocuments((prev) => [...prev, ...items.documents]);
+    }
     setShowAttachModal(false);
   }, [maxImages]);
+
+  const handleDeleteAttachment = useCallback(async (messageId: number, filename: string) => {
+    if (!activeChatId) return;
+    // Optimistic: remove from UI immediately
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId || !m.attachments) return m;
+      return { ...m, attachments: m.attachments.filter(a => a.filename !== filename) };
+    }));
+    try {
+      const res = await api.deleteAttachment(activeChatId, messageId, filename);
+      if (typeof res.token_count === 'number') {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, token_count: res.token_count } : m));
+      }
+    } catch {
+      toast.error('Не удалось удалить файл');
+      // Reload to restore
+      const data = await api.getMessages(activeChatId);
+      setMessages(data.messages);
+    }
+  }, [activeChatId]);
 
   const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
 
@@ -2228,6 +2260,7 @@ export function ChatPage() {
                   onSetEditingText={setEditingText}
                   onSaveEdit={handleSaveEdit}
                   onCancelEdit={handleCancelEdit}
+                  onDeleteAttachment={handleDeleteAttachment}
                 />
               ))}
               {false && messages.map((msg) => (
@@ -2390,32 +2423,38 @@ export function ChatPage() {
                         </div>
                       )}
                       {msg.attachments && msg.attachments.length > 0 && (
-                        <div className={s.messageImages} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px', marginBottom: '6px' }}>
+                        <div className={s.messageImages}>
                           {msg.attachments.map((att, i) => {
-                            const downloadUrl = resolveImageUrl(att.url);
+                            const downloadUrl = att.url ? resolveImageUrl(att.url) : null;
                             return (
-                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', fontSize: '12px' }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                  <polyline points="14 2 14 8 20 8" />
-                                </svg>
-                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
-                                  {att.name}
-                                </span>
-                                <span style={{ color: 'var(--text-hint)', fontSize: '11px' }}>
-                                  {(att.size_bytes / 1024).toFixed(1)} KB
-                                </span>
-                                <button
-                                  style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', lineHeight: 1, display: 'flex' }}
-                                  onClick={(e) => { e.stopPropagation(); handleDownloadImage(downloadUrl); }}
-                                  title="Скачать"
-                                >
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
+                              <div key={i} className={s.attachmentCard}>
+                                <div className={s.attachmentIcon}>
+                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
                                   </svg>
-                                </button>
+                                </div>
+                                <div className={s.attachmentInfo}>
+                                  <span className={s.attachmentName}>{att.name}</span>
+                                  <span className={s.attachmentSize}>{att.size_bytes < 1024 * 1024 ? `${(att.size_bytes / 1024).toFixed(1)} KB` : `${(att.size_bytes / (1024 * 1024)).toFixed(1)} MB`}</span>
+                                </div>
+                                {downloadUrl && (
+                                  <button className={s.attachmentDownload} onClick={(e) => { e.stopPropagation(); handleDownloadImage(downloadUrl); }} title="Скачать">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                      <polyline points="7 10 12 15 17 10" />
+                                      <line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                  </button>
+                                )}
+                                {msg.id > 0 && att.filename && (
+                                  <button className={s.attachmentDelete} onClick={(e) => { e.stopPropagation(); handleDeleteAttachment(msg.id, att.filename); }} title="Удалить">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             );
                           })}
@@ -3365,17 +3404,10 @@ export function ChatPage() {
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                 </svg>
               ) : (
-                <svg className={s.inputIcon} viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-                </svg>
-              )}
-
-              {/* Document attach button */}
-              <span title="Прикрепить документы" style={{ display: 'inline-flex' }}>
                 <svg
                   className={s.inputIcon}
                   style={{ cursor: 'pointer' }}
-                  onClick={() => setShowDocumentModal(true)}
+                  onClick={() => setShowAttachModal(true)}
                   viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 >
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -3383,7 +3415,7 @@ export function ChatPage() {
                   <line x1="16" y1="13" x2="8" y2="13" />
                   <line x1="16" y1="17" x2="8" y2="17" />
                 </svg>
-              </span>
+              )}
 
               <textarea
                 ref={textareaRef}
@@ -3407,8 +3439,8 @@ export function ChatPage() {
                 </svg>
               ) : (
               <svg
-                className={!input.trim() && attachedImages.length === 0 ? s.sendIconDisabled : s.sendIcon}
-                onClick={() => { if (input.trim() || attachedImages.length > 0) handleSend(); }}
+                className={!input.trim() && attachedImages.length === 0 && attachedDocuments.length === 0 ? s.sendIconDisabled : s.sendIcon}
+                onClick={() => { if (input.trim() || attachedImages.length > 0 || attachedDocuments.length > 0) handleSend(); }}
                 viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
               >
                 <line x1="22" y1="2" x2="11" y2="13" />
@@ -3467,24 +3499,13 @@ export function ChatPage() {
           />
         )}
 
-        {showAttachModal && maxImages > 0 && (
+        {showAttachModal && (
           <AttachModal
             key="attach-modal"
             onClose={() => setShowAttachModal(false)}
             onAttach={handleAttachFromModal}
-            currentCount={attachedImages.length}
-            maxCount={maxImages}
-          />
-        )}
-
-        {showDocumentModal && (
-          <DocumentAttachModal
-            key="document-modal"
-            onClose={() => setShowDocumentModal(false)}
-            onAttach={(docs) => {
-              setAttachedDocuments((prev) => [...prev, ...docs]);
-              setShowDocumentModal(false);
-            }}
+            currentImageCount={attachedImages.length}
+            maxImageCount={maxImages}
           />
         )}
 

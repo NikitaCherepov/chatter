@@ -2,7 +2,8 @@ import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import s from './AttachModal.module.scss';
 
-const ALLOWED_FORMATS: string[] = (() => {
+/* ── Image config ── */
+const ALLOWED_IMAGE_FORMATS: string[] = (() => {
   const raw = import.meta.env.VITE_ALLOWED_IMAGE_FORMATS || '';
   if (!raw.trim()) {
     return ['image/png', 'image/jpeg', 'image/webp'];
@@ -21,24 +22,46 @@ const MIME_TO_EXT: Record<string, string> = {
   'image/tiff': 'TIFF',
 };
 
-const FORMAT_LABELS: string = ALLOWED_FORMATS
+const IMAGE_FORMAT_LABELS: string = ALLOWED_IMAGE_FORMATS
   .map((mime) => MIME_TO_EXT[mime] || mime.split('/')[1]?.toUpperCase() || mime)
   .join(', ');
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20 MB
 
-type ImageItem = {
+/* ── Document config ── */
+const ALLOWED_DOC_EXTENSIONS = [
+  'txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'log', 'xml',
+  'yaml', 'yml', 'ini', 'toml', 'env', 'conf', 'cfg',
+  'py', 'js', 'mjs', 'ts', 'tsx', 'jsx', 'go', 'rs', 'java',
+  'c', 'cpp', 'cc', 'h', 'hpp', 'cs', 'rb', 'php', 'pl', 'lua',
+  'sh', 'bash', 'zsh', 'fish', 'bat', 'ps1',
+  'sql', 'graphql', 'gql',
+  'html', 'htm', 'css', 'scss', 'sass', 'less',
+  'rtf', 'docx', 'pdf',
+];
+
+const MAX_DOC_SIZE = 5 * 1024 * 1024; // 5 MB
+
+/* ── Types ── */
+export type ImageItem = {
   file: File;
   preview: string;
   base64: string;
   mime_type: string;
 };
 
+export type DocumentItem = {
+  file: File;
+  base64: string;
+  filename: string;
+  size_bytes: number;
+};
+
 type Props = {
   onClose: () => void;
-  onAttach: (images: ImageItem[]) => void;
-  currentCount: number;
-  maxCount: number;
+  onAttach: (items: { images: ImageItem[]; documents: DocumentItem[] }) => void;
+  currentImageCount: number;
+  maxImageCount: number;
 };
 
 const overlayVariants = {
@@ -53,48 +76,89 @@ const modalVariants = {
   exit: { opacity: 0, y: 16, transition: { duration: 0.15 } },
 };
 
-export function AttachModal({ onClose, onAttach, currentCount, maxCount }: Props) {
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getExt(name: string): string {
+  const dot = name.lastIndexOf('.');
+  if (dot < 0 || dot === name.length - 1) return '';
+  return name.slice(dot + 1).toLowerCase();
+}
+
+export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCount }: Props) {
   const [images, setImages] = useState<ImageItem[]>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const remaining = maxCount - currentCount;
+  const remainingImages = maxImageCount - currentImageCount;
+  const totalCount = images.length + documents.length;
 
   const processFiles = async (files: FileList | File[]) => {
     setError('');
-    const valid: ImageItem[] = [];
+    const validImages: ImageItem[] = [];
+    const validDocs: DocumentItem[] = [];
     const fileArr = Array.from(files);
 
     for (const file of fileArr) {
-      if (!ALLOWED_FORMATS.includes(file.type)) {
-        setError(`Неподдерживаемый формат: ${file.name}`);
+      // Try image first
+      if (ALLOWED_IMAGE_FORMATS.includes(file.type)) {
+        if (file.size > MAX_IMAGE_SIZE) {
+          setError(`Файл слишком большой: ${file.name} (макс. 20 МБ)`);
+          continue;
+        }
+        if (images.length + validImages.length >= remainingImages) {
+          setError(`Максимум ${maxImageCount} изображений для вашего плана`);
+          break;
+        }
+        try {
+          const base64 = await fileToBase64(file);
+          validImages.push({
+            file,
+            preview: URL.createObjectURL(file),
+            base64: base64.split(',')[1] || base64,
+            mime_type: file.type,
+          });
+        } catch {
+          setError(`Не удалось прочитать: ${file.name}`);
+        }
         continue;
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        setError(`Файл слишком большой: ${file.name} (макс. 20 МБ)`);
-        continue;
-      }
-      if (images.length + valid.length >= remaining) {
-        setError(`Максимум ${maxCount} изображений для вашего плана`);
-        break;
       }
 
-      try {
-        const base64 = await fileToBase64(file);
-        valid.push({
-          file,
-          preview: URL.createObjectURL(file),
-          base64: base64.split(',')[1] || base64,
-          mime_type: file.type,
-        });
-      } catch {
-        setError(`Не удалось прочитать: ${file.name}`);
+      // Try document
+      const ext = getExt(file.name);
+      if (ALLOWED_DOC_EXTENSIONS.includes(ext)) {
+        if (file.size > MAX_DOC_SIZE) {
+          setError(`Файл слишком большой: ${file.name} (макс. 5 МБ)`);
+          continue;
+        }
+        try {
+          const base64 = await fileToBase64(file);
+          validDocs.push({
+            file,
+            base64: base64.split(',')[1] || base64,
+            filename: file.name,
+            size_bytes: file.size,
+          });
+        } catch {
+          setError(`Не удалось прочитать: ${file.name}`);
+        }
+        continue;
       }
+
+      // Neither image nor document
+      setError(`Неподдерживаемый формат: ${file.name}`);
     }
 
-    if (valid.length > 0) {
-      setImages((prev) => [...prev, ...valid]);
+    if (validImages.length > 0) {
+      setImages((prev) => [...prev, ...validImages]);
+    }
+    if (validDocs.length > 0) {
+      setDocuments((prev) => [...prev, ...validDocs]);
     }
   };
 
@@ -128,7 +192,7 @@ export function AttachModal({ onClose, onAttach, currentCount, maxCount }: Props
     }
   };
 
-  const handleRemove = (index: number) => {
+  const handleRemoveImage = (index: number) => {
     setImages((prev) => {
       const removed = prev[index];
       if (removed) URL.revokeObjectURL(removed.preview);
@@ -137,11 +201,21 @@ export function AttachModal({ onClose, onAttach, currentCount, maxCount }: Props
     setError('');
   };
 
+  const handleRemoveDoc = (index: number) => {
+    setDocuments((prev) => prev.filter((_, i) => i !== index));
+    setError('');
+  };
+
   const handleAttach = () => {
-    if (images.length > 0) {
-      onAttach(images);
+    if (totalCount > 0) {
+      onAttach({ images, documents });
     }
   };
+
+  const acceptAttr = [
+    ...ALLOWED_IMAGE_FORMATS,
+    ...ALLOWED_DOC_EXTENSIONS.map((e) => `.${e}`),
+  ].join(',');
 
   return (
     <motion.div
@@ -167,7 +241,7 @@ export function AttachModal({ onClose, onAttach, currentCount, maxCount }: Props
             </svg>
           </button>
 
-          <h2 className={s.title}>Прикрепить изображения</h2>
+          <h2 className={s.title}>Прикрепить файлы</h2>
 
           <div
             className={s.dropZone}
@@ -184,14 +258,17 @@ export function AttachModal({ onClose, onAttach, currentCount, maxCount }: Props
             </div>
             <span className={s.dropText}>Нажмите для выбора или перетащите файлы</span>
             <span className={s.dropHint}>
-              {FORMAT_LABELS} &bull; макс. 20 МБ на файл
+              {IMAGE_FORMAT_LABELS} — макс. 20 МБ
+            </span>
+            <span className={s.dropHint}>
+              txt, md, json, pdf, docx, код… — макс. 5 МБ
             </span>
           </div>
 
           <input
             ref={fileInputRef}
             type="file"
-            accept={ALLOWED_FORMATS.join(',')}
+            accept={acceptAttr}
             multiple
             style={{ display: 'none' }}
             onChange={handleFileChange}
@@ -199,12 +276,36 @@ export function AttachModal({ onClose, onAttach, currentCount, maxCount }: Props
 
           {error && <p className={s.errorText}>{error}</p>}
 
+          {/* Image previews */}
           {images.length > 0 && (
             <div className={s.previews}>
               {images.map((img, i) => (
-                <div key={i} className={s.previewItem}>
+                <div key={`img-${i}`} className={s.previewItem}>
                   <img className={s.previewImg} src={img.preview} alt="" />
-                  <button className={s.previewRemove} onClick={() => handleRemove(i)}>
+                  <button className={s.previewRemove} onClick={() => handleRemoveImage(i)}>
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Document list */}
+          {documents.length > 0 && (
+            <div className={s.docsList}>
+              {documents.map((doc, i) => (
+                <div key={`doc-${i}`} className={s.docItem}>
+                  <div className={s.docIcon}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                  </div>
+                  <div className={s.docInfo}>
+                    <span className={s.docName}>{doc.filename}</span>
+                    <span className={s.docSize}>{formatSize(doc.size_bytes)}</span>
+                  </div>
+                  <button className={s.docRemove} onClick={() => handleRemoveDoc(i)} title="Удалить">
                     &times;
                   </button>
                 </div>
@@ -214,8 +315,8 @@ export function AttachModal({ onClose, onAttach, currentCount, maxCount }: Props
 
           <div className={s.footer}>
             <button className={s.btnCancel} onClick={onClose}>Отмена</button>
-            <button className={s.btnAttach} disabled={images.length === 0} onClick={handleAttach}>
-              Прикрепить ({images.length})
+            <button className={s.btnAttach} disabled={totalCount === 0} onClick={handleAttach}>
+              Прикрепить ({totalCount})
             </button>
           </div>
         </motion.div>
@@ -231,5 +332,3 @@ function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
-export type { ImageItem };

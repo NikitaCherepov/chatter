@@ -226,7 +226,7 @@ export const deleteMessageAttachment = (
   chatId: number,
   messageId: number,
   filename: string
-): { ok: boolean } => {
+): { ok: boolean; token_count?: number } => {
   const row = db.prepare(
     'SELECT role, content, attachments FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
   ).get(messageId, userId, chatId) as { role: ChatRole; content: string; attachments: string | null } | undefined;
@@ -271,7 +271,7 @@ export const deleteMessageAttachment = (
     ).run(newJson, messageId, userId, chatId);
   }
 
-  return { ok: true };
+  return { ok: true, token_count: newTokenCount };
 };
 
 export const getChatMessages = (userId: number, chatId: number, limit = 20, offset = 0): MessageDto[] => {

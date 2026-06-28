@@ -1067,7 +1067,7 @@ export async function getChatAttachments(chatId: number): Promise<{ attachments:
   return apiFetch(`/api/v1/chats/${chatId}/attachments`);
 }
 
-export async function deleteAttachment(chatId: number, messageId: number, filename: string): Promise<{ ok: boolean }> {
+export async function deleteAttachment(chatId: number, messageId: number, filename: string): Promise<{ ok: boolean; token_count?: number }> {
   return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}/attachments/${encodeURIComponent(filename)}`, {
     method: 'DELETE',
   });
