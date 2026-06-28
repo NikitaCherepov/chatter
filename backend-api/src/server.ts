@@ -567,7 +567,7 @@ const toAuthUserDto = (user: UserRecord) => {
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
     core_memory: effectiveUser.core_memory ?? null,
     ui_settings: parseUiSettings(effectiveUser),
-    subagent_mode: effectiveUser.subagent_mode === 'manual' ? 'manual' : 'auto',
+    subagent_model: effectiveUser.subagent_mode && effectiveUser.subagent_mode !== 'auto' ? effectiveUser.subagent_mode : null,
   };
 };
 
@@ -2441,24 +2441,28 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
   return res.json({ ok: true, preferred_model: modelId });
 });
 
-// ─── Subagent model mode ────────────────────────────────────────────────────
+// ─── Subagent preferred model ───────────────────────────────────────────────
 
-const VALID_SUBAGENT_MODES = ['auto', 'manual'] as const;
-
-app.get('/api/v1/user/subagent-mode', (req: AuthedRequest, res) => {
+app.get('/api/v1/user/subagent-model', (req: AuthedRequest, res) => {
   const userId = effectiveUserId(req);
   const user = getUserById(userId);
-  return res.json({ subagent_mode: user?.subagent_mode === 'manual' ? 'manual' : 'auto' });
+  return res.json({ subagent_model: user?.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null });
 });
 
-app.put('/api/v1/user/subagent-mode', (req: AuthedRequest, res: any) => {
+app.put('/api/v1/user/subagent-model', (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
-  const mode = req.body?.subagent_mode;
-  if (typeof mode !== 'string' || !VALID_SUBAGENT_MODES.includes(mode as any)) {
-    return res.status(400).json({ error: 'bad_subagent_mode' });
+  const modelId = req.body?.model_id ?? null;
+  if (modelId !== null && typeof modelId !== 'string') {
+    return res.status(400).json({ error: 'bad_model_id' });
   }
-  db.prepare('UPDATE users SET subagent_mode = ? WHERE id = ?').run(mode, userId);
-  return res.json({ ok: true, subagent_mode: mode });
+  if (modelId !== null) {
+    const catalog = getModelsCatalog();
+    if (!catalog.some(m => m.id === modelId)) {
+      return res.status(400).json({ error: 'model_not_found' });
+    }
+  }
+  db.prepare('UPDATE users SET subagent_mode = ? WHERE id = ?').run(modelId || 'auto', userId);
+  return res.json({ ok: true, subagent_model: modelId });
 });
 
 // ─── Reasoning level ────────────────────────────────────────────────────────

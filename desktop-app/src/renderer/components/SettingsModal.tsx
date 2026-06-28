@@ -141,8 +141,8 @@ export function SettingsModal({ onClose }: Props) {
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
-  const [subagentMode, setSubagentModeState] = useState<api.SubagentMode>('auto');
-  const [subagentModeSaving, setSubagentModeSaving] = useState(false);
+  const [subagentModel, setSubagentModelState] = useState<string | null>(null);
+  const [subagentModelSaving, setSubagentModelSaving] = useState(false);
   const [contextTokenLimit, setContextTokenLimitState] = useState<api.ContextTokenLimit | null>(null);
   const [contextTokenLimitSaving, setContextTokenLimitSaving] = useState(false);
   const [attachmentTokenLimit, setAttachmentTokenLimitState] = useState<api.AttachmentTokenLimit | null>(null);
@@ -203,8 +203,11 @@ export function SettingsModal({ onClose }: Props) {
       api.getUiSettings()
         .then((res) => setUiSettingsState(res.settings))
         .catch(() => {});
-      api.getSubagentMode()
-        .then((res) => setSubagentModeState(res.subagent_mode))
+      api.getModels()
+        .then((res) => setModelsCatalog(res.models))
+        .catch(() => {});
+      api.getSubagentModel()
+        .then((res) => setSubagentModelState(res.subagent_model))
         .catch(() => {});
       api.getContextTokenLimit()
         .then((res) => setContextTokenLimitState(res))
@@ -254,22 +257,22 @@ export function SettingsModal({ onClose }: Props) {
     }
   };
 
-  const handleSubagentModeChange = async (value: string) => {
-    const mode = value === 'manual' ? 'manual' : 'auto';
-    const prev = subagentMode;
-    setSubagentModeState(mode);
-    setSubagentModeSaving(true);
+  const handleSubagentModelChange = async (value: string) => {
+    const modelId = value || null;
+    const prev = subagentModel;
+    setSubagentModelState(modelId);
+    setSubagentModelSaving(true);
     try {
-      const res = await api.setSubagentMode(mode);
-      setSubagentModeState(res.subagent_mode);
+      const res = await api.setSubagentModel(modelId);
+      setSubagentModelState(res.subagent_model);
       if (user) {
-        setUser({ ...user, subagent_mode: res.subagent_mode });
+        setUser({ ...user, subagent_model: res.subagent_model });
       }
     } catch {
-      setSubagentModeState(prev);
-      toast.error('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ СЂРµР¶РёРј СЃСѓР±Р°РіРµРЅС‚РѕРІ');
+      setSubagentModelState(prev);
+      toast.error('Не удалось сохранить модель субагентов');
     } finally {
-      setSubagentModeSaving(false);
+      setSubagentModelSaving(false);
     }
   };
 
@@ -1108,21 +1111,25 @@ export function SettingsModal({ onClose }: Props) {
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>РњРѕРґРµР»СЊ СЃСѓР±Р°РіРµРЅС‚РѕРІ</label>
+                <label className={s.fieldLabel}>Модель субагентов</label>
                 <div className={s.voiceSelect}>
                   <Select
                     options={[
-                      { value: 'auto', label: 'РђРІС‚Рѕ', hint: 'РќР°СЃР»РµРґСѓРµС‚ Р°РІС‚Рѕ-СЂРѕСѓС‚РёРЅРі РѕСЃРЅРѕРІРЅРѕРіРѕ Р°РіРµРЅС‚Р°' },
-                      { value: 'manual', label: 'Р СѓС‡РЅРѕР№ РІС‹Р±РѕСЂ', hint: 'РСЃРїРѕР»СЊР·СѓРµС‚ РјРѕРґРµР»СЊ РёР· РІРµСЂС…РЅРµРіРѕ СЃРµР»РµРєС‚РѕСЂР°' },
+                      { value: '', label: 'Авто', hint: 'Автоматический выбор' },
+                      ...modelsCatalog.map(m => ({
+                        value: m.id,
+                        label: m.name,
+                        hint: m.description || undefined,
+                      })),
                     ]}
-                    value={subagentMode}
-                    onChange={handleSubagentModeChange}
-                    placeholder="РђРІС‚Рѕ"
-                    disabled={subagentModeSaving}
+                    value={subagentModel || ''}
+                    onChange={handleSubagentModelChange}
+                    placeholder="Авто"
+                    disabled={subagentModelSaving}
                   />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  Р РµР¶РёРј РІС‹Р±РёСЂР°РµС‚СЃСЏ Р·РґРµСЃСЊ, Р° РЅРµ РјРѕРґРµР»СЊСЋ РІ tool call.
+                  Отдельный выбор модели для субагентов. В tool call модель режим не выбирает.
                 </div>
               </div>
 

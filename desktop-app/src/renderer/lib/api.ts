@@ -14,8 +14,6 @@ export type UiSettings = {
   dice_roll_enabled?: boolean;
 };
 
-export type SubagentMode = 'auto' | 'manual';
-
 type User = {
   id: number;
   name: string | null;
@@ -27,7 +25,7 @@ type User = {
   custom_prompt_content: string | null;
   core_memory: string | null;
   ui_settings?: UiSettings;
-  subagent_mode?: SubagentMode;
+  subagent_model?: string | null;
 };
 
 // ---------- Token storage ----------
@@ -942,15 +940,15 @@ export async function setPreferredModel(modelId: string | null): Promise<{ ok: b
   });
 }
 
-export async function getSubagentMode(): Promise<{ subagent_mode: SubagentMode }> {
-  return apiFetch('/api/v1/user/subagent-mode');
+export async function getSubagentModel(): Promise<{ subagent_model: string | null }> {
+  return apiFetch('/api/v1/user/subagent-model');
 }
 
-export async function setSubagentMode(mode: SubagentMode): Promise<{ ok: boolean; subagent_mode: SubagentMode }> {
-  return apiFetch('/api/v1/user/subagent-mode', {
+export async function setSubagentModel(modelId: string | null): Promise<{ ok: boolean; subagent_model: string | null }> {
+  return apiFetch('/api/v1/user/subagent-model', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subagent_mode: mode }),
+    body: JSON.stringify({ model_id: modelId }),
   });
 }
 

@@ -4784,7 +4784,12 @@ export const sendMessageThroughAi = async (
   if (preferredModelId && !manualModel) {
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
-  const subagentMode: 'auto' | 'manual' = user.subagent_mode === 'manual' ? 'manual' : 'auto';
+  const subagentModelId = user.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null;
+  const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId) : undefined;
+  if (subagentModelId && !subagentManualModel) {
+    console.warn(`[ai] subagent_model "${subagentModelId}" not found in MODELS_MANUAL, falling back to auto`);
+  }
+  const subagentMode: 'auto' | 'manual' = subagentManualModel ? 'manual' : 'auto';
 
   // Резолв reasoning level: из options (явный запрос) или из профиля юзера
   const reasoningLevel: ReasoningLevel | null = options?.reasoningLevel ?? (user as any).reasoning_level ?? null;
@@ -5391,7 +5396,7 @@ for (const toolCall of message.tool_calls) {
         options?.activeMacros,
         abortController.signal,
         {
-          manualModel: subagentMode === 'manual' ? manualModel : undefined,
+          manualModel: subagentManualModel,
           subagentMode,
           onToolStatus: options?.onToolStatus,
           onDesktopAction: options?.onDesktopAction,
