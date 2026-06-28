@@ -136,6 +136,44 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
 
+  // Parse optional documents array (attachments) — mirrors /api/v1/chat/send
+  const documentsRawInternal: Array<any> = Array.isArray(req.body?.documents) ? req.body.documents : [];
+  let savedUserAttachmentsInternal: any[] | null = null;
+  if (documentsRawInternal.length > 0) {
+    try {
+      const { saveUserDocument } = await import('./services/attachment-storage.js');
+      const saved: any[] = [];
+      for (const doc of documentsRawInternal) {
+        const base64 = `${doc?.base64 || ''}`.trim();
+        const filename = `${doc?.filename || 'document'}`.trim();
+        if (!base64) continue;
+        const buf = Buffer.from(base64, 'base64');
+        if (!buf.length) continue;
+        if (buf.length > MAX_ATTACHMENT_BYTES) {
+          return res.status(413).json({ error: 'document_too_large', filename });
+        }
+        const ext = filename.split('.').pop()?.toLowerCase() || '';
+        if (!SUPPORTED_EXTENSIONS.has(ext)) {
+          return res.status(400).json({ error: 'unsupported_document_format', filename, ext });
+        }
+        const extractedText = await parseDocument(buf, filename);
+        const stored = await saveUserDocument(buf, filename);
+        saved.push({
+          name: filename,
+          size_bytes: buf.length,
+          mime_type: guessMimeType(filename),
+          extracted_text: extractedText,
+          url: stored.url,
+          filename: stored.filename,
+        });
+      }
+      savedUserAttachmentsInternal = saved.length > 0 ? saved : null;
+    } catch (err: any) {
+      console.error('[internal/ai/send] failed to save documents:', err);
+      return res.status(400).json({ error: 'document_parse_failed', detail: err?.message || String(err) });
+    }
+  }
+
   try {
     const enabledMacros = getEnabledMacros(userId);
     const tgUser = getUserById(Math.floor(userId));
@@ -144,6 +182,7 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
       activeMacros: enabledMacros,
       featureFlags: tgUser ? parseFeatureFlags(tgUser) : undefined,
       diceRollMode: tgUser ? Boolean(parseUiSettings(tgUser).dice_roll_enabled) : false,
+      ...(savedUserAttachmentsInternal ? { userAttachments: savedUserAttachmentsInternal } : {}),
     });
 
     // If AI triggered a desktop_action and desktop is online — push via WS
@@ -191,6 +230,44 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
 
+  // Parse optional documents array (attachments) — mirrors /api/v1/chat/send
+  const documentsRawStream: Array<any> = Array.isArray(req.body?.documents) ? req.body.documents : [];
+  let savedUserAttachmentsStream: any[] | null = null;
+  if (documentsRawStream.length > 0) {
+    try {
+      const { saveUserDocument } = await import('./services/attachment-storage.js');
+      const saved: any[] = [];
+      for (const doc of documentsRawStream) {
+        const base64 = `${doc?.base64 || ''}`.trim();
+        const filename = `${doc?.filename || 'document'}`.trim();
+        if (!base64) continue;
+        const buf = Buffer.from(base64, 'base64');
+        if (!buf.length) continue;
+        if (buf.length > MAX_ATTACHMENT_BYTES) {
+          return res.status(413).json({ error: 'document_too_large', filename });
+        }
+        const ext = filename.split('.').pop()?.toLowerCase() || '';
+        if (!SUPPORTED_EXTENSIONS.has(ext)) {
+          return res.status(400).json({ error: 'unsupported_document_format', filename, ext });
+        }
+        const extractedText = await parseDocument(buf, filename);
+        const stored = await saveUserDocument(buf, filename);
+        saved.push({
+          name: filename,
+          size_bytes: buf.length,
+          mime_type: guessMimeType(filename),
+          extracted_text: extractedText,
+          url: stored.url,
+          filename: stored.filename,
+        });
+      }
+      savedUserAttachmentsStream = saved.length > 0 ? saved : null;
+    } catch (err: any) {
+      console.error('[internal/ai/stream] failed to save documents:', err);
+      return res.status(400).json({ error: 'document_parse_failed', detail: err?.message || String(err) });
+    }
+  }
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -205,6 +282,7 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       activeMacros: enabledMacros,
       featureFlags: tgUser ? parseFeatureFlags(tgUser) : undefined,
       diceRollMode: tgUser ? Boolean(parseUiSettings(tgUser).dice_roll_enabled) : false,
+      ...(savedUserAttachmentsStream ? { userAttachments: savedUserAttachmentsStream } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
       },

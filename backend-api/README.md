@@ -482,8 +482,9 @@ services/subagents/
 
 - Все эндпоинты ниже требуют `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
 - AI:
-  - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options? }` -> `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
-  - `POST /internal/ai/stream` -> SSE-стриминг для Telegram: `{ user_id, text, chat_id?, options? }`
+  - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options?, documents? }` -> `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
+  - `POST /internal/ai/stream` -> SSE-стриминг для Telegram: `{ user_id, text, chat_id?, options?, documents? }`
+    - `documents[]` — опциональный массив `{ filename, base64 }`, парсится и сохраняется идентично `/api/v1/chat/send` (см. [Документы (attachments)](#документы-attachments)).
     - События: `intermediate`, `tool_status`, `display_state`, `desktop_action`, `done`, `error` (см. [SSE-стриминг](#sse-striing-i-dual-delivery-podtverzhdeniy))
     - Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`
   - `POST /internal/ai/lite` -> `{ text }` -> `{ reply_text }` — LITE AI для проверки безопасности команд
@@ -630,7 +631,7 @@ services/subagents/
 
 **Поток данных:**
 - **Desktop:** drag-and-drop/выбор файлов → base64 → POST `/api/v1/chat/send` (`documents[]`) или WS `chat_send` → сервер парсит, сохраняет файл, сохраняет extracted_text → инджектит в AI.
-- **Telegram:** не поддерживается (только desktop).
+- **Telegram:** файлы скачиваются TG-ботом → base64 → POST `/internal/ai/send` или `/internal/ai/stream` с тем же полем `documents[]` → та же обработка. Поддержка: одиночный файл (с/без caption), альбомы (`media_group_id`).
 - **Удаление:** ToolsPanel → DELETE → файл с диска + JSON в БД → пересчёт токенов → инъекция прекращается.
 
 **API:**

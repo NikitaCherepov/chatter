@@ -1058,6 +1058,7 @@ const runBackendAiSend = async (
         userTelegramChatId?: number | null;
         userTelegramMessageId?: number | null;
         assistantTelegramChatId?: number | null;
+        documents?: Array<{ filename: string; base64: string }>;
     }
 ) => {
     if (!BACKEND_INTERNAL_TOKEN) {
@@ -1078,13 +1079,15 @@ const runBackendAiSend = async (
                 userTelegramChatId: Number.isFinite(Number(options?.userTelegramChatId)) ? Math.floor(Number(options?.userTelegramChatId)) : null,
                 userTelegramMessageId: Number.isFinite(Number(options?.userTelegramMessageId)) ? Math.floor(Number(options?.userTelegramMessageId)) : null,
                 assistantTelegramChatId: Number.isFinite(Number(options?.assistantTelegramChatId)) ? Math.floor(Number(options?.assistantTelegramChatId)) : null
-            }
+            },
+            ...(Array.isArray(options?.documents) && options.documents.length > 0 ? { documents: options.documents } : {})
         },
         {
             headers: {
                 Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
             },
-            timeout: BACKEND_TIMEOUT_AI_MS
+            timeout: BACKEND_TIMEOUT_AI_MS,
+            maxBodyLength: Infinity
         }
     );
 
@@ -1120,6 +1123,7 @@ const runBackendAiStream = async (
         userTelegramChatId?: number | null;
         userTelegramMessageId?: number | null;
         assistantTelegramChatId?: number | null;
+        documents?: Array<{ filename: string; base64: string }>;
     },
     callbacks?: AiStreamCallbacks
 ): Promise<{
@@ -1153,14 +1157,16 @@ const runBackendAiStream = async (
                 userTelegramChatId: Number.isFinite(Number(options?.userTelegramChatId)) ? Math.floor(Number(options?.userTelegramChatId)) : null,
                 userTelegramMessageId: Number.isFinite(Number(options?.userTelegramMessageId)) ? Math.floor(Number(options?.userTelegramMessageId)) : null,
                 assistantTelegramChatId: Number.isFinite(Number(options?.assistantTelegramChatId)) ? Math.floor(Number(options?.assistantTelegramChatId)) : null
-            }
+            },
+            ...(Array.isArray(options?.documents) && options.documents.length > 0 ? { documents: options.documents } : {})
         },
         {
             headers: {
                 Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}`
             },
             responseType: 'stream',
-            timeout: BACKEND_TIMEOUT_AI_MS
+            timeout: BACKEND_TIMEOUT_AI_MS,
+            maxBodyLength: Infinity
         }
     );
 
@@ -1857,6 +1863,122 @@ const detectImageMimeType = (url: string, fallback: string | null = null) => {
 };
 
 const photoAlbumBuffer = new Map<string, { images: Array<{ buffer: Buffer; mimeType: string }>; caption: string; timer: ReturnType<typeof setTimeout>; ctx: any }>();
+
+// ── Documents (attachments) support for Telegram ──────────────────────────
+// Same whitelist as desktop / backend SUPPORTED_EXTENSIONS.
+const SUPPORTED_DOCUMENT_EXTENSIONS = new Set([
+    'txt', 'md', 'markdown', 'json', 'csv', 'log', 'xml', 'yaml', 'yml', 'ini', 'toml',
+    'py', 'js', 'ts', 'tsx', 'jsx', 'go', 'rs', 'java', 'c', 'cpp', 'cs', 'php', 'sh',
+    'sql', 'html', 'css', 'docx', 'pdf', 'rtf'
+]);
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024; // 5 MB — identical to backend MAX_RAW_FILE_SIZE
+
+type PendingDocument = { filename: string; base64: string; sizeBytes: number };
+
+// Album (media_group_id) buffer — same pattern as photoAlbumBuffer.
+const documentAlbumBuffer = new Map<string, { items: PendingDocument[]; caption: string; timer: ReturnType<typeof setTimeout>; ctx: any }>();
+
+const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const downloadTelegramDocument = async (ctx: any, doc: any): Promise<{ buffer: Buffer; filename: string } | null> => {
+    const fileId = doc?.file_id;
+    const fileName = (typeof doc?.file_name === 'string' && doc.file_name.trim()) ? doc.file_name.trim() : 'document';
+    if (!fileId) return null;
+    try {
+        const fileLink = await ctx.telegram.getFileLink(fileId);
+        const response = await fetch(fileLink.href);
+        if (!response.ok) return null;
+        const buffer = await response.arrayBuffer();
+        if (!buffer.byteLength) return null;
+        return { buffer: Buffer.from(buffer), filename: fileName };
+    } catch {
+        return null;
+    }
+};
+
+const processDocumentAlbum = async (albumKey: string) => {
+    const album = documentAlbumBuffer.get(albumKey);
+    if (!album) return;
+    documentAlbumBuffer.delete(albumKey);
+
+    const { items, caption, ctx } = album;
+    if (!items.length) return;
+
+    processUserTextThroughAi(ctx, caption, { documents: items }).catch((err) => {
+        console.error('Ошибка в processUserTextThroughAi (document album):', err);
+    });
+};
+
+const processUserDocumentThroughAi = async (ctx: any) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const doc = ctx.message?.document;
+    if (!doc) return;
+
+    const caption = typeof ctx.message?.caption === 'string' ? ctx.message.caption.trim() : '';
+    const mediaGroupId = ctx.message?.media_group_id;
+
+    // Validate extension locally (mirrors backend SUPPORTED_EXTENSIONS).
+    const filename = (typeof doc.file_name === 'string' && doc.file_name.trim()) ? doc.file_name.trim() : 'document';
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    if (!SUPPORTED_DOCUMENT_EXTENSIONS.has(ext)) {
+        await ctx.reply(
+            `⚠️ Формат «.${ext || '?'}» не поддерживается.\n` +
+            `Разрешены: txt, md, json, csv, log, xml, yaml, ini, toml, код (py, js, ts, ...), docx, pdf, rtf.`
+        );
+        return;
+    }
+
+    // Check file size from Telegram metadata (avoid downloading huge files).
+    if (typeof doc.file_size === 'number' && doc.file_size > MAX_DOCUMENT_BYTES) {
+        await ctx.reply(`⚠️ Файл слишком большой (${formatBytes(doc.file_size)}). Максимум — 5 МБ.`);
+        return;
+    }
+
+    const downloaded = await downloadTelegramDocument(ctx, doc);
+    if (!downloaded) {
+        await ctx.reply('⚠️ Не удалось скачать файл. Попробуй ещё раз.');
+        return;
+    }
+    if (downloaded.buffer.length > MAX_DOCUMENT_BYTES) {
+        await ctx.reply(`⚠️ Файл слишком большой (${formatBytes(downloaded.buffer.length)}). Максимум — 5 МБ.`);
+        return;
+    }
+
+    const item: PendingDocument = {
+        filename: downloaded.filename,
+        base64: downloaded.buffer.toString('base64'),
+        sizeBytes: downloaded.buffer.length,
+    };
+
+    // Album (media_group_id) — collect all files of the group, then send as one AI request.
+    if (mediaGroupId) {
+        const albumKey = `${userId}:${mediaGroupId}`;
+        const existing = documentAlbumBuffer.get(albumKey);
+        if (existing) {
+            existing.items.push(item);
+            if (caption) existing.caption = caption;
+        } else {
+            documentAlbumBuffer.set(albumKey, {
+                items: [item],
+                caption,
+                timer: setTimeout(() => processDocumentAlbum(albumKey), 1500),
+                ctx
+            });
+        }
+        return;
+    }
+
+    // Single document → straight to AI (caption becomes the text, or placeholder if empty).
+    processUserTextThroughAi(ctx, caption, { documents: [item] }).catch((err) => {
+        console.error('Ошибка в processUserTextThroughAi (document):', err);
+    });
+};
 
 const downloadTelegramPhoto = async (ctx: any, photos: any[]): Promise<{ buffer: Buffer; mimeType: string } | null> => {
     const biggestPhoto = photos[photos.length - 1];
@@ -5502,13 +5624,16 @@ const processUserTextThroughAi = async (
         ignoreDailyLimit?: boolean;
         countAsUserMessage?: boolean;
         skipHistory?: boolean;
+        documents?: Array<{ filename: string; base64: string }>;
     }
 ) => {
     const userId = ctx.from?.id;
     if (!userId) return null;
 
     let userText = rawText.trim();
-    if (!userText) {
+    const hasDocuments = Array.isArray(options?.documents) && options!.documents!.length > 0;
+    // Allow empty text when documents are attached (placeholder for AI).
+    if (!userText && !hasDocuments) {
         if (!options?.suppressFinalReply) {
             await ctx.reply('Пустое сообщение. Попробуй ещё раз.');
         }
@@ -5518,11 +5643,15 @@ const processUserTextThroughAi = async (
     if (forceProRoute && !options?.forcePro) {
         userText = userText.replace(/^!{3,}/, '').trim();
     }
-    if (!userText) {
+    if (forceProRoute && !userText && !hasDocuments) {
         if (!options?.suppressFinalReply) {
             await ctx.reply('После !!! нужен текст запроса.');
         }
         return null;
+    }
+    // If no text but documents present — use a neutral placeholder so backend "empty_text" check passes.
+    if (!userText && hasDocuments) {
+        userText = 'Проанализируй прикреплённые документы.';
     }
     const userTextForHistory = options?.persistUserText?.trim() || userText;
 
@@ -5549,7 +5678,8 @@ const processUserTextThroughAi = async (
             skipHistory: options?.skipHistory,
             userTelegramChatId: userChatId,
             userTelegramMessageId: userMessageId,
-            assistantTelegramChatId: userChatId
+            assistantTelegramChatId: userChatId,
+            documents: options?.documents
         }, {
             onIntermediate: async (stepText) => {
                 if (options?.suppressFinalReply) return;
@@ -6219,6 +6349,11 @@ bot.on('text', async (ctx) => {
     processUserTextThroughAi(ctx, userText).catch(err => {
         console.error('Ошибка в processUserTextThroughAi:', err);
     });
+});
+
+// ── Document (file attachment) handler ──
+bot.on('document', async (ctx) => {
+    await processUserDocumentThroughAi(ctx);
 });
 
 bot.on('voice', async (ctx) => {
