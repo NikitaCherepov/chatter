@@ -35,6 +35,7 @@ export type UserRecord = {
   total_image_gen_count?: number;
   linked_tg_id?: number | null;
   preferred_model?: string | null;
+  subagent_mode?: 'auto' | 'manual' | string | null;
   feature_flags?: string | null;
   reasoning_level?: string | null;
   model_settings?: string | null;
@@ -89,6 +90,17 @@ export type MessageDto = {
   token_count?: number;
   reasoning_tokens?: number;
   attachments?: MessageAttachment[] | null;
+  /** Полные trace ad-hoc субагентов (если были). */
+  subagents?: Array<{
+    task: string;
+    system_prompt: string;
+    tools: string[];
+    tools_used: string[];
+    answer: string;
+    summary: string;
+    aborted?: boolean;
+    trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+  }> | null;
 };
 
 export type NoteDto = {
@@ -147,6 +159,17 @@ export type AiSendResult = {
   desktop_action?: DesktopActionPayload | null;
   aborted?: boolean;
   tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }>;
+  /** Полные trace ad-hoc субагентов (для UI-блока «Сабагенты»). */
+  subagents?: Array<{
+    task: string;
+    system_prompt: string;
+    tools: string[];
+    tools_used: string[];
+    answer: string;
+    summary: string;
+    aborted?: boolean;
+    trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+  }>;
   usage: UsageDto;
   /** Токены ответа ассистента (без reasoning). См. MessageTokensDto. */
   token_count?: number;

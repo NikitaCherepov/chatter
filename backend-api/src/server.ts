@@ -567,6 +567,7 @@ const toAuthUserDto = (user: UserRecord) => {
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
     core_memory: effectiveUser.core_memory ?? null,
     ui_settings: parseUiSettings(effectiveUser),
+    subagent_mode: effectiveUser.subagent_mode === 'manual' ? 'manual' : 'auto',
   };
 };
 
@@ -2440,6 +2441,26 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
   return res.json({ ok: true, preferred_model: modelId });
 });
 
+// ─── Subagent model mode ────────────────────────────────────────────────────
+
+const VALID_SUBAGENT_MODES = ['auto', 'manual'] as const;
+
+app.get('/api/v1/user/subagent-mode', (req: AuthedRequest, res) => {
+  const userId = effectiveUserId(req);
+  const user = getUserById(userId);
+  return res.json({ subagent_mode: user?.subagent_mode === 'manual' ? 'manual' : 'auto' });
+});
+
+app.put('/api/v1/user/subagent-mode', (req: AuthedRequest, res: any) => {
+  const userId = effectiveUserId(req);
+  const mode = req.body?.subagent_mode;
+  if (typeof mode !== 'string' || !VALID_SUBAGENT_MODES.includes(mode as any)) {
+    return res.status(400).json({ error: 'bad_subagent_mode' });
+  }
+  db.prepare('UPDATE users SET subagent_mode = ? WHERE id = ?').run(mode, userId);
+  return res.json({ ok: true, subagent_mode: mode });
+});
+
 // ─── Reasoning level ────────────────────────────────────────────────────────
 
 const VALID_REASONING_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
@@ -2552,7 +2573,7 @@ app.delete('/api/v1/user/model-settings/:modelId', (req: AuthedRequest, res) => 
 
 // ─── Feature flags (tool restrictions) ──────────────────────────────────────
 
-const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_subagents'] as const;
+const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_specialized_subagents', 'disable_adhoc_subagents'] as const;
 
 app.get('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);

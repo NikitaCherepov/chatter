@@ -62,6 +62,7 @@ type MessageItemProps = {
   isTtsPlaying: boolean;
   isReasoningOpen: boolean;
   isToolCallsOpen: boolean;
+  isSubagentsOpen: boolean;
   isRegenHintOpen: boolean;
   isEditing: boolean;
   editingText: string;
@@ -74,6 +75,7 @@ type MessageItemProps = {
   onDownloadImage: (src: string) => void;
   onToggleReasoning: (messageId: number) => void;
   onToggleToolCalls: (messageId: number) => void;
+  onToggleSubagents: (messageId: number) => void;
   onRegenerate: (messageId: number) => void;
   onOpenRegenHint: (messageId: number) => void;
   onCloseRegenHint: () => void;
@@ -92,6 +94,7 @@ const MessageItem = React.memo(function MessageItem({
   isTtsPlaying,
   isReasoningOpen,
   isToolCallsOpen,
+  isSubagentsOpen,
   isRegenHintOpen,
   isEditing,
   editingText,
@@ -104,6 +107,7 @@ const MessageItem = React.memo(function MessageItem({
   onDownloadImage,
   onToggleReasoning,
   onToggleToolCalls,
+  onToggleSubagents,
   onRegenerate,
   onOpenRegenHint,
   onCloseRegenHint,
@@ -118,9 +122,10 @@ const MessageItem = React.memo(function MessageItem({
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
   const hasToolCalls = msg.role === 'assistant' && Boolean(msg.tool_calls?.length);
+  const hasSubagents = msg.role === 'assistant' && Boolean(msg.subagents?.length);
 
   return (
-    <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
+    <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
       <div className={s.metaRow}>
         <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatMessageTime(msg.created_at)}{msg.archived ? ' \u00b7 архив' : ''}</span>
         <button
@@ -169,6 +174,21 @@ const MessageItem = React.memo(function MessageItem({
             title={isToolCallsOpen ? 'Скрыть инструменты' : 'Показать инструменты'}
           >
             <span>{msg.tool_calls!.length} {msg.tool_calls!.length === 1 ? 'инструмент' : msg.tool_calls!.length < 5 ? 'инструмента' : 'инструментов'}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+        {hasSubagents && (
+          <button
+            className={`${s.reasoningToggle} ${isSubagentsOpen ? s.reasoningToggleOpen : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSubagents(msg.id);
+            }}
+            title={isSubagentsOpen ? 'Скрыть сабагентов' : 'Показать сабагентов'}
+          >
+            <span>{msg.subagents!.length} {msg.subagents!.length === 1 ? 'сабагент' : msg.subagents!.length < 5 ? 'сабагента' : 'сабагентов'}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -351,6 +371,29 @@ const MessageItem = React.memo(function MessageItem({
               </div>
             </motion.div>
           )}
+          {hasSubagents && isSubagentsOpen && (
+            <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+              <div className={s.toolCallList}>
+                {msg.subagents!.map((sa, i) => (
+                  <div key={i} className={s.toolCallItem}>
+                    <div className={s.toolCallName}>🧠 Сабагент {i + 1}{sa.aborted ? ' · ⏹ прерван' : ''}</div>
+                    <div className={s.toolCallLabel}>Задача</div>
+                    <pre className={s.toolCallArgs}>{sa.task}</pre>
+                    <div className={s.toolCallLabel}>Системный промпт</div>
+                    <pre className={s.toolCallArgs}>{sa.system_prompt.slice(0, 500)}{sa.system_prompt.length > 500 ? '…' : ''}</pre>
+                    <div className={s.toolCallLabel}>Инструменты ({sa.tools.length})</div>
+                    <pre className={s.toolCallArgs}>{sa.tools.join(', ')}</pre>
+                    <div className={s.toolCallLabel}>Выполнено инструментов ({sa.trace.length})</div>
+                    {sa.trace.length > 0 && (
+                      <pre className={s.toolCallArgs}>{sa.trace.map(t => `  • ${t.tool}`).join('\n')}</pre>
+                    )}
+                    <div className={s.toolCallLabel}>Ответ</div>
+                    <pre className={s.toolCallArgs}>{sa.answer.slice(0, 1000)}{sa.answer.length > 1000 ? '…' : ''}</pre>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
         <button className={s.msgKebabBtn} onClick={(e) => onMsgKebabClick(e, msg.id)} title="Действия">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -451,6 +494,7 @@ export function ChatPage() {
   const [regenHintText, setRegenHintText] = useState('');
   const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
   const [openToolCallsId, setOpenToolCallsId] = useState<number | null>(null);
+  const [openSubagentsId, setOpenSubagentsId] = useState<number | null>(null);
   const [contextTokens, setContextTokens] = useState<api.ChatContextTokens | null>(null);
 
   // Subscribe to TTS state
@@ -948,14 +992,56 @@ export function ChatPage() {
           if (typeof res.dice_roll === 'number' && diceRolling) {
             finishDiceRoll(res.dice_roll);
           }
-          // Если генерация была остановлена пользователем
+          // Если генерация была остановлена пользователем — soft abort.
+          // Сохраняем всё что бот успел сделать как обычное сообщение (если message_id > 0).
           if (res.aborted) {
-            if (assistantMsgCreated) {
-              // Удаляем временный assistant message (если был промежуточный текст)
+            if (res.message_id > 0) {
+              // Сообщение сохранено в БД — финализируем его в UI
+              if (assistantMsgCreated) {
+                setMessages((prev) => prev.map(m => {
+                  if (m.id === tempAssistantId) {
+                    return {
+                      ...m,
+                      id: res.message_id,
+                      ...(res.reply_text ? { content: res.reply_text } : { content: '_⏹ Генерация остановлена_' }),
+                      reasoning_content: res.reasoning_content ?? null,
+                      tool_calls: res.tool_calls ?? null,
+                      subagents: res.subagents ?? null,
+                    };
+                  }
+                  if (res.user_message_id && m.id === tempUserMsg.id) {
+                    return { ...m, id: res.user_message_id };
+                  }
+                  return m;
+                }));
+              } else {
+                // Не было промежуточных — добавляем как новое
+                setMessages((prev) => {
+                  const updated = res.user_message_id
+                    ? prev.map(m => m.id === tempUserMsg.id ? { ...m, id: res.user_message_id! } : m)
+                    : prev;
+                  return [...updated, {
+                    id: res.message_id, role: 'assistant' as const,
+                    content: res.reply_text || '_⏹ Генерация остановлена_',
+                    created_at: Math.floor(Date.now() / 1000),
+                    reasoning_content: res.reasoning_content ?? null,
+                    tool_calls: res.tool_calls ?? null,
+                    subagents: res.subagents ?? null,
+                  }];
+                });
+              }
+              refreshContextTokens(res.chat_id);
+            } else if (assistantMsgCreated) {
+              // message_id === 0 — старое поведение, удаляем temp
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
             }
             setShowTyping(false);
             setSending(false);
+            if (res.display_state) applyAvatarState(res.display_state);
+            if (!activeChatId || res.chat_id !== activeChatId) {
+              setActiveChatId(res.chat_id);
+              loadChats();
+            }
             return;
           }
           if (res.model_fallback_notice) {
@@ -984,6 +1070,7 @@ export function ChatPage() {
                   reasoning_content: res.reasoning_content ?? null,
                   tool_calls: res.tool_calls ?? null,
                   ...(genImages ? { images: genImages } : {}),
+                  subagents: res.subagents ?? null,
                   ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
                   ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
                 };
@@ -1013,6 +1100,7 @@ export function ChatPage() {
                 reasoning_content: res.reasoning_content ?? null,
                 tool_calls: res.tool_calls ?? null,
                 images: genImages,
+                subagents: res.subagents ?? null,
                 ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
                 ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
               }];
@@ -1410,11 +1498,38 @@ export function ChatPage() {
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
-            if (assistantMsgCreated) {
+            if (res.message_id > 0) {
+              if (assistantMsgCreated) {
+                setMessages((prev) => prev.map(m => {
+                  if (m.id === tempAssistantId) {
+                    return {
+                      ...m,
+                      id: res.message_id,
+                      ...(res.reply_text ? { content: res.reply_text } : { content: '_⏹ Генерация остановлена_' }),
+                      reasoning_content: res.reasoning_content ?? null,
+                      tool_calls: res.tool_calls ?? null,
+                      subagents: res.subagents ?? null,
+                    };
+                  }
+                  return m;
+                }));
+              } else {
+                setMessages((prev) => [...prev, {
+                  id: res.message_id, role: 'assistant' as const,
+                  content: res.reply_text || '_⏹ Генерация остановлена_',
+                  created_at: Math.floor(Date.now() / 1000),
+                  reasoning_content: res.reasoning_content ?? null,
+                  tool_calls: res.tool_calls ?? null,
+                  subagents: res.subagents ?? null,
+                }]);
+              }
+            } else if (assistantMsgCreated) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
             }
             setShowTyping(false);
             setSending(false);
+            if (res.display_state) applyAvatarState(res.display_state);
+            refreshContextTokens(res.chat_id);
             return;
           }
           if (res.model_fallback_notice) {
@@ -1529,11 +1644,38 @@ export function ChatPage() {
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
-            if (assistantMsgCreated) {
+            if (res.message_id > 0) {
+              if (assistantMsgCreated) {
+                setMessages((prev) => prev.map(m => {
+                  if (m.id === tempAssistantId) {
+                    return {
+                      ...m,
+                      id: res.message_id,
+                      ...(res.reply_text ? { content: res.reply_text } : { content: '_⏹ Генерация остановлена_' }),
+                      reasoning_content: res.reasoning_content ?? null,
+                      tool_calls: res.tool_calls ?? null,
+                      subagents: res.subagents ?? null,
+                    };
+                  }
+                  return m;
+                }));
+              } else {
+                setMessages((prev) => [...prev, {
+                  id: res.message_id, role: 'assistant' as const,
+                  content: res.reply_text || '_⏹ Генерация остановлена_',
+                  created_at: Math.floor(Date.now() / 1000),
+                  reasoning_content: res.reasoning_content ?? null,
+                  tool_calls: res.tool_calls ?? null,
+                  subagents: res.subagents ?? null,
+                }]);
+              }
+            } else if (assistantMsgCreated) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
             }
             setShowTyping(false);
             setSending(false);
+            if (res.display_state) applyAvatarState(res.display_state);
+            refreshContextTokens(res.chat_id);
             return;
           }
           if (res.model_fallback_notice) {
@@ -1870,6 +2012,10 @@ export function ChatPage() {
 
   const handleToggleToolCalls = useCallback((messageId: number) => {
     setOpenToolCallsId((current) => current === messageId ? null : messageId);
+  }, []);
+
+  const handleToggleSubagents = useCallback((messageId: number) => {
+    setOpenSubagentsId((current) => current === messageId ? null : messageId);
   }, []);
 
   const handleOpenRegenHint = useCallback((messageId: number) => {
@@ -2239,6 +2385,7 @@ export function ChatPage() {
                   isTtsPlaying={ttsPlayingId === msg.id}
                   isReasoningOpen={openReasoningId === msg.id}
                   isToolCallsOpen={openToolCallsId === msg.id}
+                  isSubagentsOpen={openSubagentsId === msg.id}
                   isRegenHintOpen={regenHintMsgId === msg.id}
                   isEditing={editingMsgId === msg.id}
                   editingText={editingText}
@@ -2251,6 +2398,7 @@ export function ChatPage() {
                   onDownloadImage={handleDownloadImage}
                   onToggleReasoning={handleToggleReasoning}
                   onToggleToolCalls={handleToggleToolCalls}
+                  onToggleSubagents={handleToggleSubagents}
                   onRegenerate={handleRegenerate}
                   onOpenRegenHint={handleOpenRegenHint}
                   onCloseRegenHint={handleCloseRegenHint}

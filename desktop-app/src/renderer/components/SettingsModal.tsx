@@ -126,7 +126,8 @@ export function SettingsModal({ onClose }: Props) {
     disable_pc_commands: false,
     disable_internet: false,
     disable_personal: false,
-    disable_subagents: false,
+    disable_specialized_subagents: false,
+    disable_adhoc_subagents: false,
   });
   const [flagsLoading, setFlagsLoading] = useState(false);
   const [flagsSaving, setFlagsSaving] = useState(false);
@@ -140,6 +141,8 @@ export function SettingsModal({ onClose }: Props) {
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
+  const [subagentMode, setSubagentModeState] = useState<api.SubagentMode>('auto');
+  const [subagentModeSaving, setSubagentModeSaving] = useState(false);
   const [contextTokenLimit, setContextTokenLimitState] = useState<api.ContextTokenLimit | null>(null);
   const [contextTokenLimitSaving, setContextTokenLimitSaving] = useState(false);
   const [attachmentTokenLimit, setAttachmentTokenLimitState] = useState<api.AttachmentTokenLimit | null>(null);
@@ -200,6 +203,9 @@ export function SettingsModal({ onClose }: Props) {
       api.getUiSettings()
         .then((res) => setUiSettingsState(res.settings))
         .catch(() => {});
+      api.getSubagentMode()
+        .then((res) => setSubagentModeState(res.subagent_mode))
+        .catch(() => {});
       api.getContextTokenLimit()
         .then((res) => setContextTokenLimitState(res))
         .catch(() => {});
@@ -245,6 +251,25 @@ export function SettingsModal({ onClose }: Props) {
       toast.error('Не удалось сохранить настройку');
     } finally {
       setUiSettingsSaving(false);
+    }
+  };
+
+  const handleSubagentModeChange = async (value: string) => {
+    const mode = value === 'manual' ? 'manual' : 'auto';
+    const prev = subagentMode;
+    setSubagentModeState(mode);
+    setSubagentModeSaving(true);
+    try {
+      const res = await api.setSubagentMode(mode);
+      setSubagentModeState(res.subagent_mode);
+      if (user) {
+        setUser({ ...user, subagent_mode: res.subagent_mode });
+      }
+    } catch {
+      setSubagentModeState(prev);
+      toast.error('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ СЂРµР¶РёРј СЃСѓР±Р°РіРµРЅС‚РѕРІ');
+    } finally {
+      setSubagentModeSaving(false);
     }
   };
 
@@ -915,14 +940,32 @@ export function SettingsModal({ onClose }: Props) {
                       <input
                         type="checkbox"
                         className={s.macroCheckbox}
-                        checked={featureFlags.disable_subagents}
-                        onChange={() => handleToggleFlag('disable_subagents')}
+                        checked={featureFlags.disable_specialized_subagents}
+                        onChange={() => handleToggleFlag('disable_specialized_subagents')}
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без субагентов</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без специализированных субагентов</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает вызов субагентов (invoke_subagent).
+                          Отключает вызов заранее настроенных субагентов (invoke_subagent).
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_adhoc_subagents}
+                        onChange={() => handleToggleFlag('disable_adhoc_subagents')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без создания субагентов</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          Отключает создание субагентов на лету (spawn_subagent).
                         </div>
                       </div>
                     </label>
@@ -1062,6 +1105,25 @@ export function SettingsModal({ onClose }: Props) {
                   label="Показывать токены"
                   disabled={uiSettingsSaving}
                 />
+              </div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>РњРѕРґРµР»СЊ СЃСѓР±Р°РіРµРЅС‚РѕРІ</label>
+                <div className={s.voiceSelect}>
+                  <Select
+                    options={[
+                      { value: 'auto', label: 'РђРІС‚Рѕ', hint: 'РќР°СЃР»РµРґСѓРµС‚ Р°РІС‚Рѕ-СЂРѕСѓС‚РёРЅРі РѕСЃРЅРѕРІРЅРѕРіРѕ Р°РіРµРЅС‚Р°' },
+                      { value: 'manual', label: 'Р СѓС‡РЅРѕР№ РІС‹Р±РѕСЂ', hint: 'РСЃРїРѕР»СЊР·СѓРµС‚ РјРѕРґРµР»СЊ РёР· РІРµСЂС…РЅРµРіРѕ СЃРµР»РµРєС‚РѕСЂР°' },
+                    ]}
+                    value={subagentMode}
+                    onChange={handleSubagentModeChange}
+                    placeholder="РђРІС‚Рѕ"
+                    disabled={subagentModeSaving}
+                  />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  Р РµР¶РёРј РІС‹Р±РёСЂР°РµС‚СЃСЏ Р·РґРµСЃСЊ, Р° РЅРµ РјРѕРґРµР»СЊСЋ РІ tool call.
+                </div>
               </div>
 
               {/* Context Token Limit */}

@@ -2337,6 +2337,57 @@ const buildInvokeSubagentTool = () => {
   };
 };
 
+/**
+ * Build the `spawn_subagent` tool — lets the main agent create an ad-hoc subagent
+ * with a custom system prompt, a subset of tools, and iteration limit.
+ *
+ * Unlike `invoke_subagent` (which uses the static registry), this tool creates a
+ * brand new subagent on the fly. The main agent specifies exactly which tools the
+ * subagent can use, what its system prompt is, and how many iterations it may take.
+ */
+const buildSpawnSubagentTool = (): any => {
+  // Build a list of all available tool names (excluding recursive spawning).
+  const availableToolNames = toolDefinitions
+    .map((t: any) => t?.function?.name)
+    .filter((n: string | undefined) => n && n !== 'spawn_subagent' && n !== 'invoke_subagent');
+
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'spawn_subagent',
+      description:
+        'Создай и запусти нового субагента «на лету» с твоим собственным системным промптом, ' +
+        'набором инструментов и лимитом итераций. Субагент выполнит узкую задачу и вернёт результат.\n\n' +
+        'Используй когда: задача требует специализированного подхода с конкретным набором инструментов, ' +
+        'и нет готового субагента в реестре. Субагент НЕ может вызывать других субагентов.\n\n' +
+        `Доступные инструменты для передачи субагенту: ${availableToolNames.join(', ')}`,
+      parameters: {
+        type: 'object',
+        properties: {
+          task: {
+            type: 'string',
+            description: 'Чёткое описание задачи для субагента',
+          },
+          system_prompt: {
+            type: 'string',
+            description: 'Системный промпт субагента — его роль, инструкции, ограничения. Если опустить — будет использован дефолтный промпт общего ассистента.',
+          },
+          tools: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Массив имён инструментов которые субагент может использовать',
+          },
+          max_loops: {
+            type: 'number',
+            description: 'Максимум итераций цикла субагента (1–50, по умолчанию 20)',
+          },
+        },
+        required: ['task', 'tools'],
+      },
+    },
+  };
+};
+
 const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const allowed = new Set(allowedToolNames);
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
@@ -2439,7 +2490,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null }, autoRejectHitl?: boolean) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void }, autoRejectHitl?: boolean) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -4459,6 +4510,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           onDesktopAction: subagentExtra?.onDesktopAction,
           onToolStatus: subagentExtra?.onToolStatus,
           manualModel: subagentExtra?.manualModel,
+          subagentMode: subagentExtra?.subagentMode,
         },
       });
 
@@ -4473,6 +4525,105 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({
         status: 'error',
         message: `Ошибка субагента ${agentName}: ${err?.message || String(err)}`,
+      });
+    }
+  }
+
+  // --- spawn_subagent (desktop-only, ad-hoc subagent created by the main agent) ---
+  if (toolName === 'spawn_subagent') {
+    const task: string = typeof parsed.task === 'string' ? parsed.task.trim() : '';
+    const systemPrompt: string = typeof parsed.system_prompt === 'string' ? parsed.system_prompt.trim() : '';
+    const requestedTools: string[] = Array.isArray(parsed.tools)
+      ? parsed.tools.filter((t: any) => typeof t === 'string').map((t: string) => t.trim()).filter(Boolean)
+      : [];
+    const requestedMaxLoops: number = typeof parsed.max_loops === 'number'
+      ? Math.min(Math.max(1, Math.floor(parsed.max_loops)), 50)
+      : 20;
+
+    if (!task) return JSON.stringify({ status: 'error', message: 'task (описание задачи) обязательно' });
+    if (requestedTools.length === 0) return JSON.stringify({ status: 'error', message: 'tools (массив имён инструментов) обязательно' });
+
+    // Если бот не передал промпт — используем дефолтный
+    const effectivePrompt = systemPrompt || 'Ты специализированный AI-ассистент. Выполни поставленную задачу, используя предоставленные тебе инструменты. Действуй последовательно и эффективно.';
+
+    // Validate tools against the known toolDefinitions — reject unknown names early.
+    const knownToolNames = new Set(toolDefinitions.map((t: any) => t?.function?.name).filter(Boolean));
+    // Deny recursive spawning.
+    knownToolNames.delete('spawn_subagent');
+    knownToolNames.delete('invoke_subagent');
+
+    const validTools = requestedTools.filter(t => knownToolNames.has(t));
+    const rejectedTools = requestedTools.filter(t => !knownToolNames.has(t));
+    if (validTools.length === 0) {
+      return JSON.stringify({
+        status: 'error',
+        message: `Ни один из запрошенных инструментов не существует. Неизвестные: ${rejectedTools.join(', ')}`,
+      });
+    }
+
+    try {
+      const { buildAdhocSubagent } = await import('./subagents/registry.js');
+      const { runSubagent } = await import('./subagents/runner.js');
+
+      const agent = buildAdhocSubagent({
+        systemPrompt: effectivePrompt.slice(0, 16384), // hard cap 16KB
+        sharedTools: validTools,
+        maxLoops: requestedMaxLoops,
+      });
+
+      const result = await runSubagent({
+        agent,
+        task,
+        ctx: {
+          userId: user.id,
+          isDesktop: !!desktopActionSink,
+          timezoneOffset,
+          signal,
+          desktopActionSink: desktopActionSink || undefined,
+          onDesktopAction: subagentExtra?.onDesktopAction,
+          onToolStatus: subagentExtra?.onToolStatus,
+          manualModel: subagentExtra?.manualModel,
+          subagentMode: subagentExtra?.subagentMode,
+          onSubagentTrace: subagentExtra?.onSubagentTrace,
+        },
+      });
+
+      const response: any = {
+        status: 'success',
+        answer: result.answer,
+        summary: result.summary,
+        tools_used: result.toolCallsHistory.map(t => t.tool),
+        tools_granted: validTools,
+      };
+      if (rejectedTools.length > 0) {
+        response.tools_rejected = rejectedTools;
+      }
+      if (result.aborted) {
+        response.aborted = true;
+      }
+
+      // Push full trace for UI display via callback
+      if (subagentExtra?.onSubagentTrace) {
+        try {
+          subagentExtra.onSubagentTrace({
+            task,
+            system_prompt: effectivePrompt.slice(0, 2000), // для UI сохраняем сокращённую версию промпта
+            tools: validTools,
+            tools_used: result.toolCallsHistory.map(t => t.tool),
+            answer: result.answer,
+            summary: result.summary,
+            aborted: result.aborted,
+            trace: result.toolCallsHistory,
+          });
+        } catch {}
+      }
+
+      return JSON.stringify(response);
+    } catch (err: any) {
+      console.warn('[ai] spawn_subagent error:', err?.message || err);
+      return JSON.stringify({
+        status: 'error',
+        message: `Ошибка ad-hoc субагента: ${err?.message || String(err)}`,
       });
     }
   }
@@ -4531,6 +4682,13 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
       const agent = parsed.agent || '';
       return `Вызываю субагента "${agent}"...`;
     } catch { return 'Вызываю субагента...'; }
+  }
+  if (toolName === 'spawn_subagent') {
+    try {
+      const parsed = JSON.parse(argsRaw || '{}');
+      const task = String(parsed.task || '').slice(0, 60);
+      return task ? `🧠 Запускаю субагента: ${task}...` : '🧠 Запускаю субагента...';
+    } catch { return '🧠 Запускаю субагента...'; }
   }
   if (toolName === 'desktop_action') {
     try {
@@ -4594,7 +4752,8 @@ export const sendMessageThroughAi = async (
       disable_pc_commands?: boolean;
       disable_internet?: boolean;
       disable_personal?: boolean;
-      disable_subagents?: boolean;
+      disable_specialized_subagents?: boolean;
+      disable_adhoc_subagents?: boolean;
     } | null;
     regenerateHint?: string;
     regenerateFromHistory?: boolean;
@@ -4625,6 +4784,7 @@ export const sendMessageThroughAi = async (
   if (preferredModelId && !manualModel) {
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
+  const subagentMode: 'auto' | 'manual' = user.subagent_mode === 'manual' ? 'manual' : 'auto';
 
   // Резолв reasoning level: из options (явный запрос) или из профиля юзера
   const reasoningLevel: ReasoningLevel | null = options?.reasoningLevel ?? (user as any).reasoning_level ?? null;
@@ -4677,6 +4837,31 @@ export const sendMessageThroughAi = async (
   let usedModel = '';
   let usedProvider = '';
   let diceRollValue: number | null = null;
+
+  // ── Soft-abort buffers: объявляем ВНЕ try, чтобы catch имел к ним доступ ──
+  let answer = FALLBACK_ANSWER;
+  let fullDbHistory = '';
+  let finalAnswer = '';
+  const reasoningParts: string[] = [];
+  const toolCallsHistory: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
+  const iterations: ToolIteration[] = [];
+  const toolUserMessages: string[] = [];
+  const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
+  let assistantTelegramChatId: number | null = null;
+  let userMessageId = 0;
+
+  // Subagent traces — полные trace ad-hoc субагентов для отдельного UI-блока.
+  // Не уходят в AI-контекст, только для отображения в сообщении.
+  const subagentTraces: Array<{
+    task: string;
+    system_prompt: string;
+    tools: string[];
+    tools_used: string[];
+    answer: string;
+    summary: string;
+    aborted?: boolean;
+    trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+  }> = [];
 
   try {
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
@@ -4802,8 +4987,11 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('get_my_tasks');
     disabledToolSet.add('delete_my_task');
   }
-  if (flags?.disable_subagents) {
+  if (flags?.disable_specialized_subagents) {
     disabledToolSet.add('invoke_subagent');
+  }
+  if (flags?.disable_adhoc_subagents) {
+    disabledToolSet.add('spawn_subagent');
   }
   if (disabledToolSet.size > 0) {
     console.log(`[feature-flags] user=${userId} disabled tools: ${[...disabledToolSet].join(', ')}`);
@@ -4836,6 +5024,7 @@ export const sendMessageThroughAi = async (
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
+  const spawnSubagentTool = options?.isDesktop ? buildSpawnSubagentTool() : null;
   // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
   const serverOnlyTools = [
     buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(),
@@ -4855,6 +5044,7 @@ export const sendMessageThroughAi = async (
     ...serverOnlyTools,
     ...desktopOnlyTools,
     ...(subagentTool ? [subagentTool] : []),
+    ...(spawnSubagentTool ? [spawnSubagentTool] : []),
     ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])
   ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[];
 
@@ -4997,26 +5187,14 @@ PRO
     { role: 'user', content: userMessageContent }
   ];
 
-  let answer = FALLBACK_ANSWER;
   let loop = 0;
   const effectiveMaxLoops = options?.isVoice ? MAX_TOOL_LOOPS_VOICE : MAX_TOOL_LOOPS;
   const toolOutputsForFallback: string[] = [];
-  const toolUserMessages: string[] = [];
-  const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
   const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
   const desktopActionSink: { value: DesktopActionPayload | null } = { value: null };
   const mapUpdateSink: { value: MapUpdatePayload | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
-
-  // Буферы для корректной сборки ответа агентского цикла
-  let fullDbHistory = '';  // Весь текст от нейросети (для сохранения контекста в БД)
-  let finalAnswer = '';    // Только последний текст (чтобы не дублировать отправку)
-  const reasoningParts: string[] = [];
-  const toolCallsHistory: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
-  // Полный trace цикла по итерациям — для корректного разворота в getHistoryForAi().
-  // Параллельно с toolCallsHistory (которая остаётся плоской проекцией для UI/клиентов).
-  const iterations: ToolIteration[] = [];
 
   while (loop < effectiveMaxLoops) {
     loop += 1;
@@ -5213,11 +5391,13 @@ for (const toolCall of message.tool_calls) {
         options?.activeMacros,
         abortController.signal,
         {
-          manualModel,
+          manualModel: subagentMode === 'manual' ? manualModel : undefined,
+          subagentMode,
           onToolStatus: options?.onToolStatus,
           onDesktopAction: options?.onDesktopAction,
           displayManifest: options?.displayManifest,
-          currentDisplayState: options?.currentDisplayState
+          currentDisplayState: options?.currentDisplayState,
+          onSubagentTrace: (trace: any) => { subagentTraces.push(trace); }
         },
         options?.autoRejectHitl
       ),
@@ -5277,9 +5457,14 @@ if (escalatedToPro) {
   continue;
 }
 
-// Если были прерваны во время tool_calls — сразу выходим, не продолжаем while
+// Если были прерваны во время tool_calls — фиксируем partial-итерацию в trace
+// и переходим к soft-save вместо throw (артефакты сохраняются).
 if (abortController.signal.aborted) {
-  throw createAbortError();
+  // Сохраняем даже неполную итерацию — там могут быть уже выполненные tool_results
+  if (currentIteration.tool_calls.length > 0 || currentIteration.results.length > 0) {
+    iterations.push(currentIteration);
+  }
+  break;
 }
 
 // Итерация полностью выполнена (все tool_calls обработаны, не прервана, не эскалирована) —
@@ -5342,7 +5527,6 @@ iterations.push(currentIteration);
   }
 
   const userTextForHistory = options?.persistUserText?.trim() || text;
-  let userMessageId = 0;
   if (!options?.skipHistory && !options?.skipUserHistory) {
     const userTelegramChatId = Number.isFinite(Number(options?.userTelegramChatId))
       ? Math.floor(Number(options?.userTelegramChatId))
@@ -5354,7 +5538,7 @@ iterations.push(currentIteration);
     const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
     userMessageId = appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
   }
-  const assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
+  assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))
     : null;
   // Сохраняем в БД полную историю, даже если она ушла через коллбэк
@@ -5368,9 +5552,10 @@ iterations.push(currentIteration);
   // getHistoryForAi() разворачивает его в корректную последовательность сообщений для API.
   // Старый плоский формат (без `step`) поддерживается как fallback при чтении.
   const tcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
+  const subagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
   const assistantMessageId = options?.skipHistory
     ? 0
-    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent, tcJson);
+    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent, tcJson, null, subagentsJson);
 
   const safeTokens = Math.max(0, Math.floor(totalTokens));
   const costRub = toRubFromTokens(safeTokens);
@@ -5427,6 +5612,7 @@ iterations.push(currentIteration);
     display_state: displayStateSink.value ?? undefined,
     desktop_action: desktopActionSink.value ?? undefined,
     tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
+    subagents: subagentTraces.length > 0 ? subagentTraces : undefined,
     usage: {
       tokens_used: totalTokens,
       used_model: usedModel,
@@ -5438,14 +5624,44 @@ iterations.push(currentIteration);
   };
   } catch (err: any) {
     if (isAbortError(err)) {
-      // Генерация остановлена пользователем
-      console.log(`[AI] Generation aborted by user ${userId}`);
+      // Генерация остановлена пользователем — soft abort.
+      // Сохраняем всё что бот успел сделать (tool_calls, промежуточный текст, reasoning)
+      // как обычное assistant-сообщение с пометкой aborted: true.
+      console.log(`[AI] Generation aborted by user ${userId} (soft-save)`);
+
+      const abortedAnswer = answer && answer !== FALLBACK_ANSWER
+        ? answer + '\n\n_⏹ Генерация остановлена пользователем_'
+        : (toolUserMessages.length > 0 ? '_⏹ Генерация остановлена пользователем_' : '');
+      const abortedDbText = fullDbHistory || abortedAnswer;
+      const abortedReasoning = reasoningParts.length > 0 ? reasoningParts.join('\n\n').trim() : null;
+      const abortedTcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
+      const abortedSubagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
+
+      let abortedMessageId = 0;
+      if (!options?.skipHistory) {
+        try {
+          abortedMessageId = appendChatMessage(
+            userId, chatId, 'assistant',
+            abortedDbText || '_Генерация остановлена_',
+            assistantTelegramChatId, null, null,
+            abortedReasoning, abortedTcJson, null, abortedSubagentsJson
+          );
+        } catch (saveErr) {
+          console.warn(`[AI] soft-save failed:`, saveErr);
+        }
+      }
+
       return {
-        reply_text: '',
+        reply_text: abortedAnswer,
+        reasoning_content: abortedReasoning,
         chat_id: chatId,
-        message_id: 0,
+        message_id: abortedMessageId,
         aborted: true,
+        tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
+        subagents: subagentTraces.length > 0 ? subagentTraces : undefined,
         usage: { tokens_used: totalTokens, used_model: usedModel, used_provider: usedProvider },
+        ...((abortedMessageId > 0) ? getMessageTokens(abortedMessageId) : {}),
+        ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
         ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
       };
     }

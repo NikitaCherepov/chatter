@@ -58,13 +58,20 @@ function getToolStatusMessage(agentName: string, toolName: string): string {
   return base ? `[${agentName}] ${base}` : `[${agentName}] ${toolName}...`;
 }
 
+/** Local abort-error check (avoids circular import with ai.ts). */
+function _isAbortError(err: any): boolean {
+  return err?.name === 'AbortError' || err?.code === 'ABORT_ERR' || `${err?.message || ''}` === 'AbortError';
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 export interface RunSubagentParams {
-  /** Subagent name from the registry. */
-  agentName: string;
+  /** Subagent name from the registry. Mutually exclusive with `agent`. */
+  agentName?: string;
+  /** Ready-to-run subagent (e.g. ad-hoc). Mutually exclusive with `agentName`. */
+  agent?: RegisteredSubagent;
   /** The task description from the main agent. */
   task: string;
   /** Extra context / data from the main agent. */
@@ -74,12 +81,25 @@ export interface RunSubagentParams {
 }
 
 /**
+ * Resolve effective mode from user settings.
+ * 'auto' = inherit from main agent (always 'pro' for the API call;
+ *   actual model selection happens via manualModel fallback chain).
+ * 'manual' = use user's preferred_model (ctx.manualModel), still 'pro' API mode.
+ */
+function resolveMode(ctx: SubagentContext): 'pro' {
+  // Оба режима используют 'pro' API — разница только в том,
+  // передаётся ли manualModel в runCompletion.
+  // manualModel уже прокинут через ctx и применяется автоматически ниже.
+  return 'pro';
+}
+
+/**
  * Run a subagent to completion and return its result.
  *
  * This function is called from the main agent's `runTool` handler for `invoke_subagent`.
  */
 export async function runSubagent(params: RunSubagentParams): Promise<SubagentResult> {
-  const { agentName, task, context, ctx } = params;
+  const { agentName, agent: directAgent, task, context, ctx } = params;
 
   if (!_runCompletion || !_runTool) {
     throw new Error('Subagent runner not initialised. Call initSubagentRunner() first.');
@@ -95,13 +115,15 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   }
 
   // Resolve user's preferred model (manual model selection)
-  const manualModel = ctx.manualModel || undefined;
+  const manualModel = ctx.subagentMode === 'manual' ? (ctx.manualModel || undefined) : undefined;
 
-  // 1. Resolve agent config
-  const agent: RegisteredSubagent = getSubagent(agentName);
+  // 1. Resolve agent config — either from registry or direct (ad-hoc)
+  const agent: RegisteredSubagent = directAgent || getSubagent(agentName!);
+  const resolvedAgentName = agent.name;
 
   // 2. Build tool list: own tools + shared tools from main agent
-  const ownToolDefs = agent.ownTools.map(t => t.definition);
+  const ownTools = agent.ownTools || [];
+  const ownToolDefs = ownTools.map(t => t.definition);
   const sharedToolDefs = (_toolDefinitions as unknown as any[]).filter(
     (t: any) => agent.sharedTools.includes(t?.function?.name || '')
   );
@@ -109,7 +131,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   const allToolDefs = [...ownToolDefs, ...sharedToolDefs];
 
   // Create a lookup for own tools
-  const ownToolsMap = new Map(agent.ownTools.map(t => [t.definition.function.name, t]));
+  const ownToolsMap = new Map(ownTools.map(t => [t.definition.function.name, t]));
 
   // 3. Build messages
   const userMessageParts = [`Задача: ${task}`];
@@ -124,10 +146,11 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
 
   // 4. Agent loop
   const toolCallsHistory: SubagentResult['toolCallsHistory'] = [];
-  const mode = agent.mode || 'pro';
+  const mode = resolveMode(ctx);
   const maxLoops = agent.maxLoops;
   const debugRaw = process.env.DEBUG_AI_RAW_SUBAGENT === '1';
 
+  try {
   for (let loop = 0; loop < maxLoops; loop++) {
     _throwIfAborted(ctx.signal);
 
@@ -139,7 +162,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       });
     }
 
-    console.log(`[subagent:${agentName}] === loop ${loop + 1}/${maxLoops} === (messages: ${messages.length})`);
+    console.log(`[subagent:${resolvedAgentName}] === loop ${loop + 1}/${maxLoops} === (messages: ${messages.length})`);
 
     // Call AI — use user's preferred model if set, otherwise agent's configured mode
     const completion = await _withAbort(
@@ -155,7 +178,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     const response = completion?.response;
     const message = response?.choices?.[0]?.message;
     if (!message) {
-      console.warn(`[subagent:${agentName}] empty response from model`);
+      console.warn(`[subagent:${resolvedAgentName}] empty response from model`);
       return {
         answer: 'Субагент не получил ответ от модели.',
         summary: 'Пустой ответ модели.',
@@ -166,16 +189,16 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     // Debug: log raw model response
     if (debugRaw) {
       try {
-        console.log(`[subagent:${agentName}][RAW]`, JSON.stringify(response, null, 2));
+        console.log(`[subagent:${resolvedAgentName}][RAW]`, JSON.stringify(response, null, 2));
       } catch (err) {
-        console.warn(`[subagent:${agentName}][RAW] serialization failed:`, err);
+        console.warn(`[subagent:${resolvedAgentName}][RAW] serialization failed:`, err);
       }
     }
 
     // Log assistant text (reasoning / intermediate message)
     if (message.content) {
       const text = String(message.content);
-      console.log(`[subagent:${agentName}][text] ${text.slice(0, 2000)}`);
+      console.log(`[subagent:${resolvedAgentName}][text] ${text.slice(0, 2000)}`);
     }
 
     // Push assistant message to history
@@ -185,7 +208,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     const toolCalls = message.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
       const content = message.content || '';
-      console.log(`[subagent:${agentName}] === finished after ${loop + 1} loops, answer: ${content.slice(0, 500)}`);
+      console.log(`[subagent:${resolvedAgentName}] === finished after ${loop + 1} loops, answer: ${content.slice(0, 500)}`);
       return {
         answer: content,
         summary: content.slice(0, 500),
@@ -202,10 +225,10 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       let toolContent: string;
 
       // Log tool call with arguments
-      console.log(`[subagent:${agentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
+      console.log(`[subagent:${resolvedAgentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
 
       // Broadcast tool status to client
-      const statusMsg = getToolStatusMessage(agentName, toolName);
+      const statusMsg = getToolStatusMessage(resolvedAgentName, toolName);
       if (ctx.onToolStatus) {
         try { await ctx.onToolStatus(statusMsg); } catch {}
       }
@@ -223,7 +246,8 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
             ctx.signal,
           );
         } catch (err: any) {
-          console.warn(`[subagent:${agentName}] own tool "${toolName}" error:`, err?.message || err);
+          if (_isAbortError(err)) throw err;
+          console.warn(`[subagent:${resolvedAgentName}] own tool "${toolName}" error:`, err?.message || err);
           toolContent = JSON.stringify({ status: 'error', message: err?.message || String(err) });
         }
       } else if (agent.sharedTools.includes(toolName)) {
@@ -250,7 +274,8 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
             ctx.signal,
           );
         } catch (err: any) {
-          console.warn(`[subagent:${agentName}] shared tool "${toolName}" error:`, err?.message || err);
+          if (_isAbortError(err)) throw err;
+          console.warn(`[subagent:${resolvedAgentName}] shared tool "${toolName}" error:`, err?.message || err);
           toolContent = JSON.stringify({ status: 'error', message: err?.message || String(err) });
         }
       } else {
@@ -261,7 +286,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       }
 
       // Log tool result
-      console.log(`[subagent:${agentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
+      console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
 
       // Record history
       try {
@@ -295,4 +320,22 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     summary: 'Превышен лимит итераций.',
     toolCallsHistory,
   };
+  } catch (err: any) {
+    // Soft abort: возвращаем partial-результат вместо throw,
+    // чтобы основной агент получил tool_result и мог продолжить.
+    if (_isAbortError(err)) {
+      console.log(`[subagent:${resolvedAgentName}] aborted, returning partial result (${toolCallsHistory.length} tool calls performed)`);
+      const partialAnswer = messages
+        .filter(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.trim())
+        .map(m => m.content)
+        .pop() as string | undefined;
+      return {
+        answer: partialAnswer || 'Прервано пользователем',
+        summary: 'Прервано пользователем (partial).',
+        toolCallsHistory,
+        aborted: true,
+      };
+    }
+    throw err;
+  }
 }

@@ -54,6 +54,7 @@ ensureUserColumn('feature_flags', 'ALTER TABLE users ADD COLUMN feature_flags TE
 ensureUserColumn('reasoning_level', 'ALTER TABLE users ADD COLUMN reasoning_level TEXT');
 ensureUserColumn('model_settings', 'ALTER TABLE users ADD COLUMN model_settings TEXT');
 ensureUserColumn('ui_settings', 'ALTER TABLE users ADD COLUMN ui_settings TEXT');
+ensureUserColumn('subagent_mode', "ALTER TABLE users ADD COLUMN subagent_mode TEXT NOT NULL DEFAULT 'auto'");
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
@@ -68,6 +69,8 @@ ensureChatMessageColumn('token_count', 'ALTER TABLE chat_messages ADD COLUMN tok
 ensureChatMessageColumn('reasoning_tokens', 'ALTER TABLE chat_messages ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0');
 // Attachments (documents) — text files injected into AI context
 ensureChatMessageColumn('attachments', 'ALTER TABLE chat_messages ADD COLUMN attachments TEXT');
+// Subagent traces — полные trace ad-hoc субагентов для UI-отображения (не уходит в AI-контекст)
+ensureChatMessageColumn('subagents_json', 'ALTER TABLE chat_messages ADD COLUMN subagents_json TEXT');
 
 // Index for efficient filtering: active (non-archived) messages per chat
 if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_chat_messages_active'").get()) {

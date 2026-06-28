@@ -60,7 +60,7 @@ const REGISTRY: Record<string, SubagentConfig> = {
 // ---------------------------------------------------------------------------
 
 export interface RegisteredSubagent extends SubagentConfig {
-  /** Loaded system prompt text. */
+  /** Loaded system prompt text (from file or direct). */
   systemPrompt: string;
 }
 
@@ -72,13 +72,34 @@ export function getSubagent(name: string): RegisteredSubagent {
   }
   return {
     ...config,
-    systemPrompt: loadPrompt(config.promptFile),
+    systemPrompt: loadPrompt(config.promptFile!),
   };
 }
 
 /** List all registered subagent names. */
 export function listSubagentNames(): string[] {
   return Object.keys(REGISTRY);
+}
+
+/**
+ * Build an ad-hoc subagent from a direct system prompt (no file, no ownTools).
+ * Used by the `spawn_subagent` tool — the main agent creates a subagent on the fly.
+ */
+export function buildAdhocSubagent(opts: {
+  name?: string;
+  systemPrompt: string;
+  sharedTools: string[];
+  maxLoops: number;
+}): RegisteredSubagent {
+  return {
+    name: opts.name || 'adhoc',
+    description: 'Ad-hoc subagent created by the main agent.',
+    systemPromptText: opts.systemPrompt,
+    systemPrompt: opts.systemPrompt,
+    sharedTools: opts.sharedTools,
+    ownTools: [],
+    maxLoops: opts.maxLoops,
+  };
 }
 
 /**

@@ -278,12 +278,12 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived, token_count, reasoning_tokens, attachments
+    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived, token_count, reasoning_tokens, attachments, subagents_json
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -344,7 +344,11 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       created_at: toUnix(row.created_at),
       archived: row.archived === 1,
       token_count: row.token_count ?? 0,
-      reasoning_tokens: row.reasoning_tokens ?? 0
+      reasoning_tokens: row.reasoning_tokens ?? 0,
+      subagents: (() => {
+        if (!row.subagents_json) return null;
+        try { const arr = JSON.parse(row.subagents_json); return Array.isArray(arr) ? arr : null; } catch { return null; }
+      })()
     };
   });
 };
@@ -407,12 +411,14 @@ export const appendChatMessage = (
   images: MessageImage[] | null = null,
   reasoningContent: string | null = null,
   toolCallsJson: string | null = null,
-  attachments: MessageAttachment[] | null = null
+  attachments: MessageAttachment[] | null = null,
+  subagentsJson: string | null = null
 ) => {
   const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
   const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
   const reasoning = role === 'assistant' && reasoningContent?.trim() ? reasoningContent.trim() : null;
   const tcJson = role === 'assistant' && toolCallsJson?.trim() ? toolCallsJson.trim() : null;
+  const saj = role === 'assistant' && subagentsJson?.trim() ? subagentsJson.trim() : null;
 
   // ── Token accounting ────────────────────────────────────────────────────
   // token_count = вес сообщения в AI-контексте (не включает reasoning).
@@ -458,9 +464,9 @@ export const appendChatMessage = (
   }
 
   const inserted = db.prepare(`
-    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content, tool_calls_json, token_count, reasoning_tokens, attachments)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning, tcJson, tokenCount, reasoningTokens, attachmentsJson);
+    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content, tool_calls_json, token_count, reasoning_tokens, attachments, subagents_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning, tcJson, tokenCount, reasoningTokens, attachmentsJson, saj);
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return Number(inserted.lastInsertRowid);
 };

@@ -14,6 +14,8 @@ export type UiSettings = {
   dice_roll_enabled?: boolean;
 };
 
+export type SubagentMode = 'auto' | 'manual';
+
 type User = {
   id: number;
   name: string | null;
@@ -25,6 +27,7 @@ type User = {
   custom_prompt_content: string | null;
   core_memory: string | null;
   ui_settings?: UiSettings;
+  subagent_mode?: SubagentMode;
 };
 
 // ---------- Token storage ----------
@@ -166,6 +169,18 @@ export type MessageAudio = {
 
 export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };
 
+/** Полный trace ad-hoc субагента — для UI-блока «Сабагенты». */
+export type SubagentTrace = {
+  task: string;
+  system_prompt: string;
+  tools: string[];
+  tools_used: string[];
+  answer: string;
+  summary: string;
+  aborted?: boolean;
+  trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+};
+
 export type Message = {
   id: number;
   role: 'user' | 'assistant';
@@ -181,6 +196,8 @@ export type Message = {
   /** Токены reasoning_content (только для assistant). */
   reasoning_tokens?: number;
   attachments?: MessageAttachment[] | null;
+  /** Полные trace ad-hoc субагентов (если были). */
+  subagents?: SubagentTrace[] | null;
 };
 
 export type ChatInfo = {
@@ -309,6 +326,8 @@ export type ChatSendResponse = {
   user_token_count?: number;
   /** Результат броска d20 (1..20) в режиме Dice Roll Mode, иначе отсутствует. */
   dice_roll?: number;
+  /** Полные trace ad-hoc субагентов (для UI-блока «Сабагенты»). */
+  subagents?: SubagentTrace[];
 };
 
 export type ChatContextTokens = {
@@ -923,6 +942,18 @@ export async function setPreferredModel(modelId: string | null): Promise<{ ok: b
   });
 }
 
+export async function getSubagentMode(): Promise<{ subagent_mode: SubagentMode }> {
+  return apiFetch('/api/v1/user/subagent-mode');
+}
+
+export async function setSubagentMode(mode: SubagentMode): Promise<{ ok: boolean; subagent_mode: SubagentMode }> {
+  return apiFetch('/api/v1/user/subagent-mode', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subagent_mode: mode }),
+  });
+}
+
 export type ReasoningLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export async function getReasoningLevel(): Promise<{ reasoning_level: ReasoningLevel | null }> {
@@ -983,7 +1014,8 @@ export type FeatureFlags = {
   disable_pc_commands: boolean;
   disable_internet: boolean;
   disable_personal: boolean;
-  disable_subagents: boolean;
+  disable_specialized_subagents: boolean;
+  disable_adhoc_subagents: boolean;
 };
 
 export async function getFeatureFlags(): Promise<{ flags: FeatureFlags }> {
