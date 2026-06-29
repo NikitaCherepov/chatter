@@ -139,6 +139,21 @@ POST /tts/generate { text, voice_id, message_id }
 - `GET /api/v1/user/reasoning-level` → `{ reasoning_level: string | null }`
 - `PUT /api/v1/user/reasoning-level` ← `{ reasoning_level: 'none'|'minimal'|'low'|'medium'|'high'|'xhigh'|null }`
 
+### Subagent model & reasoning level
+
+Модель и reasoning level для субагентов настраиваются пользователем отдельно от основного агента.
+
+- `subagent_mode` (в таблице `users`) — `NULL` или `'auto'` = наследует модель основного агента, или ID конкретной модели из каталога (`GET /api/v1/models`). Если выбранная модель недоступна — fallback на auto.
+- `subagent_reasoning_level` — глубина reasoning для субагентов (`NULL` = авто, те же уровни что и для основного: `none, minimal, low, medium, high, xhigh`).
+
+Прокидывается через `SubagentContext` в `runner.ts` → `runCompletion()`. Влияние на провайдера аналогично основному reasoning level (см. выше).
+
+**Эндпоинты:**
+- `GET /api/v1/user/subagent-model` → `{ subagent_model: string | null }`
+- `PUT /api/v1/user/subagent-model` ← `{ model_id: string | null }`
+- `GET /api/v1/user/subagent-reasoning-level` → `{ reasoning_level: string | null }`
+- `PUT /api/v1/user/subagent-reasoning-level` ← `{ reasoning_level: 'none'|'minimal'|'low'|'medium'|'high'|'xhigh'|null }`
+
 ### Model Settings (параметры генерации)
 
 Позволяет юзеру настраивать параметры генерации (temperature, top_p, top_k, frequency_penalty, presence_penalty, repetition_penalty, max_tokens) для каждой ручной модели индивидуально. Хранится в `users.model_settings` (JSON-объект, ключ — `unique_id` модели). Применяется только для ручных моделей (не для авто-роутинга и не для LITE-режима).
@@ -412,31 +427,42 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 ### Subagent System (desktop-only, `isDesktop`)
 
-Система специализированных вложенных агентов (субагентов). Главный AI-агент делегирует узкоспециализированные задачи субагентам через инструмент `invoke_subagent`. Каждый субагент имеет свой системный промпт, собственный набор инструментов и отдельный агентский цикл.
+Система вложенных агентов (субагентов). Главный AI-агент может делегировать задачи субагентам двумя способами:
+
+1. **Специализированные субагенты** (`invoke_subagent`) — из статического реестра (заранее настроенные промпты и инструменты).
+2. **Ad-hoc субагенты** (`spawn_subagent`) — создаются моделью «на лету» с кастомным промптом, выбранными инструментами и лимитом итераций.
+
+Каждый субагент имеет свой системный промпт, собственный набор инструментов и отдельный агентский цикл.
 
 **Архитектура:**
 
 ```
 Главный агент (ai.ts)
-  ├── invoke_subagent(agent, task, context)
-  │     └── runner.ts: загрузка промпта + инструментов
+  ├── invoke_subagent(agent, task, context)         — статический реестр
+  ├── spawn_subagent(task, system_prompt, tools)    — ad-hoc, динамический
+  │     └── buildAdhocSubagent() → runSubagent()
   │           ├── Собственные инструменты (ownTools) — выполняются напрямую
   │           └── Разделяемые инструменты (sharedTools) — через runTool главного агента
   └── Возврат результата (answer, summary, toolCallsHistory)
 ```
 
+**Параллельный запуск:** если модель возвращает несколько `spawn_subagent` вызовов в одной итерации, они выполняются параллельно (до `MAX_PARALLEL_SPAWN_SUBAGENTS = 3` одновременно). Остальные инструменты выполняются последовательно, как и раньше.
+
 **Интеграция:**
-- `invoke_subagent` — динамически генерируемый инструмент, добавляется в `executionTools` только если `isDesktop=true` и в реестре есть зарегистрированные субагенты
-- `initSubagentRunner()` — вызывается при старте сервера (`ai.ts`), передаёт ссылки на `runCompletion`, `runTool`, `toolDefinitions` для разрыва циклических зависимостей
-- Субагент использует тот же `AbortSignal` что и основной запрос — остановка генерации (`chat_stop`) останавливает и субагента
+- `invoke_subagent` — добавляется в `executionTools` только если `isDesktop=true` и в реестре есть зарегистрированные субагенты
+- `spawn_subagent` — добавляется только если `isDesktop=true` и флаг `disable_adhoc_subagents` не установлен. Динамически генерирует список доступных инструментов (исключая `spawn_subagent` и `invoke_subagent` — рекурсивный спавн запрещён)
+- `initSubagentRunner()` — вызывается при старте сервера (`server.ts`), передаёт ссылки на `runCompletion`, `runTool`, `toolDefinitions` для разрыва циклических зависимостей
+- Субагент использует тот же `AbortSignal` что и основной запрос — остановка генерации (`chat_stop`) останавливает и субагента (soft-abort — возвращает partial-результат)
+- Модель субагента: пользователь выбирает в настройках `subagent_mode` (`auto` = наследует модель основного агента, или конкретная модель из каталога). Reasoning level также настраивается отдельно через `subagent_reasoning_level`
+- **Trace субагентов** сохраняется отдельно в `chat_messages.subagents_json` (не в `tool_calls_json`), чтобы не засорять AI-контекст. В `tool_calls_json` попадает только вызов `spawn_subagent` + краткий результат. Полный trace (промпт, задача, список инструментов, пошаговые tool calls, ответ) доступен для отображения в UI
 
 **Структура файлов:**
 
 ```
 services/subagents/
-  types.ts          — типы: SubagentConfig, SubagentTool, SubagentContext, SubagentResult
-  registry.ts       — реестр субагентов: REGISTRY, getSubagent(), buildSubagentListDescription()
-  runner.ts         — агентский цикл: runSubagent(), initSubagentRunner()
+  types.ts          — типы: SubagentConfig, SubagentTool, SubagentContext, SubagentResult, SubagentMode, SubagentTraceEntry
+  registry.ts       — реестр субагентов: REGISTRY, getSubagent(), buildSubagentListDescription(), buildAdhocSubagent()
+  runner.ts         — агентский цикл: runSubagent(), initSubagentRunner(), soft-abort
   prompts/
   tools/
 ```
@@ -446,16 +472,20 @@ services/subagents/
 2. Создать промпт в `prompts/<name>.md`
 3. Добавить entry в `REGISTRY` в `registry.ts`
 
-**Реестр (REGISTRY):**
+**Ad-hoc субагенты (`buildAdhocSubagent`):**
 
-| Имя | Описание | mode | maxLoops | sharedTools |
-|---|---|---|---|---|
+Создаются моделью через `spawn_subagent` без регистрации в `REGISTRY`. Параметры:
+- `systemPrompt` — прямой текст промпта (не из файла), лимит 16KB. Если модель не передаёт — используется дефолтный промпт общего ассистента.
+- `sharedTools` — массив имён инструментов из `toolDefinitions`, которые субагент может использовать. Валидируется на бэкенде — неизвестные имена отбрасываются.
+- `maxLoops` — лимит итераций (1–50, по умолчанию 20).
+- Не имеет `ownTools` — только разделяемые инструменты главного агента.
 
 **Агентский цикл (runner.ts):**
-- Лимит итераций: `maxLoops` из конфига (default 50)
+- Лимит итераций: `maxLoops` из конфига (default 50 для статических, default 20 для ad-hoc, hard cap 50)
 - За 2 итерации до лимота — nudge "заверши задачу"
 - Debug: `DEBUG_AI_RAW_SUBAGENT=1` — логирует полные ответы модели
 - `setMaxListeners(100)` на signal — предотвращает `MaxListenersExceededWarning` при длинных циклах
+- **Soft-abort:** при прерывании (`AbortSignal`) субагент не бросает исключение, а возвращает partial-результат — последний assistant-контент и накопленные tool calls. Результат помечается `aborted: true`.
 
 ### Vector Memory (JWT, feature-flag)
 
@@ -734,6 +764,7 @@ services/subagents/
 
 - `chat_messages.reasoning_content TEXT` — склеенный reasoning по шагам ответа.
 - `chat_messages.tool_calls_json TEXT` — JSON в trace-формате (массив `ToolIteration`). Старые записи (плоский массив без поля `step`) поддерживаются как fallback при чтении.
+- `chat_messages.subagents_json TEXT` — JSON-массив полных trace ad-hoc субагентов (`SubagentTraceEntry[]`). Хранится отдельно от `tool_calls_json`, **не отправляется** в AI-контекст (модель видит только краткий результат `spawn_subagent` в `tool_calls_json`). Содержит: task, system_prompt, tools, tools_used, answer, summary, aborted, trace (пошаговые tool calls).
 
 Desktop показывает эти поля как раскрывающиеся popover-кнопки у assistant-сообщения. Если reasoning или tool calls отсутствуют, соответствующая кнопка не отображается. `getChatMessages()` при чтении разворачивает trace-формат обратно в плоский массив с `result_preview` (обрезка `slice(0, 250)`).
 
@@ -822,7 +853,7 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 
 Большинство инструментов доступно как из desktop, так и из Telegram через SSE-стриминг. Разделение на `serverOnlyTools` и `desktopOnlyTools` описано в [Tool availability split](#tool-availability-split).
 
-**Desktop-only (не доступны из TG):** `desktop_action` (управление UI десктопа), `invoke_subagent` (субагенты).
+**Desktop-only (не доступны из TG):** `desktop_action` (управление UI десктопа), `invoke_subagent` (специализированные субагенты), `spawn_subagent` (ad-hoc субагенты).
 
 ### Smart Home (Умный дом)
 
@@ -868,7 +899,8 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
 | `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
 | `disable_personal` | Гостевой режим | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + скрытие промпта и горячей памяти из system prompt |
-| `disable_subagents` | Без субагентов | `invoke_subagent` |
+| `disable_specialized_subagents` | Без специализированных субагентов | `invoke_subagent` |
+| `disable_adhoc_subagents` | Без создания субагентов | `spawn_subagent` |
 
 **Как это работает (ai.ts):**
 
@@ -975,7 +1007,8 @@ CRITICAL SYSTEM RULE: даже при roll=1, если требуется tool c
 | `write_file` | Записывает файл на ПК пользователя нативно через Node.js fs. Параметры: `file_path`, `content`, `mode` (`overwrite`/`append`). Поддерживает `.docx` — генерирует валидный Word-документ (каждая строка = абзац, только `overwrite`). **Всегда требует HitL-карточку `file_action_confirmation`** (игнорирует auto-approve). Лимит контента: 5 МБ. Запись в системные директории (`C:\Windows`, `/etc`, `/usr`, `/bin`) заблокирована. |
 | `edit_file_lines` | Точечно заменяет строки в файле через `Array.splice`. Параметры: `file_path`, `start_line`, `end_line`, `new_content`. Поддерживает замену, вставку (`end_line = start_line - 1`) и удаление (`new_content = ""`). Перед HitL бэкенд читает старые строки для diff-превью. **Всегда требует HitL-карточку `edit_file_lines_confirmation`** с визуальным diff (красный/зелёный). Не поддерживает `.docx`. |
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
-| `invoke_subagent` | Делегирует задачу специализированному субагенту. Динамически генерируется из реестра (`services/subagents/registry.ts`). Добавляется только при `isDesktop=true` и наличии зарегистрированных субагентов. |
+| `invoke_subagent` | Делегирует задачу специализированному субагенту из статического реестра. Динамически генерируется из `services/subagents/registry.ts`. Добавляется только при `isDesktop=true` и наличии зарегистрированных субагентов. |
+| `spawn_subagent` | Создаёт ad-hoc субагента «на лету»: модель задаёт задачу, опциональный системный промпт, набор инструментов и лимит итераций (1–50). Динамически генерирует список доступных инструментов (исключая рекурсивный спавн). Несколько вызовов в одной итерации выполняются параллельно (до `MAX_PARALLEL_SPAWN_SUBAGENTS = 3`). Добавляется только при `isDesktop=true`. Полный trace сохраняется в `subagents_json` отдельно от `tool_calls_json`. |
 
 HitL-отклонения (`pc_command_confirmation`, file/email/devops confirmations) могут передавать `rejection_comment`. Бэкенд прокидывает его в tool response как `user_comment`, чтобы модель понимала, что пользователь хочет изменить.
 
@@ -1297,6 +1330,7 @@ Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`,
 - **`serverOnlyTools`** (всегда доступны, без `isDesktop`): SSH, DevOps, PC commands, maps, transit.
 - **`desktopOnlyTools`** (только `isDesktop=true`): `desktop_action` (UI-управление).
 - `invoke_subagent` — только `isDesktop=true`.
+- `spawn_subagent` — только `isDesktop=true`.
 
 ### Intermediate content: `fullDbHistory`
 
@@ -1306,6 +1340,18 @@ Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`,
 - `onIntermediateMessage` — текст, сгенерированный на промежуточных шагах (текст + tool call одновременно).
 - `onStateChange` — мгновенная передача изменений аватара при вызове `set_display_state`.
 - `onToolStatus` — статусы типа "Ищу информацию..." в реалтайме.
+
+### Soft Abort (остановка генерации с сохранением)
+
+При остановке генерации (`chat_stop` / `POST /api/v1/chat/stop`) бот **не удаляет** то, что успело сгенерироваться. Вместо этого:
+
+1. Цикл tool-calls прерывается (`break` вместо `throw AbortError`) — даже неполная итерация сохраняется.
+2. Все накопленные артефакты (`answer`, `reasoningParts`, `iterations`, `toolCallsHistory`, `subagentTraces`) объявлены вне `try` блока, чтобы catch имел к ним доступ.
+3. Сохраняется assistant-сообщение в БД с всем накопленным контентом: `reasoning_content`, `tool_calls_json`, `subagents_json`.
+4. Ответ помечается `aborted: true` и `_⏹ Генерация остановлена пользователем_` добавляется в конец текста.
+5. Субагенты внутри цикла тоже получают soft-abort — возвращают partial-результат с `aborted: true`.
+
+Поведение клиента (desktop): при `res.aborted` временное сообщение финализируется с реальным `message_id` и всем накопленным контентом вместо удаления.
 
 ## Система обновлений (Admin)
 

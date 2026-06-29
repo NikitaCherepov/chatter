@@ -660,7 +660,8 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 | `disable_pc_control_full` | Полная блокировка | Всё из lite + команды на ПК + умный дом, почта, карты, виджеты, файловая система |
 | `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
 | `disable_personal` | Гостевой режим | Промпт, hot/cold memory, заметки, задачи. AI общается с чистого листа |
-| `disable_subagents` | Без субагентов | `invoke_subagent` |
+| `disable_specialized_subagents` | Без специализированных субагентов | `invoke_subagent` |
+| `disable_adhoc_subagents` | Без создания субагентов | `spawn_subagent` |
 
 ### Как добавить новый флаг
 
@@ -773,6 +774,22 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 | `repetition_penalty` | 1.0–2.0 | Жёсткий штраф за повторения (OpenRouter only) |
 | `max_tokens` | 1–65536 | Лимит длины ответа |
 
+## Subagent Settings (модель и reasoning субагентов)
+
+Во вкладке "Модели" в SettingsModal, отдельно от основной модели, настраиваются параметры для AI-субагентов:
+
+- **Модель субагента** — селектор (аналогичный основному): `auto` (наследует модель основного агента) или конкретная модель из каталога. Сохраняется через `PUT /api/v1/user/subagent-model`.
+- **Reasoning level** — появляется только если выбрана конкретная модель и она поддерживает reasoning levels. Сохраняется через `PUT /api/v1/user/subagent-reasoning-level`.
+
+Оба значения прокидываются через `SubagentContext` в `runner.ts` и применяются в `runCompletion()` при каждом AI-вызове внутри субагента.
+
+### Ключевые файлы
+
+| Файл | Роль |
+|---|---|
+| `lib/api.ts` | `getSubagentModel()` / `setSubagentModel()` / `getSubagentReasoningLevel()` / `setSubagentReasoningLevel()` |
+| `components/SettingsModal.tsx` | Селектор модели субагента + reasoning level slider |
+
 ## ChatPage Messages
 
 Основная лента чата живет в `pages/ChatPage.tsx`.
@@ -788,20 +805,24 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 - Автоскролл вниз пропускается, если идет prepend старых сообщений.
 - Архивные сообщения (`msg.archived === true`) отображаются с пониженной прозрачностью (opacity 0.55) и меткой «архив» в metaRow. Архивные сообщения не отправляются в AI-контекст, но остаются в БД и доступны для просмотра и поиска.
 
-### Reasoning и tool calls
+### Reasoning, tool calls и subagents
 
 Assistant-сообщения могут иметь дополнительные поля:
 
 - `reasoning_content?: string | null`
 - `tool_calls?: Array<{ id?: string; name: string; arguments: unknown; result_preview?: string }>`
 - `result_preview` — обрезанный результат инструмента (до 250 символов) для отображения в popover. При streaming приходит из `toolCallsHistory` (обрезка через `formatToolResultPreview`), при перезагрузке чата — реконструируется из trace-формата `tool_calls_json` (обрезка через `slice(0, 250)`).
+- `subagents?: SubagentTrace[] | null` — полные trace ad-hoc субагентов (созданных через `spawn_subagent`). Каждый элемент содержит: `task`, `system_prompt`, `tools`, `tools_used`, `answer`, `summary`, `aborted?`, `trace` (пошаговые tool calls).
 
 UI:
 
 - Кнопка `Рассуждение` появляется только если `reasoning_content` непустой.
 - Кнопка инструментов появляется только если `tool_calls.length > 0`.
-- Оба блока открываются как absolute popover поверх ширины сообщения (`reasoningPanel`) и не раздвигают ленту.
+- Кнопка `N сабагент(ов)` появляется только если `subagents.length > 0`. Открывает панель с детальным trace каждого субагента: задача, промпт (обрезанный до 500 символов), список переданных инструментов, список выполненных инструментов, ответ.
+- Прерванные субагенты помечаются `⏹ прерван`.
+- Все три блока открываются как absolute popover поверх ширины сообщения (`reasoningPanel`) и не раздвигают ленту.
 - Анимация popover сделана через `AnimatePresence` + `motion.div`, направление раскрытия — сверху вниз (`y: -16 -> 0`).
+- Toggles управляются через `openSubagentsId` state (по аналогии с `openReasoningId` / `openToolCallsId`).
 
 ### Regeneration
 
@@ -904,6 +925,11 @@ Desktop-клиент использует **WebSocket** для двунапра�
 - `stopChatStream()` sends `{ type: 'chat_stop' }` over WS when connected and also calls `POST /api/v1/chat/stop` as a fallback/backup.
 - In `ChatPage`, `sending` means "there is an active chat request" and keeps the stop button visible until `done`, `error`, or aborted `done`.
 - `showTyping` is separate from `sending`: it only controls the temporary typing bubble. The first `tool_status` or `intermediate` event hides typing and appends content to the same temporary assistant message.
+
+**Soft abort:** при остановке генерации бот не удаляет накопленный контент. Вместо этого:
+- Если `res.aborted === true` и есть `res.message_id` — временное сообщение финализируется с реальным ID, всем накопленным контентом (`reasoning_content`, `tool_calls`, `subagents`) и текстом `_⏹ Генерация остановлена пользователем_`.
+- Если `message_id === 0` — временное сообщение удаляется (ничего не успело сгенерироваться).
+- Затронуто 4 потока: обычная отправка, regenerate, regenerate-with-hint, voice.
 
 ## Tool Navigation
 
