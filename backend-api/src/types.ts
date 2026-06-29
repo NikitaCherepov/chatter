@@ -100,7 +100,13 @@ export type MessageDto = {
     answer: string;
     summary: string;
     aborted?: boolean;
-    trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+    iterations: Array<{
+      step: number;
+      content: string;
+      tool_calls: Array<{ id?: string; name: string; arguments: any }>;
+      results: Array<{ id?: string; name: string; content: string }>;
+      is_final?: boolean;
+    }>;
   }> | null;
 };
 
@@ -169,7 +175,13 @@ export type AiSendResult = {
     answer: string;
     summary: string;
     aborted?: boolean;
-    trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+    iterations: Array<{
+      step: number;
+      content: string;
+      tool_calls: Array<{ id?: string; name: string; arguments: any }>;
+      results: Array<{ id?: string; name: string; content: string }>;
+      is_final?: boolean;
+    }>;
   }>;
   usage: UsageDto;
   /** Токены ответа ассистента (без reasoning). См. MessageTokensDto. */

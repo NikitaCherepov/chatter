@@ -49,6 +49,19 @@ export interface SubagentContext {
   onSubagentTrace?: (trace: SubagentTraceEntry) => void;
 }
 
+/** Одна итерация агентского цикла субагента (аналог ToolIteration основного агента). */
+export interface SubagentIteration {
+  step: number;
+  /** Текст, который модель сгенерила на этой итерации (intermediate content). Может быть "". */
+  content: string;
+  /** Tool calls на этой итерации. */
+  tool_calls: Array<{ id?: string; name: string; arguments: any }>;
+  /** Полные результаты для каждого tool_call этой итерации. */
+  results: Array<{ id?: string; name: string; content: string }>;
+  /** true у финальной итерации без tool_calls (только текстовый ответ). */
+  is_final?: boolean;
+}
+
 /** Trace entry for ad-hoc subagent — stored in messages.subagents_json for UI display. */
 export interface SubagentTraceEntry {
   task: string;
@@ -58,7 +71,8 @@ export interface SubagentTraceEntry {
   answer: string;
   summary: string;
   aborted?: boolean;
-  trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+  /** Итерации агентского цикла (аналог ToolIteration основного агента). */
+  iterations: SubagentIteration[];
 }
 
 /** Result returned from a finished subagent run. */
@@ -67,8 +81,10 @@ export interface SubagentResult {
   answer: string;
   /** Short human-readable summary of what the subagent did. */
   summary: string;
-  /** Full history of tool calls the subagent performed (name → result). */
+  /** Full history of tool calls the subagent performed (flat list, for backwards compat). */
   toolCallsHistory: Array<{ tool: string; args: Record<string, any>; result: string }>;
+  /** Iterations of the agent loop (step-by-step with results, for trace/UI). */
+  iterations: SubagentIteration[];
   /** Present and `true` when the subagent was aborted mid-run (soft abort). */
   aborted?: boolean;
 }

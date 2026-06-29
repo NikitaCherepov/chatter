@@ -374,23 +374,50 @@ const MessageItem = React.memo(function MessageItem({
           {hasSubagents && isSubagentsOpen && (
             <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <div className={s.toolCallList}>
-                {msg.subagents!.map((sa, i) => (
-                  <div key={i} className={s.toolCallItem}>
-                    <div className={s.toolCallName}>🧠 Сабагент {i + 1}{sa.aborted ? ' · ⏹ прерван' : ''}</div>
-                    <div className={s.toolCallLabel}>Задача</div>
-                    <pre className={s.toolCallArgs}>{sa.task}</pre>
-                    <div className={s.toolCallLabel}>Системный промпт</div>
-                    <pre className={s.toolCallArgs}>{sa.system_prompt.slice(0, 500)}{sa.system_prompt.length > 500 ? '…' : ''}</pre>
-                    <div className={s.toolCallLabel}>Инструменты ({sa.tools.length})</div>
-                    <pre className={s.toolCallArgs}>{sa.tools.join(', ')}</pre>
-                    <div className={s.toolCallLabel}>Выполнено инструментов ({sa.trace.length})</div>
-                    {sa.trace.length > 0 && (
-                      <pre className={s.toolCallArgs}>{sa.trace.map(t => `  • ${t.tool}`).join('\n')}</pre>
-                    )}
-                    <div className={s.toolCallLabel}>Ответ</div>
-                    <pre className={s.toolCallArgs}>{sa.answer.slice(0, 1000)}{sa.answer.length > 1000 ? '…' : ''}</pre>
-                  </div>
-                ))}
+                {msg.subagents!.map((sa, i) => {
+                  const totalToolCalls = sa.iterations?.reduce((sum, it) => sum + (it.tool_calls?.length || 0), 0) ?? 0;
+                  return (
+                    <div key={i} className={s.toolCallItem}>
+                      <div className={s.toolCallName}>🧠 Сабагент {i + 1}{sa.aborted ? ' · ⏹ прерван' : ''}</div>
+                      <div className={s.toolCallLabel}>Задача</div>
+                      <pre className={s.toolCallArgs}>{sa.task}</pre>
+                      <div className={s.toolCallLabel}>Системный промпт</div>
+                      <pre className={s.toolCallArgs}>{sa.system_prompt.slice(0, 500)}{sa.system_prompt.length > 500 ? '…' : ''}</pre>
+                      <div className={s.toolCallLabel}>Инструменты ({sa.tools.length})</div>
+                      <pre className={s.toolCallArgs}>{sa.tools.join(', ')}</pre>
+                      <div className={s.toolCallLabel}>Выполнено инструментов ({totalToolCalls})</div>
+                      {sa.iterations?.map((iter, j) => (
+                        <div key={j} style={{ marginTop: 4 }}>
+                          {iter.content && (
+                            <>
+                              <div className={s.toolCallLabel} style={{ opacity: 0.6 }}>Шаг {iter.step} · текст</div>
+                              <pre className={s.toolCallArgs} style={{ opacity: 0.7 }}>{iter.content.slice(0, 500)}{iter.content.length > 500 ? '…' : ''}</pre>
+                            </>
+                          )}
+                          {iter.tool_calls?.map((tc, k) => {
+                            const args = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {}, null, 2);
+                            const result = iter.results?.find(r => (tc.id && r.id === tc.id) || r.name === tc.name);
+                            const resultText = result?.content || '';
+                            return (
+                              <div key={k} style={{ marginTop: 2 }}>
+                                <div className={s.toolCallLabel}>Шаг {iter.step} · {tc.name}</div>
+                                <pre className={s.toolCallArgs}>{formatToolValue(args) || '{}'}</pre>
+                                {resultText && (
+                                  <>
+                                    <div className={s.toolCallLabel} style={{ opacity: 0.6 }}>Результат</div>
+                                    <pre className={s.toolCallArgs} style={{ opacity: 0.8 }}>{formatToolValue(resultText.slice(0, 250))}{resultText.length > 250 ? `\n...[truncated ${resultText.length - 250} chars]` : ''}</pre>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                      <div className={s.toolCallLabel}>Ответ</div>
+                      <pre className={s.toolCallArgs}>{sa.answer.slice(0, 1000)}{sa.answer.length > 1000 ? '…' : ''}</pre>
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           )}

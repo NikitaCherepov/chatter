@@ -461,6 +461,54 @@ export const appendChatMessage = (
     if (reasoning) {
       reasoningTokens = countTokens(reasoning);
     }
+
+    // Subagent trace tokens: считаем вес subagents_json (tool calls + results
+    // каждого субагента), чтобы оценка контекста сообщения была точной.
+    // В AI-контекст не отправляется (как reasoning), но нужен для подсчёта
+    // общего "веса" сообщения и отображения в UI.
+    if (saj) {
+      try {
+        const saParsed = JSON.parse(saj);
+        if (Array.isArray(saParsed)) {
+          for (const sa of saParsed) {
+            // Считаем task + system_prompt + answer
+            tokenCount += countTokens(String(sa.task || ''));
+            tokenCount += countTokens(String(sa.system_prompt || ''));
+            tokenCount += countTokens(String(sa.answer || ''));
+            // Считаем iterations (tool calls + results)
+            if (Array.isArray(sa.iterations)) {
+              for (const iter of sa.iterations) {
+                if (Array.isArray(iter.tool_calls)) {
+                  for (const tc of iter.tool_calls) {
+                    tokenCount += countToolCallTokens(
+                      tc.name ?? '',
+                      typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {}),
+                      tc.id ?? ''
+                    );
+                  }
+                }
+                if (Array.isArray(iter.results)) {
+                  for (const res of iter.results) {
+                    tokenCount += countToolResultTokens(
+                      res.name ?? '',
+                      res.id ?? '',
+                      res.content ?? ''
+                    );
+                  }
+                }
+              }
+            }
+            // Fallback: старый формат с плоским trace
+            if (Array.isArray(sa.trace)) {
+              for (const t of sa.trace) {
+                tokenCount += countToolCallTokens(t.tool ?? '', JSON.stringify(t.args ?? {}), '');
+                tokenCount += countToolResultTokens(t.tool ?? '', '', String(t.result ?? ''));
+              }
+            }
+          }
+        }
+      } catch { /* skip invalid JSON */ }
+    }
   }
 
   const inserted = db.prepare(`

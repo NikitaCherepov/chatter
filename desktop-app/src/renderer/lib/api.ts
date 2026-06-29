@@ -169,6 +169,14 @@ export type MessageAudio = {
 export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };
 
 /** Полный trace ad-hoc субагента — для UI-блока «Сабагенты». */
+export type SubagentIteration = {
+  step: number;
+  content: string;
+  tool_calls: Array<{ id?: string; name: string; arguments: any }>;
+  results: Array<{ id?: string; name: string; content: string }>;
+  is_final?: boolean;
+};
+
 export type SubagentTrace = {
   task: string;
   system_prompt: string;
@@ -177,7 +185,7 @@ export type SubagentTrace = {
   answer: string;
   summary: string;
   aborted?: boolean;
-  trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+  iterations: SubagentIteration[];
 };
 
 export type Message = {

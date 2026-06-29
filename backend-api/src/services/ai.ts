@@ -4598,7 +4598,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         answer: result.answer,
         summary: result.summary,
         aborted: result.aborted,
-        trace: result.toolCallsHistory,
+        iterations: result.iterations || [],
       };
 
       const response: any = {
@@ -4621,13 +4621,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         try {
           subagentExtra.onSubagentTrace({
             task,
-            system_prompt: effectivePrompt.slice(0, 2000), // для UI сохраняем сокращённую версию промпта
+            system_prompt: effectivePrompt.slice(0, 2000),
             tools: validTools,
             tools_used: result.toolCallsHistory.map(t => t.tool),
             answer: result.answer,
             summary: result.summary,
             aborted: result.aborted,
-            trace: result.toolCallsHistory,
+            iterations: result.iterations || [],
           });
         } catch {}
       }
@@ -4880,7 +4880,13 @@ export const sendMessageThroughAi = async (
     answer: string;
     summary: string;
     aborted?: boolean;
-    trace: Array<{ tool: string; args: Record<string, any>; result: string }>;
+    iterations: Array<{
+      step: number;
+      content: string;
+      tool_calls: Array<{ id?: string; name: string; arguments: any }>;
+      results: Array<{ id?: string; name: string; content: string }>;
+      is_final?: boolean;
+    }>;
   }> = [];
 
   try {

@@ -12,7 +12,7 @@
  * Respects user's preferred model (manual model selection).
  */
 
-import { SubagentContext, SubagentResult } from './types.js';
+import { SubagentContext, SubagentResult, SubagentIteration } from './types.js';
 import { setMaxListeners } from 'events';
 import { getSubagent, RegisteredSubagent } from './registry.js';
 
@@ -61,6 +61,16 @@ function getToolStatusMessage(agentName: string, toolName: string): string {
 /** Local abort-error check (avoids circular import with ai.ts). */
 function _isAbortError(err: any): boolean {
   return err?.name === 'AbortError' || err?.code === 'ABORT_ERR' || `${err?.message || ''}` === 'AbortError';
+}
+
+/** Лимит на сохраняемый полный результат инструмента в trace (аналог TOOL_RESULT_FULL_MAX в ai.ts). */
+const SUBAGENT_TOOL_RESULT_MAX = 40_000;
+
+function truncateToolResult(content: string): string {
+  if (content.length > SUBAGENT_TOOL_RESULT_MAX) {
+    return content.slice(0, SUBAGENT_TOOL_RESULT_MAX) + `\n\n[...результат обрезан, всего ${content.length} символов]`;
+  }
+  return content;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +157,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
 
   // 4. Agent loop
   const toolCallsHistory: SubagentResult['toolCallsHistory'] = [];
+  const iterations: SubagentIteration[] = [];
   const mode = resolveMode(ctx);
   const maxLoops = agent.maxLoops;
   const debugRaw = process.env.DEBUG_AI_RAW_SUBAGENT === '1';
@@ -188,6 +199,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         answer: 'Субагент не получил ответ от модели.',
         summary: 'Пустой ответ модели.',
         toolCallsHistory,
+        iterations,
       };
     }
 
@@ -209,15 +221,26 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     // Push assistant message to history
     messages.push(message);
 
+    // Start a new iteration trace entry
+    const currentIteration: SubagentIteration = {
+      step: loop + 1,
+      content: typeof message.content === 'string' ? message.content : '',
+      tool_calls: [],
+      results: [],
+    };
+
     // If no tool calls — we have the final answer
     const toolCalls = message.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
       const content = message.content || '';
       console.log(`[subagent:${resolvedAgentName}] === finished after ${loop + 1} loops, answer: ${content.slice(0, 500)}`);
+      currentIteration.is_final = true;
+      iterations.push(currentIteration);
       return {
         answer: content,
         summary: content.slice(0, 500),
         toolCallsHistory,
+        iterations,
       };
     }
 
@@ -293,16 +316,18 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       // Log tool result
       console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
 
-      // Record history
+      // Record flat history
+      let parsedArgs: any;
+      try { parsedArgs = JSON.parse(argsRaw); } catch { parsedArgs = { _raw: argsRaw }; }
+      toolCallsHistory.push({ tool: toolName, args: parsedArgs, result: toolContent });
+
+      // Record in iteration trace (with full result, truncated)
       try {
-        toolCallsHistory.push({
-          tool: toolName,
-          args: JSON.parse(argsRaw),
-          result: toolContent,
-        });
+        currentIteration.tool_calls.push({ id: toolCall.id, name: toolName, arguments: parsedArgs });
       } catch {
-        toolCallsHistory.push({ tool: toolName, args: { _raw: argsRaw }, result: toolContent });
+        currentIteration.tool_calls.push({ id: toolCall.id, name: toolName, arguments: { _raw: argsRaw } });
       }
+      currentIteration.results.push({ id: toolCall.id, name: toolName, content: truncateToolResult(toolContent) });
 
       // Push tool result to messages
       messages.push({
@@ -317,6 +342,9 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         ctx.desktopActionSink.value = null;
       }
     }
+
+    // Save completed iteration
+    iterations.push(currentIteration);
   }
 
   // If we exhausted all loops without a final answer
@@ -324,6 +352,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     answer: 'Субагент превысил лимит итераций. Задача может быть выполнена частично.',
     summary: 'Превышен лимит итераций.',
     toolCallsHistory,
+    iterations,
   };
   } catch (err: any) {
     // Soft abort: возвращаем partial-результат вместо throw,
@@ -338,6 +367,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         answer: partialAnswer || 'Прервано пользователем',
         summary: 'Прервано пользователем (partial).',
         toolCallsHistory,
+        iterations,
         aborted: true,
       };
     }
