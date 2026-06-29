@@ -4504,6 +4504,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         context: contextData,
         ctx: {
           userId: user.id,
+          user,
           isDesktop: !!desktopActionSink,
           timezoneOffset,
           signal,
@@ -4577,6 +4578,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         task,
         ctx: {
           userId: user.id,
+          user,
           isDesktop: !!desktopActionSink,
           timezoneOffset,
           signal,
