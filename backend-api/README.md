@@ -450,7 +450,7 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 
 **Интеграция:**
 - `invoke_subagent` — добавляется в `executionTools` только если `isDesktop=true` и в реестре есть зарегистрированные субагенты
-- `spawn_subagent` — добавляется только если `isDesktop=true` и флаг `disable_adhoc_subagents` не установлен. Динамически генерирует список доступных инструментов (исключая `spawn_subagent` и `invoke_subagent` — рекурсивный спавн запрещён)
+- `spawn_subagent` — добавляется только если `isDesktop=true` и флаг `disable_adhoc_subagents` не установлен. Динамически генерирует список **всех** runtime-инструментов (базовые + serverOnlyTools + desktopOnlyTools + macros), исключая `spawn_subagent` и `invoke_subagent` (рекурсивный спавн запрещён). Список передаётся через `availableToolDefs` → `ctx.runtimeToolDefs` в runner
 - `initSubagentRunner()` — вызывается при старте сервера (`server.ts`), передаёт ссылки на `runCompletion`, `runTool`, `toolDefinitions` для разрыва циклических зависимостей
 - Субагент использует тот же `AbortSignal` что и основной запрос — остановка генерации (`chat_stop`) останавливает и субагента (soft-abort — возвращает partial-результат)
 - Модель субагента: пользователь выбирает в настройках `subagent_mode` (`auto` = наследует модель основного агента, или конкретная модель из каталога). Reasoning level также настраивается отдельно через `subagent_reasoning_level`
@@ -476,7 +476,7 @@ services/subagents/
 
 Создаются моделью через `spawn_subagent` без регистрации в `REGISTRY`. Параметры:
 - `systemPrompt` — прямой текст промпта (не из файла), лимит 16KB. Если модель не передаёт — используется дефолтный промпт общего ассистента.
-- `sharedTools` — массив имён инструментов из `toolDefinitions`, которые субагент может использовать. Валидируется на бэкенде — неизвестные имена отбрасываются.
+- `sharedTools` — массив имён инструментов из полного runtime-набора (базовые `toolDefinitions` + динамические `serverOnlyTools` / `desktopOnlyTools` / macros), которые субагент может использовать. Валидируется на бэкенде — неизвестные имена отбрасываются. Runner получает definitions через `ctx.runtimeToolDefs`.
 - `maxLoops` — лимит итераций (1–50, по умолчанию 20).
 - Не имеет `ownTools` — только разделяемые инструменты главного агента.
 
@@ -1008,7 +1008,7 @@ CRITICAL SYSTEM RULE: даже при roll=1, если требуется tool c
 | `edit_file_lines` | Точечно заменяет строки в файле через `Array.splice`. Параметры: `file_path`, `start_line`, `end_line`, `new_content`. Поддерживает замену, вставку (`end_line = start_line - 1`) и удаление (`new_content = ""`). Перед HitL бэкенд читает старые строки для diff-превью. **Всегда требует HitL-карточку `edit_file_lines_confirmation`** с визуальным diff (красный/зелёный). Не поддерживает `.docx`. |
 | `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
 | `invoke_subagent` | Делегирует задачу специализированному субагенту из статического реестра. Динамически генерируется из `services/subagents/registry.ts`. Добавляется только при `isDesktop=true` и наличии зарегистрированных субагентов. |
-| `spawn_subagent` | Создаёт ad-hoc субагента «на лету»: модель задаёт задачу, опциональный системный промпт, набор инструментов и лимит итераций (1–50). Динамически генерирует список доступных инструментов (исключая рекурсивный спавн). Несколько вызовов в одной итерации выполняются параллельно (до `MAX_PARALLEL_SPAWN_SUBAGENTS = 3`). Добавляется только при `isDesktop=true`. Полный trace сохраняется в `subagents_json` отдельно от `tool_calls_json`. |
+| `spawn_subagent` | Создаёт ad-hoc субагента «на лету»: модель задаёт задачу, опциональный системный промпт, набор инструментов и лимит итераций (1–50). Доступны **все** runtime-инструменты (кроме `spawn_subagent` / `invoke_subagent`). Несколько вызовов в одной итерации выполняются параллельно (до `MAX_PARALLEL_SPAWN_SUBAGENTS = 3`). Добавляется только при `isDesktop=true`. Полный trace сохраняется в `subagents_json` отдельно от `tool_calls_json`. |
 
 HitL-отклонения (`pc_command_confirmation`, file/email/devops confirmations) могут передавать `rejection_comment`. Бэкенд прокидывает его в tool response как `user_comment`, чтобы модель понимала, что пользователь хочет изменить.
 
