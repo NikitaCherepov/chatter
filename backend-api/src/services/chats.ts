@@ -568,13 +568,15 @@ export type ChatMediaItem = {
 export const getChatMedia = (userId: number, chatId: number, limit = 100, offset = 0): ChatMediaItem[] => {
   const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
+  // Берём с запасом по строкам — одна строка может содержать несколько картинок
+  const rowLimit = safeOffset + safeLimit + 50;
   const rows = db.prepare(`
     SELECT id, images, created_at
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ? AND images IS NOT NULL AND images != ''
     ORDER BY id DESC
-    LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; images: string; created_at: string }>;
+    LIMIT ?
+  `).all(userId, chatId, rowLimit) as Array<{ id: number; images: string; created_at: string }>;
 
   const items: ChatMediaItem[] = [];
   for (const row of rows) {
@@ -592,24 +594,28 @@ export const getChatMedia = (userId: number, chatId: number, limit = 100, offset
       }
     } catch { /* skip invalid JSON */ }
   }
-  return items;
+  // Обрезаем по реальному количеству изображений
+  return items.slice(safeOffset, safeOffset + safeLimit);
 };
 
 /**
  * Возвращает медиа (изображения) из всех чатов пользователя.
  * JOIN с user_chats для получения названия чата.
+ * Пагинация по итоговым изображениям, а не по строкам chat_messages.
  */
 export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMediaItem[] => {
   const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
+  // Берём с запасом по строкам — одна строка может содержать несколько картинок
+  const rowLimit = safeOffset + safeLimit + 50;
   const rows = db.prepare(`
     SELECT cm.id, cm.images, cm.created_at, cm.chat_id, uc.title AS chat_title
     FROM chat_messages cm
     LEFT JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = cm.user_id
     WHERE cm.user_id = ? AND cm.images IS NOT NULL AND cm.images != ''
     ORDER BY cm.id DESC
-    LIMIT ? OFFSET ?
-  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; images: string; created_at: string; chat_id: number; chat_title: string | null }>;
+    LIMIT ?
+  `).all(userId, rowLimit) as Array<{ id: number; images: string; created_at: string; chat_id: number; chat_title: string | null }>;
 
   const items: ChatMediaItem[] = [];
   for (const row of rows) {
@@ -629,7 +635,8 @@ export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMe
       }
     } catch { /* skip invalid JSON */ }
   }
-  return items;
+  // Обрезаем по реальному количеству изображений
+  return items.slice(safeOffset, safeOffset + safeLimit);
 };
 
 /**
