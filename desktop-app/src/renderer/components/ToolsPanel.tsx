@@ -116,6 +116,7 @@ type Props = {
   isAdmin: number;
   activeChatId?: number | null;
   onImageClick?: (src: string) => void;
+  onChatSelect?: (chatId: number) => void;
 };
 
 const CONTENT_LIMITS: Record<string, number> = {
@@ -124,7 +125,7 @@ const CONTENT_LIMITS: Record<string, number> = {
   pro: 3000,
 };
 
-export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick }: Props) {
+export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSelect }: Props) {
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
   const [openTools, setOpenTools] = useState<ToolId[]>(() => getToolsPanelState().openTools);
   // Per-tool layout states
@@ -228,7 +229,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick }: Props)
       return <MapTool />;
     }
     if (toolId === 'gallery') {
-      return <GalleryTool chatId={activeChatId ?? null} onImageClick={onImageClick} />;
+      return <GalleryTool chatId={activeChatId ?? null} onImageClick={onImageClick} onChatSelect={onChatSelect} />;
     }
     if (toolId === 'documents') {
       return <DocumentsTool chatId={activeChatId ?? null} />;

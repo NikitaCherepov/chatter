@@ -5,20 +5,29 @@ import s from './GalleryTool.module.scss';
 type Props = {
   chatId: number | null;
   onImageClick?: (src: string) => void;
+  onChatSelect?: (chatId: number) => void;
 };
 
 const PAGE_SIZE = 50;
 
-export function GalleryTool({ chatId, onImageClick }: Props) {
+type GalleryMode = 'current' | 'all';
+
+export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
+  const [mode, setMode] = useState<GalleryMode>('current');
   const [media, setMedia] = useState<api.ChatMediaItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
-  const loadMedia = useCallback(async (id: number, resetOffset: number = 0) => {
+  const loadMedia = useCallback(async (resetOffset: number = 0) => {
     setLoading(true);
     try {
-      const res = await api.getChatMedia(id, PAGE_SIZE, resetOffset);
+      const res = mode === 'all'
+        ? await api.getAllMedia(PAGE_SIZE, resetOffset)
+        : chatId
+          ? await api.getChatMedia(chatId, PAGE_SIZE, resetOffset)
+          : { media: [] };
+
       if (resetOffset === 0) {
         setMedia(res.media);
       } else {
@@ -33,26 +42,34 @@ export function GalleryTool({ chatId, onImageClick }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mode, chatId]);
 
   useEffect(() => {
-    if (chatId) {
-      loadMedia(chatId, 0);
+    if (mode === 'all' || chatId) {
+      loadMedia(0);
     } else {
       setMedia([]);
       setHasMore(false);
     }
-  }, [chatId, loadMedia]);
+  }, [mode, chatId, loadMedia]);
 
   const handleLoadMore = () => {
-    if (chatId && !loading && hasMore) {
-      loadMedia(chatId, offset);
+    if (!loading && hasMore) {
+      loadMedia(offset);
     }
   };
 
-  if (!chatId) {
+  const isCurrent = mode === 'current';
+  const isAll = mode === 'all';
+
+  // Показываем empty state когда нет чата в режиме "current"
+  if (isCurrent && !chatId) {
     return (
       <div className={s.root}>
+        <div className={s.modeSwitch}>
+          <ModeButton active={isCurrent} onClick={() => setMode('current')}>Этот чат</ModeButton>
+          <ModeButton active={isAll} onClick={() => setMode('all')}>Все чаты</ModeButton>
+        </div>
         <div className={s.empty}>Выберите чат</div>
       </div>
     );
@@ -60,22 +77,53 @@ export function GalleryTool({ chatId, onImageClick }: Props) {
 
   return (
     <div className={s.root}>
+      <div className={s.modeSwitch}>
+        <ModeButton active={isCurrent} onClick={() => setMode('current')}>Этот чат</ModeButton>
+        <ModeButton active={isAll} onClick={() => setMode('all')}>Все чаты</ModeButton>
+      </div>
+
       {media.length === 0 && !loading ? (
-        <div className={s.empty}>Нет изображений</div>
+        <div className={s.empty}>
+          {mode === 'all' ? 'Нет изображений' : 'В этом чате нет изображений'}
+        </div>
       ) : (
         <div className={s.grid}>
           {media.map((item, i) => {
             const src = api.resolveImageUrl(item.url);
             return (
-              <button
+              <div
                 key={`${item.message_id}-${i}`}
-                className={s.thumb}
-                onClick={() => onImageClick?.(src)}
-                title={item.type === 'generated' ? 'Сгенерировано' : 'Фото пользователя'}
+                className={s.thumbWrapper}
               >
-                <img src={src} alt="" loading="lazy" />
-                {item.type === 'generated' && <span className={s.badge}>AI</span>}
-              </button>
+                <button
+                  className={s.thumb}
+                  onClick={() => onImageClick?.(src)}
+                  title={item.type === 'generated' ? 'Сгенерировано' : 'Фото пользователя'}
+                >
+                  <img src={src} alt="" loading="lazy" />
+                  {item.type === 'generated' && <span className={s.badge}>AI</span>}
+                </button>
+                {/* В режиме "все чаты" — badge с названием чата и кнопка перехода */}
+                {mode === 'all' && item.chat_title && (
+                  <div className={s.chatBadge}>
+                    <span className={s.chatBadgeText} title={item.chat_title}>
+                      {item.chat_title}
+                    </span>
+                    {onChatSelect && item.chat_id && (
+                      <button
+                        className={s.chatJump}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChatSelect(item.chat_id!);
+                        }}
+                        title={`Перейти к чату: ${item.chat_title}`}
+                      >
+                        ↗
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -86,5 +134,13 @@ export function GalleryTool({ chatId, onImageClick }: Props) {
         </button>
       )}
     </div>
+  );
+}
+
+function ModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button className={`${s.modeBtn} ${active ? s.modeBtnActive : ''}`} onClick={onClick}>
+      {children}
+    </button>
   );
 }

@@ -3646,7 +3646,7 @@ export function ChatPage() {
       </main>
 
       {/* RIGHT TOOLS PANEL */}
-      <ToolsPanel plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId} onImageClick={(src) => setViewerImageSrc(src)} />
+      <ToolsPanel plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId} onImageClick={(src) => setViewerImageSrc(src)} onChatSelect={selectChat} />
 
       <AnimatePresence>
         {showSettings && (

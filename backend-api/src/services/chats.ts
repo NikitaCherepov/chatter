@@ -561,6 +561,8 @@ export type ChatMediaItem = {
   url: string;
   type: 'user_photo' | 'generated';
   created_at: number;
+  chat_id?: number;
+  chat_title?: string;
 };
 
 export const getChatMedia = (userId: number, chatId: number, limit = 100, offset = 0): ChatMediaItem[] => {
@@ -585,6 +587,43 @@ export const getChatMedia = (userId: number, chatId: number, limit = 100, offset
             url: img.url,
             type: img.type,
             created_at: toUnix(row.created_at),
+          });
+        }
+      }
+    } catch { /* skip invalid JSON */ }
+  }
+  return items;
+};
+
+/**
+ * Возвращает медиа (изображения) из всех чатов пользователя.
+ * JOIN с user_chats для получения названия чата.
+ */
+export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMediaItem[] => {
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const rows = db.prepare(`
+    SELECT cm.id, cm.images, cm.created_at, cm.chat_id, uc.title AS chat_title
+    FROM chat_messages cm
+    LEFT JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = cm.user_id
+    WHERE cm.user_id = ? AND cm.images IS NOT NULL AND cm.images != ''
+    ORDER BY cm.id DESC
+    LIMIT ? OFFSET ?
+  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; images: string; created_at: string; chat_id: number; chat_title: string | null }>;
+
+  const items: ChatMediaItem[] = [];
+  for (const row of rows) {
+    try {
+      const imgs = JSON.parse(row.images) as MessageImage[];
+      for (const img of imgs) {
+        if (img.url) {
+          items.push({
+            message_id: row.id,
+            url: img.url,
+            type: img.type,
+            created_at: toUnix(row.created_at),
+            chat_id: row.chat_id,
+            chat_title: row.chat_title || `Чат ${row.chat_id}`,
           });
         }
       }

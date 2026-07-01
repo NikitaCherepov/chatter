@@ -272,10 +272,16 @@ export type ChatMediaItem = {
   url: string;
   type: 'user_photo' | 'generated';
   created_at: number;
+  chat_id?: number;
+  chat_title?: string;
 };
 
 export async function getChatMedia(chatId: number, limit = 100, offset = 0): Promise<{ media: ChatMediaItem[] }> {
   return apiFetch(`/api/v1/chats/${chatId}/media?limit=${limit}&offset=${offset}`);
+}
+
+export async function getAllMedia(limit = 100, offset = 0): Promise<{ media: ChatMediaItem[] }> {
+  return apiFetch(`/api/v1/media/all?limit=${limit}&offset=${offset}`);
 }
 
 export function resolveImageUrl(url: string): string {
