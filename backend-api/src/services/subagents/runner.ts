@@ -135,7 +135,12 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   // 2. Build tool list: own tools + shared tools from main agent
   const ownTools = agent.ownTools || [];
   const ownToolDefs = ownTools.map(t => t.definition);
-  const sharedToolDefs = (_toolDefinitions as unknown as any[]).filter(
+  // Resolve shared tool definitions: prefer runtime defs (includes serverOnlyTools, desktopOnlyTools, etc.),
+  // fall back to the static _toolDefinitions if runtime defs weren't provided.
+  const sharedToolSource = (ctx.runtimeToolDefs && ctx.runtimeToolDefs.length > 0)
+    ? ctx.runtimeToolDefs
+    : (_toolDefinitions as unknown as any[]);
+  const sharedToolDefs = sharedToolSource.filter(
     (t: any) => agent.sharedTools.includes(t?.function?.name || '')
   );
 

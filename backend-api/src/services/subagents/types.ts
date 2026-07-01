@@ -49,6 +49,9 @@ export interface SubagentContext {
   subagentContext?: Record<string, any>;
   /** Optional: called by spawn_subagent handler when the subagent finishes, to capture the full trace for UI display. */
   onSubagentTrace?: (trace: SubagentTraceEntry) => void;
+  /** Full runtime tool definitions from the main agent (executionTools), used to resolve shared tools
+   *  that aren't in the static toolDefinitions array (e.g. serverOnlyTools, desktopOnlyTools). */
+  runtimeToolDefs?: any[];
 }
 
 /** Одна итерация агентского цикла субагента (аналог ToolIteration основного агента). */

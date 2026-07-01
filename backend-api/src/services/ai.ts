@@ -2346,9 +2346,12 @@ const buildInvokeSubagentTool = () => {
  * brand new subagent on the fly. The main agent specifies exactly which tools the
  * subagent can use, what its system prompt is, and how many iterations it may take.
  */
-const buildSpawnSubagentTool = (): any => {
+const buildSpawnSubagentTool = (availableToolDefs?: any[]): any => {
   // Build a list of all available tool names (excluding recursive spawning).
-  const availableToolNames = toolDefinitions
+  // If availableToolDefs (the full runtime executionTools) is provided, use it;
+  // otherwise fall back to the static toolDefinitions array.
+  const source = availableToolDefs || toolDefinitions;
+  const availableToolNames = source
     .map((t: any) => t?.function?.name)
     .filter((n: string | undefined) => n && n !== 'spawn_subagent' && n !== 'invoke_subagent');
 
@@ -2491,7 +2494,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void }, autoRejectHitl?: boolean) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -4514,6 +4517,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           manualModel: subagentExtra?.manualModel,
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
+          runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
       });
 
@@ -4548,9 +4552,16 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     // Если бот не передал промпт — используем дефолтный
     const effectivePrompt = systemPrompt || 'Ты специализированный AI-ассистент. Выполни поставленную задачу, используя предоставленные тебе инструменты. Действуй последовательно и эффективно.';
 
-    // Validate tools against the known toolDefinitions — reject unknown names early.
-    const knownToolNames = new Set(toolDefinitions.map((t: any) => t?.function?.name).filter(Boolean));
-    // Deny recursive spawning.
+    // Validate tools against the known tool set — reject unknown names early.
+    // Use availableToolDefs (full runtime set) if provided, otherwise fall back to toolDefinitions.
+    const runtimeDefs = subagentExtra?.availableToolDefs;
+    const runtimeNames = (runtimeDefs && runtimeDefs.length > 0)
+      ? runtimeDefs.map((t: any) => t?.function?.name).filter(Boolean)
+      : null;
+    const knownToolNames = new Set(
+      runtimeNames || toolDefinitions.map((t: any) => t?.function?.name).filter(Boolean)
+    );
+    // Deny recursive spawning (already excluded by availableToolDefs, but double-check for fallback).
     knownToolNames.delete('spawn_subagent');
     knownToolNames.delete('invoke_subagent');
 
@@ -4589,6 +4600,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
           onSubagentTrace: subagentExtra?.onSubagentTrace,
+          runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
       });
 
@@ -5052,7 +5064,6 @@ export const sendMessageThroughAi = async (
     ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
     : 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
-  const spawnSubagentTool = options?.isDesktop ? buildSpawnSubagentTool() : null;
   // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
   const serverOnlyTools = [
     buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(),
@@ -5067,10 +5078,16 @@ export const sendMessageThroughAi = async (
   const desktopOnlyTools = options?.isDesktop ? [
     buildDesktopActionTool(),
   ] : [];
-  let executionTools: any[] = [
+  // Build spawn_subagent AFTER we know all available tools (including serverOnlyTools, desktopOnlyTools, etc.)
+  // so the model can see and grant the full set.
+  const allBaseToolDefs = [
     ...toolDefinitions, buildDisplayStateTool(options?.displayManifest),
     ...serverOnlyTools,
     ...desktopOnlyTools,
+  ];
+  const spawnSubagentTool = options?.isDesktop ? buildSpawnSubagentTool(allBaseToolDefs) : null;
+  let executionTools: any[] = [
+    ...allBaseToolDefs,
     ...(subagentTool ? [subagentTool] : []),
     ...(spawnSubagentTool ? [spawnSubagentTool] : []),
     ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])
@@ -5405,6 +5422,9 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           onDesktopAction: options?.onDesktopAction,
           displayManifest: options?.displayManifest,
           currentDisplayState: options?.currentDisplayState,
+          availableToolDefs: executionTools.filter(
+            (t: any) => t?.function?.name && t.function.name !== 'spawn_subagent' && t.function.name !== 'invoke_subagent'
+          ),
         },
         options?.autoRejectHitl
       ),
