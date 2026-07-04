@@ -437,6 +437,7 @@ type WsCallbacks = StreamCallbacks & {
 };
 
 let wsCallbacks: WsCallbacks = {};
+let activeStreamCallbacks: StreamCallbacks = {};
 
 /** Register a global handler for task_result events (scheduler push). */
 export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
@@ -444,7 +445,7 @@ export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
 }
 
 export function initWebSocket(callbacks?: WsCallbacks) {
-  if (callbacks) wsCallbacks = callbacks;
+  if (callbacks) wsCallbacks = { ...wsCallbacks, ...callbacks };
 
   // Already connecting or open — skip
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
@@ -468,23 +469,31 @@ export function initWebSocket(callbacks?: WsCallbacks) {
       const msg = JSON.parse(ev.data as string);
 
       switch (msg.type) {
-        case 'intermediate': wsCallbacks.onIntermediate?.(msg.text); break;
-        case 'stream_token': wsCallbacks.onStreamToken?.(msg.text); break;
-        case 'reasoning_token': wsCallbacks.onReasoningStream?.(msg.text); break;
-        case 'display_state': wsCallbacks.onDisplayState?.(msg); break;
+        case 'intermediate': (activeStreamCallbacks.onIntermediate ?? wsCallbacks.onIntermediate)?.(msg.text); break;
+        case 'stream_token': (activeStreamCallbacks.onStreamToken ?? wsCallbacks.onStreamToken)?.(msg.text); break;
+        case 'reasoning_token': (activeStreamCallbacks.onReasoningStream ?? wsCallbacks.onReasoningStream)?.(msg.text); break;
+        case 'display_state': (activeStreamCallbacks.onDisplayState ?? wsCallbacks.onDisplayState)?.(msg); break;
         case 'desktop_action':
           // If it's a macro — execute it via Electron in the background
           if (msg.action === 'execute_macro' && msg.value?.commands) {
             (window as any).electronAPI?.executeCommands(msg.value.commands).catch(console.error);
           }
           // Pass to React (e.g. UI toast "Macro launched")
-          wsCallbacks.onDesktopAction?.(msg);
+          (activeStreamCallbacks.onDesktopAction ?? wsCallbacks.onDesktopAction)?.(msg);
           break;
-        case 'tool_status': wsCallbacks.onToolStatus?.(msg.text); break;
-        case 'map_update': wsCallbacks.onMapUpdate?.(msg); break;
-        case 'dice_roll': wsCallbacks.onDiceRoll?.(Number(msg.roll)); break;
-        case 'done': wsCallbacks.onDone?.(msg); break;
-        case 'error': wsCallbacks.onError?.(msg.error); break;
+        case 'tool_status': (activeStreamCallbacks.onToolStatus ?? wsCallbacks.onToolStatus)?.(msg.text); break;
+        case 'map_update': (activeStreamCallbacks.onMapUpdate ?? wsCallbacks.onMapUpdate)?.(msg); break;
+        case 'dice_roll': (activeStreamCallbacks.onDiceRoll ?? wsCallbacks.onDiceRoll)?.(Number(msg.roll)); break;
+        case 'done': {
+          (activeStreamCallbacks.onDone ?? wsCallbacks.onDone)?.(msg);
+          activeStreamCallbacks = {};
+          break;
+        }
+        case 'error': {
+          (activeStreamCallbacks.onError ?? wsCallbacks.onError)?.(msg.error);
+          activeStreamCallbacks = {};
+          break;
+        }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
         case 'execute_ipc':
           console.log('[ws] execute_ipc received', {
@@ -552,9 +561,7 @@ export async function streamChatMessage(
   documents?: ChatSendDocument[]
 ) {
   // Update callbacks for this request
-  if (callbacks) {
-    wsCallbacks = { ...wsCallbacks, ...callbacks };
-  }
+  activeStreamCallbacks = callbacks ?? {};
 
   // If WS is connected — send through WS
   if (ws && ws.readyState === WebSocket.OPEN) {

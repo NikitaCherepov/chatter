@@ -65,6 +65,7 @@ type MessageItemProps = {
   isSubagentsOpen: boolean;
   isRegenHintOpen: boolean;
   isEditing: boolean;
+  streamingState: 'idle' | 'reasoning' | 'content' | 'done';
   editingText: string;
   sending: boolean;
   regenHintText: string;
@@ -97,6 +98,7 @@ const MessageItem = React.memo(function MessageItem({
   isSubagentsOpen,
   isRegenHintOpen,
   isEditing,
+  streamingState,
   editingText,
   sending,
   regenHintText,
@@ -123,6 +125,8 @@ const MessageItem = React.memo(function MessageItem({
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
   const hasToolCalls = msg.role === 'assistant' && Boolean(msg.tool_calls?.length);
   const hasSubagents = msg.role === 'assistant' && Boolean(msg.subagents?.length);
+  const isStreamingReasoning = streamingState === 'reasoning';
+  const isStreamingContent = streamingState === 'content';
 
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
@@ -150,6 +154,21 @@ const MessageItem = React.memo(function MessageItem({
           )}
         </button>
         {hasReasoning && (
+          isStreamingReasoning ? (
+            <button
+              className={`${s.reasoningToggle} ${s.reasoningToggleStreaming} ${reasoningOpen ? s.reasoningToggleOpen : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleReasoning(msg.id);
+              }}
+              title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+            >
+              <span className={s.streamingLabel}>Рассуждает...</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          ) : (
           <button
             className={`${s.reasoningToggle} ${reasoningOpen ? s.reasoningToggleOpen : ''}`}
             onClick={(e) => {
@@ -163,6 +182,7 @@ const MessageItem = React.memo(function MessageItem({
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
+          )
         )}
         {hasToolCalls && (
           <button
@@ -338,13 +358,23 @@ const MessageItem = React.memo(function MessageItem({
             </div>
           ) : (
             msg.role === 'assistant'
-              ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
+              ? (
+                isStreamingReasoning && !msg.content ? (
+                  <div className={`${s.typingDots} ${s.typingDotsStreaming}`}>
+                    <span className={s.dot} />
+                    <span className={s.dot} />
+                    <span className={s.dot} />
+                  </div>
+                ) : (
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={msg.content} /></div>
+                )
+              )
               : <div className={s.bubbleTextPlain}>{msg.content}</div>
           )}
         </div>
         <AnimatePresence>
           {hasReasoning && reasoningOpen && (
-            <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+            <motion.div className={`${s.reasoningPanel} ${isStreamingReasoning || isStreamingContent ? s.bubbleTextStreaming : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <MarkdownRenderer content={msg.reasoning_content || ''} />
             </motion.div>
           )}
@@ -549,15 +579,32 @@ export function ChatPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
-  /** Текущее состояние стриминга для последнего временного сообщения:
-   *  - 'idle': стрим ещё не начался (или нет стрима) → обычные typing dots
-   *  - 'reasoning': стримятся reasoning-токены → "Рассуждает..." + bouncing dots
-   *  - 'content': стримятся токены контента → печатаем текст
-   *  - 'done': стрим завершён
+  /**
+   * Стриминг-стейт. Храним и в ref (для чтения в колбеках без stale closure),
+   * и в state (для ре-рендера UI).
    */
-  const [streamingState, setStreamingState] = useState<'idle' | 'reasoning' | 'content' | 'done'>('idle');
-  /** ID временного сообщения, к которому относится стрим (для сопоставления с msg в списке). */
-  const [streamingMsgId, setStreamingMsgId] = useState<number | null>(null);
+  const streamingStateRef = useRef<'idle' | 'reasoning' | 'content' | 'done'>('idle');
+  const streamingMsgIdRef = useRef<number | null>(null);
+  const [streamingState, setStreamingStateRaw] = useState<'idle' | 'reasoning' | 'content' | 'done'>('idle');
+  const [streamingMsgId, setStreamingMsgIdRaw] = useState<number | null>(null);
+
+  const setStreamingState = useCallback((s: 'idle' | 'reasoning' | 'content' | 'done' | ((prev: 'idle' | 'reasoning' | 'content' | 'done') => 'idle' | 'reasoning' | 'content' | 'done')) => {
+    if (typeof s === 'function') {
+      setStreamingStateRaw((prev) => {
+        const next = s(prev);
+        streamingStateRef.current = next;
+        return next;
+      });
+    } else {
+      streamingStateRef.current = s;
+      setStreamingStateRaw(s);
+    }
+  }, []);
+
+  const setStreamingMsgId = useCallback((id: number | null) => {
+    streamingMsgIdRef.current = id;
+    setStreamingMsgIdRaw(id);
+  }, []);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -1118,12 +1165,10 @@ export function ChatPage() {
           appendToAssistant(stepText);
         },
         onStreamToken: (token) => {
-          console.log('[stream UI] onStreamToken', { token, streamingMsgId, streamingState });
           setStreamingState((prev) => prev === 'idle' || prev === 'reasoning' ? 'content' : prev);
           streamAppenderRef.current.appendText(token);
         },
         onReasoningStream: (token) => {
-          console.log('[stream UI] onReasoningStream', { token, streamingMsgId, streamingState });
           setStreamingState((prev) => prev === 'idle' ? 'reasoning' : prev);
           streamAppenderRef.current.appendReasoning(token);
         },
@@ -2585,6 +2630,7 @@ export function ChatPage() {
                   isSubagentsOpen={openSubagentsId === msg.id}
                   isRegenHintOpen={regenHintMsgId === msg.id}
                   isEditing={editingMsgId === msg.id}
+                  streamingState={msg.id === streamingMsgId ? streamingState : 'idle'}
                   editingText={editingText}
                   sending={sending}
                   regenHintText={regenHintText}
@@ -2635,15 +2681,20 @@ export function ChatPage() {
                     </button>
                     {msg.role === 'assistant' && msg.reasoning_content?.trim() && (
                       msg.id === streamingMsgId && streamingState === 'reasoning' ? (
-                        // Стрим reasoning — показываем индикатор "Рассуждает..." с bouncing dots
-                        <span className={s.streamingIndicator}>
-                          <span className={s.streamingDots}>
-                            <span className={s.streamingDot} />
-                            <span className={s.streamingDot} />
-                            <span className={s.streamingDot} />
-                          </span>
+                        // Стрим reasoning — показываем текстовый индикатор.
+                        <button
+                          className={`${s.reasoningToggle} ${s.reasoningToggleStreaming} ${openReasoningId === msg.id ? s.reasoningToggleOpen : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenReasoningId((current) => current === msg.id ? null : msg.id);
+                          }}
+                          title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+                        >
                           <span className={s.streamingLabel}>Рассуждает...</span>
-                        </span>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
                       ) : (
                         <button
                           className={`${s.reasoningToggle} ${openReasoningId === msg.id ? s.reasoningToggleOpen : ''}`}
@@ -2882,9 +2933,9 @@ export function ChatPage() {
               ))}
               {showTyping && (
                 <div className={s.messageGroup}>
-                  <div className={s.metaRow}>Chatter &bull; typing...</div>
+                  <div className={s.metaRow}>Chatter &bull; {streamingState === 'reasoning' ? 'Рассуждает...' : 'typing...'}</div>
                   <div className={s.bubble}>
-                    <div className={s.typingDots}>
+                    <div className={`${s.typingDots} ${streamingState === 'reasoning' ? s.typingDotsStreaming : ''}`}>
                       <span className={s.dot} />
                       <span className={s.dot} />
                       <span className={s.dot} />
