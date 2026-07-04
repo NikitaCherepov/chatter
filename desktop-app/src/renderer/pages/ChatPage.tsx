@@ -449,6 +449,99 @@ export function ChatPage() {
   const showTokens = user?.ui_settings?.show_tokens !== false;
   const diceRollEnabled = Boolean(user?.ui_settings?.dice_roll_enabled);
 
+  // ── Token-streaming infrastructure ──
+  // Глобальный буфер для стрим-токенов. Переиспользуется между обычной отправкой,
+  // regenerate и regenerate-with-hint. Каждая новая генерация вызывает
+  // streamAppenderRef.current.reset() перед началом.
+  //
+  // rAF-троттлинг группирует множество setState-обновлений в одно на кадр,
+  // чтобы избежать дребезга при ~20 FPS потока токенов от бэкенда.
+  const streamAppenderRef = useRef({
+    textBuffer: '',
+    reasoningBuffer: '',
+    rafScheduled: false,
+    tempAssistantId: 0,
+    assistantMsgCreated: false,
+    setShowTyping: ((_v: boolean) => {}) as (v: boolean) => void,
+    setMessages: ((_updater: (prev: api.Message[]) => api.Message[]) => []) as React.Dispatch<React.SetStateAction<api.Message[]>>,
+    rafId: 0 as number | null,
+
+    reset(tempAssistantId: number, setShowTypingFn: (v: boolean) => void, setMessagesFn: React.Dispatch<React.SetStateAction<api.Message[]>>) {
+      // Если был запланирован rAF — сбрасываем, иначе старый flush может запуститься после reset
+      if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+      this.textBuffer = '';
+      this.reasoningBuffer = '';
+      this.rafScheduled = false;
+      this.tempAssistantId = tempAssistantId;
+      this.assistantMsgCreated = false;
+      this.setShowTyping = setShowTypingFn;
+      this.setMessages = setMessagesFn;
+      this.rafId = null;
+    },
+
+    flush() {
+      this.rafScheduled = false;
+      this.rafId = null;
+      const text = this.textBuffer;
+      const reasoning = this.reasoningBuffer;
+      this.textBuffer = '';
+      this.reasoningBuffer = '';
+      if (!text && !reasoning) return;
+
+      if (!this.assistantMsgCreated) {
+        this.assistantMsgCreated = true;
+        this.setShowTyping(false);
+        const initText = text;
+        const initReasoning = reasoning || undefined;
+        this.setMessages((prev) => [...prev, {
+          id: this.tempAssistantId,
+          role: 'assistant' as const,
+          content: initText,
+          reasoning_content: initReasoning ?? null,
+          created_at: Math.floor(Date.now() / 1000),
+        }]);
+        return;
+      }
+
+      const tid = this.tempAssistantId;
+      const dt = text;
+      const dr = reasoning;
+      this.setMessages((prev) => prev.map(m => {
+        if (m.id !== tid) return m;
+        const next: api.Message = { ...m };
+        if (dt) next.content = (m.content || '') + dt;
+        if (dr) next.reasoning_content = (m.reasoning_content || '') + dr;
+        return next;
+      }));
+    },
+
+    scheduleFlush() {
+      if (this.rafScheduled) return;
+      this.rafScheduled = true;
+      this.rafId = requestAnimationFrame(() => this.flush());
+    },
+
+    appendText(text: string) {
+      if (!text) return;
+      this.textBuffer += text;
+      this.scheduleFlush();
+    },
+
+    appendReasoning(text: string) {
+      if (!text) return;
+      this.reasoningBuffer += text;
+      this.scheduleFlush();
+    },
+
+    /** Принудительный синхронный flush — вызвать перед onDone/onError. */
+    flushNow() {
+      if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+      this.rafScheduled = false;
+      this.flush();
+    },
+  });
+
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
   const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
@@ -970,12 +1063,23 @@ export function ChatPage() {
     setMessages((prev) => [...prev, tempUserMsg]);
 
     // ID для временного сообщения ассистента — создаётся лениво при первом контенте
-    let assistantMsgCreated = false;
+    // Используем объект-флаг (а не let) чтобы разделять состояние между
+    // appendToAssistant и stream-аппендером.
+    const assistantMsgCreatedRef = { current: false };
     const tempAssistantId = -Date.now() - 1;
 
+    // Инициализируем стрим-аппендер для этой генерации
+    streamAppenderRef.current.reset(tempAssistantId, setShowTyping, setMessages);
+    // Разделяем флаг создания сообщения между appendToAssistant и стримером
+    Object.defineProperty(streamAppenderRef.current, 'assistantMsgCreated', {
+      get: () => assistantMsgCreatedRef.current,
+      set: (v: boolean) => { assistantMsgCreatedRef.current = v; },
+      configurable: true,
+    });
+
     const appendToAssistant = (text: string) => {
-      if (!assistantMsgCreated) {
-        assistantMsgCreated = true;
+      if (!assistantMsgCreatedRef.current) {
+        assistantMsgCreatedRef.current = true;
         setShowTyping(false);
         setMessages((prev) => [...prev, {
           id: tempAssistantId, role: 'assistant', content: text, created_at: Math.floor(Date.now() / 1000),
@@ -997,9 +1101,18 @@ export function ChatPage() {
       currentAvatarStateRef.current,
       {
         onIntermediate: (stepText) => {
+          // Сбрасываем буфер стримера, чтобы новый шаг начался с чистой строки
+          streamAppenderRef.current.flushNow();
           appendToAssistant(stepText);
         },
+        onStreamToken: (token) => {
+          streamAppenderRef.current.appendText(token);
+        },
+        onReasoningStream: (token) => {
+          streamAppenderRef.current.appendReasoning(token);
+        },
         onToolStatus: (statusText) => {
+          streamAppenderRef.current.flushNow();
           appendToAssistant(`_${statusText}_`);
         },
         onDisplayState: (state) => {
@@ -1015,6 +1128,8 @@ export function ChatPage() {
           finishDiceRoll(roll);
         },
         onDone: (res) => {
+          // Финализируем стрим-буфер перед обработкой done
+          streamAppenderRef.current.flushNow();
           // Dice Roll Mode: fallback — если событие dice_roll не дошло, используем done-поле
           if (typeof res.dice_roll === 'number' && diceRolling) {
             finishDiceRoll(res.dice_roll);
@@ -1024,7 +1139,7 @@ export function ChatPage() {
           if (res.aborted) {
             if (res.message_id > 0) {
               // Сообщение сохранено в БД — финализируем его в UI
-              if (assistantMsgCreated) {
+              if (assistantMsgCreatedRef.current) {
                 setMessages((prev) => prev.map(m => {
                   if (m.id === tempAssistantId) {
                     return {
@@ -1058,7 +1173,7 @@ export function ChatPage() {
                 });
               }
               refreshContextTokens(res.chat_id);
-            } else if (assistantMsgCreated) {
+            } else if (assistantMsgCreatedRef.current) {
               // message_id === 0 — старое поведение, удаляем temp
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
             }
@@ -1087,7 +1202,7 @@ export function ChatPage() {
               }))
             : undefined;
 
-          if (assistantMsgCreated) {
+          if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.map(m => {
               if (m.id === tempAssistantId) {
                 return {
@@ -1149,7 +1264,8 @@ export function ChatPage() {
         },
         onError: (err) => {
           console.error('Stream error:', err);
-          if (assistantMsgCreated) {
+          streamAppenderRef.current.flushNow();
+          if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
           } else {
             setMessages((prev) => prev.filter(m => m.id !== tempUserMsg.id));
@@ -1490,11 +1606,18 @@ export function ChatPage() {
     // Dice Roll Mode: regenerate тоже бросает кубик (флаг серверный)
     if (diceRollEnabled) startDiceRollAnimation();
 
-    let assistantMsgCreated = false;
+    const assistantMsgCreatedRef = { current: false };
     const tempAssistantId = -Date.now() - 1;
+    streamAppenderRef.current.reset(tempAssistantId, setShowTyping, setMessages);
+    Object.defineProperty(streamAppenderRef.current, 'assistantMsgCreated', {
+      get: () => assistantMsgCreatedRef.current,
+      set: (v: boolean) => { assistantMsgCreatedRef.current = v; },
+      configurable: true,
+    });
+
     const appendToAssistant = (text: string) => {
-      if (!assistantMsgCreated) {
-        assistantMsgCreated = true;
+      if (!assistantMsgCreatedRef.current) {
+        assistantMsgCreatedRef.current = true;
         setShowTyping(false);
         setMessages((prev) => [...prev, {
           id: tempAssistantId, role: 'assistant', content: text, created_at: Math.floor(Date.now() / 1000),
@@ -1515,18 +1638,21 @@ export function ChatPage() {
       getAvatarManifest(),
       currentAvatarStateRef.current,
       {
-        onIntermediate: (stepText) => appendToAssistant(stepText),
-        onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
+        onIntermediate: (stepText) => { streamAppenderRef.current.flushNow(); appendToAssistant(stepText); },
+        onStreamToken: (token) => streamAppenderRef.current.appendText(token),
+        onReasoningStream: (token) => streamAppenderRef.current.appendReasoning(token),
+        onToolStatus: (statusText) => { streamAppenderRef.current.flushNow(); appendToAssistant(`_${statusText}_`); },
         onDisplayState: (state) => applyAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDiceRoll: (roll) => finishDiceRoll(roll),
         onDone: (res) => {
+          streamAppenderRef.current.flushNow();
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
             if (res.message_id > 0) {
-              if (assistantMsgCreated) {
+              if (assistantMsgCreatedRef.current) {
                 setMessages((prev) => prev.map(m => {
                   if (m.id === tempAssistantId) {
                     return {
@@ -1550,7 +1676,7 @@ export function ChatPage() {
                   subagents: res.subagents ?? null,
                 }]);
               }
-            } else if (assistantMsgCreated) {
+            } else if (assistantMsgCreatedRef.current) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
             }
             setShowTyping(false);
@@ -1574,7 +1700,7 @@ export function ChatPage() {
               }))
             : undefined;
 
-          if (assistantMsgCreated) {
+          if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
                 ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}), ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}), ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}) }
@@ -1596,7 +1722,8 @@ export function ChatPage() {
         },
         onError: (err) => {
           console.error('Regenerate error:', err);
-          if (assistantMsgCreated) {
+          streamAppenderRef.current.flushNow();
+          if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
           }
           setShowTyping(false);
@@ -1636,11 +1763,18 @@ export function ChatPage() {
     // Dice Roll Mode: regenerate тоже бросает кубик (флаг серверный)
     if (diceRollEnabled) startDiceRollAnimation();
 
-    let assistantMsgCreated = false;
+    const assistantMsgCreatedRef = { current: false };
     const tempAssistantId = -Date.now() - 1;
+    streamAppenderRef.current.reset(tempAssistantId, setShowTyping, setMessages);
+    Object.defineProperty(streamAppenderRef.current, 'assistantMsgCreated', {
+      get: () => assistantMsgCreatedRef.current,
+      set: (v: boolean) => { assistantMsgCreatedRef.current = v; },
+      configurable: true,
+    });
+
     const appendToAssistant = (text: string) => {
-      if (!assistantMsgCreated) {
-        assistantMsgCreated = true;
+      if (!assistantMsgCreatedRef.current) {
+        assistantMsgCreatedRef.current = true;
         setShowTyping(false);
         setMessages((prev) => [...prev, {
           id: tempAssistantId, role: 'assistant', content: text, created_at: Math.floor(Date.now() / 1000),
@@ -1661,18 +1795,21 @@ export function ChatPage() {
       getAvatarManifest(),
       currentAvatarStateRef.current,
       {
-        onIntermediate: (stepText) => appendToAssistant(stepText),
-        onToolStatus: (statusText) => appendToAssistant(`_${statusText}_`),
+        onIntermediate: (stepText) => { streamAppenderRef.current.flushNow(); appendToAssistant(stepText); },
+        onStreamToken: (token) => streamAppenderRef.current.appendText(token),
+        onReasoningStream: (token) => streamAppenderRef.current.appendReasoning(token),
+        onToolStatus: (statusText) => { streamAppenderRef.current.flushNow(); appendToAssistant(`_${statusText}_`); },
         onDisplayState: (state) => applyAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
         onMapUpdate: (data) => { openTool('map'); dispatchMapData(data); },
         onDiceRoll: (roll) => finishDiceRoll(roll),
         onDone: (res) => {
+          streamAppenderRef.current.flushNow();
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
             if (res.message_id > 0) {
-              if (assistantMsgCreated) {
+              if (assistantMsgCreatedRef.current) {
                 setMessages((prev) => prev.map(m => {
                   if (m.id === tempAssistantId) {
                     return {
@@ -1696,7 +1833,7 @@ export function ChatPage() {
                   subagents: res.subagents ?? null,
                 }]);
               }
-            } else if (assistantMsgCreated) {
+            } else if (assistantMsgCreatedRef.current) {
               setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
             }
             setShowTyping(false);
@@ -1720,7 +1857,7 @@ export function ChatPage() {
               }))
             : undefined;
 
-          if (assistantMsgCreated) {
+          if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
                 ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}), ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}), ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}) }
@@ -1742,7 +1879,8 @@ export function ChatPage() {
         },
         onError: (err) => {
           console.error('Regenerate with hint error:', err);
-          if (assistantMsgCreated) {
+          streamAppenderRef.current.flushNow();
+          if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
           }
           setShowTyping(false);

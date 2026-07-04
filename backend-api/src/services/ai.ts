@@ -445,6 +445,176 @@ const adaptRequestBodyForProvider = (
   return modelSettings ? applyModelSettingsToBody(requestBody, baseURL, modelSettings) : requestBody;
 };
 
+/**
+ * Опциональные колбеки для токен-стриминга.
+ * Если хотя бы один передан — createCompletionWithModelFallback включает stream:true
+ * и прокидывает токены в колбеки, одновременно собирая assembled-сообщение для возврата.
+ */
+export type StreamCallbacks = {
+  /** Вызывается по мере получения текстовых токенов (уже оттроттлено по времени). */
+  onToken?: (text: string) => void;
+  /** Вызывается по мере получения reasoning-токенов (уже оттроттлено). */
+  onReasoningToken?: (text: string) => void;
+};
+
+/**
+ * Частота flush-а накопленных токенов в колбеки (мс).
+ * ~20 FPS — баланс между плавностью печати и нагрузкой на WS/React.
+ */
+const STREAM_FLUSH_INTERVAL_MS = 50;
+
+/**
+ * Превращает стрим от OpenAI-совместимого API в собранное assistant-сообщение,
+ * одновременно прокидывая токены в колбеки (оттроттленно по времени).
+ *
+ * Возвращает объект того же формата, что client.chat.completions.create() —
+ * { choices: [{ message }] }, чтобы вызывающий код ничего не заметил.
+ *
+ * Поддерживает:
+ * - content (текст)
+ * - reasoning_content / reasoning (DeepSeek, OpenRouter)
+ * - tool_calls (собирается из дельт по index)
+ * - AbortSignal через SDK options + ручная проверка
+ */
+const streamAndAssemble = async (
+  client: OpenAI,
+  payload: Record<string, unknown>,
+  model: string,
+  callbacks: StreamCallbacks | undefined,
+  signal?: AbortSignal
+): Promise<{ choices: Array<{ message: any }> }> => {
+  const wantCallbacks = !!(callbacks?.onToken || callbacks?.onReasoningToken);
+
+  // ── Без колбеков — обычный стрим, только собираем сообщение ──
+  // Это полезно для совместимости (например, если хочешь stream:true без пуша в WS)
+  // Но сейчас мы вызываем streamAndAssemble только когда есть колбеки.
+
+  const stream = await client.chat.completions.create(
+    { ...payload, model, stream: true } as any,
+    signal ? { signal } : {}
+  );
+
+  // Буферы для throttle
+  let textBuffer = '';
+  let reasoningBuffer = '';
+  let flushTimer: NodeJS.Timeout | null = null;
+  let lastTextFlush = 0;
+  let lastReasoningFlush = 0;
+
+  const flush = (final = false) => {
+    flushTimer = null;
+    const now = Date.now();
+    if (textBuffer && callbacks?.onToken) {
+      // Минимальный интервал между flush-ами, кроме финального
+      if (final || now - lastTextFlush >= STREAM_FLUSH_INTERVAL_MS) {
+        callbacks.onToken(textBuffer);
+        textBuffer = '';
+        lastTextFlush = now;
+      }
+    }
+    if (reasoningBuffer && callbacks?.onReasoningToken) {
+      if (final || now - lastReasoningFlush >= STREAM_FLUSH_INTERVAL_MS) {
+        callbacks.onReasoningToken(reasoningBuffer);
+        reasoningBuffer = '';
+        lastReasoningFlush = now;
+      }
+    }
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => flush(false), STREAM_FLUSH_INTERVAL_MS);
+  };
+
+  // Собираем сообщение
+  const assembledMessage: any = {
+    role: 'assistant',
+    content: '',
+    reasoning_content: '',
+    tool_calls: [] as any[],
+  };
+  // Временное хранилище для tool_calls по index
+  const toolCallMap = new Map<number, { id?: string; type: 'function'; function: { name: string; arguments: string } }>();
+
+  try {
+    for await (const chunk of stream as any) {
+      // Ручная проверка abort (дополнительно к SDK-abort, для надёжности)
+      if (signal?.aborted) {
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
+
+      const choice = chunk?.choices?.[0];
+      if (!choice) continue;
+      const delta = choice.delta;
+      if (!delta) continue;
+
+      // 1. Контент
+      if (typeof delta.content === 'string' && delta.content) {
+        assembledMessage.content += delta.content;
+        if (callbacks?.onToken) {
+          textBuffer += delta.content;
+          scheduleFlush();
+        }
+      }
+
+      // 2. Reasoning (DeepSeek: reasoning_content, OpenRouter: reasoning)
+      const reasoningChunk = delta.reasoning_content ?? delta.reasoning;
+      if (typeof reasoningChunk === 'string' && reasoningChunk) {
+        assembledMessage.reasoning_content += reasoningChunk;
+        if (callbacks?.onReasoningToken) {
+          reasoningBuffer += reasoningChunk;
+          scheduleFlush();
+        }
+      }
+
+      // 3. Tool calls — собираем по index
+      if (Array.isArray(delta.tool_calls)) {
+        for (const tc of delta.tool_calls) {
+          const idx = typeof tc.index === 'number' ? tc.index : 0;
+          if (!toolCallMap.has(idx)) {
+            toolCallMap.set(idx, { id: undefined, type: 'function', function: { name: '', arguments: '' } });
+          }
+          const slot = toolCallMap.get(idx)!;
+          if (tc.id) slot.id = tc.id;
+          if (tc.type) slot.type = tc.type;
+          if (tc.function?.name) slot.function.name += tc.function.name;
+          if (tc.function?.arguments) slot.function.arguments += tc.function.arguments;
+        }
+      }
+    }
+
+    // Финальный flush — отправляем всё что накопилось
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    flush(true);
+  } catch (err: any) {
+    // Гарантируем flush перед пробросом ошибки, чтобы юзер увидел то что уже сгенерировалось
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    flush(true);
+    throw err;
+  }
+
+  // Собираем tool_calls в массив по порядку index
+  if (toolCallMap.size > 0) {
+    const sortedIndices = Array.from(toolCallMap.keys()).sort((a, b) => a - b);
+    assembledMessage.tool_calls = sortedIndices.map(i => toolCallMap.get(i)!);
+  }
+
+  // Если content пустой — null (некоторые провайдеры требуют именно null, не пустую строку)
+  if (!assembledMessage.content && assembledMessage.tool_calls.length > 0) {
+    assembledMessage.content = null;
+  }
+
+  return { choices: [{ message: assembledMessage }] };
+};
+
 const createCompletionWithModelFallback = async (
   client: OpenAI,
   modelChain: string[],
@@ -453,7 +623,8 @@ const createCompletionWithModelFallback = async (
   baseURL = '',
   signal?: AbortSignal,
   reasoningLevel?: ReasoningLevel | null,
-  modelSettings?: ModelSettings | null
+  modelSettings?: ModelSettings | null,
+  streamCallbacks?: StreamCallbacks
 ) => {
   const failedModels: string[] = [];
   let lastError: unknown = null;
@@ -476,7 +647,10 @@ const createCompletionWithModelFallback = async (
             max_tokens: providerRequestBody.max_tokens,
           });
         }
-        const response = await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
+        // Если есть streamCallbacks — стримим и собираем, иначе обычный запрос
+        const response = streamCallbacks
+          ? await streamAndAssemble(client, providerRequestBody, model, streamCallbacks, signal)
+          : await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
         return { response, modelUsed: model, failedModels };
       } catch (err) {
         if (isAbortError(err)) throw err;
@@ -508,7 +682,7 @@ const createCompletionWithModelFallback = async (
   });
 };
 
-const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null) => {
+const createCompletionWithProProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null, streamCallbacks?: StreamCallbacks) => {
   const failedProviders: string[] = [];
   const failedModels: string[] = [];
 
@@ -519,7 +693,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -555,7 +729,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
   throw Object.assign(new Error('pro_providers_failed'), { failedProviders, failedModels });
 };
 
-const createCompletionWithLiteProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null) => {
+const createCompletionWithLiteProviderFallback = async (requestBody: Record<string, unknown>, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null, streamCallbacks?: StreamCallbacks) => {
   const failedProviders: string[] = [];
   const failedModels: string[] = [];
 
@@ -566,7 +740,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -2397,11 +2571,11 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
-export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null): Promise<CompletionMeta & { manualFallback?: boolean }> => {
+export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null, streamCallbacks?: StreamCallbacks): Promise<CompletionMeta & { manualFallback?: boolean }> => {
   // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
   if (manualModel) {
     try {
-      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel, modelSettings);
+      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks);
       return {
         response: completion.response,
         usedModel: completion.modelUsed,
@@ -2416,18 +2590,21 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
       // Не бросаем ошибку — fallback на обычный роутинг
       // Продолжаем выполнение ниже как будто manualModel не задан
       // При fallback на auto — modelSettings не применяются (только для ручной модели)
+      // При fallback на auto — стримКолбеки тоже не пробрасываем (см. ниже)
     }
   }
 
   if (mode === 'vision-pro' || mode === 'vision-lite') {
     const providers = mode === 'vision-pro' ? VISION_PROVIDERS.pro : VISION_PROVIDERS.lite;
     if (!providers.length) {
+      // Vision без провайдеров → fallback на обычный режим, стрим не нужен
       return runCompletion(mode === 'vision-pro' ? 'pro' : 'lite', requestPayload, undefined, signal, reasoningLevel);
     }
     const failedProviders: string[] = [];
     const failedModels: string[] = [];
     for (const provider of providers) {
       try {
+        // Vision-запросы не стримим (анализ фото — не диалог)
         const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestPayload, provider.name, provider.baseURL, signal, reasoningLevel);
         if (completion.failedModels.length) {
           failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
@@ -2452,7 +2629,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
   }
   if (mode === 'pro') {
     if (PRO_PROVIDERS.length > 0) {
-      const res = await createCompletionWithProProviderFallback(requestPayload, signal, reasoningLevel);
+      const res = await createCompletionWithProProviderFallback(requestPayload, signal, reasoningLevel, modelSettings, streamCallbacks);
       return {
         response: res.response,
         usedModel: res.modelUsed,
@@ -2462,7 +2639,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
         failedProviders: res.failedProviders
       };
     }
-    const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload, 'pro-main', '', signal, reasoningLevel);
+    const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload, 'pro-main', '', signal, reasoningLevel, modelSettings, streamCallbacks);
     return {
       response: res.response,
       usedModel: res.modelUsed,
@@ -2471,7 +2648,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
       failedModels: res.failedModels
     };
   }
-  const res = await createCompletionWithLiteProviderFallback(requestPayload, signal, reasoningLevel);
+  const res = await createCompletionWithLiteProviderFallback(requestPayload, signal, reasoningLevel, modelSettings, streamCallbacks);
   return {
     response: res.response,
     usedModel: res.modelUsed,
@@ -4771,6 +4948,10 @@ export const sendMessageThroughAi = async (
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
+    /** Стрим токенов контента в реальном времени (уже оттроттлено в streamAndAssemble). */
+    onStreamToken?: (text: string) => Promise<void> | void;
+    /** Стрим reasoning-токенов в реальном времени. */
+    onReasoningStream?: (text: string) => Promise<void> | void;
     activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>;
     preferredModel?: string | null;
     featureFlags?: {
@@ -4865,6 +5046,22 @@ export const sendMessageThroughAi = async (
   if (!options?.isBackgroundTask) {
     activeGenerations.set(userId, abortController);
   }
+
+  // ── Стрим-колбеки для токен-стриминга в реальном времени ──
+  // Если options.onStreamToken передан — основной и финальный runCompletion
+  // будут стримить токены по мере получения от провайдера.
+  // streamAndAssemble уже делает throttle по времени, здесь только прокидываем.
+  const streamCallbacks: StreamCallbacks | undefined =
+    (options?.onStreamToken || options?.onReasoningStream)
+      ? {
+          onToken: options?.onStreamToken
+            ? (t) => { Promise.resolve(options.onStreamToken!(t)).catch(e => console.warn('[stream onToken]', e)); }
+            : undefined,
+          onReasoningToken: options?.onReasoningStream
+            ? (t) => { Promise.resolve(options.onReasoningStream!(t)).catch(e => console.warn('[stream onReasoningToken]', e)); }
+            : undefined,
+        }
+      : undefined;
 
   let chatId = 0;
   let totalTokens = 0;
@@ -5258,7 +5455,7 @@ PRO
       max_tokens: 16384,
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
-    }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings);
+    }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
@@ -5626,7 +5823,7 @@ iterations.push(currentIteration);
         max_tokens: 8192,
         thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
         clear_thinking: false
-      }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings);
+      }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
       const finalMessage = finalCompletion.response?.choices?.[0]?.message;
       if (finalMessage) {
         const finalReasoning = extractReasoning(finalMessage, finalCompletion.response);

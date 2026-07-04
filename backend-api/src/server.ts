@@ -1259,6 +1259,12 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       },
       onDiceRoll: (roll) => {
         res.write(`event: dice_roll\ndata: ${JSON.stringify({ roll })}\n\n`);
+      },
+      onStreamToken: (text) => {
+        res.write(`event: stream_token\ndata: ${JSON.stringify({ text })}\n\n`);
+      },
+      onReasoningStream: (text) => {
+        res.write(`event: reasoning_token\ndata: ${JSON.stringify({ text })}\n\n`);
       }
     });
 
@@ -4021,6 +4027,12 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       },
       onDiceRoll: async (roll) => {
         await sendWsJson({ type: 'dice_roll', roll });
+      },
+      onStreamToken: async (text) => {
+        await sendWsJson({ type: 'stream_token', text });
+      },
+      onReasoningStream: async (text) => {
+        await sendWsJson({ type: 'reasoning_token', text });
       },
     });
 

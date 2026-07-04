@@ -415,6 +415,10 @@ export type StreamCallbacks = {
   onToolStatus?: (text: string) => void;
   onMapUpdate?: (data: MapUpdatePayload) => void;
   onDiceRoll?: (roll: number) => void;
+  /** Стрим текстовых токенов от модели в реальном времени (оттроттлено бэкендом). */
+  onStreamToken?: (text: string) => void;
+  /** Стрим reasoning-токенов в реальном времени. */
+  onReasoningStream?: (text: string) => void;
   onDone?: (result: ChatSendResponse) => void;
   onError?: (err: string) => void;
 };
@@ -465,6 +469,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
 
       switch (msg.type) {
         case 'intermediate': wsCallbacks.onIntermediate?.(msg.text); break;
+        case 'stream_token': wsCallbacks.onStreamToken?.(msg.text); break;
+        case 'reasoning_token': wsCallbacks.onReasoningStream?.(msg.text); break;
         case 'display_state': wsCallbacks.onDisplayState?.(msg); break;
         case 'desktop_action':
           // If it's a macro — execute it via Electron in the background
@@ -662,6 +668,8 @@ async function streamChatMessageSSE(
           try {
             const data = JSON.parse(dataStr);
             if (eventName === 'intermediate' && callbacks?.onIntermediate) callbacks.onIntermediate(data.text);
+            else if (eventName === 'stream_token' && callbacks?.onStreamToken) callbacks.onStreamToken(data.text);
+            else if (eventName === 'reasoning_token' && callbacks?.onReasoningStream) callbacks.onReasoningStream(data.text);
             else if (eventName === 'display_state' && callbacks?.onDisplayState) callbacks.onDisplayState(data);
             else if (eventName === 'desktop_action' && callbacks?.onDesktopAction) callbacks.onDesktopAction(data);
             else if (eventName === 'map_update' && callbacks?.onMapUpdate) callbacks.onMapUpdate(data);
