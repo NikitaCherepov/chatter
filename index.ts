@@ -1200,9 +1200,15 @@ const runBackendAiStream = async (
                                 if (callbacks?.onToolStatus) await callbacks.onToolStatus(data.text);
                                 break;
                             case 'stream_token':
+                                if (STREAM_DEBUG_LOG) {
+                                    console.log(`[tg][sse] stream_token received, len=${typeof data.text === 'string' ? data.text.length : '?'}`);
+                                }
                                 if (callbacks?.onStreamToken) await callbacks.onStreamToken(data.text);
                                 break;
                             case 'reasoning_token':
+                                if (STREAM_DEBUG_LOG) {
+                                    console.log(`[tg][sse] reasoning_token received, len=${typeof data.text === 'string' ? data.text.length : '?'}`);
+                                }
                                 if (callbacks?.onReasoningStream) await callbacks.onReasoningStream(data.text);
                                 break;
                             case 'desktop_action':
@@ -5634,6 +5640,7 @@ bot.action(/^devops:creds_reject_comment:(.+)$/, async (ctx) => {
 const STREAM_FLUSH_INTERVAL_MS = 250;
 const STREAM_MIN_DELTA_CHARS = 15;
 const STREAM_DRAFT_TEXT_LIMIT = 4000; // оставляем запас от лимита 4096
+const STREAM_DEBUG_LOG = process.env.TG_STREAM_DEBUG === '1';
 
 type RichStreamPhase = 'idle' | 'thinking' | 'answering';
 
@@ -5645,6 +5652,7 @@ class RichStreamSession {
     private chatId: number;
     private telegram: any; // ctx.telegram
     private draftId: number;
+    private messageThreadId: number | null = null;
     private phase: RichStreamPhase = 'idle';
 
     private reasoningBuf = '';
@@ -5660,9 +5668,12 @@ class RichStreamSession {
 
     public messageId: number | null = null; // message_id финального persisted сообщения
 
-    constructor(telegram: any, chatId: number) {
+    constructor(telegram: any, chatId: number, messageThreadId?: number | null) {
         this.telegram = telegram;
         this.chatId = chatId;
+        if (messageThreadId && Number.isFinite(messageThreadId)) {
+            this.messageThreadId = messageThreadId;
+        }
         // Уникальный draft_id — timestamp + random, чтобы черновики разных запросов не конфликтовали.
         this.draftId = Date.now();
     }
@@ -5670,30 +5681,49 @@ class RichStreamSession {
     /** Вызов sendRichMessageDraft. Тихо гасит ошибки → fallback. */
     private async callDraft(blocks: any[]): Promise<void> {
         if (this.draftFailed || this.finalized) return;
+        const payload: any = {
+            chat_id: this.chatId,
+            draft_id: this.draftId,
+            rich_message: { blocks },
+        };
+        if (this.messageThreadId) {
+            payload.message_thread_id = this.messageThreadId;
+        }
         try {
-            await this.telegram.callApi('sendRichMessageDraft', {
-                chat_id: this.chatId,
-                draft_id: this.draftId,
-                rich_message: { blocks },
-            });
+            if (STREAM_DEBUG_LOG) {
+                console.log('[tg][rich-stream] sendRichMessageDraft payload:', JSON.stringify(payload).slice(0, 500));
+            }
+            await this.telegram.callApi('sendRichMessageDraft', payload);
             this.draftShownAtLeastOnce = true;
         } catch (err: any) {
-            const msg = String(err?.message || err);
-            // Если метода нет или chat_id неверный — нет смысла ретраить.
-            console.warn('[tg][rich-stream] sendRichMessageDraft failed:', msg);
+            // Жёсткий лог: описание от Telegram + payload для разбора.
+            const description = err?.response?.description || err?.description || err?.message || String(err);
+            console.error(`[CRITICAL][tg][rich-stream] sendRichMessageDraft error:`, description, '| payload:', JSON.stringify(payload).slice(0, 800));
             this.draftFailed = true;
             this.clearTimer();
         }
+    }
+
+    /** Обёрнуть текст в RichTextPlain, как ожидает Telegram Bot API. */
+    private richText(text: string): any {
+        const sliced = text.slice(0, STREAM_DRAFT_TEXT_LIMIT);
+        return { type: 'plain', text: sliced };
     }
 
     /** Построить массив блоков по текущим буферам и фазе. */
     private buildBlocks(): any[] {
         const blocks: any[] = [];
         if (this.reasoningBuf) {
-            blocks.push({ type: 'RichBlockThinking', text: this.reasoningBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT) });
+            blocks.push({
+                type: 'RichBlockThinking',
+                text: this.richText(this.reasoningBuf),
+            });
         }
         if (this.textBuf) {
-            blocks.push({ type: 'RichBlockParagraph', text: this.textBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT) });
+            blocks.push({
+                type: 'RichBlockParagraph',
+                text: this.richText(this.textBuf),
+            });
         }
         return blocks;
     }
@@ -5705,9 +5735,13 @@ class RichStreamSession {
         // First-touch: показываем плейсхолдер "Думаю…" пустым RichBlockThinking.
         if (this.phase !== 'idle') {
             const blocks = this.buildBlocks();
-            // Если оба буфера пусты, но phase уже стартовал — шлём "" как placeholder.
+            // Если оба буфера пусты, но phase уже стартовал — шлём плейсхолдер.
+            // Не пустой текст (иначе API вернёт "message text is empty"), а " " или "…".
             if (blocks.length === 0) {
-                await this.callDraft([{ type: 'RichBlockThinking', text: '' }]);
+                await this.callDraft([{
+                    type: 'RichBlockThinking',
+                    text: this.richText('…'),
+                }]);
             } else {
                 await this.callDraft(blocks);
             }
@@ -5783,15 +5817,26 @@ class RichStreamSession {
         if (!hasAnyContent) return false;
 
         const blocks = this.buildBlocks();
+        const payload: any = {
+            chat_id: this.chatId,
+            rich_message: { blocks },
+        };
+        if (this.messageThreadId) {
+            payload.message_thread_id = this.messageThreadId;
+        }
         try {
-            const result = await this.telegram.callApi('sendRichMessage', {
-                chat_id: this.chatId,
-                rich_message: { blocks },
-            });
+            if (STREAM_DEBUG_LOG) {
+                console.log('[tg][rich-stream] sendRichMessage payload:', JSON.stringify(payload).slice(0, 500));
+            }
+            const result = await this.telegram.callApi('sendRichMessage', payload);
             this.messageId = Number.isFinite(Number(result?.message_id)) ? Number(result.message_id) : null;
-            return true;
+            if (STREAM_DEBUG_LOG) {
+                console.log('[tg][rich-stream] sendRichMessage result:', JSON.stringify(result).slice(0, 300));
+            }
+            return this.messageId !== null;
         } catch (err: any) {
-            console.warn('[tg][rich-stream] sendRichMessage failed, falling back to plain reply:', err?.message || err);
+            const description = err?.response?.description || err?.description || err?.message || String(err);
+            console.error(`[CRITICAL][tg][rich-stream] sendRichMessage error:`, description, '| payload:', JSON.stringify(payload).slice(0, 800));
             return false;
         }
     }
@@ -5866,8 +5911,11 @@ const processUserTextThroughAi = async (
 
         // Rich streaming session (Bot API 10.1+). Если TG_USE_RICH_STREAMING выключен —
         // сессия всё равно создается (для согласованности), но finalize() вернёт false → fallback на safeReply.
+        const threadId = Number.isFinite(Number(ctx.message?.message_thread_id))
+            ? Math.floor(Number(ctx.message?.message_thread_id))
+            : null;
         const richStream = (TG_USE_RICH_STREAMING && userChatId && !options?.suppressFinalReply)
-            ? new RichStreamSession(ctx.telegram, userChatId)
+            ? new RichStreamSession(ctx.telegram, userChatId, threadId)
             : null;
 
         const backend = await runBackendAiStream(userId, userText, {
