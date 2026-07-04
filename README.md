@@ -58,6 +58,8 @@ npm run logs
 - `BACKEND_TIMEOUT_AI_MS` - таймаут AI-запросов (ms), по умолчанию `120000` (2 мин).
 - `BACKEND_TIMEOUT_MEDIA_MS` - таймаут голоса/фото (ms), по умолчанию `180000` (3 мин).
 - `BACKEND_TIMEOUT_DEFAULT_MS` - таймаут прочих запросов к backend (ms), по умолчанию `15000` (15 сек).
+- `TG_USE_RICH_STREAMING=1` - включает rich streaming в Telegram через `sendRichMessageDraft` / `sendRichMessage` (Bot API 10.1+).
+- `TG_STREAM_DEBUG=1` - подробные логи rich-stream flush/finalize/backoff.
 
 ## AI-инструменты
 
@@ -155,18 +157,55 @@ npm run logs
 
 - API backend: [backend-api/README.md](./backend-api/README.md)
 
-## SSE-стриминг и подтверждения команд в Telegram
+## SSE/rich-стриминг и подтверждения команд в Telegram
 
-Бот работает с backend через SSE-стриминг (`/internal/ai/stream`) — пользователь видит процесс работы AI в реальном времени: промежуточные сообщения, статусы инструментов, карточки подтверждения команд.
+Бот работает с backend через SSE-стриминг (`/internal/ai/stream`) — пользователь видит процесс работы AI в реальном времени: token-by-token текст, reasoning, промежуточные сообщения, статусы инструментов и карточки подтверждения команд.
 
 ### Как это работает
 
 1. Пользователь отправляет текст боту
 2. Бот открывает SSE-соединение с backend (`POST /internal/ai/stream`)
-3. Backend стримит события: `intermediate` (промежуточный текст), `tool_status` (статус), `desktop_action` (карточка подтверждения)
-4. Бот отправляет каждое промежуточное сообщение отдельным сообщением в чат
+3. Backend стримит события: `reasoning_token`, `stream_token`, `intermediate`, `tool_status`, `desktop_action`, `done`, `error`
+4. Если включён `TG_USE_RICH_STREAMING=1`, бот обновляет один rich draft через `sendRichMessageDraft`; иначе продолжает старый режим отдельных сообщений/final reply
 5. На карточки подтверждения рендерит inline-клавиатуры
-6. По `done` — отправляет финальный ответ
+6. По `done` rich draft финализируется через `sendRichMessage`, чтобы сообщение осталось в истории
+
+### Rich streaming (`TG_USE_RICH_STREAMING=1`)
+
+Реализация живёт в `index.ts` (`RichStreamSession`). На каждый AI-запрос создаётся отдельная сессия с буферами `reasoningBuf` и `textBuf`.
+
+- `reasoning_token` переводит сессию в phase `thinking` и обновляет draft-блок `<tg-thinking>...</tg-thinking>`.
+- Первый `stream_token` переводит phase в `answering`; reasoning в draft больше не обновляется, но остаётся в буфере и попадёт в финал.
+- Пока обычного текста нет, draft показывает `<p>...</p>`, чтобы Telegram не выглядел пустым.
+- В финальном `sendRichMessage` тег `<tg-thinking>` не используется: reasoning превращается в раскрывающийся `<blockquote expandable><b>💭 Размышления</b>...</blockquote>`.
+- Если rich draft/final падает не из-за 429, сессия отключает rich path и бот уходит в обычный fallback-ответ.
+
+### Форматирование rich-ответа
+
+Основной текст ответа модели приходит как Markdown и конвертируется в Telegram Rich HTML через `marked` с кастомным renderer'ом. Сырой HTML из ответа модели не исполняется, а экранируется.
+
+Поддерживаемые элементы:
+
+- параграфы и переносы строк (`<p>`, `<br>`)
+- заголовки (`<h1>`-`<h6>`)
+- жирный/курсив/зачёркивание/inline-code (`<b>`, `<i>`, `<s>`, `<code>`)
+- code fences (`<pre><code class="language-...">`)
+- списки (`<ul>`, `<ol>`, `<li>`) с inline-форматированием внутри пунктов
+- цитаты (`<blockquote>`)
+- таблицы (`<table>`, `<tr>`, `<th>`, `<td>`)
+- безопасные ссылки (`http`, `https`, `mailto`, `tel`, `tg://`)
+
+Важно: `marked` нужен только Telegram-боту. Desktop рендерит markdown в React через `MarkdownRenderer` (`ReactMarkdown + remark-gfm + rehype-highlight`), а Telegram получает уже готовую строку `rich_message.html`.
+
+### Throttle и 429 backoff
+
+Rich draft нельзя обновлять на каждый токен без ограничений: Telegram быстро отдаёт `429 Too Many Requests`.
+
+- Базовый flush-интервал: `STREAM_FLUSH_BASE_INTERVAL_MS = 500` (~2 обновления/сек).
+- Максимальный adaptive throttle: `STREAM_FLUSH_MAX_INTERVAL_MS = 5000`.
+- Если накопилось `STREAM_MIN_DELTA_CHARS = 30`, flush может уйти раньше интервала, кроме периода cooldown после 429.
+- При 429 бот читает `retry_after`, ставит `nextAllowedFlushAt` в будущее и не отправляет новый draft до окончания cooldown, даже если накопился большой `textDelta`.
+- AIMD-логика: на 429 интервал увеличивается, после серии успешных flush постепенно возвращается к базовым 500 мс.
 
 ### Inline-кнопки подтверждения
 
