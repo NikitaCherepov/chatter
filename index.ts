@@ -5705,32 +5705,30 @@ class RichStreamSession {
     }
 
     /** Обёрнуть текст в RichTextPlain, как ожидает Telegram Bot API. */
-private richText(text: string): any {
+private richTextArray(text: string): any[] {
         const sliced = text.slice(0, STREAM_DRAFT_TEXT_LIMIT);
-        // Ставим "...", чтобы Telegram видел реальный текст
-        return { type: 'plain', text: sliced || '...' }; 
+        // Обязательно возвращаем МАССИВ [ ... ]
+        return [{ type: 'plain', text: sliced || '...' }];
     }
 
     /** Построить массив блоков по текущим буферам и фазе. */
-    private buildBlocks(): any[] {
+private buildBlocks(): any[] {
         const blocks: any[] = [];
-
-        // 1. Блок размышлений (добавляем, только если есть мысли)
+        
+        // 1. Блок размышлений 
         if (this.reasoningBuf) {
             blocks.push({
-                type: 'RichBlockThinking', // В твоих логах успешно парсился именно этот тип
-                text: this.richText(this.reasoningBuf),
+                type: 'thinking', // Строго маленькими буквами!
+                text: this.reasoningBuf // У thinking text - это просто строка
             });
         }
-
-        // 2. Блок основного текста (ОБЯЗАТЕЛЕН ВСЕГДА)
-        // Именно из-за его отсутствия Telegram отклонял сообщение-черновик.
-        // Если textBuf пока пустой, richText() сам вставит туда невидимый пробел.
+        
+        // 2. Блок основного текста (ОБЯЗАТЕЛЕН)
         blocks.push({
-            type: 'RichBlockParagraph',
-            text: this.richText(this.textBuf),
+            type: 'paragraph', // Строго маленькими буквами!
+            text: this.richTextArray(this.textBuf) // А тут передаем массив!
         });
-
+        
         return blocks;
     }
 
