@@ -504,6 +504,9 @@ const EMAIL_PASSWORD_DELIMITER = '::';
 const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:3050').trim().replace(/\/$/, '');
 const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim();
 const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
+// Rich streaming через sendRichMessageDraft (Bot API 10.1+).
+// 1 = стриминг с черновиком (RichBlockThinking + RichBlockParagraph), 0 = старый режим "intermediate + done".
+const TG_USE_RICH_STREAMING = process.env.TG_USE_RICH_STREAMING === '1';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
 const BASE_COMMANDS = [
@@ -1109,6 +1112,8 @@ type AiStreamCallbacks = {
     onIntermediate?: (text: string) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onDesktopAction?: (action: any) => Promise<void> | void;
+    onStreamToken?: (text: string) => Promise<void> | void;
+    onReasoningStream?: (text: string) => Promise<void> | void;
 };
 
 const runBackendAiStream = async (
@@ -1193,6 +1198,12 @@ const runBackendAiStream = async (
                                 break;
                             case 'tool_status':
                                 if (callbacks?.onToolStatus) await callbacks.onToolStatus(data.text);
+                                break;
+                            case 'stream_token':
+                                if (callbacks?.onStreamToken) await callbacks.onStreamToken(data.text);
+                                break;
+                            case 'reasoning_token':
+                                if (callbacks?.onReasoningStream) await callbacks.onReasoningStream(data.text);
                                 break;
                             case 'desktop_action':
                                 if (callbacks?.onDesktopAction) {
@@ -5613,6 +5624,189 @@ bot.action(/^devops:creds_reject_comment:(.+)$/, async (ctx) => {
     await requestRejectionComment(ctx, '/internal/devops/approve', confirmationId, 'обновления credentials');
 });
 
+// ───────────────────────────────────────────────────────────────────────────
+// Rich streaming helper (Bot API 10.1+: sendRichMessageDraft / sendRichMessage)
+// Реализует вариант C: сначала стримим RichBlockThinking ("Думаю..."),
+// когда пошёл обычный текст — замораживаем thinking и стримим только RichBlockParagraph.
+// На done — финальный sendRichMessage, чтобы сообщение осталось в истории.
+// ───────────────────────────────────────────────────────────────────────────
+
+const STREAM_FLUSH_INTERVAL_MS = 250;
+const STREAM_MIN_DELTA_CHARS = 15;
+const STREAM_DRAFT_TEXT_LIMIT = 4000; // оставляем запас от лимита 4096
+
+type RichStreamPhase = 'idle' | 'thinking' | 'answering';
+
+/**
+ * Контейнер состояния одного стримящегося ответа.
+ * Создаётся на каждый вызов processUserTextThroughAi, живёт до done/error.
+ */
+class RichStreamSession {
+    private chatId: number;
+    private telegram: any; // ctx.telegram
+    private draftId: number;
+    private phase: RichStreamPhase = 'idle';
+
+    private reasoningBuf = '';
+    private textBuf = '';
+
+    private lastFlushAt = 0;
+    private lastTextLenAtFlush = 0;
+    private flushTimer: NodeJS.Timeout | null = null;
+
+    private draftFailed = false;     // если callApi упал — переключаемся в fallback (safeReply)
+    private draftShownAtLeastOnce = false;
+    private finalized = false;
+
+    public messageId: number | null = null; // message_id финального persisted сообщения
+
+    constructor(telegram: any, chatId: number) {
+        this.telegram = telegram;
+        this.chatId = chatId;
+        // Уникальный draft_id — timestamp + random, чтобы черновики разных запросов не конфликтовали.
+        this.draftId = Date.now();
+    }
+
+    /** Вызов sendRichMessageDraft. Тихо гасит ошибки → fallback. */
+    private async callDraft(blocks: any[]): Promise<void> {
+        if (this.draftFailed || this.finalized) return;
+        try {
+            await this.telegram.callApi('sendRichMessageDraft', {
+                chat_id: this.chatId,
+                draft_id: this.draftId,
+                rich_message: { blocks },
+            });
+            this.draftShownAtLeastOnce = true;
+        } catch (err: any) {
+            const msg = String(err?.message || err);
+            // Если метода нет или chat_id неверный — нет смысла ретраить.
+            console.warn('[tg][rich-stream] sendRichMessageDraft failed:', msg);
+            this.draftFailed = true;
+            this.clearTimer();
+        }
+    }
+
+    /** Построить массив блоков по текущим буферам и фазе. */
+    private buildBlocks(): any[] {
+        const blocks: any[] = [];
+        if (this.reasoningBuf) {
+            blocks.push({ type: 'RichBlockThinking', text: this.reasoningBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT) });
+        }
+        if (this.textBuf) {
+            blocks.push({ type: 'RichBlockParagraph', text: this.textBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT) });
+        }
+        return blocks;
+    }
+
+    /** Отправка черновика (с очищением, если оба буфера пусты). */
+    private async flush(): Promise<void> {
+        if (this.draftFailed || this.finalized) return;
+
+        // First-touch: показываем плейсхолдер "Думаю…" пустым RichBlockThinking.
+        if (this.phase !== 'idle') {
+            const blocks = this.buildBlocks();
+            // Если оба буфера пусты, но phase уже стартовал — шлём "" как placeholder.
+            if (blocks.length === 0) {
+                await this.callDraft([{ type: 'RichBlockThinking', text: '' }]);
+            } else {
+                await this.callDraft(blocks);
+            }
+        }
+        this.lastFlushAt = Date.now();
+        this.lastTextLenAtFlush = this.textBuf.length;
+    }
+
+    private scheduleFlush(): void {
+        if (this.draftFailed || this.finalized) return;
+        if (this.flushTimer) return;
+        const elapsed = Date.now() - this.lastFlushAt;
+        const delay = Math.max(0, STREAM_FLUSH_INTERVAL_MS - elapsed);
+        this.flushTimer = setTimeout(() => {
+            this.flushTimer = null;
+            this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
+        }, delay);
+    }
+
+    private clearTimer(): void {
+        if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+            this.flushTimer = null;
+        }
+    }
+
+    /** Получен reasoning_token. */
+    onReasoning(text: string): void {
+        if (this.draftFailed || this.finalized) return;
+        // Если уже в answering — thinking заморожен, больше не трогаем (вариант C).
+        if (this.phase === 'answering') return;
+        this.phase = 'thinking';
+        this.reasoningBuf += text;
+        this.maybeFlush();
+    }
+
+    /** Получен stream_token (обычный текст). */
+    onToken(text: string): void {
+        if (this.draftFailed || this.finalized) return;
+        // Первый token → переключаемся в answering.
+        // Thinking остаётся в буфере и попадёт в финал, но в draft больше не обновляется.
+        this.phase = 'answering';
+        this.textBuf += text;
+        this.maybeFlush();
+    }
+
+    /** Throttle: мгновенный flush, если прошло >= INTERVAL или накопилось >= MIN_DELTA. */
+    private maybeFlush(): void {
+        if (this.draftFailed || this.finalized) return;
+        const sinceFlush = Date.now() - this.lastFlushAt;
+        const textDelta = this.textBuf.length - this.lastTextLenAtFlush;
+        if (sinceFlush >= STREAM_FLUSH_INTERVAL_MS || textDelta >= STREAM_MIN_DELTA_CHARS) {
+            this.clearTimer();
+            this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
+        } else {
+            this.scheduleFlush();
+        }
+    }
+
+    /**
+     * Финализация: вызвать sendRichMessage с обоими блоками.
+     * Возвращает true при успехе, false при fallback.
+     */
+    async finalize(): Promise<boolean> {
+        if (this.finalized) return this.messageId !== null;
+        this.finalized = true;
+        this.clearTimer();
+
+        if (!TG_USE_RICH_STREAMING) return false;
+
+        // Если ни draft не показывался, ни текста нет — нет смысла в RichMessage.
+        const hasAnyContent = this.reasoningBuf.trim() || this.textBuf.trim();
+        if (!hasAnyContent) return false;
+
+        const blocks = this.buildBlocks();
+        try {
+            const result = await this.telegram.callApi('sendRichMessage', {
+                chat_id: this.chatId,
+                rich_message: { blocks },
+            });
+            this.messageId = Number.isFinite(Number(result?.message_id)) ? Number(result.message_id) : null;
+            return true;
+        } catch (err: any) {
+            console.warn('[tg][rich-stream] sendRichMessage failed, falling back to plain reply:', err?.message || err);
+            return false;
+        }
+    }
+
+    /** Получал ли сессия хотя бы один токен (для решения нужен ли rich pipeline). */
+    hasContent(): boolean {
+        return Boolean(this.reasoningBuf.trim()) || Boolean(this.textBuf.trim());
+    }
+
+    /** Полный текст ответа (для safeReply в fallback). */
+    getText(): string {
+        return this.textBuf;
+    }
+}
+
 const processUserTextThroughAi = async (
     ctx: any,
     rawText: string,
@@ -5670,6 +5864,12 @@ const processUserTextThroughAi = async (
         const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
         const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
 
+        // Rich streaming session (Bot API 10.1+). Если TG_USE_RICH_STREAMING выключен —
+        // сессия всё равно создается (для согласованности), но finalize() вернёт false → fallback на safeReply.
+        const richStream = (TG_USE_RICH_STREAMING && userChatId && !options?.suppressFinalReply)
+            ? new RichStreamSession(ctx.telegram, userChatId)
+            : null;
+
         const backend = await runBackendAiStream(userId, userText, {
             forcePro: forceProRoute,
             persistUserText: userTextForHistory,
@@ -5696,6 +5896,12 @@ const processUserTextThroughAi = async (
                 } catch {
                     // ignore
                 }
+            },
+            onStreamToken: async (text) => {
+                if (richStream) richStream.onToken(text);
+            },
+            onReasoningStream: async (text) => {
+                if (richStream) richStream.onReasoning(text);
             },
             onDesktopAction: async (action) => {
                 if (action?.action === 'pc_command_confirmation' && action?.value?.confirmation_id) {
@@ -5978,7 +6184,18 @@ const processUserTextThroughAi = async (
             : FALLBACK_ANSWER;
         let sentMessage: any = null;
         if (!options?.suppressFinalReply) {
-            sentMessage = await safeReply(ctx, assistantText);
+            // Сначала пытаемся финализировать rich-stream черновик → persisted sendRichMessage.
+            // Если не получилось (флаг выключен, не было ни одного токена, ошибка API) — fallback на safeReply.
+            let richFinalized = false;
+            if (richStream) {
+                richFinalized = await richStream.finalize();
+                if (richFinalized && richStream.messageId) {
+                    sentMessage = { message_id: richStream.messageId };
+                }
+            }
+            if (!richFinalized) {
+                sentMessage = await safeReply(ctx, assistantText);
+            }
             const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
                 ? Math.floor(Number(backend?.message_id))
                 : null;
