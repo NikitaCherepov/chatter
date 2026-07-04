@@ -5705,12 +5705,10 @@ class RichStreamSession {
     }
 
     /** Обёрнуть текст в RichTextPlain, как ожидает Telegram Bot API. */
-    private richText(text: string): any {
+private richText(text: string): any {
         const sliced = text.slice(0, STREAM_DRAFT_TEXT_LIMIT);
-        // Обязательно возвращаем объект { type: 'plain', text: ... }
-        // Если текста еще нет, подставляем невидимый символ \u200B.
-        // Это защитит от ошибки "message text is empty"
-        return { type: 'plain', text: sliced || '\u200B' };
+        // Ставим "...", чтобы Telegram видел реальный текст
+        return { type: 'plain', text: sliced || '...' }; 
     }
 
     /** Построить массив блоков по текущим буферам и фазе. */
