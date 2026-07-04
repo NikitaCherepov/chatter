@@ -549,6 +549,15 @@ export function ChatPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
+  /** Текущее состояние стриминга для последнего временного сообщения:
+   *  - 'idle': стрим ещё не начался (или нет стрима) → обычные typing dots
+   *  - 'reasoning': стримятся reasoning-токены → "Рассуждает..." + bouncing dots
+   *  - 'content': стримятся токены контента → печатаем текст
+   *  - 'done': стрим завершён
+   */
+  const [streamingState, setStreamingState] = useState<'idle' | 'reasoning' | 'content' | 'done'>('idle');
+  /** ID временного сообщения, к которому относится стрим (для сопоставления с msg в списке). */
+  const [streamingMsgId, setStreamingMsgId] = useState<number | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -1076,6 +1085,9 @@ export function ChatPage() {
       set: (v: boolean) => { assistantMsgCreatedRef.current = v; },
       configurable: true,
     });
+    // Сбрасываем состояние стриминга для UI-индикатора
+    setStreamingState('idle');
+    setStreamingMsgId(tempAssistantId);
 
     const appendToAssistant = (text: string) => {
       if (!assistantMsgCreatedRef.current) {
@@ -1106,9 +1118,13 @@ export function ChatPage() {
           appendToAssistant(stepText);
         },
         onStreamToken: (token) => {
+          console.log('[stream UI] onStreamToken', { token, streamingMsgId, streamingState });
+          setStreamingState((prev) => prev === 'idle' || prev === 'reasoning' ? 'content' : prev);
           streamAppenderRef.current.appendText(token);
         },
         onReasoningStream: (token) => {
+          console.log('[stream UI] onReasoningStream', { token, streamingMsgId, streamingState });
+          setStreamingState((prev) => prev === 'idle' ? 'reasoning' : prev);
           streamAppenderRef.current.appendReasoning(token);
         },
         onToolStatus: (statusText) => {
@@ -1130,6 +1146,8 @@ export function ChatPage() {
         onDone: (res) => {
           // Финализируем стрим-буфер перед обработкой done
           streamAppenderRef.current.flushNow();
+          setStreamingState('done');
+          setStreamingMsgId(null);
           // Dice Roll Mode: fallback — если событие dice_roll не дошло, используем done-поле
           if (typeof res.dice_roll === 'number' && diceRolling) {
             finishDiceRoll(res.dice_roll);
@@ -1265,6 +1283,8 @@ export function ChatPage() {
         onError: (err) => {
           console.error('Stream error:', err);
           streamAppenderRef.current.flushNow();
+          setStreamingState('done');
+          setStreamingMsgId(null);
           if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
           } else {
@@ -1614,6 +1634,8 @@ export function ChatPage() {
       set: (v: boolean) => { assistantMsgCreatedRef.current = v; },
       configurable: true,
     });
+    setStreamingState('idle');
+    setStreamingMsgId(tempAssistantId);
 
     const appendToAssistant = (text: string) => {
       if (!assistantMsgCreatedRef.current) {
@@ -1639,8 +1661,8 @@ export function ChatPage() {
       currentAvatarStateRef.current,
       {
         onIntermediate: (stepText) => { streamAppenderRef.current.flushNow(); appendToAssistant(stepText); },
-        onStreamToken: (token) => streamAppenderRef.current.appendText(token),
-        onReasoningStream: (token) => streamAppenderRef.current.appendReasoning(token),
+        onStreamToken: (token) => { setStreamingState((p) => p === 'idle' || p === 'reasoning' ? 'content' : p); streamAppenderRef.current.appendText(token); },
+        onReasoningStream: (token) => { setStreamingState((p) => p === 'idle' ? 'reasoning' : p); streamAppenderRef.current.appendReasoning(token); },
         onToolStatus: (statusText) => { streamAppenderRef.current.flushNow(); appendToAssistant(`_${statusText}_`); },
         onDisplayState: (state) => applyAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
@@ -1648,6 +1670,8 @@ export function ChatPage() {
         onDiceRoll: (roll) => finishDiceRoll(roll),
         onDone: (res) => {
           streamAppenderRef.current.flushNow();
+          setStreamingState('done');
+          setStreamingMsgId(null);
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
@@ -1723,6 +1747,8 @@ export function ChatPage() {
         onError: (err) => {
           console.error('Regenerate error:', err);
           streamAppenderRef.current.flushNow();
+          setStreamingState('done');
+          setStreamingMsgId(null);
           if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
           }
@@ -1771,6 +1797,8 @@ export function ChatPage() {
       set: (v: boolean) => { assistantMsgCreatedRef.current = v; },
       configurable: true,
     });
+    setStreamingState('idle');
+    setStreamingMsgId(tempAssistantId);
 
     const appendToAssistant = (text: string) => {
       if (!assistantMsgCreatedRef.current) {
@@ -1796,8 +1824,8 @@ export function ChatPage() {
       currentAvatarStateRef.current,
       {
         onIntermediate: (stepText) => { streamAppenderRef.current.flushNow(); appendToAssistant(stepText); },
-        onStreamToken: (token) => streamAppenderRef.current.appendText(token),
-        onReasoningStream: (token) => streamAppenderRef.current.appendReasoning(token),
+        onStreamToken: (token) => { setStreamingState((p) => p === 'idle' || p === 'reasoning' ? 'content' : p); streamAppenderRef.current.appendText(token); },
+        onReasoningStream: (token) => { setStreamingState((p) => p === 'idle' ? 'reasoning' : p); streamAppenderRef.current.appendReasoning(token); },
         onToolStatus: (statusText) => { streamAppenderRef.current.flushNow(); appendToAssistant(`_${statusText}_`); },
         onDisplayState: (state) => applyAvatarState(state),
         onDesktopAction: handleIncomingDesktopAction,
@@ -1805,6 +1833,8 @@ export function ChatPage() {
         onDiceRoll: (roll) => finishDiceRoll(roll),
         onDone: (res) => {
           streamAppenderRef.current.flushNow();
+          setStreamingState('done');
+          setStreamingMsgId(null);
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
@@ -1880,6 +1910,8 @@ export function ChatPage() {
         onError: (err) => {
           console.error('Regenerate with hint error:', err);
           streamAppenderRef.current.flushNow();
+          setStreamingState('done');
+          setStreamingMsgId(null);
           if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
           }
@@ -2602,19 +2634,31 @@ export function ChatPage() {
                       )}
                     </button>
                     {msg.role === 'assistant' && msg.reasoning_content?.trim() && (
-                      <button
-                        className={`${s.reasoningToggle} ${openReasoningId === msg.id ? s.reasoningToggleOpen : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenReasoningId((current) => current === msg.id ? null : msg.id);
-                        }}
-                        title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
-                      >
-                        <span>Рассуждение{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
+                      msg.id === streamingMsgId && streamingState === 'reasoning' ? (
+                        // Стрим reasoning — показываем индикатор "Рассуждает..." с bouncing dots
+                        <span className={s.streamingIndicator}>
+                          <span className={s.streamingDots}>
+                            <span className={s.streamingDot} />
+                            <span className={s.streamingDot} />
+                            <span className={s.streamingDot} />
+                          </span>
+                          <span className={s.streamingLabel}>Рассуждает...</span>
+                        </span>
+                      ) : (
+                        <button
+                          className={`${s.reasoningToggle} ${openReasoningId === msg.id ? s.reasoningToggleOpen : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenReasoningId((current) => current === msg.id ? null : msg.id);
+                          }}
+                          title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+                        >
+                          <span>Рассуждение{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      )
                     )}
                     {msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0 && (
                       <button
@@ -2774,14 +2818,14 @@ export function ChatPage() {
                         </div>
                       )}
                       {msg.role === 'assistant'
-                        ? <div className={s.bubbleText}><MarkdownRenderer content={msg.content} /></div>
+                        ? <div className={`${s.bubbleText} ${msg.id === streamingMsgId && streamingState === 'content' ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={msg.content} /></div>
                         : <div className={s.bubbleTextPlain}>{msg.content}</div>
                       }
                     </div>
                     <AnimatePresence>
                       {msg.role === 'assistant' && msg.reasoning_content?.trim() && openReasoningId === msg.id && (
                         <motion.div
-                          className={s.reasoningPanel}
+                          className={`${s.reasoningPanel} ${msg.id === streamingMsgId && (streamingState === 'reasoning' || streamingState === 'content') ? s.bubbleTextStreaming : ''}`}
                           variants={reasoningPanelVariants}
                           initial="hidden"
                           animate="visible"

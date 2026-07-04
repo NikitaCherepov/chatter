@@ -1250,7 +1250,9 @@ WebSocket сервер на том же порту (3050), путь `/ws`, ау�
 
 | Сервер → Клиент | Описание |
 |---|---|
-| `intermediate` | Промежуточный текст AI |
+| `intermediate` | Промежуточный текст AI (между tool-call итерациями) |
+| `stream_token` | Чанк текста от модели в реальном времени (token-by-token, ~20 FPS) |
+| `reasoning_token` | Чанк reasoning (DeepSeek `reasoning_content`, OpenRouter `reasoning`) |
 | `display_state` | Состояние аватара |
 | `desktop_action` | Команда UI / макрос |
 | `tool_status` | Статус выполнения инструмента |
@@ -1340,6 +1342,66 @@ Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`,
 - `onIntermediateMessage` — текст, сгенерированный на промежуточных шагах (текст + tool call одновременно).
 - `onStateChange` — мгновенная передача изменений аватара при вызове `set_display_state`.
 - `onToolStatus` — статусы типа "Ищу информацию..." в реалтайме.
+- `onStreamToken` — текстовые токены от модели в реальном времени (token-by-token streaming).
+- `onReasoningStream` — reasoning-токены (DeepSeek `reasoning_content`, OpenRouter `reasoning`) в реальном времени.
+
+### Token-by-token streaming
+
+Побуквенный стриминг ответа AI (как в ChatGPT) вместо чанков после tool-call итераций.
+
+**Архитектура — стратегия "stream and assemble":**
+
+Хелпер `streamAndAssemble()` в `services/ai.ts` включает `stream: true` в запросе к провайдеру, читает поток по chunks, одновременно:
+1. **Собирает** assembled-сообщение (`content`, `reasoning_content`, `tool_calls`) в памяти.
+2. **Прокидывает** токены в колбеки `onToken`/`onReasoningToken` (оттроттлено по времени).
+
+Возвращает объект того же формата, что `client.chat.completions.create()` — `{ choices: [{ message }] }`. Агентский цикл, `runTool`, scheduler, vision — ничего не замечают.
+
+**Throttling:**
+- **Бэкенд:** `STREAM_FLUSH_INTERVAL_MS = 50` (~20 FPS). Буферы накапливаются, flush по таймеру. Гарантированный финальный flush в `try/catch` — токены не теряются при ошибке провайдера.
+- **Десктоп:** `requestAnimationFrame` throttle. Буферы накапливаются между кадрами, один `setState` на кадр. Flush перед `onDone`/`onError`/`onIntermediate`.
+
+**Каскад колбеков:**
+```
+streamAndAssemble (throttle 50ms)
+  → StreamCallbacks.onToken / onReasoningToken
+    → createCompletionWithModelFallback
+      → createCompletionWithProProviderFallback / Lite
+        → runCompletion (параметр streamCallbacks)
+          → sendMessageThroughAi (options.onStreamToken / onReasoningStream)
+            → WS { type: 'stream_token' } / SSE event: stream_token
+              → desktop api.ts → ChatPage streamAppenderRef
+```
+
+**Что НЕ стримится:**
+- Vision-запросы (`vision-pro`, `vision-lite`) — анализ фото, не диалог.
+- Lite router (классификация intent) — быстрый одиночный запрос.
+- Scheduler tasks (background) — стрим некуда пушить.
+- Subagents — могут добавить позже.
+
+**Сборка `tool_calls` из дельт:**
+OpenAI/DeepSeek шлют tool_calls фрагментированно — по index. Хелпер собирает через `Map<index, { id, type, function: { name, arguments } }>`, доклеивая `function.arguments` по кускам. В конце сортируется по index.
+
+**Reasoning-поля:**
+Поддерживаются оба варианта:
+- `delta.reasoning_content` (DeepSeek R1, нативный vLLM)
+- `delta.reasoning` (OpenRouter для некоторых провайдеров)
+
+**Abort:**
+- `signal` передаётся в опциях `create()` → SDK сам вызовет `stream.controller.abort()`.
+- Дополнительно — ручная проверка `signal?.aborted` в цикле с `throw new AbortError`.
+
+**WS/SSE события:**
+
+| Событие | Канал | Payload | Описание |
+|---|---|---|---|
+| `stream_token` | WS / SSE | `{ text }` | Чанк текста (оттроттлено ~20 FPS) |
+| `reasoning_token` | WS / SSE | `{ text }` | Чанк reasoning |
+
+События `intermediate` (текст между tool-call итерациями) и `stream_token` (побуквенный текст внутри итерации) **не конфликтуют** — на стороне desktop вызывается `flushNow()` перед `onIntermediate`, чтобы разделить шаги.
+
+**Fallback моделей при стриме:**
+Если первая модель падает на середине стрима, пользователь видит частичный текст. Fallback-каскад (`createCompletionWithModelFallback`) перехватывает ошибку и пробует следующую модель. Стрим начинается заново. Сейчас это приемлемо — fallback срабатывает редко.
 
 ### Soft Abort (остановка генерации с сохранением)
 

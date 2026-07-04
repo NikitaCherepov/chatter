@@ -489,6 +489,13 @@ const streamAndAssemble = async (
   // Это полезно для совместимости (например, если хочешь stream:true без пуша в WS)
   // Но сейчас мы вызываем streamAndAssemble только когда есть колбеки.
 
+  console.log('[streamAndAssemble] START', {
+    model,
+    hasOnToken: !!callbacks?.onToken,
+    hasOnReasoningToken: !!callbacks?.onReasoningToken,
+    payloadKeys: Object.keys(payload),
+  });
+
   const stream = await client.chat.completions.create(
     { ...payload, model, stream: true } as any,
     signal ? { signal } : {}
@@ -5048,9 +5055,6 @@ export const sendMessageThroughAi = async (
   }
 
   // ── Стрим-колбеки для токен-стриминга в реальном времени ──
-  // Если options.onStreamToken передан — основной и финальный runCompletion
-  // будут стримить токены по мере получения от провайдера.
-  // streamAndAssemble уже делает throttle по времени, здесь только прокидываем.
   const streamCallbacks: StreamCallbacks | undefined =
     (options?.onStreamToken || options?.onReasoningStream)
       ? {
@@ -5062,6 +5066,15 @@ export const sendMessageThroughAi = async (
             : undefined,
         }
       : undefined;
+
+  console.log('[sendMessageThroughAi] streamCallbacks', {
+    hasOptions: !!options,
+    hasOnStreamToken: !!options?.onStreamToken,
+    hasOnReasoningStream: !!options?.onReasoningStream,
+    streamCallbacksBuilt: !!streamCallbacks,
+    hasOnToken: !!streamCallbacks?.onToken,
+    hasOnReasoningToken: !!streamCallbacks?.onReasoningToken,
+  });
 
   let chatId = 0;
   let totalTokens = 0;
