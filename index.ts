@@ -5697,6 +5697,18 @@ class RichStreamSession {
             this.draftShownAtLeastOnce = true;
         } catch (err: any) {
             const description = err?.response?.description || err?.description || err?.message || String(err);
+
+            // Умный back-off: Telegram вернул 429 Too Many Requests.
+            // Сдвигаем lastFlushAt в будущее на retry_after секунд —
+            // тогда throttle-таймер (STREAM_FLUSH_INTERVAL_MS) просто переживёт паузу.
+            if (description.toLowerCase().includes('too many requests')) {
+                const retryAfter = Number(err?.response?.parameters?.retry_after) || 3;
+                console.warn(`[tg][rich-stream] Rate limit hit! Backing off for ${retryAfter}s`);
+                this.lastFlushAt = Date.now() + (retryAfter * 1000);
+                // НЕ ставим draftFailed — пережидаем и продолжаем.
+                return;
+            }
+
             console.error(`[CRITICAL][tg][rich-stream] sendRichMessageDraft error:`, description, '| html:', html.slice(0, 400));
             this.draftFailed = true;
             this.clearTimer();
@@ -5715,28 +5727,36 @@ class RichStreamSession {
     }
 
     /**
-     * Генерируем Rich HTML строку (вместо массива blocks).
-     * Telegram сам парсит этот HTML и собирает из него Rich-блоки на своей стороне.
+     * Генерируем Rich HTML строку.
      *
-     * Структура:
-     *   <tg-thinking>...размышления...</tg-thinking>
-     *   <p>...основной текст...</p>
-     *
-     * <p> присутствует ВСЕГДА — это гарантия что rich_message непустой.
+     * @param isFinal Если true — это финальная отправка в историю чата.
+     *                Тег <tg-thinking> ЗАПРЕЩЁН в persisted-сообщениях,
+     *                поэтому превращаем его в нативный раскрывающийся blockquote.
      */
-    private buildRichHtml(): string {
+    private buildRichHtml(isFinal: boolean = false): string {
         let html = '';
 
-        // 1. Нативный блок размышлений (только если есть мысли).
+        // 1. Блок размышлений.
         if (this.reasoningBuf) {
             const safeThinking = this.escapeHtml(this.reasoningBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
-            html += `<tg-thinking>${safeThinking}</tg-thinking>`;
+            if (isFinal) {
+                // В финале <tg-thinking> запрещён API Telegram (RICH_MESSAGE_BLOCK_UNSUPPORTED).
+                // Превращаем в нативный раскрывающийся blockquote.
+                html += `<blockquote expandable><b>💭 Размышления</b>\n${safeThinking}</blockquote>\n`;
+            } else {
+                // В черновике — нативный тег, даст анимацию «думаю…».
+                html += `<tg-thinking>${safeThinking}</tg-thinking>`;
+            }
         }
 
-        // 2. Основной текст — ОБЯЗАТЕЛЕН.
-        // Если textBuf пустой, ставим '...', иначе пустой <p></p> ломает парсинг.
+        // 2. Основной текст. В черновике присутствует всегда ('...' если пусто),
+        //    в финале — только если есть что показать.
         const safeText = this.escapeHtml(this.textBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
-        html += `<p>${safeText || '...'}</p>`;
+        if (isFinal) {
+            if (safeText) html += `<p>${safeText}</p>`;
+        } else {
+            html += `<p>${safeText || '...'}</p>`;
+        }
 
         return html;
     }
@@ -5746,7 +5766,7 @@ class RichStreamSession {
         if (this.draftFailed || this.finalized) return;
 
         if (this.phase !== 'idle') {
-            await this.callDraft(this.buildRichHtml());
+            await this.callDraft(this.buildRichHtml(false));
         }
 
         this.lastFlushAt = Date.now();
@@ -5819,7 +5839,7 @@ class RichStreamSession {
         const hasAnyContent = this.reasoningBuf.trim() || this.textBuf.trim();
         if (!hasAnyContent) return false;
 
-        const html = this.buildRichHtml();
+        const html = this.buildRichHtml(true);
         const payload: any = {
             chat_id: this.chatId,
             rich_message: { html },
