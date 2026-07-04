@@ -5957,6 +5957,7 @@ class RichStreamSession {
     private maybeFlush(): void {
         if (this.draftFailed || this.finalized) return;
         const now = Date.now();
+        // Телеграм сказал «подожди» — и мы ждём. Не спорим с тем, кто старше по протоколу.
         if (now < this.nextAllowedFlushAt) {
             this.scheduleFlush();
             return;
