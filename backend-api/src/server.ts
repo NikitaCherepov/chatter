@@ -27,7 +27,7 @@ import { startTaskScheduler } from './services/scheduler.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { VectorMemoryService } from './services/vector-memory.js';
-import { splitTextForTelegram, sendTelegramMessage, sendTelegramPhoto } from './services/telegram-send.js';
+import { sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret, runEmailSend } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
@@ -998,6 +998,14 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
   console.log(`[send-to-telegram] message found, text_len=${text.length}, images_count=${images.length}, sending to tg_id=${linkedTgId}`);
 
   const tgApiBase = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+  const assertTelegramFormOk = async (response: Response, method: string) => {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok === false) {
+      const description = data?.description || `${response.status} ${response.statusText}`;
+      throw new Error(`${method}_failed: ${description}`);
+    }
+    return data;
+  };
 
   try {
     if (images.length > 0) {
@@ -1019,18 +1027,14 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
           formData.append('photo', new Blob([new Uint8Array(imageFiles[0])]), 'photo.webp');
           if (text) formData.append('caption', text.slice(0, 1024));
 
-          await fetch(`${tgApiBase}/sendPhoto`, { method: 'POST', body: formData });
+          await assertTelegramFormOk(
+            await fetch(`${tgApiBase}/sendPhoto`, { method: 'POST', body: formData }),
+            'sendPhoto'
+          );
 
           // Send remaining text beyond the 1024 caption limit as separate messages
           if (text.length > 1024) {
-            const remainder = splitTextForTelegram(text.slice(1024));
-            for (const chunk of remainder) {
-              await fetch(`${tgApiBase}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
-              });
-            }
+            await sendTelegramMessage(linkedTgId, text.slice(1024), { strict: true, preferRich: true });
           }
         } else {
           // Multiple photos via sendMediaGroup (caption limit 1024)
@@ -1047,43 +1051,25 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
             formData.append(`photo_${i}`, new Blob([new Uint8Array(buf)]), `photo_${i}.webp`);
           });
 
-          await fetch(`${tgApiBase}/sendMediaGroup`, { method: 'POST', body: formData });
+          await assertTelegramFormOk(
+            await fetch(`${tgApiBase}/sendMediaGroup`, { method: 'POST', body: formData }),
+            'sendMediaGroup'
+          );
 
           // Send remaining text beyond the 1024 caption limit as separate messages
           if (text.length > 1024) {
-            const remainder = splitTextForTelegram(text.slice(1024));
-            for (const chunk of remainder) {
-              await fetch(`${tgApiBase}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
-              });
-            }
+            await sendTelegramMessage(linkedTgId, text.slice(1024), { strict: true, preferRich: true });
           }
         }
       } else {
         // Images existed but files not found on disk — send text only (chunked)
         const fallbackText = text || '(изображение недоступно)';
-        const chunks = splitTextForTelegram(fallbackText);
-        for (const chunk of chunks) {
-          await fetch(`${tgApiBase}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
-          });
-        }
+        await sendTelegramMessage(linkedTgId, fallbackText, { strict: true, preferRich: true });
       }
     } else {
       // Text only — split into chunks (Telegram limit is 4096, use 4000 with margin)
       if (!text) return res.status(400).json({ error: 'empty_message' });
-      const chunks = splitTextForTelegram(text);
-      for (const chunk of chunks) {
-        await fetch(`${tgApiBase}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: linkedTgId, text: chunk }),
-        });
-      }
+      await sendTelegramMessage(linkedTgId, text, { strict: true, preferRich: true });
     }
 
     return res.json({ ok: true });

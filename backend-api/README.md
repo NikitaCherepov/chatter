@@ -1297,13 +1297,19 @@ Scheduler выполняет отложенные задачи. Живёт в `s
 
 **Доставка результатов (`deliverTaskResult`):**
 - Если десктоп онлайн — пуш через WS: `{ type: 'task_result', chat_id, text, is_new_chat }`
-- Всегда — отправка в Telegram через `sendTelegramMessage()` (с Markdown-форматированием и разбивкой длинных текстов)
+- Всегда — отправка в Telegram через `sendTelegramMessage()` (Rich HTML при `TG_USE_RICH_MESSAGES=1` или совместимом `TG_USE_RICH_STREAMING=1`, fallback на Markdown/plain, разбивка длинных текстов)
 
 **Изоляция от обычного чата:**
 - Флаг `isBackgroundTask: true` — scheduler-задача не регистрируется в `activeGenerations`, и обычное сообщение юзера её не отменяет.
 - `forcePro: true`, `ignoreDailyLimit: true` — использует PRO-модель, не упирается в дневные лимиты.
 
-**Общая утилита отправки в Telegram:** `services/telegram-send.ts` — `sendTelegramMessage()`, `splitTextForTelegram()`, `formatForTelegram()`. Используется scheduler'ом и endpoint'ом `send-to-telegram`.
+**Общая утилита отправки в Telegram:** `services/telegram-send.ts` — `sendTelegramMessage()`, `markdownToTelegramRichHtml()`, `splitTextForTelegram()`, `formatForTelegram()`. Используется scheduler'ом и endpoint'ом `send-to-telegram`.
+
+- `sendMessageToTelegram` из desktop вызывает `POST /api/v1/messages/:id/send-to-telegram`.
+- Text-only сообщения и остатки текста после media caption идут через `sendTelegramMessage(..., { strict: true, preferRich: true })`.
+- Это не streaming: endpoint отправляет один финальный `sendRichMessage`, без `sendRichMessageDraft`.
+- При rich-отправке Markdown конвертируется в Telegram Rich HTML через `marked` с кастомным renderer'ом; если `sendRichMessage` недоступен или падает, отправитель откатывается на старый `sendMessage`.
+- Endpoint проверяет ответы `sendPhoto` / `sendMediaGroup` / `sendMessage` и возвращает `telegram_send_failed`, если Telegram API реально отказал, чтобы desktop не показывал ложный success.
 
 ### SSE-стриминг
 
