@@ -299,6 +299,12 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       onDiceRoll: (roll) => {
         res.write(`event: dice_roll\ndata: ${JSON.stringify({ roll })}\n\n`);
       },
+      onStreamToken: (text) => {
+        res.write(`event: stream_token\ndata: ${JSON.stringify({ text })}\n\n`);
+      },
+      onReasoningStream: (text) => {
+        res.write(`event: reasoning_token\ndata: ${JSON.stringify({ text })}\n\n`);
+      },
     });
 
     // Push desktop_action via WS if desktop is also connected (TG→Desktop push pattern)
