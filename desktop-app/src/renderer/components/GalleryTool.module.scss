@@ -58,10 +58,12 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .thumb {
   position: relative;
+  width: 100%;
   aspect-ratio: 1;
   border-radius: 6px;
   overflow: hidden;
