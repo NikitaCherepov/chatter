@@ -5675,6 +5675,14 @@ function createTelegramRichMarkdownRenderer(): Renderer {
     const renderer = new Renderer();
     const inline = (tokens: any[]) => renderer.parser.parseInline(tokens);
     const block = (tokens: any[]) => renderer.parser.parse(tokens);
+    const listItemContent = (tokens: any[]) => tokens
+        .map(token => {
+            if ((token?.type === 'paragraph' || token?.type === 'text') && Array.isArray(token.tokens)) {
+                return inline(token.tokens);
+            }
+            return block([token]);
+        })
+        .join('');
 
     renderer.code = ({ text, lang }) => {
         const language = cleanCodeLanguage(lang);
@@ -5721,7 +5729,7 @@ function createTelegramRichMarkdownRenderer(): Renderer {
         const checkbox = item.task
             ? `<code>${item.checked ? 'x' : ' '}</code> `
             : '';
-        return `<li>${checkbox}${block(item.tokens)}</li>`;
+        return `<li>${checkbox}${listItemContent(item.tokens)}</li>`;
     };
 
     renderer.table = ({ header, rows }) => {
