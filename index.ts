@@ -5707,47 +5707,46 @@ class RichStreamSession {
     /** Обёрнуть текст в RichTextPlain, как ожидает Telegram Bot API. */
     private richText(text: string): any {
         const sliced = text.slice(0, STREAM_DRAFT_TEXT_LIMIT);
-        // Пробуем самый минимальный формат — обычная строка.
-        // Если API ждёт структуру, можно переключить на { type: 'plain', text: sliced }.
-        return sliced;
+        // Обязательно возвращаем объект { type: 'plain', text: ... }
+        // Если текста еще нет, подставляем невидимый символ \u200B.
+        // Это защитит от ошибки "message text is empty"
+        return { type: 'plain', text: sliced || '\u200B' };
     }
 
     /** Построить массив блоков по текущим буферам и фазе. */
     private buildBlocks(): any[] {
         const blocks: any[] = [];
+
+        // 1. Блок размышлений (добавляем, только если есть мысли)
         if (this.reasoningBuf) {
             blocks.push({
-                type: 'thinking',
+                type: 'RichBlockThinking', // В твоих логах успешно парсился именно этот тип
                 text: this.richText(this.reasoningBuf),
             });
         }
-        if (this.textBuf) {
-            blocks.push({
-                type: 'paragraph',
-                text: this.richText(this.textBuf),
-            });
-        }
+
+        // 2. Блок основного текста (ОБЯЗАТЕЛЕН ВСЕГДА)
+        // Именно из-за его отсутствия Telegram отклонял сообщение-черновик.
+        // Если textBuf пока пустой, richText() сам вставит туда невидимый пробел.
+        blocks.push({
+            type: 'RichBlockParagraph',
+            text: this.richText(this.textBuf),
+        });
+
         return blocks;
     }
 
-    /** Отправка черновика (с очищением, если оба буфера пусты). */
+    /** Отправка черновика. */
     private async flush(): Promise<void> {
         if (this.draftFailed || this.finalized) return;
 
-        // First-touch: показываем плейсхолдер "Думаю…" пустым RichBlockThinking.
         if (this.phase !== 'idle') {
             const blocks = this.buildBlocks();
-            // Если оба буфера пусты, но phase уже стартовал — шлём плейсхолдер.
-            // Не пустой текст (иначе API вернёт "message text is empty"), а " " или "…".
-            if (blocks.length === 0) {
-                await this.callDraft([{
-                    type: 'thinking',
-                    text: this.richText('…'),
-                }]);
-            } else {
-                await this.callDraft(blocks);
-            }
+            // Поскольку buildBlocks теперь ВСЕГДА отдает как минимум один параграф,
+            // костыль с отправкой '...' нам больше не нужен. Шлем блоки напрямую.
+            await this.callDraft(blocks);
         }
+
         this.lastFlushAt = Date.now();
         this.lastTextLenAtFlush = this.textBuf.length;
     }
