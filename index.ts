@@ -5707,7 +5707,9 @@ class RichStreamSession {
     /** Обёрнуть текст в RichTextPlain, как ожидает Telegram Bot API. */
     private richText(text: string): any {
         const sliced = text.slice(0, STREAM_DRAFT_TEXT_LIMIT);
-        return { type: 'plain', text: sliced };
+        // Пробуем самый минимальный формат — обычная строка.
+        // Если API ждёт структуру, можно переключить на { type: 'plain', text: sliced }.
+        return sliced;
     }
 
     /** Построить массив блоков по текущим буферам и фазе. */
@@ -5715,13 +5717,13 @@ class RichStreamSession {
         const blocks: any[] = [];
         if (this.reasoningBuf) {
             blocks.push({
-                type: 'RichBlockThinking',
+                type: 'thinking',
                 text: this.richText(this.reasoningBuf),
             });
         }
         if (this.textBuf) {
             blocks.push({
-                type: 'RichBlockParagraph',
+                type: 'paragraph',
                 text: this.richText(this.textBuf),
             });
         }
@@ -5739,7 +5741,7 @@ class RichStreamSession {
             // Не пустой текст (иначе API вернёт "message text is empty"), а " " или "…".
             if (blocks.length === 0) {
                 await this.callDraft([{
-                    type: 'RichBlockThinking',
+                    type: 'thinking',
                     text: this.richText('…'),
                 }]);
             } else {
