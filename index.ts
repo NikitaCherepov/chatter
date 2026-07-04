@@ -5637,9 +5637,12 @@ bot.action(/^devops:creds_reject_comment:(.+)$/, async (ctx) => {
 // На done — финальный sendRichMessage, чтобы сообщение осталось в истории.
 // ───────────────────────────────────────────────────────────────────────────
 
-const STREAM_FLUSH_INTERVAL_MS = 250;
-const STREAM_MIN_DELTA_CHARS = 15;
-const STREAM_DRAFT_TEXT_LIMIT = 4000; // оставляем запас от лимита 4096
+// Базовый throttle. Подобран эмпирически: 4 апдейта/сек ловят 429,
+// 2 апдейта/сек (~500мс) работают стабильно для длинных ответов.
+const STREAM_FLUSH_BASE_INTERVAL_MS = 500;
+const STREAM_FLUSH_MAX_INTERVAL_MS = 5000;   // потолок адаптивного throttle
+const STREAM_MIN_DELTA_CHARS = 30;            // минимальный прирост текста для мгновенного flush
+const STREAM_DRAFT_TEXT_LIMIT = 4000;         // оставляем запас от лимита 4096
 const STREAM_DEBUG_LOG = process.env.TG_STREAM_DEBUG === '1';
 
 type RichStreamPhase = 'idle' | 'thinking' | 'answering';
@@ -5661,6 +5664,11 @@ class RichStreamSession {
     private lastFlushAt = 0;
     private lastTextLenAtFlush = 0;
     private flushTimer: NodeJS.Timeout | null = null;
+
+    // AIMD-адаптивный throttle: при 429 интервал растёт (multiplicative decrease),
+    // при N успешных flush подряд — плавно возвращается к базе (additive increase).
+    private currentFlushIntervalMs = STREAM_FLUSH_BASE_INTERVAL_MS;
+    private consecutiveOkFlushes = 0;
 
     private draftFailed = false;     // если callApi упал — переключаемся в fallback (safeReply)
     private draftShownAtLeastOnce = false;
@@ -5691,19 +5699,37 @@ class RichStreamSession {
         }
         try {
             if (STREAM_DEBUG_LOG) {
-                console.log('[tg][rich-stream] sendRichMessageDraft html_len=', html.length, 'preview:', html.slice(0, 200));
+                console.log('[tg][rich-stream] sendRichMessageDraft html_len=', html.length, 'interval=', this.currentFlushIntervalMs, 'ms');
             }
             await this.telegram.callApi('sendRichMessageDraft', payload);
             this.draftShownAtLeastOnce = true;
+
+            // AIMD additive increase: после каждого успешного flush плавно возвращаем интервал к базе.
+            this.consecutiveOkFlushes++;
+            if (this.consecutiveOkFlushes >= 4 && this.currentFlushIntervalMs > STREAM_FLUSH_BASE_INTERVAL_MS) {
+                this.currentFlushIntervalMs = Math.max(
+                    STREAM_FLUSH_BASE_INTERVAL_MS,
+                    this.currentFlushIntervalMs - 100
+                );
+                this.consecutiveOkFlushes = 0;
+                if (STREAM_DEBUG_LOG) {
+                    console.log('[tg][rich-stream] AIMD decrease interval →', this.currentFlushIntervalMs, 'ms');
+                }
+            }
         } catch (err: any) {
             const description = err?.response?.description || err?.description || err?.message || String(err);
 
             // Умный back-off: Telegram вернул 429 Too Many Requests.
-            // Сдвигаем lastFlushAt в будущее на retry_after секунд —
-            // тогда throttle-таймер (STREAM_FLUSH_INTERVAL_MS) просто переживёт паузу.
+            // AIMD multiplicative decrease: удваиваем интервал + учитываем retry_after.
             if (description.toLowerCase().includes('too many requests')) {
                 const retryAfter = Number(err?.response?.parameters?.retry_after) || 3;
-                console.warn(`[tg][rich-stream] Rate limit hit! Backing off for ${retryAfter}s`);
+                const newInterval = Math.min(
+                    STREAM_FLUSH_MAX_INTERVAL_MS,
+                    Math.max(this.currentFlushIntervalMs * 2, retryAfter * 1000 + 500)
+                );
+                console.warn(`[tg][rich-stream] Rate limit hit! retry_after=${retryAfter}s, interval ${this.currentFlushIntervalMs}ms → ${newInterval}ms`);
+                this.currentFlushIntervalMs = newInterval;
+                this.consecutiveOkFlushes = 0;
                 this.lastFlushAt = Date.now() + (retryAfter * 1000);
                 // НЕ ставим draftFailed — пережидаем и продолжаем.
                 return;
@@ -5777,7 +5803,7 @@ class RichStreamSession {
         if (this.draftFailed || this.finalized) return;
         if (this.flushTimer) return;
         const elapsed = Date.now() - this.lastFlushAt;
-        const delay = Math.max(0, STREAM_FLUSH_INTERVAL_MS - elapsed);
+        const delay = Math.max(0, this.currentFlushIntervalMs - elapsed);
         this.flushTimer = setTimeout(() => {
             this.flushTimer = null;
             this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
@@ -5816,7 +5842,7 @@ class RichStreamSession {
         if (this.draftFailed || this.finalized) return;
         const sinceFlush = Date.now() - this.lastFlushAt;
         const textDelta = this.textBuf.length - this.lastTextLenAtFlush;
-        if (sinceFlush >= STREAM_FLUSH_INTERVAL_MS || textDelta >= STREAM_MIN_DELTA_CHARS) {
+        if (sinceFlush >= this.currentFlushIntervalMs || textDelta >= STREAM_MIN_DELTA_CHARS) {
             this.clearTimer();
             this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
         } else {
