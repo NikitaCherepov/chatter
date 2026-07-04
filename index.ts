@@ -5678,58 +5678,67 @@ class RichStreamSession {
         this.draftId = Date.now();
     }
 
-    /** Вызов sendRichMessageDraft. Тихо гасит ошибки → fallback. */
-    private async callDraft(blocks: any[]): Promise<void> {
+    /** Вызов sendRichMessageDraft с HTML. Тихо гасит ошибки → fallback. */
+    private async callDraft(html: string): Promise<void> {
         if (this.draftFailed || this.finalized) return;
         const payload: any = {
             chat_id: this.chatId,
             draft_id: this.draftId,
-            rich_message: { blocks },
+            rich_message: { html },
         };
         if (this.messageThreadId) {
             payload.message_thread_id = this.messageThreadId;
         }
         try {
             if (STREAM_DEBUG_LOG) {
-                console.log('[tg][rich-stream] sendRichMessageDraft payload:', JSON.stringify(payload).slice(0, 500));
+                console.log('[tg][rich-stream] sendRichMessageDraft html_len=', html.length, 'preview:', html.slice(0, 200));
             }
             await this.telegram.callApi('sendRichMessageDraft', payload);
             this.draftShownAtLeastOnce = true;
         } catch (err: any) {
-            // Жёсткий лог: описание от Telegram + payload для разбора.
             const description = err?.response?.description || err?.description || err?.message || String(err);
-            console.error(`[CRITICAL][tg][rich-stream] sendRichMessageDraft error:`, description, '| payload:', JSON.stringify(payload).slice(0, 800));
+            console.error(`[CRITICAL][tg][rich-stream] sendRichMessageDraft error:`, description, '| html:', html.slice(0, 400));
             this.draftFailed = true;
             this.clearTimer();
         }
     }
 
-    /** Обёрнуть текст в RichTextPlain, как ожидает Telegram Bot API. */
-private richTextArray(text: string): any[] {
-        const sliced = text.slice(0, STREAM_DRAFT_TEXT_LIMIT);
-        // Обязательно возвращаем МАССИВ [ ... ]
-        return [{ type: 'plain', text: sliced || '...' }];
+    /**
+     * Экранирование спецсимволов HTML.
+     * Обязательно — иначе знак < или & в ответе сломает HTML-парсер Telegram.
+     */
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
-    /** Построить массив блоков по текущим буферам и фазе. */
-private buildBlocks(): any[] {
-        const blocks: any[] = [];
-        
-        // 1. Блок размышлений 
+    /**
+     * Генерируем Rich HTML строку (вместо массива blocks).
+     * Telegram сам парсит этот HTML и собирает из него Rich-блоки на своей стороне.
+     *
+     * Структура:
+     *   <tg-thinking>...размышления...</tg-thinking>
+     *   <p>...основной текст...</p>
+     *
+     * <p> присутствует ВСЕГДА — это гарантия что rich_message непустой.
+     */
+    private buildRichHtml(): string {
+        let html = '';
+
+        // 1. Нативный блок размышлений (только если есть мысли).
         if (this.reasoningBuf) {
-            blocks.push({
-                type: 'thinking', // Строго маленькими буквами!
-                text: this.reasoningBuf // У thinking text - это просто строка
-            });
+            const safeThinking = this.escapeHtml(this.reasoningBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
+            html += `<tg-thinking>${safeThinking}</tg-thinking>`;
         }
-        
-        // 2. Блок основного текста (ОБЯЗАТЕЛЕН)
-        blocks.push({
-            type: 'paragraph', // Строго маленькими буквами!
-            text: this.richTextArray(this.textBuf) // А тут передаем массив!
-        });
-        
-        return blocks;
+
+        // 2. Основной текст — ОБЯЗАТЕЛЕН.
+        // Если textBuf пустой, ставим '...', иначе пустой <p></p> ломает парсинг.
+        const safeText = this.escapeHtml(this.textBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
+        html += `<p>${safeText || '...'}</p>`;
+
+        return html;
     }
 
     /** Отправка черновика. */
@@ -5737,10 +5746,7 @@ private buildBlocks(): any[] {
         if (this.draftFailed || this.finalized) return;
 
         if (this.phase !== 'idle') {
-            const blocks = this.buildBlocks();
-            // Поскольку buildBlocks теперь ВСЕГДА отдает как минимум один параграф,
-            // костыль с отправкой '...' нам больше не нужен. Шлем блоки напрямую.
-            await this.callDraft(blocks);
+            await this.callDraft(this.buildRichHtml());
         }
 
         this.lastFlushAt = Date.now();
@@ -5799,7 +5805,7 @@ private buildBlocks(): any[] {
     }
 
     /**
-     * Финализация: вызвать sendRichMessage с обоими блоками.
+     * Финализация: вызвать sendRichMessage с HTML.
      * Возвращает true при успехе, false при fallback.
      */
     async finalize(): Promise<boolean> {
@@ -5813,17 +5819,17 @@ private buildBlocks(): any[] {
         const hasAnyContent = this.reasoningBuf.trim() || this.textBuf.trim();
         if (!hasAnyContent) return false;
 
-        const blocks = this.buildBlocks();
+        const html = this.buildRichHtml();
         const payload: any = {
             chat_id: this.chatId,
-            rich_message: { blocks },
+            rich_message: { html },
         };
         if (this.messageThreadId) {
             payload.message_thread_id = this.messageThreadId;
         }
         try {
             if (STREAM_DEBUG_LOG) {
-                console.log('[tg][rich-stream] sendRichMessage payload:', JSON.stringify(payload).slice(0, 500));
+                console.log('[tg][rich-stream] sendRichMessage html_len=', html.length, 'preview:', html.slice(0, 200));
             }
             const result = await this.telegram.callApi('sendRichMessage', payload);
             this.messageId = Number.isFinite(Number(result?.message_id)) ? Number(result.message_id) : null;
