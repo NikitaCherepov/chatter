@@ -5663,6 +5663,7 @@ class RichStreamSession {
 
     private lastFlushAt = 0;
     private lastTextLenAtFlush = 0;
+    private nextAllowedFlushAt = 0;
     private flushTimer: NodeJS.Timeout | null = null;
 
     // AIMD-адаптивный throttle: при 429 интервал растёт (multiplicative decrease),
@@ -5730,7 +5731,7 @@ class RichStreamSession {
                 console.warn(`[tg][rich-stream] Rate limit hit! retry_after=${retryAfter}s, interval ${this.currentFlushIntervalMs}ms → ${newInterval}ms`);
                 this.currentFlushIntervalMs = newInterval;
                 this.consecutiveOkFlushes = 0;
-                this.lastFlushAt = Date.now() + (retryAfter * 1000);
+                this.nextAllowedFlushAt = Date.now() + (retryAfter * 1000) + 500;
                 // НЕ ставим draftFailed — пережидаем и продолжаем.
                 return;
             }
@@ -5802,8 +5803,11 @@ class RichStreamSession {
     private scheduleFlush(): void {
         if (this.draftFailed || this.finalized) return;
         if (this.flushTimer) return;
-        const elapsed = Date.now() - this.lastFlushAt;
-        const delay = Math.max(0, this.currentFlushIntervalMs - elapsed);
+        const now = Date.now();
+        const cooldownDelay = Math.max(0, this.nextAllowedFlushAt - now);
+        const elapsed = now - this.lastFlushAt;
+        const throttleDelay = Math.max(0, this.currentFlushIntervalMs - elapsed);
+        const delay = Math.max(cooldownDelay, throttleDelay);
         this.flushTimer = setTimeout(() => {
             this.flushTimer = null;
             this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
@@ -5840,7 +5844,12 @@ class RichStreamSession {
     /** Throttle: мгновенный flush, если прошло >= INTERVAL или накопилось >= MIN_DELTA. */
     private maybeFlush(): void {
         if (this.draftFailed || this.finalized) return;
-        const sinceFlush = Date.now() - this.lastFlushAt;
+        const now = Date.now();
+        if (now < this.nextAllowedFlushAt) {
+            this.scheduleFlush();
+            return;
+        }
+        const sinceFlush = now - this.lastFlushAt;
         const textDelta = this.textBuf.length - this.lastTextLenAtFlush;
         if (sinceFlush >= this.currentFlushIntervalMs || textDelta >= STREAM_MIN_DELTA_CHARS) {
             this.clearTimer();
