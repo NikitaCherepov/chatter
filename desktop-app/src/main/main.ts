@@ -644,11 +644,12 @@ function createWindow() {
     for await (const line of rl) {
       currentLine++;
       if (currentLine < startLine) continue;
-      if (currentLine > endLine) break;
-      lines.push(line);
+      if (currentLine <= endLine) {
+        lines.push(line);
+      }
     }
 
-    const totalLines = currentLine; // last line number seen
+    const totalLines = currentLine;
     fileStream.destroy();
 
     const formatted = showLineNumbers

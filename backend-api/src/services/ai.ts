@@ -4109,24 +4109,27 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Редактирование файла невозможно.' });
     }
 
-    // Pre-read old lines for diff preview (via IPC read_file)
+    // Pre-read only the affected range for diff preview. read_file has a
+    // pagination cap, so reading from line 1 would make large-file edits look
+    // out of bounds even when the target lines exist.
     let oldLinesPreview = '';
     try {
-      const readResult = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: 1, max_lines: 5000 }, 30000, signal);
-      const fullContent = typeof readResult === 'object' && readResult !== null && 'content' in readResult
+      const previewLineCount = endLine >= startLine
+        ? Math.max(1, Math.min(endLine - startLine + 1, 2000))
+        : 1;
+      const readResult = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: startLine, max_lines: previewLineCount }, 30000, signal);
+      const previewContent = typeof readResult === 'object' && readResult !== null && 'content' in readResult
         ? String((readResult as any).content)
         : typeof readResult === 'string' ? readResult : '';
-      const allLines = fullContent.split('\n');
-      const totalLines = allLines.length;
+      const totalLines = typeof readResult === 'object' && readResult !== null && typeof (readResult as any).total_lines === 'number'
+        ? Math.floor((readResult as any).total_lines)
+        : startLine + (previewContent ? previewContent.split('\n').length : 0) - 1;
 
       if (startLine > totalLines + 1) {
         return JSON.stringify({ status: 'error', message: `start_line (${startLine}) выходит за пределы файла (всего строк: ${totalLines}).` });
       }
 
-      const sliceStart = startLine - 1;
-      const sliceEnd = endLine >= startLine ? Math.min(endLine, totalLines) : startLine - 1;
-      const oldSlice = allLines.slice(sliceStart, sliceEnd);
-      oldLinesPreview = oldSlice.join('\n');
+      oldLinesPreview = endLine >= startLine ? previewContent : '';
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Не удалось прочитать файл для diff: ${err?.message || String(err)}`, file_path: filePath });
     }
