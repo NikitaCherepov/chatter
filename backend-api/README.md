@@ -1358,7 +1358,7 @@ Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`,
 Возвращает объект того же формата, что `client.chat.completions.create()` — `{ choices: [{ message }] }`. Агентский цикл, `runTool`, scheduler, vision — ничего не замечают.
 
 **Throttling:**
-- **Бэкенд:** `STREAM_FLUSH_INTERVAL_MS = 50` (~20 FPS). Буферы накапливаются, flush по таймеру. Гарантированный финальный flush в `try/catch` — токены не теряются при ошибке провайдера.
+- **Бэкенд:** `STREAM_FLUSH_INTERVAL_MS = 50` в `services/ai.ts` (~20 FPS). Это главное ограничение скорости прихода новых `stream_token` / `reasoning_token` в WS/SSE. Буферы накапливаются, flush по таймеру. Гарантированный финальный flush в `try/catch` — токены не теряются при ошибке провайдера.
 - **Десктоп:** `requestAnimationFrame` throttle. Буферы накапливаются между кадрами, один `setState` на кадр. Flush перед `onDone`/`onError`/`onIntermediate`.
 
 **Каскад колбеков:**
@@ -1399,6 +1399,11 @@ OpenAI/DeepSeek шлют tool_calls фрагментированно — по in
 | `reasoning_token` | WS / SSE | `{ text }` | Чанк reasoning |
 
 События `intermediate` (текст между tool-call итерациями) и `stream_token` (побуквенный текст внутри итерации) **не конфликтуют** — на стороне desktop вызывается `flushNow()` перед `onIntermediate`, чтобы разделить шаги.
+
+**Desktop UI при стриме:**
+- `reasoning_token` создаёт временное assistant-сообщение так же, как `stream_token`, чтобы кнопка reasoning появилась сразу и её можно было раскрыть во время генерации.
+- Пока есть reasoning, но ещё нет обычного content-текста, bubble временного assistant-сообщения показывает анимированные typing dots вместо пустой плашки.
+- Кнопка `Рассуждает...` использует тот же toggle-контрол, что и обычное `Рассуждение`, поэтому popover открывается/закрывается без ожидания `done`.
 
 **Fallback моделей при стриме:**
 Если первая модель падает на середине стрима, пользователь видит частичный текст. Fallback-каскад (`createCompletionWithModelFallback`) перехватывает ошибку и пробует следующую модель. Стрим начинается заново. Сейчас это приемлемо — fallback срабатывает редко.

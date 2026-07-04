@@ -817,6 +817,9 @@ Assistant-сообщения могут иметь дополнительные 
 UI:
 
 - Кнопка `Рассуждение` появляется только если `reasoning_content` непустой.
+- Во время token streaming кнопка `Рассуждение` превращается в тот же toggle-контрол с текстом `Рассуждает...`: chevron и раскрытие popover работают сразу, не дожидаясь `done`.
+- Если первым приходит `reasoning_token`, `ChatPage` сразу создаёт временное assistant-сообщение с `reasoning_content`, чтобы reasoning можно было открыть во время генерации. Пока обычный `content` ещё пустой, bubble показывает те же typing dots, но с более активной streaming-анимацией.
+- После первого `stream_token` состояние переходит в `content`: typing dots заменяются Markdown-текстом, а `streamAppenderRef` продолжает rAF-батчить текст и reasoning в одно обновление на кадр.
 - Кнопка инструментов появляется только если `tool_calls.length > 0`.
 - Кнопка `N сабагент(ов)` появляется только если `subagents.length > 0`. Открывает панель с детальным trace каждого субагента: задача, промпт (обрезанный до 500 символов), список переданных инструментов, список выполненных инструментов, ответ.
 - Прерванные субагенты помечаются `⏹ прерван`.
@@ -899,6 +902,8 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | type | Описание |
 |---|---|
 | `intermediate` | Промежуточный текст AI |
+| `stream_token` | Чанк обычного текста ответа. На стороне `ChatPage` попадает в `onStreamToken` → `streamAppenderRef.appendText()` и переводит UI в состояние `content`. |
+| `reasoning_token` | Чанк reasoning/thinking. На стороне `ChatPage` попадает в `onReasoningStream` → `streamAppenderRef.appendReasoning()` и переводит UI в состояние `reasoning`. |
 | `tool_status` | Статус выполнения инструмента ("Ищу информацию...") |
 | `display_state` | Изменение состояния аватара |
 | `desktop_action` | Команда управления UI / макрос |
@@ -910,6 +915,10 @@ Desktop-клиент использует **WebSocket** для двунапра�
 | `execute_ipc` | Запрос сервера выполнить IPC и вернуть результат |
 | `ping` | Серверный heartbeat; клиент должен ответить `pong` |
 | `pong` | Ответ на ping |
+
+**Callbacks текущего стрима:** `lib/api.ts` разделяет постоянные WS handlers (`wsCallbacks`: connect/disconnect/task_result и fallback handlers) и callbacks активной генерации (`activeStreamCallbacks`). `streamChatMessage()` кладёт callbacks текущего запроса в `activeStreamCallbacks`, входящие `stream_token` / `reasoning_token` / `done` / `error` сначала доставляются туда, а на `done` или `error` active callbacks очищаются. Это защищает токен-стрим от случайной перерегистрации `initWebSocket()`.
+
+**Скорость токенов:** фактический throttle задаётся на backend в `backend-api/src/services/ai.ts`: `STREAM_FLUSH_INTERVAL_MS = 50` (~20 WS/SSE chunks/sec). Desktop не задаёт отдельный millisecond-rate, а батчит входящие чанки через `requestAnimationFrame`, чтобы делать не больше одного `setState` на кадр.
 
 **Обратный канал (execute_ipc):**
 Сервер может запросить десктоп выполнить IPC-команду и вернуть результат. Используется для `return_output` макросов, `explore_fs`, `read_file`, `write_file` и подтверждённых `execute_pc_command`. `lib/api.ts` логирует получение `execute_ipc` и отправку `ipc_result`; связка с backend-логами делается по `request_id`.
@@ -924,7 +933,7 @@ Desktop-клиент использует **WebSocket** для двунапра�
 
 - `stopChatStream()` sends `{ type: 'chat_stop' }` over WS when connected and also calls `POST /api/v1/chat/stop` as a fallback/backup.
 - In `ChatPage`, `sending` means "there is an active chat request" and keeps the stop button visible until `done`, `error`, or aborted `done`.
-- `showTyping` is separate from `sending`: it only controls the temporary typing bubble. The first `tool_status` or `intermediate` event hides typing and appends content to the same temporary assistant message.
+- `showTyping` is separate from `sending`: it controls the pre-message typing bubble before an assistant message exists. The first `reasoning_token`, `stream_token`, `tool_status`, or `intermediate` hides `showTyping` and switches to the temporary assistant message managed by `streamAppenderRef`.
 
 **Soft abort:** при остановке генерации бот не удаляет накопленный контент. Вместо этого:
 - Если `res.aborted === true` и есть `res.message_id` — временное сообщение финализируется с реальным ID, всем накопленным контентом (`reasoning_content`, `tool_calls`, `subagents`) и текстом `_⏹ Генерация остановлена пользователем_`.
