@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import * as dotenv from 'dotenv';
 import crypto from 'crypto';
 import axios from 'axios';
+import { marked, Renderer } from 'marked';
 
 dotenv.config();
 
@@ -5648,6 +5649,116 @@ const STREAM_DEBUG_LOG = process.env.TG_STREAM_DEBUG === '1';
 type RichStreamPhase = 'idle' | 'thinking' | 'answering';
 
 /**
+ * Экранирование спецсимволов Rich HTML.
+ * Обязательно — иначе знак < или & в ответе сломает HTML-парсер Telegram.
+ */
+function escapeRichHtml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function isSafeRichUrl(url: string): boolean {
+    return /^(https?:|mailto:|tel:|tg:\/\/)/i.test(url.trim());
+}
+
+function cleanCodeLanguage(lang?: string): string {
+    return (lang || '')
+        .split(/\s+/)[0]
+        .replace(/[^a-zA-Z0-9_+#.-]/g, '')
+        .slice(0, 40);
+}
+
+function createTelegramRichMarkdownRenderer(): Renderer {
+    const renderer = new Renderer();
+    const inline = (tokens: any[]) => renderer.parser.parseInline(tokens);
+    const block = (tokens: any[]) => renderer.parser.parse(tokens);
+
+    renderer.code = ({ text, lang }) => {
+        const language = cleanCodeLanguage(lang);
+        const classAttr = language ? ` class="language-${escapeRichHtml(language)}"` : '';
+        return `<pre><code${classAttr}>${escapeRichHtml(text)}</code></pre>\n`;
+    };
+
+    renderer.blockquote = ({ tokens }) => `<blockquote>${block(tokens)}</blockquote>\n`;
+    renderer.heading = ({ tokens, depth }) => {
+        const level = Math.min(Math.max(depth, 1), 6);
+        return `<h${level}>${inline(tokens)}</h${level}>\n`;
+    };
+    renderer.hr = () => '<hr/>\n';
+    renderer.paragraph = ({ tokens }) => `<p>${inline(tokens)}</p>\n`;
+    renderer.strong = ({ tokens }) => `<b>${inline(tokens)}</b>`;
+    renderer.em = ({ tokens }) => `<i>${inline(tokens)}</i>`;
+    renderer.codespan = ({ text }) => `<code>${escapeRichHtml(text)}</code>`;
+    renderer.br = () => '<br>';
+    renderer.del = ({ tokens }) => `<s>${inline(tokens)}</s>`;
+    renderer.text = ({ text }) => escapeRichHtml(text);
+    renderer.html = ({ text, block }) => block
+        ? `<p>${escapeRichHtml(text)}</p>\n`
+        : escapeRichHtml(text);
+    renderer.image = ({ href, text }) => {
+        const alt = text?.trim() || href;
+        if (!href || !isSafeRichUrl(href)) return escapeRichHtml(alt || '');
+        return `<a href="${escapeRichHtml(href)}">${escapeRichHtml(alt)}</a>`;
+    };
+    renderer.link = ({ href, tokens }) => {
+        const label = inline(tokens);
+        if (!href || !isSafeRichUrl(href)) return label;
+        return `<a href="${escapeRichHtml(href)}">${label}</a>`;
+    };
+
+    renderer.list = ({ ordered, start, items }) => {
+        const tag = ordered ? 'ol' : 'ul';
+        const startAttr = ordered && typeof start === 'number' && start > 1
+            ? ` start="${start}"`
+            : '';
+        const body = items.map(item => renderer.listitem(item)).join('');
+        return `<${tag}${startAttr}>${body}</${tag}>\n`;
+    };
+    renderer.listitem = (item) => {
+        const checkbox = item.task
+            ? `<code>${item.checked ? 'x' : ' '}</code> `
+            : '';
+        return `<li>${checkbox}${block(item.tokens)}</li>`;
+    };
+
+    renderer.table = ({ header, rows }) => {
+        const head = `<tr>${header.map(cell => renderer.tablecell({ ...cell, header: true })).join('')}</tr>`;
+        const body = rows
+            .map(row => `<tr>${row.map(cell => renderer.tablecell({ ...cell, header: false })).join('')}</tr>`)
+            .join('');
+        return `<table>${head}${body}</table>\n`;
+    };
+    renderer.tablecell = ({ tokens, header, align }) => {
+        const tag = header ? 'th' : 'td';
+        const alignAttr = align ? ` align="${align}"` : '';
+        return `<${tag}${alignAttr}>${inline(tokens)}</${tag}>`;
+    };
+
+    return renderer;
+}
+
+function markdownToTelegramRichHtml(text: string): string {
+    const markdown = text.trim();
+    if (!markdown) return '';
+
+    try {
+        const html = marked.parse(markdown, {
+            async: false,
+            gfm: true,
+            breaks: true,
+            renderer: createTelegramRichMarkdownRenderer(),
+        });
+        return typeof html === 'string' ? html.trim() : escapeRichHtml(markdown);
+    } catch (err: any) {
+        console.warn('[tg][rich-stream] markdown render failed:', err?.message || err);
+        return `<p>${escapeRichHtml(markdown)}</p>`;
+    }
+}
+
+/**
  * Контейнер состояния одного стримящегося ответа.
  * Создаётся на каждый вызов processUserTextThroughAi, живёт до done/error.
  */
@@ -5742,15 +5853,8 @@ class RichStreamSession {
         }
     }
 
-    /**
-     * Экранирование спецсимволов HTML.
-     * Обязательно — иначе знак < или & в ответе сломает HTML-парсер Telegram.
-     */
     private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        return escapeRichHtml(text);
     }
 
     /**
@@ -5778,11 +5882,11 @@ class RichStreamSession {
 
         // 2. Основной текст. В черновике присутствует всегда ('...' если пусто),
         //    в финале — только если есть что показать.
-        const safeText = this.escapeHtml(this.textBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
+        const safeText = markdownToTelegramRichHtml(this.textBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
         if (isFinal) {
-            if (safeText) html += `<p>${safeText}</p>`;
+            if (safeText) html += safeText;
         } else {
-            html += `<p>${safeText || '...'}</p>`;
+            html += safeText || '<p>...</p>';
         }
 
         return html;
