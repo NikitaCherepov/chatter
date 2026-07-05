@@ -5779,7 +5779,7 @@ class RichStreamSession {
     private phase: RichStreamPhase = 'idle';
 
     private reasoningBuf = '';
-    private toolStatusBuf = '';
+    private lastToolStatus = '';
     private intermediateBuf = '';
     private textBuf = '';
 
@@ -5904,31 +5904,34 @@ class RichStreamSession {
 
         // Сначала tool_status и intermediate (короткие, важные для понимания «что делает бот»).
         const statusLines: string[] = [];
-        if (this.toolStatusBuf.trim()) {
-            // Каждая строка статуса — отдельная <i>🔧 ...</i>
-            const lines = this.toolStatusBuf.split('\n').map(s => s.trim()).filter(Boolean);
-            for (const line of lines) {
-                const lineHtml = `<i>🔧 ${this.escapeHtml(line)}</i><br>`;
-                if (remaining < lineHtml.length + STATUS_OVERHEAD) break;
+        if (this.lastToolStatus.trim()) {
+            // Показываем только ОДНУ последнюю строку статуса — индикатор «сейчас делаю X».
+            const lineHtml = `<i>🔧 ${this.escapeHtml(this.lastToolStatus.trim())}</i><br>`;
+            if (remaining >= lineHtml.length + STATUS_OVERHEAD) {
                 statusLines.push(lineHtml);
                 remaining -= lineHtml.length;
             }
         }
 
-        // intermediate — отдельным курсивом/цитатой (короткие промежуточные выводы модели).
+        // intermediate — отдельным курсивом/цитатой. Показываем ХВОСТ (последние мысли).
         let intermediatePart = '';
         if (this.intermediateBuf.trim() && remaining > 60) {
-            const escaped = this.escapeHtml(this.intermediateBuf.slice(0, remaining - 60));
-            intermediatePart = `<blockquote>${escaped}</blockquote>`;
+            const budget = Math.max(0, remaining - 60);
+            const source = this.intermediateBuf.length > budget
+                ? '…' + this.intermediateBuf.slice(-budget)   // хвост с многоточием в начале
+                : this.intermediateBuf;
+            intermediatePart = `<blockquote>${this.escapeHtml(source)}</blockquote>`;
             remaining -= intermediatePart.length;
         }
 
-        // Reasoning — что осталось. Может быть обрезан с «…».
+        // Reasoning — что осталось. Показываем ХВОСТ (последние мысли важнее для «думаю…»).
         let thinkingPart = '';
         if (this.reasoningBuf.trim() && remaining > 60) {
-            const safeThinking = this.escapeHtml(this.reasoningBuf.slice(0, remaining - 60));
-            const suffix = this.reasoningBuf.length > remaining - 60 ? '…' : '';
-            thinkingPart = `<tg-thinking>${safeThinking}${suffix}</tg-thinking>`;
+            const budget = Math.max(0, remaining - 60);
+            const source = this.reasoningBuf.length > budget
+                ? '…' + this.reasoningBuf.slice(-budget)   // хвост с многоточием
+                : this.reasoningBuf;
+            thinkingPart = `<tg-thinking>${this.escapeHtml(source)}</tg-thinking>`;
         }
 
         // Порядок: thinking → статусы → intermediate → основной текст.
@@ -5951,7 +5954,7 @@ class RichStreamSession {
         const hasAny =
             this.phase !== 'idle' ||
             this.reasoningBuf.trim() ||
-            this.toolStatusBuf.trim() ||
+            this.lastToolStatus.trim() ||
             this.intermediateBuf.trim() ||
             this.textBuf.trim();
         if (hasAny) {
@@ -5960,7 +5963,7 @@ class RichStreamSession {
 
         this.lastFlushAt = Date.now();
         // Сохраняем суммарную длину всех буферов для корректной дельты в maybeFlush.
-        this.lastTextLenAtFlush = this.textBuf.length + this.toolStatusBuf.length
+        this.lastTextLenAtFlush = this.textBuf.length + this.lastToolStatus.length
             + this.intermediateBuf.length + this.reasoningBuf.length;
     }
 
@@ -5997,15 +6000,17 @@ class RichStreamSession {
 
     /**
      * Получен tool_status (например «Выполняю команду на ПК…»).
-     * Эфемерный: накапливается в toolStatusBuf, показывается в черновике,
-     * в финале выкидывается полностью.
+     * Эфемерный: показываем только ПОСЛЕДНИЙ статус как индикатор «сейчас делаю это».
+     * Не накапливаем историю (иначе 10 tool calls = 10 строк шума в draft).
+     * В финале выкидывается полностью.
      */
     onToolStatus(text: string): void {
         if (this.draftFailed || this.finalized) return;
         const line = typeof text === 'string' ? text.trim() : '';
         if (!line) return;
-        // Накапливаем построчно, чтобы потом рендерить каждую отдельно.
-        this.toolStatusBuf += (this.toolStatusBuf ? '\n' : '') + line;
+        // Запоминаем только последний статус — пользователь видит «сейчас делаю X»,
+        // а не всю историю вызовов.
+        this.lastToolStatus = line;
         this.maybeFlush();
     }
 
@@ -6043,7 +6048,7 @@ class RichStreamSession {
         }
         const sinceFlush = now - this.lastFlushAt;
         // Дельта по всем буферам — tool_status/intermediate тоже должны триггерить flush.
-        const totalLen = this.textBuf.length + this.toolStatusBuf.length
+        const totalLen = this.textBuf.length + this.lastToolStatus.length
             + this.intermediateBuf.length + this.reasoningBuf.length;
         const delta = totalLen - this.lastTextLenAtFlush;
         if (sinceFlush >= this.currentFlushIntervalMs || delta >= STREAM_MIN_DELTA_CHARS) {
@@ -6098,7 +6103,7 @@ class RichStreamSession {
     /** Получал ли сессия хотя бы один токен (для решения нужен ли rich pipeline). */
     hasContent(): boolean {
         return Boolean(this.reasoningBuf.trim())
-            || Boolean(this.toolStatusBuf.trim())
+            || Boolean(this.lastToolStatus.trim())
             || Boolean(this.intermediateBuf.trim())
             || Boolean(this.textBuf.trim());
     }
@@ -6485,17 +6490,6 @@ const processUserTextThroughAi = async (
             }
         });
 
-        if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length > 0 && !options?.suppressFinalReply) {
-            for (const msg of backend.tool_user_messages) {
-                const trimmed = typeof msg === 'string' ? msg.trim() : '';
-                if (trimmed) {
-                    await ctx.reply(trimmed);
-                }
-            }
-        }
-        if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim() && !options?.suppressFinalReply) {
-            await ctx.reply(backend.model_fallback_notice.trim());
-        }
         const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
             ? backend.reply_text.trim()
             : FALLBACK_ANSWER;
@@ -6510,8 +6504,25 @@ const processUserTextThroughAi = async (
                     sentMessage = { message_id: richStream.messageId };
                 }
             }
+            // Если rich-stream успешно финализирован — tool_user_messages уже были показаны
+            // в эфемерном draft (🔧 статусы), НЕ дублируем их отдельными сообщениями.
+            // Шлём только в fallback-режиме (rich выключен/упал).
+            if (!richFinalized
+                && Array.isArray(backend?.tool_user_messages)
+                && backend.tool_user_messages.length > 0) {
+                for (const msg of backend.tool_user_messages) {
+                    const trimmed = typeof msg === 'string' ? msg.trim() : '';
+                    if (trimmed) {
+                        await ctx.reply(trimmed);
+                    }
+                }
+            }
             if (!richFinalized) {
                 sentMessage = await safeReply(ctx, assistantText);
+            }
+            // Уведомление о fallback модели (не rich-связанное) — оставляем как было.
+            if (typeof backend?.model_fallback_notice === 'string' && backend.model_fallback_notice.trim()) {
+                await ctx.reply(backend.model_fallback_notice.trim());
             }
             const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
                 ? Math.floor(Number(backend?.message_id))
