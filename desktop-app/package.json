@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.7.0",
+  "version": "1.7.5",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
@@ -56,6 +56,8 @@
     "productName": "Chatter",
     "files": [
       "dist/**/*",
+      "!dist/wakeword-listener.exe",
+      "!dist/wakeword-listener/**",
       ".env"
     ],
     "asarUnpack": [

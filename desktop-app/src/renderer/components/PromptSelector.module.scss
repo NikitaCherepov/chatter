@@ -130,6 +130,43 @@
   }
 }
 
+.optionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: lowercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  line-height: 1.5;
+}
+
+.badgeDefault {
+  background-color: rgba(79, 172, 254, 0.15);
+  color: #4facfe;
+}
+
+.badgeCustom {
+  background-color: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-hint);
+  padding: 6px 10px 2px;
+}
+
 .optionName {
   font-weight: 500;
 }

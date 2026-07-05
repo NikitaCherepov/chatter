@@ -841,8 +841,16 @@ export type PromptInfo = {
   is_default: number;
 };
 
+export type CustomPromptInfo = {
+  id: number;
+  name: string;
+  description: string;
+  content: string;
+};
+
 export type PromptsResponse = {
   prompts: PromptInfo[];
+  custom_prompts: CustomPromptInfo[];
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
 };
@@ -858,6 +866,37 @@ export async function selectPrompt(promptId: number): Promise<{ ok: boolean }> {
   });
 }
 
+/** Create a new custom prompt. Auto-selects it server-side. */
+export async function createCustomPrompt(data: {
+  name: string;
+  description?: string;
+  content: string;
+}): Promise<{ ok: boolean; prompt_id: number }> {
+  return apiFetch('/api/v1/prompts/custom', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Update an existing custom prompt (by selected_id, i.e. <= -1000). */
+export async function updateCustomPromptById(
+  selectedId: number,
+  data: { name?: string; description?: string; content?: string }
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/prompts/custom/${selectedId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Delete a custom prompt (by selected_id). */
+export async function deleteCustomPrompt(selectedId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/prompts/custom/${selectedId}`, {
+    method: 'DELETE',
+  });
+}
+
+/** Legacy: update the single custom_prompt_content field. */
 export async function updateCustomPrompt(content: string): Promise<{ ok: boolean }> {
   return apiFetch('/api/v1/prompts/custom', {
     method: 'PUT',

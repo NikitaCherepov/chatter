@@ -92,10 +92,14 @@ export function SettingsModal({ onClose }: Props) {
 
   // Prompt
   const [prompts, setPrompts] = useState<api.PromptInfo[]>([]);
+  const [customPrompts, setCustomPrompts] = useState<api.CustomPromptInfo[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState<number | null>(null);
   const [customContent, setCustomContent] = useState('');
+  const [promptName, setPromptName] = useState('');
+  const [promptDesc, setPromptDesc] = useState('');
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
+  const [promptDeleting, setPromptDeleting] = useState(false);
 
   // App zoom (stored as honest percentages)
   const [zoomPct, setZoomPct] = useState(100);
@@ -417,7 +421,7 @@ export function SettingsModal({ onClose }: Props) {
         const res = await api.getPrompts();
         if (cancelled) return;
         setPrompts(res.prompts);
-        // If user hasn't chosen a prompt, fall back to the default one
+        setCustomPrompts(res.custom_prompts || []);
         if (res.selected_prompt_id !== null) {
           setSelectedPromptId(res.selected_prompt_id);
         } else {
@@ -434,6 +438,23 @@ export function SettingsModal({ onClose }: Props) {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Sync name/desc/content fields when selectedPromptId changes
+  useEffect(() => {
+    if (selectedPromptId !== null && selectedPromptId <= -1000) {
+      const cp = customPrompts.find(p => p.id === selectedPromptId);
+      if (cp) {
+        setPromptName(cp.name);
+        setPromptDesc(cp.description);
+        setCustomContent(cp.content);
+      }
+    } else if (selectedPromptId === CUSTOM_PROMPT_ID) {
+      // New prompt: blank fields
+      setPromptName('');
+      setPromptDesc('');
+      setCustomContent('');
+    }
+  }, [selectedPromptId, customPrompts]);
 
   const handleSaveName = async () => {
     const trimmed = nameValue.trim();
@@ -482,7 +503,11 @@ export function SettingsModal({ onClose }: Props) {
     setPromptSaving(true);
     try {
       await api.selectPrompt(promptId);
-      toast.success(promptId === CUSTOM_PROMPT_ID ? 'Выбран кастомный промпт' : 'Промпт выбран');
+      if (promptId === CUSTOM_PROMPT_ID) {
+        // "New prompt" — don't show success, user hasn't saved anything yet
+      } else {
+        toast.success('Промпт выбран');
+      }
     } catch (err) {
       console.error('Failed to select prompt:', err);
       toast.error('Не удалось выбрать промпт');
@@ -492,15 +517,77 @@ export function SettingsModal({ onClose }: Props) {
   };
 
   const handleSaveCustomPrompt = async () => {
+    const name = promptName.trim();
+    if (!name) {
+      toast.error('Введите название промпта');
+      return;
+    }
+    if (!customContent.trim()) {
+      toast.error('Введите текст промпта');
+      return;
+    }
     setPromptSaving(true);
     try {
-      await api.updateCustomPrompt(customContent);
-      toast.success('Кастомный промпт сохранён');
+      if (selectedPromptId !== null && selectedPromptId <= -1000) {
+        // Update existing
+        await api.updateCustomPromptById(selectedPromptId, {
+          name,
+          description: promptDesc.trim(),
+          content: customContent,
+        });
+        // Update local state
+        setCustomPrompts(prev => prev.map(p =>
+          p.id === selectedPromptId
+            ? { ...p, name, description: promptDesc.trim(), content: customContent }
+            : p
+        ));
+        toast.success('Промпт обновлён');
+      } else {
+        // Create new (selectedPromptId === -1 or null)
+        const res = await api.createCustomPrompt({
+          name,
+          description: promptDesc.trim(),
+          content: customContent,
+        });
+        const newId = res.prompt_id;
+        // Add to local state + select it
+        setCustomPrompts(prev => [...prev, {
+          id: newId,
+          name,
+          description: promptDesc.trim(),
+          content: customContent,
+        }]);
+        setSelectedPromptId(newId);
+        toast.success('Промпт создан и выбран');
+      }
     } catch (err) {
       console.error('Failed to save custom prompt:', err);
       toast.error('Не удалось сохранить промпт');
     } finally {
       setPromptSaving(false);
+    }
+  };
+
+  const handleDeleteCustomPrompt = async () => {
+    if (selectedPromptId === null || selectedPromptId > -1000) return;
+    setPromptDeleting(true);
+    try {
+      await api.deleteCustomPrompt(selectedPromptId);
+      const deletedId = selectedPromptId;
+      setCustomPrompts(prev => prev.filter(p => p.id !== deletedId));
+      // Reset to default
+      const def = prompts.find(p => p.is_default === 1);
+      const fallbackId = def ? def.id : null;
+      setSelectedPromptId(fallbackId);
+      if (fallbackId !== null) {
+        try { await api.selectPrompt(fallbackId); } catch { /* non-critical */ }
+      }
+      toast.success('Промпт удалён');
+    } catch (err) {
+      console.error('Failed to delete custom prompt:', err);
+      toast.error('Не удалось удалить промпт');
+    } finally {
+      setPromptDeleting(false);
     }
   };
 
@@ -722,33 +809,64 @@ export function SettingsModal({ onClose }: Props) {
                   <div className={s.fieldGroup}>
                     <label className={s.fieldLabel}>Стиль общения</label>
                     <PromptSelector
-                      options={prompts}
+                      options={[
+                        ...prompts.map(p => ({ id: p.id, name: p.name, description: p.description, kind: 'default' as const })),
+                        ...customPrompts.map(p => ({ id: p.id, name: p.name, description: p.description, kind: 'custom' as const })),
+                      ]}
                       value={selectedPromptId}
                       onChange={handleSelectPrompt}
                       disabled={promptSaving}
-                      maxVisibleItems={3}
+                      maxVisibleItems={5}
                     />
                   </div>
 
-                  {selectedPromptId === CUSTOM_PROMPT_ID && (
+                  {(selectedPromptId === CUSTOM_PROMPT_ID || (selectedPromptId !== null && selectedPromptId <= -1000)) && (
                     <div className={s.fieldGroup}>
-                      <label className={s.fieldLabel}>Ваш промпт</label>
+                      <label className={s.fieldLabel}>
+                        {selectedPromptId === CUSTOM_PROMPT_ID ? 'Новый промпт' : 'Редактирование промпта'}
+                      </label>
+                      <input
+                        className={s.fieldInput}
+                        value={promptName}
+                        onChange={(e) => setPromptName(e.target.value.slice(0, 80))}
+                        placeholder="Название (например: «Саркастичный помощник»)"
+                        maxLength={80}
+                      />
+                      <input
+                        className={s.fieldInput}
+                        value={promptDesc}
+                        onChange={(e) => setPromptDesc(e.target.value.slice(0, 200))}
+                        placeholder="Короткое описание (необязательно)"
+                        maxLength={200}
+                      />
                       <textarea
                         className={s.textareaInput}
                         value={customContent}
                         onChange={(e) => setCustomContent(e.target.value.slice(0, 10000))}
-                        placeholder="Опишите стиль общения..."
+                        placeholder="Текст промпта..."
                         rows={6}
                         maxLength={10000}
                       />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <button
-                          className={s.saveBtn}
-                          onClick={handleSaveCustomPrompt}
-                          disabled={promptSaving}
-                        >
-                          {promptSaving ? 'Сохранение...' : 'Сохранить промпт'}
-                        </button>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            className={s.saveBtn}
+                            onClick={handleSaveCustomPrompt}
+                            disabled={promptSaving}
+                          >
+                            {promptSaving ? 'Сохранение...' : (selectedPromptId === CUSTOM_PROMPT_ID ? 'Создать' : 'Сохранить')}
+                          </button>
+                          {selectedPromptId !== null && selectedPromptId <= -1000 && (
+                            <button
+                              className={s.deleteBtn}
+                              onClick={handleDeleteCustomPrompt}
+                              disabled={promptDeleting}
+                              style={{ color: '#e74c3c' }}
+                            >
+                              {promptDeleting ? 'Удаление...' : 'Удалить'}
+                            </button>
+                          )}
+                        </div>
                         <span style={{ fontSize: '11px', color: customContent.length >= 10000 ? '#e74c3c' : 'var(--text-hint)' }}>
                           {customContent.length} / 10000
                         </span>

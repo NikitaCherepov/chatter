@@ -28,7 +28,7 @@ import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { VectorMemoryService } from './services/vector-memory.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
-import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt } from './services/prompts.js';
+import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret, runEmailSend } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
@@ -1568,10 +1568,18 @@ app.post('/api/v1/link/unlink', authMiddleware, (req: AuthedRequest, res) => {
 // ── Prompts (public, for desktop) ──────────────────────────────────────
 
 app.get('/api/v1/prompts', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
   const prompts = getAllPrompts();
-  const user = getUserById(req.authUserId!);
+  const user = getUserById(userId);
+  const userPrompts = getUserPrompts(userId);
   return res.json({
     prompts: prompts.map(p => ({ id: p.id, name: p.name, description: p.description, is_default: p.is_default })),
+    custom_prompts: userPrompts.map(p => ({
+      id: toUserPromptSelectedId(p.id),
+      name: p.name,
+      description: p.description,
+      content: p.content,
+    })),
     selected_prompt_id: user?.selected_prompt_id ?? null,
     custom_prompt_content: user?.custom_prompt_content ?? null,
   });
@@ -1583,7 +1591,15 @@ app.post('/api/v1/prompts/select', (req: AuthedRequest, res) => {
   if (!Number.isFinite(promptId)) return res.status(400).json({ error: 'bad_prompt_id' });
 
   if (promptId === -1) {
+    // Legacy "Custom" (blank template) — still allow for backward compat
     selectUserCustomPrompt(userId);
+  } else if (promptId <= -USER_PROMPT_OFFSET) {
+    // User custom prompt: verify ownership
+    const rowId = parseUserPromptRowId(promptId);
+    if (rowId === null) return res.status(400).json({ error: 'bad_prompt_id' });
+    const up = getUserPromptById(userId, rowId);
+    if (!up) return res.status(404).json({ error: 'prompt_not_found' });
+    updateUserPrompt(userId, promptId);
   } else {
     const prompt = getPromptById(promptId);
     if (!prompt) return res.status(404).json({ error: 'prompt_not_found' });
@@ -1592,6 +1608,78 @@ app.post('/api/v1/prompts/select', (req: AuthedRequest, res) => {
   return res.json({ ok: true });
 });
 
+// Create a new custom prompt
+app.post('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const name = `${req.body?.name || ''}`.trim();
+  const description = `${req.body?.description || ''}`.trim();
+  const content = `${req.body?.content || ''}`;
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  if (content.length > 10000) return res.status(400).json({ error: 'content_too_long' });
+
+  const result = createUserPrompt(userId, name, description, content);
+  const newRowId = Number(result.lastInsertRowid);
+  const selectedId = toUserPromptSelectedId(newRowId);
+  // Auto-select the newly created prompt
+  updateUserPrompt(userId, selectedId);
+  return res.json({ ok: true, prompt_id: selectedId });
+});
+
+// Update an existing custom prompt
+app.put('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const selectedId = Number(req.params.selectedId);
+  if (!Number.isFinite(selectedId) || selectedId > -USER_PROMPT_OFFSET) {
+    return res.status(400).json({ error: 'bad_prompt_id' });
+  }
+  const rowId = parseUserPromptRowId(selectedId);
+  if (rowId === null) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getUserPromptById(userId, rowId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  const fields: { name?: string; description?: string; content?: string } = {};
+  if (req.body?.name !== undefined) {
+    const name = `${req.body.name}`.trim();
+    if (!name) return res.status(400).json({ error: 'name_required' });
+    fields.name = name;
+  }
+  if (req.body?.description !== undefined) {
+    fields.description = `${req.body.description}`.trim();
+  }
+  if (req.body?.content !== undefined) {
+    const content = `${req.body.content}`;
+    if (content.length > 10000) return res.status(400).json({ error: 'content_too_long' });
+    fields.content = content;
+  }
+
+  updateUserPromptRow(userId, rowId, fields);
+  return res.json({ ok: true });
+});
+
+// Delete a custom prompt
+app.delete('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const selectedId = Number(req.params.selectedId);
+  if (!Number.isFinite(selectedId) || selectedId > -USER_PROMPT_OFFSET) {
+    return res.status(400).json({ error: 'bad_prompt_id' });
+  }
+  const rowId = parseUserPromptRowId(selectedId);
+  if (rowId === null) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getUserPromptById(userId, rowId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  deleteUserPromptRow(userId, rowId);
+  // If deleted prompt was selected, reset to default
+  const user = getUserById(userId);
+  if (user?.selected_prompt_id === selectedId) {
+    db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE id = ?').run(userId);
+  }
+  return res.json({ ok: true });
+});
+
+// Legacy: update single custom_prompt_content (kept for backward compat)
 app.put('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
   const userId = req.authUserId!;
   const content = `${req.body?.content || ''}`;

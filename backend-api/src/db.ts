@@ -219,6 +219,22 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_macros_user_id ON macros(user_id)");
 // ── Safe migrations (add columns if missing) ──
 try { db.exec("ALTER TABLE macros ADD COLUMN return_output INTEGER NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
 
+// ── User custom prompts ──────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_prompts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+db.exec("CREATE INDEX IF NOT EXISTS idx_user_prompts_user ON user_prompts(user_id)");
+
 // ── Currency rates (CBR) ──────────────────────────────────────────────────────
 
 db.exec(`

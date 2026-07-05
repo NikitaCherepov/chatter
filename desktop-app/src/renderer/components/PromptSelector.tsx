@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import s from './PromptSelector.module.scss';
 
-type PromptOption = {
+/** Один элемент в селекторе — либо default-промпт, либо custom. */
+export type PromptOption = {
   id: number;
   name: string;
   description: string;
+  /** 'default' — системный пресет; 'custom' — создан юзером */
+  kind: 'default' | 'custom';
 };
 
 type Props = {
@@ -16,7 +19,7 @@ type Props = {
   maxVisibleItems?: number;
 };
 
-const CUSTOM_ID = -1;
+const NEW_PROMPT_ID = -1;
 
 export function PromptSelector({ options, value, onChange, disabled = false, placeholder = 'Выберите промпт...', maxVisibleItems = 6 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,17 +27,16 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return options;
-    return options.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
-    );
-  }, [search, options]);
+  const defaults = useMemo(() => options.filter(o => o.kind === 'default'), [options]);
+  const customs  = useMemo(() => options.filter(o => o.kind === 'custom'),  [options]);
+
+  const q = search.toLowerCase().trim();
+  const filteredDefaults = useMemo(() => q ? defaults.filter(p => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) : defaults, [q, defaults]);
+  const filteredCustoms  = useMemo(() => q ? customs.filter(p  => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) : customs,  [q, customs]);
 
   const selectedLabel = useMemo(() => {
-    if (value === CUSTOM_ID) return 'Кастомный';
-    const found = options.find((p) => p.id === value);
+    if (value === NEW_PROMPT_ID) return '+ Новый промпт';
+    const found = options.find(p => p.id === value);
     return found ? found.name : placeholder;
   }, [value, options, placeholder]);
 
@@ -64,11 +66,17 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
     setSearch('');
   };
 
+  const renderBadge = (kind: 'default' | 'custom') => (
+    <span className={`${s.badge} ${kind === 'default' ? s.badgeDefault : s.badgeCustom}`}>
+      {kind === 'default' ? 'default' : 'custom'}
+    </span>
+  );
+
   return (
     <div className={s.root} ref={rootRef}>
       <button
         className={s.trigger}
-        onClick={() => { if (!disabled) setIsOpen((v) => !v); }}
+        onClick={() => { if (!disabled) setIsOpen(v => !v); }}
         disabled={disabled}
         type="button"
       >
@@ -97,30 +105,56 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
             />
           </div>
           <div className={s.list} style={{ maxHeight: `${maxVisibleItems * 52}px` }}>
-            {filtered.map((p) => (
+            {filteredDefaults.map(p => (
               <button
                 key={p.id}
                 className={`${s.option} ${p.id === value ? s.optionActive : ''}`}
                 onClick={() => handleSelect(p.id)}
                 type="button"
               >
-                <span className={s.optionName}>{p.name}</span>
-                <span className={s.optionDesc}>{p.description}</span>
+                <span className={s.optionTop}>
+                  <span className={s.optionName}>{p.name}</span>
+                  {renderBadge(p.kind)}
+                </span>
+                {p.description && <span className={s.optionDesc}>{p.description}</span>}
               </button>
             ))}
 
-            {filtered.length === 0 && (
+            {filteredCustoms.length > 0 && (
+              <>
+                <div className={s.sectionLabel}>Мои промпты</div>
+                {filteredCustoms.map(p => (
+                  <button
+                    key={p.id}
+                    className={`${s.option} ${p.id === value ? s.optionActive : ''}`}
+                    onClick={() => handleSelect(p.id)}
+                    type="button"
+                  >
+                    <span className={s.optionTop}>
+                      <span className={s.optionName}>{p.name}</span>
+                      {renderBadge(p.kind)}
+                    </span>
+                    {p.description && <span className={s.optionDesc}>{p.description}</span>}
+                  </button>
+                ))}
+              </>
+            )}
+
+            {(filteredDefaults.length === 0 && filteredCustoms.length === 0) && (
               <div className={s.emptyState}>Ничего не найдено</div>
             )}
 
             <div className={s.customDivider} />
             <button
-              className={`${s.option} ${value === CUSTOM_ID ? s.optionActive : ''}`}
-              onClick={() => handleSelect(CUSTOM_ID)}
+              className={`${s.option} ${value === NEW_PROMPT_ID ? s.optionActive : ''}`}
+              onClick={() => handleSelect(NEW_PROMPT_ID)}
               type="button"
             >
-              <span className={s.optionName}>Кастомный</span>
-              <span className={s.optionDesc}>Напишите свой промпт</span>
+              <span className={s.optionTop}>
+                <span className={s.optionName}>+ Новый промпт</span>
+                {renderBadge('custom')}
+              </span>
+              <span className={s.optionDesc}>Создать свой промпт</span>
             </button>
           </div>
         </div>
