@@ -1642,6 +1642,23 @@ export function ChatPage() {
     setEditingText('');
   };
 
+  const [forking, setForking] = useState(false);
+
+  const handleForkFromMessage = async (messageId: number) => {
+    closeMsgMenu();
+    if (!activeChatId || forking) return;
+    setForking(true);
+    try {
+      const res = await api.forkChatFromMessage(activeChatId, messageId);
+      await loadChats();
+      selectChat(res.chat_id);
+    } catch (err) {
+      console.error('Failed to fork chat:', err);
+    } finally {
+      setForking(false);
+    }
+  };
+
   const handleRegenerate = useCallback(async (assistantMsgId: number) => {
     if (!activeChatId || sending) return;
     const idx = messages.findIndex(m => m.id === assistantMsgId);
@@ -3706,6 +3723,16 @@ export function ChatPage() {
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
                   Отправить в Telegram
+                </button>
+                <button className={s.contextMenuItem} onClick={() => handleForkFromMessage(msgMenuId)} disabled={forking} title="Создать новый чат-ветку с копией истории до этого сообщения">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="6" cy="6" r="2" />
+                    <circle cx="6" cy="18" r="2" />
+                    <circle cx="18" cy="6" r="2" />
+                    <path d="M6 8v8" />
+                    <path d="M18 8c0 4-4 4-6 6" />
+                  </svg>
+                  Создать ветку
                 </button>
                 <button className={s.contextMenuItem} onClick={() => handleStartEdit(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

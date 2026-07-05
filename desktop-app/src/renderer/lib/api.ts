@@ -236,6 +236,17 @@ export async function createChat(title?: string): Promise<{ chat_id: number }> {
   });
 }
 
+export async function forkChatFromMessage(
+  sourceChatId: number,
+  fromMessageId: number,
+  title?: string
+): Promise<{ chat_id: number; forked_messages: number }> {
+  return apiFetch(`/api/v1/chats/${sourceChatId}/fork`, {
+    method: 'POST',
+    body: JSON.stringify({ from_message_id: fromMessageId, title }),
+  });
+}
+
 export async function activateChat(chatId: number): Promise<{ ok: boolean; active_chat_id: number }> {
   return apiFetch(`/api/v1/chats/${chatId}/activate`, { method: 'POST' });
 }

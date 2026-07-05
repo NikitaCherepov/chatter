@@ -117,6 +117,166 @@ export const createUserChat = (userId: number, title: string) => {
   return chatId;
 };
 
+/**
+ * Build a forked chat title by prepending a "[N]" index.
+ *
+ * Rules (matches UI expectations):
+ *   "Report"              -> "[2] Report"
+ *   "[2] Report"          -> "[3] Report"
+ *   "[5] [important] x"   -> "[2] [5] [important] x"  (existing [N] at start is replaced,
+ *                                                      other bracketed tokens preserved as-is)
+ *   "[note] x"            -> "[2] [note] x"            (non-numeric brackets are left alone)
+ *
+ * The index is computed only from a leading "[<digits>]" token; if present,
+ * it is stripped before re-prefixing with index+1. Anything else in the title
+ * (including non-numeric bracketed fragments) is kept verbatim.
+ */
+const buildForkTitle = (origTitle: string): string => {
+  const trimmed = (origTitle || '').trim();
+  const m = trimmed.match(/^\[(\d+)\]\s*(.*)$/);
+  const nextIndex = m ? Number(m[1]) + 1 : 2;
+  const rest = m ? m[2] : trimmed;
+  const baseTitle = rest || `Чат ${Math.floor(Date.now() / 1000)}`;
+  return `[${nextIndex}] ${baseTitle}`.slice(0, 120);
+};
+
+/**
+ * Fork a chat: create a new chat and copy all messages from the source chat
+ * up to (and including) `fromMessageId` into it.
+ *
+ * - Attachments: physical files are COPIED on disk (new random filename) so
+ *   that deletion in either chat never orphans the other. If a source file
+ *   is missing, that attachment entry is dropped from the new message's JSON.
+ * - Images / audio: references are shared (no file copy). Today there is no
+ *   delete endpoint for these assets, so sharing is safe.
+ * - `token_count` / `reasoning_tokens` are copied as-is — they are
+ *   deterministic for the same content and avoid recomputation cost.
+ * - `telegram_chat_id` / `telegram_message_id` are NULLed in the copies —
+ *   the new chat has no Telegram binding.
+ * - FTS index is updated automatically by the `trg_chat_messages_fts_ai`
+ *   trigger on INSERT.
+ * - The new chat becomes the user's active chat.
+ *
+ * Returns the new chat id and the number of copied messages, or null if the
+ * source chat/message is not found.
+ */
+export const forkChat = (
+  userId: number,
+  sourceChatId: number,
+  fromMessageId: number,
+  customTitle?: string
+): { chat_id: number; forked_messages: number } | null => {
+  // Verify the source chat belongs to the user.
+  const sourceChat = db.prepare(
+    'SELECT id, title FROM user_chats WHERE id = ? AND user_id = ?'
+  ).get(sourceChatId, userId) as { id: number; title: string } | undefined;
+  if (!sourceChat) return null;
+
+  // Verify the anchor message exists in the source chat.
+  const anchor = db.prepare(
+    'SELECT id FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
+  ).get(fromMessageId, userId, sourceChatId) as { id: number } | undefined;
+  if (!anchor) return null;
+
+  // Resolve title.
+  const title = (customTitle && customTitle.trim())
+    ? customTitle.trim().slice(0, 120)
+    : buildForkTitle(sourceChat.title);
+
+  // Lazily import to avoid a circular dependency at module load time
+  // (matches the pattern used in deleteMessageAttachment).
+  const { copyAttachmentFile } = require('./attachment-storage.js') as {
+    copyAttachmentFile: (src: string) => { filename: string; url: string } | null;
+  };
+
+  const tx = db.transaction(() => {
+    // 1. Create the new chat and activate it.
+    const newChatId = createUserChat(userId, title);
+
+    // 2. Select all source messages up to the anchor (inclusive), oldest first.
+    const rows = db.prepare(`
+      SELECT id, role, content, images, audio, reasoning_content,
+             tool_calls_json, token_count, reasoning_tokens,
+             attachments, subagents_json, archived
+      FROM chat_messages
+      WHERE user_id = ? AND chat_id = ? AND id <= ?
+      ORDER BY id ASC
+    `).all(userId, sourceChatId, fromMessageId) as Array<{
+      id: number;
+      role: ChatRole;
+      content: string;
+      images: string | null;
+      audio: string | null;
+      reasoning_content: string | null;
+      tool_calls_json: string | null;
+      token_count: number;
+      reasoning_tokens: number;
+      attachments: string | null;
+      subagents_json: string | null;
+      archived: number;
+    }>;
+
+    const insertStmt = db.prepare(`
+      INSERT INTO chat_messages (
+        user_id, role, content, chat_id,
+        telegram_chat_id, telegram_message_id,
+        images, audio, reasoning_content, tool_calls_json,
+        token_count, reasoning_tokens, attachments, subagents_json, archived
+      )
+      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const row of rows) {
+      // Rewrite attachments JSON: copy each file on disk, drop missing ones.
+      let newAttachmentsJson: string | null = row.attachments;
+      if (row.attachments) {
+        try {
+          const parsed = JSON.parse(row.attachments) as MessageAttachment[];
+          if (Array.isArray(parsed)) {
+            const rewritten: MessageAttachment[] = [];
+            for (const att of parsed) {
+              const copied = copyAttachmentFile(att.filename);
+              if (!copied) continue; // source file missing → drop entry
+              rewritten.push({
+                ...att,
+                filename: copied.filename,
+                url: copied.url
+              });
+            }
+            newAttachmentsJson = rewritten.length > 0 ? JSON.stringify(rewritten) : null;
+          }
+        } catch {
+          // Invalid JSON — leave as-is (defensive; should not happen).
+        }
+      }
+
+      insertStmt.run(
+        userId,
+        row.role,
+        row.content,
+        newChatId,
+        row.images,            // shared references — no copy
+        row.audio,             // shared reference — no copy
+        row.reasoning_content,
+        row.tool_calls_json,
+        row.token_count,       // already computed, deterministic
+        row.reasoning_tokens,
+        newAttachmentsJson,
+        row.subagents_json,
+        row.archived           // preserve archived state
+      );
+    }
+
+    // 3. Bump the new chat's updated_at.
+    db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+      .run(newChatId, userId);
+
+    return { chat_id: newChatId, forked_messages: rows.length };
+  });
+
+  return tx();
+};
+
 export const activateUserChat = (userId: number, chatId: number) => {
   const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
   if (!exists) return false;

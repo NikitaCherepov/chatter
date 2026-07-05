@@ -87,3 +87,44 @@ export const deleteAttachmentFile = (filename: string): void => {
     // best-effort
   }
 };
+
+/**
+ * Copy an existing attachment file to a new on-disk file (fork scenario).
+ * Returns new { filename, url } or null if source doesn't exist.
+ *
+ * The new filename keeps the same extension and sanitized base, but gets a
+ * fresh 24-hex prefix so that deletion of the original in another chat
+ * cannot orphan the forked copy.
+ *
+ * Original name format:  <24hex>_<sanitized>.<ext>
+ * Resulting format:      <new-24hex>_<sanitized>.<ext>
+ */
+export const copyAttachmentFile = (
+  srcFilename: string
+): { filename: string; url: string } | null => {
+  try {
+    const safeSrc = path.basename(srcFilename);
+    const srcPath = path.join(UPLOADS_DIR, safeSrc);
+    if (!fs.existsSync(srcPath)) return null;
+
+    ensureUploadsDir();
+
+    // Preserve the part after the leading "<24hex>_" if it exists,
+    // otherwise reuse the whole sanitized basename.
+    const m = safeSrc.match(/^[0-9a-f]{24}_(.+)$/i);
+    const tail = m ? m[1] : safeSrc;
+
+    const newId = crypto.randomBytes(12).toString('hex');
+    const newFilename = `${newId}_${tail}`;
+    const destPath = path.join(UPLOADS_DIR, newFilename);
+
+    fs.copyFileSync(srcPath, destPath);
+
+    return {
+      filename: newFilename,
+      url: `/api/v1/attachments/${newFilename}`
+    };
+  } catch {
+    return null;
+  }
+};
