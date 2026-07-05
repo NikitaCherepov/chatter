@@ -202,9 +202,21 @@ function createWindow() {
   // ── IPC: save-file (shows save dialog, writes blob to disk) ─────────────
   ipcMain.handle('save-file', async (_event, fileName: string, data: ArrayBuffer) => {
     if (!mainWindow) return { canceled: true };
+    const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
+    const imageExts = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'];
+    const docExts = ['docx', 'pdf', 'txt', 'md', 'json', 'csv', 'xml', 'yaml', 'ini', 'toml'];
+    const filters: Electron.FileFilter[] = [];
+    if (imageExts.includes(ext)) {
+      filters.push({ name: 'Images', extensions: [ext] });
+    } else if (docExts.includes(ext)) {
+      filters.push({ name: 'Documents', extensions: [ext] });
+    } else {
+      filters.push({ name: 'Documents', extensions: ['docx'] });
+    }
+    filters.push({ name: 'All files', extensions: ['*'] });
     const result = await dialog.showSaveDialog(mainWindow, {
       defaultPath: fileName,
-      filters: [{ name: 'Documents', extensions: ['docx'] }],
+      filters,
     });
     if (result.canceled || !result.filePath) return { canceled: true };
     fs.writeFileSync(result.filePath, Buffer.from(data));

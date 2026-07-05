@@ -2254,7 +2254,8 @@ export function ChatPage() {
       const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : blob.type.includes('gif') ? 'gif' : 'jpg';
       const d = new Date();
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const fileName = `image_${dateStr}.${ext}`;
+      const uuid = crypto.randomUUID().split('-')[0];
+      const fileName = `image_${dateStr}_${uuid}.${ext}`;
       const result = await window.electronAPI?.saveFile(fileName, buffer);
       if (result && !result.canceled) {
         toast.success('Изображение сохранено');

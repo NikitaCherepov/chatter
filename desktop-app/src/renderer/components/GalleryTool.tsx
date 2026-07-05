@@ -44,14 +44,24 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
     }
   }, [mode, chatId]);
 
+  // В режиме "all" — грузим при смене mode на "all", игнорируем смену chatId
   useEffect(() => {
-    if (mode === 'all' || chatId) {
+    if (mode !== 'all') return;
+    loadMedia(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  // В режиме "current" — грузим при смене chatId
+  useEffect(() => {
+    if (mode !== 'current') return;
+    if (chatId) {
       loadMedia(0);
     } else {
       setMedia([]);
       setHasMore(false);
     }
-  }, [mode, chatId, loadMedia]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, chatId]);
 
   const handleLoadMore = () => {
     if (!loading && hasMore) {
