@@ -5643,7 +5643,8 @@ bot.action(/^devops:creds_reject_comment:(.+)$/, async (ctx) => {
 const STREAM_FLUSH_BASE_INTERVAL_MS = 500;
 const STREAM_FLUSH_MAX_INTERVAL_MS = 5000;   // потолок адаптивного throttle
 const STREAM_MIN_DELTA_CHARS = 30;            // минимальный прирост текста для мгновенного flush
-const STREAM_DRAFT_TEXT_LIMIT = 4000;         // оставляем запас от лимита 4096
+const STREAM_DRAFT_TEXT_LIMIT = 4000;         // потолок суммарной длины draft-HTML (теги + контент)
+const STREAM_FINAL_TEXT_LIMIT = 4000;         // потолок для финального persisted-сообщения
 const STREAM_DEBUG_LOG = process.env.TG_STREAM_DEBUG === '1';
 
 type RichStreamPhase = 'idle' | 'thinking' | 'answering';
@@ -5778,6 +5779,8 @@ class RichStreamSession {
     private phase: RichStreamPhase = 'idle';
 
     private reasoningBuf = '';
+    private toolStatusBuf = '';
+    private intermediateBuf = '';
     private textBuf = '';
 
     private lastFlushAt = 0;
@@ -5868,34 +5871,73 @@ class RichStreamSession {
     /**
      * Генерируем Rich HTML строку.
      *
-     * @param isFinal Если true — это финальная отправка в историю чата.
-     *                Тег <tg-thinking> ЗАПРЕЩЁН в persisted-сообщениях,
-     *                поэтому превращаем его в нативный раскрывающийся blockquote.
+     * Архитектура «эфемерный лог»:
+     *  - В ЧЕРНОВИКЕ (isFinal=false) показываем всё: <tg-thinking>, статусы тулзов
+     *    курсивом, intermediate-блок, печатающийся textBuf.
+     *  - В ФИНАЛЕ (isFinal=true) выкидываем reasoning / toolStatus / intermediate
+     *    ПОЛНОСТЬЮ — остаётся только чистый textBuf (ответ модели).
+     *    Чат после генерации остаётся чистым, никаких blockquote expandable.
+     *
+     * Динамическая обрезка draft'а: суммарная длина HTML ≤ STREAM_DRAFT_TEXT_LIMIT.
+     * Приоритет — textBuf (всегда целиком насколько влезает), остаток делится между
+     * reasoning и toolStatus. Если не влезает — режем с «…».
      */
     private buildRichHtml(isFinal: boolean = false): string {
-        let html = '';
+        // ── ФИНАЛ ─────────────────────────────────────────────────────────────
+        // Только чистый ответ модели. Никаких эфемерных буферов.
+        if (isFinal) {
+            const safeText = markdownToTelegramRichHtml(this.textBuf.slice(0, STREAM_FINAL_TEXT_LIMIT));
+            return safeText || '';
+        }
 
-        // 1. Блок размышлений.
-        if (this.reasoningBuf) {
-            const safeThinking = this.escapeHtml(this.reasoningBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
-            if (isFinal) {
-                // В финале <tg-thinking> запрещён API Telegram (RICH_MESSAGE_BLOCK_UNSUPPORTED).
-                // Превращаем в нативный раскрывающийся blockquote.
-                html += `<blockquote expandable><b>💭 Размышления</b>\n${safeThinking}</blockquote>\n`;
-            } else {
-                // В черновике — нативный тег, даст анимацию «думаю…».
-                html += `<tg-thinking>${safeThinking}</tg-thinking>`;
+        // ── ЧЕРНОВИК ──────────────────────────────────────────────────────────
+        const PART_OVERHEAD = 80;   // запас на теги вокруг каждой части
+        const STATUS_OVERHEAD = 16; // <i>🔧 ...</i><br> на одну строку статуса
+
+        // Сначала рендерим textBuf (приоритет). Если он один длинный — режем.
+        const textBudget = STREAM_DRAFT_TEXT_LIMIT - 600; // резервируем минимум под reasoning/status
+        const textPart = markdownToTelegramRichHtml(this.textBuf.slice(0, textBudget)) || '<p>...</p>';
+
+        // Остаток бюджета делим между reasoning и toolStatus/intermediate.
+        let remaining = STREAM_DRAFT_TEXT_LIMIT - textPart.length - PART_OVERHEAD;
+        if (remaining < 0) remaining = 0;
+
+        // Сначала tool_status и intermediate (короткие, важные для понимания «что делает бот»).
+        const statusLines: string[] = [];
+        if (this.toolStatusBuf.trim()) {
+            // Каждая строка статуса — отдельная <i>🔧 ...</i>
+            const lines = this.toolStatusBuf.split('\n').map(s => s.trim()).filter(Boolean);
+            for (const line of lines) {
+                const lineHtml = `<i>🔧 ${this.escapeHtml(line)}</i><br>`;
+                if (remaining < lineHtml.length + STATUS_OVERHEAD) break;
+                statusLines.push(lineHtml);
+                remaining -= lineHtml.length;
             }
         }
 
-        // 2. Основной текст. В черновике присутствует всегда ('...' если пусто),
-        //    в финале — только если есть что показать.
-        const safeText = markdownToTelegramRichHtml(this.textBuf.slice(0, STREAM_DRAFT_TEXT_LIMIT));
-        if (isFinal) {
-            if (safeText) html += safeText;
-        } else {
-            html += safeText || '<p>...</p>';
+        // intermediate — отдельным курсивом/цитатой (короткие промежуточные выводы модели).
+        let intermediatePart = '';
+        if (this.intermediateBuf.trim() && remaining > 60) {
+            const escaped = this.escapeHtml(this.intermediateBuf.slice(0, remaining - 60));
+            intermediatePart = `<blockquote>${escaped}</blockquote>`;
+            remaining -= intermediatePart.length;
         }
+
+        // Reasoning — что осталось. Может быть обрезан с «…».
+        let thinkingPart = '';
+        if (this.reasoningBuf.trim() && remaining > 60) {
+            const safeThinking = this.escapeHtml(this.reasoningBuf.slice(0, remaining - 60));
+            const suffix = this.reasoningBuf.length > remaining - 60 ? '…' : '';
+            thinkingPart = `<tg-thinking>${safeThinking}${suffix}</tg-thinking>`;
+        }
+
+        // Порядок: thinking → статусы → intermediate → основной текст.
+        // Telegram показывает их последовательно в одном сообщении.
+        let html = '';
+        if (thinkingPart) html += thinkingPart;
+        if (statusLines.length) html += statusLines.join('');
+        if (intermediatePart) html += intermediatePart;
+        html += textPart;
 
         return html;
     }
@@ -5904,12 +5946,22 @@ class RichStreamSession {
     private async flush(): Promise<void> {
         if (this.draftFailed || this.finalized) return;
 
-        if (this.phase !== 'idle') {
+        // Draft показывается, если есть ЛЮБОЙ контент (включая tool_status/intermediate),
+        // не только когда phase !== 'idle'. Это важно: tool_status может прийти до reasoning.
+        const hasAny =
+            this.phase !== 'idle' ||
+            this.reasoningBuf.trim() ||
+            this.toolStatusBuf.trim() ||
+            this.intermediateBuf.trim() ||
+            this.textBuf.trim();
+        if (hasAny) {
             await this.callDraft(this.buildRichHtml(false));
         }
 
         this.lastFlushAt = Date.now();
-        this.lastTextLenAtFlush = this.textBuf.length;
+        // Сохраняем суммарную длину всех буферов для корректной дельты в maybeFlush.
+        this.lastTextLenAtFlush = this.textBuf.length + this.toolStatusBuf.length
+            + this.intermediateBuf.length + this.reasoningBuf.length;
     }
 
     private scheduleFlush(): void {
@@ -5943,6 +5995,33 @@ class RichStreamSession {
         this.maybeFlush();
     }
 
+    /**
+     * Получен tool_status (например «Выполняю команду на ПК…»).
+     * Эфемерный: накапливается в toolStatusBuf, показывается в черновике,
+     * в финале выкидывается полностью.
+     */
+    onToolStatus(text: string): void {
+        if (this.draftFailed || this.finalized) return;
+        const line = typeof text === 'string' ? text.trim() : '';
+        if (!line) return;
+        // Накапливаем построчно, чтобы потом рендерить каждую отдельно.
+        this.toolStatusBuf += (this.toolStatusBuf ? '\n' : '') + line;
+        this.maybeFlush();
+    }
+
+    /**
+     * Получен intermediate-текст модели (между tool-call итерациями).
+     * Эфемерный: в финале выкидывается.
+     * Не пушим в textBuf, чтобы не портить чистый финальный ответ.
+     */
+    onIntermediate(text: string): void {
+        if (this.draftFailed || this.finalized) return;
+        const piece = typeof text === 'string' ? text.trim() : '';
+        if (!piece) return;
+        this.intermediateBuf += (this.intermediateBuf ? '\n\n' : '') + piece;
+        this.maybeFlush();
+    }
+
     /** Получен stream_token (обычный текст). */
     onToken(text: string): void {
         if (this.draftFailed || this.finalized) return;
@@ -5963,8 +6042,11 @@ class RichStreamSession {
             return;
         }
         const sinceFlush = now - this.lastFlushAt;
-        const textDelta = this.textBuf.length - this.lastTextLenAtFlush;
-        if (sinceFlush >= this.currentFlushIntervalMs || textDelta >= STREAM_MIN_DELTA_CHARS) {
+        // Дельта по всем буферам — tool_status/intermediate тоже должны триггерить flush.
+        const totalLen = this.textBuf.length + this.toolStatusBuf.length
+            + this.intermediateBuf.length + this.reasoningBuf.length;
+        const delta = totalLen - this.lastTextLenAtFlush;
+        if (sinceFlush >= this.currentFlushIntervalMs || delta >= STREAM_MIN_DELTA_CHARS) {
             this.clearTimer();
             this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
         } else {
@@ -5983,9 +6065,10 @@ class RichStreamSession {
 
         if (!TG_USE_RICH_STREAMING) return false;
 
-        // Если ни draft не показывался, ни текста нет — нет смысла в RichMessage.
-        const hasAnyContent = this.reasoningBuf.trim() || this.textBuf.trim();
-        if (!hasAnyContent) return false;
+        // Эфемерная архитектура: финал содержит ТОЛЬКО textBuf.
+        // reasoning / toolStatus / intermediate выкидываются.
+        // Если textBuf пуст (модель не дала ответа) — финалить нечего, fallback.
+        if (!this.textBuf.trim()) return false;
 
         const html = this.buildRichHtml(true);
         const payload: any = {
@@ -6014,7 +6097,10 @@ class RichStreamSession {
 
     /** Получал ли сессия хотя бы один токен (для решения нужен ли rich pipeline). */
     hasContent(): boolean {
-        return Boolean(this.reasoningBuf.trim()) || Boolean(this.textBuf.trim());
+        return Boolean(this.reasoningBuf.trim())
+            || Boolean(this.toolStatusBuf.trim())
+            || Boolean(this.intermediateBuf.trim())
+            || Boolean(this.textBuf.trim());
     }
 
     /** Полный текст ответа (для safeReply в fallback). */
@@ -6102,6 +6188,12 @@ const processUserTextThroughAi = async (
         }, {
             onIntermediate: async (stepText) => {
                 if (options?.suppressFinalReply) return;
+                // Эфемерный rich-path: пушим в буфер, в финале выкидывается.
+                if (richStream) {
+                    richStream.onIntermediate(stepText);
+                    return;
+                }
+                // Fallback (rich выключен или уже упал): старый режим — отдельным сообщением.
                 try {
                     await ctx.reply(stepText.slice(0, 4096));
                 } catch {
@@ -6110,6 +6202,12 @@ const processUserTextThroughAi = async (
             },
             onToolStatus: async (statusText) => {
                 if (options?.suppressFinalReply) return;
+                // Эфемерный rich-path: накапливается в черновике серым курсивом, в финале исчезает.
+                if (richStream) {
+                    richStream.onToolStatus(statusText);
+                    return;
+                }
+                // Fallback: отдельным сообщением (как раньше).
                 try {
                     await ctx.reply(`_${statusText}_`);
                 } catch {
