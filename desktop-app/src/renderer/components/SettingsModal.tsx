@@ -858,7 +858,7 @@ export function SettingsModal({ onClose }: Props) {
                           </button>
                           {selectedPromptId !== null && selectedPromptId <= -1000 && (
                             <button
-                              className={s.deleteBtn}
+                              className={s.cancelBtn}
                               onClick={handleDeleteCustomPrompt}
                               disabled={promptDeleting}
                               style={{ color: '#e74c3c' }}
