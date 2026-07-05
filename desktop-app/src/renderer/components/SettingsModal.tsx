@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { diffLines } from 'diff';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
@@ -100,6 +101,13 @@ export function SettingsModal({ onClose }: Props) {
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptDeleting, setPromptDeleting] = useState(false);
+
+  // AI prompt generation
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiDetail, setAiDetail] = useState<string>('medium');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiGenerated, setAiGenerated] = useState<string | null>(null);
 
   // App zoom (stored as honest percentages)
   const [zoomPct, setZoomPct] = useState(100);
@@ -591,6 +599,46 @@ export function SettingsModal({ onClose }: Props) {
     }
   };
 
+  const handleAiGenerate = async () => {
+    const instruction = aiInstruction.trim();
+    if (!instruction) {
+      toast.error('Опишите что хотите получить');
+      return;
+    }
+    setAiGenerating(true);
+    setAiGenerated(null);
+    try {
+      const res = await api.generatePrompt({
+        instruction,
+        current_content: customContent,
+        detail: aiDetail as 'minimal' | 'medium' | 'detailed' | 'none',
+      });
+      setAiGenerated(res.generated_prompt);
+    } catch (err) {
+      console.error('AI prompt generation failed:', err);
+      toast.error('Не удалось сгенерировать промпт');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleAiApply = () => {
+    if (aiGenerated === null) return;
+    setCustomContent(aiGenerated);
+    setAiGenerated(null);
+    toast.success('Промпт применён');
+  };
+
+  const handleAiDismiss = () => {
+    setAiGenerated(null);
+  };
+
+  // Diff between current content and AI-generated
+  const aiDiff = useMemo(() => {
+    if (aiGenerated === null) return null;
+    return diffLines(customContent, aiGenerated);
+  }, [aiGenerated, customContent]);
+
   const applyZoom = async (newPct: number) => {
     setZoomPct(newPct);
     setZoomInputValue(String(newPct));
@@ -870,6 +918,121 @@ export function SettingsModal({ onClose }: Props) {
                         <span style={{ fontSize: '11px', color: customContent.length >= 10000 ? '#e74c3c' : 'var(--text-hint)' }}>
                           {customContent.length} / 10000
                         </span>
+                      </div>
+
+                      {/* AI generation */}
+                      <div className={s.fieldGroup}>
+                        <div className={s.macroFormDivider} />
+                        <button
+                          onClick={() => setAiPanelOpen(v => !v)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            background: 'transparent', border: 'none', cursor: 'pointer',
+                            color: aiPanelOpen ? 'var(--accent_icon, var(--accent))' : 'var(--text-muted)',
+                            fontSize: '13px', fontWeight: 500, padding: 0,
+                            transition: 'color 0.1s',
+                          }}
+                          type="button"
+                        >
+                          <span>ИИ</span>
+                          <svg
+                            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                            style={{ transition: 'transform 0.15s', transform: aiPanelOpen ? 'rotate(180deg)' : 'none' }}
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                          {aiPanelOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto', transition: { duration: 0.2, ease: 'easeOut' } }}
+                              exit={{ opacity: 0, height: 0, transition: { duration: 0.15 } }}
+                              style={{ overflow: 'visible' }}
+                            >
+                              <div style={{ marginTop: '10px' }}>
+                                <span className={s.fieldLabel} style={{ display: 'block', marginBottom: '6px' }}>
+                                  Используется ваша основная нейросеть
+                                </span>
+                                <textarea
+                                  className={s.textareaInput}
+                                  value={aiInstruction}
+                                  onChange={(e) => setAiInstruction(e.target.value.slice(0, 1000))}
+                                  placeholder="Опишите что хотите получить (например: «саркастичный помощник, который не церемонится»)"
+                                  rows={2}
+                                  maxLength={1000}
+                                />
+                                <div style={{ marginTop: '8px' }}>
+                                  <label className={s.fieldLabel} style={{ display: 'block', marginBottom: '4px' }}>
+                                    Детализация
+                                  </label>
+                                  <Select
+                                    options={[
+                                      { value: 'minimal', label: 'Минимально' },
+                                      { value: 'medium', label: 'Средне' },
+                                      { value: 'detailed', label: 'Подробно' },
+                                      { value: 'none', label: 'Не имеет значения' },
+                                    ]}
+                                    value={aiDetail}
+                                    onChange={setAiDetail}
+                                  />
+                                </div>
+                                <button
+                                  className={s.saveBtn}
+                                  onClick={handleAiGenerate}
+                                  disabled={aiGenerating || !aiInstruction.trim()}
+                                  style={{ marginTop: '8px' }}
+                                  type="button"
+                                >
+                                  {aiGenerating ? 'Генерация...' : 'Сгенерировать'}
+                                </button>
+
+                                {/* Diff preview */}
+                                {aiDiff && (
+                                  <div className={s.aiDiffWrap}>
+                                    <div className={s.aiDiffHeader}>
+                                      <span>Предпросмотр изменений</span>
+                                      <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button
+                                          type="button"
+                                          className={s.aiDiffApplyBtn}
+                                          onClick={handleAiApply}
+                                        >
+                                          Применить
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={s.cancelBtn}
+                                          onClick={handleAiDismiss}
+                                        >
+                                          Отмена
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className={s.aiDiffBody}>
+                                      {aiDiff.map((part, i) => (
+                                        <div
+                                          key={i}
+                                          className={`${s.aiDiffLine} ${
+                                            part.added ? s.aiDiffAdded :
+                                            part.removed ? s.aiDiffRemoved : ''
+                                          }`}
+                                        >
+                                          <span className={s.aiDiffPrefix}>
+                                            {part.added ? '+' : part.removed ? '−' : ' '}
+                                          </span>
+                                          <span className={s.aiDiffText}>{part.value}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   )}

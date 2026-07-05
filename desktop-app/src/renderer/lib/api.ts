@@ -904,6 +904,18 @@ export async function updateCustomPrompt(content: string): Promise<{ ok: boolean
   });
 }
 
+/** AI-generate a prompt using the user's preferred model. */
+export async function generatePrompt(data: {
+  instruction: string;
+  current_content?: string;
+  detail?: 'minimal' | 'medium' | 'detailed' | 'none';
+}): Promise<{ generated_prompt: string }> {
+  return apiFetch('/api/v1/prompts/generate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 // ---------- Notes ----------
 
 export type NoteDto = {

@@ -600,3 +600,81 @@
   align-items: center;
   gap: 12px;
 }
+
+// ── AI prompt generation: diff preview ────────────────────────────────────
+
+.aiDiffWrap {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.aiDiffHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.aiDiffApplyBtn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.aiDiffBody {
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.aiDiffLine {
+  display: flex;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.aiDiffPrefix {
+  flex-shrink: 0;
+  width: 16px;
+  user-select: none;
+  color: var(--text-hint);
+}
+
+.aiDiffText {
+  flex: 1;
+}
+
+.aiDiffAdded {
+  background: rgba(76, 175, 80, 0.12);
+
+  .aiDiffPrefix {
+    color: #4caf50;
+  }
+}
+
+.aiDiffRemoved {
+  background: rgba(229, 57, 53, 0.12);
+
+  .aiDiffPrefix {
+    color: #e53935;
+  }
+}

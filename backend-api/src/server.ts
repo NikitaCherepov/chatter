@@ -8,7 +8,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, create
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, activeGenerations } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, activeGenerations, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -1685,6 +1685,55 @@ app.put('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
   const content = `${req.body?.content || ''}`;
   updateUserCustomPrompt(userId, content);
   return res.json({ ok: true });
+});
+
+// AI prompt generation — uses user's preferred model (or auto PRO)
+app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const instruction = `${req.body?.instruction || ''}`.trim();
+  const currentContent = `${req.body?.current_content || ''}`;
+  const detail = `${req.body?.detail || 'medium'}`.trim() as 'minimal' | 'medium' | 'detailed' | 'none';
+
+  if (!instruction) return res.status(400).json({ error: 'instruction_required' });
+
+  const detailInstructions: Record<string, string> = {
+    minimal: 'Будь максимально краток. Выдели только суть — характер, роль и ключевые правила. Не используй художественные описания. До 500 символов.',
+    medium: 'Сбалансированный persona-промпт: характер, стиль общения, ключевые правила. До 2000 символов.',
+    detailed: 'Детальный persona-промпт: характер, стиль общения, правила и правила мира, примеры реакций, tone of voice, краевые случаи. До 10000 символов.',
+    none: '',
+  };
+
+  const detailHint = detailInstructions[detail] ?? '';
+  const detailSuffix = detailHint ? ` ${detailHint}` : '';
+
+  const hasExisting = currentContent.trim().length > 0;
+  const systemPrompt = `Ты — эксперт по созданию системных промптов для ИИ-ассистентов.${detailSuffix}\n\nОтветь ТОЛЬКО текстом промпта — без пояснений, без markdown-обёртки, без "Вот ваш промпт:". Просто текст системного промпта, который будет отправлен ИИ как инструкция.`;
+  const userPrompt = hasExisting
+    ? `Задание: ${instruction}\n\nТекущий промпт (отредактируй его с учётом задания, сохрани ядро и стиль если они не конфликтуют):\n\n${currentContent}`
+    : `Задание: ${instruction}`;
+
+  try {
+    const user = getUserById(userId);
+    const preferredModelId = user?.preferred_model || null;
+    const manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
+
+    const result = await runCompletion('pro', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 25000,
+    }, manualModel);
+
+    const generated = result.response?.choices?.[0]?.message?.content;
+    if (typeof generated !== 'string' || !generated.trim()) {
+      return res.status(500).json({ error: 'empty_ai_response' });
+    }
+    return res.json({ generated_prompt: generated.trim() });
+  } catch (err) {
+    console.error('[prompts/generate]', err);
+    return res.status(500).json({ error: 'ai_call_failed' });
+  }
 });
 
 // ── Internal: Telegram Link Verify (bot) ──────────────────────────────────
