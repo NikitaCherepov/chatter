@@ -4,7 +4,6 @@ import * as dotenv from 'dotenv';
 import crypto from 'crypto';
 import axios from 'axios';
 import { marked, Renderer } from 'marked';
-import { splitTextForTelegram } from './backend-api/src/services/telegram-send';
 
 dotenv.config();
 
@@ -5651,6 +5650,27 @@ const STREAM_DEBUG_LOG = process.env.TG_STREAM_DEBUG === '1';
 type RichStreamPhase = 'idle' | 'thinking' | 'answering';
 
 /**
+ * Разбить текст на куски ≤ maxLen, предпочитая разрез по `\n`.
+ * Копия splitTextForTelegram из backend-api/src/services/telegram-send.ts
+ * (бот и API — отдельные процессы, импорт между ними невозможен).
+ */
+const splitTextForFinal = (text: string, maxLen = 4000): string[] => {
+    const source = typeof text === 'string' ? text : String(text ?? '');
+    if (source.length <= maxLen) return [source];
+
+    const chunks: string[] = [];
+    let remaining = source;
+    while (remaining.length > maxLen) {
+        let cut = remaining.lastIndexOf('\n', maxLen);
+        if (cut <= 0) cut = maxLen;
+        chunks.push(remaining.slice(0, cut));
+        remaining = remaining.slice(cut).replace(/^\n/, '');
+    }
+    if (remaining) chunks.push(remaining);
+    return chunks;
+};
+
+/**
  * Экранирование спецсимволов Rich HTML.
  * Обязательно — иначе знак < или & в ответе сломает HTML-парсер Telegram.
  */
@@ -6078,9 +6098,10 @@ class RichStreamSession {
         if (!this.textBuf.trim()) return false;
 
         // Дробим textBuf на куски ≤ STREAM_FINAL_TEXT_LIMIT, режем по \n
-        // (splitTextForTelegram из telegram-send.ts). Каждый кусок конвертируется
-        // в Rich HTML отдельно и отправляется как самостоятельное persisted-сообщение.
-        const rawChunks = splitTextForTelegram(this.textBuf, STREAM_FINAL_TEXT_LIMIT);
+        // (splitTextForFinal — локальная копия splitTextForTelegram).
+        // Каждый кусок конвертируется в Rich HTML отдельно и отправляется
+        // как самостоятельное persisted-сообщение.
+        const rawChunks = splitTextForFinal(this.textBuf, STREAM_FINAL_TEXT_LIMIT);
         if (STREAM_DEBUG_LOG) {
             console.log(`[tg][rich-stream] finalize: textBuf len=${this.textBuf.length}, chunks=${rawChunks.length}`);
         }
