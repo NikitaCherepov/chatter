@@ -5913,16 +5913,10 @@ class RichStreamSession {
             }
         }
 
-        // intermediate — отдельным курсивом/цитатой. Показываем ХВОСТ (последние мысли).
-        let intermediatePart = '';
-        if (this.intermediateBuf.trim() && remaining > 60) {
-            const budget = Math.max(0, remaining - 60);
-            const source = this.intermediateBuf.length > budget
-                ? '…' + this.intermediateBuf.slice(-budget)   // хвост с многоточием в начале
-                : this.intermediateBuf;
-            intermediatePart = `<blockquote>${this.escapeHtml(source)}</blockquote>`;
-            remaining -= intermediatePart.length;
-        }
+        // intermediate НЕ рендерим отдельным блоком — его контент всё равно
+        // попадёт в textBuf через stream_token / reply_text (fullDbHistory).
+        // Отдельный blockquote был бы чистым дублем.
+        // (intermediateBuf остаётся только для hasContent() и reset-логики.)
 
         // Reasoning — что осталось. Показываем ХВОСТ (последние мысли важнее для «думаю…»).
         let thinkingPart = '';
@@ -5934,12 +5928,11 @@ class RichStreamSession {
             thinkingPart = `<tg-thinking>${this.escapeHtml(source)}</tg-thinking>`;
         }
 
-        // Порядок: thinking → статусы → intermediate → основной текст.
+        // Порядок: thinking → статусы → основной текст.
         // Telegram показывает их последовательно в одном сообщении.
         let html = '';
         if (thinkingPart) html += thinkingPart;
         if (statusLines.length) html += statusLines.join('');
-        if (intermediatePart) html += intermediatePart;
         html += textPart;
 
         return html;
@@ -6024,6 +6017,8 @@ class RichStreamSession {
         const piece = typeof text === 'string' ? text.trim() : '';
         if (!piece) return;
         this.intermediateBuf += (this.intermediateBuf ? '\n\n' : '') + piece;
+        // Инструмент отработал, модель продолжает рассуждать — статус больше не актуален.
+        this.lastToolStatus = '';
         this.maybeFlush();
     }
 
@@ -6033,6 +6028,8 @@ class RichStreamSession {
         // Первый token → переключаемся в answering.
         // Thinking остаётся в буфере и попадёт в финал, но в draft больше не обновляется.
         this.phase = 'answering';
+        // Модель начала финальный ответ — статус/intermediate больше не показываем.
+        this.lastToolStatus = '';
         this.textBuf += text;
         this.maybeFlush();
     }
