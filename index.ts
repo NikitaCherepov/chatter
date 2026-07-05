@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import crypto from 'crypto';
 import axios from 'axios';
 import { marked, Renderer } from 'marked';
+import { splitTextForTelegram } from './backend-api/src/services/telegram-send';
 
 dotenv.config();
 
@@ -5644,7 +5645,7 @@ const STREAM_FLUSH_BASE_INTERVAL_MS = 500;
 const STREAM_FLUSH_MAX_INTERVAL_MS = 5000;   // потолок адаптивного throttle
 const STREAM_MIN_DELTA_CHARS = 30;            // минимальный прирост текста для мгновенного flush
 const STREAM_DRAFT_TEXT_LIMIT = 4000;         // потолок суммарной длины draft-HTML (теги + контент)
-const STREAM_FINAL_TEXT_LIMIT = 4000;         // потолок для финального persisted-сообщения
+const STREAM_FINAL_TEXT_LIMIT = 4000;         // потолок для одного финального persisted-сообщения (резерв под HTML-теги)
 const STREAM_DEBUG_LOG = process.env.TG_STREAM_DEBUG === '1';
 
 type RichStreamPhase = 'idle' | 'thinking' | 'answering';
@@ -6059,6 +6060,10 @@ class RichStreamSession {
     /**
      * Финализация: вызвать sendRichMessage с HTML.
      * Возвращает true при успехе, false при fallback.
+     *
+     * Если textBuf длиннее STREAM_FINAL_TEXT_LIMIT — дробим на несколько
+     * persisted-сообщений (аналог splitTextForTelegram, но для Rich HTML).
+     * Каждое сообщение рендерится отдельно через marked.
      */
     async finalize(): Promise<boolean> {
         if (this.finalized) return this.messageId !== null;
@@ -6072,27 +6077,38 @@ class RichStreamSession {
         // Если textBuf пуст (модель не дала ответа) — финалить нечего, fallback.
         if (!this.textBuf.trim()) return false;
 
-        const html = this.buildRichHtml(true);
-        const payload: any = {
-            chat_id: this.chatId,
-            rich_message: { html },
-        };
-        if (this.messageThreadId) {
-            payload.message_thread_id = this.messageThreadId;
+        // Дробим textBuf на куски ≤ STREAM_FINAL_TEXT_LIMIT, режем по \n
+        // (splitTextForTelegram из telegram-send.ts). Каждый кусок конвертируется
+        // в Rich HTML отдельно и отправляется как самостоятельное persisted-сообщение.
+        const rawChunks = splitTextForTelegram(this.textBuf, STREAM_FINAL_TEXT_LIMIT);
+        if (STREAM_DEBUG_LOG) {
+            console.log(`[tg][rich-stream] finalize: textBuf len=${this.textBuf.length}, chunks=${rawChunks.length}`);
         }
+
         try {
-            if (STREAM_DEBUG_LOG) {
-                console.log('[tg][rich-stream] sendRichMessage html_len=', html.length, 'preview:', html.slice(0, 200));
-            }
-            const result = await this.telegram.callApi('sendRichMessage', payload);
-            this.messageId = Number.isFinite(Number(result?.message_id)) ? Number(result.message_id) : null;
-            if (STREAM_DEBUG_LOG) {
-                console.log('[tg][rich-stream] sendRichMessage result:', JSON.stringify(result).slice(0, 300));
+            for (let i = 0; i < rawChunks.length; i++) {
+                const chunkHtml = markdownToTelegramRichHtml(rawChunks[i]);
+                if (!chunkHtml) continue;
+                const payload: any = {
+                    chat_id: this.chatId,
+                    rich_message: { html: chunkHtml },
+                };
+                if (this.messageThreadId) {
+                    payload.message_thread_id = this.messageThreadId;
+                }
+                if (STREAM_DEBUG_LOG) {
+                    console.log(`[tg][rich-stream] sendRichMessage chunk ${i + 1}/${rawChunks.length}, html_len=${chunkHtml.length}`);
+                }
+                const result = await this.telegram.callApi('sendRichMessage', payload);
+                // message_id первого сообщения используем для бинда в БД.
+                if (i === 0) {
+                    this.messageId = Number.isFinite(Number(result?.message_id)) ? Number(result.message_id) : null;
+                }
             }
             return this.messageId !== null;
         } catch (err: any) {
             const description = err?.response?.description || err?.description || err?.message || String(err);
-            console.error(`[CRITICAL][tg][rich-stream] sendRichMessage error:`, description, '| payload:', JSON.stringify(payload).slice(0, 800));
+            console.error(`[CRITICAL][tg][rich-stream] sendRichMessage error:`, description);
             return false;
         }
     }

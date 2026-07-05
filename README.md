@@ -175,8 +175,8 @@ npm run logs
 Реализация живёт в `index.ts` (`RichStreamSession`). На каждый AI-запрос создаётся отдельная сессия с буферами:
 
 - `reasoningBuf` — токены размышления модели (`reasoning_token`)
-- `toolStatusBuf` — статусы инструментов (`tool_status`, например «Выполняю команду на ПК…»)
-- `intermediateBuf` — промежуточный текст модели между tool-call итерациями (`intermediate`)
+- `lastToolStatus` — последний статус инструмента (`tool_status`, например «Выполняю команду на ПК…»); хранится только один — новый заменяет старый
+- `intermediateBuf` — промежуточный текст модели между tool-call итерациями (`intermediate`); в draft не рендерится (его контент всё равно попадёт в `textBuf` через стрим), используется только для триггера flush и сброса статуса
 - `textBuf` — финальный ответ модели (`stream_token`)
 
 #### Эфемерный лог (architectural decision)
@@ -185,25 +185,24 @@ npm run logs
 
 **Draft (во время генерации):**
 
-1. `<tg-thinking>{reasoning}</tg-thinking>` — анимация «думаю…»
-2. `<i>🔧 {tool_status}</i>` — статусы тулзов курсивом, построчно
-3. `<blockquote>{intermediate}</blockquote>` — промежуточные выводы модели
-4. `{textBuf}` — печатающийся финальный ответ
+1. `<tg-thinking>{reasoning_tail}</tg-thinking>` — анимация «думаю…»; показываем **хвост** рассуждения (последние мысли важнее, чем начало «Пользователь просит…»)
+2. `<i>🔧 {last_tool_status}</i>` — один текущий статус инструмента курсивом; когда инструмент отработал (`onIntermediate`/`onToken`) — сбрасывается, чтобы не висел
+3. `{textBuf}` — печатающийся финальный ответ
 
 **Final (после `done`):**
 
 - Только `{textBuf}`. Всё остальное испаряется.
+- Если `textBuf` длиннее `STREAM_FINAL_TEXT_LIMIT` (4000) — дробится на несколько persisted-сообщений (`splitMarkdownForFinal` режет по `\n\n`/`\n`, каждое конвертируется в Rich HTML отдельно).
 
 #### Динамическая обрезка draft'а
 
-Суммарная длина HTML draft'а ограничена `STREAM_DRAFT_TEXT_LIMIT = 4000`. Приоритет — `textBuf` (всегда целиком насколько влезает), затем `toolStatusBuf`, `intermediateBuf`, `reasoningBuf`. Если что-то не влезло — режем с `…`.
-
-Финал использует `STREAM_FINAL_TEXT_LIMIT = 4000` только для `textBuf`, но так как финал содержит один буфер — риск упереться минимален.
+Суммарная длина HTML draft'а ограничена `STREAM_DRAFT_TEXT_LIMIT = 4000`. Приоритет — `textBuf` (всегда целиком насколько влезает), затем `lastToolStatus`, `reasoningBuf`. Reasoning показывается хвостом с `…` в начале. Если не влезает — урезается ещё.
 
 - Первый `stream_token` переводит phase в `answering`; reasoning в draft больше не обновляется (но остаётся в буфере до финала, где выкидывается).
 - `tool_status` и `intermediate` можно получать до/после reasoning — они не зависят от phase.
 - Если `textBuf` пуст после `done` (модель не дала ответа) — `finalize()` вернёт false → fallback на `safeReply`.
 - Если rich draft падает не из-за 429, сессия выставляет `draftFailed` и колбэки `onToolStatus`/`onIntermediate` откатываются на старый режим (`ctx.reply` отдельными сообщениями).
+- При успешном rich-финале `backend.tool_user_messages` **не отправляются** отдельными сообщениями — они уже были видны в эфемерном draft. Отправляются только в fallback-режиме.
 - Карточки подтверждения команд (`desktop_action`) **не идут через rich pipeline** — они всегда отдельными сообщениями с inline-кнопками, поэтому подтверждения (`execute_pc_command`, `execute_ssh_command`, файловые операции и т.д.) не зависят от rich streaming и не ломаются.
 
 ### Форматирование rich-ответа
