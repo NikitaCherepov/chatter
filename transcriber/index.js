@@ -318,17 +318,30 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
             return;
         }
 
-        // 5. Финализируем rich-сообщение с текстом расшифровки
-        richStream.onText(transcribedText);
-        const richOk = await richStream.finalize();
+        // 5. Текст > 4000 — отправляем .txt файлом, иначе rich-сообщением
+        if (transcribedText.length > STREAM_DRAFT_TEXT_LIMIT) {
+            // Финализируем draft коротким статусом
+            richStream.onStatus('');
+            richStream.onText('📄 Расшифровка слишком длинная, отправляю файлом...');
+            await richStream.finalize();
 
-        if (!richOk) {
-            // Fallback: отправляем как раньше — .txt файлом
             const textFileName = `transcription_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
             const textFilePath = path.resolve(__dirname, textFileName);
             fs.writeFileSync(textFilePath, transcribedText);
             await ctx.replyWithDocument({ source: textFilePath, filename: textFileName });
             fs.unlinkSync(textFilePath);
+        } else {
+            richStream.onText(transcribedText);
+            const richOk = await richStream.finalize();
+
+            if (!richOk) {
+                // Fallback: отправляем .txt файлом
+                const textFileName = `transcription_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+                const textFilePath = path.resolve(__dirname, textFileName);
+                fs.writeFileSync(textFilePath, transcribedText);
+                await ctx.replyWithDocument({ source: textFilePath, filename: textFileName });
+                fs.unlinkSync(textFilePath);
+            }
         }
 
     } catch (error) {
