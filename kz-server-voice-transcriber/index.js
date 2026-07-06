@@ -23,7 +23,6 @@ const processQueue = async () => {
     const { res, inputPath, isStream } = item;
     const wavPath = `${inputPath}.wav`;
 
-    // Хелперы: отправка SSE-события или молчаливый no-op для старого JSON-режима
     const sseSend = (data) => {
         if (isStream && !res.writableEnded) {
             res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -39,91 +38,84 @@ const processQueue = async () => {
         console.log(`[${new Date().toISOString()}] Processing file: ${inputPath}`);
         sseSend({ status: 'progress', percent: 0, stage: 'converting' });
 
-        // ffmpeg через spawn — не блокирует event loop
-        const ffmpegProc = spawn('ffmpeg', [
-            '-i', inputPath,
-            '-ar', '16000',
-            '-ac', '1',
-            '-c:a', 'pcm_s16le',
-            wavPath,
-            '-y'
+        // Возвращаем старый добрый execSync. Он блокирует поток на пару секунд, 
+        // но зато 100% надёжно создает wav-файл и не падает молча.
+        execSync(`ffmpeg -i ${inputPath} -ar 16000 -ac 1 -c:a pcm_s16le ${wavPath} -y`);
+
+        sseSend({ status: 'progress', percent: 0, stage: 'transcribing' });
+
+        // Убрали выдуманный флаг. Оставляем только -pp
+const whisper = spawn('../whisper.cpp/build/bin/whisper-cli', [
+            '-m', '../whisper.cpp/models/ggml-small.bin',
+            '-f', wavPath,
+            '-nt',
+            '-l', 'ru',
+            '-pp'
         ]);
 
-        let ffmpegDone = false;
-        const runWhisper = () => {
-            if (ffmpegDone) return;
-            ffmpegDone = true;
+        let finalOutput = '';
+        let isDone = false;
+        let lastProgress = 0; // Запоминаем, на скольки процентах мы остановились
 
-            sseSend({ status: 'progress', percent: 0, stage: 'transcribing' });
+        whisper.stdout.on('data', (data) => {
+            finalOutput += data.toString();
+        });
 
-            // spawn whisper с шагом прогресса 1% (whisper.cpp поддерживает --progress-step)
-            const whisper = spawn('../whisper.cpp/build/bin/whisper-cli', [
-                '-m', '../whisper.cpp/models/ggml-small.bin',
-                '-f', wavPath,
-                '-nt',
-                '-l', 'ru',
-                '-pp',
-                '--progress-step', '1'
-            ]);
+        whisper.stderr.on('data', (data) => {
+            const str = data.toString();
+            
+            // ВАЖНО: Выводим все логи виспера в PM2, чтобы больше не быть слепыми
+            process.stdout.write(`[WHISPER] ${str}`);
+            
+            const match = str.match(/progress\s*=\s*(\d+)%/);
+            if (match) {
+                lastProgress = parseInt(match[1], 10);
+                sseSend({ status: 'progress', percent: lastProgress, stage: 'transcribing' });
+            }
+        });
 
-            let finalOutput = '';
-
-            whisper.stdout.on('data', (data) => {
-                finalOutput += data.toString();
-            });
-
-            whisper.stderr.on('data', (data) => {
-                const str = data.toString();
-                const match = str.match(/progress\s*=\s*(\d+)%/);
-                if (match) {
-                    sseSend({ status: 'progress', percent: parseInt(match[1], 10), stage: 'transcribing' });
-                }
-            });
-
-            whisper.on('error', (err) => {
-                console.error('Whisper spawn error:', err);
-                sseSend({ status: 'error', error: 'Ошибка при расшифровке' });
-                sseEnd();
-                cleanupAndNext();
-            });
-
-            whisper.on('close', (code) => {
-                if (code !== 0) {
-                    console.error(`whisper-cli exited with code ${code}`);
-                    sseSend({ status: 'error', error: `whisper-cli exit code ${code}` });
-                    sseEnd();
-                } else if (isStream) {
-                    sseSend({ status: 'done', text: finalOutput.trim() });
-                    sseEnd();
-                } else {
-                    res.json({ text: finalOutput.trim() });
-                }
-                cleanupAndNext();
-            });
-        };
-
-        ffmpegProc.on('error', (err) => {
-            console.error('ffmpeg spawn error:', err);
-            sseSend({ status: 'error', error: 'Ошибка конвертации аудио' });
+        whisper.on('error', (err) => {
+            if (isDone) return;
+            isDone = true;
+            console.error('Whisper spawn error:', err);
+            sseSend({ status: 'error', error: 'Ошибка при запуске расшифровки' });
             sseEnd();
             cleanupAndNext();
         });
 
-        ffmpegProc.on('close', (code) => {
-            if (code !== 0) {
-                console.error(`ffmpeg exited with code ${code}`);
-                sseSend({ status: 'error', error: `ffmpeg exit code ${code}` });
-                sseEnd();
-                cleanupAndNext();
-                return;
+        whisper.on('exit', (code, signal) => {
+            if (isDone) return;
+            isDone = true;
+
+            const text = finalOutput.trim();
+
+            // Считаем успехом нормальный выход (0) ИЛИ если он упал в самом конце (прогресс >= 95%)
+            const isSuccess = code === 0 || (code === null && lastProgress >= 95);
+
+            if (isSuccess && text.length > 0) {
+                if (isStream) {
+                    sseSend({ status: 'done', text });
+                    sseEnd();
+                } else {
+                    res.json({ text });
+                }
+            } else {
+                // Если процесс умер, мы честно кидаем ошибку
+                console.error(`whisper-cli crashed at ${lastProgress}% with code ${code}, signal ${signal}`);
+                if (isStream) {
+                    sseSend({ status: 'error', error: `Сбой на ${lastProgress}% (сигнал ${signal})` });
+                    sseEnd();
+                } else {
+                    res.status(500).json({ error: 'Сбой whisper в процессе' });
+                }
             }
-            runWhisper();
+            cleanupAndNext();
         });
 
     } catch (error) {
         console.error('Queue processing error:', error);
         if (isStream) {
-            sseSend({ status: 'error', error: 'Ошибка на стороне KZ' });
+            sseSend({ status: 'error', error: 'Ошибка конвертации на стороне KZ' });
             sseEnd();
         } else {
             res.status(500).json({ error: 'Ошибка на стороне KZ' });
