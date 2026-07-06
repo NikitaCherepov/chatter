@@ -909,6 +909,7 @@ export async function generatePrompt(data: {
   instruction: string;
   current_content?: string;
   detail?: 'minimal' | 'medium' | 'detailed' | 'none';
+  preferred_model?: string;
 }): Promise<{ generated_prompt: string }> {
   return apiFetch('/api/v1/prompts/generate', {
     method: 'POST',

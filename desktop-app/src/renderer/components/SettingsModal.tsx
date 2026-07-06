@@ -108,6 +108,7 @@ export function SettingsModal({ onClose }: Props) {
   const [aiDetail, setAiDetail] = useState<string>('medium');
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGenerated, setAiGenerated] = useState<string | null>(null);
+  const [aiPreferredModel, setAiPreferredModel] = useState<string | null>(null);
 
   // App zoom (stored as honest percentages)
   const [zoomPct, setZoomPct] = useState(100);
@@ -612,6 +613,7 @@ export function SettingsModal({ onClose }: Props) {
         instruction,
         current_content: customContent,
         detail: aiDetail as 'minimal' | 'medium' | 'detailed' | 'none',
+        preferred_model: aiPreferredModel || undefined,
       });
       setAiGenerated(res.generated_prompt);
     } catch (err) {
@@ -924,7 +926,12 @@ export function SettingsModal({ onClose }: Props) {
                       <div className={s.fieldGroup}>
                         <div className={s.macroFormDivider} />
                         <button
-                          onClick={() => setAiPanelOpen(v => !v)}
+                          onClick={() => {
+                            if (!aiPanelOpen) {
+                              api.getModels().then(res => setAiPreferredModel(res.preferred_model)).catch(() => {});
+                            }
+                            setAiPanelOpen(v => !v);
+                          }}
                           style={{
                             display: 'flex', alignItems: 'center', gap: '6px',
                             background: 'transparent', border: 'none', cursor: 'pointer',
