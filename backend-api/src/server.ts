@@ -1689,7 +1689,7 @@ app.put('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
 
 // AI prompt generation — uses user's preferred model (or auto PRO)
 app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
+  const userId = effectiveUserId(req);
   const instruction = `${req.body?.instruction || ''}`.trim();
   const currentContent = `${req.body?.current_content || ''}`;
   const detail = `${req.body?.detail || 'medium'}`.trim() as 'minimal' | 'medium' | 'detailed' | 'none';
@@ -1714,8 +1714,12 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
 
   try {
     const user = getUserById(userId);
-    const preferredModelId = user?.preferred_model || null;
+    const requestedModelId = typeof req.body?.preferred_model === 'string' ? req.body.preferred_model.trim() : '';
+    const preferredModelId = requestedModelId || user?.preferred_model || null;
     const manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
+    if (preferredModelId && !manualModel) {
+      console.warn(`[prompts/generate] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
+    }
 
     const result = await runCompletion('pro', {
       messages: [
