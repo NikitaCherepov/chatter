@@ -38,6 +38,15 @@ const MAX_IMAGES_PRO = 10;
 const MAX_IMAGES_ADMIN = 20;
 const MESSAGE_PAGE_SIZE = 50;
 const CHAT_PAGE_SIZE = 25;
+/**
+ * Ленивый рендеринг ленты: показываем не все загруженные сообщения, а только те,
+ * что вписываются в токен-бюджет. Гарантируем минимум MIN_VISIBLE_MESSAGES (даже если
+ * сумма токенов превышает бюджет). Кнопка «Показать ещё» расширяет бюджет на EXTRA_TOKEN_STEP.
+ * Бэкенд по-прежнему отдаёт порциями по MESSAGE_PAGE_SIZE — мы лишь управляем DOM.
+ */
+const MESSAGE_TOKEN_BUDGET = 20000;
+const MIN_VISIBLE_MESSAGES = 8;
+const EXTRA_TOKEN_STEP = 20000;
 
 const reasoningPanelVariants = {
   hidden: { opacity: 0, y: -16 },
@@ -608,6 +617,13 @@ export function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  /**
+   * Расширенный бюджет токенов для ленивого рендеринга ленты.
+   * Базовый MESSAGE_TOKEN_BUDGET + extraTokenBudget = текущий лимит показа.
+   * Кнопка «Показать ещё» увеличивает extraTokenBudget на EXTRA_TOKEN_STEP.
+   * Сбрасывается в 0 при смене чата.
+   */
+  const [extraTokenBudget, setExtraTokenBudget] = useState(0);
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
   const [hasMoreChats, setHasMoreChats] = useState(false);
@@ -814,6 +830,8 @@ export function ChatPage() {
 
   const loadMessages = async (chatId: number) => {
     setLoadingMessages(true);
+    // Сброс токен-бюджета ленивого рендера — каждый чат начинается с чистого бюджета
+    setExtraTokenBudget(0);
     try {
       const res = await api.getMessages(chatId, MESSAGE_PAGE_SIZE);
       setMessages(res.messages);
@@ -848,6 +866,53 @@ export function ChatPage() {
       setLoadingOlderMessages(false);
     }
   }, [activeChatId, loadingOlderMessages, hasMoreMessages, messages.length]);
+
+  /**
+   * Срез сообщений для DOM-рендера. Идём с конца (свежие) к началу (старые):
+   *   1. Первые MIN_VISIBLE_MESSAGES показываем всегда, независимо от токен-бюджета.
+   *   2. Дальше копим сумму token_count, пока не упрётся в MESSAGE_TOKEN_BUDGET + extraTokenBudget.
+   * Остальные лежат в messages[] (в памяти), но не рендерятся — пользователь раскрывает
+   * их кнопкой «Показать ещё» (увеличивает extraTokenBudget).
+   *
+   * При streaming нового сообщения оно добавляется в конец messages и попадает в visibleMessages автоматически.
+   */
+  const visibleMessages = useMemo<api.Message[]>(() => {
+    if (messages.length <= MIN_VISIBLE_MESSAGES) return messages;
+    const budget = MESSAGE_TOKEN_BUDGET + extraTokenBudget;
+    // Идём с конца, копим токены
+    let sumTokens = 0;
+    let cutIndex = messages.length; // начинаем с "показываем все"
+    for (let i = messages.length - 1; i >= MIN_VISIBLE_MESSAGES; i--) {
+      const tk = messages[i].token_count ?? 0;
+      // Если добавление этого сообщения пробьёт бюджет — режем здесь (i включаем в скрытую часть)
+      if (sumTokens + tk > budget) {
+        cutIndex = i + 1; // показываем начиная с i+1, всё что <= i — скрыто
+        break;
+      }
+      sumTokens += tk;
+      cutIndex = i;
+    }
+    // cutIndex может оказаться 0 если бюджет всё вместило — тогда показываем все
+    // Но не меньше MIN_VISIBLE_MESSAGES (по циклу i >= MIN_VISIBLE_MESSAGES)
+    return messages.slice(Math.max(0, cutIndex));
+  }, [messages, extraTokenBudget]);
+
+  /** Сколько сообщений скрыто (не отрендерено) сверх visibleMessages. */
+  const hiddenMessagesCount = messages.length - visibleMessages.length;
+
+  /** Примерное число токенов в скрытой части — для подписи на кнопке. */
+  const hiddenTokensSum = useMemo(() => {
+    const start = 0;
+    const end = messages.length - visibleMessages.length;
+    let sum = 0;
+    for (let i = start; i < end; i++) sum += messages[i]?.token_count ?? 0;
+    return sum;
+  }, [messages, visibleMessages.length]);
+
+  /** Раскрыть ещё одну порцию скрытых сообщений (увеличиваем токен-бюджет). */
+  const showMoreHidden = useCallback(() => {
+    setExtraTokenBudget(prev => prev + EXTRA_TOKEN_STEP);
+  }, []);
 
   const selectChat = async (chatId: number) => {
     setActiveChatId(chatId);
@@ -2632,12 +2697,18 @@ export function ChatPage() {
               {loadingMessages && (
                 <div className={s.loadingRow}>Загрузка сообщений...</div>
               )}
-              {!loadingMessages && hasMoreMessages && (
+              {!loadingMessages && hiddenMessagesCount > 0 && (
+                <button className={s.loadOlderBtn} onClick={showMoreHidden}>
+                  Показать ещё {hiddenMessagesCount} сообщ.
+                  {hiddenTokensSum > 0 ? ` (~${Math.round(hiddenTokensSum / 1000)}k токенов)` : ''}
+                </button>
+              )}
+              {!loadingMessages && hiddenMessagesCount === 0 && hasMoreMessages && (
                 <button className={s.loadOlderBtn} onClick={loadOlderMessages} disabled={loadingOlderMessages}>
                   {loadingOlderMessages ? 'Загрузка...' : 'Загрузить старые сообщения'}
                 </button>
               )}
-              {messages.map((msg) => (
+              {visibleMessages.map((msg) => (
                 <MessageItem
                   key={msg.id}
                   msg={msg}
