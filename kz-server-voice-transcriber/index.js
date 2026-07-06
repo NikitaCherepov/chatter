@@ -37,53 +37,87 @@ const processQueue = async () => {
 
     try {
         console.log(`[${new Date().toISOString()}] Processing file: ${inputPath}`);
-        sseSend({ status: 'converting' });
+        sseSend({ status: 'progress', percent: 0, stage: 'converting' });
 
-        execSync(`ffmpeg -i ${inputPath} -ar 16000 -ac 1 -c:a pcm_s16le ${wavPath} -y`);
-
-        // spawn вместо execSync — не блокирует event loop, читаем прогресс из stderr
-        const whisper = spawn('../whisper.cpp/build/bin/whisper-cli', [
-            '-m', '../whisper.cpp/models/ggml-small.bin',
-            '-f', wavPath,
-            '-nt',
-            '-l', 'ru',
-            '-pp'
+        // ffmpeg через spawn — не блокирует event loop
+        const ffmpegProc = spawn('ffmpeg', [
+            '-i', inputPath,
+            '-ar', '16000',
+            '-ac', '1',
+            '-c:a', 'pcm_s16le',
+            wavPath,
+            '-y'
         ]);
 
-        let finalOutput = '';
+        let ffmpegDone = false;
+        const runWhisper = () => {
+            if (ffmpegDone) return;
+            ffmpegDone = true;
 
-        whisper.stdout.on('data', (data) => {
-            finalOutput += data.toString();
-        });
+            sseSend({ status: 'progress', percent: 0, stage: 'transcribing' });
 
-        whisper.stderr.on('data', (data) => {
-            const str = data.toString();
-            const match = str.match(/progress\s*=\s*(\d+)%/);
-            if (match) {
-                sseSend({ status: 'progress', percent: parseInt(match[1], 10) });
-            }
-        });
+            // spawn whisper с шагом прогресса 1% (whisper.cpp поддерживает --progress-step)
+            const whisper = spawn('../whisper.cpp/build/bin/whisper-cli', [
+                '-m', '../whisper.cpp/models/ggml-small.bin',
+                '-f', wavPath,
+                '-nt',
+                '-l', 'ru',
+                '-pp',
+                '--progress-step', '1'
+            ]);
 
-        whisper.on('error', (err) => {
-            console.error('Whisper spawn error:', err);
-            sseSend({ status: 'error', error: 'Ошибка при расшифровке' });
+            let finalOutput = '';
+
+            whisper.stdout.on('data', (data) => {
+                finalOutput += data.toString();
+            });
+
+            whisper.stderr.on('data', (data) => {
+                const str = data.toString();
+                const match = str.match(/progress\s*=\s*(\d+)%/);
+                if (match) {
+                    sseSend({ status: 'progress', percent: parseInt(match[1], 10), stage: 'transcribing' });
+                }
+            });
+
+            whisper.on('error', (err) => {
+                console.error('Whisper spawn error:', err);
+                sseSend({ status: 'error', error: 'Ошибка при расшифровке' });
+                sseEnd();
+                cleanupAndNext();
+            });
+
+            whisper.on('close', (code) => {
+                if (code !== 0) {
+                    console.error(`whisper-cli exited with code ${code}`);
+                    sseSend({ status: 'error', error: `whisper-cli exit code ${code}` });
+                    sseEnd();
+                } else if (isStream) {
+                    sseSend({ status: 'done', text: finalOutput.trim() });
+                    sseEnd();
+                } else {
+                    res.json({ text: finalOutput.trim() });
+                }
+                cleanupAndNext();
+            });
+        };
+
+        ffmpegProc.on('error', (err) => {
+            console.error('ffmpeg spawn error:', err);
+            sseSend({ status: 'error', error: 'Ошибка конвертации аудио' });
             sseEnd();
             cleanupAndNext();
         });
 
-        whisper.on('close', (code) => {
+        ffmpegProc.on('close', (code) => {
             if (code !== 0) {
-                console.error(`whisper-cli exited with code ${code}`);
-                sseSend({ status: 'error', error: `whisper-cli exit code ${code}` });
+                console.error(`ffmpeg exited with code ${code}`);
+                sseSend({ status: 'error', error: `ffmpeg exit code ${code}` });
                 sseEnd();
-            } else if (isStream) {
-                sseSend({ status: 'done', text: finalOutput.trim() });
-                sseEnd();
-            } else {
-                // Старый JSON-режим — просто отправляем результат
-                res.json({ text: finalOutput.trim() });
+                cleanupAndNext();
+                return;
             }
-            cleanupAndNext();
+            runWhisper();
         });
 
     } catch (error) {

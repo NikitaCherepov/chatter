@@ -273,10 +273,18 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
 
                         if (data.status === 'queued') {
                             richStream.onStatus(`⏳ В очереди. Позиция: ${data.position}`);
-                        } else if (data.status === 'converting') {
-                            richStream.onStatus('⚙️ Конвертация аудио...');
                         } else if (data.status === 'progress') {
-                            richStream.onStatus(`🎙 Расшифровка: ${data.percent}%`);
+                            if (data.stage === 'converting') {
+                                richStream.onStatus('⚙️ Конвертация аудио...');
+                            } else {
+                                // transcribing — прогресс whisper
+                                const pct = data.percent;
+                                if (typeof pct === 'number') {
+                                    richStream.onStatus(`🎙 Расшифровка: ${pct}%`);
+                                } else {
+                                    richStream.onStatus('🎙 Расшифровка...');
+                                }
+                            }
                         } else if (data.status === 'done') {
                             transcribedText = data.text || '';
                         } else if (data.status === 'error') {
