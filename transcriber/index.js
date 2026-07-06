@@ -219,9 +219,12 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
 
         if (!fileId) return ctx.reply('Я не вижу здесь аудиофайла.');
 
-        // 1. Скачиваем файл из Telegram
-        const statusMsg = await ctx.reply('⏳ Скачиваю файл из Telegram...');
+        // 1. Создаём rich streaming draft сразу — всё летит в одно сообщение
+        const chatId = ctx.chat.id;
+        const richStream = new RichStreamSession(ctx.telegram, chatId);
+        richStream.onStatus('⏳ Скачиваю файл из Telegram...');
 
+        // 2. Скачиваем файл из Telegram
         const fileUrl = await ctx.telegram.getFileLink(fileId);
         const tempFilePath = path.resolve(__dirname, `temp_audio_${Date.now()}.ogg`);
 
@@ -233,9 +236,7 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
             }).on('error', reject);
         });
 
-        // 2. Создаём rich streaming draft
-        const chatId = ctx.chat.id;
-        const richStream = new RichStreamSession(ctx.telegram, chatId);
+        // 3. Отправляем на KZ сервер
         richStream.onStatus('📨 Отправляю на сервер...');
 
         // 3. Отправляем файл на KZ сервер и слушаем SSE-стрим
@@ -304,8 +305,7 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
             richStream.onText('❌ Расшифровка пуста. Возможно, на фоне была только тишина или музыка.');
             const ok = await richStream.finalize();
             if (!ok) {
-                await ctx.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
-                    '❌ Расшифровка пуста. Возможно, на фоне была только тишина или музыка.');
+                await ctx.reply('❌ Расшифровка пуста. Возможно, на фоне была только тишина или музыка.');
             }
             return;
         }
@@ -321,12 +321,20 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
             fs.writeFileSync(textFilePath, transcribedText);
             await ctx.replyWithDocument({ source: textFilePath, filename: textFileName });
             fs.unlinkSync(textFilePath);
-            try { await ctx.telegram.deleteMessage(chatId, statusMsg.message_id); } catch {}
         }
 
     } catch (error) {
         console.error(error);
-        ctx.reply(`❌ Произошла ошибка: ${error.message}`);
+        const errText = `❌ Произошла ошибка: ${error.message}`;
+        // Пытаемся показать ошибку в rich draft, если он есть
+        if (typeof richStream !== 'undefined' && !richStream.finalized) {
+            richStream.onStatus('');
+            richStream.onText(errText);
+            const ok = await richStream.finalize();
+            if (!ok) await ctx.reply(errText);
+        } else {
+            await ctx.reply(errText);
+        }
     }
 });
 
