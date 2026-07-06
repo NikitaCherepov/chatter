@@ -1717,6 +1717,16 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
     const requestedModelId = typeof req.body?.preferred_model === 'string' ? req.body.preferred_model.trim() : '';
     const preferredModelId = requestedModelId || user?.preferred_model || null;
     const manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
+    console.log('[prompts/generate] model selection', {
+      authUserId: req.authUserId,
+      effectiveUserId: userId,
+      bodyPreferredModel: requestedModelId || null,
+      dbPreferredModel: user?.preferred_model || null,
+      preferredModelId,
+      manualResolved: Boolean(manualModel),
+      manualApiModel: manualModel?.apiModelName || null,
+      manualBaseURL: manualModel?.baseURL || null,
+    });
     if (preferredModelId && !manualModel) {
       console.warn(`[prompts/generate] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
     }
@@ -1728,6 +1738,14 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
       ],
       max_tokens: 25000,
     }, manualModel);
+    console.log('[prompts/generate] completion route', {
+      usedProvider: result.usedProvider,
+      usedModel: result.usedModel,
+      baseURLUsed: result.baseURLUsed || null,
+      manualFallback: Boolean(result.manualFallback),
+      failedModels: result.failedModels || [],
+      failedProviders: result.failedProviders || [],
+    });
 
     const generated = result.response?.choices?.[0]?.message?.content;
     if (typeof generated !== 'string' || !generated.trim()) {
