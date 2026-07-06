@@ -11,24 +11,93 @@ const SECRET_TOKEN = '***REMOVED_VOICE_SECRET***';
 let queue = [];
 let isProcessing = false;
 
+// Общая очередь для обоих эндпоинтов (старый JSON и новый SSE-стрим).
+// res может быть обычным Express Response (старый /api/voice) или SSE-стримом (/api/voice/stream).
+// Тип ответа определяется флагом isStream в элементе очереди.
+
 const processQueue = async () => {
     if (isProcessing || queue.length === 0) return;
     isProcessing = true;
 
-    const { res, inputPath } = queue.shift();
+    const item = queue.shift();
+    const { res, inputPath, isStream } = item;
     const wavPath = `${inputPath}.wav`;
+
+    // Хелперы: отправка SSE-события или молчаливый no-op для старого JSON-режима
+    const sseSend = (data) => {
+        if (isStream && !res.writableEnded) {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        }
+    };
+    const sseEnd = () => {
+        if (isStream && !res.writableEnded) {
+            res.end();
+        }
+    };
 
     try {
         console.log(`[${new Date().toISOString()}] Processing file: ${inputPath}`);
+        sseSend({ status: 'converting' });
 
         execSync(`ffmpeg -i ${inputPath} -ar 16000 -ac 1 -c:a pcm_s16le ${wavPath} -y`);
-        const output = execSync(`../whisper.cpp/build/bin/whisper-cli -m ../whisper.cpp/models/ggml-small.bin -f ${wavPath} -nt -l ru`);
 
-        res.json({ text: output.toString().trim() });
+        // spawn вместо execSync — не блокирует event loop, читаем прогресс из stderr
+        const whisper = spawn('../whisper.cpp/build/bin/whisper-cli', [
+            '-m', '../whisper.cpp/models/ggml-small.bin',
+            '-f', wavPath,
+            '-nt',
+            '-l', 'ru',
+            '-pp'
+        ]);
+
+        let finalOutput = '';
+
+        whisper.stdout.on('data', (data) => {
+            finalOutput += data.toString();
+        });
+
+        whisper.stderr.on('data', (data) => {
+            const str = data.toString();
+            const match = str.match(/progress\s*=\s*(\d+)%/);
+            if (match) {
+                sseSend({ status: 'progress', percent: parseInt(match[1], 10) });
+            }
+        });
+
+        whisper.on('error', (err) => {
+            console.error('Whisper spawn error:', err);
+            sseSend({ status: 'error', error: 'Ошибка при расшифровке' });
+            sseEnd();
+            cleanupAndNext();
+        });
+
+        whisper.on('close', (code) => {
+            if (code !== 0) {
+                console.error(`whisper-cli exited with code ${code}`);
+                sseSend({ status: 'error', error: `whisper-cli exit code ${code}` });
+                sseEnd();
+            } else if (isStream) {
+                sseSend({ status: 'done', text: finalOutput.trim() });
+                sseEnd();
+            } else {
+                // Старый JSON-режим — просто отправляем результат
+                res.json({ text: finalOutput.trim() });
+            }
+            cleanupAndNext();
+        });
+
     } catch (error) {
         console.error('Queue processing error:', error);
-        res.status(500).json({ error: 'Ошибка на стороне KZ' });
-    } finally {
+        if (isStream) {
+            sseSend({ status: 'error', error: 'Ошибка на стороне KZ' });
+            sseEnd();
+        } else {
+            res.status(500).json({ error: 'Ошибка на стороне KZ' });
+        }
+        cleanupAndNext();
+    }
+
+    function cleanupAndNext() {
         if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
         if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
         isProcessing = false;
@@ -136,6 +205,7 @@ app.post('/api/silero', (req, res) => {
     );
 });
 
+// Старый эндпоинт — обычный JSON ответ. Не трогаем, chatter зависит от него.
 app.post('/api/voice', upload.single('audio'), (req, res) => {
     if (req.headers.authorization !== `Bearer ${SECRET_TOKEN}`) {
         return res.status(403).send('Отказано в доступе');
@@ -144,8 +214,33 @@ app.post('/api/voice', upload.single('audio'), (req, res) => {
         return res.status(400).json({ error: 'Файл не получен' });
     }
 
-    queue.push({ res, inputPath: req.file.path });
-    console.log(`Добавлено в очередь. Позиция: ${queue.length}`);
+    queue.push({ res, inputPath: req.file.path, isStream: false });
+    console.log(`[JSON] Добавлено в очередь. Позиция: ${queue.length}`);
+    processQueue();
+});
+
+// Новый эндпоинт — SSE-стрим прогресса whisper.
+// Отвечает text/event-stream с событиями: queued, converting, progress, done, error.
+app.post('/api/voice/stream', upload.single('audio'), (req, res) => {
+    if (req.headers.authorization !== `Bearer ${SECRET_TOKEN}`) {
+        return res.status(403).send('Отказано в доступе');
+    }
+    if (!req.file?.path) {
+        return res.status(400).json({ error: 'Файл не получен' });
+    }
+
+    // SSE-заголовки
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const queuePos = queue.length + (isProcessing ? 1 : 0);
+    res.write(`data: ${JSON.stringify({ status: 'queued', position: queuePos })}\n\n`);
+
+    queue.push({ res, inputPath: req.file.path, isStream: true });
+    console.log(`[SSE] Добавлено в очередь. Позиция: ${queuePos}`);
     processQueue();
 });
 
