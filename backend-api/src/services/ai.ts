@@ -3382,7 +3382,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
   }
 
-  // ── Visual Control: capture webcam photo ────────────────────────────────────
+
+  // ── Visual Control: capture webcam photo (always HitL) ──────────────────────
 
   if (toolName === 'capture_webcam') {
     const purpose: string = typeof parsed.purpose === 'string' ? parsed.purpose.trim() : 'Опиши что видит камера';
@@ -3392,19 +3393,79 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Захват с веб-камеры невозможен — попроси пользователя запустить приложение.' });
     }
 
-    try {
-      // 1. Capture from webcam via desktop IPC
-      const result = await sendIpcToDesktop(user.id, 'capture_webcam', { camera_name: cameraName }, 30000, signal);
+    // Auto-reject in scheduler mode
+    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. Webcam capture confirmation was automatically rejected.' });
 
-      if (!result?.screenshot_base64) {
-        return JSON.stringify({ status: 'error', message: result?.error || 'Не удалось сделать фото с веб-камеры. Камера может быть занята или отключена.' });
+    // Always requires user confirmation — HitL
+    const { randomUUID } = await import('node:crypto');
+    const confirmationId = randomUUID();
+
+    const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
+    const confirmationPromise = new Promise<any>((resolve, reject) => {
+      registerPendingPcConfirmation(confirmationId, {
+        userId: user.id,
+        kind: 'webcam_capture',
+        label: `📸 Фото с веб-камеры: ${purpose}`,
+        payload: { ipcType: 'capture_webcam', ipcPayload: { camera_name: cameraName, purpose } },
+        resolve,
+        reject,
+        createdAt: Date.now()
+      });
+    });
+
+    const confirmationAction: DesktopActionPayload = {
+      action: 'webcam_capture_confirmation',
+      value: {
+        confirmation_id: confirmationId,
+        purpose,
+        camera_name: cameraName || 'default',
+      }
+    };
+
+    let sent = false;
+    try {
+      if (subagentExtra?.onDesktopAction) {
+        await subagentExtra.onDesktopAction(confirmationAction);
+        sent = true;
+        if (isDesktopOnline(user.id)) {
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
+      } else {
+        sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+      }
+    } catch (err) {
+      console.error('[capture_webcam] failed to send confirmation action:', err);
+    }
+
+    console.log('[capture_webcam] confirmation dispatch', {
+      userId: user.id,
+      confirmationId,
+      purpose,
+      cameraName,
+      via: subagentExtra?.onDesktopAction ? 'callback+ws' : 'ws_registry',
+      sent,
+    });
+
+    if (!sent) {
+      deletePendingPcConfirmation(confirmationId);
+      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.' });
+    }
+
+    try {
+      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
+
+      // User approved — execute capture
+      const captureResult = await sendIpcToDesktop(user.id, 'capture_webcam', { camera_name: cameraName }, 30000, signal);
+
+      if (!captureResult?.screenshot_base64) {
+        return JSON.stringify({ status: 'error', message: captureResult?.error || 'Не удалось сделать фото с веб-камеры. Камера может быть занята или отключена.' });
       }
 
-      // 2. Compress via sharp → JPEG
+      // Compress via sharp → JPEG
       const { default: sharpLib } = await import('sharp');
       const { saveGeneratedImage } = await import('./image-storage.js');
 
-      const buf = Buffer.from(result.screenshot_base64, 'base64');
+      const buf = Buffer.from(captureResult.screenshot_base64, 'base64');
       const compressed = await sharpLib(buf, { failOn: 'none' })
         .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 70 })
@@ -3412,21 +3473,21 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       const compressedB64 = compressed.toString('base64');
       const dataUrl = `data:image/jpeg;base64,${compressedB64}`;
 
-      // 3. Save to disk → show in chat
+      // Save to disk → show in chat
       if (Array.isArray(generatedImages)) {
         try {
           const saved = await saveGeneratedImage(compressedB64);
           generatedImages.push({
             image_base64: compressedB64,
             image_url: saved.url,
-            prompt_used: `Фото с веб-камеры: ${result.camera || 'default'}`,
+            prompt_used: `Фото с веб-камеры: ${captureResult.camera || 'default'}`,
           });
         } catch (err) {
           console.error('[capture_webcam] failed to save webcam photo:', err);
         }
       }
 
-      // 4. Send to vision model
+      // Send to vision model
       const visionMessages = [
         {
           role: 'system',
@@ -3450,14 +3511,22 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
       return JSON.stringify({
         status: 'success',
-        camera: result.camera || 'default',
+        camera: captureResult.camera || 'default',
         vision_result: visionText,
         message: `Фото с веб-камеры сделано и проанализировано.`,
       });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка захвата с веб-камеры: ${err.message}` });
+      if (err?.message?.startsWith('rejected_by_user')) {
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил захват с веб-камеры.' }, err));
+      }
+      if (err?.message === 'confirmation_expired') {
+        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).' });
+      }
+      return JSON.stringify({ status: 'error', message: `Ошибка захвата с веб-камеры: ${err?.message || String(err)}` });
     }
   }
+
+
 
 
 
@@ -5280,6 +5349,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('edit_file_lines');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
+    disabledToolSet.add('capture_webcam');
   }
   // Лайт: отключает опасное, оставляет read-only
   if (flags?.disable_pc_control_lite) {
@@ -5326,9 +5396,9 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('check_emails');
     disabledToolSet.add('read_email_content');
     disabledToolSet.add('get_my_tasks');
-    disabledToolSet.add('explore_fs');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
+    disabledToolSet.add('capture_webcam');
     disabledToolSet.add('desktop_action');
     disabledToolSet.add('map_control');
     disabledToolSet.add('get_map_pins');

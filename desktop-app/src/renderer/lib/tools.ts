@@ -351,6 +351,14 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     // Renders a confirmation card: [Approve] [Reject]
     return;
   }
+
+  // ── Webcam Capture confirmation ──
+
+  if (a === 'webcam_capture_confirmation') {
+    // Handled by ChatPage via the webcamCaptureConfirmation callback
+    // Renders a confirmation card: [Approve] [Reject]
+    return;
+  }
 }
 
 // ── Suggest Macro callback ──────────────────────────────────────────────────

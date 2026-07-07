@@ -7,7 +7,7 @@
  *  - 'file_action': read or write a file on user's PC via native fs
  */
 
-export type PendingActionKind = 'pc_command' | 'file_action';
+export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture';
 
 type ExecutePayload = {
   ipcType: 'execute_commands';
@@ -19,7 +19,12 @@ type FileActionPayload = {
   ipcPayload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean; content?: string; mode?: 'overwrite' | 'append'; end_line?: number; new_content?: string; query?: string; max_matches?: number };
 };
 
-type ActionPayload = ExecutePayload | FileActionPayload;
+type WebcamCapturePayload = {
+  ipcType: 'capture_webcam';
+  ipcPayload: { camera_name?: string; purpose?: string };
+};
+
+type ActionPayload = ExecutePayload | FileActionPayload | WebcamCapturePayload;
 
 export type PendingPcCommandConfirmation = {
   userId: number;

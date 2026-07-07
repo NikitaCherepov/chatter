@@ -6391,6 +6391,39 @@ const processUserTextThroughAi = async (
                         }
                     }
                 }
+                if (action?.action === 'webcam_capture_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const purpose = action.value.purpose || 'Опиши что видит камера';
+                    const cameraName = action.value.camera_name || 'default';
+
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback('📸 Разрешить фото', `pcconfirm:allow:${confirmationId}`),
+                            Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback('💬 Отклонить с комментарием', `pcconfirm:reject_comment:${confirmationId}`),
+                        ]
+                    ]);
+                    console.log('[tg][desktop_action] webcam_capture_confirmation', {
+                        confirmationId,
+                        purpose,
+                        cameraName
+                    });
+                    try {
+                        await ctx.reply(
+                            `📸 **Захват с веб-камеры**\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`,
+                            { parse_mode: 'Markdown', ...keyboard }
+                        );
+                    } catch {
+                        try {
+                            await ctx.reply(`📸 Захват с веб-камеры\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`, keyboard);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+
                 if (action?.action === 'devops_confirmation' && action?.value?.confirmation_id) {
                     const confirmationId = action.value.confirmation_id;
                     const serverName = action.value.server_name || '';

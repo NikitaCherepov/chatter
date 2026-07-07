@@ -677,6 +677,7 @@ export function ChatPage() {
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
   const [editFileLinesConfirmations, setEditFileLinesConfirmations] = useState<Array<{ confirmation_id: string; file_path: string; start_line: number; end_line: number; old_content_preview?: string; new_content_preview?: string }>>([]);
+  const [webcamCaptureConfirmations, setWebcamCaptureConfirmations] = useState<Array<{ confirmation_id: string; purpose: string; camera_name: string }>>([]);
   const [emailConfirmations, setEmailConfirmations] = useState<Array<{ confirmation_id: string; from: string; to: string; subject: string; body: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
@@ -1042,6 +1043,21 @@ export function ChatPage() {
         });
       }
     }
+
+    if (action.action === 'webcam_capture_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; purpose?: string; camera_name?: string };
+      if (val.confirmation_id) {
+        setWebcamCaptureConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            purpose: val.purpose || 'Опиши что видит камера',
+            camera_name: val.camera_name || 'default',
+          }];
+        });
+      }
+    }
+
     if (action.action === 'email_confirmation' && action.value) {
       const val = action.value as { confirmation_id?: string; from?: string; to?: string; subject?: string; body?: string };
       if (val.confirmation_id && val.to && val.subject && val.body) {
@@ -3529,6 +3545,67 @@ export function ChatPage() {
                   </div>
                 </div>
               ))}
+
+
+              {/* Webcam Capture Confirmation cards */}
+              {webcamCaptureConfirmations.map((conf, confIdx) => (
+                <div key={`webcam-${confIdx}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span className={s.suggestMacroTitle}>📸 Фото с веб-камеры</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>Камера: {conf.camera_name}</code>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Задача: {conf.purpose}
+                  </div>
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success('Фото сделано');
+                          setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error('Ошибка захвата');
+                        }
+                      }}
+                    >
+                      📸 Разрешить
+                    </button>
+                    <RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      onReject={async (comment) => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                        } catch {}
+                        setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+
 
               {/* Email Confirmation cards */}
               {emailConfirmations.map((conf, confIdx) => (
