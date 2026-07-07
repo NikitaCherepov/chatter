@@ -897,7 +897,7 @@ function createWindow() {
 
     try {
       await new Promise<void>((resolve, reject) => {
-        execFile('ffmpeg', [
+        execFile(getFfmpegPath(), [
           '-y', '-f', 'dshow', '-video_size', '1280x720',
           '-i', `video=${cameraName}`,
           '-frames:v', '1',
