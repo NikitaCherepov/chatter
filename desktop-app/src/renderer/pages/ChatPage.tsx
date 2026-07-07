@@ -877,23 +877,29 @@ export function ChatPage() {
    * При streaming нового сообщения оно добавляется в конец messages и попадает в visibleMessages автоматически.
    */
   const visibleMessages = useMemo<api.Message[]>(() => {
+    // Если сообщений мало — показываем все, бюджет не важен.
     if (messages.length <= MIN_VISIBLE_MESSAGES) return messages;
     const budget = MESSAGE_TOKEN_BUDGET + extraTokenBudget;
-    // Идём с конца, копим токены
+    // Идём с конца (свежие) к началу (старые), копим token_count.
+    // Гарантия: первые MIN_VISIBLE_MESSAGES (последние по индексу) показываем всегда,
+    // даже если их сумма превышает бюджет — поэтому бюджет проверяем только после них.
     let sumTokens = 0;
-    let cutIndex = messages.length; // начинаем с "показываем все"
-    for (let i = messages.length - 1; i >= MIN_VISIBLE_MESSAGES; i--) {
+    let cutIndex = messages.length; // по умолчанию: показываем все
+    for (let i = messages.length - 1; i >= 0; i--) {
       const tk = messages[i].token_count ?? 0;
-      // Если добавление этого сообщения пробьёт бюджет — режем здесь (i включаем в скрытую часть)
-      if (sumTokens + tk > budget) {
+      // Бюджет проверяем ТОЛЬКО за пределами гарантированного минимума.
+      // i < MIN_VISIBLE_MESSAGES — это индексы в "хвосте" (старые сообщения),
+      // они могут быть скрыты только по бюджету.
+      // Но: если мы ещё не вышли за минимум (i >= messages.length - MIN_VISIBLE_MESSAGES),
+      // проверку бюджета пропускаем.
+      const withinMin = i >= messages.length - MIN_VISIBLE_MESSAGES;
+      if (!withinMin && sumTokens + tk > budget) {
         cutIndex = i + 1; // показываем начиная с i+1, всё что <= i — скрыто
         break;
       }
       sumTokens += tk;
       cutIndex = i;
     }
-    // cutIndex может оказаться 0 если бюджет всё вместило — тогда показываем все
-    // Но не меньше MIN_VISIBLE_MESSAGES (по циклу i >= MIN_VISIBLE_MESSAGES)
     return messages.slice(Math.max(0, cutIndex));
   }, [messages, extraTokenBudget]);
 
