@@ -90,3 +90,25 @@ export const getUploadsDir = (): string => {
   ensureUploadsDir();
   return UPLOADS_DIR;
 };
+
+/**
+ * Delete an image file from disk by filename.
+ * Best-effort: silently ignores errors.
+ */
+export const deleteImageFile = (filename: string): void => {
+  try {
+    const safeName = path.basename(filename);
+    const filepath = path.join(UPLOADS_DIR, safeName);
+    if (fs.existsSync(filepath)) {
+      fs.unlinkSync(filepath);
+    }
+  } catch { /* best-effort */ }
+};
+
+/**
+ * Extract filename from a URL like /api/v1/images/abc123.webp
+ */
+export const filenameFromUrl = (url: string): string | null => {
+  const match = url.match(/\/api\/v1\/images\/(.+)$/);
+  return match ? match[1] : null;
+};

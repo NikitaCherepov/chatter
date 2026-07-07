@@ -1212,6 +1212,12 @@ export async function deleteAttachment(chatId: number, messageId: number, filena
   });
 }
 
+export async function deleteMessageImage(messageId: number, imageUrl: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/messages/${messageId}/images?url=${encodeURIComponent(imageUrl)}`, {
+    method: 'DELETE',
+  });
+}
+
 // ---------- TTS (Cartesia cloud) ----------
 
 export type CartesiaVoice = {

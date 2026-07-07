@@ -18,6 +18,8 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
   const [loading, setLoading] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   const loadMedia = useCallback(async (resetOffset: number = 0) => {
     setLoading(true);
@@ -69,21 +71,21 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
     }
   };
 
+  const handleDelete = async (item: api.ChatMediaItem, key: string) => {
+    setDeletingKey(key);
+    try {
+      await api.deleteMessageImage(item.message_id, item.url);
+      setMedia(prev => prev.filter(m => !(m.message_id === item.message_id && m.url === item.url)));
+      setConfirmDeleteKey(null);
+    } catch (err) {
+      console.error('[gallery] Failed to delete image:', err);
+    } finally {
+      setDeletingKey(null);
+    }
+  };
+
   const isCurrent = mode === 'current';
   const isAll = mode === 'all';
-
-  // Показываем empty state когда нет чата в режиме "current"
-  if (isCurrent && !chatId) {
-    return (
-      <div className={s.root}>
-        <div className={s.modeSwitch}>
-          <ModeButton active={isCurrent} onClick={() => setMode('current')}>Этот чат</ModeButton>
-          <ModeButton active={isAll} onClick={() => setMode('all')}>Все чаты</ModeButton>
-        </div>
-        <div className={s.empty}>Выберите чат</div>
-      </div>
-    );
-  }
 
   return (
     <div className={s.root}>
@@ -92,19 +94,21 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
         <ModeButton active={isAll} onClick={() => setMode('all')}>Все чаты</ModeButton>
       </div>
 
-      {media.length === 0 && !loading ? (
+      {isCurrent && !chatId ? (
+        <div className={s.empty}>Выберите чат</div>
+      ) : media.length === 0 && !loading ? (
         <div className={s.empty}>
-          {mode === 'all' ? 'Нет изображений' : 'В этом чате нет изображений'}
+          {isAll ? 'Нет изображений' : 'В этом чате нет изображений'}
         </div>
       ) : (
         <div className={s.grid}>
           {media.map((item, i) => {
             const src = api.resolveImageUrl(item.url);
+            const key = `${item.message_id}-${i}`;
+            const isConfirming = confirmDeleteKey === key;
+            const isDeleting = deletingKey === key;
             return (
-              <div
-                key={`${item.message_id}-${i}`}
-                className={s.thumbWrapper}
-              >
+              <div key={key} className={s.thumbWrapper}>
                 <button
                   className={s.thumb}
                   onClick={() => onImageClick?.(src)}
@@ -113,25 +117,63 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
                   <img src={src} alt="" loading="lazy" />
                   {item.type === 'generated' && <span className={s.badge}>AI</span>}
                 </button>
-                {/* В режиме "все чаты" — badge с названием чата и кнопка перехода */}
-                {mode === 'all' && item.chat_title && (
-                  <div className={s.chatBadge}>
-                    <span className={s.chatBadgeText} title={item.chat_title}>
-                      {item.chat_title}
-                    </span>
-                    {onChatSelect && item.chat_id && (
+
+                {isConfirming ? (
+                  <div className={s.confirmDelete}>
+                    <button
+                      className={`${s.confirmBtn} ${s.yes}`}
+                      onClick={() => handleDelete(item, key)}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? '...' : 'Да'}
+                    </button>
+                    <button
+                      className={`${s.confirmBtn} ${s.no}`}
+                      onClick={() => setConfirmDeleteKey(null)}
+                      disabled={isDeleting}
+                    >
+                      Нет
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* В режиме "все чаты" — badge с названием чата и кнопка перехода */}
+                    {isAll && item.chat_title && (
+                      <div className={s.chatBadge}>
+                        <span className={s.chatBadgeText} title={item.chat_title}>
+                          {item.chat_title}
+                        </span>
+                        {onChatSelect && item.chat_id && (
+                          <button
+                            className={s.chatJump}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onChatSelect(item.chat_id!);
+                            }}
+                            title={`Перейти к чату: ${item.chat_title}`}
+                          >
+                            ↗
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {/* Кнопка удаления */}
+                    {!isAll && (
                       <button
-                        className={s.chatJump}
+                        className={s.deleteBtn}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onChatSelect(item.chat_id!);
+                          setConfirmDeleteKey(key);
                         }}
-                        title={`Перейти к чату: ${item.chat_title}`}
+                        title="Удалить"
                       >
-                        ↗
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
                       </button>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
             );

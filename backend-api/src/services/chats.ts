@@ -294,6 +294,8 @@ export const renameUserChat = (userId: number, chatId: number, title: string): b
 export const deleteUserChat = (userId: number, chatId: number): boolean => {
   const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
   if (!exists) return false;
+  // Удаляем файлы картинок и вложений перед удалением строк
+  cleanupMessageFiles(userId, chatId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
   db.prepare('DELETE FROM user_chats WHERE id = ? AND user_id = ?').run(chatId, userId);
   // If deleted chat was active, reset to another chat
@@ -306,10 +308,51 @@ export const deleteUserChat = (userId: number, chatId: number): boolean => {
 };
 
 export const deleteUserMessage = (userId: number, chatId: number, messageId: number): boolean => {
+  // Удаляем файлы картинок и вложений перед удалением строки
+  cleanupMessageFiles(userId, chatId, messageId);
   const result = db.prepare(
     'DELETE FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
   ).run(messageId, userId, chatId);
   return result.changes > 0;
+};
+
+/**
+ * Удаляет файлы (картинки, вложения) с диска для одного сообщения или всех сообщений чата.
+ * Best-effort: ошибки удаления файлов не блокируют удаление из БД.
+ */
+const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number): void => {
+  try {
+    const query = messageId
+      ? 'SELECT images, attachments FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
+      : 'SELECT images, attachments FROM chat_messages WHERE user_id = ? AND chat_id = ?';
+    const params = messageId ? [messageId, userId, chatId] : [userId, chatId];
+    const rows = db.prepare(query).all(...params) as Array<{ images: string | null; attachments: string | null }>;
+
+    const { deleteImageFile, filenameFromUrl } = require('./image-storage.js');
+    const { deleteAttachmentFile } = require('./attachment-storage.js');
+
+    for (const row of rows) {
+      // Картинки
+      if (row.images) {
+        try {
+          const imgs = JSON.parse(row.images) as MessageImage[];
+          for (const img of imgs) {
+            const fn = filenameFromUrl(img.url);
+            if (fn) deleteImageFile(fn);
+          }
+        } catch { /* skip */ }
+      }
+      // Вложения
+      if (row.attachments) {
+        try {
+          const atts = JSON.parse(row.attachments) as MessageAttachment[];
+          for (const att of atts) {
+            if (att.filename) deleteAttachmentFile(att.filename);
+          }
+        } catch { /* skip */ }
+      }
+    }
+  } catch { /* best-effort */ }
 };
 
 export const editUserMessage = (
@@ -432,6 +475,50 @@ export const deleteMessageAttachment = (
   }
 
   return { ok: true, token_count: newTokenCount };
+};
+
+/**
+ * Удаляет одно изображение из messages.images (JSON-колонка).
+ * Удаляет файл с диска + убирает URL из массива.
+ */
+export const deleteMessageImage = (
+  userId: number,
+  messageId: number,
+  imageUrl: string
+): { ok: boolean } => {
+  const row = db.prepare(
+    'SELECT images FROM chat_messages WHERE id = ? AND user_id = ?'
+  ).get(messageId, userId) as { images: string | null } | undefined;
+
+  if (!row || !row.images) return { ok: false };
+
+  let imgs: MessageImage[];
+  try {
+    imgs = JSON.parse(row.images);
+  } catch {
+    return { ok: false };
+  }
+
+  const target = imgs.find(a => a.url === imageUrl);
+  if (!target) return { ok: false };
+
+  // 1. Удаляем файл с диска
+  try {
+    const { deleteImageFile, filenameFromUrl } = require('./image-storage.js');
+    const filename = filenameFromUrl(target.url);
+    if (filename) deleteImageFile(filename);
+  } catch { /* best-effort */ }
+
+  // 2. Убираем из массива
+  const remaining = imgs.filter(a => a.url !== imageUrl);
+  const newJson = remaining.length > 0 ? JSON.stringify(remaining) : null;
+
+  // 3. UPDATE
+  db.prepare(
+    'UPDATE chat_messages SET images = ? WHERE id = ? AND user_id = ?'
+  ).run(newJson, messageId, userId);
+
+  return { ok: true };
 };
 
 export const getChatMessages = (userId: number, chatId: number, limit = 20, offset = 0): MessageDto[] => {

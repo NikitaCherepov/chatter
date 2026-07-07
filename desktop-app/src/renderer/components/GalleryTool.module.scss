@@ -160,3 +160,60 @@
     cursor: default;
   }
 }
+
+.deleteBtn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 1;
+}
+
+.thumbWrapper:hover .deleteBtn {
+  opacity: 1;
+}
+
+.confirmDelete {
+  display: flex;
+  gap: 4px;
+  padding: 3px 4px;
+  margin-top: 2px;
+}
+
+.confirmBtn {
+  flex: 1;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: opacity 0.12s ease;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.yes {
+  background: #ef4444;
+  color: #fff;
+}
+
+.no {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
