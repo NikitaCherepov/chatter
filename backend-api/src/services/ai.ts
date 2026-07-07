@@ -3405,7 +3405,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       registerPendingPcConfirmation(confirmationId, {
         userId: user.id,
         kind: 'webcam_capture',
-        label: `📸 Фото с веб-камеры: ${purpose}`,
+        label: `Фото с веб-камеры: ${purpose}`,
         payload: { ipcType: 'capture_webcam', ipcPayload: { camera_name: cameraName, purpose } },
         resolve,
         reject,

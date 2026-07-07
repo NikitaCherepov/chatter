@@ -6398,7 +6398,7 @@ const processUserTextThroughAi = async (
 
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('📸 Разрешить фото', `pcconfirm:allow:${confirmationId}`),
+                            Markup.button.callback('Разрешить фото', `pcconfirm:allow:${confirmationId}`),
                             Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
                         ],
                         [
@@ -6412,12 +6412,12 @@ const processUserTextThroughAi = async (
                     });
                     try {
                         await ctx.reply(
-                            `📸 **Захват с веб-камеры**\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`,
+                            `**Захват с веб-камеры**\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`,
                             { parse_mode: 'Markdown', ...keyboard }
                         );
                     } catch {
                         try {
-                            await ctx.reply(`📸 Захват с веб-камеры\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`, keyboard);
+                            await ctx.reply(`Захват с веб-камеры\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`, keyboard);
                         } catch {
                             // ignore
                         }
