@@ -89,6 +89,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   visualClick: (data: { display_id?: string; x: number; y: number; button?: string }) =>
     ipcRenderer.invoke('visual-click', data),
 
+  // Visual Control: capture webcam photo
+  captureWebcam: (payload?: { camera_name?: string }) =>
+    ipcRenderer.invoke('capture-webcam', payload),
+
+
   readSshKeys: () =>
     ipcRenderer.invoke('read-ssh-keys'),
 

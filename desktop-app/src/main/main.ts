@@ -889,6 +889,46 @@ function createWindow() {
     return { displays: result };
   });
 
+  // ── Visual Control: capture webcam photo ──
+
+  ipcMain.handle('capture-webcam', async (_event, payload?: { camera_name?: string }) => {
+    const cameraName = payload?.camera_name || 'Microsoft Modern Webcam';
+    const outPath = path.join(app.getPath('temp'), `chatter_webcam_${Date.now()}.jpg`);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        execFile('ffmpeg', [
+          '-y', '-f', 'dshow', '-video_size', '1280x720',
+          '-i', `video=${cameraName}`,
+          '-frames:v', '1',
+          outPath,
+        ], { timeout: 15000 }, (err) => {
+          if (err) reject(new Error(err.message || 'ffmpeg_failed'));
+          else resolve();
+        });
+      });
+
+      const buffer = await fs.promises.readFile(outPath);
+      // Clean up temp file
+      await fs.promises.unlink(outPath).catch(() => {});
+
+      return {
+        screenshot_base64: buffer.toString('base64'),
+        camera: cameraName,
+      };
+    } catch (err: any) {
+      return {
+        screenshot_base64: null,
+        error: `Не удалось сделать фото: ${err.message}. Камера "${cameraName}" может быть занята или отключена.`,
+        camera: cameraName,
+      };
+    }
+  });
+
+
+
+
+
   // ── Visual Control: execute mouse click ──
 
   ipcMain.handle('visual-click', async (_event, data: {

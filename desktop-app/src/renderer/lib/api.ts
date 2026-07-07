@@ -746,6 +746,10 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
     } else if (ipc_type === 'capture_screen') {
       console.log('[ipc] renderer invoke captureScreen', { requestId: request_id });
       result = await (window as any).electronAPI?.captureScreen();
+    } else if (ipc_type === 'capture_webcam') {
+      console.log('[ipc] renderer invoke captureWebcam', { requestId: request_id, payload });
+      result = await (window as any).electronAPI?.captureWebcam(payload);
+
     } else if (ipc_type === 'visual_click') {
       console.log('[ipc] renderer invoke visualClick', {
         requestId: request_id,

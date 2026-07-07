@@ -2050,6 +2050,40 @@ const buildEditFileLinesTool = () => {
   };
 };
 
+/** Build capture_webcam tool — takes a photo with the user's webcam */
+const buildCaptureWebcamTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'capture_webcam',
+      description: `Делает фото с веб-камеры пользователя и отправляет его vision-модели для анализа.
+Используй когда:
+- Пользователь просит сфотографировать комнату / проверить камеру
+- Нужно увидеть, что происходит в помещении
+- Нужно проверить, кто дома
+
+В параметре purpose укажи чёткую задачу для vision-модели.
+В ответ получишь текстовое описание того, что видит камера.
+Если камера не найдена — верни ошибку.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          purpose: {
+            type: 'string',
+            description: 'Задача для vision-модели. Например: "Опиши что видит камера" или "Есть ли кто-то в комнате" или "Что стоит на столе".'
+          },
+          camera_name: {
+            type: 'string',
+            description: 'Имя камеры в системе (опционально). Если не указано — используется камера по умолчанию.'
+          }
+        },
+        required: ['purpose']
+      }
+    }
+  };
+};
+
+
 /** Build capture_screen tool — captures screenshot, sends to vision model with purpose */
 const buildCaptureScreenTool = () => {
   return {
@@ -3347,6 +3381,85 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'error', message: `Ошибка скриншота: ${err.message}` });
     }
   }
+
+  // ── Visual Control: capture webcam photo ────────────────────────────────────
+
+  if (toolName === 'capture_webcam') {
+    const purpose: string = typeof parsed.purpose === 'string' ? parsed.purpose.trim() : 'Опиши что видит камера';
+    const cameraName: string | undefined = typeof parsed.camera_name === 'string' ? parsed.camera_name.trim() || undefined : undefined;
+
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Захват с веб-камеры невозможен — попроси пользователя запустить приложение.' });
+    }
+
+    try {
+      // 1. Capture from webcam via desktop IPC
+      const result = await sendIpcToDesktop(user.id, 'capture_webcam', { camera_name: cameraName }, 30000, signal);
+
+      if (!result?.screenshot_base64) {
+        return JSON.stringify({ status: 'error', message: result?.error || 'Не удалось сделать фото с веб-камеры. Камера может быть занята или отключена.' });
+      }
+
+      // 2. Compress via sharp → JPEG
+      const { default: sharpLib } = await import('sharp');
+      const { saveGeneratedImage } = await import('./image-storage.js');
+
+      const buf = Buffer.from(result.screenshot_base64, 'base64');
+      const compressed = await sharpLib(buf, { failOn: 'none' })
+        .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 70 })
+        .toBuffer();
+      const compressedB64 = compressed.toString('base64');
+      const dataUrl = `data:image/jpeg;base64,${compressedB64}`;
+
+      // 3. Save to disk → show in chat
+      if (Array.isArray(generatedImages)) {
+        try {
+          const saved = await saveGeneratedImage(compressedB64);
+          generatedImages.push({
+            image_base64: compressedB64,
+            image_url: saved.url,
+            prompt_used: `Фото с веб-камеры: ${result.camera || 'default'}`,
+          });
+        } catch (err) {
+          console.error('[capture_webcam] failed to save webcam photo:', err);
+        }
+      }
+
+      // 4. Send to vision model
+      const visionMessages = [
+        {
+          role: 'system',
+          content: `Ты — vision-аналитик. Проанализируй фото с веб-камеры пользователя и выполни задачу. Опиши подробно что видишь на изображении: объекты, людей, освещение, обстановку.`
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: purpose },
+            { type: 'image_url', image_url: { url: dataUrl } }
+          ]
+        }
+      ];
+
+      const visionResp = await runCompletion('vision-pro', {
+        messages: visionMessages,
+        max_tokens: 1000,
+      });
+
+      const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
+
+      return JSON.stringify({
+        status: 'success',
+        camera: result.camera || 'default',
+        vision_result: visionText,
+        message: `Фото с веб-камеры сделано и проанализировано.`,
+      });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Ошибка захвата с веб-камеры: ${err.message}` });
+    }
+  }
+
+
 
   // ── Visual Control: execute click (with HitL confirmation) ──────────────────
 
@@ -4884,6 +4997,9 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
   if (toolName === 'execute_visual_click') return 'Жду подтверждения клика...';
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
+  if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
+  if (toolName === 'capture_webcam') return 'Фотографирую веб-камерой...';
+
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
   if (toolName === 'install_ssh_public_key') return 'Устанавливаю SSH-ключ...';
@@ -5285,7 +5401,8 @@ export const sendMessageThroughAi = async (
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
     buildExecutePcCommandTool(), buildGetFileInfoTool(),
     buildReadFileTool(), buildSearchFileKeywordsTool(), buildWriteFileTool(), buildEditFileLinesTool(),
-    buildCaptureScreenTool(), buildExecuteVisualClickTool(),
+    buildCaptureScreenTool(), buildExecuteVisualClickTool(), buildCaptureWebcamTool(),
+
   ];
   // Tools that require a desktop client UI — only when isDesktop
   const desktopOnlyTools = options?.isDesktop ? [
