@@ -995,7 +995,14 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
     }
 
     if (!hasToolCalls && iter.content && iter.content.length > 0) {
-      messages.push({ role: 'assistant', content: iter.content });
+      // Для финальной итерации берём content из колонки БД — он мог быть
+      // отредактирован пользователем через editUserMessage, который обновляет
+      // только chat_messages.content, но не tool_calls_json.
+      const isLast = iter === iterations[iterations.length - 1];
+      const text = isLast ? content : iter.content;
+      if (text && text.length > 0) {
+        messages.push({ role: 'assistant', content: text });
+      }
     }
   }
 
