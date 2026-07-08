@@ -81,7 +81,7 @@ type MessageItemProps = {
   showTokens: boolean;
   resolveImageUrl: (url: string) => string;
   onSetMessages: React.Dispatch<React.SetStateAction<api.Message[]>>;
-  onSetViewerImageSrc: (src: string) => void;
+  onSetViewerImageSrc: (src: string, messageId?: number, url?: string) => void;
   onDownloadImage: (src: string) => void;
   onToggleReasoning: (messageId: number) => void;
   onToggleToolCalls: (messageId: number) => void;
@@ -96,6 +96,7 @@ type MessageItemProps = {
   onSaveEdit: (messageId: number) => void;
   onCancelEdit: () => void;
   onDeleteAttachment: (messageId: number, filename: string) => void;
+  onDeleteImage: (messageId: number, url: string) => void;
 };
 
 const MessageItem = React.memo(function MessageItem({
@@ -129,6 +130,7 @@ const MessageItem = React.memo(function MessageItem({
   onSaveEdit,
   onCancelEdit,
   onDeleteAttachment,
+  onDeleteImage,
 }: MessageItemProps) {
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
@@ -286,7 +288,13 @@ const MessageItem = React.memo(function MessageItem({
                 const src = resolveImageUrl(img.url);
                 return (
                   <div key={i} className={s.messageImageWrap}>
-                    <img className={s.messageImage} src={src} alt={img.type === 'generated' ? 'Generated' : 'Photo'} loading="lazy" onClick={() => onSetViewerImageSrc(src)} />
+                    <img className={s.messageImage} src={src} alt={img.type === 'generated' ? 'Generated' : 'Photo'} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
+                    <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title="Удалить">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
                     <button className={s.messageImageDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(src); }} title="Скачать">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -669,6 +677,10 @@ export function ChatPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
+  const [viewerImageMsgId, setViewerImageMsgId] = useState<number | null>(null);
+  const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
+  const [imageDeleteTarget, setImageDeleteTarget] = useState<{ messageId: number; url: string } | null>(null);
+  const [deletingImage, setDeletingImage] = useState(false);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
@@ -2353,6 +2365,28 @@ export function ChatPage() {
     }
   }, []);
 
+  const handleDeleteImage = useCallback(async (messageId: number, url: string) => {
+    setDeletingImage(true);
+    try {
+      await api.deleteMessageImage(messageId, url);
+      // Убираем картинку из messages
+      setMessages(prev => prev.map(m => {
+        if (m.id !== messageId || !m.images) return m;
+        const filtered = m.images.filter(img => img.url !== url);
+        return { ...m, images: filtered.length > 0 ? filtered : undefined };
+      }));
+      setImageDeleteTarget(null);
+      setViewerImageSrc(null);
+      setViewerImageMsgId(null);
+      setViewerImageUrl(null);
+    } catch (err) {
+      console.error('Failed to delete image:', err);
+      toast.error('Не удалось удалить изображение');
+    } finally {
+      setDeletingImage(false);
+    }
+  }, []);
+
   const handleToggleReasoning = useCallback((messageId: number) => {
     setOpenReasoningId((current) => current === messageId ? null : messageId);
   }, []);
@@ -2748,7 +2782,11 @@ export function ChatPage() {
                   showTokens={showTokens}
                   resolveImageUrl={resolveImageUrl}
                   onSetMessages={setMessages}
-                  onSetViewerImageSrc={setViewerImageSrc}
+                  onSetViewerImageSrc={(src, msgId, url) => {
+                    setViewerImageSrc(src);
+                    setViewerImageMsgId(msgId ?? null);
+                    setViewerImageUrl(url ?? null);
+                  }}
                   onDownloadImage={handleDownloadImage}
                   onToggleReasoning={handleToggleReasoning}
                   onToggleToolCalls={handleToggleToolCalls}
@@ -2763,6 +2801,7 @@ export function ChatPage() {
                   onSaveEdit={handleSaveEdit}
                   onCancelEdit={handleCancelEdit}
                   onDeleteAttachment={handleDeleteAttachment}
+                  onDeleteImage={(messageId, url) => setImageDeleteTarget({ messageId, url })}
                 />
               ))}
               {false && messages.map((msg) => (
@@ -2923,7 +2962,11 @@ export function ChatPage() {
                                   src={src}
                                   alt={img.type === 'generated' ? 'Generated' : 'Photo'}
                                   loading="lazy"
-                                  onClick={() => setViewerImageSrc(src)}
+                                  onClick={() => {
+                                    setViewerImageSrc(src);
+                                    setViewerImageMsgId(msg.id);
+                                    setViewerImageUrl(img.url);
+                                  }}
                                 />
                                 <button
                                   className={s.messageImageDownload}
@@ -2934,6 +2977,16 @@ export function ChatPage() {
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                     <polyline points="7 10 12 15 17 10" />
                                     <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                </button>
+                                <button
+                                  className={s.messageImageDelete}
+                                  onClick={(e) => { e.stopPropagation(); setImageDeleteTarget({ messageId: msg.id, url: img.url }); }}
+                                  title="Удалить"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                                   </svg>
                                 </button>
                               </div>
@@ -4061,7 +4114,7 @@ export function ChatPage() {
       </main>
 
       {/* RIGHT TOOLS PANEL */}
-      <ToolsPanel plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId} onImageClick={(src) => setViewerImageSrc(src)} onChatSelect={selectChat} />
+      <ToolsPanel plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId} onImageClick={(src, msgId, url) => { setViewerImageSrc(src); setViewerImageMsgId(msgId ?? null); setViewerImageUrl(url ?? null); }} onChatSelect={selectChat} />
 
       <AnimatePresence>
         {showSettings && (
@@ -4100,11 +4153,22 @@ export function ChatPage() {
         )}
 
         <ConfirmDialog
+          key="confirm-delete-chat"
           open={deletingChatId !== null}
           title="Удалить чат?"
           text="Это действие нельзя отменить. Все сообщения будут удалены безвозвратно."
           onCancel={() => setDeletingChatId(null)}
           onConfirm={handleConfirmDelete}
+        />
+
+        <ConfirmDialog
+          key="confirm-delete-image"
+          open={imageDeleteTarget !== null}
+          title="Удалить изображение?"
+          text="Файл будет удалён безвозвратно."
+          onCancel={() => setImageDeleteTarget(null)}
+          onConfirm={() => imageDeleteTarget && handleDeleteImage(imageDeleteTarget.messageId, imageDeleteTarget.url)}
+          confirmLabel={deletingImage ? '...' : 'Удалить'}
         />
 
         {viewerImageSrc && (
@@ -4132,6 +4196,18 @@ export function ChatPage() {
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </button>
+            {viewerImageMsgId !== null && viewerImageUrl && (
+              <button
+                className={s.imageViewerDelete}
+                onClick={(e) => { e.stopPropagation(); setImageDeleteTarget({ messageId: viewerImageMsgId, url: viewerImageUrl }); }}
+                title="Удалить"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </button>
+            )}
             <button
               className={s.imageViewerClose}
               onClick={() => setViewerImageSrc(null)}

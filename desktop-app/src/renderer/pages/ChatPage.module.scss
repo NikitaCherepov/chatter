@@ -1305,7 +1305,8 @@
   border-radius: 8px;
   overflow: hidden;
 
-  &:hover .messageImageDownload {
+  &:hover .messageImageDownload,
+  &:hover .messageImageDelete {
     opacity: 1;
   }
 }
@@ -1348,6 +1349,30 @@
   }
 }
 
+.messageImageDelete {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background-color: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.1s;
+  padding: 0;
+  z-index: 2;
+
+  &:hover {
+    background-color: rgba(220, 38, 38, 0.85);
+  }
+}
+
 // ====== IMAGE VIEWER ======
 
 .imageViewerOverlay {
@@ -1370,6 +1395,7 @@
 }
 
 .imageViewerDownload,
+.imageViewerDelete,
 .imageViewerClose {
   position: fixed;
   z-index: 201;
@@ -1392,6 +1418,11 @@
 }
 
 .imageViewerDownload {
+  top: 20px;
+  right: 116px;
+}
+
+.imageViewerDelete {
   top: 20px;
   right: 68px;
 }

@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import * as api from '../lib/api';
+import { ConfirmDialog } from './ConfirmDialog';
 import s from './GalleryTool.module.scss';
 
 type Props = {
   chatId: number | null;
-  onImageClick?: (src: string) => void;
+  onImageClick?: (src: string, messageId?: number, url?: string) => void;
   onChatSelect?: (chatId: number) => void;
 };
 
@@ -18,8 +20,8 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
   const [loading, setLoading] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
-  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<api.ChatMediaItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadMedia = useCallback(async (resetOffset: number = 0) => {
     setLoading(true);
@@ -46,14 +48,12 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
     }
   }, [mode, chatId]);
 
-  // В режиме "all" — грузим при смене mode на "all", игнорируем смену chatId
   useEffect(() => {
     if (mode !== 'all') return;
     loadMedia(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // В режиме "current" — грузим при смене chatId
   useEffect(() => {
     if (mode !== 'current') return;
     if (chatId) {
@@ -71,16 +71,17 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
     }
   };
 
-  const handleDelete = async (item: api.ChatMediaItem, key: string) => {
-    setDeletingKey(key);
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.deleteMessageImage(item.message_id, item.url);
-      setMedia(prev => prev.filter(m => !(m.message_id === item.message_id && m.url === item.url)));
-      setConfirmDeleteKey(null);
+      await api.deleteMessageImage(deleteTarget.message_id, deleteTarget.url);
+      setMedia(prev => prev.filter(m => !(m.message_id === deleteTarget.message_id && m.url === deleteTarget.url)));
+      setDeleteTarget(null);
     } catch (err) {
       console.error('[gallery] Failed to delete image:', err);
     } finally {
-      setDeletingKey(null);
+      setDeleting(false);
     }
   };
 
@@ -105,76 +106,52 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
           {media.map((item, i) => {
             const src = api.resolveImageUrl(item.url);
             const key = `${item.message_id}-${i}`;
-            const isConfirming = confirmDeleteKey === key;
-            const isDeleting = deletingKey === key;
             return (
               <div key={key} className={s.thumbWrapper}>
                 <button
                   className={s.thumb}
-                  onClick={() => onImageClick?.(src)}
+                  onClick={() => onImageClick?.(src, item.message_id, item.url)}
                   title={item.type === 'generated' ? 'Сгенерировано' : 'Фото пользователя'}
                 >
                   <img src={src} alt="" loading="lazy" />
                   {item.type === 'generated' && <span className={s.badge}>AI</span>}
                 </button>
 
-                {isConfirming ? (
-                  <div className={s.confirmDelete}>
-                    <button
-                      className={`${s.confirmBtn} ${s.yes}`}
-                      onClick={() => handleDelete(item, key)}
-                      disabled={isDeleting}
-                    >
-                      {isDeleting ? '...' : 'Да'}
-                    </button>
-                    <button
-                      className={`${s.confirmBtn} ${s.no}`}
-                      onClick={() => setConfirmDeleteKey(null)}
-                      disabled={isDeleting}
-                    >
-                      Нет
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    {/* В режиме "все чаты" — badge с названием чата и кнопка перехода */}
-                    {isAll && item.chat_title && (
-                      <div className={s.chatBadge}>
-                        <span className={s.chatBadgeText} title={item.chat_title}>
-                          {item.chat_title}
-                        </span>
-                        {onChatSelect && item.chat_id && (
-                          <button
-                            className={s.chatJump}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onChatSelect(item.chat_id!);
-                            }}
-                            title={`Перейти к чату: ${item.chat_title}`}
-                          >
-                            ↗
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {/* Кнопка удаления */}
-                    {!isAll && (
+                {/* В режиме "все чаты" — badge с названием чата и кнопка перехода */}
+                {isAll && item.chat_title && (
+                  <div className={s.chatBadge}>
+                    <span className={s.chatBadgeText} title={item.chat_title}>
+                      {item.chat_title}
+                    </span>
+                    {onChatSelect && item.chat_id && (
                       <button
-                        className={s.deleteBtn}
+                        className={s.chatJump}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setConfirmDeleteKey(key);
+                          onChatSelect(item.chat_id!);
                         }}
-                        title="Удалить"
+                        title={`Перейти к чату: ${item.chat_title}`}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
+                        ↗
                       </button>
                     )}
-                  </>
+                  </div>
                 )}
+
+                {/* Кнопка удаления */}
+                <button
+                  className={s.deleteBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(item);
+                  }}
+                  title="Удалить"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
               </div>
             );
           })}
@@ -185,6 +162,18 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
           {loading ? '...' : 'Загрузить ещё'}
         </button>
       )}
+
+      <AnimatePresence>
+        <ConfirmDialog
+          key="confirm-delete-gallery-image"
+          open={deleteTarget !== null}
+          title="Удалить изображение?"
+          text="Файл будет удалён безвозвратно."
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          confirmLabel={deleting ? '...' : 'Удалить'}
+        />
+      </AnimatePresence>
     </div>
   );
 }

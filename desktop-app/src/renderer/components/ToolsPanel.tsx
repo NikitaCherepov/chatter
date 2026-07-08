@@ -115,7 +115,7 @@ type Props = {
   plan: string;
   isAdmin: number;
   activeChatId?: number | null;
-  onImageClick?: (src: string) => void;
+  onImageClick?: (src: string, messageId?: number, url?: string) => void;
   onChatSelect?: (chatId: number) => void;
 };
 

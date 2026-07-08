@@ -184,36 +184,3 @@
 .thumbWrapper:hover .deleteBtn {
   opacity: 1;
 }
-
-.confirmDelete {
-  display: flex;
-  gap: 4px;
-  padding: 3px 4px;
-  margin-top: 2px;
-}
-
-.confirmBtn {
-  flex: 1;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 6px;
-  font-size: 11px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: opacity 0.12s ease;
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-}
-
-.yes {
-  background: #ef4444;
-  color: #fff;
-}
-
-.no {
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
-}

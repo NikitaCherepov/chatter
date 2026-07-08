@@ -11,20 +11,19 @@ type ConfirmDialogProps = {
 };
 
 export function ConfirmDialog({ open, title, text, confirmLabel = 'Удалить', onCancel, onConfirm }: ConfirmDialogProps) {
-  if (!open) return null;
-
   return (
     <motion.div
       key="confirm-dialog"
       className={s.overlay}
       onClick={onCancel}
+      style={{ pointerEvents: open ? 'auto' : 'none' }}
       variants={{
         hidden: { opacity: 0 },
         visible: { opacity: 1 },
         exit: { opacity: 0 },
       }}
       initial="hidden"
-      animate="visible"
+      animate={open ? 'visible' : 'hidden'}
       exit="exit"
     >
       <motion.div
@@ -36,7 +35,7 @@ export function ConfirmDialog({ open, title, text, confirmLabel = 'Удалит�
           exit: { opacity: 0, y: 16, transition: { duration: 0.15 } },
         }}
         initial="hidden"
-        animate="visible"
+        animate={open ? 'visible' : 'hidden'}
         exit="exit"
       >
         <div className={s.confirmTitle}>{title}</div>
