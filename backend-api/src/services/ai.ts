@@ -6215,7 +6215,7 @@ iterations.push(currentIteration);
       : null;
     const userMessageImages = options?.userImages?.length ? options.userImages : null;
     const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
-    userMessageId = appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
+    userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
   }
   assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))
@@ -6234,7 +6234,7 @@ iterations.push(currentIteration);
   const subagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
   const assistantMessageId = options?.skipHistory
     ? 0
-    : appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent, tcJson, null, subagentsJson);
+    : await appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent, tcJson, null, subagentsJson);
 
   const safeTokens = Math.max(0, Math.floor(totalTokens));
   const costRub = toRubFromTokens(safeTokens);
@@ -6319,7 +6319,7 @@ iterations.push(currentIteration);
       let abortedMessageId = 0;
       if (!options?.skipHistory) {
         try {
-          abortedMessageId = appendChatMessage(
+          abortedMessageId = await appendChatMessage(
             userId, chatId, 'assistant',
             abortedDbText || '_Генерация остановлена_',
             assistantTelegramChatId, null, null,

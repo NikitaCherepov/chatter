@@ -648,7 +648,41 @@ export const injectAttachments = (
   return blocks.join('\n\n');
 };
 
-export const appendChatMessage = (
+/**
+ * Оценка токенов изображения по тайловому алгоритму (де-факто стандарт OpenAI).
+ * Маленькие скриншоты ~250 токенов, большие ~1100.
+ */
+function estimateImageTokens(width: number, height: number): number {
+  const scale = Math.min(2048 / Math.max(width, height), 768 / Math.min(width, height), 1);
+  const scaledW = width * scale;
+  const scaledH = height * scale;
+  const tilesW = Math.ceil(scaledW / 512);
+  const tilesH = Math.ceil(scaledH / 512);
+  return (tilesW * tilesH * 170) + 85;
+}
+
+/**
+ * Читает размеры изображения с диска через sharp.metadata() и считает токены.
+ * Fallback: 1000 токенов если файл не читается.
+ */
+async function estimateImageTokensFromFile(url: string): Promise<number> {
+  try {
+    const { resolveImageFile, filenameFromUrl } = require('./image-storage.js');
+    const filename = filenameFromUrl(url);
+    if (!filename) return 1000;
+    const filepath = resolveImageFile(filename);
+    if (!filepath) return 1000;
+    const sharp = (await import('sharp')).default;
+    const metadata = await sharp(filepath).metadata();
+    const width = metadata.width || 1920;
+    const height = metadata.height || 1080;
+    return estimateImageTokens(width, height);
+  } catch {
+    return 1000;
+  }
+}
+
+export const appendChatMessage = async (
   userId: number,
   chatId: number,
   role: ChatRole,
@@ -674,13 +708,16 @@ export const appendChatMessage = (
   let reasoningTokens = 0;
 
   if (role === 'user') {
-    // Для user-сообщений считаем текст + инъекцию attachments + маркеры images.
+    // Для user-сообщений считаем текст + инъекцию attachments + images.
     const injected = attachments && attachments.length > 0 ? injectAttachments(attachments) : '';
-    const imageMarker = images && images.length > 0
-      ? images.map((img, i) => `[Images attached ${i + 1}: ${img.url}]`).join('\n')
-      : '';
-    const fullContent = content + (injected ? '\n\n' + injected : '') + (imageMarker ? '\n' + imageMarker : '');
+    const fullContent = content + (injected ? '\n\n' + injected : '');
     tokenCount = countMessageTokens('user', fullContent);
+
+    if (images && images.length > 0) {
+      for (const img of images) {
+        tokenCount += await estimateImageTokensFromFile(img.url);
+      }
+    }
   } else {
     // assistant: считаем по развёрнутому trace (как в getHistoryForAi),
     // чтобы оценка совпадала с реальным payload в API.
@@ -710,6 +747,13 @@ export const appendChatMessage = (
     // Reasoning считается отдельно — он не уходит в контекст, но нужен для UI-бейджа.
     if (reasoning) {
       reasoningTokens = countTokens(reasoning);
+    }
+
+    // Images (сгенерированные): оценка по тайлам.
+    if (images && images.length > 0) {
+      for (const img of images) {
+        tokenCount += await estimateImageTokensFromFile(img.url);
+      }
     }
 
     // Subagent trace tokens: считаем вес subagents_json (tool calls + results

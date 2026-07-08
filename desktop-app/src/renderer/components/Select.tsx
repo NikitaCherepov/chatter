@@ -112,7 +112,6 @@ export function Select({
         ) : (
           <span className={s.triggerContent}>
             {selectedLabel}
-            {selectedOption?.badge && renderBadge(selectedOption.badge)}
           </span>
         )}
         <span className={`${s.triggerArrow} ${isOpen ? s.triggerArrowOpen : ''}`}>

@@ -230,13 +230,13 @@ const tick = async () => {
       if (task.task_type === 'message') {
         successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
         chatId = ensureActiveChat(task.user_id);
-        appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
+        await appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
       } else if (task.task_type === 'smart_home') {
         const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
         const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
         successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
         chatId = ensureActiveChat(task.user_id);
-        appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
+        await appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
       } else if (task.task_type === 'ai_instruction') {
         const result = await runScheduledAiInstructionTask(task);
         successMessage = result.reply_text ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result.reply_text}` : '';
