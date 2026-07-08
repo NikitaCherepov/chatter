@@ -10,9 +10,9 @@ const UPLOADS_DIR = path.resolve(
   process.env.UPLOADS_DIR || path.resolve(__dirname, '../../uploads')
 );
 
-const THUMBNAIL_MAX_WIDTH = 512;
-const THUMBNAIL_MAX_HEIGHT = 512;
-const THUMBNAIL_QUALITY = 75;
+const THUMBNAIL_MAX_WIDTH = 1920;
+const THUMBNAIL_MAX_HEIGHT = 1080;
+const THUMBNAIL_QUALITY = 80;
 
 /** Ensure uploads directory exists */
 const ensureUploadsDir = () => {

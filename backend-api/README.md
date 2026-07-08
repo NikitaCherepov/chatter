@@ -107,10 +107,11 @@ POST /tts/generate { text, voice_id, message_id }
 
 Позволяет юзеру выбирать конкретную модель вместо авто-роутинга. Независимо от PRO/LITE провайдеров.
 
-- `MODELS_MANUAL` - список моделей для ручного выбора. Формат: `base_url|api_key|api_model_name|display_name|description|unique_id;...`
-  - Пример: `https://api.timeweb.com|sk-xxx|gpt-4o|GPT-4o (Timeweb)|Надёжная и быстрая|tw-gpt4o;https://api.deepseek.com|sk-yyy|deepseek-chat|DeepSeek|Дешёвая, но медленная|ds-chat`
+- `MODELS_MANUAL` - список моделей для ручного выбора. Формат: `base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision;...`
+  - Пример: `https://api.timeweb.com|sk-xxx|gpt-4o|GPT-4o (Timeweb)|Надёжная и быстрая|tw-gpt4o|1;https://api.deepseek.com|sk-yyy|deepseek-chat|DeepSeek|Дешёвая, но медленная|ds-chat|0`
   - `api_model_name` — реальное имя модели для API-запроса
-  - `unique_id` — уникальный идентификатор для клиента (может не совпадать с api_model_name)
+  - `unique_id` — уникальный идентификатор для клиента (может не совпадать с `api_model_name`)
+  - `supports_vision` — опционально, `1` или `0` (по умолчанию `0`). Если `1` — фото отправляется напрямую в модель. Если `0` — доступен tool `describe_image` (через vision-провайдер)
   - Если не задан — селектор моделей не отображается
 - `preferred_model` (в таблице `users`) — `NULL` = авто, `"tw-gpt4o"` = конкретная модель
 - Если выбранная модель недоступна — fallback на авто-роутинг + уведомление юзеру
@@ -214,6 +215,15 @@ Vision-запросы (анализ фото) могут использоват�
 - `TIMEWEB_LITE_VISION_BASE_URL` - по умолчанию `TIMEWEB_LITE_BASE_URL`.
 - `TIMEWEB_LITE_VISION_API_KEY` - по умолчанию `TIMEWEB_LITE_API_KEY`.
 - `TIMEWEB_LITE_VISION_MODEL` - по умолчанию `TIMEWEB_VISION_MODEL`.
+
+### Vision support для auto-роутинга
+
+Определяет, поддерживает ли основная модель нативный приём изображений. Если да — фото отправляется прямо в модель. Если нет — модель использует tool `describe_image` (через vision-провайдер).
+
+- `TIMEWEB_MODEL_SUPPORTS_VISION` - `1`/`true`, если PRO-модель поддерживает vision (по умолчанию `false`).
+- `TIMEWEB_LITE_MODEL_SUPPORTS_VISION` - `1`/`true`, если LITE-модель поддерживает vision (по умолчанию `false`).
+
+Для manual-моделей vision-флаг задаётся в `MODELS_MANUAL` (7-е поле `supports_vision`).
 
 ## Типы авторизации
 

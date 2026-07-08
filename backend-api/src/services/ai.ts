@@ -80,6 +80,7 @@ type ManualModelEntry = {
   description: string;
   client: OpenAI;
   baseURL: string;
+  supportsVision: boolean;
 };
 
 type CompletionMeta = {
@@ -211,7 +212,8 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
 const VISION_PROVIDERS = parseVisionProviders();
 
 // ── MODELS_MANUAL: ручной выбор модели пользователем ──────────────────────────
-// Формат env: base_url|api_key|api_model_name|display_name|description|unique_id;...
+// Формат env: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision;...
+// supports_vision: опционально, "1" или "0" (по умолчанию "0")
 const parseManualModels = (): ManualModelEntry[] => {
   const raw = (process.env.MODELS_MANUAL || '').trim();
   if (!raw) return [];
@@ -219,7 +221,7 @@ const parseManualModels = (): ManualModelEntry[] => {
   const models: ManualModelEntry[] = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const parts = chunks[i].split('|').map(v => `${v || ''}`.trim());
-    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId] = parts;
+    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw] = parts;
     if (!baseURL || !apiKey || !apiModelName || !uniqueId) continue;
     models.push({
       id: uniqueId,
@@ -228,6 +230,7 @@ const parseManualModels = (): ManualModelEntry[] => {
       description: description || '',
       client: new OpenAI({ apiKey, baseURL }),
       baseURL,
+      supportsVision: supportsVisionRaw === '1' || supportsVisionRaw.toLowerCase() === 'true',
     });
   }
   return models;
@@ -242,6 +245,7 @@ export const getModelsCatalog = () => MANUAL_MODELS.map(m => ({
   description: m.description,
   reasoning_levels: getReasoningLevelsForBaseURL(m.baseURL),
   supported_params: [...getProviderSupportedParams(m.baseURL)],
+  supports_vision: m.supportsVision,
 }));
 
 export const resolveManualModel = (modelId: string): ManualModelEntry | undefined =>
@@ -276,6 +280,21 @@ export const getAutoReasoningLevels = (): ReasoningLevel[] => ALL_REASONING_LEVE
 const DEBUG_AI_RAW_MAIN_RESPONSE = process.env.DEBUG_AI_RAW_MAIN_RESPONSE === '1';
 const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1';
 const LITE_ROUTER_ENABLED = process.env.TIMEWEB_LITE_ROUTER_ENABLED !== '0';
+
+// ── Vision support flags for auto-routing models ──────────────────────────
+const PRO_MODEL_SUPPORTS_VISION = process.env.TIMEWEB_MODEL_SUPPORTS_VISION === '1' || process.env.TIMEWEB_MODEL_SUPPORTS_VISION?.toLowerCase() === 'true';
+const LITE_MODEL_SUPPORTS_VISION = process.env.TIMEWEB_LITE_MODEL_SUPPORTS_VISION === '1' || process.env.TIMEWEB_LITE_MODEL_SUPPORTS_VISION?.toLowerCase() === 'true';
+
+/**
+ * Определяет, поддерживает ли текущая модель нативный vision (приём изображений).
+ * - manual-модель: проверяет флаг supportsVision из MODELS_MANUAL
+ * - auto: проверяет env-флаг PRO_MODEL_SUPPORTS_VISION / LITE_MODEL_SUPPORTS_VISION
+ */
+const modelSupportsVision = (manualModel: ManualModelEntry | undefined, plan: string): boolean => {
+  if (manualModel) return manualModel.supportsVision;
+  // auto-роутинг: PRO по умолчанию
+  return plan === 'pro' ? PRO_MODEL_SUPPORTS_VISION : LITE_MODEL_SUPPORTS_VISION;
+};
 
 const extractTokens = (response: any) => Number(response?.usage?.total_tokens || 0);
 const createAbortError = () => new DOMException('The user aborted a request.', 'AbortError');
@@ -2084,6 +2103,47 @@ const buildCaptureWebcamTool = () => {
 };
 
 
+/** Build describe_image tool — sends user-attached photo to vision model for analysis */
+const buildDescribeImageTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'describe_image',
+      description: `Отправляет изображение(я), прикреплённые к сообщению пользователя, vision-модели для анализа.
+Используй когда:
+- Пользователь прислал фото и спрашивает что на нём
+- Нужно прочитать текст с изображения (OCR)
+- Нужно описать содержимое картинки
+- Нужно ответить на конкретный вопрос по изображению
+- Нужно проанализировать фото из истории чата (по URL)
+
+В параметре question укажи чёткую задачу для vision-модели.
+В параметре image_url укажи URL изображения (из маркера [Прикреплено изображение: ...] в сообщении), чтобы проанализировать конкретное фото — в том числе из прошлых сообщений.
+Если image_url не указан — анализируются изображения из текущего сообщения.
+В ответ получишь текстовое описание/анализ от vision-модели.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: 'Задача/вопрос для vision-модели. Например: "Опиши что изображено" или "Какой текст на картинке?" или "Сколько объектов на фото?".'
+          },
+          image_url: {
+            type: 'string',
+            description: 'URL конкретного изображения (из маркера [Прикреплено изображение N: URL]). Используй для анализа фото из истории чата.'
+          },
+          image_index: {
+            type: 'number',
+            description: 'Индекс изображения (с 0) из текущего сообщения, если их несколько. Игнорируется если указан image_url.'
+          }
+        },
+        required: ['question']
+      }
+    }
+  };
+};
+
+
 /** Build capture_screen tool — captures screenshot, sends to vision model with purpose */
 const buildCaptureScreenTool = () => {
   return {
@@ -2712,7 +2772,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -3527,6 +3587,83 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   }
 
 
+  // ── Describe user-attached image(s) via vision model ──────────────────────
+
+  if (toolName === 'describe_image') {
+    const question: string = typeof parsed.question === 'string' ? parsed.question.trim() : '';
+    const imageIndex: number | undefined = typeof parsed.image_index === 'number' ? Math.floor(parsed.image_index) : undefined;
+    const imageUrl: string | undefined = typeof parsed.image_url === 'string' ? parsed.image_url.trim() || undefined : undefined;
+
+    if (!question) return JSON.stringify({ status: 'error', message: 'question обязателен — укажи что нужно узнать об изображении.' });
+
+    try {
+      // Collect images to analyze.
+      // Priority: 1) explicit image_url param 2) current request userImages 3) load from disk by URL
+      type ImgData = { base64: string; mimeType: string };
+      let imagesToAnalyze: ImgData[] = [];
+
+      if (imageUrl) {
+        // Load from disk by URL
+        const { resolveImageFile, filenameFromUrl } = await import('./image-storage.js');
+        const filename = filenameFromUrl(imageUrl);
+        if (!filename) {
+          return JSON.stringify({ status: 'error', message: `Некорректный URL изображения: ${imageUrl}` });
+        }
+        const filepath = resolveImageFile(filename);
+        if (!filepath) {
+          return JSON.stringify({ status: 'error', message: `Файл изображения не найден: ${imageUrl}` });
+        }
+        const fs = await import('node:fs');
+        const nodePath = await import('node:path');
+        const buf = fs.readFileSync(filepath);
+        const ext = nodePath.extname(filename).toLowerCase();
+        const mimeType = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/jpeg';
+        imagesToAnalyze = [{ base64: buf.toString('base64'), mimeType }];
+      } else if (userImages && userImages.length > 0) {
+        // From current request
+        imagesToAnalyze = (imageIndex !== undefined && imageIndex >= 0 && imageIndex < userImages.length)
+          ? [userImages[imageIndex]]
+          : userImages;
+      }
+
+      if (imagesToAnalyze.length === 0) {
+        return JSON.stringify({ status: 'error', message: 'Изображение недоступно. Возможно, оно было удалено или ещё не сохранено.' });
+      }
+
+      const visionMessages = [
+        {
+          role: 'system',
+          content: `You are a vision analyst. Analyze the user's image(s) and complete the requested task.
+Respond in the user's language. Be detailed and precise.`
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: question },
+            ...imagesToAnalyze.map(img => ({
+              type: 'image_url',
+              image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+            }))
+          ]
+        }
+      ];
+
+      const visionResp = await runCompletion('vision-pro', {
+        messages: visionMessages,
+        max_tokens: 2000,
+      });
+
+      const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
+
+      return JSON.stringify({
+        status: 'success',
+        images_analyzed: imagesToAnalyze.length,
+        vision_result: visionText,
+      });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Ошибка анализа изображения: ${err?.message || String(err)}` });
+    }
+  }
 
 
 
@@ -5068,6 +5205,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
   if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
   if (toolName === 'capture_webcam') return 'Фотографирую веб-камерой...';
+  if (toolName === 'describe_image') return 'Анализирую изображение...';
 
   if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
   if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
@@ -5176,6 +5314,8 @@ export const sendMessageThroughAi = async (
   let text = (inputText || '').trim();
   if (!text && !hasImages) throw new Error('empty_text');
   if (!text) text = hasImages ? (images.length === 1 ? 'Что на этой картинке?' : `Что на этих ${images.length} картинках?`) : '';
+  // Фото форсирует PRO-маршрут (минуя LITE-роутер), но не переключает модель на vision-pro/lite.
+  // Если основная модель поддерживает vision — фото пойдёт напрямую. Если нет — будет доступен tool describe_image.
   const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!') || hasImages;
   if (forceProRoute && !options?.forcePro && !hasImages) {
     text = text.replace(/^!{3,}/, '').trim();
@@ -5188,6 +5328,8 @@ export const sendMessageThroughAi = async (
   if (preferredModelId && !manualModel) {
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
+  // Проверяем, поддерживает ли текущая модель нативный vision
+  const currentModelSupportsVision = modelSupportsVision(manualModel, user.plan || 'free');
   const subagentModelId = user.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null;
   const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId) : undefined;
   if (subagentModelId && !subagentManualModel) {
@@ -5306,7 +5448,7 @@ export const sendMessageThroughAi = async (
   const contextWindow = resolveEffectiveContextWindow(user);
   const maxContextTokens = resolveMaxContextTokens(user);
   const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
-  let history = getHistoryForAi(userId, chatId, contextWindow, attachmentMaxTokens);
+  let history = getHistoryForAi(userId, chatId, contextWindow, attachmentMaxTokens, currentModelSupportsVision);
   let regenerateUserText: string | null = null;
   if (requestedRegenerateFromHistory) {
     history = [...history];
@@ -5457,11 +5599,11 @@ export const sendMessageThroughAi = async (
     try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${hasImages ? '\n\nЕсли пользователь прислал изображение(я), анализируй его/их и отвечай конкретно по запросу пользователя.' : ''}${dicePromptHint}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${dicePromptHint}`;
 
-  let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = hasImages
-    ? (user.plan === 'pro' ? 'vision-pro' : 'vision-lite')
-    : 'pro';
+  // executionMode больше не переключается на vision-pro/lite при наличии фото.
+  // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.
+  let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
   // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
   const serverOnlyTools = [
@@ -5472,7 +5614,7 @@ export const sendMessageThroughAi = async (
     buildExecutePcCommandTool(), buildGetFileInfoTool(),
     buildReadFileTool(), buildSearchFileKeywordsTool(), buildWriteFileTool(), buildEditFileLinesTool(),
     buildCaptureScreenTool(), buildExecuteVisualClickTool(), buildCaptureWebcamTool(),
-
+    buildDescribeImageTool(),
   ];
   // Tools that require a desktop client UI — only when isDesktop
   const desktopOnlyTools = options?.isDesktop ? [
@@ -5592,7 +5734,15 @@ PRO
   }
 }
 
-  let userMessageContent: any = hasImages
+  // userMessageContent: фото вставляются как image_url ТОЛЬКО если модель поддерживает vision нативно.
+  // Если не поддерживает — в текст сообщения добавляются маркеры с URL фото,
+  // чтобы модель знала о наличии изображений и могла вызвать describe_image.
+  const imageUrls = options?.userImages?.length ? options.userImages.map(i => i.url) : [];
+  const imageMarker = hasImages && !currentModelSupportsVision
+    ? imageUrls.map((url, i) => `[Прикреплено изображение ${i + 1}: ${url}]`).join('\n')
+    : '';
+
+  let userMessageContent: any = (hasImages && currentModelSupportsVision)
     ? [
         { type: 'text', text: regenerateUserText || text },
         ...images.map(img => ({
@@ -5600,7 +5750,7 @@ PRO
           image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
         }))
       ]
-    : (regenerateUserText || text);
+    : ((regenerateUserText || text) + (imageMarker ? '\n' + imageMarker : ''));
 
   // Append regeneration hint to the current request (not saved to DB).
   if (options?.regenerateHint) {
@@ -5826,7 +5976,8 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             (t: any) => t?.function?.name && t.function.name !== 'spawn_subagent' && t.function.name !== 'invoke_subagent'
           ),
         },
-        options?.autoRejectHitl
+        options?.autoRejectHitl,
+        images
       ),
       abortController.signal
     );

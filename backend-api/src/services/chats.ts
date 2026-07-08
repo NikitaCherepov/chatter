@@ -674,10 +674,13 @@ export const appendChatMessage = (
   let reasoningTokens = 0;
 
   if (role === 'user') {
-    // Для user-сообщений считаем текст + инъекцию attachments
-    // (images не уходят в контекст — только text-based [Фото]caption).
+    // Для user-сообщений считаем текст + инъекцию attachments + маркеры images.
     const injected = attachments && attachments.length > 0 ? injectAttachments(attachments) : '';
-    tokenCount = countMessageTokens('user', content + (injected ? '\n\n' + injected : ''));
+    const imageMarker = images && images.length > 0
+      ? images.map((img, i) => `[Images attached ${i + 1}: ${img.url}]`).join('\n')
+      : '';
+    const fullContent = content + (injected ? '\n\n' + injected : '') + (imageMarker ? '\n' + imageMarker : '');
+    tokenCount = countMessageTokens('user', fullContent);
   } else {
     // assistant: считаем по развёрнутому trace (как в getHistoryForAi),
     // чтобы оценка совпадала с реальным payload в API.
@@ -967,16 +970,16 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
  *
  * Reasoning в API не отправляется (односторонний вывод модели).
  */
-export const getHistoryForAi = (userId: number, chatId: number, limit?: number, attachmentMaxTokens = 0): any[] => {
+export const getHistoryForAi = (userId: number, chatId: number, limit?: number, attachmentMaxTokens = 0, supportsVision = false): any[] => {
   // LIMIT больше не используется для ограничения контекста —
   // Epoch Trimming (trimUserHistoryByChat) контролирует размер через архивацию по токенам.
   // Параметр limit оставлен для обратной совместимости, но игнорируется.
   const rows = db.prepare(`
-    SELECT role, content, tool_calls_json, attachments
+    SELECT role, content, tool_calls_json, attachments, images
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ? AND archived = 0
     ORDER BY id DESC
-  `).all(userId, chatId).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null }>;
+  `).all(userId, chatId).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null }>;
 
   const messages: any[] = [];
 
@@ -990,12 +993,111 @@ export const getHistoryForAi = (userId: number, chatId: number, limit?: number, 
       const injected = parsedAttachments && parsedAttachments.length > 0
         ? injectAttachments(parsedAttachments, attachmentMaxTokens)
         : '';
-      const finalContent = injected ? `${row.content}\n\n${injected}` : row.content;
-      messages.push({ role: row.role, content: finalContent });
+
+      // Достаём images (если есть) — user_photo и generated обрабатываем одинаково.
+      let parsedImages: MessageImage[] | null = null;
+      if (row.images) {
+        try { parsedImages = JSON.parse(row.images); } catch { parsedImages = null; }
+      }
+      const allImages = parsedImages ?? [];
+
+      let textContent = row.content;
+      if (injected) textContent += '\n\n' + injected;
+
+      if (allImages.length > 0 && supportsVision) {
+        // Vision: загружаем файлы с диска, формируем content как массив text + image_url
+        const { resolveImageFile, filenameFromUrl } = require('./image-storage.js');
+        const fs = require('node:fs');
+        const nodePath = require('node:path');
+
+        const imageBlocks: any[] = [];
+        for (const img of allImages) {
+          try {
+            const filename = filenameFromUrl(img.url);
+            if (!filename) continue;
+            const filepath = resolveImageFile(filename);
+            if (!filepath) continue;
+            const buf = fs.readFileSync(filepath);
+            const ext = nodePath.extname(filename).toLowerCase();
+            const mimeType = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : 'image/jpeg';
+            imageBlocks.push({
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${buf.toString('base64')}` }
+            });
+          } catch { /* skip unreadable */ }
+        }
+
+        if (imageBlocks.length > 0) {
+          messages.push({
+            role: row.role,
+            content: [
+              { type: 'text', text: textContent },
+              ...imageBlocks,
+            ]
+          });
+        } else {
+          // Файлы не читаются — fallback на маркер
+          const imageMarker = allImages.map((img, i) => `[Прикреплено изображение ${i + 1}: ${img.url}]`).join('\n');
+          messages.push({ role: row.role, content: textContent + '\n' + imageMarker });
+        }
+      } else if (allImages.length > 0) {
+        // Не-vision: текстовый маркер с URL
+        const imageMarker = allImages.map((img, i) => `[Прикреплено изображение ${i + 1}: ${img.url}]`).join('\n');
+        messages.push({ role: row.role, content: textContent + '\n' + imageMarker });
+      } else {
+        // Нет фото — обычный content
+        messages.push({ role: row.role, content: textContent });
+      }
       continue;
     }
     // role === 'assistant'
-    messages.push(...expandAssistantMessage(row.content, row.tool_calls_json));
+    const expanded = expandAssistantMessage(row.content, row.tool_calls_json);
+
+    // Если у assistant-сообщения есть images (generated и т.д.) — добавляем их.
+    let assistantImages: MessageImage[] | null = null;
+    if (row.images) {
+      try { assistantImages = JSON.parse(row.images); } catch { assistantImages = null; }
+    }
+    if (assistantImages && assistantImages.length > 0 && expanded.length > 0) {
+      // Находим последнее сообщение с текстовым content (финальный ответ).
+      const lastIdx = expanded.length - 1;
+      if (assistantImages.length > 0 && supportsVision) {
+        // Vision: превращаем content последнего assistant-сообщения в массив text + image_url
+        const { resolveImageFile, filenameFromUrl } = require('./image-storage.js');
+        const fs = require('node:fs');
+        const nodePath = require('node:path');
+        const imageBlocks: any[] = [];
+        for (const img of assistantImages) {
+          try {
+            const filename = filenameFromUrl(img.url);
+            if (!filename) continue;
+            const filepath = resolveImageFile(filename);
+            if (!filepath) continue;
+            const buf = fs.readFileSync(filepath);
+            const ext = nodePath.extname(filename).toLowerCase();
+            const mimeType = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : 'image/jpeg';
+            imageBlocks.push({
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${buf.toString('base64')}` }
+            });
+          } catch { /* skip */ }
+        }
+        if (imageBlocks.length > 0 && typeof expanded[lastIdx].content === 'string') {
+          expanded[lastIdx].content = [
+            { type: 'text', text: expanded[lastIdx].content },
+            ...imageBlocks,
+          ];
+        }
+      } else {
+        // Не-vision: маркер в текст
+        const imageMarker = assistantImages.map((img, i) => `[Generated image ${i + 1}: ${img.url}]`).join('\n');
+        if (typeof expanded[lastIdx].content === 'string') {
+          expanded[lastIdx].content += '\n' + imageMarker;
+        }
+      }
+    }
+
+    messages.push(...expanded);
   }
 
   return messages;
