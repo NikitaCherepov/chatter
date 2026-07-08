@@ -38,6 +38,24 @@
   color: var(--text-hint);
 }
 
+.triggerContent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
 .triggerArrow {
   position: absolute;
   right: 10px;
@@ -132,6 +150,12 @@
 
 .optionLabel {
   font-weight: 500;
+}
+
+.optionMain {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .optionHint {

@@ -251,6 +251,12 @@ export const getModelsCatalog = () => MANUAL_MODELS.map(m => ({
 export const resolveManualModel = (modelId: string): ManualModelEntry | undefined =>
   MANUAL_MODELS_MAP.get(modelId);
 
+/** Vision-флаги для auto-роутинга (PRO / LITE). */
+export const getAutoVisionSupport = () => ({
+  pro: PRO_MODEL_SUPPORTS_VISION,
+  lite: LITE_MODEL_SUPPORTS_VISION,
+});
+
 const ALL_REASONING_LEVELS: ReasoningLevel[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
 /**

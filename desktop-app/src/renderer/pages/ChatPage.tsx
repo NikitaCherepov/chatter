@@ -695,6 +695,7 @@ export function ChatPage() {
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
   const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
   const [autoReasoningLevels, setAutoReasoningLevels] = useState<api.ReasoningLevel[]>(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+  const [autoSupportsVision, setAutoSupportsVision] = useState<{ pro: boolean; lite: boolean }>({ pro: false, lite: false });
   const [regenHintMsgId, setRegenHintMsgId] = useState<number | null>(null);
   const [regenHintText, setRegenHintText] = useState('');
   const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
@@ -715,6 +716,7 @@ export function ChatPage() {
         setModelsCatalog(res.models);
         setPreferredModel(res.preferred_model);
         if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
+        if (res.auto_supports_vision) setAutoSupportsVision(res.auto_supports_vision);
       } catch {}
       try {
         const res = await api.getReasoningLevel();
@@ -2697,11 +2699,12 @@ export function ChatPage() {
                     <div className={s.modelSelectWrap}>
                       <Select
                         options={[
-                          { value: '', label: 'Авто', hint: 'Автоматический выбор' },
+                          { value: '', label: 'Авто', hint: 'Автоматический выбор', badge: (user?.plan === 'pro' ? autoSupportsVision.pro : autoSupportsVision.lite) ? { text: 'Vision', color: 'success' as const } : undefined },
                           ...modelsCatalog.map(m => ({
                             value: m.id,
                             label: m.name,
                             hint: m.description || undefined,
+                            badge: m.supports_vision ? { text: 'Vision', color: 'success' as const } : undefined,
                           })),
                         ]}
                         value={preferredModel || ''}

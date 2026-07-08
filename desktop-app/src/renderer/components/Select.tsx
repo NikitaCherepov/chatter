@@ -1,10 +1,24 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
 import s from './Select.module.scss';
+
+/** Ограниченный набор цветов бейджа — каждый берётся из CSS-переменной. */
+export type BadgeColor = 'success' | 'error' | 'info' | 'warning';
+
+/** Бейдж для option: если нет icon — рисуется текст в квадратных скобках. */
+export type SelectBadge = {
+  /** Текст бейджа (для title, а при отсутствии icon — для отображения в [скобках]) */
+  text: string;
+  /** Цвет. По умолчанию 'success' */
+  color?: BadgeColor;
+  /** Кастомная иконка. Если не передана — рисуется [text] */
+  icon?: ReactNode;
+};
 
 export type SelectOption = {
   value: string;
   label: string;
   hint?: string;
+  badge?: SelectBadge;
 };
 
 type Props = {
@@ -40,10 +54,11 @@ export function Select({
     );
   }, [search, options, searchable]);
 
-  const selectedLabel = useMemo(() => {
-    const found = options.find((o) => o.value === value);
-    return found ? found.label : placeholder;
-  }, [value, options, placeholder]);
+  const selectedOption = useMemo(() => {
+    return options.find((o) => o.value === value) ?? null;
+  }, [value, options]);
+
+  const selectedLabel = selectedOption ? selectedOption.label : placeholder;
 
   // Close on outside click
   useEffect(() => {
@@ -71,6 +86,19 @@ export function Select({
     setSearch('');
   };
 
+  const renderBadge = (badge: SelectBadge) => {
+    const colorVar = badge.color ? `var(--color-${badge.color})` : 'var(--color-success)';
+    return (
+      <span
+        className={s.badge}
+        style={{ color: colorVar }}
+        title={badge.text}
+      >
+        {badge.icon ?? `[${badge.text}]`}
+      </span>
+    );
+  };
+
   return (
     <div className={s.root} ref={rootRef}>
       <button
@@ -82,7 +110,10 @@ export function Select({
         {!value ? (
           <span className={s.triggerPlaceholder}>{placeholder}</span>
         ) : (
-          <span>{selectedLabel}</span>
+          <span className={s.triggerContent}>
+            {selectedLabel}
+            {selectedOption?.badge && renderBadge(selectedOption.badge)}
+          </span>
         )}
         <span className={`${s.triggerArrow} ${isOpen ? s.triggerArrowOpen : ''}`}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -113,7 +144,10 @@ export function Select({
                 onClick={() => handleSelect(opt.value)}
                 type="button"
               >
-                <span className={s.optionLabel}>{opt.label}</span>
+                <div className={s.optionMain}>
+                  <span className={s.optionLabel}>{opt.label}</span>
+                  {opt.badge && renderBadge(opt.badge)}
+                </div>
                 {opt.hint && <span className={s.optionHint}>{opt.hint}</span>}
               </button>
             ))}

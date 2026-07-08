@@ -1023,9 +1023,10 @@ export type ModelCatalogEntry = {
   description: string;
   reasoning_levels?: ReasoningLevel[] | null;
   supported_params?: string[];
+  supports_vision?: boolean;
 };
 
-export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; auto_reasoning_levels?: ReasoningLevel[] }> {
+export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; auto_reasoning_levels?: ReasoningLevel[]; auto_supports_vision?: { pro: boolean; lite: boolean } }> {
   return apiFetch('/api/v1/models');
 }
 
