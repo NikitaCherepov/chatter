@@ -25,6 +25,9 @@ const MAX_TOOL_LOOPS = 80;
 const MAX_TOOL_LOOPS_VOICE = 10;
 const MAX_PARALLEL_SPAWN_SUBAGENTS = 3;
 const TOOL_RESULT_PREVIEW_MAX = 250;
+const SCREENSHOT_MAX_WIDTH = 1920;
+const SCREENSHOT_MAX_HEIGHT = 1080;
+const SCREENSHOT_QUALITY = 80;
 const PC_COMMAND_OUTPUT_MAX = 15_000;
 // Лимит на сохраняемый полный результат инструмента в trace (для отправки в AI-контекст).
 // Всё что длиннее — обрезается с пометкой, чтобы tool_calls_json не разрастался бесконечно.
@@ -3388,8 +3391,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         try {
           const buf = Buffer.from(disp.screenshot_base64, 'base64');
           const compressed = await sharpLib(buf, { failOn: 'none' })
-            .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 80 })
+            .resize(SCREENSHOT_MAX_WIDTH, SCREENSHOT_MAX_HEIGHT, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: SCREENSHOT_QUALITY })
             .toBuffer();
           const compressedB64 = compressed.toString('base64');
           const dataUrl = `data:image/jpeg;base64,${compressedB64}`;
