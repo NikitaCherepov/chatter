@@ -2158,6 +2158,24 @@ const buildDescribeImageTool = () => {
 };
 
 
+/** Build list_monitors tool — lists available displays without taking screenshots */
+const buildListMonitorsTool = () => {
+  return {
+    type: 'function' as const,
+    function: {
+      name: 'list_monitors',
+      description: `Возвращает список мониторов пользователя (ID, имя, разрешение, позицию). Не делает скриншоты — дешев по токенам.
+Используй перед capture_screen, если не уверен сколько мониторов и какой нужен.
+Полученный display_id передай в capture_screen для скриншота конкретного монитора.`,
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  };
+};
+
 /** Build capture_screen tool — captures screenshot, sends to vision model with purpose */
 const buildCaptureScreenTool = () => {
   return {
@@ -2172,7 +2190,8 @@ const buildCaptureScreenTool = () => {
 
 В параметре purpose укажи чёткую задачу для vision-модели.
 В ответ получишь текстовый результат (координаты, описание и т.д.).
-Координаты возвращаются в нормализованном виде (0.0–1.0) — используй их в execute_visual_click.`,
+Координаты возвращаются в нормализованном виде (0.0–1.0) — используй их в execute_visual_click.
+Если не знаешь display_id нужного монитора — сначала вызови list_monitors.`,
       parameters: {
         type: 'object',
         properties: {
@@ -3351,6 +3370,26 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({ status: 'success', file_path: filePath, ...(typeof result === 'object' && result !== null ? result : {}) });
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: err.message, file_path: filePath });
+    }
+  }
+
+  // ── Visual Control: list monitors (no screenshots, cheap) ─────────────────
+
+  if (toolName === 'list_monitors') {
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети.' });
+    }
+    try {
+      const result = await sendIpcToDesktop(user.id, 'capture_screen', {}, 15000, signal);
+      const displays: any[] = result.displays || [];
+      const monitors = displays.map((d: any) => ({
+        display_id: d.display_id,
+        name: d.name || d.display_id,
+        bounds: d.bounds,
+      }));
+      return JSON.stringify({ status: 'success', monitors });
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: `Ошибка получения мониторов: ${err.message}` });
     }
   }
 
@@ -5230,9 +5269,9 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
   if (toolName === 'write_file') return 'Записываю файл...';
   if (toolName === 'edit_file_lines') return 'Редактирую файл...';
   if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
+  if (toolName === 'list_monitors') return 'Получаю список мониторов...';
   if (toolName === 'execute_visual_click') return 'Жду подтверждения клика...';
   if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
-  if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
   if (toolName === 'capture_webcam') return 'Фотографирую веб-камерой...';
   if (toolName === 'describe_image') return 'Анализирую изображение...';
 
@@ -5518,6 +5557,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('search_file_keywords');
     disabledToolSet.add('write_file');
     disabledToolSet.add('edit_file_lines');
+    disabledToolSet.add('list_monitors');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
     disabledToolSet.add('capture_webcam');
@@ -5567,6 +5607,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('check_emails');
     disabledToolSet.add('read_email_content');
     disabledToolSet.add('get_my_tasks');
+    disabledToolSet.add('list_monitors');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
     disabledToolSet.add('capture_webcam');
@@ -5642,7 +5683,7 @@ export const sendMessageThroughAi = async (
     buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
     buildExecutePcCommandTool(), buildGetFileInfoTool(),
     buildReadFileTool(), buildSearchFileKeywordsTool(), buildWriteFileTool(), buildEditFileLinesTool(),
-    buildCaptureScreenTool(), buildExecuteVisualClickTool(), buildCaptureWebcamTool(),
+    buildListMonitorsTool(), buildCaptureScreenTool(), buildExecuteVisualClickTool(), buildCaptureWebcamTool(),
     buildDescribeImageTool(),
   ];
   // Tools that require a desktop client UI — only when isDesktop
