@@ -2176,6 +2176,10 @@ const buildCaptureScreenTool = () => {
           purpose: {
             type: 'string',
             description: 'Задача для vision-модели. Например: "Найди кнопку Сохранить и верни её координаты" или "Опиши подробно что открыто на экране" или "Найди поле ввода поиска".'
+          },
+          display_id: {
+            type: 'string',
+            description: 'ID монитора для скриншота. Если не указан — скриншоты всех мониторов. ID можно получить из ответа предыдущего вызова capture_screen (поле display_id в displays).'
           }
         },
         required: ['purpose']
@@ -3353,15 +3357,26 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const purpose: string = typeof parsed.purpose === 'string' ? parsed.purpose.trim() : '';
     if (!purpose) return JSON.stringify({ status: 'error', message: 'purpose обязателен — укажи что найти или описать на экране.' });
 
+    const requestedDisplayId: string = typeof parsed.display_id === 'string' ? parsed.display_id.trim() : '';
+
     if (!isDesktopOnline(user.id)) {
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Скриншот невозможен — попроси пользователя запустить приложение.' });
     }
     try {
       // 1. Capture screenshots from desktop
       const result = await sendIpcToDesktop(user.id, 'capture_screen', {}, 30000, signal);
-      const displays: any[] = result.displays || [];
+      let displays: any[] = result.displays || [];
       if (displays.length === 0) {
         return JSON.stringify({ status: 'error', message: 'Не удалось получить скриншоты мониторов.' });
+      }
+
+      // Filter by display_id if specified
+      if (requestedDisplayId) {
+        const filtered = displays.filter((d: any) => d.display_id === requestedDisplayId);
+        if (filtered.length === 0) {
+          return JSON.stringify({ status: 'error', message: `Монитор с display_id="${requestedDisplayId}" не найден. Доступные: ${displays.map((d: any) => d.display_id).join(', ')}` });
+        }
+        displays = filtered;
       }
 
       // 2. Compress via sharp → JPEG
