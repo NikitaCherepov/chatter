@@ -2165,8 +2165,9 @@ const buildListMonitorsTool = () => {
     function: {
       name: 'list_monitors',
       description: `Возвращает список мониторов пользователя (ID, имя, разрешение, позицию). Не делает скриншоты — дешев по токенам.
-Используй перед capture_screen, если не уверен сколько мониторов и какой нужен.
-Полученный display_id передай в capture_screen для скриншота конкретного монитора.`,
+
+ОБЯЗАТЕЛЬНО вызывай ПЕРВЫМ перед capture_screen.
+Полученный display_id передай в capture_screen.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -2191,7 +2192,9 @@ const buildCaptureScreenTool = () => {
 В параметре purpose укажи чёткую задачу для vision-модели.
 В ответ получишь текстовый результат (координаты, описание и т.д.).
 Координаты возвращаются в нормализованном виде (0.0–1.0) — используй их в execute_visual_click.
-Если не знаешь display_id нужного монитора — сначала вызови list_monitors.`,
+Сначала вызови list_monitors для получения display_id нужного монитора.
+Никогда не вызывай capture_screen без display_id, если user не попросил посмотреть на ВСЕ мониторы сразу - так как это тратит больше токенов.
+`,
       parameters: {
         type: 'object',
         properties: {
@@ -2201,7 +2204,7 @@ const buildCaptureScreenTool = () => {
           },
           display_id: {
             type: 'string',
-            description: 'ID монитора для скриншота. Если не указан — скриншоты всех мониторов. ID можно получить из ответа предыдущего вызова capture_screen (поле display_id в displays).'
+            description: 'ID монитора для скриншота. Если не указан — скриншоты всех мониторов. Получи через list_monitors.'
           }
         },
         required: ['purpose']
