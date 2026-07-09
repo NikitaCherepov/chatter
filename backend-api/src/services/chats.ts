@@ -1104,23 +1104,10 @@ export const getHistoryForAi = (userId: number, chatId: number, limit?: number, 
     // role === 'assistant'
     const expanded = expandAssistantMessage(row.content, row.tool_calls_json);
 
-    // Если у assistant-сообщения есть images (generated и т.д.) — добавляем их.
-    let assistantImages: MessageImage[] | null = null;
-    if (row.images) {
-      try { assistantImages = JSON.parse(row.images); } catch { assistantImages = null; }
-    }
-    if (assistantImages && assistantImages.length > 0 && expanded.length > 0) {
-      // Находим последнее сообщение с текстовым content (финальный ответ).
-      const lastIdx = expanded.length - 1;
-      // Assistant images всегда идут как текстовые маркеры с URL.
-      // Модель может проанализировать их через инструмент describe_image.
-      // Это безопасно для всех провайдеров — image_url в role: 'assistant'
-      // не поддерживается многими провайдерами (Xiaomi, DeepSeek, Cerebras).
-      const imageMarker = assistantImages.map((img, i) => `[Attached image ${i + 1}: ${img.url}]`).join('\n');
-      if (typeof expanded[lastIdx].content === 'string') {
-        expanded[lastIdx].content += '\n' + imageMarker;
-      }
-    }
+    // Assistant images (скриншоты, generate_image) не добавляются в AI-контекст.
+    // image_url в role: 'assistant' не поддерживается многими провайдерами,
+    // а текстовые маркеры модель путает со своим ответом.
+    // Картинки остаются в БД и UI; модель может получить к ним доступ через describe_image.
 
     messages.push(...expanded);
   }
