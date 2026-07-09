@@ -3388,8 +3388,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         try {
           const buf = Buffer.from(disp.screenshot_base64, 'base64');
           const compressed = await sharpLib(buf, { failOn: 'none' })
-            .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 70 })
+            .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
             .toBuffer();
           const compressedB64 = compressed.toString('base64');
           const dataUrl = `data:image/jpeg;base64,${compressedB64}`;
