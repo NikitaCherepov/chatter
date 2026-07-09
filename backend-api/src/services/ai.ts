@@ -2164,7 +2164,7 @@ const buildListMonitorsTool = () => {
     type: 'function' as const,
     function: {
       name: 'list_monitors',
-      description: `Возвращает список мониторов пользователя (ID, имя, разрешение, позицию). Не делает скриншоты — дешев по токенам.
+      description: `Возвращает список мониторов пользователя (номер, имя, разрешение, позицию). Не делает скриншоты — дешев по токенам.
 
 ОБЯЗАТЕЛЬНО вызывай ПЕРВЫМ перед capture_screen.
 Полученный display_id передай в capture_screen.`,
@@ -2204,7 +2204,7 @@ const buildCaptureScreenTool = () => {
           },
           display_id: {
             type: 'string',
-            description: 'ID монитора для скриншота. Если не указан — скриншоты всех мониторов. Получи через list_monitors.'
+            description: 'Номер монитора (0, 1, 2, ...) для скриншота. Если не указан — скриншоты всех мониторов. Получи через list_monitors.'
           }
         },
         required: ['purpose']
@@ -2224,7 +2224,7 @@ const buildExecuteVisualClickTool = () => {
 Требует подтверждения пользователя (через Telegram inline-кнопки).
 
 Параметры:
-- display_id: ID монитора из capture_screen
+- display_id: номер монитора из capture_screen (0, 1, 2, ...)
 - x: нормализованная X координата (0.0–1.0)
 - y: нормализованная Y координата (0.0–1.0)
 - button: "left" (по умолчанию) или "right"
@@ -2234,7 +2234,7 @@ const buildExecuteVisualClickTool = () => {
         properties: {
           display_id: {
             type: 'string',
-            description: 'ID монитора (из ответа capture_screen).'
+            description: 'Номер монитора (0, 1, 2, ...) из ответа capture_screen.'
           },
           x: {
             type: 'number',
