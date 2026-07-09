@@ -1112,39 +1112,13 @@ export const getHistoryForAi = (userId: number, chatId: number, limit?: number, 
     if (assistantImages && assistantImages.length > 0 && expanded.length > 0) {
       // Находим последнее сообщение с текстовым content (финальный ответ).
       const lastIdx = expanded.length - 1;
-      if (assistantImages.length > 0 && supportsVision) {
-        // Vision: превращаем content последнего assistant-сообщения в массив text + image_url
-        const { resolveImageFile, filenameFromUrl } = require('./image-storage.js');
-        const fs = require('node:fs');
-        const nodePath = require('node:path');
-        const imageBlocks: any[] = [];
-        for (const img of assistantImages) {
-          try {
-            const filename = filenameFromUrl(img.url);
-            if (!filename) continue;
-            const filepath = resolveImageFile(filename);
-            if (!filepath) continue;
-            const buf = fs.readFileSync(filepath);
-            const ext = nodePath.extname(filename).toLowerCase();
-            const mimeType = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : 'image/jpeg';
-            imageBlocks.push({
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${buf.toString('base64')}` }
-            });
-          } catch { /* skip */ }
-        }
-        if (imageBlocks.length > 0 && typeof expanded[lastIdx].content === 'string') {
-          expanded[lastIdx].content = [
-            { type: 'text', text: expanded[lastIdx].content },
-            ...imageBlocks,
-          ];
-        }
-      } else {
-        // Не-vision: маркер в текст
-        const imageMarker = assistantImages.map((img, i) => `[Generated image ${i + 1}: ${img.url}]`).join('\n');
-        if (typeof expanded[lastIdx].content === 'string') {
-          expanded[lastIdx].content += '\n' + imageMarker;
-        }
+      // Assistant images всегда идут как текстовые маркеры с URL.
+      // Модель может проанализировать их через инструмент describe_image.
+      // Это безопасно для всех провайдеров — image_url в role: 'assistant'
+      // не поддерживается многими провайдерами (Xiaomi, DeepSeek, Cerebras).
+      const imageMarker = assistantImages.map((img, i) => `[Attached image ${i + 1}: ${img.url}]`).join('\n');
+      if (typeof expanded[lastIdx].content === 'string') {
+        expanded[lastIdx].content += '\n' + imageMarker;
       }
     }
 
