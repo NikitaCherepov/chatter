@@ -870,7 +870,7 @@ function createWindow() {
       const base64 = pngBuffer.toString('base64');
 
       return {
-        display_id: String(idx),
+        display_id: source.display_id || String(source.id),
         name: source.name,
         bounds: {
           x: display.bounds.x,
@@ -941,14 +941,22 @@ function createWindow() {
       throw new Error('x_y_required');
     }
 
-    // display_id is a monitor index (0, 1, 2, ...)
+    // display_id from desktopCapturer may not match screen.Display.id
+    // Match by index: capture-screen returns sources in same order as getAllDisplays
     const displays = screen.getAllDisplays();
     let targetDisplay = displays[0];
 
     if (data.display_id) {
-      const idx = parseInt(data.display_id, 10);
-      if (!isNaN(idx) && idx >= 0 && idx < displays.length) {
-        targetDisplay = displays[idx];
+      // Try matching by id string, then by index
+      const byId = displays.find(d => String(d.id) === data.display_id);
+      if (byId) {
+        targetDisplay = byId;
+      } else {
+        // display_id might be an index or source name — try parsing as number
+        const idx = parseInt(data.display_id, 10);
+        if (!isNaN(idx) && idx >= 0 && idx < displays.length) {
+          targetDisplay = displays[idx];
+        }
       }
     }
 
