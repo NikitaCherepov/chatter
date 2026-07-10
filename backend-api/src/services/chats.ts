@@ -749,12 +749,8 @@ export const appendChatMessage = async (
       reasoningTokens = countTokens(reasoning);
     }
 
-    // Images (сгенерированные): оценка по тайлам.
-    if (images && images.length > 0) {
-      for (const img of images) {
-        tokenCount += await estimateImageTokensFromFile(img.url);
-      }
-    }
+    // Assistant images (скриншоты, generate_image) не отправляются в AI-контекст,
+    // поэтому их токены не учитываются.
 
     // Subagent trace tokens: считаем вес subagents_json (tool calls + results
     // каждого субагента), чтобы оценка контекста сообщения была точной.
