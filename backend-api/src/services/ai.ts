@@ -449,8 +449,8 @@ const adaptRequestBodyForProvider = (
     return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
 
-  // ── DeepSeek direct / Xiaomi MiMo direct ──
-  if (url.includes('deepseek.com') || url.includes('xiaomimimo.com')) {
+  // ── DeepSeek direct ──
+  if (url.includes('deepseek.com')) {
     const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, ...body } = requestBody as any;
     if (!level || level === 'auto') {
       return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
@@ -465,6 +465,18 @@ const adaptRequestBodyForProvider = (
     } else {
       // high → high
       body.reasoning_effort = level;
+    }
+    return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
+  }
+
+  // ── Xiaomi MiMo direct — только thinking enabled/disabled, без уровней ──
+  if (url.includes('xiaomimimo.com')) {
+    const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, reasoning: _r, ...body } = requestBody as any;
+    if (level === 'none' || level === 'minimal') {
+      body.thinking = { type: 'disabled' };
+    } else {
+      // auto, low, medium, high, xhigh — всё включено
+      body.thinking = { type: 'enabled' };
     }
     return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
