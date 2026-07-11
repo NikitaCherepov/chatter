@@ -277,6 +277,10 @@ export const getReasoningLevelsForBaseURL = (baseURL: string): ReasoningLevel[] 
     return ['none', 'high', 'xhigh']; // low/medium маппятся в high, xhigh → max
   }
 
+  if (url.includes('xiaomimimo.com')) {
+    return ['none', 'high']; // только thinking enabled/disabled
+  }
+
   return null; // неизвестный провайдер — ползунок не показываем
 };
 
