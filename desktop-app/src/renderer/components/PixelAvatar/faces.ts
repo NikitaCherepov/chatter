@@ -34,6 +34,7 @@ const REACTIONS: Record<string, string> = {
   // squint:   new URL('../../assets/reactions/squint.gif',   import.meta.url).href,
   // laugh:    new URL('../../assets/reactions/laugh.gif',    import.meta.url).href,
   think:    new URL('../../assets/reactions/thinking.gif',    import.meta.url).href,
+  rabbit_jump: new URL('../../assets/reactions/rabbit_jump.gif', import.meta.url).href,
   // search:   new URL('../../assets/reactions/search.gif',   import.meta.url).href,
   // wave:     new URL('../../assets/reactions/wave.gif',     import.meta.url).href,
   // confused: new URL('../../assets/reactions/confused.gif', import.meta.url).href,
@@ -49,6 +50,7 @@ const REACTION_DURATIONS: Record<string, number> = {
   search:   2500,
   wave:     1000,
   confused: 1200,
+  rabbit_jump: 4000,
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

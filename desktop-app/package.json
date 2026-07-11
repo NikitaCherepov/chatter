@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.7.5",
+  "version": "1.7.6",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
