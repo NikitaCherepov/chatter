@@ -1,8 +1,10 @@
 import sharp from 'sharp';
 
 export type PixelArtResult = {
-  base64: string;
-  url: string;
+  /** Большая картинка для просмотра (каждый пиксель масштабирован) */
+  preview: { base64: string; url: string };
+  /** Оригинальный размер 1:1 (16x16 или 32x32 пикселей) */
+  original: { base64: string; url: string };
 };
 
 const PIXEL_SIZE = 16;
@@ -35,22 +37,22 @@ const validatePixels = (pixels: unknown): number => {
 };
 
 /**
- * Рендерит 2D массив hex-цветов в PNG buffer.
- * Каждый логический пиксель масштабируется до PIXEL_SIZE x PIXEL_SIZE физических пикселей.
+ * Рендерит 2D массив hex-цветов в raw RGBA buffer.
+ * pixelScale = 1 — оригинальный размер, pixelScale > 1 — увеличенный для просмотра.
  */
-const renderPixelArt = (pixels: string[][]): Buffer => {
+const renderPixelArt = (pixels: string[][], pixelScale: number): { buf: Buffer; width: number; height: number } => {
   const rows = pixels.length;
-  const imgW = rows * PIXEL_SIZE;
-  const imgH = rows * PIXEL_SIZE;
+  const imgW = rows * pixelScale;
+  const imgH = rows * pixelScale;
   const buf = Buffer.alloc(imgW * imgH * 4);
 
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < rows; x++) {
       const [r, g, b] = hexToRgb(pixels[y][x]);
-      for (let dy = 0; dy < PIXEL_SIZE; dy++) {
-        for (let dx = 0; dx < PIXEL_SIZE; dx++) {
-          const px = x * PIXEL_SIZE + dx;
-          const py = y * PIXEL_SIZE + dy;
+      for (let dy = 0; dy < pixelScale; dy++) {
+        for (let dx = 0; dx < pixelScale; dx++) {
+          const px = x * pixelScale + dx;
+          const py = y * pixelScale + dy;
           const idx = (py * imgW + px) * 4;
           buf[idx] = r;
           buf[idx + 1] = g;
@@ -61,33 +63,44 @@ const renderPixelArt = (pixels: string[][]): Buffer => {
     }
   }
 
-  return buf;
+  return { buf, width: imgW, height: imgH };
+};
+
+const toPngBase64 = async (buf: Buffer, width: number, height: number): Promise<string> => {
+  const pngBuffer = await sharp(buf, {
+    raw: { width, height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+  return pngBuffer.toString('base64');
 };
 
 /**
- * Создаёт пиксель-арт изображение из 2D массива hex-цветов.
- * Сохраняет PNG на диск через saveGeneratedImage и возвращает base64 + URL.
+ * Создаёт пиксель-арт из 2D массива hex-цветов.
+ * Сохраняет два PNG на диск:
+ *  - preview: увеличенный (каждый пиксель = 16x16 физических)
+ *  - original: 1:1 (16x16 или 32x32 пикселей)
  */
 export const createPixelArt = async (
   pixels: unknown
 ): Promise<PixelArtResult> => {
-  const rows = validatePixels(pixels);
-
-  const rawBuf = renderPixelArt(pixels as string[][]);
-
-  const imgW = rows * PIXEL_SIZE;
-  const imgH = rows * PIXEL_SIZE;
-
-  const pngBuffer = await sharp(rawBuf, {
-    raw: { width: imgW, height: imgH, channels: 4 },
-  })
-    .png()
-    .toBuffer();
-
-  const base64 = pngBuffer.toString('base64');
+  validatePixels(pixels);
+  const px = pixels as string[][];
 
   const { saveGeneratedImage } = await import('./image-storage.js');
-  const saved = await saveGeneratedImage(base64);
 
-  return { base64, url: saved.url };
+  // Preview — увеличенный
+  const previewRender = renderPixelArt(px, PIXEL_SIZE);
+  const previewBase64 = await toPngBase64(previewRender.buf, previewRender.width, previewRender.height);
+  const previewSaved = await saveGeneratedImage(previewBase64);
+
+  // Original — 1:1
+  const originalRender = renderPixelArt(px, 1);
+  const originalBase64 = await toPngBase64(originalRender.buf, originalRender.width, originalRender.height);
+  const originalSaved = await saveGeneratedImage(originalBase64);
+
+  return {
+    preview: { base64: previewBase64, url: previewSaved.url },
+    original: { base64: originalBase64, url: originalSaved.url },
+  };
 };

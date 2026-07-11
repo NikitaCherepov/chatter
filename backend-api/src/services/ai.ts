@@ -3069,7 +3069,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       const result = await createPixelArt(parsed.pixels);
 
       if (Array.isArray(generatedImages)) {
-        generatedImages.push({ image_base64: result.base64, image_url: result.url, prompt_used: 'pixel-art' });
+        generatedImages.push({ image_base64: result.preview.base64, image_url: result.preview.url, prompt_used: 'pixel-art (preview)' });
+        generatedImages.push({ image_base64: result.original.base64, image_url: result.original.url, prompt_used: 'pixel-art (original)' });
       }
 
       return JSON.stringify({ status: 'success', message: 'Пиксель-арт изображение создано и будет отправлено пользователю. Опиши результат своими словами.' });
