@@ -1628,6 +1628,27 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'create_pixel_image',
+      description: 'Создаёт изображение (PNG) из массива пикселей. Принимает 2D массив hex-цветов (#RRGGBB). Размер: 16x16 или 32x32. Используй когда пользователь просит нарисовать пиксельную иконку, пиксель-арт, эмодзи или подобное небольшое изображение, заданное попиксельно. НЕ возвращай массив в текст ответа — просто вызови tool.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pixels: {
+            type: 'array',
+            description: 'Двумерный массив hex-цветов. Каждый элемент — строка вида "#RRGGBB" (например "#FF6600"). Внешний массив — строки (Y), внутренний — колонки (X). Размер 16x16 или 32x32.',
+            items: {
+              type: 'array',
+              items: { type: 'string' }
+            }
+          }
+        },
+        required: ['pixels']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_exchange_rates',
       description: 'Получить актуальный курс валют ЦБ РФ (доллар, евро, юань и т.д.) и динамику изменения по сравнению с предыдущим днём. Используй когда пользователь спрашивает про курс валют, конвертацию, стоимость доллара/евро и т.п.',
       parameters: {
@@ -3040,6 +3061,22 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       generatedImages.push({ image_base64: result.image_base64, image_url: imageUrl, prompt_used: result.prompt_used });
     }
     return JSON.stringify({ status: 'success', message: 'Изображение успешно сгенерировано и будет отправлено пользователю. Опиши результат своими словами.' });
+  }
+
+  if (toolName === 'create_pixel_image') {
+    try {
+      const { createPixelArt } = await import('./pixel-art.js');
+      const result = await createPixelArt(parsed.pixels);
+
+      if (Array.isArray(generatedImages)) {
+        generatedImages.push({ image_base64: result.base64, image_url: result.url, prompt_used: 'pixel-art' });
+      }
+
+      return JSON.stringify({ status: 'success', message: 'Пиксель-арт изображение создано и будет отправлено пользователю. Опиши результат своими словами.' });
+    } catch (err) {
+      console.error('[create_pixel_image] error:', err);
+      return `Ошибка создания пиксель-арт: ${err instanceof Error ? err.message : 'unknown'}`;
+    }
   }
 
   if (toolName === 'set_display_state') {
@@ -5240,6 +5277,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
     }
   }
   if (toolName === 'generate_image') return 'Генерирую изображение...';
+  if (toolName === 'create_pixel_image') return 'Создаю пиксель-арт...';
   if (toolName === 'map_control') return 'Ищу на карте...';
   if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
   if (toolName === 'find_transit_route') return 'Ищу маршруты общественного транспорта...';
@@ -5612,6 +5650,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('search_web');
     disabledToolSet.add('read_webpage');
     disabledToolSet.add('generate_image');
+    disabledToolSet.add('create_pixel_image');
   }
   if (flags?.disable_personal) {
     disabledToolSet.add('update_core_memory');
