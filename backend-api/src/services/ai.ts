@@ -1628,33 +1628,33 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
-      name: 'generate_pixel_art',
-      description: 'Создание пиксельной графики (pixel art) размером 16×16, 32×32 или 64×64 пикселя. Используй когда пользователь просит нарисовать пиксель-арт, спрайт, иконку, тайл или графику в ретро-стиле. Результат сохраняется как PNG в галерею чата. КАК РАБОТАЕТ: ты задаёшь палитру (символ → HEX цвет) и массив строк (пиксели), где каждый символ = один пиксель. Символ "." = прозрачный пиксель. Ты ВИДИШЬ картинку прямо в тексте во время создания — используй это для точного рисунка. После создания можно отредактировать: вызови read_pixel_art для PNG на диске, измени пиксели/палитру и вызови generate_pixel_art снова.',
+      name: 'modify_pixel_art',
+      description: 'Изменяет существующий пиксель-арт (PNG на диске). Сначала вызови read_pixel_art чтобы увидеть структуру (палитру, пиксели, координаты), затем отправь список команд для рисования. Бэкенд применит команды к исходному PNG и результат придёт в чат как новая картинка. Координаты: (0,0) — левый верхний угол. Действия: set_pixel (один пиксель по x,y), draw_rect (прямоугольник от x,y до x2,y2), draw_line (линия от x,y до x2,y2 по алгоритму Брезенхема), fill (заливка всего холста цветом).',
       parameters: {
         type: 'object',
         properties: {
-          width: {
-            type: 'number',
-            description: 'Ширина в пикселях: 16, 32 или 64.',
-            enum: [16, 32, 64]
+          file_path: {
+            type: 'string',
+            description: 'Абсолютный путь к исходному PNG файлу.'
           },
-          height: {
-            type: 'number',
-            description: 'Высота в пикселях: 16, 32 или 64.',
-            enum: [16, 32, 64]
-          },
-          palette: {
-            type: 'object',
-            description: 'Палитра цветов. Ключ — один символ (буква/цифра), значение — HEX цвет (#RRGGBB) или "transparent". Символ "." автоматически означает прозрачный — не добавляй его в палитру. Пример: { "B": "#0000FF", "R": "#FF0000", "W": "#FFFFFF" }.',
-            additionalProperties: { type: 'string' }
-          },
-          pixels: {
+          commands: {
             type: 'array',
-            items: { type: 'string' },
-            description: 'Массив строк пикселей. Каждая строка = одна строка пикселей слева направо. Каждый символ в строке соответствует пикселю. Длина строки = width. Количество строк = height. Пример для 4×2: ["BBRR", "B..R"]. Используй символы из палитры.'
+            description: 'Список команд рисования. Выполняются по порядку.',
+            items: {
+              type: 'object',
+              properties: {
+                action: { type: 'string', enum: ['set_pixel', 'draw_rect', 'draw_line', 'fill'] },
+                color: { type: 'string', description: 'HEX цвет, например "#FFD700", или "transparent" для прозрачного.' },
+                x: { type: 'number', description: 'Координата X (для set_pixel, draw_rect, draw_line).' },
+                y: { type: 'number', description: 'Координата Y (для set_pixel, draw_rect, draw_line).' },
+                x2: { type: 'number', description: 'Координата X2 (для draw_rect, draw_line).' },
+                y2: { type: 'number', description: 'Координата Y2 (для draw_rect, draw_line).' }
+              },
+              required: ['action', 'color']
+            }
           }
         },
-        required: ['width', 'height', 'palette', 'pixels']
+        required: ['file_path', 'commands']
       }
     }
   },
@@ -1662,7 +1662,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_pixel_art',
-      description: 'Читает PNG файл с диска и преобразует его в ASCII-представление пикселей. Возвращает { width, height, palette, pixels }. Используй чтобы: 1) просмотреть существующий PNG в читаемом виде, 2) отредактировать — прочитай, измени пиксели, пересоздай через generate_pixel_art. Работает через IPC десктопа (нужен запущенный клиент).',
+      description: 'Читает PNG файл с диска и преобразует его в ASCII-представление пикселей. Возвращает { width, height, palette, pixels }. Используй чтобы увидеть структуру картинки перед редактированием через modify_pixel_art. Работает через IPC десктопа (нужен запущенный клиент).',
       parameters: {
         type: 'object',
         properties: {
@@ -3092,23 +3092,34 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     return JSON.stringify({ status: 'success', message: 'Изображение успешно сгенерировано и будет отправлено пользователю. Опиши результат своими словами.' });
   }
 
-  // ── Pixel Art: generate ──────────────────────────────────────────────────
-  if (toolName === 'generate_pixel_art') {
-    const { validatePixelArtArgs, encodePixelArt } = await import('./pixel-art.js');
+  // ── Pixel Art: modify existing PNG via drawing commands ───────────────────
+  if (toolName === 'modify_pixel_art') {
+    const filePath = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
 
-    const validationError = validatePixelArtArgs(parsed);
-    if (validationError) return JSON.stringify({ status: 'error', message: validationError });
+    if (!Array.isArray(parsed.commands) || parsed.commands.length === 0) {
+      return JSON.stringify({ status: 'error', message: 'commands должен быть непустым массивом' });
+    }
+
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Чтение файла невозможно.' });
+    }
 
     try {
-      const pngBuffer = encodePixelArt({
-        width: parsed.width,
-        height: parsed.height,
-        palette: parsed.palette,
-        pixels: parsed.pixels,
-      });
-      const base64 = pngBuffer.toString('base64');
+      // Read source PNG via desktop IPC
+      const rawResult = await sendIpcToDesktop(user.id, 'read_file_base64', { file_path: filePath }, 30000, signal);
 
-      // Save to disk and attach to chat (same as generate_image)
+      if (!rawResult?.base64) {
+        return JSON.stringify({ status: 'error', message: 'Не удалось прочитать файл. Файл не найден или недоступен.' });
+      }
+
+      const sourceBuffer = Buffer.from(rawResult.base64, 'base64');
+      const { applyCommands } = await import('./pixel-art.js');
+      const result = applyCommands(sourceBuffer, parsed.commands);
+
+      const base64 = result.buffer.toString('base64');
+
+      // Save to disk and attach to chat gallery
       if (Array.isArray(generatedImages)) {
         let imageUrl: string | undefined;
         try {
@@ -3116,23 +3127,30 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           const saved = await saveGeneratedImage(base64);
           imageUrl = saved.url;
         } catch (err) {
-          console.error('[generate_pixel_art] failed to save PNG to disk:', err);
+          console.error('[modify_pixel_art] failed to save PNG to disk:', err);
         }
         generatedImages.push({
           image_base64: base64,
           image_url: imageUrl,
-          prompt_used: `Pixel art ${parsed.width}×${parsed.height}`,
+          prompt_used: `Modified pixel art ${result.width}×${result.height} (${filePath})`,
         });
       }
 
+      const skippedInfo = result.skipped.length > 0
+        ? ` Пропущено команд: ${result.skipped.length} (${result.skipped.join('; ')}).`
+        : '';
+
       return JSON.stringify({
         status: 'success',
-        message: `Пиксель-арт ${parsed.width}×${parsed.height} успешно создан и будет отправлен пользователю. Опиши результат своими словами.`,
-        width: parsed.width,
-        height: parsed.height,
+        message: `Изображение ${result.width}×${result.height} обновлено. Применено команд: ${result.applied}.${skippedInfo} Результат будет отправлен пользователю.`,
+        file_path: filePath,
+        width: result.width,
+        height: result.height,
+        applied: result.applied,
+        skipped: result.skipped,
       });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка создания пиксель-арта: ${err?.message || String(err)}` });
+      return JSON.stringify({ status: 'error', message: `Ошибка модификации пиксель-арта: ${err?.message || String(err)}`, file_path: filePath });
     }
   }
 
@@ -5366,7 +5384,7 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
     }
   }
   if (toolName === 'generate_image') return 'Генерирую изображение...';
-  if (toolName === 'generate_pixel_art') return 'Рисую пиксель-арт...';
+  if (toolName === 'modify_pixel_art') return 'Редактирую пиксель-арт...';
   if (toolName === 'read_pixel_art') return 'Читаю пиксель-арт...';
   if (toolName === 'map_control') return 'Ищу на карте...';
   if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
@@ -5674,6 +5692,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('write_file');
     disabledToolSet.add('edit_file_lines');
     disabledToolSet.add('read_pixel_art');
+    disabledToolSet.add('modify_pixel_art');
     disabledToolSet.add('list_monitors');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
@@ -5741,7 +5760,6 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('search_web');
     disabledToolSet.add('read_webpage');
     disabledToolSet.add('generate_image');
-    disabledToolSet.add('generate_pixel_art');
   }
   if (flags?.disable_personal) {
     disabledToolSet.add('update_core_memory');

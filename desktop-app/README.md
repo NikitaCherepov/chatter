@@ -422,41 +422,50 @@ AI: execute_visual_click({ display_id, x: 0.63, y: 0.42 })
 - Скриншот с прицелом отправляется в Telegram — юзер видит точку клика
 - Инструменты отключаются через feature flags `disable_pc_commands` и `disable_pc_control_full`
 
-### Pixel Art (создание и чтение)
+### Pixel Art (чтение и редактирование)
 
-Система генерации пиксельной графики через ASCII-представление. Модель буквально "видит" картинку в тексте во время генерации, что позволяет точно рисовать спрайты, иконки и тайлы.
+Система редактирования пиксельной графики через командный подход. Модель читает PNG, видит его структуру (палитру + пиксели в ASCII), затем отправляет команды рисования с координатами. Бэкенд выступает рендерером. Это решает проблему токенизации: модель работает с числами (координатами), а не с символьными строками.
 
 **Два инструмента:**
 
 | Инструмент | Описание |
 |---|---|
-| `generate_pixel_art` | Модель отдаёт `{ width, height, palette, pixels }` → бэкенд кодирует PNG через pngjs → сохраняется как generated image → попадает в галерею чата. Символ `.` = прозрачный пиксель. |
-| `read_pixel_art` | Читает PNG с диска через IPC `read_file_base64` → декодирует в ASCII. Модель видит палитру и пиксели, может модифицировать и пересоздать через `generate_pixel_art`. |
+| `read_pixel_art` | Читает PNG с диска через IPC `read_file_base64` → декодирует в ASCII `{ width, height, palette, pixels }`. Модель видит палитру и пиксели, чтобы понять структуру перед редактированием. |
+| `modify_pixel_art` | Принимает `{ file_path, commands }` → читает PNG через IPC → применяет команды (`set_pixel`, `draw_rect`, `draw_line`, `fill`) → результат сохраняется как generated image → попадает в галерею чата. |
 
-**Поток generate:**
-```
-AI: generate_pixel_art({ width: 16, height: 16, palette: { "R": "#FF0000" }, pixels: ["RRRR..."] })
-  → Backend: encodePixelArt() → PNG buffer (pngjs, filterType: -1 — без сглаживания)
-  → saveGeneratedImage() → uploads/abc123.png
-  → generatedImages.push({ image_base64, image_url })
-  → Изображение появляется в галерее чата, доступно для скачивания
-```
-
-**Поток read (редактирование):**
+**Поток read:**
 ```
 AI: read_pixel_art({ file_path: "C:\\sprites\\potion.png" })
   → Backend: sendIpcToDesktop('read_file_base64') → IPC readFileBase64()
   → Desktop: fs.readFile() → base64
   → Backend: decodePixelArtFromBuffer() → { width, height, palette, pixels }
-  → AI получает ASCII-представление → может изменить палитру/пиксели → generate_pixel_art
+  → AI получает ASCII-представление, понимает где что находится
 ```
 
-**Размеры:** 16×16, 32×32, 64×64 пикселя.
-**Палитра:** до 62 цветов (A-Z, a-z, 0-9) + `.` = transparent. При декодировании если цветов больше — ближайшие сливаются (квантизация по евклидову расстоянию в RGB).
+**Поток modify:**
+```
+AI: modify_pixel_art({ file_path: "C:\\sprites\\happy.png", commands: [
+      { action: "draw_rect", color: "#FFD700", x: 6, y: 9, x2: 9, y2: 12 },
+      { action: "draw_line", color: "#FFD700", x: 9, y: 12, x2: 10, y2: 20 }
+    ]})
+  → Backend: sendIpcToDesktop('read_file_base64') → читает исходный PNG
+  → Backend: applyCommands(pngBuffer, commands) → модифицирует пиксели (pngjs)
+  → saveGeneratedImage() → uploads/abc123.png
+  → generatedImages.push({ image_base64, image_url })
+  → Изображение появляется в галерее чата
+```
+
+**Команды рисования:**
+- `set_pixel` — один пиксель по `(x, y)` цветом `color`
+- `draw_rect` — заливка прямоугольника от `(x, y)` до `(x2, y2)`
+- `draw_line` — линия от `(x, y)` до `(x2, y2)` (алгоритм Брезенхема)
+- `fill` — заливка всего холста одним цветом
+
+**Палитра при чтении:** до 62 цветов (A-Z, a-z, 0-9) + `.` = transparent. При декодировании если цветов больше — ближайшие сливаются (квантизация по евклидову расстоянию в RGB).
 
 **Feature flags:**
-- `generate_pixel_art` отключается через `disable_internet`
 - `read_pixel_art` отключается через `disable_pc_commands`
+- `modify_pixel_art` отключается через `disable_pc_commands`
 
 ### Поток выполнения
 

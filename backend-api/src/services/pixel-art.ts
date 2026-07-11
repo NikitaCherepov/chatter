@@ -1,19 +1,13 @@
 /**
- * Pixel Art encode/decode service.
- * Converts between ASCII representation ({ palette, pixels }) and PNG buffers.
+ * Pixel Art service.
+ * decodePixelArtFromBuffer — reads PNG → ASCII representation for the model to "see".
+ * applyCommands — applies drawing commands (set_pixel, draw_rect, draw_line, fill) to a PNG buffer.
  * Designed for small pixel art (1×1 to 64×64).
  */
 
 import { PNG } from 'pngjs';
 
-export interface PixelArtArgs {
-  width: number;
-  height: number;
-  /** Key = single char (e.g. "B"), value = HEX color ("#FF0000") or "transparent" */
-  palette: Record<string, string>;
-  /** Array of strings, each string = one row of characters */
-  pixels: string[];
-}
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface DecodedPixelArt {
   width: number;
@@ -22,8 +16,31 @@ export interface DecodedPixelArt {
   pixels: string[];
 }
 
+export type DrawAction = 'set_pixel' | 'draw_rect' | 'draw_line' | 'fill';
+
+export interface DrawCommand {
+  action: DrawAction;
+  color: string;       // HEX, e.g. "#FFD700" or "transparent"
+  x?: number;
+  y?: number;
+  x2?: number;
+  y2?: number;
+}
+
+export interface ApplyCommandsResult {
+  buffer: Buffer;
+  width: number;
+  height: number;
+  applied: number;
+  skipped: string[];
+}
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
 const MAX_DIMENSION = 64;
 const PALETTE_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Parse a hex color string ("#FF5733" or "FF5733") into RGB tuple */
 function parseHex(hex: string): [number, number, number] {
@@ -48,51 +65,15 @@ function colorDistance(a: [number, number, number], b: [number, number, number])
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
-/**
- * Encode an ASCII pixel art representation into a PNG buffer.
- * Validates dimensions, pads/truncates pixel rows as needed.
- */
-export function encodePixelArt(args: PixelArtArgs): Buffer {
-  let { width, height, palette, pixels } = args;
-
-  // Clamp dimensions
-  width = Math.max(1, Math.min(Math.floor(width), MAX_DIMENSION));
-  height = Math.max(1, Math.min(Math.floor(height), MAX_DIMENSION));
-
-  // Normalize palette keys to single chars
-  const normalizedPalette: Record<string, [number, number, number, number]> = {};
-  for (const [key, colorStr] of Object.entries(palette)) {
-    const k = key.charAt(0);
-    const c = (typeof colorStr === 'string' ? colorStr : '').trim();
-    if (!c || c === 'transparent' || c === 'none') {
-      normalizedPalette[k] = [0, 0, 0, 0]; // transparent
-    } else {
-      const [r, g, b] = parseHex(c);
-      normalizedPalette[k] = [r, g, b, 255];
-    }
-  }
-  // Ensure "." is always transparent
-  normalizedPalette['.'] = [0, 0, 0, 0];
-
-  // Create PNG
-  const png = new PNG({ width, height, filterType: -1 });
-
-  // Fill pixel data
-  for (let y = 0; y < height; y++) {
-    const row = typeof pixels[y] === 'string' ? pixels[y] : '';
-    for (let x = 0; x < width; x++) {
-      const idx = (width * y + x) << 2;
-      const char = row[x] || '.';
-      const color = normalizedPalette[char] || normalizedPalette['.'] || [0, 0, 0, 0];
-      png.data[idx] = color[0];
-      png.data[idx + 1] = color[1];
-      png.data[idx + 2] = color[2];
-      png.data[idx + 3] = color[3];
-    }
-  }
-
-  return PNG.sync.write(png);
+/** Parse color string → RGBA tuple. "transparent"/"none" → [0,0,0,0] */
+function parseColor(color: string): [number, number, number, number] {
+  const c = (typeof color === 'string' ? color : '').trim().toLowerCase();
+  if (!c || c === 'transparent' || c === 'none') return [0, 0, 0, 0];
+  const [r, g, b] = parseHex(c);
+  return [r, g, b, 255];
 }
+
+// ─── Decode ─────────────────────────────────────────────────────────────────
 
 /**
  * Decode a PNG buffer into ASCII pixel art representation.
@@ -191,39 +172,107 @@ export function decodePixelArtFromBuffer(buffer: Buffer): DecodedPixelArt {
   return { width, height, palette, pixels };
 }
 
+// ─── Apply Commands ─────────────────────────────────────────────────────────
+
 /**
- * Validate pixel art args and return error message or null.
+ * Apply drawing commands to a PNG buffer.
+ * Returns modified buffer + stats.
  */
-export function validatePixelArtArgs(args: any): string | null {
-  if (!args || typeof args !== 'object') return 'Аргументы должны быть объектом';
+export function applyCommands(buffer: Buffer, commands: DrawCommand[]): ApplyCommandsResult {
+  const png = PNG.sync.read(buffer);
+  const { width, height } = png;
 
-  const { width, height, palette, pixels } = args;
+  let applied = 0;
+  const skipped: string[] = [];
 
-  if (typeof width !== 'number' || width < 1 || width > MAX_DIMENSION)
-    return `width должен быть числом от 1 до ${MAX_DIMENSION}`;
+  const setPixel = (x: number, y: number, rgba: [number, number, number, number]) => {
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
+    const idx = (width * y + x) << 2;
+    png.data[idx] = rgba[0];
+    png.data[idx + 1] = rgba[1];
+    png.data[idx + 2] = rgba[2];
+    png.data[idx + 3] = rgba[3];
+  };
 
-  if (typeof height !== 'number' || height < 1 || height > MAX_DIMENSION)
-    return `height должен быть числом от 1 до ${MAX_DIMENSION}`;
+  for (const cmd of commands) {
+    if (!cmd || typeof cmd !== 'object') {
+      skipped.push('invalid command (not an object)');
+      continue;
+    }
 
-  if (!palette || typeof palette !== 'object')
-    return 'palette должен быть объектом { символ: "#HEX" }';
+    const rgba = parseColor(cmd.color);
 
-  if (!Array.isArray(pixels) || pixels.length === 0)
-    return 'pixels должен быть массивом строк';
+    switch (cmd.action) {
+      case 'set_pixel': {
+        const x = cmd.x, y = cmd.y;
+        if (typeof x !== 'number' || typeof y !== 'number') {
+          skipped.push(`set_pixel: missing x/y`);
+          continue;
+        }
+        setPixel(x, y, rgba);
+        applied++;
+        break;
+      }
 
-  if (pixels.length > height)
-    return `pixels содержит ${pixels.length} строк, но height=${height}`;
+      case 'draw_rect': {
+        const x1 = cmd.x, y1 = cmd.y, x2 = cmd.x2, y2 = cmd.y2;
+        if (typeof x1 !== 'number' || typeof y1 !== 'number' || typeof x2 !== 'number' || typeof y2 !== 'number') {
+          skipped.push(`draw_rect: missing x/y/x2/y2`);
+          continue;
+        }
+        const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+        const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+        for (let py = minY; py <= maxY; py++) {
+          for (let px = minX; px <= maxX; px++) {
+            setPixel(px, py, rgba);
+          }
+        }
+        applied++;
+        break;
+      }
 
-  // Check palette keys are single chars
-  for (const key of Object.keys(palette)) {
-    if (key.length !== 1) return `Ключ палитры "${key}" должен быть одним символом`;
+      case 'draw_line': {
+        const x1 = cmd.x, y1 = cmd.y, x2 = cmd.x2, y2 = cmd.y2;
+        if (typeof x1 !== 'number' || typeof y1 !== 'number' || typeof x2 !== 'number' || typeof y2 !== 'number') {
+          skipped.push(`draw_line: missing x/y/x2/y2`);
+          continue;
+        }
+        // Bresenham's line algorithm
+        let dx = Math.abs(x2 - x1);
+        let dy = Math.abs(y2 - y1);
+        let sx = x1 < x2 ? 1 : -1;
+        let sy = y1 < y2 ? 1 : -1;
+        let err = dx - dy;
+        let cx = x1, cy = y1;
+        // Safety cap to prevent infinite loops
+        let cap = MAX_DIMENSION * MAX_DIMENSION * 4;
+        while (cap-- > 0) {
+          setPixel(cx, cy, rgba);
+          if (cx === x2 && cy === y2) break;
+          const e2 = 2 * err;
+          if (e2 > -dy) { err -= dy; cx += sx; }
+          if (e2 < dx) { err += dx; cy += sy; }
+        }
+        applied++;
+        break;
+      }
+
+      case 'fill': {
+        // Fill entire canvas with one color
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            setPixel(x, y, rgba);
+          }
+        }
+        applied++;
+        break;
+      }
+
+      default:
+        skipped.push(`unknown action: ${cmd.action}`);
+    }
   }
 
-  // Check pixel rows don't exceed width
-  for (let i = 0; i < pixels.length; i++) {
-    if (typeof pixels[i] !== 'string') return `pixels[${i}] должен быть строкой`;
-    if (pixels[i].length > width) return `pixels[${i}] содержит ${pixels[i].length} символов, но width=${width}`;
-  }
-
-  return null;
+  const outBuffer = PNG.sync.write(png);
+  return { buffer: outBuffer, width, height, applied, skipped };
 }
