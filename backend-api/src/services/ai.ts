@@ -449,8 +449,8 @@ const adaptRequestBodyForProvider = (
     return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
 
-  // ── DeepSeek direct ──
-  if (url.includes('deepseek.com')) {
+  // ── DeepSeek direct / Xiaomi MiMo direct ──
+  if (url.includes('deepseek.com') || url.includes('xiaomimimo.com')) {
     const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, ...body } = requestBody as any;
     if (!level || level === 'auto') {
       return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
