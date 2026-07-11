@@ -69,6 +69,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) =>
     ipcRenderer.invoke('read-file', payload),
 
+  // File Action: read file as base64 (for pixel art / binary reads)
+  readFileBase64: (payload: { file_path: string }) =>
+    ipcRenderer.invoke('read-file-base64', payload),
+
   // File Action: search matching lines in a file
   searchFileKeywords: (payload: { file_path: string; query: string; max_matches?: number }) =>
     ipcRenderer.invoke('search-file-keywords', payload),

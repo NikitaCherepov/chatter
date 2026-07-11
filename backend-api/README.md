@@ -925,6 +925,8 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `delete_from_cold_memory` | Удаление из векторного архива |
 | `random_roll` | Бросок монетки/кубиков |
 | `generate_image` | Генерация изображения (ProxyAPI, `b64_json`). Автоматически маршрутизируется через PRO. |
+| `generate_pixel_art` | Создание пиксельной графики (16/32/64 px) из ASCII-представления. Модель отдаёт `{ width, height, palette, pixels }` → бэкенд кодирует в PNG через pngjs → сохраняется как generated image в галерею чата. |
+| `read_pixel_art` | Чтение PNG файла с диска пользователя через desktop IPC → декодирует в ASCII-представление `{ width, height, palette, pixels }`. Модель видит пиксели в тексте и может редактировать. |
 | `get_exchange_rates` | Курсы валют ЦБ РФ с динамикой изменения. По умолчанию возвращает USD и EUR. |
 
 ### Клиентские инструменты (desktop + Telegram)
@@ -973,9 +975,9 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 |---|---|---|
 | `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
 | `disable_pc_control_lite` | Ограниченный режим | `execute_ssh_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
-| `disable_pc_commands` | Без команд на ПК | `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` |
+| `disable_pc_commands` | Без команд на ПК | `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines`, `read_pixel_art` |
 | `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
-| `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
+| `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image`, `generate_pixel_art` |
 | `disable_personal` | Гостевой режим | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + скрытие промпта и горячей памяти из system prompt |
 | `disable_specialized_subagents` | Без специализированных субагентов | `invoke_subagent` |
 | `disable_adhoc_subagents` | Без создания субагентов | `spawn_subagent` |

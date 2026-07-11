@@ -373,6 +373,7 @@ Reject UX: desktop confirmation cards use shared `RejectWithComment`; clicking r
 | `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. Логирует batch/cmd start/done/error для диагностики зависаний команд. На Windows команды оборачиваются в PowerShell с UTF-8 I/O для корректной кириллицы (см. ниже). |
 | `read-directory` | Чтение содержимого директории (read-only). Возвращает `{ name, isDirectory, size, modifiedAt }[]`. |
 | `read-file` | Нативное чтение файла через `fs.createReadStream` + `readline` (UTF-8, с пагинацией). Параметры: `{ file_path, start_line?, max_lines?, line_numbers? }`. Возвращает `{ content, start_line, read_lines, total_lines, encoding, line_numbers }`. При `line_numbers=true` каждая строка имеет префикс `     N\t` (формат `cat -n`). Не загружает весь файл в память — построчное чтение. **Для `.docx`** использует `mammoth.extractRawText()` — извлекает чистый текст, затем применяет ту же пагинацию. |
+| `read-file-base64` | Чтение файла как base64 (для pixel art / binary). Параметры: `{ file_path }`. Возвращает `{ base64, size }`. Лимит 10 МБ. Используется инструментом `read_pixel_art` для чтения PNG файлов. |
 | `write-file` | Нативная запись файла через `fs.promises.writeFile`/`appendFile` (UTF-8). Параметры: `{ file_path, content, mode? }`. Создаёт родительские директории при отсутствии. Возвращает `{ ok, bytes_written, mode }`. **Для `.docx`** генерирует валидный Word-документ через `docx` пакет (каждая строка текста = абзац). Режим `append` для `.docx` запрещён — возвращается ошибка. |
 | `edit-file-lines` | Точечная замена строк в файле через `Array.splice`. Параметры: `{ file_path, start_line, end_line, new_content }`. Читает файл → разбивает на строки → вырезает `start_line..end_line` → вставляет `new_content` → записывает обратно. Поддерживает вставку без удаления (`end_line = start_line - 1`) и удаление (`new_content = ""`). Возвращает `{ ok, lines_removed, lines_added, total_lines_before, total_lines_after }`. Не поддерживает `.docx`. |
 | `capture-screen` | Захват скриншотов всех мониторов через `desktopCapturer.getSources()`. Возвращает `{ displays: [{ display_id, name, bounds, screenshot_base64 }] }`. Используется инструментом `capture_screen` для visual control. |
@@ -420,6 +421,42 @@ AI: execute_visual_click({ display_id, x: 0.63, y: 0.42 })
 - Один клик за одно подтверждение (никаких серий)
 - Скриншот с прицелом отправляется в Telegram — юзер видит точку клика
 - Инструменты отключаются через feature flags `disable_pc_commands` и `disable_pc_control_full`
+
+### Pixel Art (создание и чтение)
+
+Система генерации пиксельной графики через ASCII-представление. Модель буквально "видит" картинку в тексте во время генерации, что позволяет точно рисовать спрайты, иконки и тайлы.
+
+**Два инструмента:**
+
+| Инструмент | Описание |
+|---|---|
+| `generate_pixel_art` | Модель отдаёт `{ width, height, palette, pixels }` → бэкенд кодирует PNG через pngjs → сохраняется как generated image → попадает в галерею чата. Символ `.` = прозрачный пиксель. |
+| `read_pixel_art` | Читает PNG с диска через IPC `read_file_base64` → декодирует в ASCII. Модель видит палитру и пиксели, может модифицировать и пересоздать через `generate_pixel_art`. |
+
+**Поток generate:**
+```
+AI: generate_pixel_art({ width: 16, height: 16, palette: { "R": "#FF0000" }, pixels: ["RRRR..."] })
+  → Backend: encodePixelArt() → PNG buffer (pngjs, filterType: -1 — без сглаживания)
+  → saveGeneratedImage() → uploads/abc123.png
+  → generatedImages.push({ image_base64, image_url })
+  → Изображение появляется в галерее чата, доступно для скачивания
+```
+
+**Поток read (редактирование):**
+```
+AI: read_pixel_art({ file_path: "C:\\sprites\\potion.png" })
+  → Backend: sendIpcToDesktop('read_file_base64') → IPC readFileBase64()
+  → Desktop: fs.readFile() → base64
+  → Backend: decodePixelArtFromBuffer() → { width, height, palette, pixels }
+  → AI получает ASCII-представление → может изменить палитру/пиксели → generate_pixel_art
+```
+
+**Размеры:** 16×16, 32×32, 64×64 пикселя.
+**Палитра:** до 62 цветов (A-Z, a-z, 0-9) + `.` = transparent. При декодировании если цветов больше — ближайшие сливаются (квантизация по евклидову расстоянию в RGB).
+
+**Feature flags:**
+- `generate_pixel_art` отключается через `disable_internet`
+- `read_pixel_art` отключается через `disable_pc_commands`
 
 ### Поток выполнения
 
