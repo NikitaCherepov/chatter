@@ -5851,6 +5851,11 @@ PRO
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
     }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
+    // Debug: log image sizes when present
+    if (hasImages) {
+      const imgSizes = images.map(img => ({ mimeType: img.mimeType, base64Len: img.base64.length, approxKB: Math.round(img.base64.length * 0.75 / 1024) }));
+      console.log('[DEBUG_USER_IMAGES]', JSON.stringify({ count: images.length, images: imgSizes, supportsVision: currentModelSupportsVision }));
+    }
     if (DEBUG_AI_RAW_MAIN_RESPONSE) {
       try {
         console.log('[DEBUG_AI_RAW_MAIN_RESPONSE]', JSON.stringify(completion.response, null, 2));
