@@ -678,23 +678,6 @@ function createWindow() {
     };
   });
 
-  // ── File Action: read file as base64 (for pixel art / binary reads) ──
-
-  ipcMain.handle('read-file-base64', async (_event, payload: { file_path: string }) => {
-    const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
-    if (!filePath) throw new Error('file_path_required');
-
-    const resolved = path.resolve(filePath);
-    const stat = fs.statSync(resolved);
-    if (!stat.isFile()) throw new Error('not_a_file');
-
-    // 10 MB safety limit
-    if (stat.size > 10 * 1024 * 1024) throw new Error('file_too_large');
-
-    const buffer = await fs.promises.readFile(resolved);
-    return { base64: buffer.toString('base64'), size: stat.size };
-  });
-
   // ── File Action: write file natively (UTF-8, overwrite or append, .docx supported) ──
 
   ipcMain.handle('search-file-keywords', async (_event, payload: { file_path: string; query: string; max_matches?: number }) => {

@@ -1628,56 +1628,6 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
-      name: 'generate_pixel_art',
-      description: 'Создание пиксельной графики (pixel art) размером 16×16, 32×32 или 64×64 пикселя. Используй когда пользователь просит нарисовать пиксель-арт, спрайт, иконку, тайл или графику в ретро-стиле. Результат сохраняется как PNG в галерею чата. КАК РАБОТАЕТ: ты задаёшь палитру (символ → HEX цвет) и массив строк (пиксели), где каждый символ = один пиксель. Символ "." = прозрачный пиксель. Ты ВИДИШЬ картинку прямо в тексте во время создания — используй это для точного рисунка. После создания можно отредактировать: вызови read_pixel_art для PNG на диске, измени пиксели/палитру и вызови generate_pixel_art снова.',
-      parameters: {
-        type: 'object',
-        properties: {
-          width: {
-            type: 'number',
-            description: 'Ширина в пикселях: 16, 32 или 64.',
-            enum: [16, 32, 64]
-          },
-          height: {
-            type: 'number',
-            description: 'Высота в пикселях: 16, 32 или 64.',
-            enum: [16, 32, 64]
-          },
-          palette: {
-            type: 'object',
-            description: 'Палитра цветов. Ключ — один символ (буква/цифра), значение — HEX цвет (#RRGGBB) или "transparent". Символ "." автоматически означает прозрачный — не добавляй его в палитру. Пример: { "B": "#0000FF", "R": "#FF0000", "W": "#FFFFFF" }.',
-            additionalProperties: { type: 'string' }
-          },
-          pixels: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Массив строк пикселей. Каждая строка = одна строка пикселей слева направо. Каждый символ в строке соответствует пикселю. Длина строки = width. Количество строк = height. Пример для 4×2: ["BBRR", "B..R"]. Используй символы из палитры.'
-          }
-        },
-        required: ['width', 'height', 'palette', 'pixels']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_pixel_art',
-      description: 'Читает PNG файл с диска и преобразует его в ASCII-представление пикселей. Возвращает { width, height, palette, pixels }. Используй чтобы: 1) просмотреть существующий PNG в читаемом виде, 2) отредактировать — прочитай, измени пиксели, пересоздай через generate_pixel_art. Работает через IPC десктопа (нужен запущенный клиент).',
-      parameters: {
-        type: 'object',
-        properties: {
-          file_path: {
-            type: 'string',
-            description: 'Абсолютный путь к PNG файлу.'
-          }
-        },
-        required: ['file_path']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
       name: 'get_exchange_rates',
       description: 'Получить актуальный курс валют ЦБ РФ (доллар, евро, юань и т.д.) и динамику изменения по сравнению с предыдущим днём. Используй когда пользователь спрашивает про курс валют, конвертацию, стоимость доллара/евро и т.п.',
       parameters: {
@@ -3090,82 +3040,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       generatedImages.push({ image_base64: result.image_base64, image_url: imageUrl, prompt_used: result.prompt_used });
     }
     return JSON.stringify({ status: 'success', message: 'Изображение успешно сгенерировано и будет отправлено пользователю. Опиши результат своими словами.' });
-  }
-
-  // ── Pixel Art: generate ──────────────────────────────────────────────────
-  if (toolName === 'generate_pixel_art') {
-    const { validatePixelArtArgs, encodePixelArt } = await import('./pixel-art.js');
-
-    const validationError = validatePixelArtArgs(parsed);
-    if (validationError) return JSON.stringify({ status: 'error', message: validationError });
-
-    try {
-      const pngBuffer = encodePixelArt({
-        width: parsed.width,
-        height: parsed.height,
-        palette: parsed.palette,
-        pixels: parsed.pixels,
-      });
-      const base64 = pngBuffer.toString('base64');
-
-      // Save to disk and attach to chat (same as generate_image)
-      if (Array.isArray(generatedImages)) {
-        let imageUrl: string | undefined;
-        try {
-          const { saveGeneratedImage } = await import('./image-storage.js');
-          const saved = await saveGeneratedImage(base64);
-          imageUrl = saved.url;
-        } catch (err) {
-          console.error('[generate_pixel_art] failed to save PNG to disk:', err);
-        }
-        generatedImages.push({
-          image_base64: base64,
-          image_url: imageUrl,
-          prompt_used: `Pixel art ${parsed.width}×${parsed.height}`,
-        });
-      }
-
-      return JSON.stringify({
-        status: 'success',
-        message: `Пиксель-арт ${parsed.width}×${parsed.height} успешно создан и будет отправлен пользователю. Опиши результат своими словами.`,
-        width: parsed.width,
-        height: parsed.height,
-      });
-    } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка создания пиксель-арта: ${err?.message || String(err)}` });
-    }
-  }
-
-  // ── Pixel Art: read from disk via desktop IPC ────────────────────────────
-  if (toolName === 'read_pixel_art') {
-    const filePath = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
-    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
-
-    if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Чтение файла невозможно.' });
-    }
-
-    try {
-      // Read raw PNG bytes via desktop IPC (read-file returns text, so we use capture-screen style approach)
-      // We send a custom IPC type to read the file as base64
-      const rawResult = await sendIpcToDesktop(user.id, 'read_file_base64', { file_path: filePath }, 30000, signal);
-
-      if (!rawResult?.base64) {
-        return JSON.stringify({ status: 'error', message: 'Не удалось прочитать файл. Файл не найден или не является PNG.' });
-      }
-
-      const pngBuffer = Buffer.from(rawResult.base64, 'base64');
-      const { decodePixelArtFromBuffer } = await import('./pixel-art.js');
-      const decoded = decodePixelArtFromBuffer(pngBuffer);
-
-      return JSON.stringify({
-        status: 'success',
-        file_path: filePath,
-        ...decoded,
-      });
-    } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка чтения PNG: ${err?.message || String(err)}`, file_path: filePath });
-    }
   }
 
   if (toolName === 'set_display_state') {
@@ -5366,8 +5240,6 @@ const getToolUserMessage = (toolName: string, argsRaw: string) => {
     }
   }
   if (toolName === 'generate_image') return 'Генерирую изображение...';
-  if (toolName === 'generate_pixel_art') return 'Рисую пиксель-арт...';
-  if (toolName === 'read_pixel_art') return 'Читаю пиксель-арт...';
   if (toolName === 'map_control') return 'Ищу на карте...';
   if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
   if (toolName === 'find_transit_route') return 'Ищу маршруты общественного транспорта...';
@@ -5673,7 +5545,6 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('search_file_keywords');
     disabledToolSet.add('write_file');
     disabledToolSet.add('edit_file_lines');
-    disabledToolSet.add('read_pixel_art');
     disabledToolSet.add('list_monitors');
     disabledToolSet.add('capture_screen');
     disabledToolSet.add('execute_visual_click');
@@ -5741,7 +5612,6 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('search_web');
     disabledToolSet.add('read_webpage');
     disabledToolSet.add('generate_image');
-    disabledToolSet.add('generate_pixel_art');
   }
   if (flags?.disable_personal) {
     disabledToolSet.add('update_core_memory');

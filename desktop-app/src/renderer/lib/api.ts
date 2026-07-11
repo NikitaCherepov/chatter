@@ -762,12 +762,6 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         filePath: payload?.file_path,
       });
       result = await (window as any).electronAPI?.readFile(payload);
-    } else if (ipc_type === 'read_file_base64') {
-      console.log('[ipc] renderer invoke readFileBase64', {
-        requestId: request_id,
-        filePath: payload?.file_path,
-      });
-      result = await (window as any).electronAPI?.readFileBase64(payload);
     } else if (ipc_type === 'search_file_keywords') {
       console.log('[ipc] renderer invoke searchFileKeywords', {
         requestId: request_id,
