@@ -1612,13 +1612,18 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'generate_image',
-      description: 'Генерация изображения по текстовому описанию. Вызывай ТОЛЬКО если пользователь напрямую попросил "нарисуй", "создай изображение", "сгенерируй картинку" и т.п. Если пользователь пишет на русском — переведи промпт на английский для лучшего качества, но ответь пользователю на русском. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО писать JSON с action/actioninput/dalle в текст ответа — используй ТОЛЬКО tool call.',
+      description: 'Генерация изображения по текстовому описанию. Вызывай ТОЛЬКО если пользователь напрямую попросил "нарисуй", "создай изображение", "сгенерируй картинку" и т.п. Если пользователь пишет на русском — переведи промпт на английский для лучшего качества, но ответь пользователю на русском. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО писать JSON с action/actioninput/dalle в текст ответа — используй ТОЛЬКО tool call. Поддерживает image-to-image: если пользователь прикрепил фото и просит изменить/отредактировать — укажи image_indices.',
       parameters: {
         type: 'object',
         properties: {
           prompt: {
             type: 'string',
-            description: 'Детальное описание того, что нужно изобразить (на английском языке для лучшего качества генерации).'
+            description: 'Детальное описание того, что нужно изобразить или как изменить прикреплённое изображение (на английском языке для лучшего качества генерации).'
+          },
+          image_indices: {
+            type: 'array',
+            items: { type: 'number' },
+            description: 'Индексы прикреплённых изображений (начиная с 0), которые нужно использовать как референс для image-to-image генерации. Используй когда пользователь просит изменить/отредактировать/модифицировать прикреплённое фото. Не указывай, если изображение нужно сгенерировать с нуля по тексту.'
           }
         },
         required: ['prompt']
@@ -3044,7 +3049,18 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'generate_image') {
     const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
     if (!prompt) return 'Ошибка: пустой промпт для генерации изображения.';
-    const result = await runImageGeneration(user.id, prompt);
+
+    // Collect reference images by indices from userImages
+    let selectedImages: Array<{ base64: string; mimeType: string }> = [];
+    const rawIndices: unknown = parsed.image_indices;
+    if (Array.isArray(rawIndices) && rawIndices.length > 0 && userImages && userImages.length > 0) {
+      selectedImages = rawIndices
+        .map((idx: unknown) => typeof idx === 'number' ? userImages[idx] : undefined)
+        .filter((img: { base64: string; mimeType: string } | undefined): img is { base64: string; mimeType: string } => Boolean(img && img.base64))
+        .slice(0, 10);
+    }
+
+    const result = await runImageGeneration(user.id, prompt, selectedImages.length > 0 ? selectedImages : undefined);
     if (!result.ok) return `Ошибка генерации изображения: ${(result as any).error || 'unknown'}`;
     // base64 НЕ возвращаем в tool_content — он сохраняется в массив generatedImages
     // LLM получает текстовую заглушку, чтобы не забивать контекст мегабайтами base64

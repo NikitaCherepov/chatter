@@ -96,23 +96,34 @@ const generateProxyApi = async (prompt: string): Promise<ImageGenResult | ImageG
 };
 
 /**
- * OpenRouter provider — chat/completions with image modality.
- * Expects choices[0].message.images[0].image_url.url (returns URL, downloads & converts to base64).
+ * OpenRouter provider — /images endpoint (Grok Imagine).
+ * Supports input_references for image-to-image generation (up to 3 images).
+ * Expects response.data[0].b64_json.
  */
-const generateOpenRouter = async (prompt: string): Promise<ImageGenResult | ImageGenError> => {
+const generateOpenRouter = async (
+  prompt: string,
+  inputImages?: Array<{ base64: string; mimeType: string }>
+): Promise<ImageGenResult | ImageGenError> => {
   if (!OPENROUTER_API_KEY) {
     return { ok: false, error: 'Генерация изображений не настроена (нет OPENROUTER_API_KEY).' };
   }
 
+  const body: Record<string, unknown> = {
+    model: IMAGE_GEN_MODEL,
+    prompt,
+  };
+
+  // Attach reference images
+  if (inputImages && inputImages.length > 0) {
+    body.input_references = inputImages.slice(0, 10).map(img => ({
+      type: 'image_url',
+      image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+    }));
+  }
+
   const response = await axios.post(
-    `${OPENROUTER_BASE_URL}/chat/completions`,
-    {
-      model: IMAGE_GEN_MODEL,
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-      modalities: ['image']
-    },
+    `${OPENROUTER_BASE_URL}/images`,
+    body,
     {
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -122,24 +133,10 @@ const generateOpenRouter = async (prompt: string): Promise<ImageGenResult | Imag
     }
   );
 
-  // Extract image URL from response
-  const images = response.data?.choices?.[0]?.message?.images;
-  if (!images || !Array.isArray(images) || images.length === 0) {
+  const base64Data = response.data?.data?.[0]?.b64_json;
+  if (!base64Data) {
     return { ok: false, error: 'OpenRouter API не вернул данные изображения.' };
   }
-
-  const imageUrl = images[0]?.image_url?.url;
-  if (!imageUrl) {
-    return { ok: false, error: 'OpenRouter API не вернул URL изображения.' };
-  }
-
-  // Download image and convert to base64
-  const imageResponse = await axios.get(imageUrl, {
-    responseType: 'arraybuffer',
-    timeout: 60000
-  });
-
-  const base64Data = Buffer.from(imageResponse.data, 'binary').toString('base64');
 
   return {
     ok: true,
@@ -150,7 +147,8 @@ const generateOpenRouter = async (prompt: string): Promise<ImageGenResult | Imag
 
 export const runImageGeneration = async (
   userId: number,
-  prompt: string
+  prompt: string,
+  inputImages?: Array<{ base64: string; mimeType: string }>
 ): Promise<ImageGenResult | ImageGenError> => {
   const user = getUserById(userId);
   if (!user) return { ok: false, error: 'user_not_found' };
@@ -169,7 +167,7 @@ export const runImageGeneration = async (
 
     switch (IMAGE_GEN_PROVIDER) {
       case 'openrouter':
-        result = await generateOpenRouter(trimmedPrompt);
+        result = await generateOpenRouter(trimmedPrompt, inputImages);
         break;
       case 'proxyapi':
       default:
