@@ -1621,8 +1621,9 @@ export const toolDefinitions = [
             description: 'Детальное описание того, что нужно изобразить или как изменить прикреплённое изображение (на английском языке для лучшего качества генерации).'
           },
           image_url: {
-            type: 'string',
-            description: 'URL картинки из маркеров [Прикреплено/Attached image N: URL] в текущем сообщении или истории чата. Используй для image-to-image генерации (редактирование/модификация прикреплённого фото). Можно указать несколько через запятую.'
+            type: 'array',
+            items: { type: 'string' },
+            description: 'URL(ы) картинок из маркеров [Прикреплено/Attached image N: URL] в текущем сообщении или истории чата. Используй для image-to-image генерации (редактирование/модификация прикреплённого фото).'
           }
         },
         required: ['prompt']
@@ -3052,11 +3053,14 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     // Collect reference images by URL(s) from chat history or current message
     let selectedImages: Array<{ base64: string; mimeType: string }> = [];
     const rawImageUrl: unknown = parsed.image_url;
-    if (typeof rawImageUrl === 'string' && rawImageUrl.trim()) {
+    const urls: string[] = Array.isArray(rawImageUrl)
+      ? rawImageUrl.filter((u): u is string => typeof u === 'string' && u.trim().length > 0).map(u => u.trim())
+      : (typeof rawImageUrl === 'string' && rawImageUrl.trim() ? [rawImageUrl.trim()] : []);
+
+    if (urls.length > 0) {
       const { resolveImageFile, filenameFromUrl } = await import('./image-storage.js');
       const fs = await import('node:fs');
       const nodePath = await import('node:path');
-      const urls = rawImageUrl.split(',').map(u => u.trim()).filter(Boolean);
       for (const url of urls) {
         const filename = filenameFromUrl(url);
         if (!filename) continue;
