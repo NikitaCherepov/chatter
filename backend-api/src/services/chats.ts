@@ -1052,10 +1052,14 @@ export const getHistoryForAi = (userId: number, chatId: number, limit?: number, 
       if (injected) textContent += '\n\n' + injected;
 
       if (allImages.length > 0 && supportsVision) {
-        // Vision: загружаем файлы с диска, формируем content как массив text + image_url
+        // Vision: загружаем файлы с диска, формируем content как массив text + image_url.
+        // Маркеры с URL добавляются в text — чтобы модель могла передать их в generate_image / describe_image.
         const { resolveImageFile, filenameFromUrl } = require('./image-storage.js');
         const fs = require('node:fs');
         const nodePath = require('node:path');
+
+        const imageMarker = allImages.map((img, i) => `[Attached image ${i + 1}: ${img.url}]`).join('\n');
+        const textWithMarkers = textContent + (imageMarker ? '\n' + imageMarker : '');
 
         const imageBlocks: any[] = [];
         for (const img of allImages) {
@@ -1078,18 +1082,17 @@ export const getHistoryForAi = (userId: number, chatId: number, limit?: number, 
           messages.push({
             role: row.role,
             content: [
-              { type: 'text', text: textContent },
+              { type: 'text', text: textWithMarkers },
               ...imageBlocks,
             ]
           });
         } else {
           // Файлы не читаются — fallback на маркер
-          const imageMarker = allImages.map((img, i) => `[Прикреплено изображение ${i + 1}: ${img.url}]`).join('\n');
-          messages.push({ role: row.role, content: textContent + '\n' + imageMarker });
+          messages.push({ role: row.role, content: textWithMarkers });
         }
       } else if (allImages.length > 0) {
         // Не-vision: текстовый маркер с URL
-        const imageMarker = allImages.map((img, i) => `[Прикреплено изображение ${i + 1}: ${img.url}]`).join('\n');
+        const imageMarker = allImages.map((img, i) => `[Attached image ${i + 1}: ${img.url}]`).join('\n');
         messages.push({ role: row.role, content: textContent + '\n' + imageMarker });
       } else {
         // Нет фото — обычный content

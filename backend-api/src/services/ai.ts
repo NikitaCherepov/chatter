@@ -1623,7 +1623,7 @@ export const toolDefinitions = [
           image_url: {
             type: 'array',
             items: { type: 'string' },
-            description: 'URL(ы) картинок из маркеров [Прикреплено/Attached image N: URL] в текущем сообщении или истории чата. Используй для image-to-image генерации (редактирование/модификация прикреплённого фото).'
+            description: 'URL(ы) картинок из маркеров [Attached image N: URL] в текущем сообщении или истории чата. Используй для image-to-image генерации (редактирование/модификация прикреплённого фото).'
           }
         },
         required: ['prompt']
@@ -2170,7 +2170,7 @@ const buildDescribeImageTool = () => {
           },
           image_url: {
             type: 'string',
-            description: 'URL картинки из маркеров [Прикреплено/Attached image N: URL]. Оставь пустым для анализа картинок из текущего сообщения пользователя.'
+            description: 'URL картинки из маркеров [Attached image N: URL]. Оставь пустым для анализа картинок из текущего сообщения пользователя.'
           },
           image_index: {
             type: 'number',
@@ -5868,7 +5868,7 @@ PRO
   // чтобы модель могла передать URL в generate_image / describe_image.
   const imageUrls = options?.userImages?.length ? options.userImages.map(i => i.url) : [];
   const imageMarker = hasImages
-    ? imageUrls.map((url, i) => `[Прикреплено изображение ${i + 1}: ${url}]`).join('\n')
+    ? imageUrls.map((url, i) => `[Attached image ${i + 1}: ${url}]`).join('\n')
     : '';
 
   let userMessageContent: any = (hasImages && currentModelSupportsVision)
