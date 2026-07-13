@@ -3596,9 +3596,10 @@ app.get('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => 
 
 app.put('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => {
   const userId = effectiveUserId(req);
-  const updates: { fs_scan_enabled?: boolean; auto_approve_all?: boolean } = {};
+  const updates: { fs_scan_enabled?: boolean; auto_approve_all?: boolean; file_read_enabled?: boolean } = {};
   if (typeof req.body?.fs_scan_enabled === 'boolean') updates.fs_scan_enabled = req.body.fs_scan_enabled;
   if (typeof req.body?.auto_approve_all === 'boolean') updates.auto_approve_all = req.body.auto_approve_all;
+  if (typeof req.body?.file_read_enabled === 'boolean') updates.file_read_enabled = req.body.file_read_enabled;
   updatePcCommandsSettings(userId, updates);
   return res.json({ ok: true });
 });

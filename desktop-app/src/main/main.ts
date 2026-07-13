@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, net, screen } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, net, screen, shell } from 'electron';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -174,6 +174,37 @@ ipcMain.on('get-app-version', (event) => {
 });
 
 function createWindow() {
+  const isDev = !app.isPackaged;
+  const rendererEntryPath = path.join(__dirname, '../renderer/index.html');
+
+  const isTrustedRendererUrl = (rawUrl: string): boolean => {
+    try {
+      const url = new URL(rawUrl);
+      if (isDev) {
+        return url.protocol === 'http:'
+          && (url.hostname === '127.0.0.1' || url.hostname === 'localhost')
+          && url.port === '5173';
+      }
+
+      const expected = new URL(`file:///${rendererEntryPath.replace(/\\/g, '/')}`);
+      return url.protocol === 'file:' && url.pathname === expected.pathname;
+    } catch {
+      return false;
+    }
+  };
+
+  const openExternalHttpUrl = (rawUrl: string) => {
+    try {
+      const url = new URL(rawUrl);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+      void shell.openExternal(url.toString()).catch((err) => {
+        console.error('[navigation] failed to open external URL:', err);
+      });
+    } catch {
+      // Ignore malformed URLs.
+    }
+  };
+
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
@@ -187,12 +218,22 @@ function createWindow() {
     },
   });
 
-  const isDev = !app.isPackaged;
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalHttpUrl(url);
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isTrustedRendererUrl(url)) return;
+    event.preventDefault();
+    openExternalHttpUrl(url);
+  });
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(rendererEntryPath);
   }
 
   mainWindow.on('closed', () => {
@@ -1040,12 +1081,13 @@ interface VersionManifest {
   size?: number;
 }
 
-const DEFAULT_UPDATES_BASE = 'http://***REMOVED_IP***:3050/updates';
+function areAutoUpdatesEnabled(): boolean {
+  return /^(1|true|yes|on)$/i.test(process.env.AUTO_UPDATES_ENABLED?.trim() || '');
+}
 
-function getUpdatesBaseUrl(): string {
-  return process.env.UPDATES_FEED_URL
-    || (process.env.VITE_API_BASE_URL ? `${process.env.VITE_API_BASE_URL.replace(/\/$/, '')}/updates` : null)
-    || DEFAULT_UPDATES_BASE;
+function getUpdatesBaseUrl(): string | null {
+  const configuredUrl = process.env.UPDATES_FEED_URL?.trim();
+  return configuredUrl ? configuredUrl.replace(/\/$/, '') : null;
 }
 
 function compareVersions(a: string, b: string): number {
@@ -1084,6 +1126,16 @@ function getUpdateTempExtension(downloadUrl: string): string {
 
 function setupCustomUpdater() {
   if (!app.isPackaged) return;
+  if (!areAutoUpdatesEnabled()) {
+    console.log('[updater] disabled (set AUTO_UPDATES_ENABLED=true to enable)');
+    return;
+  }
+
+  const baseUrl = getUpdatesBaseUrl();
+  if (!baseUrl) {
+    console.warn('[updater] AUTO_UPDATES_ENABLED is true, but UPDATES_FEED_URL is not configured');
+    return;
+  }
 
   const logPath = path.join(app.getPath('userData'), 'updater.log');
   const logStream = fs.createWriteStream(logPath, { flags: 'a' });
@@ -1096,7 +1148,6 @@ function setupCustomUpdater() {
   log('=== app started ===');
   log(`version: ${app.getVersion()}`);
 
-  const baseUrl = getUpdatesBaseUrl();
   const manifestUrl = `${baseUrl}/version.json`;
 
   // ── IPC: check-for-updates ────────────────────────────────────────────

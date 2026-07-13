@@ -76,6 +76,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
+                title={href}
               >
                 {children}
               </a>
