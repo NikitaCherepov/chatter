@@ -6697,6 +6697,10 @@ bot.on('text', async (ctx) => {
             if (msg === 'telegram_user_not_found') {
                 return ctx.reply('Не нашёл твой Telegram-аккаунт в базе. Напиши /start и дождись подтверждения админа.');
             }
+            if (msg === 'too_many_link_attempts') {
+                const retryAfter = Math.max(1, Number(err?.response?.data?.retry_after) || 60);
+                return ctx.reply(`Слишком много неверных кодов. Попробуй снова через ${retryAfter} сек.`);
+            }
             console.error('Link verify error:', err?.message || err);
             return ctx.reply('Ошибка при привязке. Попробуй позже.');
         }

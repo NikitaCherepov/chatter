@@ -66,6 +66,8 @@ export const verifyPassword = (plain: string, salt: string, hash: string) => {
 };
 
 const parseInitData = (initData: string) => {
+  if (!BOT_TOKEN) return { ok: false as const, reason: 'bot_token_missing' as const };
+
   const params = new URLSearchParams(initData);
   const hash = params.get('hash') || '';
   const authDate = Number.parseInt(params.get('auth_date') || '0', 10);
