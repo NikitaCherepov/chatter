@@ -22,7 +22,7 @@ npm run logs:api
 - `TELEGRAM_TOKEN` - обязателен для Telegram auth проверки.
 - `BACKEND_INTERNAL_TOKEN` - обязателен для всех `/internal/*`.
 - `BACKEND_API_PORT` - по умолчанию `3050`.
-- `API_JWT_SECRET` - опционально, иначе берется `TELEGRAM_TOKEN`.
+- `API_JWT_SECRET` - обязательный отдельный секрет для подписи access/refresh JWT.
 - `API_DB_PATH` или `NOTES_DB_PATH` - опционально. По умолчанию используется `chatter.db` в корне проекта.
 - `TIMEWEB_*` и другие AI ключи - для AI/voice/photo.
 - `ENCRYPTION_KEY` - для mail (шифрование паролей).

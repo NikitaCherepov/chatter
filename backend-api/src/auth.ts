@@ -5,7 +5,7 @@ import { getUserById } from './services/chats.js';
 dotenv.config();
 
 const BOT_TOKEN = process.env.TELEGRAM_TOKEN || '';
-const JWT_SECRET = process.env.API_JWT_SECRET || BOT_TOKEN;
+const JWT_SECRET = process.env.API_JWT_SECRET || '';
 if (!JWT_SECRET) throw new Error('api_jwt_secret_not_configured');
 const ACCESS_TTL_SEC = Math.max(60, Number.parseInt(process.env.API_ACCESS_TTL_SEC || '3600', 10) || 3600);
 const REFRESH_TTL_SEC = Math.max(300, Number.parseInt(process.env.API_REFRESH_TTL_SEC || '2592000', 10) || 2592000);
