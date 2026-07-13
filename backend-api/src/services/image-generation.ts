@@ -1,4 +1,3 @@
-import axios from 'axios';
 import dotenv from 'dotenv';
 import { getUserById } from './chats.js';
 import { db } from '../db.js';
@@ -21,6 +20,33 @@ const IMAGE_GEN_SIZE = `${process.env.IMAGE_GEN_SIZE || '1024x1024'}`.trim();
 // OpenRouter settings (provider=openrouter)
 const OPENROUTER_API_KEY = `${process.env.OPENROUTER_API_KEY || ''}`.trim();
 const OPENROUTER_BASE_URL = `${process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'}`.trim();
+
+const postJson = async (url: string, body: unknown, apiKey: string): Promise<any> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const responseData = await response.json() as any;
+  if (!response.ok) {
+    const error = new Error(responseData?.error?.message || `HTTP ${response.status}`) as any;
+    error.response = { status: response.status, data: responseData };
+    throw error;
+  }
+  return responseData;
+};
 
 const normalizeDailyImageGenLimit = (value: number | null | undefined) => {
   if (!Number.isFinite(Number(value))) return 0;
@@ -66,7 +92,7 @@ const generateProxyApi = async (prompt: string): Promise<ImageGenResult | ImageG
     return { ok: false, error: 'Генерация изображений не настроена (нет PROXYAPI_KEY).' };
   }
 
-  const response = await axios.post(
+  const responseData = await postJson(
     `${PROXYAPI_BASE_URL}/images/generations`,
     {
       model: IMAGE_GEN_MODEL,
@@ -74,16 +100,10 @@ const generateProxyApi = async (prompt: string): Promise<ImageGenResult | ImageG
       quality: IMAGE_GEN_QUALITY,
       size: IMAGE_GEN_SIZE
     },
-    {
-      headers: {
-        'Authorization': `Bearer ${PROXYAPI_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 120000
-    }
+    PROXYAPI_KEY,
   );
 
-  const base64Data = response.data?.data?.[0]?.b64_json;
+  const base64Data = responseData?.data?.[0]?.b64_json;
   if (!base64Data) {
     return { ok: false, error: 'API не вернул данные изображения.' };
   }
@@ -121,19 +141,13 @@ const generateOpenRouter = async (
     }));
   }
 
-  const response = await axios.post(
+  const responseData = await postJson(
     `${OPENROUTER_BASE_URL}/images`,
     body,
-    {
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 120000
-    }
+    OPENROUTER_API_KEY,
   );
 
-  const base64Data = response.data?.data?.[0]?.b64_json;
+  const base64Data = responseData?.data?.[0]?.b64_json;
   if (!base64Data) {
     return { ok: false, error: 'OpenRouter API не вернул данные изображения.' };
   }

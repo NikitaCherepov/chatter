@@ -1,5 +1,3 @@
-﻿import axios from 'axios';
-
 // Используем базовый урл. Если в .env ничего нет, берем рабочий production-sfo
 const BROWSERLESS_BASE_URL = (process.env.BROWSERLESS_BASE_URL || 'https://production-sfo.browserless.io').trim().replace(/\/$/, '');
 const BROWSERLESS_TOKEN = (process.env.BROWSERLESS_TOKEN || '').trim();
@@ -32,26 +30,36 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
   `;
 
   try {
-    const response = await axios.post(
-      endpoint,
-      {
-        query: query,
-        variables: { target: url }
-      },
-      { 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45_000);
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        timeout: 45000 // Даем браузеру время отрендерить React/Vue
-      }
-    );
+        body: JSON.stringify({
+          query,
+          variables: { target: url },
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const responseData = await response.json() as any;
+    if (!response.ok) {
+      throw new Error(`browserless_http_${response.status}: ${JSON.stringify(responseData).slice(0, 1000)}`);
+    }
 
     // ПРОВЕРКА НА ВНУТРЕННИЕ ОШИБКИ GRAPHQL
-    if (response.data?.errors && response.data.errors.length > 0) {
-      const errorMsg = response.data.errors.map((e: any) => e.message).join(' | ');
+    if (responseData?.errors && responseData.errors.length > 0) {
+      const errorMsg = responseData.errors.map((e: any) => e.message).join(' | ');
       console.error('GraphQL Internal Errors:', errorMsg);
       return `Ошибка парсера (GraphQL): ${errorMsg}`;
     }
 
-    const rawText = response.data?.data?.text?.text || '';
+    const rawText = responseData?.data?.text?.text || '';
     const cleanText = rawText.replace(/\s+/g, ' ').trim();
 
     if (!cleanText) {
@@ -61,8 +69,8 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
     return cleanText.slice(0, 15000);
 
   } catch (error: any) {
-    const errorDetails = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+    const errorDetails = error?.message || String(error);
     console.error('Browserless BQL HTTP Error:', errorDetails);
-    return `HTTP Ошибка при чтении страницы: ${error.message}`;
+    return `HTTP Ошибка при чтении страницы: ${errorDetails}`;
   }
 };
