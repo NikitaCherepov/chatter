@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, forkChat, getApiAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, forkChat, getApiAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -767,6 +767,12 @@ app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   return res.json({ user: toAuthUserDto(user) });
+});
+
+// Revoke every access/refresh token previously issued to this account.
+app.post('/api/v1/auth/logout', (req: AuthedRequest, res) => {
+  revokeUserAuthTokens(req.authUserId!);
+  return res.json({ ok: true, all_sessions_revoked: true });
 });
 
 // Update core memory
@@ -4020,6 +4026,7 @@ wss.on('connection', (ws, req) => {
   const now = Date.now();
   const client: WsClient = {
     ws,
+    accessToken: token,
     apiUserId,
     effectiveUserId,
     pendingIpc: new Map(),
@@ -4036,6 +4043,10 @@ wss.on('connection', (ws, req) => {
   // 4. Handle incoming messages
   ws.on('message', async (raw) => {
     try {
+      if (!verifyToken(client.accessToken, 'access')) {
+        ws.close(4001, 'token_revoked');
+        return;
+      }
       const msg = JSON.parse(raw.toString());
       client.lastMessageAt = Date.now();
 
@@ -4079,6 +4090,11 @@ setInterval(() => {
   const now = Date.now();
   for (const client of uniqueClients) {
     if (client.ws.readyState !== WebSocket.OPEN) continue;
+
+    if (!verifyToken(client.accessToken, 'access')) {
+      client.ws.close(4001, 'token_revoked');
+      continue;
+    }
 
     const lastPongAgeMs = now - client.lastPongAt;
     if (lastPongAgeMs > WS_HEARTBEAT_GRACE_MS) {

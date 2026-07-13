@@ -339,6 +339,8 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 - `POST /api/v1/auth/refresh`
   - Ввод: `{ refresh_token }`
   - Вывод: `{ access_token, refresh_token, access_expires_in, refresh_expires_in }`
+- `POST /api/v1/auth/logout`
+  - Требует access JWT и отзывает все ранее выданные access/refresh токены аккаунта.
 - `GET /api/v1/chats?limit=&offset=`
   - Ввод: query `limit` по умолчанию 50, максимум 100; `offset` по умолчанию 0
   - Вывод: `{ chats, active_chat_id, limit, offset }`

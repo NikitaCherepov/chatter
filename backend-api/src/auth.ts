@@ -22,6 +22,7 @@ type TokenPayload = {
   typ: 'access' | 'refresh';
   exp: number;
   iat: number;
+  ver?: number;
 };
 
 export type AuthedRequest = Record<string, any> & { authUserId?: number };
@@ -42,7 +43,10 @@ export const verifyToken = (token: string, expectedType: 'access' | 'refresh') =
   if (!header || !payload || !signature) return null;
   const content = `${header}.${payload}`;
   const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(content).digest('base64url');
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) return null;
+  const signatureBuffer = Buffer.from(signature);
+  const expectedSignatureBuffer = Buffer.from(expectedSig);
+  if (signatureBuffer.length !== expectedSignatureBuffer.length) return null;
+  if (!crypto.timingSafeEqual(signatureBuffer, expectedSignatureBuffer)) return null;
 
   let decoded: TokenPayload;
   try {
@@ -51,7 +55,18 @@ export const verifyToken = (token: string, expectedType: 'access' | 'refresh') =
     return null;
   }
   if (decoded.typ !== expectedType) return null;
-  if (!decoded.sub || decoded.exp < Math.floor(Date.now() / 1000)) return null;
+  if (!decoded.sub || !Number.isFinite(decoded.exp) || decoded.exp <= Math.floor(Date.now() / 1000)) return null;
+
+  const user = getUserById(decoded.sub);
+  if (!user || (user.status !== 'approved' && user.is_admin !== 1)) return null;
+  const tokenVersion = Number.isFinite(Number(decoded.ver)) ? Math.floor(Number(decoded.ver)) : 0;
+  const currentVersion = Math.max(0, Math.floor(Number(user.auth_token_version || 0)));
+  if (tokenVersion !== currentVersion) return null;
+
+  if (user.linked_tg_id) {
+    const linkedUser = getUserById(user.linked_tg_id);
+    if (!linkedUser || (linkedUser.status !== 'approved' && linkedUser.is_admin !== 1)) return null;
+  }
   return decoded;
 };
 
@@ -101,9 +116,14 @@ const parseInitData = (initData: string) => {
 export const validateTelegramInitData = (initData: string) => parseInitData(initData);
 
 export const issueAuthTokens = (userId: number) => {
+  const user = getUserById(userId);
+  if (!user || (user.status !== 'approved' && user.is_admin !== 1)) {
+    throw new Error('user_not_authorized');
+  }
   const now = Math.floor(Date.now() / 1000);
-  const access = signPayload({ sub: userId, typ: 'access', iat: now, exp: now + ACCESS_TTL_SEC });
-  const refresh = signPayload({ sub: userId, typ: 'refresh', iat: now, exp: now + REFRESH_TTL_SEC });
+  const version = Math.max(0, Math.floor(Number(user.auth_token_version || 0)));
+  const access = signPayload({ sub: userId, typ: 'access', iat: now, exp: now + ACCESS_TTL_SEC, ver: version });
+  const refresh = signPayload({ sub: userId, typ: 'refresh', iat: now, exp: now + REFRESH_TTL_SEC, ver: version });
   return {
     access_token: access,
     refresh_token: refresh,

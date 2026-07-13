@@ -6,6 +6,7 @@ import { WebSocket } from 'ws';
 
 export type WsClient = {
   ws: WebSocket;
+  accessToken: string;
   apiUserId: number;        // JWT subject — the API account that connected
   effectiveUserId: number;  // linked_tg_id || apiUserId — the user AI operates on
   pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>;

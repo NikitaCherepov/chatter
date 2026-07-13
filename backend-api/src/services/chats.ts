@@ -1421,9 +1421,29 @@ export const createPendingTelegramUser = (
   return result;
 };
 
-export const updateUserStatus = (userId: number, status: UserStatus) => db
-  .prepare('UPDATE users SET status = ? WHERE id = ?')
-  .run(status, userId);
+export const updateUserStatus = (userId: number, status: UserStatus) => {
+  const updateStatus = db.prepare(`
+    UPDATE users
+    SET status = ?,
+        auth_token_version = auth_token_version + CASE WHEN ? = 'approved' THEN 0 ELSE 1 END
+    WHERE id = ?
+  `);
+  const revokeLinkedAccounts = db.prepare(`
+    UPDATE users
+    SET auth_token_version = auth_token_version + 1
+    WHERE linked_tg_id = ?
+  `);
+
+  return db.transaction(() => {
+    const result = updateStatus.run(status, status, userId);
+    if (status !== 'approved') revokeLinkedAccounts.run(userId);
+    return result;
+  })();
+};
+
+export const revokeUserAuthTokens = (userId: number) => db
+  .prepare('UPDATE users SET auth_token_version = auth_token_version + 1 WHERE id = ?')
+  .run(userId);
 
 export const updateUserRole = (userId: number, role: string) => db
   .prepare('UPDATE users SET role = ?, is_admin = ? WHERE id = ?')
