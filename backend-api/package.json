@@ -9,25 +9,23 @@
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^4.1.0",
-    "@tavily/core": "latest",
     "better-sqlite3": "^11.0.0",
     "busboy": "^1.6.0",
-    "cheerio": "^1.2.0",
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "fast-xml-parser": "^5.8.0",
     "gpt-tokenizer": "^3.4.0",
     "mammoth": "^1.12.0",
     "marked": "^18.0.5",
-    "openai": "^4.0.0",
+    "openai": "^6.46.0",
     "pdf-parse": "^2.4.5",
     "sharp": "^0.34.5",
     "ssh2": "^1.17.0",
     "ws": "^8.21.0"
   },
   "optionalDependencies": {
-    "imapflow": "^1.1.0",
-    "nodemailer": "^8.0.5"
+    "imapflow": "^1.4.7",
+    "nodemailer": "^9.0.3"
   },
   "devDependencies": {
     "@types/ssh2": "^1.15.5",
