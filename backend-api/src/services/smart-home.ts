@@ -1,15 +1,15 @@
 import crypto from 'node:crypto';
 import { db, getNowUnix } from '../db.js';
+import { getEncryptionKey } from '../utils/encryption.js';
 
 // ── Encryption (uses shared ENCRYPTION_KEY, same as mail.ts) ─────────────────
 
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod').digest();
 const IV_LENGTH = 16;
 const DELIMITER = ':';
 
 const encrypt = (text: string): string => {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', getEncryptionKey(['ENCRYPTION_KEY']), iv);
   const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
   return `${iv.toString('hex')}${DELIMITER}${encrypted.toString('hex')}`;
 };
@@ -19,7 +19,7 @@ const decrypt = (text: string): string => {
   if (parts.length !== 2) return text;
   const iv = Buffer.from(parts[0], 'hex');
   const encryptedText = Buffer.from(parts[1], 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', getEncryptionKey(['ENCRYPTION_KEY']), iv);
   const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
   return decrypted.toString('utf8');
 };

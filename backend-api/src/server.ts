@@ -1773,7 +1773,7 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
 // ── Internal: Telegram Link Verify (bot) ──────────────────────────────────
 
 const TELEGRAM_LINK_MAX_ATTEMPTS = 3;
-const TELEGRAM_LINK_ATTEMPT_WINDOW_MS =5 * 60 * 1000;
+const TELEGRAM_LINK_ATTEMPT_WINDOW_MS =10 * 60 * 1000;
 const telegramLinkAttempts = new Map<number, { failedAttempts: number; resetAt: number }>();
 
 const getTelegramLinkAttemptState = (tgId: number) => {

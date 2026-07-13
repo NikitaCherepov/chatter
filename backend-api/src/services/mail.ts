@@ -2,6 +2,7 @@
 import { simpleParser } from 'mailparser';
 import { db } from '../db.js';
 import { getUserById } from './chats.js';
+import { getEncryptionKey } from '../utils/encryption.js';
 
 export type MailProvider = 'yandex' | 'google';
 
@@ -15,8 +16,6 @@ type MailAccountRecord = {
   imap_secure: number;
 };
 
-const ENCRYPTION_KEY_SOURCE = process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
 const EMAIL_PASSWORD_DELIMITER = '::';
 
@@ -25,7 +24,7 @@ const decryptSecret = (text: string) => {
   if (parts.length !== 2) throw new Error('Неверный формат секрета');
   const iv = Buffer.from(parts[0], 'hex');
   const encryptedText = Buffer.from(parts[1], 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', getEncryptionKey(['ENCRYPTION_KEY']), iv);
   const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
   return decrypted.toString('utf8');
 };
@@ -304,7 +303,7 @@ export const runEmailRead = async (userId: number, subjectPart: string, provider
 
 const encryptSecret = (text: string) => {
   const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', getEncryptionKey(['ENCRYPTION_KEY']), iv);
   const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
   return `${iv.toString('hex')}${EMAIL_PASSWORD_DELIMITER}${encrypted.toString('hex')}`;
 };
@@ -445,4 +444,3 @@ export const runEmailSend = async (userId: number, to: string, subject: string, 
     return `❌ Ошибка отправки: ${err?.message || String(err)}`;
   }
 };
-

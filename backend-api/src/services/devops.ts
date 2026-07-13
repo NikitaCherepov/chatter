@@ -1,16 +1,18 @@
 import crypto from 'node:crypto';
 import { db, getNowUnix } from '../db.js';
+import { getEncryptionKey } from '../utils/encryption.js';
 
 // ── Encryption (same pattern as map-pins.ts) ────────────────────────────────
 
-const ENCRYPTION_KEY_SOURCE = process.env.DEVOPS_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || 'dev-default-key-change-in-prod';
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const IV_LENGTH = 16;
 const DELIMITER = ':';
 
 const encrypt = (text: string): string => {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', getEncryptionKey(
+    ['DEVOPS_ENCRYPTION_KEY', 'ENCRYPTION_KEY'],
+    'devops_encryption_key_not_configured',
+  ), iv);
   const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
   return `${iv.toString('hex')}${DELIMITER}${encrypted.toString('hex')}`;
 };
@@ -20,7 +22,10 @@ const decrypt = (text: string): string => {
   if (parts.length !== 2) return text;
   const iv = Buffer.from(parts[0], 'hex');
   const encryptedText = Buffer.from(parts[1], 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', getEncryptionKey(
+    ['DEVOPS_ENCRYPTION_KEY', 'ENCRYPTION_KEY'],
+    'devops_encryption_key_not_configured',
+  ), iv);
   const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
   return decrypted.toString('utf8');
 };
