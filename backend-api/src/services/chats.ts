@@ -1546,7 +1546,7 @@ export const generateLinkCode = (userId: number): { code: string; expires_in: nu
   // Invalidate any existing codes for this user
   db.prepare('DELETE FROM telegram_link_codes WHERE user_id = ?').run(userId);
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(crypto.randomInt(100000, 1_000_000));
   const now = Math.floor(Date.now() / 1000);
   const ttl = 600; // 10 minutes
   const expiresAt = now + ttl;

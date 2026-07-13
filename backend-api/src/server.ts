@@ -1772,6 +1772,24 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
 
 // ── Internal: Telegram Link Verify (bot) ──────────────────────────────────
 
+const TELEGRAM_LINK_MAX_ATTEMPTS = 3;
+const TELEGRAM_LINK_ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
+const telegramLinkAttempts = new Map<number, { failedAttempts: number; resetAt: number }>();
+
+const getTelegramLinkAttemptState = (tgId: number) => {
+  const now = Date.now();
+  for (const [storedTgId, state] of telegramLinkAttempts) {
+    if (state.resetAt <= now) telegramLinkAttempts.delete(storedTgId);
+  }
+  const current = telegramLinkAttempts.get(tgId);
+  if (!current || current.resetAt <= now) {
+    const fresh = { failedAttempts: 0, resetAt: now + TELEGRAM_LINK_ATTEMPT_WINDOW_MS };
+    telegramLinkAttempts.set(tgId, fresh);
+    return fresh;
+  }
+  return current;
+};
+
 app.post('/internal/link/verify', internalAuth, (req, res) => {
   const code = `${req.body?.code || ''}`.trim();
   const tgId = Number(req.body?.tg_id);
@@ -1786,8 +1804,27 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
     return res.status(403).json({ error: 'telegram_user_not_approved', status: tgUser.status });
   }
 
+  const attemptState = getTelegramLinkAttemptState(tgId);
+  if (attemptState.failedAttempts >= TELEGRAM_LINK_MAX_ATTEMPTS) {
+    return res.status(429).json({
+      error: 'too_many_link_attempts',
+      retry_after: Math.max(1, Math.ceil((attemptState.resetAt - Date.now()) / 1000)),
+    });
+  }
+
   const result = verifyLinkCode(code);
-  if (!result.ok) return res.status(404).json({ error: 'invalid_or_expired_code' });
+  if (!result.ok) {
+    attemptState.failedAttempts += 1;
+    if (attemptState.failedAttempts >= TELEGRAM_LINK_MAX_ATTEMPTS) {
+      return res.status(429).json({
+        error: 'too_many_link_attempts',
+        retry_after: Math.max(1, Math.ceil((attemptState.resetAt - Date.now()) / 1000)),
+      });
+    }
+    return res.status(404).json({ error: 'invalid_or_expired_code' });
+  }
+
+  telegramLinkAttempts.delete(tgId);
 
   const webUserId = result.userId!;
   const webUser = getUserById(webUserId);
@@ -3948,7 +3985,7 @@ server.headersTimeout = 5 * 60 * 1000 + 1000;
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws, req) => {
-  console.log(`[WS] New connection! URL: ${req.url}, host: ${req.headers.host}`);
+  console.log(`[WS] New connection, host: ${req.headers.host || 'unknown'}`);
 
   // 1. Authenticate via query param
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);

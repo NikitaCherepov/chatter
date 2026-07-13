@@ -30,22 +30,15 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
   `;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45_000);
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query,
-          variables: { target: url },
-        }),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query,
+        variables: { target: url },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
 
     const responseData = await response.json() as any;
     if (!response.ok) {
