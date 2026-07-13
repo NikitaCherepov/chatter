@@ -168,30 +168,54 @@ function resolvePiperModel(voicesDir: string, voiceId?: string) {
 
 let mainWindow: BrowserWindow | null = null;
 
+function getRendererEntryPath(): string {
+  return path.join(__dirname, '../renderer/index.html');
+}
+
+function isTrustedRendererUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (!app.isPackaged) {
+      return url.protocol === 'http:'
+        && (url.hostname === '127.0.0.1' || url.hostname === 'localhost')
+        && url.port === '5173';
+    }
+
+    const expected = new URL(`file:///${getRendererEntryPath().replace(/\\/g, '/')}`);
+    return url.protocol === 'file:' && url.pathname === expected.pathname;
+  } catch {
+    return false;
+  }
+}
+
+function isTrustedIpcSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
+  const senderFrame = event.senderFrame;
+  return mainWindow !== null
+    && event.sender === mainWindow.webContents
+    && senderFrame !== null
+    && senderFrame === mainWindow.webContents.mainFrame
+    && isTrustedRendererUrl(senderFrame.url);
+}
+
+function assertTrustedIpcSender(event: Electron.IpcMainInvokeEvent): void {
+  if (isTrustedIpcSender(event)) return;
+  console.warn('[ipc] rejected untrusted sender', { url: event.senderFrame?.url || 'unknown' });
+  throw new Error('untrusted_ipc_sender');
+}
+
 // Register sync IPC handlers before createWindow (preload calls these at load time)
 ipcMain.on('get-app-version', (event) => {
+  if (!isTrustedIpcSender(event)) {
+    console.warn('[ipc] rejected untrusted sender for get-app-version', { url: event.senderFrame?.url || 'unknown' });
+    event.returnValue = null;
+    return;
+  }
   event.returnValue = app.getVersion();
 });
 
 function createWindow() {
   const isDev = !app.isPackaged;
-  const rendererEntryPath = path.join(__dirname, '../renderer/index.html');
-
-  const isTrustedRendererUrl = (rawUrl: string): boolean => {
-    try {
-      const url = new URL(rawUrl);
-      if (isDev) {
-        return url.protocol === 'http:'
-          && (url.hostname === '127.0.0.1' || url.hostname === 'localhost')
-          && url.port === '5173';
-      }
-
-      const expected = new URL(`file:///${rendererEntryPath.replace(/\\/g, '/')}`);
-      return url.protocol === 'file:' && url.pathname === expected.pathname;
-    } catch {
-      return false;
-    }
-  };
+  const rendererEntryPath = getRendererEntryPath();
 
   const openExternalHttpUrl = (rawUrl: string) => {
     try {
@@ -241,7 +265,8 @@ function createWindow() {
   });
 
   // ── IPC: save-file (shows save dialog, writes blob to disk) ─────────────
-  ipcMain.handle('save-file', async (_event, fileName: string, data: ArrayBuffer) => {
+  ipcMain.handle('save-file', async (event, fileName: string, data: ArrayBuffer) => {
+    assertTrustedIpcSender(event);
     if (!mainWindow) return { canceled: true };
     const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
     const imageExts = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'];
@@ -265,18 +290,21 @@ function createWindow() {
   });
 
   // ── IPC: zoom ──────────────────────────────────────────────────────────
-  ipcMain.handle('set-zoom-level', (_event, level: number) => {
+  ipcMain.handle('set-zoom-level', (event, level: number) => {
+    assertTrustedIpcSender(event);
     if (!mainWindow) return;
     mainWindow.webContents.setZoomLevel(level);
   });
 
-  ipcMain.handle('get-zoom-level', () => {
+  ipcMain.handle('get-zoom-level', (event) => {
+    assertTrustedIpcSender(event);
     if (!mainWindow) return 0;
     return mainWindow.webContents.getZoomLevel();
   });
 
   // ── IPC: transcribe-audio (voice → wav → whisper.exe → text) ──────────
-  ipcMain.handle('transcribe-audio', async (_event, arrayBuffer: ArrayBuffer) => {
+  ipcMain.handle('transcribe-audio', async (event, arrayBuffer: ArrayBuffer) => {
+    assertTrustedIpcSender(event);
     const tempDir = os.tmpdir();
     const inputPath = path.join(tempDir, `voice_input_${Date.now()}.webm`);
     const outputPath = path.join(tempDir, `voice_output_${Date.now()}.wav`);
@@ -340,7 +368,8 @@ function createWindow() {
   });
 
   // ── IPC: wakeword start/stop ─────────────────────────────────────────────
-  ipcMain.handle('wakeword:start', async () => {
+  ipcMain.handle('wakeword:start', async (event) => {
+    assertTrustedIpcSender(event);
     try {
       return await getWakewordService().start();
     } catch (error) {
@@ -349,16 +378,22 @@ function createWindow() {
     }
   });
 
-  ipcMain.handle('wakeword:stop', () => {
+  ipcMain.handle('wakeword:stop', (event) => {
+    assertTrustedIpcSender(event);
     return getWakewordService().stop();
   });
 
-  ipcMain.on('wakeword-audio-chunk', (_event, buffer: ArrayBuffer | Uint8Array) => {
+  ipcMain.on('wakeword-audio-chunk', (event, buffer: ArrayBuffer | Uint8Array) => {
+    if (!isTrustedIpcSender(event)) {
+      console.warn('[ipc] rejected untrusted sender for wakeword-audio-chunk', { url: event.senderFrame?.url || 'unknown' });
+      return;
+    }
     getWakewordService().processAudioChunk(buffer);
   });
 
   // ── IPC: tts:generate (text → piper.exe → WAV buffer) ──────────────────
-  ipcMain.handle('tts:generate', async (_event, text: string, voiceId?: string) => {
+  ipcMain.handle('tts:generate', async (event, text: string, voiceId?: string) => {
+    assertTrustedIpcSender(event);
     const piperDir = getPiperDir();
 
     const piperExe = path.join(piperDir, 'piper.exe');
@@ -415,14 +450,16 @@ function createWindow() {
   });
 
   // ── IPC: get sounds path ────────────────────────────────────────────────
-  ipcMain.handle('get-sounds-path', () => {
+  ipcMain.handle('get-sounds-path', (event) => {
+    assertTrustedIpcSender(event);
     const soundsDir = app.isPackaged
       ? path.join(process.resourcesPath, 'sounds')
       : path.join(__dirname, '..', '..', 'sounds');
     return soundsDir;
   });
 
-  ipcMain.handle('read-sound-file', (_event, fileName: string) => {
+  ipcMain.handle('read-sound-file', (event, fileName: string) => {
+    assertTrustedIpcSender(event);
     const safeName = path.basename(fileName);
     if (safeName !== fileName || !/\.(mp3|wav|ogg)$/i.test(safeName)) {
       console.error('[sounds] rejected unsafe file name:', fileName);
@@ -444,7 +481,8 @@ function createWindow() {
 
   // ── Macro IPC: execute commands ──
 
-  ipcMain.handle('execute-commands', async (_event, commands: string[], options?: { background?: boolean }) => {
+  ipcMain.handle('execute-commands', async (event, commands: string[], options?: { background?: boolean }) => {
+    assertTrustedIpcSender(event);
     const batchStartedAt = Date.now();
     const background = options?.background === true;
     console.log('[execute-commands] batch start', {
@@ -557,7 +595,8 @@ function createWindow() {
 
   // ── Macro IPC: read directory (read-only) ──
 
-  ipcMain.handle('read-directory', async (_event, targetPath: string) => {
+  ipcMain.handle('read-directory', async (event, targetPath: string) => {
+    assertTrustedIpcSender(event);
     if (typeof targetPath !== 'string' || !targetPath.trim()) {
       throw new Error('target_path_required');
     }
@@ -591,7 +630,8 @@ function createWindow() {
 
   // ── File Action: read file natively (UTF-8, paginated, .docx supported, line numbers) ──
 
-  ipcMain.handle('get-file-info', async (_event, payload: { file_path: string; include_line_count?: boolean }) => {
+  ipcMain.handle('get-file-info', async (event, payload: { file_path: string; include_line_count?: boolean }) => {
+    assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
 
@@ -639,7 +679,8 @@ function createWindow() {
     return info;
   });
 
-  ipcMain.handle('read-file', async (_event, payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => {
+  ipcMain.handle('read-file', async (event, payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => {
+    assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
 
@@ -721,7 +762,8 @@ function createWindow() {
 
   // ── File Action: write file natively (UTF-8, overwrite or append, .docx supported) ──
 
-  ipcMain.handle('search-file-keywords', async (_event, payload: { file_path: string; query: string; max_matches?: number }) => {
+  ipcMain.handle('search-file-keywords', async (event, payload: { file_path: string; query: string; max_matches?: number }) => {
+    assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
 
@@ -790,7 +832,8 @@ function createWindow() {
     };
   });
 
-  ipcMain.handle('write-file', async (_event, payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => {
+  ipcMain.handle('write-file', async (event, payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => {
+    assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
 
@@ -847,7 +890,8 @@ function createWindow() {
 
   // ── File Action: edit file lines (surgical splice) ──
 
-  ipcMain.handle('edit-file-lines', async (_event, payload: { file_path: string; start_line: number; end_line: number; new_content: string }) => {
+  ipcMain.handle('edit-file-lines', async (event, payload: { file_path: string; start_line: number; end_line: number; new_content: string }) => {
+    assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
 
@@ -894,7 +938,8 @@ function createWindow() {
 
   // ── Visual Control: capture screen (all monitors) ──
 
-  ipcMain.handle('capture-screen', async () => {
+  ipcMain.handle('capture-screen', async (event) => {
+    assertTrustedIpcSender(event);
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: { width: 1920, height: 1080 },
@@ -932,7 +977,8 @@ function createWindow() {
 
   // ── Visual Control: capture webcam photo ──
 
-  ipcMain.handle('capture-webcam', async (_event, payload?: { camera_name?: string }) => {
+  ipcMain.handle('capture-webcam', async (event, payload?: { camera_name?: string }) => {
+    assertTrustedIpcSender(event);
     const cameraName = payload?.camera_name || 'Microsoft Modern Webcam';
     const outPath = path.join(app.getPath('temp'), `chatter_webcam_${Date.now()}.jpg`);
 
@@ -972,12 +1018,13 @@ function createWindow() {
 
   // ── Visual Control: execute mouse click ──
 
-  ipcMain.handle('visual-click', async (_event, data: {
+  ipcMain.handle('visual-click', async (event, data: {
     display_id?: string;
     x: number;
     y: number;
     button?: string;
   }) => {
+    assertTrustedIpcSender(event);
     if (!data || typeof data.x !== 'number' || typeof data.y !== 'number') {
       throw new Error('x_y_required');
     }
@@ -1031,7 +1078,8 @@ function createWindow() {
     }
   });
 
-  ipcMain.handle('read-ssh-keys', async () => {
+  ipcMain.handle('read-ssh-keys', async (event) => {
+    assertTrustedIpcSender(event);
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
     if (!homeDir) throw new Error('no_home_dir');
 
@@ -1151,7 +1199,8 @@ function setupCustomUpdater() {
   const manifestUrl = `${baseUrl}/version.json`;
 
   // ── IPC: check-for-updates ────────────────────────────────────────────
-  ipcMain.handle('update:check', async () => {
+  ipcMain.handle('update:check', async (event) => {
+    assertTrustedIpcSender(event);
     try {
       log(`checking: ${manifestUrl}`);
       const response = await net.fetch(manifestUrl);
@@ -1185,7 +1234,8 @@ function setupCustomUpdater() {
   });
 
   // ── IPC: update:download ──────────────────────────────────────────────
-  ipcMain.handle('update:download', async (_event, downloadUrl: string) => {
+  ipcMain.handle('update:download', async (event, downloadUrl: string) => {
+    assertTrustedIpcSender(event);
     try {
       log(`downloading: ${downloadUrl}`);
 
@@ -1246,7 +1296,8 @@ function setupCustomUpdater() {
   });
 
   // ── IPC: update:install-minor (ASAR Hot-Swap) ────────────────────────
-  ipcMain.handle('update:install-minor', async (_event, tempPath: string) => {
+  ipcMain.handle('update:install-minor', async (event, tempPath: string) => {
+    assertTrustedIpcSender(event);
     try {
       if (!fs.existsSync(tempPath)) {
         return { error: 'temp_file_not_found' };
@@ -1328,7 +1379,8 @@ function setupCustomUpdater() {
   });
 
   // ── IPC: update:install-major (run full installer) ───────────────────
-  ipcMain.handle('update:install-major', async (_event, tempPath: string) => {
+  ipcMain.handle('update:install-major', async (event, tempPath: string) => {
+    assertTrustedIpcSender(event);
     try {
       if (!fs.existsSync(tempPath)) {
         return { error: 'installer_not_found' };
