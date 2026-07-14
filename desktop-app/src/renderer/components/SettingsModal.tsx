@@ -969,7 +969,7 @@ export function SettingsModal({ onClose }: Props) {
                                   onChange={(e) => setAiInstruction(e.target.value.slice(0, 1000))}
                                   placeholder="Опишите что хотите получить (например: «саркастичный помощник, который не церемонится»)"
                                   rows={2}
-                                  maxLength={1000}
+                                  maxLength={50000}
                                 />
                                 <div style={{ marginTop: '8px' }}>
                                   <label className={s.fieldLabel} style={{ display: 'block', marginBottom: '4px' }}>
