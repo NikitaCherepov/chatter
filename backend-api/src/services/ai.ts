@@ -1645,6 +1645,10 @@ export const toolDefinitions = [
               type: 'array',
               items: { type: 'string' }
             }
+          },
+          set_as_avatar: {
+            type: 'boolean',
+            description: 'Если true — поставить созданную картинку в пиксельный аватар (mode=media). По умолчанию false.'
           }
         },
         required: ['pixels']
@@ -3102,6 +3106,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       if (Array.isArray(generatedImages)) {
         generatedImages.push({ image_base64: result.preview.base64, image_url: result.preview.url, prompt_used: 'pixel-art (preview)' });
         generatedImages.push({ image_base64: result.original.base64, image_url: result.original.url, prompt_used: 'pixel-art (original)' });
+      }
+
+      if (parsed.set_as_avatar === true && displayStateSink) {
+        displayStateSink.value = { mode: 'media', media_url: result.original.url };
       }
 
       return JSON.stringify({ status: 'success', message: 'Пиксель-арт изображение создано и будет отправлено пользователю. Опиши результат своими словами.' });
