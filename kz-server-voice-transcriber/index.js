@@ -3,10 +3,28 @@ const multer = require('multer');
 const { execSync, exec, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+const requireEnv = (name) => {
+    const value = `${process.env[name] || ''}`.trim();
+    if (!value) throw new Error(`[config] ${name} is required`);
+    return value;
+};
+
+const parsePort = (value) => {
+    const port = Number(value);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error('[config] VOICE_API_PORT must be an integer between 1 and 65535');
+    }
+    return port;
+};
 
 const app = express();
 const upload = multer({ dest: 'tmp/' });
-const SECRET_TOKEN = '***REMOVED_VOICE_SECRET***';
+const SECRET_TOKEN = requireEnv('VOICE_TRANSCRIBE_TOKEN');
+const VOICE_API_PORT = parsePort(process.env.VOICE_API_PORT || '3030');
 
 let queue = [];
 let isProcessing = false;
@@ -270,4 +288,4 @@ app.post('/api/voice/stream', upload.single('audio'), (req, res) => {
     processQueue();
 });
 
-app.listen(3030, () => console.log('KZ Voice API с очередью запущен...'));
+app.listen(VOICE_API_PORT, () => console.log(`KZ Voice API с очередью запущен на порту ${VOICE_API_PORT}...`));

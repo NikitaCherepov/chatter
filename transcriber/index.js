@@ -4,12 +4,27 @@ const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const dotenv = require('dotenv');
+
+// Prefer a component-specific .env, then use the project root .env as fallback.
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
+const requireEnv = (name) => {
+    const value = `${process.env[name] || ''}`.trim();
+    if (!value) throw new Error(`[config] ${name} is required`);
+    return value;
+};
 
 // --- НАСТРОЙКИ ---
-const BOT_TOKEN = '***REMOVED_TELEGRAM_TOKEN***';
-const KZ_SERVER_URL = 'http://***REMOVED_VOICE_ENDPOINT***/api/voice/stream';
-const KZ_SECRET = '***REMOVED_VOICE_SECRET***';
-const ADMIN_ID = 0;
+const BOT_TOKEN = requireEnv('TELEGRAM_TOKEN');
+const KZ_SERVER_URL = requireEnv('VOICE_TRANSCRIBE_URL');
+const KZ_SECRET = requireEnv('VOICE_TRANSCRIBE_TOKEN');
+const ADMIN_ID = Number(requireEnv('TRANSCRIBER_ADMIN_ID'));
+
+if (!Number.isSafeInteger(ADMIN_ID) || ADMIN_ID <= 0) {
+    throw new Error('[config] TRANSCRIBER_ADMIN_ID must be a positive integer');
+}
 
 // --- RICH STREAMING (Bot API 10.1+: sendRichMessageDraft / sendRichMessage) ---
 // Адаптация RichStreamSession из index.ts основного бота.

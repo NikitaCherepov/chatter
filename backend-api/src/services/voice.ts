@@ -6,9 +6,6 @@ type VoiceTurnOptions = {
   assistantTelegramChatId?: number | null;
 };
 
-const VOICE_TRANSCRIBE_URL = (process.env.VOICE_TRANSCRIBE_URL || 'http://***REMOVED_VOICE_ENDPOINT***/api/voice').trim();
-const VOICE_TRANSCRIBE_TOKEN = (process.env.VOICE_TRANSCRIBE_TOKEN || '').trim();
-
 const resolveDefaultVoiceEndpoint = (transcribeUrl: string, targetPath: '/api/tts' | '/api/silero') => {
   try {
     const parsed = new URL(transcribeUrl);
@@ -29,21 +26,34 @@ const normalizeTtsEngine = (value: string | undefined) => {
   return 'tts';
 };
 
-const VOICE_TTS_ENGINE = normalizeTtsEngine(process.env.VOICE_TTS_ENGINE);
-const VOICE_TTS_URL = (process.env.VOICE_TTS_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/tts')).trim();
-const VOICE_SILERO_URL = (process.env.VOICE_SILERO_URL || resolveDefaultVoiceEndpoint(VOICE_TRANSCRIBE_URL, '/api/silero')).trim();
-const getVoiceSynthesisUrl = () => (VOICE_TTS_ENGINE === 'silero' ? VOICE_SILERO_URL : VOICE_TTS_URL);
+const getVoiceConfig = () => {
+  const transcribeUrl = `${process.env.VOICE_TRANSCRIBE_URL || ''}`.trim();
+  const token = `${process.env.VOICE_TRANSCRIBE_TOKEN || ''}`.trim();
+
+  if (!transcribeUrl) throw new Error('VOICE_TRANSCRIBE_URL_REQUIRED');
+  if (!token) throw new Error('VOICE_TRANSCRIBE_TOKEN_REQUIRED');
+
+  const ttsEngine = normalizeTtsEngine(process.env.VOICE_TTS_ENGINE);
+  const ttsUrl = `${process.env.VOICE_TTS_URL || resolveDefaultVoiceEndpoint(transcribeUrl, '/api/tts')}`.trim();
+  const sileroUrl = `${process.env.VOICE_SILERO_URL || resolveDefaultVoiceEndpoint(transcribeUrl, '/api/silero')}`.trim();
+
+  return {
+    transcribeUrl,
+    token,
+    synthesisUrl: ttsEngine === 'silero' ? sileroUrl : ttsUrl
+  };
+};
 
 const transcribeAudio = async (audioBuffer: Buffer, mimeType: string) => {
+  const config = getVoiceConfig();
   const formData = new FormData();
   formData.append('audio', new Blob([new Uint8Array(audioBuffer)], { type: mimeType || 'audio/ogg' }), 'voice.ogg');
 
-  const headers: Record<string, string> = {};
-  if (VOICE_TRANSCRIBE_TOKEN) {
-    headers.Authorization = `Bearer ${VOICE_TRANSCRIBE_TOKEN}`;
-  }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${config.token}`
+  };
 
-  const response = await fetch(VOICE_TRANSCRIBE_URL, {
+  const response = await fetch(config.transcribeUrl, {
     method: 'POST',
     headers,
     body: formData
@@ -62,13 +72,14 @@ const transcribeAudio = async (audioBuffer: Buffer, mimeType: string) => {
 const synthesizeVoice = async (text: string) => {
   const safeText = `${text || ''}`.trim();
   if (!safeText) return null;
+  const config = getVoiceConfig();
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (VOICE_TRANSCRIBE_TOKEN) {
-    headers.Authorization = `Bearer ${VOICE_TRANSCRIBE_TOKEN}`;
-  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${config.token}`
+  };
 
-  const response = await fetch(getVoiceSynthesisUrl(), {
+  const response = await fetch(config.synthesisUrl, {
     method: 'POST',
     headers,
     body: JSON.stringify({ text: safeText })
