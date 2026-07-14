@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { getBaseFace, getReaction, type BaseMood, type ReactionKey } from './faces';
 import { getGifDurationMs } from './gifDuration';
 import type { SetDisplayStatePayload } from './schema';
+import { resolveImageUrl } from '../../lib/api';
 import s from './PixelAvatar.module.scss';
 
 // ── Blink config ────────────────────────────────────────────────────────────
@@ -139,7 +140,7 @@ export function PixelAvatar() {
     }
 
     if (payload.mode === 'media' && payload.media_url) {
-      setMediaUrl(payload.media_url);
+      setMediaUrl(resolveImageUrl(payload.media_url));
       setReactionQueue([]);
       setActiveReaction(null);
       setLoopReaction(null);
