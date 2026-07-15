@@ -1,4 +1,6 @@
-﻿# Chatter Bot (`index.ts`)
+# Chatter Bot (`index.ts`)
+
+[English](README.md) | [Русский](README_RU.md)
 
 Telegram-бот проекта `chatter`.
 
@@ -155,7 +157,7 @@ npm run logs
 
 ## Смежная документация
 
-- API backend: [backend-api/README.md](./backend-api/README.md)
+- API backend: [backend-api/README_RU.md](./backend-api/README_RU.md)
 
 ## SSE/rich-стриминг и подтверждения команд в Telegram
 
@@ -274,7 +276,7 @@ Telegram **удаляет Markdown** из текста сообщения (backt
 - **`invoke_subagent`** — вызов специализированного субагента, зарегистрированного в статическом реестре.
 - **`spawn_subagent`** — создание ad-hoc субагентов «на лету»: модель задаёт задачу, системный промпт, набор инструментов и лимит итераций. Несколько вызовов в одной итерации выполняются параллельно (до 3 одновременно). Полный trace сохраняется в отдельном поле `subagents_json` для отображения в UI десктопа.
 
-Подробности архитектуры субагентов: [backend-api/README.md → Subagent System](./backend-api/README.md#subagent-system-desktop-only-isdesktop).
+Подробности архитектуры субагентов: [backend-api/README_RU.md → Subagent System](./backend-api/README_RU.md#subagent-system-desktop-only-isdesktop).
 
 ## Soft Abort (остановка генерации)
 

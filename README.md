@@ -1,5 +1,7 @@
 # Chatter Bot (`index.ts`)
 
+[English](README.md) | [Русский](README_RU.md)
+
 Telegram bot for the `chatter` project.
 
 `index.ts` handles the Telegram UX (commands, menus, text/voice/photo processing) and communicates with `backend-api` via an internal API for AI and user management.

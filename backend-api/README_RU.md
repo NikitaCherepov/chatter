@@ -1,4 +1,6 @@
-﻿# chatter backend-api
+# chatter backend-api
+
+[English](README.md) | [Русский](README_RU.md)
 
 Backend для веб/бот-клиентов с JWT API (`/api/v1/*`) и internal API (`/internal/*`).
 
@@ -561,7 +563,7 @@ services/subagents/
   - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options?, documents? }` -> `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
   - `POST /internal/ai/stream` -> SSE-стриминг для Telegram: `{ user_id, text, chat_id?, options?, documents? }`
     - `documents[]` — опциональный массив `{ filename, base64 }`, парсится и сохраняется идентично `/api/v1/chat/send` (см. [Документы (attachments)](#документы-attachments)).
-    - События: `intermediate`, `tool_status`, `display_state`, `desktop_action`, `done`, `error` (см. [SSE-стриминг](#sse-striing-i-dual-delivery-podtverzhdeniy))
+    - События: `intermediate`, `tool_status`, `display_state`, `desktop_action`, `done`, `error` (см. [SSE-стриминг](#sse-стриминг-и-dual-delivery-подтверждений))
     - Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`
   - `POST /internal/ai/lite` -> `{ text }` -> `{ reply_text }` — LITE AI для проверки безопасности команд
   - `POST /internal/ai/admin-outreach` -> `{ target_user_id, admin_instruction }`

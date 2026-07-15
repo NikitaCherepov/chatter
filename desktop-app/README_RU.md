@@ -1,5 +1,7 @@
 # chatter desktop-app
 
+[English](README.md) | [Русский](README_RU.md)
+
 Electron + React + Vite десктоп-клиент для Chatter.
 
 ## Быстрый старт
@@ -349,7 +351,7 @@ Leaflet-карта с тремя слоями (светлая/спутник/с�
 | `email_confirmation` | Подтверждение `send_email` — карточка с From, To, Subject и превью Body (через MarkdownRenderer). Кнопки «Отправить» / «Отклонить». Дедупликация по `confirmation_id`. |
 | `suggest_devops_runbook` | Предложение инструкции — карточка с кнопками «Сохранить»/«Проверить»/«Отклонить» |
 
-Reject UX: desktop confirmation cards use shared `RejectWithComment`; clicking reject opens a short textarea. The comment is sent as `rejection_comment`, and backend returns it to AI as `user_comment` in the rejected tool result.
+UX отклонения: карточки подтверждения на десктопе используют общий компонент `RejectWithComment`; при нажатии кнопки отклонения открывается небольшое текстовое поле. Комментарий отправляется как `rejection_comment`, а backend возвращает его AI как `user_comment` в результате отклонённого вызова инструмента.
 
 ## Макросы
 
@@ -590,29 +592,6 @@ Desktop получает DevOps-действия через WS `desktop_action` 
 - `default_ssh_key_id` — ключ, который можно ставить на сервер и использовать для входа.
 - `use_ssh_key_for_login` — отдельная галочка способа входа: password login или key login.
 
-### DevOps: current cards and passwords
-
-Desktop receives DevOps actions through WS `desktop_action` and renders them in `ChatPage.tsx`.
-
-**`devops_confirmation`**
-- Used for SSH commands, `create_server_user`, and `change_server_user_password`.
-- Shows server name, host, and a safe command preview.
-- If backend sends `needs_sudo_password=true`, the card shows a `Sudo password` input and a checkbox to save it into server `sudo_password`.
-- If backend sends `needs_new_password=true`, the card shows a `New password` input. This is the Linux user's new password for `change_server_user_password`; the bot does not see it, and the preview stays `password=***`.
-- Confirmation is sent to `POST /api/v1/devops/approve` with `{ confirmation_id, approved, sudo_password?, save_sudo_password?, new_password? }`.
-
-**`suggest_server_creds_update`**
-- Used when the bot proposes changing server credentials after creating a user or installing an SSH key.
-- Supports `new_username`, `use_ssh_key_for_login` / `use_ssh_key`, and `remove_password`.
-- If `confirmation_id` is present, the card confirms through `/api/v1/devops/approve`, so the backend tool call waits for the user and continues the same AI flow.
-- If `use_ssh_key_for_login=true`, backend logs in with the server default SSH key. If the key does not work, password fallback is not attempted.
-
-**Server settings**
-- `password` is the normal SSH login password.
-- `sudo_password` is used for `sudo -S` and as the password source for `create_server_user` when saved.
-- `default_ssh_key_id` is the key used for installation and optional key login.
-- `use_ssh_key_for_login` is the explicit login-mode checkbox: password login or key login.
-
 ## Умный дом (Smart Home)
 
 Вкладка "Умный дом" в SettingsModal — управление устройствами умного дома через Яндекс.Умный дом.
@@ -635,7 +614,7 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 | `components/SmartHomeSettings.tsx` | Вкладка настроек: токен, синхронизация, список устройств |
 | `lib/api.ts` | Типы `SmartDeviceDto`, `SmartHomeSettingsDto` + API-функции |
 
-Подробности архитектуры бэкенда: [backend-api/README.md → Smart Home](../backend-api/README.md#smart-home-умный-дом).
+Подробности архитектуры бэкенда: [backend-api/README_RU.md → Smart Home](../backend-api/README_RU.md#smart-home-умный-дом).
 
 ## Feature Flags (ограничения инструментов)
 
@@ -861,7 +840,7 @@ WS это не ломает: `streamChatMessage()` по-прежнему пол�
 **Поток:**
 
 1. Клик по «Создать ветку» → `POST /api/v1/chats/:currentChatId/fork` ← `{ from_message_id }`.
-2. Бэкенд копирует все сообщения от начала до `from_message_id` в новый чат (см. [backend README → Форк чата](../backend-api/README.md#форк-чата-dialog-branch)).
+2. Бэкенд копирует все сообщения от начала до `from_message_id` в новый чат (см. [backend README → Форк чата](../backend-api/README_RU.md#форк-чата-dialog-branch)).
 3. Новый чат становится активным, сайдбар обновляется (`loadChats`), `selectChat(res.chat_id)` переключает на ветку.
 4. Кнопка блокируется на время запроса (`forking` state).
 
@@ -948,9 +927,9 @@ Desktop-клиент использует **WebSocket** для двунапра�
 
 ### Stop generation
 
-- `stopChatStream()` sends `{ type: 'chat_stop' }` over WS when connected and also calls `POST /api/v1/chat/stop` as a fallback/backup.
-- In `ChatPage`, `sending` means "there is an active chat request" and keeps the stop button visible until `done`, `error`, or aborted `done`.
-- `showTyping` is separate from `sending`: it controls the pre-message typing bubble before an assistant message exists. The first `reasoning_token`, `stream_token`, `tool_status`, or `intermediate` hides `showTyping` and switches to the temporary assistant message managed by `streamAppenderRef`.
+- `stopChatStream()` отправляет `{ type: 'chat_stop' }` через WS при активном подключении и дополнительно вызывает `POST /api/v1/chat/stop` как резервный вариант.
+- В `ChatPage` состояние `sending` означает, что выполняется активный запрос чата, и сохраняет кнопку остановки видимой до получения `done`, `error` или прерванного `done`.
+- `showTyping` не зависит от `sending`: оно управляет индикатором набора до появления сообщения ассистента. Первое событие `reasoning_token`, `stream_token`, `tool_status` или `intermediate` скрывает `showTyping` и переключает интерфейс на временное сообщение ассистента, которым управляет `streamAppenderRef`.
 
 **Soft abort:** при остановке генерации бот не удаляет накопленный контент. Вместо этого:
 - Если `res.aborted === true` и есть `res.message_id` — временное сообщение финализируется с реальным ID, всем накопленным контентом (`reasoning_content`, `tool_calls`, `subagents`) и текстом `_⏹ Генерация остановлена пользователем_`.

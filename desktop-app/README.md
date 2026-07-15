@@ -1,5 +1,7 @@
 # chatter desktop-app
 
+[English](README.md) | [Русский](README_RU.md)
+
 Electron + React + Vite desktop client for Chatter.
 
 ## Quick Start

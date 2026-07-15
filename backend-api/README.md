@@ -1,5 +1,7 @@
 # chatter backend-api
 
+[English](README.md) | [Русский](README_RU.md)
+
 Backend for web/bot clients with JWT API (`/api/v1/*`) and internal API (`/internal/*`).
 
 ## Quick Start
