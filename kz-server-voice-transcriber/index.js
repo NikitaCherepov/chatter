@@ -30,6 +30,12 @@ const parsePositiveInteger = (name, value, fallback) => {
     return parsed;
 };
 
+const parseWhisperLanguage = (value) => {
+    const language = `${value || 'auto'}`.trim().toLowerCase();
+    if (language === 'auto' || /^[a-z]{2,3}$/.test(language)) return language;
+    throw new Error('[config] VOICE_TRANSCRIBE_LANGUAGE must be auto or a 2-3 letter language code');
+};
+
 const app = express();
 const SECRET_TOKEN = requireEnv('VOICE_TRANSCRIBE_TOKEN');
 const VOICE_API_PORT = parsePort(process.env.VOICE_API_PORT || '3030');
@@ -40,6 +46,7 @@ const MAX_TTS_CHARS = parsePositiveInteger('VOICE_MAX_TTS_CHARS', process.env.VO
 const TMP_MAX_AGE_HOURS = parsePositiveInteger('VOICE_TMP_MAX_AGE_HOURS', process.env.VOICE_TMP_MAX_AGE_HOURS, 24);
 const TMP_MAX_AGE_MS = TMP_MAX_AGE_HOURS * 60 * 60 * 1000;
 const TTS_VOICE = process.env.TTS_VOICE || 'ru-RU-DmitryNeural';
+const WHISPER_LANGUAGE = parseWhisperLanguage(process.env.VOICE_TRANSCRIBE_LANGUAGE);
 const TMP_DIR = path.resolve(__dirname, 'tmp');
 const WHISPER_BIN = path.resolve(__dirname, '../whisper.cpp/build/bin/whisper-cli');
 const WHISPER_MODEL = path.resolve(__dirname, '../whisper.cpp/models/ggml-small.bin');
@@ -181,7 +188,7 @@ const processQueue = async () => {
             '-m', WHISPER_MODEL,
             '-f', wavPath,
             '-nt',
-            '-l', 'ru',
+            '-l', WHISPER_LANGUAGE,
             '-pp'
         ]);
 

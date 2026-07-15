@@ -29,8 +29,8 @@ const resolveDefaultVoiceEndpoint = (transcribeUrl: string, targetPath: '/api/tt
 
 const normalizeTtsEngine = (value: string | undefined) => {
   const lowered = `${value || ''}`.trim().toLowerCase();
-  if (lowered === 'silero') return 'silero';
-  return 'tts';
+  if (lowered === 'edge') return 'edge';
+  return 'silero';
 };
 
 const getVoiceConfig = () => {
@@ -47,7 +47,7 @@ const getVoiceConfig = () => {
   return {
     transcribeUrl,
     token,
-    synthesisUrl: ttsEngine === 'silero' ? sileroUrl : ttsUrl
+    synthesisUrl: ttsEngine === 'edge' ? ttsUrl : sileroUrl
   };
 };
 
