@@ -966,7 +966,7 @@ export function SettingsModal({ onClose }: Props) {
                                 <textarea
                                   className={s.textareaInput}
                                   value={aiInstruction}
-                                  onChange={(e) => setAiInstruction(e.target.value.slice(0, 1000))}
+                                  onChange={(e) => setAiInstruction(e.target.value.slice(0, 50000))}
                                   placeholder="Опишите что хотите получить (например: «саркастичный помощник, который не церемонится»)"
                                   rows={2}
                                   maxLength={50000}
