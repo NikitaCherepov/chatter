@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { diffLines } from 'diff';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
@@ -9,6 +10,13 @@ import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPrevie
 import type { TtsSettings } from '../lib/tts';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
+import {
+  getDetectedSystemLanguage,
+  getLanguagePreference,
+  isLanguagePreference,
+  setLanguagePreference,
+  type LanguagePreference,
+} from '../i18n';
 import Slider from './Slider';
 import Checkbox from './Checkbox';
 import { MacroSettings } from './MacroSettings';
@@ -85,6 +93,7 @@ function clampZoomPct(pct: number): number {
 
 export function SettingsModal({ onClose }: Props) {
   const { user, setUser } = useAuth();
+  const { i18n } = useTranslation();
   const [section, setSection] = useState<Section>('account');
 
   // Account
@@ -165,6 +174,17 @@ export function SettingsModal({ onClose }: Props) {
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
+  const [languagePreference, setLanguagePreferenceState] = useState<LanguagePreference>(
+    () => getLanguagePreference(),
+  );
+  const languageOptions = useMemo<SelectOption[]>(() => {
+    const currentSystemLanguage = getDetectedSystemLanguage() === 'ru' ? 'Русский' : 'English';
+    return [
+      { value: 'system', label: `Системный (${currentSystemLanguage})` },
+      { value: 'ru', label: 'Русский' },
+      { value: 'en', label: 'English' },
+    ];
+  }, [i18n.language]);
   const [subagentModel, setSubagentModelState] = useState<string | null>(null);
   const [subagentModelSaving, setSubagentModelSaving] = useState(false);
   const [subagentReasoningLevel, setSubagentReasoningLevelState] = useState<api.ReasoningLevel | null>(null);
@@ -250,6 +270,13 @@ export function SettingsModal({ onClose }: Props) {
         .catch(() => {});
     }
   }, [section]);
+
+  const handleLanguagePreferenceChange = async (value: string) => {
+    if (!isLanguagePreference(value)) return;
+
+    setLanguagePreferenceState(value);
+    await setLanguagePreference(value);
+  };
 
   const handleToggleShowTokens = async () => {
     const newValue = !(uiSettings.show_tokens !== false);
@@ -1397,6 +1424,16 @@ export function SettingsModal({ onClose }: Props) {
           {section === 'app' && (
             <div className={s.panel}>
               <div className={s.panelTitle}>Приложение</div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>Язык интерфейса</label>
+                <Select
+                  options={languageOptions}
+                  value={languagePreference}
+                  onChange={handleLanguagePreferenceChange}
+                  placeholder="Системный"
+                />
+              </div>
 
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>Масштаб интерфейса</label>

@@ -5,6 +5,8 @@ declare global {
     electronAPI: {
       platform: string;
       apiBaseUrl: string;
+      appVersion: string;
+      getSystemLanguages: () => Promise<string[]>;
       onAvatarState: (callback: (payload: unknown) => void) => () => void;
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;

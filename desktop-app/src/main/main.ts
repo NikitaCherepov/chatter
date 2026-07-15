@@ -213,6 +213,16 @@ ipcMain.on('get-app-version', (event) => {
   event.returnValue = app.getVersion();
 });
 
+ipcMain.handle('i18n:get-system-languages', (event) => {
+  assertTrustedIpcSender(event);
+  const languages = [
+    app.getSystemLocale(),
+    ...app.getPreferredSystemLanguages(),
+  ].filter(Boolean);
+
+  return [...new Set(languages)];
+});
+
 function createWindow() {
   const isDev = !app.isPackaged;
   const rendererEntryPath = getRendererEntryPath();

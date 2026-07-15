@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   appVersion: ipcRenderer.sendSync('get-app-version'),
 
+  getSystemLanguages: () =>
+    ipcRenderer.invoke('i18n:get-system-languages'),
+
   // PixelAvatar: listen for avatar state pushes from main process
   onAvatarState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
