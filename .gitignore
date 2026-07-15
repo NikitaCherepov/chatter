@@ -6,6 +6,9 @@ node_modules/
 dist/
 backend-api/dist/
 settings.local.json
+kz-server-voice-transcriber/tmp/
+transcriber/temp_audio_*
+transcriber/transcription_*
 
 
 desktop-app/release/

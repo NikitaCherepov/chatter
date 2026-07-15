@@ -452,6 +452,7 @@ app.post('/internal/voice/turn', internalAuth, async (req, res) => {
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
     if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_audio') return res.status(400).json({ error: code });
+    if (code === 'audio_too_large') return res.status(413).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
     return res.status(500).json({ error: code });
   }

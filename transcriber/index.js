@@ -1,6 +1,7 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 const FormData = require('form-data');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -25,6 +26,67 @@ const ADMIN_ID = Number(requireEnv('TRANSCRIBER_ADMIN_ID'));
 if (!Number.isSafeInteger(ADMIN_ID) || ADMIN_ID <= 0) {
     throw new Error('[config] TRANSCRIBER_ADMIN_ID must be a positive integer');
 }
+
+const formatSafeError = (error) => {
+    if (axios.isAxiosError(error)) {
+        const details = [
+            error.message,
+            error.code ? `code=${error.code}` : '',
+            error.response?.status ? `status=${error.response.status}` : ''
+        ].filter(Boolean);
+        return details.join(' ');
+    }
+    return error instanceof Error ? error.message : String(error);
+};
+
+const TRANSCRIBER_TMP_MAX_AGE_HOURS = Number(process.env.TRANSCRIBER_TMP_MAX_AGE_HOURS || 24);
+const TRANSCRIBER_TMP_MAX_AGE_MS = (
+    Number.isFinite(TRANSCRIBER_TMP_MAX_AGE_HOURS) && TRANSCRIBER_TMP_MAX_AGE_HOURS > 0
+        ? TRANSCRIBER_TMP_MAX_AGE_HOURS
+        : 24
+) * 60 * 60 * 1000;
+let cleanupRunning = false;
+
+const cleanupStaleTranscriberFiles = async () => {
+    if (cleanupRunning) return;
+    cleanupRunning = true;
+    try {
+        const entries = await fs.promises.readdir(__dirname, { withFileTypes: true });
+        const now = Date.now();
+        await Promise.all(entries
+            .filter((entry) => entry.isFile() && (
+                entry.name.startsWith('temp_audio_') || entry.name.startsWith('transcription_')
+            ))
+            .map(async (entry) => {
+                const filePath = path.resolve(__dirname, entry.name);
+                try {
+                    const stat = await fs.promises.stat(filePath);
+                    if (now - stat.mtimeMs > TRANSCRIBER_TMP_MAX_AGE_MS) {
+                        await fs.promises.unlink(filePath);
+                    }
+                } catch (error) {
+                    if (error?.code !== 'ENOENT') {
+                        console.warn('[cleanup] failed:', formatSafeError(error));
+                    }
+                }
+            }));
+    } catch (error) {
+        console.warn('[cleanup] scan failed:', formatSafeError(error));
+    } finally {
+        cleanupRunning = false;
+    }
+};
+
+const removeTempFile = (filePath) => {
+    if (!filePath) return;
+    try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (error) {
+        console.warn('[cleanup] unlink failed:', formatSafeError(error));
+    }
+};
+
+void cleanupStaleTranscriberFiles();
 
 // --- RICH STREAMING (Bot API 10.1+: sendRichMessageDraft / sendRichMessage) ---
 // Адаптация RichStreamSession из index.ts основного бота.
@@ -103,7 +165,9 @@ class RichStreamSession {
                 this.consecutiveOkFlushes = 0;
             }
         } catch (err) {
-            const description = err?.response?.description || err?.description || err?.message || String(err);
+            const description = typeof err?.response?.description === 'string'
+                ? err.response.description
+                : formatSafeError(err);
 
             if (description.toLowerCase().includes('too many requests')) {
                 // 429 — не сдаёмся, пережидаем
@@ -145,7 +209,7 @@ class RichStreamSession {
         const delay = Math.max(cooldownDelay, throttleDelay);
         this.flushTimer = setTimeout(() => {
             this.flushTimer = null;
-            this.flush().catch(err => console.warn('[rich-stream] flush error:', err?.message || err));
+            this.flush().catch(err => console.warn('[rich-stream] flush error:', formatSafeError(err)));
         }, delay);
     }
 
@@ -161,7 +225,7 @@ class RichStreamSession {
         const delta = totalLen - this.lastTotalLenAtFlush;
         if (sinceFlush >= this.currentFlushIntervalMs || delta >= STREAM_MIN_DELTA_CHARS) {
             this.clearTimer();
-            this.flush().catch(err => console.warn('[rich-stream] flush error:', err?.message || err));
+            this.flush().catch(err => console.warn('[rich-stream] flush error:', formatSafeError(err)));
         } else {
             this.scheduleFlush();
         }
@@ -208,7 +272,9 @@ class RichStreamSession {
             }
             return this.messageId !== null;
         } catch (err) {
-            const description = err?.response?.description || err?.description || err?.message || String(err);
+            const description = typeof err?.response?.description === 'string'
+                ? err.response.description
+                : formatSafeError(err);
             console.error(`[rich-stream] sendRichMessage error:`, description);
             return false;
         }
@@ -228,6 +294,11 @@ bot.use((ctx, next) => {
 });
 
 bot.on(['voice', 'audio', 'document'], async (ctx) => {
+    let richStream = null;
+    let tempFilePath = null;
+    let textFilePath = null;
+    void cleanupStaleTranscriberFiles();
+
     try {
         const message = ctx.message;
         const fileId = message.voice?.file_id || message.audio?.file_id || message.document?.file_id;
@@ -236,16 +307,23 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
 
         // 1. Создаём rich streaming draft сразу — всё летит в одно сообщение
         const chatId = ctx.chat.id;
-        const richStream = new RichStreamSession(ctx.telegram, chatId);
+        richStream = new RichStreamSession(ctx.telegram, chatId);
         richStream.onStatus('⏳ Скачиваю файл из Telegram...');
 
         // 2. Скачиваем файл из Telegram
         const fileUrl = await ctx.telegram.getFileLink(fileId);
-        const tempFilePath = path.resolve(__dirname, `temp_audio_${Date.now()}.ogg`);
+        tempFilePath = path.resolve(__dirname, `temp_audio_${Date.now()}_${crypto.randomBytes(6).toString('hex')}.ogg`);
 
         const fileStream = fs.createWriteStream(tempFilePath);
         await new Promise((resolve, reject) => {
             https.get(fileUrl, (response) => {
+                if (response.statusCode !== 200) {
+                    response.resume();
+                    reject(new Error(`telegram_download_failed_${response.statusCode || 'unknown'}`));
+                    return;
+                }
+                response.on('error', reject);
+                fileStream.on('error', reject);
                 response.pipe(fileStream);
                 fileStream.on('finish', resolve);
             }).on('error', reject);
@@ -316,7 +394,8 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
         });
 
         // 4. Удаляем временный аудиофайл
-        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        removeTempFile(tempFilePath);
+        tempFilePath = null;
 
         if (streamError) {
             throw new Error(streamError);
@@ -341,10 +420,11 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
             await richStream.finalize();
 
             const textFileName = `transcription_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
-            const textFilePath = path.resolve(__dirname, textFileName);
+            textFilePath = path.resolve(__dirname, textFileName);
             fs.writeFileSync(textFilePath, transcribedText);
             await ctx.replyWithDocument({ source: textFilePath, filename: textFileName });
-            fs.unlinkSync(textFilePath);
+            removeTempFile(textFilePath);
+            textFilePath = null;
         } else {
             richStream.onText(transcribedText);
             const richOk = await richStream.finalize();
@@ -352,18 +432,19 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
             if (!richOk) {
                 // Fallback: отправляем .txt файлом
                 const textFileName = `transcription_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
-                const textFilePath = path.resolve(__dirname, textFileName);
+                textFilePath = path.resolve(__dirname, textFileName);
                 fs.writeFileSync(textFilePath, transcribedText);
                 await ctx.replyWithDocument({ source: textFilePath, filename: textFileName });
-                fs.unlinkSync(textFilePath);
+                removeTempFile(textFilePath);
+                textFilePath = null;
             }
         }
 
     } catch (error) {
-        console.error(error);
-        const errText = `❌ Произошла ошибка: ${error.message}`;
+        console.error('[transcriber] request failed:', formatSafeError(error));
+        const errText = '❌ Произошла ошибка при расшифровке.';
         // Пытаемся показать ошибку в rich draft, если он есть
-        if (typeof richStream !== 'undefined' && !richStream.finalized) {
+        if (richStream && !richStream.finalized) {
             richStream.onStatus('');
             richStream.onText(errText);
             const ok = await richStream.finalize();
@@ -371,6 +452,9 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
         } else {
             await ctx.reply(errText);
         }
+    } finally {
+        removeTempFile(tempFilePath);
+        removeTempFile(textFilePath);
     }
 });
 

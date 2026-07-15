@@ -514,6 +514,7 @@ const BACKEND_TIMEOUT_AI_MS = Math.max(10000, Number.parseInt(process.env.BACKEN
 const BACKEND_TIMEOUT_MEDIA_MS = Math.max(10000, Number.parseInt(process.env.BACKEND_TIMEOUT_MEDIA_MS || '180000', 10));
 const BACKEND_TIMEOUT_DEFAULT_MS = Math.max(5000, Number.parseInt(process.env.BACKEND_TIMEOUT_DEFAULT_MS || '15000', 10));
 const MAX_TELEGRAM_PHOTO_BYTES = 20 * 1024 * 1024;
+const MAX_TELEGRAM_VOICE_BYTES = 10 * 1024 * 1024;
 const EMAIL_PASSWORD_DELIMITER = '::';
 const BACKEND_API_BASE_URL = (process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:3050').trim().replace(/\/$/, '');
 const BACKEND_INTERNAL_TOKEN = (process.env.BACKEND_INTERNAL_TOKEN || '').trim();
@@ -7025,6 +7026,11 @@ const processUserVoiceThroughAi = async (ctx: any) => {
     const chatId = ctx.chat?.id;
     if (!voice || !chatId) return;
 
+    if (typeof voice.file_size === 'number' && voice.file_size > MAX_TELEGRAM_VOICE_BYTES) {
+        await ctx.reply(`⚠️ Голосовое слишком большое (${formatBytes(voice.file_size)}). Максимум — 10 МБ.`);
+        return;
+    }
+
     const processingMsg = await ctx.reply('🎙 Перевариваю аудио в текст...');
 
     try {
@@ -7035,6 +7041,15 @@ const processUserVoiceThroughAi = async (ctx: any) => {
         }
 
         const audioBuffer = await response.arrayBuffer();
+        if (audioBuffer.byteLength > MAX_TELEGRAM_VOICE_BYTES) {
+            await ctx.telegram.editMessageText(
+                chatId,
+                processingMsg.message_id,
+                undefined,
+                `⚠️ Голосовое слишком большое (${formatBytes(audioBuffer.byteLength)}). Максимум — 10 МБ.`
+            );
+            return;
+        }
         const mimeType = voice.mime_type || 'audio/ogg';
         const userId = Math.floor(Number(ctx.from.id));
         const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;

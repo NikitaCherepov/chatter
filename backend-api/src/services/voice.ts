@@ -6,6 +6,13 @@ type VoiceTurnOptions = {
   assistantTelegramChatId?: number | null;
 };
 
+const parsePositiveInteger = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value ?? fallback);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const getMaxAudioBytes = () => parsePositiveInteger(process.env.VOICE_MAX_AUDIO_MB, 10) * 1024 * 1024;
+
 const resolveDefaultVoiceEndpoint = (transcribeUrl: string, targetPath: '/api/tts' | '/api/silero') => {
   try {
     const parsed = new URL(transcribeUrl);
@@ -112,6 +119,7 @@ export const runVoiceTurn = async (
 
   const audioBuffer = Buffer.from(normalizedBase64, 'base64');
   if (!audioBuffer.length) throw new Error('empty_audio');
+  if (audioBuffer.length > getMaxAudioBytes()) throw new Error('audio_too_large');
 
   const transcribedText = await transcribeAudio(audioBuffer, mimeType || 'audio/ogg');
   if (!transcribedText) {
