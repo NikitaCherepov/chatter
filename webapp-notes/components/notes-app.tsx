@@ -50,15 +50,6 @@ const preview = (value: string, max = 110) => {
   return `${compact.slice(0, max)}...`;
 };
 
-const extractInitDataFromLaunchParams = () => {
-  const fromSearch = new URLSearchParams(window.location.search).get("tgWebAppData") || "";
-  if (fromSearch) return fromSearch;
-
-  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
-  const fromHash = new URLSearchParams(hash).get("tgWebAppData") || "";
-  return fromHash;
-};
-
 export function NotesApp() {
   const [initData, setInitData] = useState("");
   const [query, setQuery] = useState("");
@@ -79,7 +70,7 @@ export function NotesApp() {
     const tg = window.Telegram?.WebApp;
     if (tg?.ready) tg.ready();
     if (tg?.expand) tg.expand();
-    const value = tg?.initData || extractInitDataFromLaunchParams();
+    const value = tg?.initData || "";
     setInitData(value || "");
   }, []);
 

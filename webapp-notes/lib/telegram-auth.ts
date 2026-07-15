@@ -1,10 +1,23 @@
-﻿import crypto from 'node:crypto';
+import crypto from 'node:crypto';
+import { db } from './db';
 
 export type TelegramAuthContext = {
   userId: number;
 };
 
-const SAFE_AUTH_MAX_AGE_SECONDS = 24 * 60 * 60;
+const DEFAULT_AUTH_MAX_AGE_SECONDS = 60 * 60;
+const MIN_AUTH_MAX_AGE_SECONDS = 60;
+const MAX_AUTH_MAX_AGE_SECONDS = 24 * 60 * 60;
+const AUTH_FUTURE_CLOCK_SKEW_SECONDS = 60;
+
+const getAuthMaxAgeSeconds = () => {
+  const configured = Number(process.env.TELEGRAM_INIT_DATA_MAX_AGE_SECONDS);
+  if (!Number.isFinite(configured)) return DEFAULT_AUTH_MAX_AGE_SECONDS;
+  return Math.max(
+    MIN_AUTH_MAX_AGE_SECONDS,
+    Math.min(MAX_AUTH_MAX_AGE_SECONDS, Math.floor(configured))
+  );
+};
 
 const toDataCheckString = (initData: string) => {
   const params = new URLSearchParams(initData);
@@ -23,14 +36,18 @@ export const verifyAndExtractTelegramUser = (initData: string): TelegramAuthCont
 
   const params = new URLSearchParams(initData);
   const hash = params.get('hash') || '';
-  if (!hash) return null;
+  if (!/^[a-f0-9]{64}$/i.test(hash)) return null;
 
   const authDateRaw = params.get('auth_date');
   const authDate = authDateRaw ? Number(authDateRaw) : 0;
   if (!Number.isFinite(authDate) || authDate <= 0) return null;
 
   const nowSec = Math.floor(Date.now() / 1000);
-  if (Math.abs(nowSec - authDate) > SAFE_AUTH_MAX_AGE_SECONDS) return null;
+  const ageSeconds = nowSec - authDate;
+  if (
+    ageSeconds < -AUTH_FUTURE_CLOCK_SKEW_SECONDS
+    || ageSeconds > getAuthMaxAgeSeconds()
+  ) return null;
 
   const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const checkString = toDataCheckString(initData);
@@ -50,4 +67,17 @@ export const verifyAndExtractTelegramUser = (initData: string): TelegramAuthCont
   } catch {
     return null;
   }
+};
+
+export const verifyAndAuthorizeTelegramUser = (initData: string): TelegramAuthContext | null => {
+  const auth = verifyAndExtractTelegramUser(initData);
+  if (!auth) return null;
+
+  const user = db.prepare(`
+    SELECT id
+    FROM users
+    WHERE id = ? AND status = 'approved'
+  `).get(auth.userId) as { id: number } | undefined;
+
+  return user ? auth : null;
 };

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteNote, getNoteById, updateNote } from '../../../../lib/notes-repo';
-import { verifyAndExtractTelegramUser } from '../../../../lib/telegram-auth';
+import { readLimitedJson } from '../../../../lib/request-json';
+import { verifyAndAuthorizeTelegramUser } from '../../../../lib/telegram-auth';
 
 const TITLE_MAX = 120;
 const CONTENT_MAX = 2000;
+const JSON_BODY_MAX_BYTES = 16 * 1024;
 const unauthorized = () => NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
 const parseNoteId = async (context: { params: Promise<{ id: string }> }) => {
@@ -18,7 +20,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const initData = request.headers.get('x-telegram-init-data') || '';
-  const auth = verifyAndExtractTelegramUser(initData);
+  const auth = verifyAndAuthorizeTelegramUser(initData);
   if (!auth) return unauthorized();
 
   const noteId = await parseNoteId(context);
@@ -39,7 +41,7 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   const initData = request.headers.get('x-telegram-init-data') || '';
-  const auth = verifyAndExtractTelegramUser(initData);
+  const auth = verifyAndAuthorizeTelegramUser(initData);
   if (!auth) return unauthorized();
 
   const noteId = await parseNoteId(context);
@@ -47,16 +49,25 @@ export async function PUT(
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  const json = await readLimitedJson(request, JSON_BODY_MAX_BYTES);
+  if (!json.ok) {
+    return NextResponse.json({ error: json.error }, { status: json.status });
   }
 
-  const payload = (body || {}) as { title?: string; content?: string };
-  const title = (payload.title || '').trim();
-  const content = (payload.content || '').trim();
+  if (!json.value || typeof json.value !== 'object' || Array.isArray(json.value)) {
+    return NextResponse.json({ error: 'JSON body must be an object' }, { status: 400 });
+  }
+
+  const payload = json.value as Record<string, unknown>;
+  if (payload.title !== undefined && typeof payload.title !== 'string') {
+    return NextResponse.json({ error: 'title должен быть строкой' }, { status: 400 });
+  }
+  if (typeof payload.content !== 'string') {
+    return NextResponse.json({ error: 'content должен быть строкой' }, { status: 400 });
+  }
+
+  const title = typeof payload.title === 'string' ? payload.title.trim() : '';
+  const content = payload.content.trim();
 
   if (!content || content.length > CONTENT_MAX) {
     return NextResponse.json({ error: `content должен быть 1..${CONTENT_MAX} символов` }, { status: 400 });
@@ -78,7 +89,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   const initData = request.headers.get('x-telegram-init-data') || '';
-  const auth = verifyAndExtractTelegramUser(initData);
+  const auth = verifyAndAuthorizeTelegramUser(initData);
   if (!auth) return unauthorized();
 
   const noteId = await parseNoteId(context);

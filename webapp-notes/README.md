@@ -8,6 +8,7 @@ Telegram Web App для заметок (Next.js SSR + SQLite).
 
 - `TELEGRAM_BOT_TOKEN` — токен того же бота.
 - `NOTES_DB_PATH` — путь к `chatter.db` (по умолчанию `../chatter.db`).
+- `TELEGRAM_INIT_DATA_MAX_AGE_SECONDS` — срок действия Telegram `initData` в секундах (по умолчанию 3600).
 
 ## Run
 
