@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, forkChat, getApiAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, ADMIN_IDS, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, forkChat, getApiAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -40,6 +40,8 @@ import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './s
 import type { UserRecord } from './types.js';
 
 dotenv.config();
+
+const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 const app = express();
 const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
@@ -169,7 +171,7 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
       }
       savedUserAttachmentsInternal = saved.length > 0 ? saved : null;
     } catch (err: any) {
-      console.error('[internal/ai/send] failed to save documents:', err);
+      console.error('[internal/ai/send] failed to save documents:', formatSafeError(err));
       return res.status(400).json({ error: 'document_parse_failed', detail: err?.message || String(err) });
     }
   }
@@ -263,7 +265,7 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       }
       savedUserAttachmentsStream = saved.length > 0 ? saved : null;
     } catch (err: any) {
-      console.error('[internal/ai/stream] failed to save documents:', err);
+      console.error('[internal/ai/stream] failed to save documents:', formatSafeError(err));
       return res.status(400).json({ error: 'document_parse_failed', detail: err?.message || String(err) });
     }
   }
@@ -1108,7 +1110,7 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
 
     return res.json({ ok: true });
   } catch (err) {
-    console.error('[send-to-telegram] Failed:', err);
+    console.error('[send-to-telegram] Failed:', formatSafeError(err));
     return res.status(500).json({ error: 'telegram_send_failed' });
   }
 });
@@ -1190,7 +1192,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       }
       savedUserImages = saved;
     } catch (err) {
-      console.error('[chat/send] failed to save image thumbnails:', err);
+      console.error('[chat/send] failed to save image thumbnails:', formatSafeError(err));
     }
   }
 
@@ -1227,7 +1229,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       }
       savedUserAttachments = saved.length > 0 ? saved : null;
     } catch (err: any) {
-      console.error('[chat/send] failed to save documents:', err);
+      console.error('[chat/send] failed to save documents:', formatSafeError(err));
       return res.status(400).json({ error: 'document_parse_failed', detail: err?.message || String(err) });
     }
   }
@@ -1771,7 +1773,7 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
     }
     return res.json({ generated_prompt: generated.trim() });
   } catch (err) {
-    console.error('[prompts/generate]', err);
+    console.error('[prompts/generate]', formatSafeError(err));
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -2269,7 +2271,7 @@ app.delete('/internal/users/:id', internalAuth, (req, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
-  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_delete_admin_from_env' });
+  if (user.role === 'admin') return res.status(422).json({ error: 'cannot_delete_admin' });
 
   removeUser(userId);
   return res.json({ ok: true });
@@ -2302,10 +2304,9 @@ app.post('/internal/users/:id/ban', internalAuth, (req, res) => {
   const reason = `${req.body?.reason || ''}`.trim() || 'Решение администратора';
   const bannedBy = Number(req.body?.banned_by) || 0;
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
-  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_ban_admin_from_env' });
-
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
+  if (user.role === 'admin') return res.status(422).json({ error: 'cannot_ban_admin' });
 
   setBan(userId, bannedBy, reason);
   updateUserStatus(userId, 'banned');
@@ -2455,8 +2456,7 @@ app.delete('/api/v1/admin/users/:id', adminMiddleware, (req: AuthedRequest, res)
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
-  // Prevent deleting ADMIN_IDS users
-  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_delete_admin_from_env' });
+  if (user.role === 'admin') return res.status(422).json({ error: 'cannot_delete_admin' });
 
   removeUser(userId);
   return res.json({ ok: true });
@@ -2506,10 +2506,9 @@ app.post('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, re
   const userId = Number.parseInt(req.params.id, 10);
   const reason = `${req.body?.reason || ''}`.trim() || 'Решение администратора';
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
-  if (ADMIN_IDS.has(userId)) return res.status(422).json({ error: 'cannot_ban_admin_from_env' });
-
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
+  if (user.role === 'admin') return res.status(422).json({ error: 'cannot_ban_admin' });
 
   setBan(userId, req.authUserId!, reason);
   updateUserStatus(userId, 'banned');
@@ -3046,7 +3045,7 @@ app.post('/api/v1/macro/explain', async (req: AuthedRequest, res) => {
     );
     return res.json({ explanation: text });
   } catch (err) {
-    console.error('[macro/explain]', err);
+    console.error('[macro/explain]', formatSafeError(err));
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -3085,7 +3084,7 @@ app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
       description: parsed.description || ''
     });
   } catch (err) {
-    console.error('[macro/describe]', err);
+    console.error('[macro/describe]', formatSafeError(err));
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -3441,7 +3440,7 @@ app.post('/api/v1/devops/runbooks/extract-commands', async (req: AuthedRequest, 
       return res.json({ commands: [] });
     }
   } catch (err) {
-    console.error('[runbooks/extract-commands]', err);
+    console.error('[runbooks/extract-commands]', formatSafeError(err));
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -3463,7 +3462,7 @@ app.post('/api/v1/devops/runbooks/review-commands', async (req: AuthedRequest, r
     );
     return res.json({ verdict });
   } catch (err) {
-    console.error('[runbooks/review-commands]', err);
+    console.error('[runbooks/review-commands]', formatSafeError(err));
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -3606,6 +3605,7 @@ app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
   const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+  if (!Number.isSafeInteger(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
   const pending = getPendingEmailConfirmation(confirmationId);
   if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
@@ -3733,18 +3733,19 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
 // ── Internal: PC Command approve/reject (for TG bot) ──────────────────────
 
 app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
-  const confirmationId = `${req.body?.confirmation_id || ''}`;
-  const approved = req.body?.approved === true;
-  const userId = Number(req.body?.user_id);
-  const rejectionComment = req.body?.rejection_comment;
+    const confirmationId = `${req.body?.confirmation_id || ''}`;
+    const approved = req.body?.approved === true;
+    const userId = Number(req.body?.user_id);
+    const rejectionComment = req.body?.rejection_comment;
 
-  if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+    if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+    if (!Number.isSafeInteger(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
   const pending = getPendingPcConfirmation(confirmationId);
   if (!pending) {
     return res.status(404).json({ error: 'not_found_or_expired' });
   }
-  if (Number.isFinite(userId) && pending.userId !== userId) {
+  if (pending.userId !== userId) {
     return res.status(403).json({ error: 'forbidden' });
   }
 
@@ -3788,12 +3789,13 @@ app.post('/internal/visual-click/approve', internalAuth, async (req, res) => {
   const userId = Number(req.body?.user_id);
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+  if (!Number.isSafeInteger(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
   const pending = getPendingVisualClick(confirmationId);
   if (!pending) {
     return res.status(404).json({ error: 'not_found_or_expired' });
   }
-  if (Number.isFinite(userId) && pending.userId !== userId) {
+  if (pending.userId !== userId) {
     return res.status(403).json({ error: 'forbidden' });
   }
 
@@ -3845,10 +3847,11 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
   const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+  if (!Number.isSafeInteger(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
   const pending = getPendingConfirmation(confirmationId);
   if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
-  if (Number.isFinite(userId) && pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+  if (pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
 
   if (!approved) {
     deletePendingConfirmation(confirmationId);
@@ -3889,10 +3892,11 @@ app.post('/internal/email/approve', internalAuth, async (req, res) => {
   const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
+  if (!Number.isSafeInteger(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
   const pending = getPendingEmailConfirmation(confirmationId);
   if (!pending) return res.status(404).json({ error: 'not_found_or_expired' });
-  if (Number.isFinite(userId) && pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
+  if (pending.userId !== userId) return res.status(403).json({ error: 'forbidden' });
 
   if (!approved) {
     deletePendingEmailConfirmation(confirmationId);
@@ -3932,7 +3936,7 @@ app.post('/internal/devops/servers/:id/policies', internalAuth, async (req, res)
 });
 
 app.use((err: any, _req: any, res: any, _next: any) => {
-  console.error('API error:', err);
+  console.error('API error:', formatSafeError(err));
   res.status(500).json({ error: 'internal_error' });
 });
 
@@ -3976,7 +3980,7 @@ const server = app.listen(PORT, () => {
         console.log(`[tokens] backfill complete: ${total} messages updated`);
       }
     } catch (err) {
-      console.error('[tokens] backfill error:', err);
+      console.error('[tokens] backfill error:', formatSafeError(err));
     }
   });
 });
@@ -4070,7 +4074,7 @@ wss.on('connection', (ws, req) => {
         client.missedPongs = 0;
       }
     } catch (err) {
-      console.error('[ws] message error:', err);
+      console.error('[ws] message error:', formatSafeError(err));
     }
   });
 
@@ -4168,7 +4172,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       }
       savedUserImages = saved;
     } catch (err) {
-      console.error('[ws] failed to save image thumbnails:', err);
+      console.error('[ws] failed to save image thumbnails:', formatSafeError(err));
     }
   }
 
@@ -4207,7 +4211,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       }
       savedUserAttachments = saved.length > 0 ? saved : null;
     } catch (err: any) {
-      console.error('[ws] failed to save documents:', err);
+      console.error('[ws] failed to save documents:', formatSafeError(err));
       client.ws.send(JSON.stringify({ type: 'error', error: 'document_parse_failed', detail: err?.message || String(err) }));
       return;
     }

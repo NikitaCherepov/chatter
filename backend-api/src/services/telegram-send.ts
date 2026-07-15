@@ -12,6 +12,7 @@ const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
 const TG_USE_RICH_MESSAGES =
   process.env.TG_USE_RICH_MESSAGES === '1' ||
   process.env.TG_USE_RICH_STREAMING === '1';
+const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 type SendTelegramMessageOptions = {
   strict?: boolean;
@@ -112,7 +113,7 @@ export const markdownToTelegramRichHtml = (text: string): string => {
     });
     return typeof html === 'string' ? html.trim() : `<p>${escapeRichHtml(markdown)}</p>`;
   } catch (err: any) {
-    console.warn('[telegram-send] rich markdown render failed:', err?.message || err);
+    console.warn('[telegram-send] rich markdown render failed:', formatSafeError(err));
     return `<p>${escapeRichHtml(markdown)}</p>`;
   }
 };
@@ -200,7 +201,7 @@ export const sendTelegramMessage = async (
       return;
     } catch (err) {
       fallbackSource = richChunks.slice(richChunkIndex).join('\n');
-      console.warn('[telegram-send] sendRichMessage failed, falling back to sendMessage:', err);
+      console.warn('[telegram-send] sendRichMessage failed, falling back to sendMessage:', formatSafeError(err));
       if (options.strict) {
         // Keep fallback below, but if that also fails the endpoint should report it.
       }
@@ -218,7 +219,7 @@ export const sendTelegramMessage = async (
         await sendTelegramJson('sendMessage', { chat_id: chatId, text: chunk });
       } catch (fallbackErr) {
         if (options.strict) throw fallbackErr;
-        console.warn('[telegram-send] sendMessage failed:', fallbackErr);
+        console.warn('[telegram-send] sendMessage failed:', formatSafeError(fallbackErr));
       }
     }
   }

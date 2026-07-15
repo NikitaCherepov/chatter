@@ -529,7 +529,7 @@ function createWindow() {
             '$OutputEncoding = [System.Text.Encoding]::UTF8',
             '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
             `$decCmd = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${cmdB64}'))`,
-            'cmd.exe /c $decCmd',
+            'cmd.exe /c "$decCmd"',
           ].join('; ');
           const scriptB64 = Buffer.from(psScript, 'utf16le').toString('base64');
           execCmd = `powershell -NoProfile -EncodedCommand ${scriptB64}`;

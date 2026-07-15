@@ -6,26 +6,6 @@ import { buildBaseSystemPromptForUser } from './system-prompt.js';
 import { resolvePromptForUser } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
 
-const parseAdminId = (raw: string | undefined) => {
-  if (!raw) return null;
-  const normalized = raw.replace(/[^\d-]/g, '').trim();
-  if (!normalized) return null;
-  const parsed = Number.parseInt(normalized, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed;
-};
-
-const ADMIN_IDS = (() => {
-  const ids = new Set<number>();
-  for (const raw of (process.env.ADMIN_IDS || '').split(/[,\s;]+/)) {
-    const id = parseAdminId(raw);
-    if (id) ids.add(id);
-  }
-  const one = parseAdminId(process.env.ADMIN_ID);
-  if (one) ids.add(one);
-  return ids;
-})();
-
 export const getUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
   .get(userId) as UserRecord | undefined;
@@ -38,7 +18,7 @@ export const upsertUserFromTelegram = (userId: number, username: string | null, 
     name = COALESCE(users.name, excluded.name),
     is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
     role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
-`).run(userId, name, ADMIN_IDS.has(userId) ? 'admin' : 'user', ADMIN_IDS.has(userId) ? 1 : 0, username);
+`).run(userId, name, 'user', 0, username);
 
 export const createOrUpdateUserForApiRegistration = (name: string | null = null) => {
   const inserted = db.prepare(`
@@ -1372,9 +1352,8 @@ export const upsertTelegramUser = (
   tgUsername: string | null,
   defaultPromptId: number | null
 ) => {
-  const isAdmin = ADMIN_IDS.has(tgId);
-  const effectiveRole = isAdmin ? 'admin' : role;
-  const effectiveIsAdmin = isAdmin ? 1 : 0;
+  const effectiveRole = role === 'admin' ? 'admin' : 'user';
+  const effectiveIsAdmin = effectiveRole === 'admin' ? 1 : 0;
   const limits = PLAN_LIMITS['free'];
 
   const result = db.prepare(`
@@ -1552,8 +1531,6 @@ export const syncAllUsersPlanLimits = () => {
       limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, plan);
   }
 };
-
-export { ADMIN_IDS };
 
 // ---------- Telegram link codes ----------
 

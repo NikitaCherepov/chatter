@@ -42,9 +42,22 @@ const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
 };
 const DEFAULT_USER_PLAN: UserPlan = 'free';
 
+const formatSafeError = (error: unknown) => {
+    if (axios.isAxiosError(error)) {
+        const details = [
+            error.message,
+            error.code ? `code=${error.code}` : '',
+            error.response?.status ? `status=${error.response.status}` : ''
+        ].filter(Boolean);
+        return details.join(' ');
+    }
+    if (error instanceof Error) return error.message;
+    return String(error);
+};
+
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
 bot.catch(async (err, ctx) => {
-    console.error('Telegraf update error:', err);
+    console.error('Telegraf update error:', formatSafeError(err));
     try {
         await ctx.reply('Сервис временно недоступен. Попробуйте ещё раз через пару секунд.');
     } catch {
@@ -553,14 +566,6 @@ const ADMIN_EXTRA_COMMANDS = [
 ] as const;
 const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
 const commandScopeCache = new Map<number, 'admin' | 'user'>();
-const parseAdminId = (raw: string | undefined) => {
-    if (!raw) return null;
-    const normalized = raw.replace(/[^\d-]/g, '').trim();
-    if (!normalized) return null;
-    const parsed = Number.parseInt(normalized, 10);
-    if (Number.isNaN(parsed) || parsed <= 0) return null;
-    return parsed;
-};
 const encryptSecret = (text: string) => {
     const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
     const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
@@ -589,28 +594,6 @@ const resolveImapProviderConfig = (providerRaw: string) => {
     }
     return null;
 };
-
-const ADMIN_IDS = (() => {
-    const ids = new Set<number>();
-
-    for (const raw of (process.env.ADMIN_IDS ?? '').split(/[,\s;]+/)) {
-        const value = parseAdminId(raw);
-        if (value) ids.add(value);
-    }
-
-    const singleAdminId = parseAdminId(process.env.ADMIN_ID);
-    if (singleAdminId) {
-        ids.add(singleAdminId);
-    }
-
-    for (const [key, value] of Object.entries(process.env)) {
-        if (!key.startsWith('ADMIN_ID_')) continue;
-        const id = parseAdminId(value);
-        if (id) ids.add(id);
-    }
-
-    return ids;
-})();
 
 type ChatRole = 'user' | 'assistant';
 type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
@@ -917,7 +900,7 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
                     const imageBuffer = Buffer.from(img.image_base64, 'base64');
                     await bot.telegram.sendPhoto(targetUserId, { source: imageBuffer });
                 } catch (imgErr) {
-                    console.error('Ошибка отправки сгенерированного изображения юзеру:', imgErr);
+                    console.error('Ошибка отправки сгенерированного изображения юзеру:', formatSafeError(imgErr));
                 }
             }
         }
@@ -1215,7 +1198,7 @@ const runBackendAiStream = async (
                             case 'desktop_action':
                                 if (callbacks?.onDesktopAction) {
                                     Promise.resolve(callbacks.onDesktopAction(data)).catch((err: any) => {
-                                        console.warn('[tg][sse] desktop_action callback failed:', err?.message || err);
+                                        console.warn('[tg][sse] desktop_action callback failed:', formatSafeError(err));
                                     });
                                 }
                                 break;
@@ -1546,6 +1529,25 @@ const runBackendGetUsersList = async (filter: string, limit: number, offset: num
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users`, { params: { filter, limit, offset }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { users: UserRecord[]; total: number; filter: string; limit: number; offset: number };
+};
+
+const getDatabaseAdminIds = async () => {
+    const adminIds: number[] = [];
+    const pageSize = 500;
+    let offset = 0;
+    let total = 0;
+
+    do {
+        const page = await runBackendGetUsersList('all', pageSize, offset);
+        total = Math.max(0, Number(page.total) || 0);
+        for (const user of page.users) {
+            if (user.role === 'admin' && user.status === 'approved') adminIds.push(user.id);
+        }
+        offset += page.users.length;
+        if (!page.users.length) break;
+    } while (offset < total);
+
+    return adminIds;
 };
 
 const runBackendUpdateUserPlan = async (userId: number, plan: string) => {
@@ -1881,6 +1883,32 @@ const detectImageMimeType = (url: string, fallback: string | null = null) => {
 };
 
 const photoAlbumBuffer = new Map<string, { images: Array<{ buffer: Buffer; mimeType: string }>; caption: string; timer: ReturnType<typeof setTimeout>; ctx: any }>();
+const activeUserRequests = new Set<number>();
+
+const withUserRequestLock = async <T>(
+    ctx: any,
+    action: () => Promise<T>,
+    waitForTurn = false
+): Promise<T | undefined> => {
+    const userId = Number(ctx.from?.id);
+    if (!Number.isSafeInteger(userId) || userId <= 0) return undefined;
+    while (activeUserRequests.has(userId)) {
+        if (!waitForTurn) {
+            await ctx.reply('⏳ Предыдущий запрос ещё обрабатывается. Дождись ответа и попробуй снова.');
+            return undefined;
+        }
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 250);
+        });
+    }
+
+    activeUserRequests.add(userId);
+    try {
+        return await action();
+    } finally {
+        activeUserRequests.delete(userId);
+    }
+};
 
 // ── Documents (attachments) support for Telegram ──────────────────────────
 // Same whitelist as desktop / backend SUPPORTED_EXTENSIONS.
@@ -1926,9 +1954,7 @@ const processDocumentAlbum = async (albumKey: string) => {
     const { items, caption, ctx } = album;
     if (!items.length) return;
 
-    processUserTextThroughAi(ctx, caption, { documents: items }).catch((err) => {
-        console.error('Ошибка в processUserTextThroughAi (document album):', err);
-    });
+    await processUserTextThroughAi(ctx, caption, { documents: items });
 };
 
 const processUserDocumentThroughAi = async (ctx: any) => {
@@ -1979,13 +2005,19 @@ const processUserDocumentThroughAi = async (ctx: any) => {
         const albumKey = `${userId}:${mediaGroupId}`;
         const existing = documentAlbumBuffer.get(albumKey);
         if (existing) {
+            clearTimeout(existing.timer);
             existing.items.push(item);
             if (caption) existing.caption = caption;
+            existing.timer = setTimeout(() => {
+                void withUserRequestLock(ctx, () => processDocumentAlbum(albumKey), true);
+            }, 1500);
         } else {
             documentAlbumBuffer.set(albumKey, {
                 items: [item],
                 caption,
-                timer: setTimeout(() => processDocumentAlbum(albumKey), 1500),
+                timer: setTimeout(() => {
+                    void withUserRequestLock(ctx, () => processDocumentAlbum(albumKey), true);
+                }, 1500),
                 ctx
             });
         }
@@ -1993,9 +2025,7 @@ const processUserDocumentThroughAi = async (ctx: any) => {
     }
 
     // Single document → straight to AI (caption becomes the text, or placeholder if empty).
-    processUserTextThroughAi(ctx, caption, { documents: [item] }).catch((err) => {
-        console.error('Ошибка в processUserTextThroughAi (document):', err);
-    });
+    await processUserTextThroughAi(ctx, caption, { documents: [item] });
 };
 
 const downloadTelegramPhoto = async (ctx: any, photos: any[]): Promise<{ buffer: Buffer; mimeType: string } | null> => {
@@ -2072,11 +2102,11 @@ const processPhotoAlbum = async (albumKey: string) => {
                     assistantTgMessageId
                 );
             } catch (bindErr) {
-                console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', bindErr);
+                console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', formatSafeError(bindErr));
             }
         }
     } catch (err) {
-        console.error('Ошибка анализа изображения:', err);
+        console.error('Ошибка анализа изображения:', formatSafeError(err));
         await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
     }
 };
@@ -2103,13 +2133,19 @@ const processUserPhotoThroughAi = async (ctx: any) => {
             const albumKey = `${userId}:${mediaGroupId}`;
             const existing = photoAlbumBuffer.get(albumKey);
             if (existing) {
+                clearTimeout(existing.timer);
                 existing.images.push(downloaded);
                 if (caption) existing.caption = caption;
+                existing.timer = setTimeout(() => {
+                    void withUserRequestLock(ctx, () => processPhotoAlbum(albumKey), true);
+                }, 1500);
             } else {
                 photoAlbumBuffer.set(albumKey, {
                     images: [downloaded],
                     caption,
-                    timer: setTimeout(() => processPhotoAlbum(albumKey), 1500),
+                    timer: setTimeout(() => {
+                        void withUserRequestLock(ctx, () => processPhotoAlbum(albumKey), true);
+                    }, 1500),
                     ctx
                 });
             }
@@ -2170,11 +2206,11 @@ const processUserPhotoThroughAi = async (ctx: any) => {
                     assistantTgMessageId
                 );
             } catch (bindErr) {
-                console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', bindErr);
+                console.warn('Не удалось привязать telegram_message_id к backend photo сообщению:', formatSafeError(bindErr));
             }
         }
     } catch (err) {
-        console.error('Ошибка анализа изображения:', err);
+        console.error('Ошибка анализа изображения:', formatSafeError(err));
         await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
     }
 };
@@ -2630,7 +2666,7 @@ const clearActiveUserHistory = (userId: number) => db.prepare(`
 const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
 
 ensureCurrentPlanSubscriptionsForAllUsers().catch((err) => {
-    console.error('Ошибка первичной инициализации подписок:', err);
+    console.error('Ошибка первичной инициализации подписок:', formatSafeError(err));
 });
 
 const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }) => {
@@ -2664,23 +2700,14 @@ bot.use(async (ctx, next) => {
     if (!userId) return;
     const telegramUsername = ctx.from?.username?.trim() || null;
     let userRecord = await getUser(userId);
-    const isAdminByEnv = ADMIN_IDS.has(userId);
-    const isAdminByDb = userRecord?.role === 'admin';
+    const isAdminByDb = userRecord?.role === 'admin' && userRecord.status === 'approved';
 
-    if (isAdminByEnv || isAdminByDb) {
+    if (isAdminByDb && userRecord) {
         const fallbackName = userRecord?.name || ctx.from?.first_name || 'Admin';
         const defaultPrompt = ensureDefaultPrompt();
-        if (!userRecord) {
-            await addUser(userId, fallbackName, 'admin', 'approved', telegramUsername);
-            userRecord = await getUser(userId);
-        } else {
-            if (userRecord.role !== 'admin' || userRecord.status !== 'approved') {
-                await addUser(userId, userRecord.name || fallbackName, 'admin', 'approved', telegramUsername);
-                userRecord = await getUser(userId);
-            } else if (userRecord.tg_username !== telegramUsername) {
-                await updateUserTelegramUsername(userId, telegramUsername);
-                userRecord = (await getUser(userId)) || userRecord;
-            }
+        if (userRecord.tg_username !== telegramUsername) {
+            await updateUserTelegramUsername(userId, telegramUsername);
+            userRecord = (await getUser(userId)) || userRecord;
         }
 
         if (userRecord && !userRecord.selected_prompt_id) {
@@ -3339,7 +3366,19 @@ const notifyAdminsNewRequest = async (user: UserRecord) => {
         [Markup.button.callback('⛔ Забанить', `mod:ban:${user.id}:0`)]
     ]);
 
-    for (const adminId of ADMIN_IDS) {
+    let adminIds: number[] = [];
+    try {
+        adminIds = await getDatabaseAdminIds();
+    } catch (err) {
+        console.warn('Не удалось получить список администраторов из БД:', formatSafeError(err));
+        return;
+    }
+
+    if (!adminIds.length) {
+        console.warn('В БД нет подтверждённых администраторов: заявка не была отправлена.');
+    }
+
+    for (const adminId of adminIds) {
         try {
             await bot.telegram.sendMessage(adminId, text, keyboard);
         } catch (err) {
@@ -3562,10 +3601,9 @@ bot.command('remove', async (ctx) => {
     const targetUserId = Number.parseInt(parts[1], 10);
 
     if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Укажи правильный ID: /remove 123456789');
-    if (ADMIN_IDS.has(targetUserId)) return ctx.reply('Нельзя удалить пользователя из ADMIN_IDS. Сначала убери его из .env и перезапусти бота.');
-
     const targetUser = await getUser(targetUserId);
     if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
+    if (targetUser.role === 'admin') return ctx.reply('Нельзя удалить администратора. Сначала измени его роль в БД.');
 
     await removeUser(targetUserId);
     removeBan(targetUserId);
@@ -3582,10 +3620,9 @@ bot.command('ban', async (ctx) => {
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
     if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Формат: /ban 123456789 [причина]');
-    if (ADMIN_IDS.has(targetUserId)) return ctx.reply('Нельзя забанить пользователя из ADMIN_IDS.');
-
     const targetUser = await getUser(targetUserId);
     if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
+    if (targetUser.role === 'admin') return ctx.reply('Нельзя забанить администратора. Сначала измени его роль в БД.');
 
     const reason = parts.slice(2).join(' ').trim() || 'Решение администратора';
     await banUserAccess(targetUserId, adminId, reason);
@@ -3798,7 +3835,7 @@ bot.command('unlink', async (ctx) => {
         if (msg === 'not_linked') {
             return ctx.reply('Аккаунт не был привязан к десктоп-приложению.', buildMenuTriggerKeyboard());
         }
-        console.error('Unlink error:', err?.message || err);
+        console.error('Unlink error:', formatSafeError(err));
         return ctx.reply('Ошибка при отвязке. Попробуй позже.');
     }
 });
@@ -4008,6 +4045,14 @@ bot.command('note_delete', async (ctx) => {
 bot.command('mail_setup', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+
+    // The command contains the app password. Remove it from Telegram immediately;
+    // the password itself is stored encrypted by backend-api.
+    try {
+        await ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id);
+    } catch (err) {
+        console.warn('Не удалось удалить сообщение с mail credentials:', formatSafeError(err));
+    }
 
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -4799,7 +4844,7 @@ bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
         await ctx.answerCbQuery('Пользователь не найден');
         return;
     }
-    if (ADMIN_IDS.has(targetUserId) || user.role === 'admin') {
+    if (user.role === 'admin') {
         await ctx.answerCbQuery('Нельзя банить админа');
         return;
     }
@@ -4852,7 +4897,7 @@ bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
-    if (ADMIN_IDS.has(targetUserId) || user.role === 'admin') {
+    if (user.role === 'admin') {
         await ctx.answerCbQuery('Нельзя удалить админа');
         return;
     }
@@ -5783,7 +5828,7 @@ function markdownToTelegramRichHtml(text: string): string {
         });
         return typeof html === 'string' ? html.trim() : escapeRichHtml(markdown);
     } catch (err: any) {
-        console.warn('[tg][rich-stream] markdown render failed:', err?.message || err);
+        console.warn('[tg][rich-stream] markdown render failed:', formatSafeError(err));
         return `<p>${escapeRichHtml(markdown)}</p>`;
     }
 }
@@ -5879,7 +5924,7 @@ class RichStreamSession {
                 return;
             }
 
-            console.error(`[CRITICAL][tg][rich-stream] sendRichMessageDraft error:`, description, '| html:', html.slice(0, 400));
+            console.error('[CRITICAL][tg][rich-stream] sendRichMessageDraft error:', description);
             this.draftFailed = true;
             this.clearTimer();
         }
@@ -5991,7 +6036,7 @@ class RichStreamSession {
         const delay = Math.max(cooldownDelay, throttleDelay);
         this.flushTimer = setTimeout(() => {
             this.flushTimer = null;
-            this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
+            this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', formatSafeError(err)));
         }, delay);
     }
 
@@ -6071,7 +6116,7 @@ class RichStreamSession {
         const delta = totalLen - this.lastTextLenAtFlush;
         if (sinceFlush >= this.currentFlushIntervalMs || delta >= STREAM_MIN_DELTA_CHARS) {
             this.clearTimer();
-            this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', err?.message || err));
+            this.flush().catch(err => console.warn('[tg][rich-stream] flush error:', formatSafeError(err)));
         } else {
             this.scheduleFlush();
         }
@@ -6335,11 +6380,11 @@ const processUserTextThroughAi = async (
                     try {
                         await ctx.reply(msgText, keyboard);
                     } catch (err: any) {
-                        console.warn('[tg][desktop_action] file_action reply failed:', err?.message || err);
+                        console.warn('[tg][desktop_action] file_action reply failed:', formatSafeError(err));
                         try {
                             await ctx.reply(`${titleIcon} ${titleText}\n\n${filePath}${sizeLine}\n\n${isWrite ? 'Разрешить запись?' : 'Разрешить чтение?'}`, keyboard);
                         } catch (fallbackErr: any) {
-                            console.warn('[tg][desktop_action] file_action fallback reply failed:', fallbackErr?.message || fallbackErr);
+                            console.warn('[tg][desktop_action] file_action fallback reply failed:', formatSafeError(fallbackErr));
                             throw fallbackErr;
                         }
                     }
@@ -6382,11 +6427,11 @@ const processUserTextThroughAi = async (
                     try {
                         await ctx.reply(msgText, keyboard);
                     } catch (err: any) {
-                        console.warn('[tg][desktop_action] edit_file_lines reply failed:', err?.message || err);
+                        console.warn('[tg][desktop_action] edit_file_lines reply failed:', formatSafeError(err));
                         try {
                             await ctx.reply(`✏️ Редактирование файла\n\n${filePath}\nСтроки: ${startLine}–${endLine}\n\nПрименить изменения?`, keyboard);
                         } catch (fallbackErr: any) {
-                            console.warn('[tg][desktop_action] edit_file_lines fallback reply failed:', fallbackErr?.message || fallbackErr);
+                            console.warn('[tg][desktop_action] edit_file_lines fallback reply failed:', formatSafeError(fallbackErr));
                             throw fallbackErr;
                         }
                     }
@@ -6543,7 +6588,7 @@ const processUserTextThroughAi = async (
                             );
                             photoSent = true;
                         } catch (err) {
-                            console.error('[visual_click] failed to send preview photo:', err);
+                            console.error('[visual_click] failed to send preview photo:', formatSafeError(err));
                         }
                     }
                     if (!photoSent) {
@@ -6601,7 +6646,7 @@ const processUserTextThroughAi = async (
                 try {
                     await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
                 } catch (bindErr) {
-                    console.warn('Не удалось привязать telegram_message_id к backend сообщению:', bindErr);
+                    console.warn('Не удалось привязать telegram_message_id к backend сообщению:', formatSafeError(bindErr));
                 }
             }
             // Отправка сгенерированных изображений
@@ -6611,7 +6656,7 @@ const processUserTextThroughAi = async (
                         const imageBuffer = Buffer.from(img.image_base64, 'base64');
                         await ctx.replyWithPhoto({ source: imageBuffer });
                     } catch (imgErr) {
-                        console.error('Ошибка отправки сгенерированного изображения:', imgErr);
+                        console.error('Ошибка отправки сгенерированного изображения:', formatSafeError(imgErr));
                         await ctx.reply('Не удалось отправить сгенерированное изображение.').catch(() => {});
                     }
                 }
@@ -6622,7 +6667,7 @@ const processUserTextThroughAi = async (
         }
         return assistantText;
     } catch (err) {
-        console.error('Ошибка backend-ai вызова:', err);
+        console.error('Ошибка backend-ai вызова:', formatSafeError(err));
         if (!options?.suppressFinalReply) {
             await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи backend-api.');
         }
@@ -6637,8 +6682,10 @@ bot.on('text', async (ctx) => {
     const userText = ctx.message.text.trim();
     const directMessageTargetId = adminAiMessageFlow.get(userId);
     if (directMessageTargetId) {
-        adminAiMessageFlow.delete(userId);
-        await handleAiDirectMessage(ctx, directMessageTargetId, userText);
+        await withUserRequestLock(ctx, async () => {
+            adminAiMessageFlow.delete(userId);
+            await handleAiDirectMessage(ctx, directMessageTargetId, userText);
+        });
         return;
     }
 
@@ -6701,7 +6748,7 @@ bot.on('text', async (ctx) => {
                 const retryAfter = Math.max(1, Number(err?.response?.data?.retry_after) || 60);
                 return ctx.reply(`Слишком много неверных кодов. Попробуй снова через ${retryAfter} сек.`);
             }
-            console.error('Link verify error:', err?.message || err);
+            console.error('Link verify error:', formatSafeError(err));
             return ctx.reply('Ошибка при привязке. Попробуй позже.');
         }
     }
@@ -6905,7 +6952,7 @@ bot.on('text', async (ctx) => {
 
         const maxAllowed = (userRecord.max_context_tokens_limit ?? 0) > 0
             ? Math.floor(userRecord.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(userRecord.plan));
-        const isUserAdmin = ADMIN_IDS.has(userId) || userRecord.role === 'admin';
+        const isUserAdmin = userRecord.role === 'admin';
         if (!isUserAdmin && parsed > maxAllowed) {
             return ctx.reply(`Для тебя доступно максимум ${(maxAllowed / 1000).toFixed(0)}k токенов.`);
         }
@@ -6961,18 +7008,19 @@ bot.on('text', async (ctx) => {
         return;
     }
 
-    // Fire-and-forget: don't block Telegraf from processing callback_query (inline buttons)
-    processUserTextThroughAi(ctx, userText).catch(err => {
-        console.error('Ошибка в processUserTextThroughAi:', err);
-    });
+    await withUserRequestLock(ctx, () => processUserTextThroughAi(ctx, userText));
 });
 
 // ── Document (file attachment) handler ──
 bot.on('document', async (ctx) => {
-    await processUserDocumentThroughAi(ctx);
+    if (ctx.message.media_group_id) {
+        await processUserDocumentThroughAi(ctx);
+        return;
+    }
+    await withUserRequestLock(ctx, () => processUserDocumentThroughAi(ctx));
 });
 
-bot.on('voice', async (ctx) => {
+const processUserVoiceThroughAi = async (ctx: any) => {
     const voice = ctx.message?.voice;
     const chatId = ctx.chat?.id;
     if (!voice || !chatId) return;
@@ -7035,7 +7083,7 @@ bot.on('voice', async (ctx) => {
             try {
                 await runBackendBindTelegramMessage(userId, backendAssistantMessageId, userChatId, assistantTgMessageId);
             } catch (bindErr) {
-                console.warn('Не удалось привязать telegram_message_id к backend voice сообщению:', bindErr);
+                console.warn('Не удалось привязать telegram_message_id к backend voice сообщению:', formatSafeError(bindErr));
             }
         }
 
@@ -7049,7 +7097,7 @@ bot.on('voice', async (ctx) => {
             console.warn('Ошибка генерации голоса на backend:', backend.voice_error);
         }
     } catch (error) {
-        console.error('Ошибка работы с голосовым:', error);
+        console.error('Ошибка работы с голосовым:', formatSafeError(error));
         try {
             await ctx.telegram.editMessageText(
                 chatId,
@@ -7061,10 +7109,18 @@ bot.on('voice', async (ctx) => {
             await ctx.reply('❌ Сбой связи с сервером расшифровки или внутренняя ошибка.');
         }
     }
+};
+
+bot.on('voice', async (ctx) => {
+    await withUserRequestLock(ctx, () => processUserVoiceThroughAi(ctx));
 });
 
 bot.on('photo', async (ctx) => {
-    await processUserPhotoThroughAi(ctx);
+    if (ctx.message.media_group_id) {
+        await processUserPhotoThroughAi(ctx);
+        return;
+    }
+    await withUserRequestLock(ctx, () => processUserPhotoThroughAi(ctx));
 });
 
 
@@ -7073,7 +7129,7 @@ setInterval(() => {
         try {
             await expireFinishedPlanSubscriptions();
         } catch (err) {
-            console.error('Ошибка проверки истекших подписок:', err);
+            console.error('Ошибка проверки истекших подписок:', formatSafeError(err));
         }
     })();
 }, 60 * 60 * 1000);
@@ -7082,7 +7138,7 @@ void (async () => {
     try {
         await expireFinishedPlanSubscriptions();
     } catch (err) {
-        console.error('Ошибка первичной проверки подписок:', err);
+        console.error('Ошибка первичной проверки подписок:', formatSafeError(err));
     }
 })();
 
@@ -7092,7 +7148,7 @@ if (AUTO_SYNC_PLAN_LIMITS_ON_BOOT) {
             await syncAllUsersPlanLimits();
             console.log('Автосинхронизация лимитов по планам выполнена.');
         } catch (err) {
-            console.error('Ошибка автосинхронизации лимитов по планам:', err);
+            console.error('Ошибка автосинхронизации лимитов по планам:', formatSafeError(err));
         }
     })();
 }

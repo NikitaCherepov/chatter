@@ -1262,7 +1262,7 @@ AI: execute_ssh_command(server_id, command)
 - `403` - доступ запрещен (`access_not_approved`, `forbidden_admin_only`).
 - `404` - сущность не найдена (`user_not_found`, `note_not_found` и т.д.).
 - `409` - конфликт (`name_already_exists`, `login_already_exists`).
-- `422` - бизнес-ограничение (`notes_limit`, `cannot_delete_default_prompt`, `cannot_ban_admin_from_env`).
+- `422` - бизнес-ограничение (`notes_limit`, `cannot_delete_default_prompt`, `cannot_ban_admin`).
 - `429` - лимиты (`daily_message_limit_reached`).
 - `500` - внутренняя ошибка (`internal_error`/`*_failed`).
 

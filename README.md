@@ -51,7 +51,7 @@ npm run logs
 
 ## Рекомендуемые ENV
 
-- `ADMIN_IDS` или `ADMIN_ID` - чтобы назначить админов.
+- Администраторы назначаются в БД (`role=admin`, `status=approved`); `ADMIN_ID(S)` больше не используются.
 - `ENCRYPTION_KEY` - ключ шифрования для mail-данных.
 - `NOTES_WEBAPP_URL` - ссылка на WebApp заметок в меню.
 - `AUTO_SYNC_PLAN_LIMITS_ON_BOOT=1` - авто-синхронизация лимитов при старте.
