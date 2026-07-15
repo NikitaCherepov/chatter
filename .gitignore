@@ -1,5 +1,9 @@
 node_modules/
 .npm-cache/
+whisper.cpp/
+__pycache__/
+*.py[cod]
+.venv/
 .env
 *.db
 *.db-journal

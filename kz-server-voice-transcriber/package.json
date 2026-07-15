@@ -1,0 +1,19 @@
+{
+  "name": "voice-transcription-api",
+  "version": "1.0.0",
+  "description": "Authenticated speech transcription and synthesis service for Chatter.",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "multer": "^2.2.0"
+  },
+  "overrides": {
+    "qs": "6.15.3"
+  }
+}
