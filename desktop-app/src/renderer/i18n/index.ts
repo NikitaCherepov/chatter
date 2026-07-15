@@ -1,19 +1,59 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import deTranslation from './locales/de/translation.json';
 import enTranslation from './locales/en/translation.json';
+import esTranslation from './locales/es/translation.json';
+import frTranslation from './locales/fr/translation.json';
+import itTranslation from './locales/it/translation.json';
+import jaTranslation from './locales/ja/translation.json';
+import koTranslation from './locales/ko/translation.json';
+import plTranslation from './locales/pl/translation.json';
+import ptBrTranslation from './locales/pt-BR/translation.json';
 import ruTranslation from './locales/ru/translation.json';
+import zhCnTranslation from './locales/zh-CN/translation.json';
 
-export type SupportedLanguage = 'en' | 'ru';
+export const SUPPORTED_LANGUAGE_OPTIONS = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'es', label: 'Español' },
+  { value: 'fr', label: 'Français' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'ja', label: '日本語' },
+  { value: 'ko', label: '한국어' },
+  { value: 'pl', label: 'Polski' },
+  { value: 'pt-BR', label: 'Português (Brasil)' },
+  { value: 'zh-CN', label: '简体中文' },
+] as const;
+
+export type SupportedLanguage = typeof SUPPORTED_LANGUAGE_OPTIONS[number]['value'];
 export type LanguagePreference = 'system' | SupportedLanguage;
 
 const LANGUAGE_PREFERENCE_STORAGE_KEY = 'chatter_language_preference';
-const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>(['en', 'ru']);
+const SUPPORTED_LANGUAGE_CODES: SupportedLanguage[] = SUPPORTED_LANGUAGE_OPTIONS.map(({ value }) => value);
+const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>(SUPPORTED_LANGUAGE_CODES);
+const SUPPORTED_LANGUAGE_BY_NORMALIZED_CODE = new Map<string, SupportedLanguage>(
+  SUPPORTED_LANGUAGE_CODES.map((language) => [language.toLowerCase(), language]),
+);
 let detectedSystemLanguage: SupportedLanguage = 'en';
 
 const resources = {
+  de: { translation: deTranslation },
   en: { translation: enTranslation },
+  es: { translation: esTranslation },
+  fr: { translation: frTranslation },
+  it: { translation: itTranslation },
+  ja: { translation: jaTranslation },
+  ko: { translation: koTranslation },
+  pl: { translation: plTranslation },
+  'pt-BR': { translation: ptBrTranslation },
   ru: { translation: ruTranslation },
+  'zh-CN': { translation: zhCnTranslation },
 } as const;
+
+export function getLanguageDisplayName(language: SupportedLanguage): string {
+  return SUPPORTED_LANGUAGE_OPTIONS.find(({ value }) => value === language)?.label ?? language;
+}
 
 export function isLanguagePreference(value: string): value is LanguagePreference {
   return value === 'system' || SUPPORTED_LANGUAGES.has(value as SupportedLanguage);
@@ -30,10 +70,26 @@ export function getLanguagePreference(): LanguagePreference {
 }
 
 function normalizeSupportedLanguage(language: string): SupportedLanguage | null {
-  const baseLanguage = language.trim().toLowerCase().replace('_', '-').split('-')[0];
-  return SUPPORTED_LANGUAGES.has(baseLanguage as SupportedLanguage)
-    ? baseLanguage as SupportedLanguage
-    : null;
+  const normalized = language.trim().toLowerCase().replace(/_/g, '-');
+  const exactMatch = SUPPORTED_LANGUAGE_BY_NORMALIZED_CODE.get(normalized);
+  if (exactMatch) return exactMatch;
+
+  const baseLanguage = normalized.split('-')[0];
+  const baseMatch = SUPPORTED_LANGUAGE_BY_NORMALIZED_CODE.get(baseLanguage);
+  if (baseMatch) return baseMatch;
+
+  if (normalized === 'pt') return 'pt-BR';
+  if (
+    normalized === 'zh'
+    || normalized === 'zh-hans'
+    || normalized.startsWith('zh-hans-')
+    || normalized === 'zh-sg'
+    || normalized.startsWith('zh-sg-')
+  ) {
+    return 'zh-CN';
+  }
+
+  return null;
 }
 
 async function getSystemLanguages(): Promise<string[]> {
@@ -90,8 +146,8 @@ export async function initializeI18n() {
         resources,
         lng: language,
         fallbackLng: 'en',
-        supportedLngs: ['en', 'ru'],
-        load: 'languageOnly',
+        supportedLngs: SUPPORTED_LANGUAGE_CODES,
+        load: 'currentOnly',
         interpolation: {
           escapeValue: false,
         },

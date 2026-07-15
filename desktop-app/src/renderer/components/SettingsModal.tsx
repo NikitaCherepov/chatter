@@ -12,9 +12,11 @@ import { Select } from './Select';
 import type { SelectOption } from './Select';
 import {
   getDetectedSystemLanguage,
+  getLanguageDisplayName,
   getLanguagePreference,
   isLanguagePreference,
   setLanguagePreference,
+  SUPPORTED_LANGUAGE_OPTIONS,
   type LanguagePreference,
 } from '../i18n';
 import Slider from './Slider';
@@ -178,13 +180,10 @@ export function SettingsModal({ onClose }: Props) {
     () => getLanguagePreference(),
   );
   const languageOptions = useMemo<SelectOption[]>(() => {
-    const currentSystemLanguage = getDetectedSystemLanguage() === 'ru'
-      ? t('settings.language.russian')
-      : t('settings.language.english');
+    const currentSystemLanguage = getLanguageDisplayName(getDetectedSystemLanguage());
     return [
       { value: 'system', label: t('settings.language.systemWithLanguage', { language: currentSystemLanguage }) },
-      { value: 'ru', label: t('settings.language.russian') },
-      { value: 'en', label: t('settings.language.english') },
+      ...SUPPORTED_LANGUAGE_OPTIONS,
     ];
   }, [i18n.language, t]);
   const [subagentModel, setSubagentModelState] = useState<string | null>(null);

@@ -702,7 +702,9 @@
       "deletePublicMessage": "The runbook will be deleted for all users.",
       "commandCount_one": "{{count}} command",
       "commandCount_other": "{{count}} commands",
-      "commandCount": "{{count}} commands"
+      "commandCount": "{{count}} commands",
+      "commandCount_few": "{{count}} commands",
+      "commandCount_many": "{{count}} commands"
     },
     "smart": {
       "loadFailed": "Could not load smart home settings",

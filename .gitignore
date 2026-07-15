@@ -23,3 +23,4 @@ desktop-app/models/
 desktop-app/.venv-wakeword/
 desktop-app/*.spec
 *.exe
+desktop-app/.env.i18n
