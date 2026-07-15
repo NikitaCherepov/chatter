@@ -1,37 +1,37 @@
-﻿# Chatter Bot (`index.ts`)
+# Chatter Bot (`index.ts`)
 
-Telegram-бот проекта `chatter`.
+Telegram bot for the `chatter` project.
 
-`index.ts` отвечает за Telegram UX (команды, меню, обработку текста/голоса/фото) и ходит в `backend-api` через internal API для AI и управления пользователями.
+`index.ts` handles the Telegram UX (commands, menus, text/voice/photo processing) and communicates with `backend-api` via an internal API for AI and user management.
 
-## Что важно понимать
+## Key Things to Know
 
-- Бот и API запускаются как два отдельных процесса.
-- Для user lifecycle бот использует backend (`/internal/users/*`), поэтому backend должен быть запущен.
-- Основная БД проекта: `chatter.db`.
+- The bot and API run as two separate processes.
+- For user lifecycle management, the bot uses the backend (`/internal/users/*`), so the backend must be running.
+- The main project database: `chatter.db`.
 
-## Быстрый старт
+## Quick Start
 
-1. Установить зависимости:
+1. Install dependencies:
 
 ```bash
 npm install
 ```
 
-2. Настроить `.env` (минимум см. ниже).
-3. Запустить backend API:
+2. Configure `.env` (see minimum below).
+3. Start the backend API:
 
 ```bash
 npm run dev:api
 ```
 
-4. В другом терминале запустить бота:
+4. In another terminal, start the bot:
 
 ```bash
 npm run dev
 ```
 
-## PM2 запуск
+## PM2 Startup
 
 ```bash
 npm run start:api
@@ -43,240 +43,239 @@ npm run logs:api
 npm run logs
 ```
 
-## Минимальные ENV для бота
+## Minimum ENV Variables for the Bot
 
-- `TELEGRAM_TOKEN` - токен Telegram-бота.
-- `BACKEND_INTERNAL_TOKEN` - должен совпадать с backend.
-- `BACKEND_API_BASE_URL` - по умолчанию `http://127.0.0.1:3050`.
+- `TELEGRAM_TOKEN` — Telegram bot token.
+- `BACKEND_INTERNAL_TOKEN` — must match the backend.
+- `BACKEND_API_BASE_URL` — defaults to `http://127.0.0.1:3050`.
 
-## Рекомендуемые ENV
+## Recommended ENV Variables
 
-- Администраторы назначаются в БД (`role=admin`, `status=approved`); `ADMIN_ID(S)` больше не используются.
-- `ENCRYPTION_KEY` - ключ шифрования для mail-данных.
-- `NOTES_WEBAPP_URL` - ссылка на WebApp заметок в меню.
-- `AUTO_SYNC_PLAN_LIMITS_ON_BOOT=1` - авто-синхронизация лимитов при старте.
-- `BACKEND_TIMEOUT_AI_MS` - таймаут AI-запросов (ms), по умолчанию `120000` (2 мин).
-- `BACKEND_TIMEOUT_MEDIA_MS` - таймаут голоса/фото (ms), по умолчанию `180000` (3 мин).
-- `BACKEND_TIMEOUT_DEFAULT_MS` - таймаут прочих запросов к backend (ms), по умолчанию `15000` (15 сек).
-- `TG_USE_RICH_STREAMING=1` - включает rich streaming в Telegram через `sendRichMessageDraft` / `sendRichMessage` (Bot API 10.1+).
-- `TG_STREAM_DEBUG=1` - подробные логи rich-stream flush/finalize/backoff.
+- Administrators are assigned in the database (`role=admin`, `status=approved`); `ADMIN_ID(S)` are no longer used.
+- `ENCRYPTION_KEY` — encryption key for mail data.
+- `NOTES_WEBAPP_URL` — link to the Notes WebApp in the menu.
+- `AUTO_SYNC_PLAN_LIMITS_ON_BOOT=1` — auto-sync plan limits on startup.
+- `BACKEND_TIMEOUT_AI_MS` — timeout for AI requests (ms), default `120000` (2 min).
+- `BACKEND_TIMEOUT_MEDIA_MS` — timeout for voice/photo (ms), default `180000` (3 min).
+- `BACKEND_TIMEOUT_DEFAULT_MS` — timeout for other backend requests (ms), default `15000` (15 sec).
+- `TG_USE_RICH_STREAMING=1` — enables rich streaming in Telegram via `sendRichMessageDraft` / `sendRichMessage` (Bot API 10.1+).
+- `TG_STREAM_DEBUG=1` — verbose rich-stream flush/finalize/backoff logs.
 
-## AI-инструменты
+## AI Tools
 
-Бот получает список инструментов из backend и передаёт их AI. Доступные:
+The bot receives the list of tools from the backend and passes them to the AI. Available tools:
 
-- **search_web** - поиск в интернете (Tavily).
-- **read_webpage** - чтение и очистка текста веб-страницы.
-- **get_smart_devices** / **control_smart_home** - управление умным домом (Яндекс). Два инструмента: первый возвращает список устройств из БД, второй управляет по device_id. Токен и устройства настраиваются через UI (Настройки → Умный дом).
-- **schedule_task** / **get_my_tasks** / **delete_my_task** - планирование задач и напоминаний.
-- **set_user_timezone** - установка часового пояса.
-- **check_emails** / **read_email_content** / **send_email** - работа с почтой.
-- **save_note** / **list_my_notes** / **read_note** / **delete_note** - заметки.
-- **update_core_memory** - статический профиль пользователя.
-- **search_cold_memory** / **save_to_cold_memory** / **delete_from_cold_memory** - векторный архив памяти.
-- **random_roll** - бросок монетки/кубиков.
-- **generate_image** - генерация изображений по текстовому описанию. Вызывается при явном намерении ("нарисуй", "сгенерируй картинку"). Промпт автоматически переводится на английский. Изображение отправляется в Telegram как фото.
-- **execute_pc_command** - выполнение команды на ПК пользователя. Требует подтверждения через inline-кнопки (если десктоп подключён). Опциональный `background: true` используется для открытия GUI-приложений (VS Code, Notepad, браузер), когда не нужен stdout/stderr и не надо ждать закрытия окна.
-- **execute_ssh_command** - выполнение SSH-команды на сервере. Требует подтверждения через inline-кнопки.
-- **list_devops_servers** / **list_devops_runbooks** / **read_devops_runbook** / **suggest_devops_runbook** - DevOps инструменты.
-- **install_ssh_public_key** / **create_server_user** / **change_server_user_password** / **suggest_server_creds_update** - управление SSH-доступом.
-- **map_control** / **get_map_pins** / **find_transit_route** / **search_nearby** - карта, маршруты, поиск мест.
-- **list_my_macros** / **execute_macro** - пользовательские макросы консольных команд.
-- **explore_fs** - чтение директории на ПК (требует подключённого десктопа).
-- **suggest_macro** - предложение сохранить новый макрос.
-- **capture_screen** - скриншот экрана ПК. Бэкенд делает скриншот через десктоп, отправляет в vision-модель для анализа (поиск элементов, описание интерфейса). Скриншот сохраняется и показывается в чате. Координаты возвращаются в нормализованном виде (0.0–1.0) для использования в execute_visual_click. Требует подключённого десктопа.
-- **execute_visual_click** - клик мышкой по указанным координатам на экране ПК. Перед кликом делает свежий скриншот, рисует красный прицел (круг + перекрестье) и отправляет в Telegram как фото с inline-кнопками «Кликнуть» / «Отклонить». После подтверждения nut.js двигает реальный курсор и кликает. Координаты — нормализованные (0.0–1.0), поддерживается мульти-монитор. Требует подтверждения пользователя и подключённого десктопа.
+- **search_web** — web search (Tavily).
+- **read_webpage** — fetch and clean webpage text.
+- **get_smart_devices** / **control_smart_home** — smart home control (Yandex). Two tools: the first returns a list of devices from the DB, the second controls them by device_id. Token and devices are configured via UI (Settings → Smart Home).
+- **schedule_task** / **get_my_tasks** / **delete_my_task** — schedule tasks and reminders.
+- **set_user_timezone** — set user timezone.
+- **check_emails** / **read_email_content** / **send_email** — email operations.
+- **save_note** / **list_my_notes** / **read_note** / **delete_note** — notes.
+- **update_core_memory** — static user profile.
+- **search_cold_memory** / **save_to_cold_memory** / **delete_from_cold_memory** — vector memory archive.
+- **random_roll** — coin/dice roll.
+- **generate_image** — generate images from a text description. Triggered by explicit intent ("draw", "generate an image"). The prompt is automatically translated to English. The image is sent to Telegram as a photo.
+- **execute_pc_command** — execute a command on the user's PC. Requires confirmation via inline buttons (if desktop is connected). Optional `background: true` is used for opening GUI applications (VS Code, Notepad, browser) when stdout/stderr is not needed and there's no need to wait for the window to close.
+- **execute_ssh_command** — execute an SSH command on a server. Requires confirmation via inline buttons.
+- **list_devops_servers** / **list_devops_runbooks** / **read_devops_runbook** / **suggest_devops_runbook** — DevOps tools.
+- **install_ssh_public_key** / **create_server_user** / **change_server_user_password** / **suggest_server_creds_update** — SSH access management.
+- **map_control** / **get_map_pins** / **find_transit_route** / **search_nearby** — maps, routes, place search.
+- **list_my_macros** / **execute_macro** — user-defined console command macros.
+- **explore_fs** — read a directory on the PC (requires connected desktop).
+- **suggest_macro** — suggest saving a new macro.
+- **capture_screen** — take a screenshot of the PC screen. The backend takes a screenshot via the desktop, sends it to a vision model for analysis (finding elements, describing the UI). The screenshot is saved and shown in the chat. Coordinates are returned in normalized form (0.0–1.0) for use in execute_visual_click. Requires a connected desktop.
+- **execute_visual_click** — click the mouse at specified coordinates on the PC screen. Before clicking, takes a fresh screenshot, draws a red crosshair (circle + crosshair) and sends it to Telegram as a photo with inline buttons "Click" / "Reject". After confirmation, nut.js moves the real cursor and clicks. Coordinates are normalized (0.0–1.0), multi-monitor is supported. Requires user confirmation and a connected desktop.
 
-## Основные команды
+## Main Commands
 
-Пользователь:
+User:
 
 - `/start`, `/menu`
 - `/clear`
 - `/tz <UTC>`
 - `/tasks`, `/task_delete <id>`
-- `/note_add <текст>`, `/notes`, `/note_find <текст>`, `/note_delete <id>`
+- `/note_add <text>`, `/notes`, `/note_find <text>`, `/note_delete <id>`
 - `/mail_setup <prov> <mail> <app_pass>`, `/mail_use <yandex|google>`, `/mail_limit`, `/mail_forget`
-- `/chats`, `/chat_new [название]`, `/chat_use <id>`
+- `/chats`, `/chat_new [name]`, `/chat_use <id>`
 - `/rename`
 - `/prompts`, `/prompt_use <id>`
 
-## Документы (attachments) в Telegram
+## Document Attachments in Telegram
 
-Помимо фото, бот умеет принимать текстовые документы: txt, md, json, csv, log, xml, yaml, ini, toml, код (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css и т.д.), **docx**, **pdf**, rtf. Лимит — 5 МБ на файл (идентично desktop). Эти же файлы сразу появляются в `DocumentsTool` десктопа — бэкенд тот же.
+In addition to photos, the bot can accept text documents: txt, md, json, csv, log, xml, yaml, ini, toml, code (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css, etc.), **docx**, **pdf**, rtf. Limit is 5 MB per file (same as desktop). These files also immediately appear in the desktop's `DocumentsTool` — the backend is the same.
 
-Работает ровно как фото: пришёл файл → сразу уходит в AI.
+Works exactly like photos: file received → immediately sent to AI.
 
-- **Файл + подпись (caption)** — подпись становится текстом запроса, файл прикрепляется к этому же сообщению.
-- **Файл без подписи** — уходит с нейтральным плейсхолдером («Проанализируй прикреплённые документы.»).
-- **Несколько файлов как альбом** (`media_group_id`) — собираются через короткий таймер и уходят одним AI-запросом; caption берётся с первого сообщения группы.
+- **File + caption** — the caption becomes the request text, the file is attached to the same message.
+- **File without caption** — sent with a neutral placeholder ("Analyze the attached documents.").
+- **Multiple files as an album** (`media_group_id`) — collected via a short timer and sent as a single AI request; the caption is taken from the first message in the group.
 
-Поток данных: TG-бот скачивает файл → base64 → `POST /internal/ai/stream` с полем `documents[]` → бэкенд парсит (через `parseDocument`), сохраняет файл, пишет `attachments` JSON в `chat_messages` и инджектит extracted_text в AI-контекст. Та же логика, что в `/api/v1/chat/send` для desktop.
+Data flow: TG bot downloads the file → base64 → `POST /internal/ai/stream` with a `documents[]` field → the backend parses it (via `parseDocument`), saves the file, writes `attachments` JSON to `chat_messages`, and injects the extracted_text into the AI context. Same logic as in `/api/v1/chat/send` for desktop.
 
-Desktop (дополнительно):
+Desktop (additional):
 
-- Полнотекстовый поиск по сообщениям в сайдбаре (FTS5, debounce 300 мс)
-- `GET /api/v1/chats/search?q=keyword` — возвращает чаты со сниппетами найденных сообщений
+- Full-text search across messages in the sidebar (FTS5, 300 ms debounce)
+- `GET /api/v1/chats/search?q=keyword` — returns chats with snippets of found messages
 
-Админ (дополнительно):
+Admin (additional):
 
 - `/add`, `/remove`
 - `/users`
-- `/ban <id> [причина]`, `/unban <id>`
+- `/ban <id> [reason]`, `/unban <id>`
 - `/prompt_add`, `/prompt_show`, `/prompt_set`, `/prompt_desc`, `/prompt_rename`, `/prompt_default`, `/prompt_delete`
 - `/history_user <user_id> [limit]`
 - `/history_delete <user_id> <message_id> [db|tg]`
 - `/sync_plan_limits`
 
-## Сборка
+## Build
 
 ```bash
 npm run build
 ```
 
-Скомпилированный файл: `dist/index.js`.
+Compiled output: `dist/index.js`.
 
-## Если бот не отвечает
+## If the Bot Is Not Responding
 
-1. Проверить, что backend жив:
+1. Check that the backend is alive:
 
 ```bash
 curl -s http://127.0.0.1:3050/health
 ```
 
-2. Проверить логи:
+2. Check logs:
 
 ```bash
 npm run logs:api
 npm run logs
 ```
 
-3. Проверить, что `BACKEND_INTERNAL_TOKEN` одинаковый у бота и backend.
+3. Verify that `BACKEND_INTERNAL_TOKEN` is the same for both the bot and the backend.
 
-## Смежная документация
+## Related Documentation
 
 - API backend: [backend-api/README.md](./backend-api/README.md)
 
-## SSE/rich-стриминг и подтверждения команд в Telegram
+## SSE/Rich Streaming and Command Confirmations in Telegram
 
-Бот работает с backend через SSE-стриминг (`/internal/ai/stream`) — пользователь видит процесс работы AI в реальном времени: token-by-token текст, reasoning, промежуточные сообщения, статусы инструментов и карточки подтверждения команд.
+The bot communicates with the backend via SSE streaming (`/internal/ai/stream`) — the user sees the AI working in real time: token-by-token text, reasoning, intermediate messages, tool statuses, and command confirmation cards.
 
-### Как это работает
+### How It Works
 
-1. Пользователь отправляет текст боту
-2. Бот открывает SSE-соединение с backend (`POST /internal/ai/stream`)
-3. Backend стримит события: `reasoning_token`, `stream_token`, `intermediate`, `tool_status`, `desktop_action`, `done`, `error`
-4. Если включён `TG_USE_RICH_STREAMING=1`, бот обновляет один rich draft через `sendRichMessageDraft`; иначе продолжает старый режим отдельных сообщений/final reply
-5. На карточки подтверждения рендерит inline-клавиатуры
-6. По `done` rich draft финализируется через `sendRichMessage`, чтобы сообщение осталось в истории
+1. User sends text to the bot
+2. The bot opens an SSE connection to the backend (`POST /internal/ai/stream`)
+3. The backend streams events: `reasoning_token`, `stream_token`, `intermediate`, `tool_status`, `desktop_action`, `done`, `error`
+4. If `TG_USE_RICH_STREAMING=1` is enabled, the bot updates a single rich draft via `sendRichMessageDraft`; otherwise it continues the old mode of separate messages/final reply
+5. Confirmation cards render inline keyboards
+6. On `done`, the rich draft is finalized via `sendRichMessage` so the message persists in history
 
 ### Rich streaming (`TG_USE_RICH_STREAMING=1`)
 
-Реализация живёт в `index.ts` (`RichStreamSession`). На каждый AI-запрос создаётся отдельная сессия с буферами:
+The implementation lives in `index.ts` (`RichStreamSession`). A separate session with buffers is created for each AI request:
 
-- `reasoningBuf` — токены размышления модели (`reasoning_token`)
-- `lastToolStatus` — последний статус инструмента (`tool_status`, например «Выполняю команду на ПК…»); хранится только один — новый заменяет старый
-- `intermediateBuf` — промежуточный текст модели между tool-call итерациями (`intermediate`); в draft не рендерится (его контент всё равно попадёт в `textBuf` через стрим), используется только для триггера flush и сброса статуса
-- `textBuf` — финальный ответ модели (`stream_token`)
+- `reasoningBuf` — model reasoning tokens (`reasoning_token`)
+- `lastToolStatus` — the latest tool status (`tool_status`, e.g. "Executing command on PC…"); only one is stored — a new one replaces the old one
+- `intermediateBuf` — intermediate model text between tool-call iterations (`intermediate`); not rendered in the draft (its content ends up in `textBuf` via the stream anyway), used only as a flush trigger and status reset
+- `textBuf` — the model's final response (`stream_token`)
 
-#### Эфемерный лог (architectural decision)
+#### Ephemeral log (architectural decision)
 
-Все буферы, **кроме `textBuf`**, — эфемерные: они показываются в draft во время генерации, но **полностью выкидываются в финальном `sendRichMessage`**. После завершения в чате остаётся только чистый ответ модели. Никаких `<blockquote expandable>💭 Размышления…`, никаких «🔧 Выполняю команду…» в истории.
+All buffers **except `textBuf`** are ephemeral: they are shown in the draft during generation but **completely discarded in the final `sendRichMessage`**. After completion, only the clean model response remains in the chat. No `<blockquote expandable>💭 Reasoning…`, no "🔧 Executing command…" in history.
 
-**Draft (во время генерации):**
+**Draft (during generation):**
 
-1. `<tg-thinking>{reasoning_tail}</tg-thinking>` — анимация «думаю…»; показываем **хвост** рассуждения (последние мысли важнее, чем начало «Пользователь просит…»)
-2. `<i>🔧 {last_tool_status}</i>` — один текущий статус инструмента курсивом; когда инструмент отработал (`onIntermediate`/`onToken`) — сбрасывается, чтобы не висел
-3. `{textBuf}` — печатающийся финальный ответ
+1. `<tg-thinking>{reasoning_tail}</tg-thinking>` — "thinking…" animation; we show the **tail** of the reasoning (the latest thoughts are more important than the beginning "The user asks…")
+2. `<i>🔧 {last_tool_status}</i>` — a single current tool status in italics; when the tool finishes (`onIntermediate`/`onToken`) — it is cleared so it doesn't linger
+3. `{textBuf}` — the streaming final response
 
-**Final (после `done`):**
+**Final (after `done`):**
 
-- Только `{textBuf}`. Всё остальное испаряется.
-- Если `textBuf` длиннее `STREAM_FINAL_TEXT_LIMIT` (4000) — дробится на несколько persisted-сообщений (`splitMarkdownForFinal` режет по `\n\n`/`\n`, каждое конвертируется в Rich HTML отдельно).
+- Only `{textBuf}`. Everything else vanishes.
+- If `textBuf` is longer than `STREAM_FINAL_TEXT_LIMIT` (4000) — it is split into multiple persisted messages (`splitMarkdownForFinal` cuts by `\n\n`/`\n`, each is converted to Rich HTML separately).
 
-#### Динамическая обрезка draft'а
+#### Dynamic draft trimming
 
-Суммарная длина HTML draft'а ограничена `STREAM_DRAFT_TEXT_LIMIT = 4000`. Приоритет — `textBuf` (всегда целиком насколько влезает), затем `lastToolStatus`, `reasoningBuf`. Reasoning показывается хвостом с `…` в начале. Если не влезает — урезается ещё.
+The total HTML draft length is limited by `STREAM_DRAFT_TEXT_LIMIT = 4000`. Priority — `textBuf` (always in full as much as fits), then `lastToolStatus`, then `reasoningBuf`. Reasoning is shown as a tail with `…` at the beginning. If it still doesn't fit — it is trimmed further.
 
-- Первый `stream_token` переводит phase в `answering`; reasoning в draft больше не обновляется (но остаётся в буфере до финала, где выкидывается).
-- `tool_status` и `intermediate` можно получать до/после reasoning — они не зависят от phase.
-- Если `textBuf` пуст после `done` (модель не дала ответа) — `finalize()` вернёт false → fallback на `safeReply`.
-- Если rich draft падает не из-за 429, сессия выставляет `draftFailed` и колбэки `onToolStatus`/`onIntermediate` откатываются на старый режим (`ctx.reply` отдельными сообщениями).
-- При успешном rich-финале `backend.tool_user_messages` **не отправляются** отдельными сообщениями — они уже были видны в эфемерном draft. Отправляются только в fallback-режиме.
-- Карточки подтверждения команд (`desktop_action`) **не идут через rich pipeline** — они всегда отдельными сообщениями с inline-кнопками, поэтому подтверждения (`execute_pc_command`, `execute_ssh_command`, файловые операции и т.д.) не зависят от rich streaming и не ломаются.
+- The first `stream_token` transitions the phase to `answering`; reasoning is no longer updated in the draft (but stays in the buffer until the final step where it's discarded).
+- `tool_status` and `intermediate` can arrive before/after reasoning — they are independent of the phase.
+- If `textBuf` is empty after `done` (the model gave no response) — `finalize()` returns false → fallback to `safeReply`.
+- If the rich draft fails for a reason other than 429, the session sets `draftFailed` and the `onToolStatus`/`onIntermediate` callbacks fall back to the old mode (`ctx.reply` with separate messages).
+- On a successful rich final, `backend.tool_user_messages` **are not sent** as separate messages — they were already visible in the ephemeral draft. They are only sent in fallback mode.
+- Command confirmation cards (`desktop_action`) **do not go through the rich pipeline** — they are always separate messages with inline buttons, so confirmations (`execute_pc_command`, `execute_ssh_command`, file operations, etc.) are independent of rich streaming and don't break.
 
-### Форматирование rich-ответа
+### Rich response formatting
 
-Основной текст ответа модели приходит как Markdown и конвертируется в Telegram Rich HTML через `marked` с кастомным renderer'ом. Сырой HTML из ответа модели не исполняется, а экранируется.
+The main model response text arrives as Markdown and is converted to Telegram Rich HTML via `marked` with a custom renderer. Raw HTML from the model response is not executed, but escaped.
 
-Поддерживаемые элементы:
+Supported elements:
 
-- параграфы и переносы строк (`<p>`, `<br>`)
-- заголовки (`<h1>`-`<h6>`)
-- жирный/курсив/зачёркивание/inline-code (`<b>`, `<i>`, `<s>`, `<code>`)
+- paragraphs and line breaks (`<p>`, `<br>`)
+- headings (`<h1>`-`<h6>`)
+- bold/italic/strikethrough/inline-code (`<b>`, `<i>`, `<s>`, `<code>`)
 - code fences (`<pre><code class="language-...">`)
-- списки (`<ul>`, `<ol>`, `<li>`) с inline-форматированием внутри пунктов
-- цитаты (`<blockquote>`)
-- таблицы (`<table>`, `<tr>`, `<th>`, `<td>`)
-- безопасные ссылки (`http`, `https`, `mailto`, `tel`, `tg://`)
+- lists (`<ul>`, `<ol>`, `<li>`) with inline formatting inside items
+- blockquotes (`<blockquote>`)
+- tables (`<table>`, `<tr>`, `<th>`, `<td>`)
+- safe links (`http`, `https`, `mailto`, `tel`, `tg://`)
 
-Важно: `marked` нужен только Telegram-боту. Desktop рендерит markdown в React через `MarkdownRenderer` (`ReactMarkdown + remark-gfm + rehype-highlight`), а Telegram получает уже готовую строку `rich_message.html`.
+Important: `marked` is only needed by the Telegram bot. Desktop renders markdown in React via `MarkdownRenderer` (`ReactMarkdown + remark-gfm + rehype-highlight`), while Telegram receives a ready-made `rich_message.html` string.
 
-### Throttle и 429 backoff
+### Throttle and 429 backoff
 
-Rich draft нельзя обновлять на каждый токен без ограничений: Telegram быстро отдаёт `429 Too Many Requests`.
+The rich draft cannot be updated on every token without limits: Telegram quickly returns `429 Too Many Requests`.
 
-- Базовый flush-интервал: `STREAM_FLUSH_BASE_INTERVAL_MS = 500` (~2 обновления/сек).
-- Максимальный adaptive throttle: `STREAM_FLUSH_MAX_INTERVAL_MS = 5000`.
-- Если накопилось `STREAM_MIN_DELTA_CHARS = 30`, flush может уйти раньше интервала, кроме периода cooldown после 429.
-- При 429 бот читает `retry_after`, ставит `nextAllowedFlushAt` в будущее и не отправляет новый draft до окончания cooldown, даже если накопился большой `textDelta`.
-- AIMD-логика: на 429 интервал увеличивается, после серии успешных flush постепенно возвращается к базовым 500 мс.
+- Base flush interval: `STREAM_FLUSH_BASE_INTERVAL_MS = 500` (~2 updates/sec).
+- Maximum adaptive throttle: `STREAM_FLUSH_MAX_INTERVAL_MS = 5000`.
+- If `STREAM_MIN_DELTA_CHARS = 30` have accumulated, a flush can fire before the interval, except during the cooldown period after a 429.
+- On 429, the bot reads `retry_after`, sets `nextAllowedFlushAt` to the future and does not send a new draft until the cooldown ends, even if a large `textDelta` has accumulated.
+- AIMD logic: on 429 the interval increases, after a series of successful flushes it gradually returns to the base 500 ms.
 
-### Inline-кнопки подтверждения
+### Inline Confirmation Buttons
 
-Когда AI выполняет команду на ПК (`execute_pc_command`) или SSH-команду (`execute_ssh_command`), бот присылает карточку с 4 кнопками:
+When the AI executes a PC command (`execute_pc_command`) or an SSH command (`execute_ssh_command`), the bot sends a card with buttons:
 
-| Кнопка | Действие |
+| Button | Action |
 |---|---|
-| ✅ Разрешить | Выполнить команду |
-| 🔓 Разрешить всегда | Подтверждение → создать политику auto-approve + выполнить |
-| ❓ Проверить | LITE AI анализирует безопасность команды |
-| ❌ Отклонить | Отклонить выполнение |
-| 💬 Отклонить с комментарием | Бот попросит следующим сообщением написать комментарий и передаст его в backend как `rejection_comment` |
+| ✅ Allow | Execute the command |
+| 🔓 Always allow | Confirmation → create an auto-approve policy + execute |
+| ❓ Check | LITE AI analyzes the command safety |
+| ❌ Reject | Reject execution |
+| 💬 Reject with comment | The bot asks for a comment in the next message and passes it to the backend as `rejection_comment` |
 
-Карточки отправляются одновременно в Telegram (inline-кнопки) и на десктоп (WS). Кто первый ответил — выполняется, второй канал игнорируется.
-Если пользователь отклоняет с комментарием, backend возвращает этот текст модели в rejected tool result как `user_comment`, чтобы AI мог скорректировать следующий шаг.
+Cards are sent simultaneously to Telegram (inline buttons) and desktop (WS). Whoever responds first — that one executes, the second channel is ignored.
+If the user rejects with a comment, the backend returns this text to the model in the rejected tool result as `user_comment`, so the AI can adjust the next step.
 
-### PC-команды в фоне
+### Background PC Commands
 
-`execute_pc_command` поддерживает флаг `background`. AI должен ставить `background: true` только для GUI/open-сценариев, где не нужен консольный вывод: открыть VS Code, Notepad, браузер, файл или папку. На desktop это запускается через detached `spawn(..., { shell: true, stdio: 'ignore', windowsHide: true })` + `unref()`, поэтому Telegram/AI получает быстрый результат и не ждёт закрытия окна.
+`execute_pc_command` supports a `background` flag. The AI should set `background: true` only for GUI/open scenarios where console output is not needed: open VS Code, Notepad, a browser, a file, or a folder. On desktop this is launched via detached `spawn(..., { shell: true, stdio: 'ignore', windowsHide: true })` + `unref()`, so Telegram/AI gets a quick result and doesn't wait for the window to close.
 
-Обычные диагностические команды (`where`, `dir`, `ipconfig`, `tasklist`, скрипты с stdout) должны идти с `background: false` или без параметра.
+Regular diagnostic commands (`where`, `dir`, `ipconfig`, `tasklist`, scripts with stdout) should run with `background: false` or without the parameter.
 
-### Архитектура Telegraf (fire-and-forget)
+### Telegraf Architecture (fire-and-forget)
 
-`processUserTextThroughAi` запускается **без `await`** — это критично. Если бы AI-обработка блокировала event loop, callback_query от inline-кнопок не обрабатывались бы, и Telegram возвращал бы "query is too old" через ~15 секунд.
+`processUserTextThroughAi` is started **without `await`** — this is critical. If AI processing blocked the event loop, callback_query from inline buttons would not be processed, and Telegram would return "query is too old" after ~15 seconds.
 
-Порядок обработки кнопки:
-1. `answerCbQuery()` — немедленно при получении callback
-2. Axios-запрос к backend — в фоновой IIFE
-3. Результат — отдельным сообщением в чат
+Button processing order:
+1. `answerCbQuery()` — immediately upon receiving the callback
+2. Axios request to the backend — in a background IIFE
+3. Result — as a separate message in the chat
 
-### Хранение команд для Review/Always
+### Storing Commands for Review/Always
 
-Telegram **удаляет Markdown** из текста сообщения (backticks исчезают), поэтому команда не может быть извлечена из `callbackQuery.message.text`. Бот хранит полные команды в памяти (`pendingPcCommandTexts` Map) при отправке карточки и достаёт по `confirmationId` при нажатии «Разрешить всегда» или «Проверить».
+Telegram **strips Markdown** from message text (backticks disappear), so the command cannot be extracted from `callbackQuery.message.text`. The bot stores full commands in memory (`pendingPcCommandTexts` Map) when sending the card and retrieves them by `confirmationId` when "Always allow" or "Check" is pressed.
 
-## Desktop-only инструменты (через backend API)
+## Desktop-only Tools (via backend API)
 
-Следующие AI-инструменты доступны только при подключённом десктопе (`isDesktop=true`) и не отображаются в Telegram:
+The following AI tools are only available when a desktop is connected (`isDesktop=true`) and are not displayed in Telegram:
 
-- **`desktop_action`** — управление UI десктопа (открытие виджетов, макросы, предложения).
-- **`invoke_subagent`** — вызов специализированного субагента, зарегистрированного в статическом реестре.
-- **`spawn_subagent`** — создание ad-hoc субагентов «на лету»: модель задаёт задачу, системный промпт, набор инструментов и лимит итераций. Несколько вызовов в одной итерации выполняются параллельно (до 3 одновременно). Полный trace сохраняется в отдельном поле `subagents_json` для отображения в UI десктопа.
+- **`desktop_action`** — desktop UI control (opening widgets, macros, suggestions).
+- **`invoke_subagent`** — invoke a specialized subagent registered in the static registry.
+- **`spawn_subagent`** — create ad-hoc subagents on the fly: the model defines a task, system prompt, toolset, and iteration limit. Multiple calls within the same iteration run in parallel (up to 3 concurrently). The full trace is saved in a separate `subagents_json` field for display in the desktop UI.
 
-Подробности архитектуры субагентов: [backend-api/README.md → Subagent System](./backend-api/README.md#subagent-system-desktop-only-isdesktop).
+Subagent architecture details: [backend-api/README.md → Subagent System](./backend-api/README.md#subagent-system-desktop-only-isdesktop).
 
-## Soft Abort (остановка генерации)
+## Soft Abort (stopping generation)
 
-При остановке генерации (`/abort_message`, `chat_stop`) бот **не удаляет** накопленный контент. Всё, что AI успел сделать (промежуточный текст, tool calls, reasoning, trace субагентов), сохраняется в БД как обычное assistant-сообщение с пометкой `_⏹ Генерация остановлена пользователем_`. Это работает как в Telegram, так и в desktop.
-
+When generation is stopped (`/abort_message`, `chat_stop`), the bot **does not delete** the accumulated content. Everything the AI managed to produce (intermediate text, tool calls, reasoning, subagent traces) is saved to the DB as a regular assistant message marked with `_⏹ Generation stopped by user_`. This works both in Telegram and on desktop.

@@ -1,8 +1,8 @@
 # chatter desktop-app
 
-Electron + React + Vite десктоп-клиент для Chatter.
+Electron + React + Vite desktop client for Chatter.
 
-## Быстрый старт
+## Quick Start
 
 ```bash
 npm install
@@ -13,72 +13,72 @@ npm run dev
 npm run build
 ```
 
-## Голос, Whisper, Wake Word
+## Voice, Whisper, Wake Word
 
-Голосовой сценарий в desktop-приложении в основном живет в Electron main process и в renderer-странице `ChatPage`.
+The voice scenario in the desktop app mainly lives in the Electron main process and in the `ChatPage` renderer page.
 
-### Ручная расшифровка голоса
+### Manual Voice Transcription
 
-- Renderer записывает звук с микрофона через `MediaRecorder` и отправляет аудиобуфер в main process через IPC `transcribe-audio`.
-- Main process сохраняет браузерный звук во временный `.webm`, конвертирует его в mono WAV 16 kHz через `fluent-ffmpeg`, а затем запускает локальный `whisper.exe`.
-- Ресурсы Whisper ожидаются в `models/` в dev-режиме и в `resources/models/` в packaged-сборке:
+- The renderer records audio from the microphone via `MediaRecorder` and sends the audio buffer to the main process via the `transcribe-audio` IPC.
+- The main process saves the browser audio as a temporary `.webm`, converts it to mono WAV 16 kHz via `fluent-ffmpeg`, and then launches the local `whisper.exe`.
+- Whisper resources are expected in `models/` in dev mode and in `resources/models/` in a packaged build:
   - `whisper.exe`
   - `ggml-small.bin`
-  - нужные whisper/ggml DLL
-- `ffmpeg-static` должен быть распакован из `app.asar`; в `package.json` для этого используется `asarUnpack` на `node_modules/ffmpeg-static/**/*`.
+  - required whisper/ggml DLLs
+- `ffmpeg-static` must be unpacked from `app.asar`; `package.json` uses `asarUnpack` for this on `node_modules/ffmpeg-static/**/*`.
 
-### Wake word
+### Wake Word
 
-Wake word обрабатывается без Python, через `onnxruntime-node` в Electron main process:
+Wake word is processed without Python, via `onnxruntime-node` in the Electron main process:
 
 - ONNX runtime: `src/main/wakeword.ts`
 - Renderer audio stream: `src/renderer/lib/wakeWordAudio.ts`
 - ONNX resources: `wakeword/models/*.onnx`
 
-Renderer держит поток микрофона через Web Audio API, ресемплит через `AudioContext({ sampleRate: 16000 })`, режет PCM на чанки по 1280 samples (80 ms) и отправляет их в main process через IPC `wakeword-audio-chunk`.
+The renderer maintains a microphone stream via the Web Audio API, resamples via `AudioContext({ sampleRate: 16000 })`, slices PCM into chunks of 1280 samples (80 ms), and sends them to the main process via the `wakeword-audio-chunk` IPC.
 
-Main process повторяет openWakeWord pipeline:
+The main process replicates the openWakeWord pipeline:
 
 1. `melspectrogram.onnx`
 2. `embedding_model.onnx`
-3. wake-word модели (`alexa`, `hey_jarvis`, `hey_mycroft`, `hey_rhasspy`, `timer`, `weather`)
-4. `silero_vad.onnx` для VAD-фильтра
+3. wake-word models (`alexa`, `hey_jarvis`, `hey_mycroft`, `hey_rhasspy`, `timer`, `weather`)
+4. `silero_vad.onnx` for the VAD filter
 
-При срабатывании main process формирует payload:
+On detection, the main process builds a payload:
 
 ```json
 {"type":"wakeword","name":"...","score":0.9,"ts":1710000000}
 ```
 
-И отправляет события:
+And sends events:
 
-- `wakeword:detected` в renderer
-- `pixel-avatar:state` со `state: "listening"`
+- `wakeword:detected` to the renderer
+- `pixel-avatar:state` with `state: "listening"`
 
-После этого renderer запускает `createSpeechRecorder()`, записывает фразу пользователя после wake word, отправляет ее в `transcribe-audio` и отправляет распознанный текст в чат.
+After that, the renderer starts `createSpeechRecorder()`, records the user's phrase after the wake word, sends it to `transcribe-audio`, and sends the recognized text to the chat.
 
-### Особенности упаковки
+### Packaging Notes
 
-`npm run build:win` должен включать:
+`npm run build:win` must include:
 
-- `models/` как `resources/models`
-- `wakeword/` как `resources/wakeword`
+- `models/` as `resources/models`
+- `wakeword/` as `resources/wakeword`
 
-`onnxruntime-node` должен быть распакован из `app.asar`; это настроено через `asarUnpack` в `package.json`.
+`onnxruntime-node` must be unpacked from `app.asar`; this is configured via `asarUnpack` in `package.json`.
 
 ## TTS (Text-to-Speech)
 
-Озвучка сообщений бота — три модели, единый стейт, плавные переходы.
+Bot message voiceover — three models, unified state, smooth transitions.
 
-### Модели
+### Models
 
-| Модель | Движок | Голоса |
+| Model | Engine | Voices |
 |---|---|---|
-| **Piper** (по умолчанию) | Локальный `piper.exe` через IPC → WAV → Web Audio API | `ruslan` (ru), расширяемо |
-| **Встроенный (Chromium)** | `window.speechSynthesis` — системные голоса Windows | Все голоса ОС |
-| **Cartesia (облачная)** | Backend-прокси → Cartesia.ai API → MP3 → Web Audio API | Голоса en/ru/de/fr, подгружаются с сервера |
+| **Piper** (default) | Local `piper.exe` via IPC → WAV → Web Audio API | `ruslan` (ru), extensible |
+| **Built-in (Chromium)** | `window.speechSynthesis` — Windows system voices | All OS voices |
+| **Cartesia (cloud)** | Backend proxy → Cartesia.ai API → MP3 → Web Audio API | en/ru/de/fr voices, loaded from server |
 
-### Архитектура
+### Architecture
 
 ```
 Renderer (tts.ts)          Main (main.ts)          FileSystem / Server
@@ -89,10 +89,10 @@ ttsSpeak(msgId, text, audio)
   │              (text)              -m model.onnx -f out.wav
   │                                  ◄── WAV buffer ──── temp file
   │
-  ├─ Cartesia? ► audio.url есть? ──► GET /api/v1/audio/xxx.mp3 ──► playBuffer()
-  │              нет? ──► POST /api/v1/tts/generate ──► server → Cartesia API
+  ├─ Cartesia? ► audio.url exists? ──► GET /api/v1/audio/xxx.mp3 ──► playBuffer()
+  │              no? ──► POST /api/v1/tts/generate ──► server → Cartesia API
   │                      ◄── { audio_url } ──► GET /api/v1/audio/xxx.mp3 ──► playBuffer()
-  │                      (audio привязывается к сообщению, повторный play — без генерации)
+  │                      (audio is bound to the message, replay — without generation)
   │
   ├─ Builtin? ► SpeechSynthesisUtterance (Chromium API, 0 IPC)
   │
@@ -101,25 +101,25 @@ AudioManager (Web Audio API)
   Source ► GainNode (fade-in/out) ► Destination
 ```
 
-### Ключевые файлы
+### Key Files
 
-- `lib/tts.ts` — единый TTS-сервис: модели, голоса, подписки на стейт, `generationTicket` для отмены
-- `lib/audioManager.ts` — Web Audio API плеер: `playBuffer()` с fade-in 40ms / fade-out 15ms до конца буфера, `stopWithFade()` 150ms
-- `ChatPage.tsx` — play/stop кнопка в metaRow каждого сообщения
-- `SettingsModal.tsx` — вкладка "Голос": модель, голос, громкость, прослушивание
+- `lib/tts.ts` — unified TTS service: models, voices, state subscriptions, `generationTicket` for cancellation
+- `lib/audioManager.ts` — Web Audio API player: `playBuffer()` with 40ms fade-in / 15ms fade-out before end of buffer, `stopWithFade()` 150ms
+- `ChatPage.tsx` — play/stop button in each message's metaRow
+- `SettingsModal.tsx` — "Voice" tab: model, voice, volume, preview
 
-### Управление воспроизведением
+### Playback Control
 
-- **Единый стейт** — `ttsSubscribe(fn)` → только одно сообщение играет одновременно
-- **Generation ticket** — `ttsStop()` инвалидирует in-flight IPC-запросы, буфер отбрасывается
-- **Настройки** — модель + голос + громкость (0–1) в `localStorage` (`chatter_tts_settings`)
+- **Unified state** — `ttsSubscribe(fn)` → only one message plays at a time
+- **Generation ticket** — `ttsStop()` invalidates in-flight IPC requests, buffer is discarded
+- **Settings** — model + voice + volume (0–1) in `localStorage` (`chatter_tts_settings`)
 
-### Ресурсы Piper
+### Piper Resources
 
 Dev: `models/piper/piper.exe` + `models/piper-voices/<voice>/*.onnx`
 Packaged: `resources/models/piper/` + `resources/models/piper-voices/`
 
-## Архитектура
+## Architecture
 
 ```
 src/
@@ -131,33 +131,33 @@ src/
     ├── global.scss    # CSS variables
     ├── pages/
     │   ├── AuthPage   # Login/register
-    │   └── ChatPage   # Основной экран
+    │   └── ChatPage   # Main screen
     ├── components/
-    │   ├── PixelAvatar/   # Пиксельный аватар (canvas)
-    │   ├── ToolsPanel     # Правая панель инструментов
-    │   ├── FloatingWidget # Обёртка для floating/fullscreen режимов
-    │   ├── NotebookTool   # Виджет блокнота
-    │   ├── TasksTool      # Просмотр задач
-    │   ├── MapTool        # Карта (Leaflet + react-leaflet)
-    │   ├── DocumentsTool  # Документы чата (attachments)
-    │   ├── GalleryTool    # Галерея фото из чата
-    │   ├── RadioGroup     # Переиспользуемый радио-селектор
-    │   ├── SettingsModal  # Настройки (аккаунт, промпт, голос, приложение, макросы, серверы, инструкции, умный дом)
-    │   ├── MacroSettings  # Управление макросами (CRUD + AI explain/describe)
-    │   ├── ServerSettings # Управление SSH-серверами DevOps (CRUD + политики + привязка инструкций)
-    │   ├── RunbookSettings # Управление инструкциями DevOps (CRUD + AI extraction/review)
-    │   ├── SmartHomeSettings # Управление умным домом (токен Яндекса, синхронизация устройств)
-    │   ├── Select         # Универсальный select-компонент
-    │   ├── PromptSelector # Выбор промпта
+    │   ├── PixelAvatar/   # Pixel avatar (canvas)
+    │   ├── ToolsPanel     # Right tools panel
+    │   ├── FloatingWidget # Wrapper for floating/fullscreen modes
+    │   ├── NotebookTool   # Notebook widget
+    │   ├── TasksTool      # Tasks viewer
+    │   ├── MapTool        # Map (Leaflet + react-leaflet)
+    │   ├── DocumentsTool  # Chat documents (attachments)
+    │   ├── GalleryTool    # Photo gallery from chat
+    │   ├── RadioGroup     # Reusable radio selector
+    │   ├── SettingsModal  # Settings (account, prompt, voice, app, macros, servers, runbooks, smart home)
+    │   ├── MacroSettings  # Macro management (CRUD + AI explain/describe)
+    │   ├── ServerSettings # DevOps SSH server management (CRUD + policies + runbook attachment)
+    │   ├── RunbookSettings # DevOps runbook management (CRUD + AI extraction/review)
+    │   ├── SmartHomeSettings # Smart home management (Yandex token, device sync)
+    │   ├── Select         # Universal select component
+    │   ├── PromptSelector # Prompt selector
     │   ├── MarkdownRenderer
     │   ├── AttachModal
     │   └── LinkTelegramModal
     └── lib/
         ├── api.ts         # API + WebSocket streaming (SSE fallback)
         ├── auth.tsx       # Auth context + WS lifecycle
-        ├── tts.ts         # TTS-сервис (Piper + Chromium SpeechSynthesis + Cartesia)
-        ├── audioManager.ts # Web Audio API плеер с fade-in/out
-        └── tools.ts       # Tools panel state + desktop_action роутер
+        ├── tts.ts         # TTS service (Piper + Chromium SpeechSynthesis + Cartesia)
+        ├── audioManager.ts # Web Audio API player with fade-in/out
+        └── tools.ts       # Tools panel state + desktop_action router
 ```
 
 ## Layout
@@ -165,430 +165,406 @@ src/
 ```
 ┌─────────────────────────────────────────────────┐
 │  Sidebar (260px)  │  Main chat  │  ToolsPanel   │
-│  чаты/бургер      │  [top bar]  │  инструменты  │
+│  chats/burger     │  [top bar]  │  tools        │
 │  collapsed: 65px  │  messages   │  collapsed:65 │
 │                   │             │  default: 65  │
 └─────────────────────────────────────────────────┘
 ```
 
-Top bar — компактная полоска над `.messages` с селектором модели (появляется только если на сервере задан `MODELS_MANUAL`). Модель хранится на сервере (`preferred_model`), синхронизируется между desktop и Telegram.
+Top bar — a compact strip above `.messages` with a model selector (only appears if the server has `MODELS_MANUAL` set). The model is stored on the server (`preferred_model`), synced between desktop and Telegram.
 
-В выпадающем списке рядом с моделями, поддерживающими vision, отображается бейдж `[Vision]` (зелёным). Бейджи реализованы через generic-механику в `Select` — поле `badge?: { text, color?, icon? }` у `SelectOption`. Цвета ограничены: `success | error | info | warning`, каждый берётся из CSS-переменной (`--color-success` и т.д.). Если `icon` не передан — рисуется `[text]`.
+In the dropdown next to models that support vision, a `[Vision]` badge is displayed (in green). Badges are implemented through a generic mechanism in `Select` — the `badge?: { text, color?, icon? }` field on `SelectOption`. Colors are limited: `success | error | info | warning`, each taken from a CSS variable (`--color-success`, etc.). If `icon` is not provided — `[text]` is rendered.
 
-Обе боковые панели работают одинаково: `motion.aside` с анимацией ширины, всегда в DOM. Сворачивание не сбрасывает внутреннее состояние.
+Both sidebars work identically: `motion.aside` with width animation, always in the DOM. Collapsing does not reset internal state.
 
-## Панель инструментов (ToolsPanel)
+## Tools Panel (ToolsPanel)
 
-Правая боковая панель. По умолчанию свёрнута (65px) — видна только иконка гаечного ключа.
+Right sidebar. Collapsed by default (65px) — only a wrench icon is visible.
 
-### Layout Modes (режимы отображения)
+### Layout Modes
 
-Каждый инструмент может находиться в одном из трёх состояний (`LayoutMode`):
+Each tool can be in one of three states (`LayoutMode`):
 
-| Режим | Описание |
+| Mode | Description |
 |---|---|
-| `sidebar` | Рендерится в правой колонке (flex), сдвигает основной чат. По умолчанию. |
-| `fullscreen` | Рендерится поверх всего интерфейса (`position: fixed, inset: 0, z-index: 100`). |
-| `floating` | Свободно плавающее окно поверх чата (`position: fixed, z-index: 50`). Перетаскивается за шапку через `@dnd-kit/core` + `restrictToWindowEdges`. |
+| `sidebar` | Rendered in the right column (flex), shifts the main chat. Default. |
+| `fullscreen` | Rendered over the entire interface (`position: fixed, inset: 0, z-index: 100`). |
+| `floating` | Free-floating window over the chat (`position: fixed, z-index: 50`). Draggable by the header via `@dnd-kit/core` + `restrictToWindowEdges`. |
 
-**Управление:**
-- В sidebar-режиме рядом с заголовком инструмента появляются кнопки (floating / fullscreen)
-- В floating/fullscreen режиме в шапке окна: кнопки "в сайдбар", "на весь экран"/"плавающее", "закрыть"
-- Если инструмент в floating/fullscreen — он скрывается из списка инструментов в сайдбаре
-- Клик на иконку гаечного ключа возвращает из floating/fullscreen в sidebar
+**Controls:**
+- In sidebar mode, buttons appear next to the tool title (floating / fullscreen)
+- In floating/fullscreen mode, the window header has buttons: "to sidebar", "fullscreen"/"floating", "close"
+- If a tool is in floating/fullscreen — it is hidden from the sidebar tools list
+- Clicking the wrench icon returns from floating/fullscreen to sidebar
 
-**Архитектура:**
-- Состояние layout хранится в `lib/tools.ts` — `getToolLayout()` / `setToolLayout()` / `subscribeToolLayout()`
-- Компонент `FloatingWidget` — обёртка с `useDraggable` для floating режима
-- `DndContext` + `restrictToWindowEdges` на уровне `ToolsPanel`
-- Координаты floating-окна обновляются в `onDragEnd` через `delta.x/y`
+**Architecture:**
+- Layout state is stored in `lib/tools.ts` — `getToolLayout()` / `setToolLayout()` / `subscribeToolLayout()`
+- `FloatingWidget` component — wrapper with `useDraggable` for floating mode
+- `DndContext` + `restrictToWindowEdges` at the `ToolsPanel` level
+- Floating window coordinates are updated in `onDragEnd` via `delta.x/y`
 
-**Хедер:** назад (fade) | заголовок (fade) | иконка инструментов (всегда видна)
+**Header:** back (fade) | title (fade) | tools icon (always visible)
 
-**Внутри:** список инструментов → конкретный инструмент (AnimatePresence slide).
+**Inside:** tools list → specific tool (AnimatePresence slide).
 
-**Реестр инструментов:** массив в `buildTools()` внутри ToolsPanel.tsx. Чтобы добавить новый — добавить entry в массив + компонент.
+**Tool registry:** array in `buildTools()` inside ToolsPanel.tsx. To add a new one — add an entry to the array + a component.
 
-### Мульти-окно
+### Multi-Window
 
-Инструменты хранятся в массиве `openTools[]` (а не один `activeToolId`). Несколько инструментов могут быть открыты одновременно — каждый в своём floating/fullscreen окне. Sidebar отображает первый инструмент в режиме sidebar.
+Tools are stored in an `openTools[]` array (not a single `activeToolId`). Multiple tools can be open simultaneously — each in its own floating/fullscreen window. The sidebar displays the first tool in sidebar mode.
 
-Управление: `openTool(id)` / `closeTool(id)` из `lib/tools.ts`.
+Management: `openTool(id)` / `closeTool(id)` from `lib/tools.ts`.
 
-## Блокнот (NotebookTool)
+## Notebook (NotebookTool)
 
-Два состояния:
-- **Список** — все заметки + кнопка "Создать" + поиск
-- **Редактор** — создание/редактирование одной заметки (title + textarea + save)
+Two states:
+- **List** — all notes + "Create" button + search
+- **Editor** — create/edit a single note (title + textarea + save)
 
-API: `GET/POST/DELETE /api/v1/notes`. Обновление = delete + create (нет PUT на бэкенде).
+API: `GET/POST/DELETE /api/v1/notes`. Update = delete + create (no PUT on the backend).
 
-## Задачи (TasksTool)
+## Tasks (TasksTool)
 
-Read-only просмотр задач с фильтрами по статусу (pending/done/all). Каждая карточка показывает статус, тип (`message`, `smart_home`, `ai_instruction`), дату, payload preview, recurrence badge. Кнопка удаления (появляется при наведении).
+Read-only task viewer with status filters (pending/done/all). Each card shows status, type (`message`, `smart_home`, `ai_instruction`), date, payload preview, recurrence badge. Delete button (appears on hover).
 
 API: `GET /api/v1/tasks?status=&limit=`, `DELETE /api/v1/tasks/:id`.
 
-Бот может открывать задачи через `desktop_action` с `action: open_widget, target: tasks`.
+The bot can open tasks via `desktop_action` with `action: open_widget, target: tasks`.
 
-### Scheduler task_result (push от сервера)
+### Scheduler task_result (server push)
 
-Когда scheduler выполняет задачу, результат пушится в десктоп через WS `{ type: 'task_result', chat_id, text, is_new_chat }`. Обработка в `ChatPage.tsx`:
+When the scheduler executes a task, the result is pushed to the desktop via WS `{ type: 'task_result', chat_id, text, is_new_chat }`. Handled in `ChatPage.tsx`:
 
-- Если чат открыт — сообщения перезагружаются из БД
-- Если другой чат — инкрементируется бейдж непрочитанных через `useUnreadChats` hook
-- При `is_new_chat: true` — обновляется список чатов в сайдбаре
+- If the chat is open — messages are reloaded from the DB
+- If a different chat — the unread badge is incremented via the `useUnreadChats` hook
+- On `is_new_chat: true` — the chat list in the sidebar is refreshed
 
 ### useUnreadChats hook
 
-`lib/useUnreadChats.ts` — переиспользуемый hook для отслеживания непрочитанных сообщений по чатам:
-- `incrementUnread(chatId)` — добавить непрочитанное
-- `markAsRead(chatId)` — очистить при открытии чата
-- `getUnread(chatId)` — получить счётчик
-- `totalUnread` — всего непрочитанных
+`lib/useUnreadChats.ts` — reusable hook for tracking unread messages per chat:
+- `incrementUnread(chatId)` — add an unread
+- `markAsRead(chatId)` — clear on chat open
+- `getUnread(chatId)` — get the counter
+- `totalUnread` — total unread
 
-Бейдж (`.unreadBadge`) рендерится в сайдбаре рядом с названием чата.
+The badge (`.unreadBadge`) is rendered in the sidebar next to the chat name.
 
-## Карта (MapTool)
+## Map (MapTool)
 
-Leaflet-карта с тремя слоями (светлая/спутник/стандартная), управляемая через кастомный `RadioGroup` компонент. Выбор слоя сохраняется в `localStorage`.
+Leaflet map with three layers (light/satellite/standard), controlled via a custom `RadioGroup` component. Layer selection is saved in `localStorage`.
 
-**Возможности:**
-- Бот показывает места на карте (`map_control` → `show_place`) через Nominatim геокодирование
-- Бот прокладывает маршруты (`draw_route`) через OSRM — синяя polyline
-- Бот ищет маршруты общественного транспорта (`find_transit_route`) через Overpass API — зелёная polyline + оранжевые маркеры остановок
-- Бот ищет заведения и объекты рядом (`search_nearby`) через Overpass API — фиолетовые маркеры POI (рестораны, аптеки, магазины и т.д.)
-- SSE-событие `map_update` доставляет данные на клиент (четыре типа action: `show_place`, `draw_route`, `transit_route`, `poi_search`)
-- Пользователь ставит свои метки (pin placement mode) — сохраняются на бэкенде (шифрованные координаты)
-- Drag & drop для перемещения меток
-- Бот может читать метки пользователя через `get_map_pins` tool
-- `ResizeHandler` вызывает `invalidateSize()` при смене layout (sidebar ↔ floating)
+**Features:**
+- Bot shows places on the map (`map_control` → `show_place`) via Nominatim geocoding
+- Bot draws routes (`draw_route`) via OSRM — blue polyline
+- Bot searches public transit routes (`find_transit_route`) via Overpass API — green polyline + orange stop markers
+- Bot searches nearby establishments and objects (`search_nearby`) via Overpass API — purple POI markers (restaurants, pharmacies, shops, etc.)
+- SSE event `map_update` delivers data to the client (four action types: `show_place`, `draw_route`, `transit_route`, `poi_search`)
+- User places custom pins (pin placement mode) — saved on the backend (encrypted coordinates)
+- Drag & drop to move pins
+- Bot can read user pins via the `get_map_pins` tool
+- `ResizeHandler` calls `invalidateSize()` on layout change (sidebar ↔ floating)
 
-**Типы `map_update` payload:**
+**`map_update` payload types:**
 
-| Action | Поля | Рендеринг |
+| Action | Fields | Rendering |
 |---|---|---|
-| `show_place` | `lat, lng, label` | Один маркер + `flyTo` |
-| `draw_route` | `from, to, route` | Два маркера + синяя Polyline + `fitBounds` |
-| `transit_route` | `routeName, path, stops` | Зелёная Polyline (сегмент между pickup/dropoff) + оранжевые маркеры остановок + `fitBounds` |
-| `poi_search` | `places[], query` | Фиолетовые маркеры POI (имя, адрес, часы) + `flyTo` к первому |
+| `show_place` | `lat, lng, label` | Single marker + `flyTo` |
+| `draw_route` | `from, to, route` | Two markers + blue Polyline + `fitBounds` |
+| `transit_route` | `routeName, path, stops` | Green Polyline (segment between pickup/dropoff) + orange stop markers + `fitBounds` |
+| `poi_search` | `places[], query` | Purple POI markers (name, address, hours) + `flyTo` the first |
 
-**API пинов:** `GET/POST/PUT/DELETE /api/v1/map-pins[/:id]`. Координаты шифруются на бэкенде через `MAP_PINS_ENCRYPTION_KEY`.
+**Pins API:** `GET/POST/PUT/DELETE /api/v1/map-pins[/:id]`. Coordinates are encrypted on the backend via `MAP_PINS_ENCRYPTION_KEY`.
 
-## Документы (DocumentsTool)
+## Documents (DocumentsTool)
 
-Инструмент в правой панели для просмотра и управления прикреплёнными документами в чате. Зеркало «Галереи» для фотографий.
+A right-panel tool for viewing and managing attached documents in a chat. A mirror of the photo "Gallery".
 
-### Прикрепление файлов
+### Attaching Files
 
-- Кнопка-скрепка слева от поля ввода открывает единую модалку `AttachModal` для фото и документов.
-- Drag-and-drop или выбор файлов через диалог.
-- Фото: PNG, JPEG, WebP (до 20 МБ). Лимит количества зависит от плана.
-- Документы: txt, md, json, csv, log, xml, yaml, ini, toml, код (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css и т.д.), **docx**, **pdf**, rtf (до 5 МБ).
-- Превью фото и список документов отображаются над полем ввода.
-- При отправке файлы передаются на сервер как base64, сервер парсит текст и сохраняет файл.
+- The paperclip button to the left of the input field opens a unified `AttachModal` for photos and documents.
+- Drag-and-drop or file selection via dialog.
+- Photos: PNG, JPEG, WebP (up to 20 MB). Quantity limit depends on the plan.
+- Documents: txt, md, json, csv, log, xml, yaml, ini, toml, code (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css, etc.), **docx**, **pdf**, rtf (up to 5 MB).
+- Photo previews and document list are displayed above the input field.
+- On send, files are transmitted to the server as base64; the server parses the text and saves the file.
 
 ### DocumentsTool (ToolsPanel)
 
-`DocumentsTool.tsx` — список всех документов в текущем чате:
-- Загружается через `GET /api/v1/chats/:chatId/attachments`.
-- Каждый элемент: иконка файла, имя, размер, дата.
-- Кнопка скачивания (через `resolveImageUrl(item.url)` для auth-token).
-- Кнопка удаления с подтверждением → `DELETE /api/v1/chats/:chatId/messages/:messageId/attachments/:filename`.
+`DocumentsTool.tsx` — list of all documents in the current chat:
+- Loaded via `GET /api/v1/chats/:chatId/attachments`.
+- Each item: file icon, name, size, date.
+- Download button (via `resolveImageUrl(item.url)` for auth-token).
+- Delete button with confirmation → `DELETE /api/v1/chats/:chatId/messages/:messageId/attachments/:filename`.
 
-### Отображение в сообщениях
+### Display in Messages
 
-- В user-сообщениях с attachments показывается список файлов с иконкой, именем, размером и кнопкой скачивания.
-- Скачивание использует `resolveImageUrl(att.url)` для подстановки JWT-токена.
+- User messages with attachments show a file list with icon, name, size, and download button.
+- Download uses `resolveImageUrl(att.url)` to inject the JWT token.
 
-### Настройки лимита токенов
+### Token Limit Settings
 
-Вкладка «Приложение» в SettingsModal — слайдер «Лимит документов»:
-- `0` = Авто (90% от `max_context_tokens`).
-- Ручной ввод от 1000 до `max_context_tokens` токенов.
-- Сохраняется через `PUT /api/v1/user/attachment-tokens-limit`.
+"Application" tab in SettingsModal — "Document limit" slider:
+- `0` = Auto (90% of `max_context_tokens`).
+- Manual input from 1000 to `max_context_tokens` tokens.
+- Saved via `PUT /api/v1/user/attachment-tokens-limit`.
 
-### Ключевые файлы
+### Key Files
 
-| Файл | Роль |
+| File | Role |
 |---|---|
-| `components/DocumentsTool.tsx` | ToolsPanel-компонент: список документов, удаление, скачивание |
-| `components/AttachModal.tsx` | Единая модалка прикрепления фото + документов: drag-drop, превью, валидация |
-| `pages/ChatPage.tsx` | Кнопка-скрепка, превью, рендер attachments в сообщениях |
-| `components/SettingsModal.tsx` | Слайдер лимита токенов на документы |
-| `lib/api.ts` | Типы `MessageAttachment`, `ChatAttachmentItem`, `AttachmentTokenLimit` + API-функции |
+| `components/DocumentsTool.tsx` | ToolsPanel component: document list, delete, download |
+| `components/AttachModal.tsx` | Unified photo + document attachment modal: drag-drop, preview, validation |
+| `pages/ChatPage.tsx` | Paperclip button, previews, attachment rendering in messages |
+| `components/SettingsModal.tsx` | Document token limit slider |
+| `lib/api.ts` | Types `MessageAttachment`, `ChatAttachmentItem`, `AttachmentTokenLimit` + API functions |
 
 ## RadioGroup
 
-Переиспользуемый компонент (`components/RadioGroup.tsx`) — кнопка-триггер, при нажатии раскрывается список радио-кнопок. Оформление идентично другим контролам карты (`#e8f0fe` / `#1a73e8`, 30x30px, `border-radius: 8px`). Принимает `options`, `value`, `onChange`, опционально `icon`.
+Reusable component (`components/RadioGroup.tsx`) — a trigger button that expands a list of radio buttons on click. Styling is identical to other map controls (`#e8f0fe` / `#1a73e8`, 30x30px, `border-radius: 8px`). Accepts `options`, `value`, `onChange`, optionally `icon`.
 
 ## Desktop Action (bot → UI)
 
-Бот может управлять интерфейсом через tool `desktop_action`. Паттерн как у `set_display_state`:
+The bot can control the interface via the `desktop_action` tool. Same pattern as `set_display_state`:
 
-1. Бэкенд получает `is_desktop: true` в body → добавляет `desktop_action` tool в AI
-2. AI вызывает tool → бэкенд отправляет WS `desktop_action` (или SSE fallback)
-3. Фронтенд ловит через `onDesktopAction` → `handleDesktopAction()` в `lib/tools.ts`
+1. Backend receives `is_desktop: true` in the body → adds the `desktop_action` tool to the AI
+2. AI calls the tool → backend sends a WS `desktop_action` (or SSE fallback)
+3. Frontend catches it via `onDesktopAction` → `handleDesktopAction()` in `lib/tools.ts`
 
 **Actions:**
 
-| Action | Описание |
+| Action | Description |
 |---|---|
-| `open_widget` | Открыть виджет (target: `notebook`, `tasks`) |
-| `close_widget` | Закрыть виджет |
-| `set_widget_data` | Передать данные в виджет (например текст черновика) |
-| `open_note` | Открыть конкретную запись по ID (value: `{ note_id }`) |
-| `read_widget_state` | Прочитать текущее состояние виджета |
-| `toggle_panel` | Открыть/закрыть панель инструментов |
-| `execute_macro` | Выполнить макрос — команды приходят в `value.commands` из SSE payload. Если `target === '__explore_fs__'` — чтение директории через `readDirectory` IPC |
-| `suggest_macro` | Предложить макрос — рендерит карточку «Сохранить/Отклонить» в ChatPage |
-| `devops_confirmation` | Подтверждение SSH-команды — карточка с кнопками «Разрешить»/«Разрешить всегда»/«? Проверить»/«Отклонить» |
-| `pc_command_confirmation` | Подтверждение `execute_pc_command` — карточка команды на ПК. `ChatPage` обрабатывает её через общий `handleIncomingDesktopAction` во всех потоках `streamChatMessage`: обычная отправка, regenerate и regenerate-with-hint. |
-| `file_action_confirmation` | Подтверждение `read_file` (когда `file_read_enabled=false`) или `write_file` (всегда). Карточка показывает путь, режим (overwrite/append), размер и превью контента. Кнопки «Записать»/«Прочитать» и «Отклонить». TG-бот рендерит через inline-кнопки `fileconfirm:allow`/`fileconfirm:reject`. |
-| `edit_file_lines_confirmation` | Подтверждение `edit_file_lines` (всегда). Карточка показывает путь, диапазон строк и **diff-превью**: красный блок «Удаляется» (старые строки) + зелёный блок «Добавляется» (новые строки). TG-бот рендерит аналогичный diff через inline-кнопки `fileconfirm:allow`/`fileconfirm:reject`. |
-| `email_confirmation` | Подтверждение `send_email` — карточка с From, To, Subject и превью Body (через MarkdownRenderer). Кнопки «Отправить» / «Отклонить». Дедупликация по `confirmation_id`. |
-| `suggest_devops_runbook` | Предложение инструкции — карточка с кнопками «Сохранить»/«Проверить»/«Отклонить» |
+| `open_widget` | Open a widget (target: `notebook`, `tasks`) |
+| `close_widget` | Close a widget |
+| `set_widget_data` | Pass data to a widget (e.g. draft text) |
+| `open_note` | Open a specific note by ID (value: `{ note_id }`) |
+| `read_widget_state` | Read the current widget state |
+| `toggle_panel` | Open/close the tools panel |
+| `execute_macro` | Execute a macro — commands arrive in `value.commands` from the SSE payload. If `target === '__explore_fs__'` — directory read via `readDirectory` IPC |
+| `suggest_macro` | Suggest a macro — renders a "Save/Reject" card in ChatPage |
+| `devops_confirmation` | SSH command confirmation — card with "Allow"/"Always allow"/"? Check"/"Reject" buttons |
+| `pc_command_confirmation` | `execute_pc_command` confirmation — PC command card. `ChatPage` handles it through the shared `handleIncomingDesktopAction` in all `streamChatMessage` flows: normal send, regenerate, and regenerate-with-hint. |
+| `file_action_confirmation` | `read_file` (when `file_read_enabled=false`) or `write_file` (always) confirmation. Card shows path, mode (overwrite/append), size, and content preview. "Write"/"Read" and "Reject" buttons. TG bot renders via inline buttons `fileconfirm:allow`/`fileconfirm:reject`. |
+| `edit_file_lines_confirmation` | `edit_file_lines` (always) confirmation. Card shows path, line range, and a **diff preview**: red "Removed" block (old lines) + green "Added" block (new lines). TG bot renders a similar diff via inline buttons `fileconfirm:allow`/`fileconfirm:reject`. |
+| `email_confirmation` | `send_email` confirmation — card with From, To, Subject, and Body preview (via MarkdownRenderer). "Send" / "Reject" buttons. Deduplication by `confirmation_id`. |
+| `suggest_devops_runbook` | Runbook suggestion — card with "Save"/"Check"/"Reject" buttons |
 
-Reject UX: desktop confirmation cards use shared `RejectWithComment`; clicking reject opens a short textarea. The comment is sent as `rejection_comment`, and backend returns it to AI as `user_comment` in the rejected tool result.
+Reject UX: desktop confirmation cards use a shared `RejectWithComment`; clicking reject opens a short textarea. The comment is sent as `rejection_comment`, and the backend returns it to the AI as `user_comment` in the rejected tool result.
 
-## Макросы
+## Macros
 
-Пользовательские наборы консольных команд, которые AI может запускать на десктопе. Хранятся на сервере (SQLite), не в localStorage.
+User-defined sets of console commands that the AI can run on the desktop. Stored on the server (SQLite), not in localStorage.
 
-### Компоненты
+### Components
 
-- **MacroSettings** (`components/MacroSettings.tsx`) — UI управления макросами во вкладке настроек «Макросы»
-  - Список макросов с чекбоксами (enabled, pinned)
-  - Кнопки: редактировать, выполнить, AI-объяснение, AI-описание, удалить
-  - Форма создания/редактирования: название, описание, команды (динамический список), чекбоксы enabled/pinned
-  - AI-помощники: explain (что делают команды) и describe (предложить название/описание) через `/api/v1/macro/explain` и `/api/v1/macro/describe`
-- **ChatPage** — карточка `suggest_macro` (массив `pendingMacros`, может быть несколько одновременно)
-  - Кнопка «Сохранить» → POST `/api/v1/macros`
-  - Кнопка «Отклонить» → удаление из массива
+- **MacroSettings** (`components/MacroSettings.tsx`) — macro management UI in the "Macros" settings tab
+  - Macro list with checkboxes (enabled, pinned)
+  - Buttons: edit, execute, AI-explain, AI-describe, delete
+  - Create/edit form: title, description, commands (dynamic list), enabled/pinned checkboxes
+  - AI assistants: explain (what the commands do) and describe (suggest title/description) via `/api/v1/macro/explain` and `/api/v1/macro/describe`
+- **ChatPage** — `suggest_macro` card (`pendingMacros` array, multiple can be present simultaneously)
+  - "Save" button → POST `/api/v1/macros`
+  - "Reject" button → removes from array
 
-### IPC-обработчики
+### IPC Handlers
 
-| IPC | Описание |
+| IPC | Description |
 |---|---|
-| `execute-commands` | Последовательно выполняет массив команд через `child_process.exec` (30с таймаут, 1MB буфер). Блокирует опасные команды (`rm -rf /`, `format`, `shutdown` и т.д.). Возвращает объединённый stdout/stderr. Логирует batch/cmd start/done/error для диагностики зависаний команд. На Windows команды оборачиваются в PowerShell с UTF-8 I/O для корректной кириллицы (см. ниже). |
-| `read-directory` | Чтение содержимого директории (read-only). Возвращает `{ name, isDirectory, size, modifiedAt }[]`. |
-| `read-file` | Нативное чтение файла через `fs.createReadStream` + `readline` (UTF-8, с пагинацией). Параметры: `{ file_path, start_line?, max_lines?, line_numbers? }`. Возвращает `{ content, start_line, read_lines, total_lines, encoding, line_numbers }`. При `line_numbers=true` каждая строка имеет префикс `     N\t` (формат `cat -n`). Не загружает весь файл в память — построчное чтение. **Для `.docx`** использует `mammoth.extractRawText()` — извлекает чистый текст, затем применяет ту же пагинацию. |
-| `write-file` | Нативная запись файла через `fs.promises.writeFile`/`appendFile` (UTF-8). Параметры: `{ file_path, content, mode? }`. Создаёт родительские директории при отсутствии. Возвращает `{ ok, bytes_written, mode }`. **Для `.docx`** генерирует валидный Word-документ через `docx` пакет (каждая строка текста = абзац). Режим `append` для `.docx` запрещён — возвращается ошибка. |
-| `edit-file-lines` | Точечная замена строк в файле через `Array.splice`. Параметры: `{ file_path, start_line, end_line, new_content }`. Читает файл → разбивает на строки → вырезает `start_line..end_line` → вставляет `new_content` → записывает обратно. Поддерживает вставку без удаления (`end_line = start_line - 1`) и удаление (`new_content = ""`). Возвращает `{ ok, lines_removed, lines_added, total_lines_before, total_lines_after }`. Не поддерживает `.docx`. |
-| `capture-screen` | Захват скриншотов всех мониторов через `desktopCapturer.getSources()`. Возвращает `{ displays: [{ display_id, name, bounds, screenshot_base64 }] }`. Используется инструментом `capture_screen` для visual control. |
-| `visual-click` | Клик мышкой по нормализованным координатам (0.0–1.0). Использует `@nut-tree-fork/nut-js` для перемещения курсора и клика. Переводит нормализованные координаты в глобальные через `display.bounds`. Поддерживает мульти-монитор (включая мониторы с отрицательными координатами). |
+| `execute-commands` | Sequentially executes an array of commands via `child_process.exec` (30s timeout, 1MB buffer). Blocks dangerous commands (`rm -rf /`, `format`, `shutdown`, etc.). Returns combined stdout/stderr. Logs batch/cmd start/done/error for diagnosing hung commands. On Windows, commands are wrapped in PowerShell with UTF-8 I/O for correct Cyrillic (see below). |
+| `read-directory` | Read directory contents (read-only). Returns `{ name, isDirectory, size, modifiedAt }[]`. |
+| `read-file` | Native file reading via `fs.createReadStream` + `readline` (UTF-8, with pagination). Parameters: `{ file_path, start_line?, max_lines?, line_numbers? }`. Returns `{ content, start_line, read_lines, total_lines, encoding, line_numbers }`. With `line_numbers=true`, each line has a `     N\t` prefix (`cat -n` format). Does not load the entire file into memory — line-by-line reading. **For `.docx`** uses `mammoth.extractRawText()` — extracts plain text, then applies the same pagination. |
+| `write-file` | Native file writing via `fs.promises.writeFile`/`appendFile` (UTF-8). Parameters: `{ file_path, content, mode? }`. Creates parent directories if missing. Returns `{ ok, bytes_written, mode }`. **For `.docx`** generates a valid Word document via the `docx` package (each text line = paragraph). `append` mode for `.docx` is forbidden — returns an error. |
+| `edit-file-lines` | Surgical line replacement via `Array.splice`. Parameters: `{ file_path, start_line, end_line, new_content }`. Reads file → splits into lines → cuts `start_line..end_line` → inserts `new_content` → writes back. Supports insert without removal (`end_line = start_line - 1`) and deletion (`new_content = ""`). Returns `{ ok, lines_removed, lines_added, total_lines_before, total_lines_after }`. Does not support `.docx`. |
+| `capture-screen` | Capture screenshots of all monitors via `desktopCapturer.getSources()`. Returns `{ displays: [{ display_id, name, bounds, screenshot_base64 }] }`. Used by the `capture_screen` tool for visual control. |
+| `visual-click` | Mouse click at normalized coordinates (0.0–1.0). Uses `@nut-tree-fork/nut-js` to move the cursor and click. Converts normalized coordinates to global via `display.bounds`. Supports multi-monitor (including monitors with negative coordinates). |
 
-**Фоновый режим execute-commands:** `electronAPI.executeCommands(commands, { background: true })` используется инструментом `execute_pc_command` для GUI/open-команд, где не нужен stdout. В этом режиме main process запускает detached-процесс через `spawn(..., { shell: true, stdio: 'ignore', windowsHide: true })` и `child.unref()`, затем сразу возвращает `[background] launched: ...`. Обычные команды по-прежнему используют `exec()` и ждут stdout/stderr.
+**Background mode for execute-commands:** `electronAPI.executeCommands(commands, { background: true })` is used by the `execute_pc_command` tool for GUI/open commands where stdout is not needed. In this mode, the main process launches a detached process via `spawn(..., { shell: true, stdio: 'ignore', windowsHide: true })` and `child.unref()`, then immediately returns `[background] launched: ...`. Regular commands still use `exec()` and wait for stdout/stderr.
 
-### Кодировка команд на Windows (fix кракозябр)
+### Windows Command Encoding (fix for garbled output)
 
-`execute-commands` на Windows оборачивает каждую команду в PowerShell-обёртку с UTF-8 I/O, чтобы кириллица в stdout не превращалась в мусор (`�ਢ��`).
+`execute-commands` on Windows wraps each command in a PowerShell wrapper with UTF-8 I/O so Cyrillic in stdout doesn't turn into garbage (`�ਢ��`).
 
-**Проблема:** `child_process.exec` на Windows запускает `cmd.exe /d /s /c "..."`. Cmd получает аргументы в системной ANSI-кодировке (cp1251 в русской локали) **до** выполнения `chcp`, поэтому `chcp 65001 && echo Привет` не помогает — к моменту переключения кодовой страницы команда уже искажена.
+**Problem:** `child_process.exec` on Windows runs `cmd.exe /d /s /c "..."`. Cmd receives arguments in the system ANSI code page (cp1251 in the Russian locale) **before** executing `chcp`, so `chcp 65001 && echo Привет` doesn't help — by the time the code page switches, the command is already corrupted.
 
-**Решение — двойной Base64** (`src/main/main.ts`, хендлер `execute-commands`):
+**Solution — double Base64** (`src/main/main.ts`, `execute-commands` handler):
 
-1. Исходная команда кодируется в Base64 (UTF-16LE для .NET): `Buffer.from(cmd, 'utf16le').toString('base64')`.
-2. PowerShell-скрипт декодирует её через `[Text.Encoding]::Unicode.GetString(...)` и выполняет через `cmd.exe /c $decCmd` — это сохраняет cmd-семантику (`&&`, `|`, `>`, `echo`, `ver`, builtin-команды).
-3. В PS форсируется UTF-8: `$OutputEncoding` и `[Console]::OutputEncoding`.
-4. Весь PS-скрипт пакуется во второй Base64 (UTF-16LE) и передаётся через `powershell -NoProfile -EncodedCommand`.
+1. The original command is encoded to Base64 (UTF-16LE for .NET): `Buffer.from(cmd, 'utf16le').toString('base64')`.
+2. A PowerShell script decodes it via `[Text.Encoding]::Unicode.GetString(...)` and executes it through `cmd.exe /c $decCmd` — this preserves cmd semantics (`&&`, `|`, `>`, `echo`, `ver`, builtin commands).
+3. UTF-8 is forced in PS: `$OutputEncoding` and `[Console]::OutputEncoding`.
+4. The entire PS script is packed into a second Base64 (UTF-16LE) and passed via `powershell -NoProfile -EncodedCommand`.
 
-На Linux/macOS обёртка не применяется — `execCmd = cmd` как есть.
+On Linux/macOS the wrapper is not applied — `execCmd = cmd` as-is.
 
-### Visual Control (удалённое управление через скриншоты)
+### Visual Control (remote control via screenshots)
 
-Позволяет AI управлять мышкой пользователя через Telegram. Два инструмента работают вместе:
+Allows the AI to control the user's mouse via Telegram. Two tools work together:
 
 **Pipeline:**
 ```
-AI: capture_screen({ purpose: "Найди кнопку Сохранить" })
+AI: capture_screen({ purpose: "Find the Save button" })
   → Backend: sendIpcToDesktop('capture_screen') → desktopCapturer
-  → Backend: sharp (сжатие до 1280px, JPEG) → сохранение в чат
-  → Backend: runCompletion('vision-pro') со скриншотом + purpose
-  → Vision-модель возвращает координаты (0.0–1.0)
-  → AI получает текстовый ответ (без картинки в контексте)
+  → Backend: sharp (compress to 1280px, JPEG) → save to chat
+  → Backend: runCompletion('vision-pro') with screenshot + purpose
+  → Vision model returns coordinates (0.0–1.0)
+  → AI gets a text response (no image in context)
 
 AI: execute_visual_click({ display_id, x: 0.63, y: 0.42 })
-  → Backend: свежий скриншот → sharp рисует красный прицел (SVG composite)
-  → SSE → TG: фото с прицелом + кнопки «Кликнуть» / «Отклонить»
-  → Юзер подтверждает → sendIpcToDesktop('visual_click')
+  → Backend: fresh screenshot → sharp draws a red crosshair (SVG composite)
+  → SSE → TG: photo with crosshair + "Click" / "Reject" buttons
+  → User confirms → sendIpcToDesktop('visual_click')
   → Desktop: nut.js mouse.setPosition() + leftClick/rightClick
 ```
 
-**Безопасность:**
-- Каждый клик требует подтверждения (HitL) — TTL 60 секунд
-- Один клик за одно подтверждение (никаких серий)
-- Скриншот с прицелом отправляется в Telegram — юзер видит точку клика
-- Инструменты отключаются через feature flags `disable_pc_commands` и `disable_pc_control_full`
+**Security:**
+- Every click requires confirmation (HitL) — 60 second TTL
+- One click per confirmation (no series)
+- Screenshot with crosshair is sent to Telegram — the user sees the click point
+- Tools are disabled via feature flags `disable_pc_commands` and `disable_pc_control_full`
 
-### Поток выполнения
+### Execution Flows
 
-**Обычный макрос (fire-and-forget):**
+**Regular macro (fire-and-forget):**
 ```
 AI: execute_macro(macro_id)
-  → Backend: находит макрос в БД, формирует WS/SSE payload
+  → Backend: finds macro in DB, builds WS/SSE payload
   → WS/SSE: desktop_action { action: 'execute_macro', value: { commands } }
-  → api.ts onmessage: electronAPI.executeCommands(commands) + callback в React
-  → main.ts: exec() для каждой команды
+  → api.ts onmessage: electronAPI.executeCommands(commands) + callback to React
+  → main.ts: exec() for each command
 ```
 
-**Макрос из Telegram (TG→Desktop push):**
+**Macro from Telegram (TG→Desktop push):**
 ```
-TG пользователь: "Запусти макрос X"
-  → Backend /internal/ai/send → sendMessageThroughAi (с activeMacros)
+TG user: "Run macro X"
+  → Backend /internal/ai/send → sendMessageThroughAi (with activeMacros)
   → AI: execute_macro → desktopActionSink.value = payload
-  → result.desktop_action возвращается в server.ts
+  → result.desktop_action returned to server.ts
   → server.ts: isDesktopOnline(userId) → WS push { type: 'desktop_action', action: 'execute_macro', value: { commands } }
   → api.ts onmessage: electronAPI.executeCommands(commands)
-  → main.ts: exec() для каждой команды
+  → main.ts: exec() for each command
 ```
-Условие: десктоп-клиент должен быть подключён через WS, а TG-аккаунт — привязан к аккаунту desktop. Если десктоп не подключён — макрос не выполнится (fire-and-forget без получателя).
+Requirement: the desktop client must be connected via WS, and the TG account must be linked to the desktop account. If the desktop is not connected — the macro won't execute (fire-and-forget without a recipient).
 
-**Макрос с return_output (через WS):**
+**Macro with return_output (via WS):**
 ```
 AI: execute_macro(macro_id) — return_output: true
   → Backend: sendIpcToDesktop('execute_commands', { commands })
   → WS: execute_ipc { request_id, ipc_type: 'execute_commands', payload }
   → IPC executeCommands(commands) → stdout
   → WS: ipc_result { request_id, data: stdout }
-  → Backend резолвит Promise → AI получает stdout как tool response
+  → Backend resolves Promise → AI gets stdout as tool response
 ```
 
-**Чтение директории (explore_fs, через WS):**
+**Directory listing (explore_fs, via WS):**
 ```
 AI: explore_fs(target_path)
   → Backend: sendIpcToDesktop('read_directory', { target_path })
   → WS: execute_ipc { request_id, ipc_type: 'read_directory', payload }
   → IPC readDirectory(target_path) → entries[]
   → WS: ipc_result { request_id, data: entries }
-  → Backend резолвит Promise → AI получает listing как tool response
+  → Backend resolves Promise → AI gets listing as tool response
 ```
 
-**Метаданные файла (get_file_info, через WS):**
+**File metadata (get_file_info, via WS):**
 
 ```text
 AI: get_file_info(file_path, include_line_count?)
     Backend: sendIpcToDesktop('get_file_info', { file_path, include_line_count })
     → Desktop: get-file-info IPC → fs.statSync()
-    → AI получает exists/type/size_bytes/timestamps/name/extension.
-      Если include_line_count=true и это файл, desktop дополнительно считает line_count потоковым чтением.
+    → AI gets exists/type/size_bytes/timestamps/name/extension.
+      If include_line_count=true and it's a file, desktop additionally counts line_count via streaming.
 ```
 
-**Поиск по файлу (search_file_keywords, через WS):**
+**File keyword search (search_file_keywords, via WS):**
 
 ```text
 AI: search_file_keywords(file_path, query, max_matches?)
     Backend: sendIpcToDesktop('search_file_keywords', { file_path, query, max_matches })
     → Desktop: search-file-keywords IPC → readline/mammoth
-    → AI получает только строки с совпадениями и номерами строк.
+    → AI gets only matching lines with line numbers.
 ```
 
-**Чтение файла (read_file, через WS):**
+**File reading (read_file, via WS):**
 ```
 AI: read_file(file_path, start_line?, max_lines?)
-  → Если file_read_enabled=true:
+  → If file_read_enabled=true:
     Backend: sendIpcToDesktop('read_file', { file_path, start_line, max_lines })
     → WS: execute_ipc → IPC readFile() → { content, start_line, read_lines, total_lines }
-    → AI получает контент как tool response
-  → Если file_read_enabled=false:
-    HitL-карточка file_action_confirmation → пользователь подтверждает →
-    затем тот же IPC-поток через /api/v1/pc-commands/approve
+    → AI gets content as tool response
+  → If file_read_enabled=false:
+    HitL card file_action_confirmation → user confirms →
+    then the same IPC flow via /api/v1/pc-commands/approve
 ```
 
-**Запись файла (write_file, через WS, всегда HitL):**
+**File writing (write_file, via WS, always HitL):**
 ```
 AI: write_file(file_path, content, mode?)
-  → Backend: регистрирует pending в pc-command-confirmations (kind: 'file_action')
+  → Backend: registers pending in pc-command-confirmations (kind: 'file_action')
   → Desktop action: file_action_confirmation { confirmation_id, action_type: 'write', file_path, mode, size_bytes, content_preview }
-  → Карточка в ChatPage / inline-кнопки в TG
-  → Пользователь подтверждает → POST /api/v1/pc-commands/approve
+  → Card in ChatPage / inline buttons in TG
+  → User confirms → POST /api/v1/pc-commands/approve
   → Backend: sendIpcToDesktop('write_file', { file_path, content, mode })
   → IPC writeFile() → { ok, bytes_written, mode }
-  → AI получает результат как tool response
+  → AI gets result as tool response
 ```
 
-### Предложение макроса
+### Macro Suggestion
 
 ```
 AI: suggest_macro(title, description, commands)
   → WS/SSE: desktop_action { action: 'suggest_macro', value: { title, description, commands } }
   → ChatPage: setPendingMacros(prev => [...prev, newMacro])
-  → Рендер карточки с кнопками «Сохранить»/«Отклонить»
-  → Сохранение: POST /api/v1/macros → БД
+  → Renders card with "Save"/"Reject" buttons
+  → Save: POST /api/v1/macros → DB
 ```
 
-**Widget data dispatch:** `dispatchWidgetData()` ставит команду в очередь если виджет ещё не смонтирован (pending commands). При подписке — очередь дренируется.
+**Widget data dispatch:** `dispatchWidgetData()` queues a command if the widget is not yet mounted (pending commands). On subscription — the queue is drained.
 
 ## DevOps Agent Runtime
 
-Система удалённого выполнения SSH-команд на серверах через AI с подтверждением пользователя (Human-in-the-Loop).
+A system for remote SSH command execution on servers via AI with user confirmation (Human-in-the-Loop).
 
-### Настройки серверов (SettingsModal → «Серверы»)
+### Server Settings (SettingsModal → "Servers")
 
-`ServerSettings.tsx` — управление SSH-серверами:
-- Форма: название, хост, порт, пользователь, пароль, приватный ключ, пароль для sudo (опционально)
-- Кнопка проверки подключения
-- Список серверов с индикаторами (пароль, ключ, sudo)
-- Политики auto-approve для каждого сервера (regex-паттерны)
-- Кнопки «Привязать инструкцию» для каждого сервера
+`ServerSettings.tsx` — SSH server management:
+- Form: name, host, port, username, password, private key, sudo password (optional)
+- Connection test button
+- Server list with indicators (password, key, sudo)
+- Auto-approve policies for each server (regex patterns)
+- "Attach runbook" buttons for each server
 
-### Инструкции (SettingsModal → «Инструкции»)
+### Runbooks (SettingsModal → "Runbooks")
 
-`RunbookSettings.tsx` — управление runbooks:
-- Форма: название, markdown-контент, массив shell-команд
-- Кнопка «Извлечь команды из текста» — AI (LITE) автоматически находит shell-команды в тексте
-- Кнопка «?» — AI проверяет безопасность каждой команды (модальное окно с MarkdownRenderer)
-- Список инструкций с кнопками редактировать/проверить/удалить
+`RunbookSettings.tsx` — runbook management:
+- Form: name, markdown content, array of shell commands
+- "Extract commands from text" button — AI (LITE) automatically finds shell commands in text
+- "?" button — AI reviews each command's safety (modal with MarkdownRenderer)
+- Runbook list with edit/review/delete buttons
 
-### Карточки в чате (ChatPage)
+### Chat Cards (ChatPage)
 
-**Подтверждение команды (`devops_confirmation`):**
-Появляется когда AI хочет выполнить SSH-команду, не попадающую под auto-approve политику.
-- Показывает: название сервера, хост, команда
-- Кнопки: «Разрешить», «Разрешить всегда» (создаёт политику точного совпадения), «? Проверить» (LITE AI анализирует безопасность), «Отклонить»
-- Вердикт AI рендерится через MarkdownRenderer прямо на карточке
+**Command confirmation (`devops_confirmation`):**
+Appears when the AI wants to execute an SSH command that doesn't match an auto-approve policy.
+- Shows: server name, host, command
+- Buttons: "Allow", "Always allow" (creates an exact-match policy), "? Check" (LITE AI analyzes safety), "Reject"
+- AI verdict is rendered via MarkdownRenderer right on the card
 
-**Предложение инструкции (`suggest_devops_runbook`):**
-Появляется когда AI предлагает сохранить инструкцию.
-- Показывает: название, список команд
-- Кнопки: «Сохранить» (POST runbook), «Проверить» (LITE AI проверяет безопасность), «Отклонить»
-- Вердикт рендерится через MarkdownRenderer
+**Runbook suggestion (`suggest_devops_runbook`):**
+Appears when the AI suggests saving a runbook.
+- Shows: name, command list
+- Buttons: "Save" (POST runbook), "Check" (LITE AI safety review), "Reject"
+- Verdict rendered via MarkdownRenderer
 
-### Поток данных
+### Data Flow
 
 ```
 AI: execute_ssh_command(server_id, command)
-  → Backend: auto-approve? → Да: выполнить сразу
-  → Нет: WS push { action: 'devops_confirmation', ... }
-    → ChatPage: карточка подтверждения
-    → Пользователь: Разрешить / Отклонить
+  → Backend: auto-approve? → Yes: execute immediately
+  → No: WS push { action: 'devops_confirmation', ... }
+    → ChatPage: confirmation card
+    → User: Allow / Reject
     → Backend: POST /api/v1/devops/approve
-    → SSH executor: выполнить команду → stdout/stderr/exitCode → AI
+    → SSH executor: execute command → stdout/stderr/exitCode → AI
 ```
-
-### DevOps: актуальные карточки и пароли
-
-Desktop получает DevOps-действия через WS `desktop_action` и рендерит их в `ChatPage.tsx`.
-
-**`devops_confirmation`**
-- Используется для SSH-команд, `create_server_user` и `change_server_user_password`.
-- Карточка показывает сервер, host и безопасное preview команды.
-- Если backend передал `needs_sudo_password=true`, появляется поле `Sudo password` и чекбокс сохранения в `sudo_password` сервера.
-- Если backend передал `needs_new_password=true`, появляется поле `New password`. Это пароль Linux-пользователя для `change_server_user_password`; бот его не видит, в preview остаётся `password=***`.
-- Кнопки: allow, allow always, review, reject. `allow always` создаёт auto-approve policy для точного preview команды и затем подтверждает текущую операцию.
-- Подтверждение отправляется в `POST /api/v1/devops/approve` с `{ confirmation_id, approved, sudo_password?, save_sudo_password?, new_password? }`.
-
-**`suggest_server_creds_update`**
-- Используется, когда бот предлагает переключить credentials сервера после создания пользователя или установки SSH-ключа.
-- Поддерживает `new_username`, `use_ssh_key_for_login` / `use_ssh_key`, `remove_password`.
-- Если есть `confirmation_id`, карточка подтверждает изменение через `/api/v1/devops/approve`, чтобы backend tool call дождался решения пользователя и продолжил тот же AI-поток.
-- Если `use_ssh_key_for_login=true`, backend будет логиниться по дефолтному SSH-ключу сервера. Если ключ не подходит, password fallback не выполняется.
-
-**Настройки сервера**
-- `password` — обычный SSH password.
-- `sudo_password` — пароль для sudo и пароль, который используется `create_server_user`, если он сохранён.
-- `default_ssh_key_id` — ключ, который можно ставить на сервер и использовать для входа.
-- `use_ssh_key_for_login` — отдельная галочка способа входа: password login или key login.
 
 ### DevOps: current cards and passwords
 
@@ -599,442 +575,443 @@ Desktop receives DevOps actions through WS `desktop_action` and renders them in 
 - Shows server name, host, and a safe command preview.
 - If backend sends `needs_sudo_password=true`, the card shows a `Sudo password` input and a checkbox to save it into server `sudo_password`.
 - If backend sends `needs_new_password=true`, the card shows a `New password` input. This is the Linux user's new password for `change_server_user_password`; the bot does not see it, and the preview stays `password=***`.
+- Buttons: allow, allow always, review, reject. `allow always` creates an auto-approve policy for the exact command preview and then confirms the current operation.
 - Confirmation is sent to `POST /api/v1/devops/approve` with `{ confirmation_id, approved, sudo_password?, save_sudo_password?, new_password? }`.
 
 **`suggest_server_creds_update`**
 - Used when the bot proposes changing server credentials after creating a user or installing an SSH key.
-- Supports `new_username`, `use_ssh_key_for_login` / `use_ssh_key`, and `remove_password`.
+- Supports `new_username`, `use_ssh_key_for_login` / `use_ssh_key`, `remove_password`.
 - If `confirmation_id` is present, the card confirms through `/api/v1/devops/approve`, so the backend tool call waits for the user and continues the same AI flow.
 - If `use_ssh_key_for_login=true`, backend logs in with the server default SSH key. If the key does not work, password fallback is not attempted.
 
 **Server settings**
-- `password` is the normal SSH login password.
-- `sudo_password` is used for `sudo -S` and as the password source for `create_server_user` when saved.
-- `default_ssh_key_id` is the key used for installation and optional key login.
-- `use_ssh_key_for_login` is the explicit login-mode checkbox: password login or key login.
+- `password` — the normal SSH login password.
+- `sudo_password` — used for `sudo -S` and as the password source for `create_server_user` when saved.
+- `default_ssh_key_id` — the key used for installation and optional key login.
+- `use_ssh_key_for_login` — the explicit login-mode checkbox: password login or key login.
 
-## Умный дом (Smart Home)
+## Smart Home
 
-Вкладка "Умный дом" в SettingsModal — управление устройствами умного дома через Яндекс.Умный дом.
+"Smart Home" tab in SettingsModal — manage smart home devices via Yandex Smart Home.
 
-`SmartHomeSettings.tsx` — UI управления:
-- Поле ввода OAuth-токена Яндекса (шифруется на сервере через `ENCRYPTION_KEY`)
-- Кнопка синхронизации — загружает актуальный список устройств и групп из Яндекса
-- Список устройств: имя, комната, бейдж "группа", capabilities, тип
+`SmartHomeSettings.tsx` — management UI:
+- Yandex OAuth token input field (encrypted on the server via `ENCRYPTION_KEY`)
+- Sync button — loads the current list of devices and groups from Yandex
+- Device list: name, room, "group" badge, capabilities, type
 
-**Настройка:**
-1. Получить отладочный OAuth-токен на `oauth.yandex.ru` (права: «API Умного дома Яндекса»)
-2. Вставить токен во вкладке "Умный дом" → "Сохранить"
-3. Нажать "Синхронизировать" — устройства появятся в списке
-4. После этого AI может управлять устройствами: `get_smart_devices()` → `control_smart_home({ device_id, action })`
+**Setup:**
+1. Get a debug OAuth token at `oauth.yandex.ru` (scope: "Yandex Smart Home API")
+2. Paste the token in the "Smart Home" tab → "Save"
+3. Click "Sync" — devices will appear in the list
+4. After that, the AI can control devices: `get_smart_devices()` → `control_smart_home({ device_id, action })`
 
-**Файлы:**
+**Files:**
 
-| Файл | Назначение |
+| File | Purpose |
 |---|---|
-| `components/SmartHomeSettings.tsx` | Вкладка настроек: токен, синхронизация, список устройств |
-| `lib/api.ts` | Типы `SmartDeviceDto`, `SmartHomeSettingsDto` + API-функции |
+| `components/SmartHomeSettings.tsx` | Settings tab: token, sync, device list |
+| `lib/api.ts` | Types `SmartDeviceDto`, `SmartHomeSettingsDto` + API functions |
 
-Подробности архитектуры бэкенда: [backend-api/README.md → Smart Home](../backend-api/README.md#smart-home-умный-дом).
+Backend architecture details: [backend-api/README.md → Smart Home](../backend-api/README.md#smart-home).
 
-## Feature Flags (ограничения инструментов)
+## Feature Flags (tool restrictions)
 
-Вкладка "Ограничения" в SettingsModal позволяет пользователю выборочно отключать AI-инструменты. Флаги хранятся на сервере (`users.feature_flags`, JSON), синхронизируются между desktop и Telegram.
+"Restrictions" tab in SettingsModal allows the user to selectively disable AI tools. Flags are stored on the server (`users.feature_flags`, JSON), synced between desktop and Telegram.
 
 ### UI
 
-`SettingsModal.tsx` → вкладка `restrictions` → 6 чекбоксов. Каждый чекбокс — instant save через `api.setFeatureFlags()` с optimistic update и rollback при ошибке.
+`SettingsModal.tsx` → `restrictions` tab → 6 checkboxes. Each checkbox is an instant save via `api.setFeatureFlags()` with optimistic update and rollback on error.
 
-### Ключевые файлы
+### Key Files
 
-| Файл | Роль |
+| File | Role |
 |---|---|
-| `lib/api.ts` | Тип `FeatureFlags` + `getFeatureFlags()` / `setFeatureFlags()` |
-| `components/SettingsModal.tsx` | Вкладка `restrictions`: state, загрузка, 6 чекбоксов с описаниями |
+| `lib/api.ts` | Type `FeatureFlags` + `getFeatureFlags()` / `setFeatureFlags()` |
+| `components/SettingsModal.tsx` | `restrictions` tab: state, loading, 6 checkboxes with descriptions |
 
-### Флаги
+### Flags
 
-| Ключ | Название | Отключает |
+| Key | Name | Disables |
 |---|---|---|
-| `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note`. Hot memory (`update_core_memory`) остаётся доступной |
-| `disable_pc_control_lite` | Ограниченный режим | SSH, макросы, отправка писем, задачи, серверы, runbooks. Умный дом, карты, чтение почты, виджеты, файловая система остаются |
-| `disable_pc_commands` | Без команд на ПК | Только `execute_pc_command`. SSH, макросы, файловая система остаются |
-| `disable_pc_control_full` | Полная блокировка | Всё из lite + команды на ПК + умный дом, почта, карты, виджеты, файловая система |
-| `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
-| `disable_personal` | Гостевой режим | Промпт, hot/cold memory, заметки, задачи. AI общается с чистого листа |
-| `disable_specialized_subagents` | Без специализированных субагентов | `invoke_subagent` |
-| `disable_adhoc_subagents` | Без создания субагентов | `spawn_subagent` |
+| `disable_memory_write` | Disable data writing | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note`. Hot memory (`update_core_memory`) remains available |
+| `disable_pc_control_lite` | Limited mode | SSH, macros, email sending, tasks, servers, runbooks. Smart home, maps, email reading, widgets, file system remain |
+| `disable_pc_commands` | No PC commands | Only `execute_pc_command`. SSH, macros, file system remain |
+| `disable_pc_control_full` | Full lockdown | Everything from lite + PC commands + smart home, email, maps, widgets, file system |
+| `disable_internet` | No internet & generation | `search_web`, `read_webpage`, `generate_image` |
+| `disable_personal` | Guest mode | Prompt, hot/cold memory, notes, tasks. AI communicates from a clean slate |
+| `disable_specialized_subagents` | No specialized subagents | `invoke_subagent` |
+| `disable_adhoc_subagents` | No subagent creation | `spawn_subagent` |
 
-### Как добавить новый флаг
+### How to add a new flag
 
-1. Добавить ключ в `VALID_FLAG_KEYS` в `backend-api/src/server.ts`
-2. Добавить поле в тип `FeatureFlags` в `desktop-app/src/renderer/lib/api.ts`
-3. Добавить инструменты в `disabledToolSet` в `backend-api/src/services/ai.ts`
-4. Добавить чекбокс в `SettingsModal.tsx` (state default + render)
+1. Add the key to `VALID_FLAG_KEYS` in `backend-api/src/server.ts`
+2. Add the field to the `FeatureFlags` type in `desktop-app/src/renderer/lib/api.ts`
+3. Add tools to `disabledToolSet` in `backend-api/src/services/ai.ts`
+4. Add a checkbox in `SettingsModal.tsx` (state default + render)
 
-### Как добавить новый инструмент под существующие флаги
+### How to add a new tool under existing flags
 
-Добавить `disabledToolSet.add('tool_name')` в соответствующий блок флага в `ai.ts` (секция `Feature flags → disabled tools`). Фильтрация сработает автоматически.
+Add `disabledToolSet.add('tool_name')` to the corresponding flag block in `ai.ts` (section `Feature flags → disabled tools`). Filtering will apply automatically.
 
 ## Dice Roll Mode (d20 Roleplay)
 
-Режим «кубика» для roleplay-фана. Включается чекбоксом «Режим кубика (d20)» во вкладке настроек «Приложение». Сохраняется в `users.ui_settings.dice_roll_enabled` (boolean, default `false`), синхронизируется между desktop и Telegram.
+A "dice" mode for roleplay fun. Enabled via the "Dice Roll Mode (d20)" checkbox in the "Application" settings tab. Stored in `users.ui_settings.dice_roll_enabled` (boolean, default `false`), synced between desktop and Telegram.
 
-### Логика работы
+### How It Works
 
-1. При отправке сообщения (или regenerate) десктоп **сразу** запускает анимацию кружка-кубика.
-2. Бэкенд бросает d20 (`1..20`) до запроса к LLM и мгновенно пушит результат отдельным событием `dice_roll` (WS: `{ type: 'dice_roll', roll }`, SSE: `event: dice_roll`).
-3. Десктоп ловит `onDiceRoll` → **тут же** останавливает анимацию на значении и красит кружок в цвет результата.
-4. Сам ответ AI приходит позже в `done` — кубик к этому моменту уже давно остановился. В `done` поле `dice_roll` дублируется как fallback.
-5. Результат сохраняется в `sessionStorage` (`chatter_dice_roll`) и не исчезает до следующего броска. Восстанавливается при перезагрузке страницы.
+1. On message send (or regenerate), the desktop **immediately** starts a dice-circle animation.
+2. The backend rolls a d20 (`1..20`) before the LLM request and instantly pushes the result as a separate `dice_roll` event (WS: `{ type: 'dice_roll', roll }`, SSE: `event: dice_roll`).
+3. Desktop catches `onDiceRoll` → **immediately** stops the animation on the value and colors the circle based on the result.
+4. The AI response itself arrives later in `done` — by then the dice has long stopped. In `done`, the `dice_roll` field is duplicated as a fallback.
+5. The result is saved in `sessionStorage` (`chatter_dice_roll`) and persists until the next roll. Restored on page reload.
 
-### Цвета результата
+### Result Colors
 
-| Roll | Цвет | Значение |
+| Roll | Color | Meaning |
 |---|---|---|
-| 1 | красный (`#e53935`) + glow | Критический провал |
-| 2–10 | оранжевый (`#ff9800`) | Неудача |
-| 11–19 | зелёный (`#4caf50`) | Успех |
-| 20 | жёлтый (`#ffc107`) + glow | Критический успех |
+| 1 | red (`#e53935`) + glow | Critical failure |
+| 2–10 | orange (`#ff9800`) | Failure |
+| 11–19 | green (`#4caf50`) | Success |
+| 20 | yellow (`#ffc107`) + glow | Critical success |
 
 ### UI
 
-Кружок 30x30px (`border-radius: 50%`) слева от иконки вложений (вне блока `inputArea`, рендерится только если `diceRollEnabled`). Состояния:
-- `idle` — эмодзи
-- `rolling` — анимация `diceSpin` (быстрые случайные числа 1..20, постепенно замедляется, ~1.2с общая длительность)
-- `success` / `crit` / `fail` / `crit_fail` — зафиксированное число с цветом
+A 30x30px circle (`border-radius: 50%`) to the left of the attachments icon (outside the `inputArea` block, rendered only if `diceRollEnabled`). States:
+- `idle` — emoji
+- `rolling` — `diceSpin` animation (fast random numbers 1..20, gradually slowing down, ~1.2s total duration)
+- `success` / `crit` / `fail` / `crit_fail` — fixed number with color
 
-### Анимация броска
+### Roll Animation
 
-Реализована через `setTimeout`-chain в `startDiceRollAnimation()`. Интервал тика растёт от 50мс до 220мс к концу (`50 + progress² · 170`), на каждом тике показывается `Math.floor(Math.random() * 20) + 1`. Общая длительность ~1.2с, но **анимация может быть остановлена раньше**, если `dice_roll` событие пришло быстрее (что и происходит — сервер шлёт результат мгновенно).
+Implemented via a `setTimeout`-chain in `startDiceRollAnimation()`. The tick interval grows from 50ms to 220ms toward the end (`50 + progress² · 170`), each tick shows `Math.floor(Math.random() * 20) + 1`. Total duration ~1.2s, but the **animation can be stopped early** if the `dice_roll` event arrives faster (which is what happens — the server sends the result instantly).
 
-### Форсированные режимы (dice mode)
+### Forced Modes (dice mode)
 
-Клик по кружку-кубику переключает режим броска (цикл `normal → always_one → always_twenty → normal`). Режим хранится **локально** в `localStorage` (`chatter_dice_mode`), не синхронизируется с сервером.
+Clicking the dice circle toggles the roll mode (cycle: `normal → always_one → always_twenty → normal`). The mode is stored **locally** in `localStorage` (`chatter_dice_mode`), not synced with the server.
 
-| Режим | Что делает | Визуально (до броска) |
+| Mode | What it does | Visual (before roll) |
 |---|---|---|
-| `normal` | Обычный случайный бросок d20 | 🎲 эмодзи, серый border |
-| `always_one` | Сервер всегда возвращает 1 (крит. провал) | «1», красный пунктирный border |
-| `always_twenty` | Сервер всегда возвращает 20 (крит. успех) | «20», жёлтый пунктирный border |
+| `normal` | Normal random d20 roll | 🎲 emoji, gray border |
+| `always_one` | Server always returns 1 (critical fail) | "1", red dashed border |
+| `always_twenty` | Server always returns 20 (critical success) | "20", yellow dashed border |
 
-В форсированных режимах кружок показывает «1» или «20» пунктирным border-ом (чтобы отличать от реального броска). При отправке сообщения режим прокидывается в body как `dice_mode`, сервер через `resolveDiceForceValue()` возвращает `diceRollForceValue: 1 | 20` в `sendMessageThroughAi`, и бросок форсируется вместо случайного.
+In forced modes, the circle shows "1" or "20" with a dashed border (to distinguish from a real roll). On message send, the mode is passed in the body as `dice_mode`; the server via `resolveDiceForceValue()` returns `diceRollForceValue: 1 | 20` in `sendMessageThroughAi`, and the roll is forced instead of random.
 
-### Промпт бота
+### Bot Prompt
 
-Бэкенд инджектит в начало `proSystemPrompt` хинт с результатом броска. Кубик влияет **только** на нарративный тон ответа (насмешка при 1, триумф при 20 и т.д.), но **не** блокирует tool calls — даже при roll=1, если требуется `execute_ssh_command`, бот его выполнит.
+The backend injects a hint with the roll result at the beginning of `proSystemPrompt`. The dice affects **only** the narrative tone of the response (dramatic failure on 1, exceptional success on 20, etc.), but **does not** block tool calls — even on roll=1, if `execute_ssh_command` is needed, the bot will execute it.
 
-### Ключевые файлы
+### Key Files
 
-| Файл | Роль |
+| File | Role |
 |---|---|
-| `pages/ChatPage.tsx` | State кубика (`diceRolling`, `diceValue`, `diceStatus`), `startDiceRollAnimation`, `finishDiceRoll`, рендер кружка |
-| `pages/ChatPage.module.scss` | `.diceRoll` + состояния (`.diceRolling`, `.diceRollCrit`, `.diceRollSuccess`, `.diceRollFail`, `.diceRollCritFail`) + `@keyframes diceSpin` |
-| `lib/api.ts` | `onDiceRoll` в `StreamCallbacks`, обработка WS `type: 'dice_roll'` и SSE `event: dice_roll` |
-| `components/SettingsModal.tsx` | Чекбокс во вкладке `app`, `handleToggleDiceRoll` |
-| `backend-api/src/services/ai.ts` | `buildDiceRollPrompt()`, бросок в `sendMessageThroughAi`, `onDiceRoll` callback |
-| `backend-api/src/server.ts` | Проброс `diceRollMode` в 3 точках (SSE/WS/TG), отправка `dice_roll` события |
+| `pages/ChatPage.tsx` | Dice state (`diceRolling`, `diceValue`, `diceStatus`), `startDiceRollAnimation`, `finishDiceRoll`, circle rendering |
+| `pages/ChatPage.module.scss` | `.diceRoll` + states (`.diceRolling`, `.diceRollCrit`, `.diceRollSuccess`, `.diceRollFail`, `.diceRollCritFail`) + `@keyframes diceSpin` |
+| `lib/api.ts` | `onDiceRoll` in `StreamCallbacks`, handling WS `type: 'dice_roll'` and SSE `event: dice_roll` |
+| `components/SettingsModal.tsx` | Checkbox in `app` tab, `handleToggleDiceRoll` |
+| `backend-api/src/services/ai.ts` | `buildDiceRollPrompt()`, roll in `sendMessageThroughAi`, `onDiceRoll` callback |
+| `backend-api/src/server.ts` | `diceRollMode` propagation in 3 points (SSE/WS/TG), sending `dice_roll` event |
 
-## Настройки моделей (Model Settings)
+## Model Settings
 
-Вкладка "Модели" в SettingsModal позволяет настраивать параметры генерации (temperature, penalties, top_p, top_k, max_tokens) для каждой кастомной модели из `MODELS_MANUAL`. Настройки хранятся на сервере (`users.model_settings`, JSON-мапа по `model_id`), применяются только для ручных моделей (не для auto-роутинга PRO/LITE).
+"Models" tab in SettingsModal allows configuring generation parameters (temperature, penalties, top_p, top_k, max_tokens) for each custom model from `MODELS_MANUAL`. Settings are stored on the server (`users.model_settings`, JSON map by `model_id`), applied only for manual models (not for PRO/LITE auto-routing).
 
 ### UI
 
-`SettingsModal.tsx` → вкладка `models`:
-- Загружает каталог моделей (`GET /api/v1/models`) + сохранённые настройки (`GET /api/v1/user/model-settings`) при открытии вкладки
-- Для каждой модели — раскрывающийся блок с слайдерами параметров
-- Список параметров фильтруется по `supported_params` модели (зависит от провайдера)
-- Каждый параметр имеет чекбокс «авто» — если включён, параметр не отправляется (используется серверный дефолт)
-- Save оптимистичный — при отпускании слайдера отправляется `PUT /api/v1/user/model-settings`
+`SettingsModal.tsx` → `models` tab:
+- Loads the model catalog (`GET /api/v1/models`) + saved settings (`GET /api/v1/user/model-settings`) when opening the tab
+- For each model — an expandable block with parameter sliders
+- The parameter list is filtered by the model's `supported_params` (depends on the provider)
+- Each parameter has an "auto" checkbox — if enabled, the parameter is not sent (server default is used)
+- Save is optimistic — on slider release, `PUT /api/v1/user/model-settings` is sent
 
-### Компоненты
+### Components
 
-| Компонент | Роль |
+| Component | Role |
 |---|---|
-| `components/Slider.tsx` | Переиспользуемый слайдер. Два режима: `numeric` (temperature и т.д.) и `discrete` (reasoning level в топбаре). |
-| `components/Checkbox.tsx` | Переиспользуемый чекбокс. Стили 1-в-1 как `macroCheckbox` из SettingsModal. |
+| `components/Slider.tsx` | Reusable slider. Two modes: `numeric` (temperature, etc.) and `discrete` (reasoning level in the top bar). |
+| `components/Checkbox.tsx` | Reusable checkbox. Styling identical to `macroCheckbox` from SettingsModal. |
 
-### Ключевые файлы
+### Key Files
 
-| Файл | Роль |
+| File | Role |
 |---|---|
-| `lib/api.ts` | Типы `ModelSettings`, `ModelSettingsMap` + `getModelSettings()` / `setModelSettings()` / `deleteModelSettings()` |
-| `components/Slider.tsx` | Переиспользуемый слайдер (numeric + discrete режимы) |
-| `components/Checkbox.tsx` | Переиспользуемый чекбокс (auto toggle) |
-| `components/SettingsModal.tsx` | Вкладка `models`: grid из чекбокс + слайдер для каждого параметра |
+| `lib/api.ts` | Types `ModelSettings`, `ModelSettingsMap` + `getModelSettings()` / `setModelSettings()` / `deleteModelSettings()` |
+| `components/Slider.tsx` | Reusable slider (numeric + discrete modes) |
+| `components/Checkbox.tsx` | Reusable checkbox (auto toggle) |
+| `components/SettingsModal.tsx` | `models` tab: grid of checkbox + slider for each parameter |
 
-### Параметры
+### Parameters
 
-| Параметр | Диапазон | Назначение |
+| Parameter | Range | Purpose |
 |---|---|---|
-| `temperature` | 0.0–2.0 | Креативность/детерминированность |
+| `temperature` | 0.0–2.0 | Creativity/determinism |
 | `top_p` | 0.0–1.0 | Nucleus sampling |
-| `top_k` | 1–100 | Ограничение выборки K токенами (OpenRouter only) |
-| `frequency_penalty` | -2.0–2.0 | Штраф за частоту токенов |
-| `presence_penalty` | -2.0–2.0 | Штраф за присутствие токенов |
-| `repetition_penalty` | 1.0–2.0 | Жёсткий штраф за повторения (OpenRouter only) |
-| `max_tokens` | 1–65536 | Лимит длины ответа |
+| `top_k` | 1–100 | K-token sampling limit (OpenRouter only) |
+| `frequency_penalty` | -2.0–2.0 | Token frequency penalty |
+| `presence_penalty` | -2.0–2.0 | Token presence penalty |
+| `repetition_penalty` | 1.0–2.0 | Hard repetition penalty (OpenRouter only) |
+| `max_tokens` | 1–65536 | Response length limit |
 
-## Subagent Settings (модель и reasoning субагентов)
+## Subagent Settings (subagent model and reasoning)
 
-Во вкладке "Модели" в SettingsModal, отдельно от основной модели, настраиваются параметры для AI-субагентов:
+In the "Models" tab in SettingsModal, separately from the main model, parameters for AI subagents are configured:
 
-- **Модель субагента** — селектор (аналогичный основному): `auto` (наследует модель основного агента) или конкретная модель из каталога. Сохраняется через `PUT /api/v1/user/subagent-model`.
-- **Reasoning level** — появляется только если выбрана конкретная модель и она поддерживает reasoning levels. Сохраняется через `PUT /api/v1/user/subagent-reasoning-level`.
+- **Subagent model** — a selector (similar to the main one): `auto` (inherits the main agent's model) or a specific model from the catalog. Saved via `PUT /api/v1/user/subagent-model`.
+- **Reasoning level** — appears only if a specific model is selected and it supports reasoning levels. Saved via `PUT /api/v1/user/subagent-reasoning-level`.
 
-Оба значения прокидываются через `SubagentContext` в `runner.ts` и применяются в `runCompletion()` при каждом AI-вызове внутри субагента.
+Both values are propagated through `SubagentContext` in `runner.ts` and applied in `runCompletion()` on every AI call within the subagent.
 
-### Ключевые файлы
+### Key Files
 
-| Файл | Роль |
+| File | Role |
 |---|---|
 | `lib/api.ts` | `getSubagentModel()` / `setSubagentModel()` / `getSubagentReasoningLevel()` / `setSubagentReasoningLevel()` |
-| `components/SettingsModal.tsx` | Селектор модели субагента + reasoning level slider |
+| `components/SettingsModal.tsx` | Subagent model selector + reasoning level slider |
 
 ## ChatPage Messages
 
-Основная лента чата живет в `pages/ChatPage.tsx`.
+The main chat feed lives in `pages/ChatPage.tsx`.
 
-### Оптимизация ленты
+### Feed Optimization
 
-- Сообщения рендерятся через memoized `MessageItem` (`React.memo`), чтобы изменение input, TTS, popover-состояний или WS-событий не перерисовывало всю историю.
-- Активные состояния передаются в `MessageItem` как booleans (`isTtsPlaying`, `isReasoningOpen`, `isToolCallsOpen`, `isRegenHintOpen`), а не как глобальные id. Так при переключении TTS/reasoning/tool calls изменяются только затронутые сообщения.
-- Начальная загрузка истории берет последние `MESSAGE_PAGE_SIZE = 50` сообщений.
-- Старые сообщения подгружаются кнопкой "Загрузить старые сообщения" через `GET /api/v1/chats/:id/messages?limit=&offset=`.
-- Левое меню чатов грузит список порциями по `CHAT_PAGE_SIZE = 50` через `GET /api/v1/chats?limit=&offset=`; поиск чатов остается отдельным `/api/v1/chats/search` без этой пагинации.
-- При prepend старых сообщений ChatPage сохраняет `scrollHeight`/`scrollTop` и восстанавливает позицию через `useLayoutEffect`, чтобы экран не прыгал вниз.
-- Автоскролл вниз пропускается, если идет prepend старых сообщений.
-- Архивные сообщения (`msg.archived === true`) отображаются с пониженной прозрачностью (opacity 0.55) и меткой «архив» в metaRow. Архивные сообщения не отправляются в AI-контекст, но остаются в БД и доступны для просмотра и поиска.
+- Messages are rendered via memoized `MessageItem` (`React.memo`), so changes to input, TTS, popover states, or WS events don't re-render the entire history.
+- Active states are passed to `MessageItem` as booleans (`isTtsPlaying`, `isReasoningOpen`, `isToolCallsOpen`, `isRegenHintOpen`), not as global ids. This way, toggling TTS/reasoning/tool calls only affects the involved messages.
+- Initial history load takes the last `MESSAGE_PAGE_SIZE = 50` messages.
+- Older messages are loaded via the "Load older messages" button through `GET /api/v1/chats/:id/messages?limit=&offset=`.
+- The chat sidebar loads the list in batches of `CHAT_PAGE_SIZE = 50` via `GET /api/v1/chats?limit=&offset=`; chat search remains a separate `/api/v1/chats/search` without this pagination.
+- When prepending older messages, ChatPage preserves `scrollHeight`/`scrollTop` and restores the position via `useLayoutEffect`, so the screen doesn't jump down.
+- Auto-scroll down is skipped when prepending older messages.
+- Archived messages (`msg.archived === true`) are displayed with reduced opacity (0.55) and an "archived" label in metaRow. Archived messages are not sent to the AI context, but remain in the DB and are available for viewing and searching.
 
-### Reasoning, tool calls и subagents
+### Reasoning, tool calls, and subagents
 
-Assistant-сообщения могут иметь дополнительные поля:
+Assistant messages can have additional fields:
 
 - `reasoning_content?: string | null`
 - `tool_calls?: Array<{ id?: string; name: string; arguments: unknown; result_preview?: string }>`
-- `result_preview` — обрезанный результат инструмента (до 250 символов) для отображения в popover. При streaming приходит из `toolCallsHistory` (обрезка через `formatToolResultPreview`), при перезагрузке чата — реконструируется из trace-формата `tool_calls_json` (обрезка через `slice(0, 250)`).
-- `subagents?: SubagentTrace[] | null` — полные trace ad-hoc субагентов (созданных через `spawn_subagent`). Каждый элемент содержит: `task`, `system_prompt`, `tools`, `tools_used`, `answer`, `summary`, `aborted?`, `trace` (пошаговые tool calls).
+- `result_preview` — truncated tool result (up to 250 characters) for popover display. During streaming, comes from `toolCallsHistory` (truncation via `formatToolResultPreview`); on chat reload — reconstructed from the trace format `tool_calls_json` (truncation via `slice(0, 250)`).
+- `subagents?: SubagentTrace[] | null` — full traces of ad-hoc subagents (created via `spawn_subagent`). Each element contains: `task`, `system_prompt`, `tools`, `tools_used`, `answer`, `summary`, `aborted?`, `trace` (step-by-step tool calls).
 
 UI:
 
-- Кнопка `Рассуждение` появляется только если `reasoning_content` непустой.
-- Во время token streaming кнопка `Рассуждение` превращается в тот же toggle-контрол с текстом `Рассуждает...`: chevron и раскрытие popover работают сразу, не дожидаясь `done`.
-- Если первым приходит `reasoning_token`, `ChatPage` сразу создаёт временное assistant-сообщение с `reasoning_content`, чтобы reasoning можно было открыть во время генерации. Пока обычный `content` ещё пустой, bubble показывает те же typing dots, но с более активной streaming-анимацией.
-- После первого `stream_token` состояние переходит в `content`: typing dots заменяются Markdown-текстом, а `streamAppenderRef` продолжает rAF-батчить текст и reasoning в одно обновление на кадр.
-- Кнопка инструментов появляется только если `tool_calls.length > 0`.
-- Кнопка `N сабагент(ов)` появляется только если `subagents.length > 0`. Открывает панель с детальным trace каждого субагента: задача, промпт (обрезанный до 500 символов), список переданных инструментов, список выполненных инструментов, ответ.
-- Прерванные субагенты помечаются `⏹ прерван`.
-- Все три блока открываются как absolute popover поверх ширины сообщения (`reasoningPanel`) и не раздвигают ленту.
-- Анимация popover сделана через `AnimatePresence` + `motion.div`, направление раскрытия — сверху вниз (`y: -16 -> 0`).
-- Toggles управляются через `openSubagentsId` state (по аналогии с `openReasoningId` / `openToolCallsId`).
+- The `Reasoning` button appears only if `reasoning_content` is non-empty.
+- During token streaming, the `Reasoning` button turns into the same toggle control with text `Reasoning...`: chevron and popover expansion work immediately, without waiting for `done`.
+- If `reasoning_token` arrives first, `ChatPage` immediately creates a temporary assistant message with `reasoning_content`, so reasoning can be opened during generation. While regular `content` is still empty, the bubble shows the same typing dots but with a more active streaming animation.
+- After the first `stream_token`, the state transitions to `content`: typing dots are replaced by Markdown text, and `streamAppenderRef` continues to rAF-batch text and reasoning into a single update per frame.
+- The tools button appears only if `tool_calls.length > 0`.
+- The `N subagent(s)` button appears only if `subagents.length > 0`. Opens a panel with a detailed trace of each subagent: task, prompt (truncated to 500 characters), list of provided tools, list of executed tools, answer.
+- Aborted subagents are marked with `⏹ aborted`.
+- All three blocks open as absolute popovers over the message width (`reasoningPanel`) and don't expand the feed.
+- Popover animation is done via `AnimatePresence` + `motion.div`, expansion direction — top to bottom (`y: -16 -> 0`).
+- Toggles are managed via `openSubagentsId` state (similar to `openReasoningId` / `openToolCallsId`).
 
 ### Regeneration
 
-В ChatPage есть обычная перегенерация последнего assistant-сообщения и перегенерация с hint.
+ChatPage has a regular regeneration of the last assistant message and a regeneration with a hint.
 
-Поток:
+Flow:
 
-1. Клиент находит последнее user-сообщение перед assistant-сообщением.
-2. Старое assistant-сообщение оптимистично удаляется из UI и удаляется на backend через `DELETE /api/v1/chats/:id/messages/:messageId`.
-3. `streamChatMessage()` отправляет тот же user text, `skip_user_history: true` и `regenerate_from_history: true`.
-4. Для hint дополнительно отправляется `regenerate_hint`.
-5. Backend не сохраняет новый user message и не дублирует user text в AI-history; он использует последнее user-сообщение из истории как текущий запрос один раз.
+1. The client finds the last user message before the assistant message.
+2. The old assistant message is optimistically deleted from the UI and on the backend via `DELETE /api/v1/chats/:id/messages/:messageId`.
+3. `streamChatMessage()` sends the same user text, `skip_user_history: true`, and `regenerate_from_history: true`.
+4. For a hint, `regenerate_hint` is additionally sent.
+5. The backend doesn't save a new user message and doesn't duplicate the user text in AI history; it uses the last user message from history as the current request once.
 
-WS это не ломает: `streamChatMessage()` по-прежнему получает `intermediate`, `tool_status`, `display_state`, `desktop_action`, `map_update`, `done`, `error`; memoized rendering влияет только на React-перерисовки.
+WS doesn't break this: `streamChatMessage()` still receives `intermediate`, `tool_status`, `display_state`, `desktop_action`, `map_update`, `done`, `error`; memoized rendering only affects React re-renders.
 
-### Редактирование сообщений
+### Message Editing
 
-В бургер-меню сообщения (где копировать/скачать) есть кнопка «Редактировать». Работает для сообщений любого роли — и user, и assistant.
+In the message burger menu (where copy/download is), there is an "Edit" button. Works for messages of any role — both user and assistant.
 
-1. Клик по «Редактировать» → контент сообщения заменяется на `<textarea>`.
-2. Высота textarea автоматически подстраивается под исходную высоту сообщения (auto-size через `scrollHeight`).
-3. **Ctrl+Enter** — сохранить, **Escape** — отмена. Кнопки «Сохранить» / «Отмена» под полем.
-4. Optimistic update: UI обновляется мгновенно, при ошибке сети — откат к старому тексту.
+1. Click "Edit" → the message content is replaced by a `<textarea>`.
+2. The textarea height automatically adjusts to the original message height (auto-size via `scrollHeight`).
+3. **Ctrl+Enter** — save, **Escape** — cancel. "Save" / "Cancel" buttons under the field.
+4. Optimistic update: UI updates instantly; on network error — rollback to old text.
 5. API: `PUT /api/v1/chats/:chatId/messages/:messageId` ← `{ content }` → `{ ok, token_count }`.
-6. После сохранения `token_count` обновляется из ответа сервера.
+6. After saving, `token_count` is updated from the server response.
 
-### Создание ветки диалога (fork)
+### Chat Fork (dialog branch)
 
-В кебаб-меню сообщения (рядом с «Редактировать» / «Удалить») есть кнопка **«Создать ветку»**. Создаёт новый чат как копию текущего от начала до этого сообщения включительно.
+In the message kebab menu (next to "Edit" / "Delete"), there is a **"Create branch"** button. Creates a new chat as a copy of the current one from the beginning through this message inclusive.
 
-**Поток:**
+**Flow:**
 
-1. Клик по «Создать ветку» → `POST /api/v1/chats/:currentChatId/fork` ← `{ from_message_id }`.
-2. Бэкенд копирует все сообщения от начала до `from_message_id` в новый чат (см. [backend README → Форк чата](../backend-api/README.md#форк-чата-dialog-branch)).
-3. Новый чат становится активным, сайдбар обновляется (`loadChats`), `selectChat(res.chat_id)` переключает на ветку.
-4. Кнопка блокируется на время запроса (`forking` state).
+1. Click "Create branch" → `POST /api/v1/chats/:currentChatId/fork` ← `{ from_message_id }`.
+2. The backend copies all messages from the beginning to `from_message_id` into a new chat (see [backend README → Chat Fork](../backend-api/README.md#chat-fork-dialog-branch)).
+3. The new chat becomes active, the sidebar refreshes (`loadChats`), `selectChat(res.chat_id)` switches to the branch.
+4. The button is disabled during the request (`forking` state).
 
-**Title по умолчанию:** числовой префикс `[N]` — `"Отчёт"` → `"[2] Отчёт"`, `"[2] Отчёт"` → `"[3] Отчёт"`. Можно передать кастомный `title` в body.
+**Default title:** numeric prefix `[N]` — `"Report"` → `"[2] Report"`, `"[2] Report"` → `"[3] Report"`. A custom `title` can be passed in the body.
 
-**Что копируется:** сообщения (включая `token_count`, `reasoning_tokens`, `archived`), attachments (**физически копируются файлы** — удаление в ветке не ломает оригинал), images/audio (общие ссылки — удалений пока нет). FTS обновляется автоматически.
+**What is copied:** messages (including `token_count`, `reasoning_tokens`, `archived`), attachments (**files are physically copied** — deletion in the branch doesn't break the original), images/audio (shared references — no deletions yet). FTS is updated automatically.
 
-## Подсчёт токенов (token accounting)
+## Token Accounting
 
-Отображение количества токенов в сообщениях и общий контекст чата. Считается на сервере (gpt-tokenizer, o200k_base), десктоп только отображает.
+Display of token counts in messages and the overall chat context. Calculated on the server (gpt-tokenizer, o200k_base), the desktop only displays.
 
-### Где отображается
+### Where It's Displayed
 
-| Место | Что показывает |
+| Location | What it shows |
 |---|---|
-| metaRow каждого сообщения | `Ntk` — количество токенов в сообщении (считается от развёрнутого trace: контент + tool_calls + tool_results) |
-| Кнопка «Рассуждение» | `Рассуждение · Ntk` — токены reasoning_content (отдельно от основного token_count) |
-| Top bar (справа) | `12 345tk · 1 876pk` — суммарные токены всех активных сообщений (`tk`) + размер системного промпта (`pk`) |
+| Each message's metaRow | `Ntk` — token count for the message (counted from the expanded trace: content + tool_calls + tool_results) |
+| "Reasoning" button | `Reasoning · Ntk` — reasoning_content tokens (separate from the main token_count) |
+| Top bar (right) | `12 345tk · 1 876pk` — total tokens of all active messages (`tk`) + system prompt size (`pk`) |
 
-### Когда обновляется
+### When It Updates
 
-- При загрузке чата (`getChatMessages`) — токены приходят в DTO каждого сообщения + отдельный запрос `getChatContextTokens(chatId)` для top bar.
-- После ответа AI (`done` событие) — assistant-сообщение получает `token_count` и `reasoning_tokens` из ответа, top bar обновляется.
-- User-сообщение получает `token_count` сразу в `done` (поле `user_token_count` ответа) — не требует перезагрузки чата.
+- On chat load (`getChatMessages`) — tokens come in each message's DTO + a separate `getChatContextTokens(chatId)` request for the top bar.
+- After AI response (`done` event) — the assistant message gets `token_count` and `reasoning_tokens` from the response, top bar updates.
+- The user message gets `token_count` right in `done` (field `user_token_count` of the response) — doesn't require a chat reload.
 
 ### API
 
-- `GET /api/v1/chats/:id/context-tokens` — возвращает `messages_tokens`, `reasoning_tokens`, `archived_tokens`, `active_messages`, `archived_messages`, `system_prompt_tokens`.
-- `ChatContextTokens` тип и `getChatContextTokens()` — в `lib/api.ts`.
+- `GET /api/v1/chats/:id/context-tokens` — returns `messages_tokens`, `reasoning_tokens`, `archived_tokens`, `active_messages`, `archived_messages`, `system_prompt_tokens`.
+- `ChatContextTokens` type and `getChatContextTokens()` — in `lib/api.ts`.
 
-### Что НЕ считается
+### What Is NOT Counted
 
-- `reasoning_content` не входит в `token_count` сообщения — он отдельно в `reasoning_tokens`.
-- Архивированные сообщения не входят в `messages_tokens` (только в `archived_tokens`).
-- Аддоны промпта (voice, avatar, image) не входят в `system_prompt_tokens` — считается только base prompt (prompt content + core memory + pinned macros).
+- `reasoning_content` is not included in the message's `token_count` — it's separately in `reasoning_tokens`.
+- Archived messages are not included in `messages_tokens` (only in `archived_tokens`).
+- Prompt add-ons (voice, avatar, image) are not included in `system_prompt_tokens` — only the base prompt is counted (prompt content + core memory + pinned macros).
 
 ## WebSocket Transport
 
-Desktop-клиент использует **WebSocket** для двунаправленного обмена с сервером. Реализация в `lib/api.ts`.
+The desktop client uses **WebSocket** for bidirectional communication with the server. Implementation in `lib/api.ts`.
 
-**Подключение:**
-- `initWebSocket()` — вызывается в `auth.tsx` после успешного логина/регистрации
-- WS подключается к `ws://host:3050/ws?token=jwt`, JWT валидируется сервером
-- Auto-reconnect с exponential backoff (1s → 2s → 4s → ... → 30s)
-- При refresh токена (401 в apiFetch) → `reconnectWebSocket()` с новым токеном
-- При logout → `closeWebSocket()` (code 1000, без реконнекта)
-- Heartbeat: backend каждые 25s отправляет `{ type: 'ping' }`, desktop отвечает `{ type: 'pong' }`. Backend считает desktop online только если `lastPongAt` свежий (grace window 75s); stale-соединение не получает `execute_ipc`.
+**Connection:**
+- `initWebSocket()` — called in `auth.tsx` after successful login/registration
+- WS connects to `ws://host:3050/ws?token=jwt`, JWT is validated by the server
+- Auto-reconnect with exponential backoff (1s → 2s → 4s → ... → 30s)
+- On token refresh (401 in apiFetch) → `reconnectWebSocket()` with the new token
+- On logout → `closeWebSocket()` (code 1000, no reconnect)
+- Heartbeat: backend sends `{ type: 'ping' }` every 25s, desktop responds `{ type: 'pong' }`. Backend considers desktop online only if `lastPongAt` is fresh (grace window 75s); stale connections don't receive `execute_ipc`.
 
-**Отправка сообщений:**
-- `streamChatMessage()` при подключённом WS отправляет `{ type: 'chat_send', text, ... }`
-- Если WS не подключён — fallback на SSE (POST + ReadableStream)
+**Sending messages:**
+- `streamChatMessage()` when WS is connected sends `{ type: 'chat_send', text, ... }`
+- If WS is not connected — SSE fallback (POST + ReadableStream)
 
-**Входящие сообщения (WS → клиент):**
+**Incoming messages (WS → client):**
 
-| type | Описание |
+| type | Description |
 |---|---|
-| `intermediate` | Промежуточный текст AI |
-| `stream_token` | Чанк обычного текста ответа. На стороне `ChatPage` попадает в `onStreamToken` → `streamAppenderRef.appendText()` и переводит UI в состояние `content`. |
-| `reasoning_token` | Чанк reasoning/thinking. На стороне `ChatPage` попадает в `onReasoningStream` → `streamAppenderRef.appendReasoning()` и переводит UI в состояние `reasoning`. |
-| `tool_status` | Статус выполнения инструмента ("Ищу информацию...") |
-| `display_state` | Изменение состояния аватара |
-| `desktop_action` | Команда управления UI / макрос |
-| `map_update` | Данные карты |
-| `dice_roll` | Результат броска d20 (Dice Roll Mode). Приходит сразу после броска, десктоп останавливает анимацию и фиксирует значение. См. [Dice Roll Mode](#dice-roll-mode-d20-roleplay) |
-| `task_result` | Результат выполнения scheduler-задачи: `{ chat_id, text, is_new_chat }`. Если открыт тот же чат — перезагрузка сообщений; если другой — бейдж непрочитанных. См. [Задачи](#задачи-taskstool) |
-| `done` | Финальный ответ: `reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?`, `display_state?`, `dice_roll?` (fallback если realtime-событие потерялось) |
-| `error` | Ошибка |
-| `execute_ipc` | Запрос сервера выполнить IPC и вернуть результат |
-| `ping` | Серверный heartbeat; клиент должен ответить `pong` |
-| `pong` | Ответ на ping |
+| `intermediate` | Intermediate AI text |
+| `stream_token` | Chunk of regular response text. On the `ChatPage` side, goes to `onStreamToken` → `streamAppenderRef.appendText()` and transitions the UI to the `content` state. |
+| `reasoning_token` | Chunk of reasoning/thinking. On the `ChatPage` side, goes to `onReasoningStream` → `streamAppenderRef.appendReasoning()` and transitions the UI to the `reasoning` state. |
+| `tool_status` | Tool execution status ("Searching for information...") |
+| `display_state` | Avatar state change |
+| `desktop_action` | UI control command / macro |
+| `map_update` | Map data |
+| `dice_roll` | d20 roll result (Dice Roll Mode). Arrives immediately after the roll; desktop stops the animation and fixes the value. See [Dice Roll Mode](#dice-roll-mode-d20-roleplay) |
+| `task_result` | Scheduler task execution result: `{ chat_id, text, is_new_chat }`. If the same chat is open — reload messages; if different — unread badge. See [Tasks](#tasks-taskstool) |
+| `done` | Final response: `reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?`, `display_state?`, `dice_roll?` (fallback if the realtime event is lost) |
+| `error` | Error |
+| `execute_ipc` | Server request to execute IPC and return result |
+| `ping` | Server heartbeat; client must respond `pong` |
+| `pong` | Response to ping |
 
-**Callbacks текущего стрима:** `lib/api.ts` разделяет постоянные WS handlers (`wsCallbacks`: connect/disconnect/task_result и fallback handlers) и callbacks активной генерации (`activeStreamCallbacks`). `streamChatMessage()` кладёт callbacks текущего запроса в `activeStreamCallbacks`, входящие `stream_token` / `reasoning_token` / `done` / `error` сначала доставляются туда, а на `done` или `error` active callbacks очищаются. Это защищает токен-стрим от случайной перерегистрации `initWebSocket()`.
+**Current stream callbacks:** `lib/api.ts` separates permanent WS handlers (`wsCallbacks`: connect/disconnect/task_result and fallback handlers) from active generation callbacks (`activeStreamCallbacks`). `streamChatMessage()` puts the current request's callbacks into `activeStreamCallbacks`; incoming `stream_token` / `reasoning_token` / `done` / `error` are delivered there first, and on `done` or `error` the active callbacks are cleared. This protects the token stream from accidental `initWebSocket()` re-registration.
 
-**Скорость токенов:** фактический throttle задаётся на backend в `backend-api/src/services/ai.ts`: `STREAM_FLUSH_INTERVAL_MS = 50` (~20 WS/SSE chunks/sec). Desktop не задаёт отдельный millisecond-rate, а батчит входящие чанки через `requestAnimationFrame`, чтобы делать не больше одного `setState` на кадр.
+**Token speed:** the actual throttle is set on the backend in `backend-api/src/services/ai.ts`: `STREAM_FLUSH_INTERVAL_MS = 50` (~20 WS/SSE chunks/sec). The desktop doesn't set a separate millisecond rate; it batches incoming chunks via `requestAnimationFrame` to do no more than one `setState` per frame.
 
-**Обратный канал (execute_ipc):**
-Сервер может запросить десктоп выполнить IPC-команду и вернуть результат. Используется для `return_output` макросов, `explore_fs`, `read_file`, `write_file` и подтверждённых `execute_pc_command`. `lib/api.ts` логирует получение `execute_ipc` и отправку `ipc_result`; связка с backend-логами делается по `request_id`.
-1. Сервер шлёт `{ type: 'execute_ipc', request_id, ipc_type, payload }`
-2. Десктоп выполняет IPC (`executeCommands` / `readDirectory` / `readFile` / `writeFile`)
-3. Десктоп отвечает `{ type: 'ipc_result', request_id, data }` или `{ error }`
-4. Сервер резолвит pending Promise → AI получает результат как tool response
+**Reverse channel (execute_ipc):**
+The server can request the desktop to execute an IPC command and return the result. Used for `return_output` macros, `explore_fs`, `read_file`, `write_file`, and confirmed `execute_pc_command`. `lib/api.ts` logs receiving `execute_ipc` and sending `ipc_result`; correlation with backend logs is done by `request_id`.
+1. Server sends `{ type: 'execute_ipc', request_id, ipc_type, payload }`
+2. Desktop executes IPC (`executeCommands` / `readDirectory` / `readFile` / `writeFile`)
+3. Desktop responds `{ type: 'ipc_result', request_id, data }` or `{ error }`
+4. Server resolves the pending Promise → AI gets the result as a tool response
 
-**SSE fallback** — если WS не подключён, `streamChatMessage` использует обычный POST + SSE. SSE — однонаправленный, обратный канал (`execute_ipc`) недоступен.
+**SSE fallback** — if WS is not connected, `streamChatMessage` uses a regular POST + SSE. SSE is unidirectional; the reverse channel (`execute_ipc`) is unavailable.
 
 ### Stop generation
 
 - `stopChatStream()` sends `{ type: 'chat_stop' }` over WS when connected and also calls `POST /api/v1/chat/stop` as a fallback/backup.
-- In `ChatPage`, `sending` means "there is an active chat request" and keeps the stop button visible until `done`, `error`, or aborted `done`.
+- In `ChatPage`, `sending` means "There is an active chat request" and keeps the stop button visible until `done`, `error`, or aborted `done`.
 - `showTyping` is separate from `sending`: it controls the pre-message typing bubble before an assistant message exists. The first `reasoning_token`, `stream_token`, `tool_status`, or `intermediate` hides `showTyping` and switches to the temporary assistant message managed by `streamAppenderRef`.
 
-**Soft abort:** при остановке генерации бот не удаляет накопленный контент. Вместо этого:
-- Если `res.aborted === true` и есть `res.message_id` — временное сообщение финализируется с реальным ID, всем накопленным контентом (`reasoning_content`, `tool_calls`, `subagents`) и текстом `_⏹ Генерация остановлена пользователем_`.
-- Если `message_id === 0` — временное сообщение удаляется (ничего не успело сгенерироваться).
-- Затронуто 4 потока: обычная отправка, regenerate, regenerate-with-hint, voice.
+**Soft abort:** on generation stop, the bot doesn't delete the accumulated content. Instead:
+- If `res.aborted === true` and there is a `res.message_id` — the temporary message is finalized with the real ID, all accumulated content (`reasoning_content`, `tool_calls`, `subagents`), and the text `_⏹ Generation stopped by user_`.
+- If `message_id === 0` — the temporary message is deleted (nothing had time to generate).
+- Affected flows: normal send, regenerate, regenerate-with-hint, voice.
 
 ## Tool Navigation
 
-Кнопка "назад" в хедере ToolsPanel — единая для всех инструментов. Инструменты регистрируют свой `onBack` коллбэк через `registerToolNav(toolId, callback)` из `lib/tools.ts`.
+The "back" button in the ToolsPanel header is unified for all tools. Tools register their `onBack` callback via `registerToolNav(toolId, callback)` from `lib/tools.ts`.
 
-| Контекст | Поведение кнопки назад |
+| Context | Back button behavior |
 |---|---|
-| Инструмент с внутренним стеком (notebook editor) | Вызывает `tool.onBack()` → возврат к списку заметок |
-| Инструмент без стека (notebook list) | Возврат к списку инструментов |
-| Нет активного инструмента | Кнопка скрыта |
+| Tool with internal stack (notebook editor) | Calls `tool.onBack()` → return to note list |
+| Tool without stack (notebook list) | Return to tools list |
+| No active tool | Button hidden |
 
-Новый инструмент просто вызывает `registerToolNav('myTool', onBack)` в useEffect. Если callback не зарегистрирован — назад возвращает к списку инструментов.
+A new tool simply calls `registerToolNav('myTool', onBack)` in useEffect. If no callback is registered — back returns to the tools list.
 
 ## CSS Variables
 
-Все цвета/отступы через CSS-переменные в `global.scss`. Ключевые:
+All colors/spacing via CSS variables in `global.scss`. Key ones:
 - `--bg-primary/secondary`, `--border-light/medium`, `--text-primary/body/muted/hint`
 - `--accent`, `--accent-icon`, `--bg-input`, `--bg-bubble`, `--bg-modal-hover`
 
-## Система обновлений
+## Update System
 
-Кастомный механизм обновлений без `electron-updater`. Работает только в packaged-сборке (`app.isPackaged`).
+A custom update mechanism without `electron-updater`. Works only in a packaged build (`app.isPackaged`).
 
-| Тип | Что скачивается | Размер | Когда использовать |
+| Type | What is downloaded | Size | When to use |
 |---|---|---|---|
-| **Minor** | новый `app.asar` | ~15-50 МБ | Код, renderer assets внутри `app.asar`, стили, main/preload |
-| **Major** | полный NSIS-инсталлер `.exe` | зависит от сборки | Electron, `extraResources`, модели, DLL, wakeword/env/runtime-ресурсы |
+| **Minor** | new `app.asar` | ~15-50 MB | Code, renderer assets inside `app.asar`, styles, main/preload |
+| **Major** | full NSIS installer `.exe` | depends on build | Electron, `extraResources`, models, DLLs, wakeword/env/runtime resources |
 
-### Архитектура
+### Architecture
 
 ```
 backend-api/updates/
   version.json                 # manifest: version/type/downloadUrl/releaseNotes/size
-  chatter-update-<ts>.asar      # minor payload, имя генерирует админка
-  chatter-update-<ts>.exe       # major payload, если exe загружен на сервер
+  chatter-update-<ts>.asar      # minor payload, name generated by admin panel
+  chatter-update-<ts>.exe       # major payload, if exe is uploaded to server
 
 desktop-app
   main.ts: setupCustomUpdater()
-    3 сек после старта
+    3 sec after startup
     GET /updates/version.json
-    показываем UpdateModal только если manifest.version > app.getVersion()
+    show UpdateModal only if manifest.version > app.getVersion()
     update:download -> net.fetch + update:progress -> temp file
     update:install-minor -> backup app.asar -> hidden helper -> copy -> restart
     update:install-major -> run downloaded .exe /S -> quit
 ```
 
-Minor-обновление скачивается во временный файл с расширением `.tmp`, даже если payload на сервере называется `.asar`. Это важно: Electron патчит `fs` для `.asar`-путей, поэтому недокачанный временный файл нельзя хранить как `*.asar`.
+The minor update is downloaded to a temporary file with a `.tmp` extension, even if the payload on the server is named `.asar`. This is important: Electron patches `fs` for `.asar` paths, so an incomplete temporary file cannot be stored as `*.asar`.
 
-Для операций с установленным `resources/app.asar` используется `original-fs`, иначе Electron воспринимает путь как виртуальный ASAR-пакет.
+Operations on the installed `resources/app.asar` use `original-fs`, otherwise Electron treats the path as a virtual ASAR package.
 
 Hot-swap helper:
-- создаётся `.ps1` с логикой ожидания текущего PID, копирования и рестарта;
-- создаётся `.vbs` launcher, который скрыто запускает PowerShell;
-- логи пишет в `app.getPath('userData')/updater-hotswap.log`;
-- основной лог апдейтера: `app.getPath('userData')/updater.log`.
+- creates a `.ps1` with logic to wait for the current PID, copy, and restart;
+- creates a `.vbs` launcher that silently runs PowerShell;
+- logs to `app.getPath('userData')/updater-hotswap.log`;
+- main updater log: `app.getPath('userData')/updater.log`.
 
-### Ключевые файлы
+### Key Files
 
-- `src/main/main.ts` — `setupCustomUpdater()`: проверка, скачивание, установка (4 IPC-хендлера)
+- `src/main/main.ts` — `setupCustomUpdater()`: check, download, install (4 IPC handlers)
 - `src/main/preload.ts` — `updateCheck`, `updateDownload`, `updateInstallMinor/Major`, `onUpdateAvailable`, `onUpdateProgress`
-- `src/renderer/components/UpdateModal.tsx` — модалка с прогресс-баром, бейджами minor/major, release notes
-- `src/renderer/App.tsx` — `UpdateListener`: подписка на `update:available` при старте
-- `backend-api/src/server.ts` — `/admin/updates*`, upload через `busboy`, генерация `version.json`
+- `src/renderer/components/UpdateModal.tsx` — modal with progress bar, minor/major badges, release notes
+- `src/renderer/App.tsx` — `UpdateListener`: subscribes to `update:available` on startup
+- `backend-api/src/server.ts` — `/admin/updates*`, upload via `busboy`, `version.json` generation
 
-### Версия приложения
+### App Version
 
 - `package.json` → `version` → `app.getVersion()`
-- Manifest считается обновлением только если `version` строго новее текущей версии.
-- Если на сервере лежит та же или более старая версия, модалка не показывается.
+- The manifest is considered an update only if `version` is strictly newer than the current version.
+- If the server has the same or older version, the modal is not shown.
 
-### Публикация обновления
+### Publishing an Update
 
 **Minor:**
 1. `package.json` → `"version": "1.4.0"`
 2. `npm run build:win`
-3. Из `release/*.zip` достать `resources/app.asar`
-4. Через админку `http://server:3050/admin/updates` загрузить этот `app.asar`, выбрать `type: minor`, указать версию и release notes.
+3. From `release/*.zip` extract `resources/app.asar`
+4. Through the admin panel `http://server:3050/admin/updates`, upload this `app.asar`, select `type: minor`, specify version and release notes.
 
-Админка сохранит файл как `chatter-update-<timestamp>.asar` и создаст `version.json`:
+The admin panel saves the file as `chatter-update-<timestamp>.asar` and creates `version.json`:
 
 ```json
 {
@@ -1046,36 +1023,36 @@ Hot-swap helper:
 }
 ```
 
-Вручную можно сделать то же самое: положить `.asar` в `backend-api/updates/` и прописать его имя в `downloadUrl`.
+You can do the same manually: put the `.asar` in `backend-api/updates/` and specify its name in `downloadUrl`.
 
 **Major:**
 1. `package.json` → `"version": "2.0.0"`
 2. `npm run build:win`
-3. Через админку загрузить NSIS `.exe` + `type: major`, либо указать внешний URL.
+3. Through the admin panel, upload the NSIS `.exe` + `type: major`, or specify an external URL.
 
-Для major нужна прямая ссылка на `.exe`. Публичная страница облака/Яндекс.Диска не подходит: клиент скачает HTML-страницу вместо инсталлера. URL должен заканчиваться на `.exe`, иначе клиент сохранит файл как `.tmp` и `update:install-major` вернёт `installer_must_be_exe`.
+For major, a direct link to the `.exe` is required. A public cloud/Yandex.Disk page won't work: the client would download an HTML page instead of the installer. The URL must end with `.exe`, otherwise the client saves the file as `.tmp` and `update:install-major` returns `installer_must_be_exe`.
 
-### Админка обновлений (backend-api)
+### Update Admin Panel (backend-api)
 
-- `GET /admin/updates` — HTML-страница с формой (логин/пароль desktop/API-аккаунта)
-- `GET /admin/updates/status` — текущий манифест + список файлов (admin JWT)
-- `POST /admin/updates/upload` — загрузка файла + генерация `version.json` (multipart/form-data)
-- `DELETE /admin/updates/file/:name` — удаление файла
+- `GET /admin/updates` — HTML page with a form (desktop/API account login/password)
+- `GET /admin/updates/status` — current manifest + file list (admin JWT)
+- `POST /admin/updates/upload` — file upload + `version.json` generation (multipart/form-data)
+- `DELETE /admin/updates/file/:name` — delete a file
 
-Админ-доступ проходит, если `is_admin = 1` у самого desktop/API user или у привязанного Telegram user (`linked_tg_id`).
+Admin access is granted if `is_admin = 1` on the desktop/API user themselves or on the linked Telegram user (`linked_tg_id`).
 
-`version.json` не показывается в списке удаляемых файлов: его содержимое отображается наверху как `Current`.
+`version.json` is not shown in the deletable file list: its content is displayed at the top as `Current`.
 
-### Что можно обновлять minor-ом
+### What Can Be Updated via Minor
 
-Minor подходит для всего, что живёт внутри `app.asar`:
+Minor is suitable for everything that lives inside `app.asar`:
 - React/renderer code;
 - main/preload code;
 - CSS/SCSS;
-- assets, импортируемые Vite, например `src/renderer/assets/faces`.
+- assets imported by Vite, e.g. `src/renderer/assets/faces`.
 
-Major нужен для всего, что лежит вне `app.asar`:
+Major is needed for everything outside `app.asar`:
 - `extraResources` (`models`, `wakeword`, `sounds`);
-- новые exe/dll/native runtime-файлы;
-- изменения installer/electron-builder config;
-- обновление Electron или зависимостей, требующих новой unpacked/native структуры.
+- new exe/dll/native runtime files;
+- installer/electron-builder config changes;
+- updating Electron or dependencies requiring a new unpacked/native structure.

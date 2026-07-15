@@ -1,8 +1,8 @@
-﻿# chatter backend-api
+# chatter backend-api
 
-Backend для веб/бот-клиентов с JWT API (`/api/v1/*`) и internal API (`/internal/*`).
+Backend for web/bot clients with JWT API (`/api/v1/*`) and internal API (`/internal/*`).
 
-## Быстрый старт
+## Quick Start
 
 ```bash
 npm run dev:api
@@ -17,250 +17,250 @@ npm run start:api
 npm run logs:api
 ```
 
-## ENV (минимум)
+## ENV (minimum)
 
-- `TELEGRAM_TOKEN` - обязателен для Telegram auth проверки.
-- `BACKEND_INTERNAL_TOKEN` - обязателен для всех `/internal/*`.
-- `BACKEND_API_PORT` - по умолчанию `3050`.
-- `API_JWT_SECRET` - обязательный отдельный секрет для подписи access/refresh JWT.
-- `API_DB_PATH` или `NOTES_DB_PATH` - опционально. По умолчанию используется `chatter.db` в корне проекта.
-- `TIMEWEB_*` и другие AI ключи - для AI/voice/photo.
-- `ENCRYPTION_KEY` - для mail (шифрование паролей).
-- `MAP_PINS_ENCRYPTION_KEY` - для шифрования координат меток карты (fallback на `ENCRYPTION_KEY`).
-- `DEVOPS_ENCRYPTION_KEY` - для шифрования учётных данных SSH серверов (пароли, ключи, sudo-пароль). Fallback на `ENCRYPTION_KEY`.
-- `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` опционально) - для `/internal/tools/read_url`.
-- `IMAGE_GEN_PROVIDER` — провайдер генерации: `proxyapi` (по умолчанию) или `openrouter`.
-- `PROXYAPI_KEY` - ключ ProxyAPI (provider=proxyapi).
-- `PROXYAPI_BASE_URL` - базовый URL ProxyAPI (по умолчанию `https://api.proxyapi.ru/openai/v1`).
-- `OPENROUTER_API_KEY` - ключ OpenRouter (provider=openrouter).
-- `OPENROUTER_BASE_URL` - базовый URL OpenRouter (по умолчанию `https://openrouter.ai/api/v1`).
-- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1.5` для proxyapi, `x-ai/grok-imagine-image-quality` для openrouter).
-- `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`, только proxyapi).
-- `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`, только proxyapi).
-- `CARTESIA_API_KEY` — API-ключ Cartesia.ai (обязательно для облачной озвучки, формат `sk_car_...`).
-- `CARTESIA_MODEL_ID` — модель TTS Cartesia (по умолчанию `sonic-3.5`).
+- `TELEGRAM_TOKEN` — required for Telegram auth verification.
+- `BACKEND_INTERNAL_TOKEN` — required for all `/internal/*`.
+- `BACKEND_API_PORT` — defaults to `3050`.
+- `API_JWT_SECRET` — mandatory separate secret for signing access/refresh JWTs.
+- `API_DB_PATH` or `NOTES_DB_PATH` — optional. Defaults to `chatter.db` in the project root.
+- `TIMEWEB_*` and other AI keys — for AI/voice/photo.
+- `ENCRYPTION_KEY` — for mail (password encryption).
+- `MAP_PINS_ENCRYPTION_KEY` — for encrypting map pin coordinates (falls back to `ENCRYPTION_KEY`).
+- `DEVOPS_ENCRYPTION_KEY` — for encrypting SSH server credentials (passwords, keys, sudo password). Falls back to `ENCRYPTION_KEY`.
+- `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` optionally) — for `/internal/tools/read_url`.
+- `IMAGE_GEN_PROVIDER` — generation provider: `proxyapi` (default) or `openrouter`.
+- `PROXYAPI_KEY` — ProxyAPI key (provider=proxyapi).
+- `PROXYAPI_BASE_URL` — ProxyAPI base URL (default `https://api.proxyapi.ru/openai/v1`).
+- `OPENROUTER_API_KEY` — OpenRouter key (provider=openrouter).
+- `OPENROUTER_BASE_URL` — OpenRouter base URL (default `https://openrouter.ai/api/v1`).
+- `IMAGE_GEN_MODEL` — generation model (default `gpt-image-1.5` for proxyapi, `x-ai/grok-imagine-image-quality` for openrouter).
+- `IMAGE_GEN_QUALITY` — quality: `low`/`medium`/`high` (default `low`, proxyapi only).
+- `IMAGE_GEN_SIZE` — size: `1024x1024` (default `1024x1024`, proxyapi only).
+- `CARTESIA_API_KEY` — Cartesia.ai API key (required for cloud TTS, format `sk_car_...`).
+- `CARTESIA_MODEL_ID` — Cartesia TTS model (default `sonic-3.5`).
 
-### Генерация изображений
+### Image Generation
 
-Генерация живёт в `services/image-generation.ts`. Провайдер выбирается через `IMAGE_GEN_PROVIDER`:
+Generation lives in `services/image-generation.ts`. The provider is selected via `IMAGE_GEN_PROVIDER`:
 
-**provider=proxyapi** (по умолчанию) — OpenAI-compatible `/images/generations`:
+**provider=proxyapi** (default) — OpenAI-compatible `/images/generations`:
 
 ```text
 POST {PROXYAPI_BASE_URL}/images/generations
 Authorization: Bearer {PROXYAPI_KEY}
 
 { "model": "...", "prompt": "...", "quality": "...", "size": "..." }
-→ response.data[0].b64_json
+ response.data[0].b64_json
 ```
 
-**provider=openrouter** — chat completion с image modality:
+**provider=openrouter** — chat completion with image modality:
 
 ```text
 POST {OPENROUTER_BASE_URL}/chat/completions
 Authorization: Bearer {OPENROUTER_API_KEY}
 
 { "model": "...", "messages": [{ "role": "user", "content": "..." }], "modalities": ["image"] }
-→ response.choices[0].message.images[0].image_url.url → download → base64
+ response.choices[0].message.images[0].image_url.url → download → base64
 ```
 
-Для добавления нового провайдера — создать функцию `generateXxx()` и добавить case в switch `runImageGeneration`.
+To add a new provider — create a `generateXxx()` function and add a case to the `runImageGeneration` switch.
 
-### TTS Cartesia (облачная озвучка)
+### TTS Cartesia (cloud voiceover)
 
-Облачная озвучка через Cartesia.ai. API-ключ живёт только на сервере — клиенты никогда его не видят.
+Cloud voiceover via Cartesia.ai. The API key lives only on the server — clients never see it.
 
-**Эндпоинты:**
+**Endpoints:**
 
-| Эндпоинт | Метод | Описание |
+| Endpoint | Method | Description |
 |---|---|---|
-| `/api/v1/tts/voices` | GET | Список голосов (en, ru, de, fr) для селектора |
-| `/api/v1/tts/generate` | POST | Генерация аудио + привязка к сообщению |
-| `/api/v1/tts/preview` | GET | Превью голоса (кешируется в `tts_voice_previews`) |
-| `/api/v1/audio/:filename` | GET | Отдача аудиофайла (owner-only) |
+| `/api/v1/tts/voices` | GET | List of voices (en, ru, de, fr) for the selector |
+| `/api/v1/tts/generate` | POST | Generate audio + bind to a message |
+| `/api/v1/tts/preview` | GET | Voice preview (cached in `tts_voice_previews`) |
+| `/api/v1/audio/:filename` | GET | Serve audio file (owner-only) |
 
-**Ключевые файлы:**
-- `services/tts-cartesia.ts` — прокси к Cartesia API (генерация + список голосов)
-- `services/audio-storage.ts` — сохранение MP3 в `uploads/audio/`
-- `tts_voice_previews` (таблица) — кеш превью-фраз по `voice_id`
+**Key files:**
+- `services/tts-cartesia.ts` — proxy to Cartesia API (generation + voice list)
+- `services/audio-storage.ts` — saves MP3 to `uploads/audio/`
+- `tts_voice_previews` (table) — cache of preview phrases by `voice_id`
 
-**Поток данных при озвучке сообщения:**
+**Data flow on message voiceover:**
 ```text
 POST /tts/generate { text, voice_id, message_id }
   → Cartesia API: POST /tts/bytes (MP3)
   → saveTtsAudio() → uploads/audio/abc123.mp3
   → updateChatMessageAudio() → chat_messages.audio = { url, tts_type, voice_id }
-  → повторный play → GET /api/v1/audio/abc123.mp3 (без повторной генерации)
+  → replay → GET /api/v1/audio/abc123.mp3 (without re-generating)
 ```
 
-### AI-провайдеры (основные)
+### AI Providers (main)
 
-- `TIMEWEB_BASE_URL` + `TIMEWEB_API_KEY` - PRO-провайдер (по умолчанию).
-- `TIMEWEB_MODEL` - цепочка моделей PRO (через запятую, fallback).
-- `TIMEWEB_LITE_BASE_URL` + `TIMEWEB_LITE_API_KEY` - LITE-провайдер.
-- `TIMEWEB_LITE_MODEL` - цепочка моделей LITE.
-- `TIMEWEB_LITE_ROUTER_ENABLED` - `0`, чтобы не вызывать LITE-router и сразу отправлять все текстовые запросы в PRO (по умолчанию включен).
-- `TIMEWEB_PRO_ENDPOINTS` - дополнительные PRO-эндпоинты (формат: `base_url|api_key|models;...`).
-- `TIMEWEB_LITE_ENDPOINTS` - дополнительные LITE-эндпоинты (аналогично).
+- `TIMEWEB_BASE_URL` + `TIMEWEB_API_KEY` — PRO provider (default).
+- `TIMEWEB_MODEL` — comma-separated PRO model chain (fallback).
+- `TIMEWEB_LITE_BASE_URL` + `TIMEWEB_LITE_API_KEY` — LITE provider.
+- `TIMEWEB_LITE_MODEL` — LITE model chain.
+- `TIMEWEB_LITE_ROUTER_ENABLED` — `0` to skip the LITE router and send all text requests directly to PRO (enabled by default).
+- `TIMEWEB_PRO_ENDPOINTS` — additional PRO endpoints (format: `base_url|api_key|models;...`).
+- `TIMEWEB_LITE_ENDPOINTS` — additional LITE endpoints (same format).
 
-### Ручной выбор модели (опционально)
+### Manual Model Selection (optional)
 
-Позволяет юзеру выбирать конкретную модель вместо авто-роутинга. Независимо от PRO/LITE провайдеров.
+Allows the user to choose a specific model instead of auto-routing. Independent of PRO/LITE providers.
 
-- `MODELS_MANUAL` - список моделей для ручного выбора. Формат: `base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision;...`
-  - Пример: `https://api.timeweb.com|sk-xxx|gpt-4o|GPT-4o (Timeweb)|Надёжная и быстрая|tw-gpt4o|1;https://api.deepseek.com|sk-yyy|deepseek-chat|DeepSeek|Дешёвая, но медленная|ds-chat|0`
-  - `api_model_name` — реальное имя модели для API-запроса
-  - `unique_id` — уникальный идентификатор для клиента (может не совпадать с `api_model_name`)
-  - `supports_vision` — опционально, `1` или `0` (по умолчанию `0`). Если `1` — фото отправляется напрямую в модель. Если `0` — доступен tool `describe_image` (через vision-провайдер)
-  - Если не задан — селектор моделей не отображается
-- `preferred_model` (в таблице `users`) — `NULL` = авто, `"tw-gpt4o"` = конкретная модель
-- Если выбранная модель недоступна — fallback на авто-роутинг + уведомление юзеру
+- `MODELS_MANUAL` — list of models for manual selection. Format: `base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision;...`
+  - Example: `https://api.timeweb.com|sk-xxx|gpt-4o|GPT-4o (Timeweb)|Reliable and fast|tw-gpt4o|1;https://api.deepseek.com|sk-yyy|deepseek-chat|DeepSeek|Cheap but slow|ds-chat|0`
+  - `api_model_name` — the real model name for API requests
+  - `unique_id` — unique identifier for the client (may differ from `api_model_name`)
+  - `supports_vision` — optional, `1` or `0` (default `0`). If `1` — photos are sent directly to the model. If `0` — the `describe_image` tool is available (via a vision provider)
+  - If not set — the model selector is not displayed
+- `preferred_model` (in the `users` table) — `NULL` = auto, `"tw-gpt4o"` = specific model
+- If the selected model is unavailable — fallback to auto-routing + user notification
 
-### Reasoning level (глубина размышления модели)
+### Reasoning Level (model thinking depth)
 
-Позволяет юзеру управлять глубиной reasoning/thinking модели. Хранится в `users.reasoning_level` (`NULL` = авто). Прокидывается через весь стек вызовов и применяется в `adaptRequestBodyForProvider` — адаптере, который определяет провайдера по `baseURL` и транслирует уровень в нативный параметр.
+Allows the user to control the model's reasoning/thinking depth. Stored in `users.reasoning_level` (`NULL` = auto). Propagated through the entire call stack and applied in `adaptRequestBodyForProvider` — an adapter that determines the provider by `baseURL` and translates the level to the native parameter.
 
-**Поддерживаемые провайдеры:**
+**Supported providers:**
 
-| Провайдер (по `baseURL`) | Нативный параметр | Уровни | Маппинг |
+| Provider (by `baseURL`) | Native parameter | Levels | Mapping |
 |---|---|---|---|
 | OpenRouter (`openrouter.ai`) | `reasoning: { effort: level }` | `none, minimal, low, medium, high, xhigh` | 1:1 |
 | DeepSeek direct (`deepseek.com`) | `reasoning_effort` / `thinking` | `none, high, xhigh` | `none`→`thinking:{type:"disabled"}`, `high`→`reasoning_effort:"high"`, `xhigh`→`reasoning_effort:"max"` |
-| Прочие (Timeweb, vLLM) | — | — | Не трогается, текущая логика (`thinking`/`clear_thinking`) |
+| Others (Timeweb, vLLM) | — | — | Not touched, current logic (`thinking`/`clear_thinking`) |
 
-**Поведение в режимах:**
-- **Авто (`NULL`)** — адаптер не добавляет reasoning-параметры, провайдер использует поведение по умолчанию.
-- **LITE-router / `callLiteAi`** — всегда `'none'`, юзер не контролирует.
-- **PRO main/final completion** — уровень юзера (или `NULL` = авто).
-- **Ручная модель** — уровень юзера применяется, если `baseURL` модели поддерживается.
+**Behavior in modes:**
+- **Auto (`NULL`)** — the adapter does not add reasoning parameters, the provider uses its default behavior.
+- **LITE-router / `callLiteAi`** — always `'none'`, not user-controlled.
+- **PRO main/final completion** — user's level (or `NULL` = auto).
+- **Manual model** — user's level is applied if the model's `baseURL` supports it.
 
-**Capability API:** `GET /api/v1/models` возвращает `reasoning_levels` для каждой ручной модели (по `baseURL`) и `auto_reasoning_levels` для auto-режима. Если `reasoning_levels = null` — ползунок скрыт.
+**Capability API:** `GET /api/v1/models` returns `reasoning_levels` for each manual model (by `baseURL`) and `auto_reasoning_levels` for auto mode. If `reasoning_levels = null` — the slider is hidden.
 
-**Эндпоинты:**
+**Endpoints:**
 - `GET /api/v1/user/reasoning-level` → `{ reasoning_level: string | null }`
 - `PUT /api/v1/user/reasoning-level` ← `{ reasoning_level: 'none'|'minimal'|'low'|'medium'|'high'|'xhigh'|null }`
 
-### Subagent model & reasoning level
+### Subagent Model & Reasoning Level
 
-Модель и reasoning level для субагентов настраиваются пользователем отдельно от основного агента.
+The model and reasoning level for subagents are configured by the user separately from the main agent.
 
-- `subagent_mode` (в таблице `users`) — `NULL` или `'auto'` = наследует модель основного агента, или ID конкретной модели из каталога (`GET /api/v1/models`). Если выбранная модель недоступна — fallback на auto.
-- `subagent_reasoning_level` — глубина reasoning для субагентов (`NULL` = авто, те же уровни что и для основного: `none, minimal, low, medium, high, xhigh`).
+- `subagent_mode` (in the `users` table) — `NULL` or `'auto'` = inherits the main agent's model, or a specific model ID from the catalog (`GET /api/v1/models`). If the selected model is unavailable — fallback to auto.
+- `subagent_reasoning_level` — reasoning depth for subagents (`NULL` = auto, same levels as for the main agent: `none, minimal, low, medium, high, xhigh`).
 
-Прокидывается через `SubagentContext` в `runner.ts` → `runCompletion()`. Влияние на провайдера аналогично основному reasoning level (см. выше).
+Propagated through `SubagentContext` in `runner.ts` → `runCompletion()`. Effect on the provider is the same as for the main reasoning level (see above).
 
-**Эндпоинты:**
+**Endpoints:**
 - `GET /api/v1/user/subagent-model` → `{ subagent_model: string | null }`
 - `PUT /api/v1/user/subagent-model` ← `{ model_id: string | null }`
 - `GET /api/v1/user/subagent-reasoning-level` → `{ reasoning_level: string | null }`
 - `PUT /api/v1/user/subagent-reasoning-level` ← `{ reasoning_level: 'none'|'minimal'|'low'|'medium'|'high'|'xhigh'|null }`
 
-### Model Settings (параметры генерации)
+### Model Settings (generation parameters)
 
-Позволяет юзеру настраивать параметры генерации (temperature, top_p, top_k, frequency_penalty, presence_penalty, repetition_penalty, max_tokens) для каждой ручной модели индивидуально. Хранится в `users.model_settings` (JSON-объект, ключ — `unique_id` модели). Применяется только для ручных моделей (не для авто-роутинга и не для LITE-режима).
+Allows the user to configure generation parameters (temperature, top_p, top_k, frequency_penalty, presence_penalty, repetition_penalty, max_tokens) for each manual model individually. Stored in `users.model_settings` (a JSON object keyed by model `unique_id`). Applied only to manual models (not auto-routing, not LITE mode).
 
-**Параметры (`MODEL_SETTINGS_RANGES`):**
+**Parameters (`MODEL_SETTINGS_RANGES`):**
 
-| Параметр | min | max | step | Описание |
+| Parameter | min | max | step | Description |
 |---|---|---|---|---|
-| `temperature` | 0 | 2 | 0.05 | Температура генерации |
+| `temperature` | 0 | 2 | 0.05 | Generation temperature |
 | `top_p` | 0 | 1 | 0.05 | Nucleus sampling |
 | `top_k` | 0 | 500 | 1 | Top-K sampling |
-| `frequency_penalty` | -2 | 2 | 0.1 | Штраф за частоту |
-| `presence_penalty` | -2 | 2 | 0.1 | Штраф за присутствие |
-| `repetition_penalty` | 0 | 2 | 0.05 | Штраф за повторения |
-| `max_tokens` | 1 | 65536 | 1 | Лимит выходных токенов |
+| `frequency_penalty` | -2 | 2 | 0.1 | Frequency penalty |
+| `presence_penalty` | -2 | 2 | 0.1 | Presence penalty |
+| `repetition_penalty` | 0 | 2 | 0.05 | Repetition penalty |
+| `max_tokens` | 1 | 65536 | 1 | Output token limit |
 
-Значение `null` для параметра = авто (не отправляется в API провайдера).
+A `null` value for a parameter = auto (not sent to the provider API).
 
-**Фильтрация по провайдеру (`PROVIDER_SUPPORTED_PARAMS`):**
+**Provider-based filtering (`PROVIDER_SUPPORTED_PARAMS`):**
 
-Не все провайдеры поддерживают все параметры. Фильтрация происходит в `adaptRequestBodyForProvider`:
+Not all providers support all parameters. Filtering happens in `adaptRequestBodyForProvider`:
 
-| Провайдер (по `baseURL`) | Поддерживаемые параметры |
+| Provider (by `baseURL`) | Supported parameters |
 |---|---|
-| OpenRouter (`openrouter.ai`) | Все 7 параметров |
-| DeepSeek direct (`deepseek.com`) | Все, кроме `top_k`, `repetition_penalty` |
-| Прочие (Timeweb, vLLM) | Все, кроме `top_k`, `repetition_penalty` |
+| OpenRouter (`openrouter.ai`) | All 7 parameters |
+| DeepSeek direct (`deepseek.com`) | All except `top_k`, `repetition_penalty` |
+| Others (Timeweb, vLLM) | All except `top_k`, `repetition_penalty` |
 
-Функция `getProviderSupportedParams(baseURL)` возвращает Set поддерживаемых параметров. `applyModelSettingsToBody()` мержит только разрешённые параметры в тело запроса.
+The `getProviderSupportedParams(baseURL)` function returns a Set of supported parameters. `applyModelSettingsToBody()` merges only allowed parameters into the request body.
 
-**`supported_params` в каталоге моделей:**
+**`supported_params` in the model catalog:**
 
-`GET /api/v1/models` возвращает `supported_params` для каждой модели (массив строк). Клиент использует его для отображения только релевантных слайдеров в настройках.
+`GET /api/v1/models` returns `supported_params` for each model (an array of strings). The client uses this to display only relevant sliders in settings.
 
-**Поведение в режимах:**
-- **Авто-роутинг (PRO/LITE)** — настройки модели не применяются.
-- **LITE-режим** — настройки модели не применяются (передаётся `null`).
-- **Ручная модель** — настройки применяются в `adaptRequestBodyForProvider`.
+**Behavior in modes:**
+- **Auto-routing (PRO/LITE)** — model settings are not applied.
+- **LITE mode** — model settings are not applied (`null` is passed).
+- **Manual model** — settings are applied in `adaptRequestBodyForProvider`.
 
-**Поток данных:**
-1. `sendMessageThroughAi` читает `user.model_settings` (JSON), находит настройки для `preferredModelId`.
-2. Передаёт `resolvedModelSettings` в `runCompletion` → `createCompletionWithModelFallback`.
-3. `adaptRequestBodyForProvider` вызывает `applyModelSettingsToBody(requestBody, baseURL, settings)`.
-4. Тело запроса мержится с настройками (отфильтрованными по провайдеру).
+**Data flow:**
+1. `sendMessageThroughAi` reads `user.model_settings` (JSON), finds settings for `preferredModelId`.
+2. Passes `resolvedModelSettings` to `runCompletion` → `createCompletionWithModelFallback`.
+3. `adaptRequestBodyForProvider` calls `applyModelSettingsToBody(requestBody, baseURL, settings)`.
+4. The request body is merged with settings (filtered by provider).
 
-**Эндпоинты:**
+**Endpoints:**
 - `GET /api/v1/user/model-settings` → `{ settings: { [modelId]: { temperature?: number, ... } } }`
-- `PUT /api/v1/user/model-settings` ← `{ model_id, settings: { temperature?, top_p?, ... } }` (merge с существующими настройками для модели)
+- `PUT /api/v1/user/model-settings` ← `{ model_id, settings: { temperature?, top_p?, ... } }` (merge with existing settings for the model)
 - `DELETE /api/v1/user/model-settings/:modelId` → `{ ok: true }`
 
-### AI-провайдеры (vision, опционально)
+### AI Providers (vision, optional)
 
-Vision-запросы (анализ фото) могут использовать отдельные модели/ключи. Если не заданы — fallback на основные PRO/LITE провайдеры.
+Vision requests (photo analysis) can use separate models/keys. If not set — fallback to the main PRO/LITE providers.
 
-- `TIMEWEB_VISION_BASE_URL` - по умолчанию `TIMEWEB_BASE_URL`.
-- `TIMEWEB_VISION_API_KEY` - по умолчанию `TIMEWEB_API_KEY`.
-- `TIMEWEB_VISION_MODEL` - по умолчанию первая из `TIMEWEB_MODEL`.
-- `TIMEWEB_LITE_VISION_BASE_URL` - по умолчанию `TIMEWEB_LITE_BASE_URL`.
-- `TIMEWEB_LITE_VISION_API_KEY` - по умолчанию `TIMEWEB_LITE_API_KEY`.
-- `TIMEWEB_LITE_VISION_MODEL` - по умолчанию `TIMEWEB_VISION_MODEL`.
+- `TIMEWEB_VISION_BASE_URL` — defaults to `TIMEWEB_BASE_URL`.
+- `TIMEWEB_VISION_API_KEY` — defaults to `TIMEWEB_API_KEY`.
+- `TIMEWEB_VISION_MODEL` — defaults to the first of `TIMEWEB_MODEL`.
+- `TIMEWEB_LITE_VISION_BASE_URL` — defaults to `TIMEWEB_LITE_BASE_URL`.
+- `TIMEWEB_LITE_VISION_API_KEY` — defaults to `TIMEWEB_LITE_API_KEY`.
+- `TIMEWEB_LITE_VISION_MODEL` — defaults to `TIMEWEB_VISION_MODEL`.
 
-### Vision support для auto-роутинга
+### Vision support for auto-routing
 
-Определяет, поддерживает ли основная модель нативный приём изображений. Если да — фото отправляется прямо в модель. Если нет — модель использует tool `describe_image` (через vision-провайдер).
+Determines whether the main model natively supports receiving images. If yes — the photo is sent directly to the model. If no — the model uses the `describe_image` tool (via a vision provider).
 
-- `TIMEWEB_MODEL_SUPPORTS_VISION` - `1`/`true`, если PRO-модель поддерживает vision (по умолчанию `false`).
-- `TIMEWEB_LITE_MODEL_SUPPORTS_VISION` - `1`/`true`, если LITE-модель поддерживает vision (по умолчанию `false`).
+- `TIMEWEB_MODEL_SUPPORTS_VISION` — `1`/`true` if the PRO model supports vision (default `false`).
+- `TIMEWEB_LITE_MODEL_SUPPORTS_VISION` — `1`/`true` if the LITE model supports vision (default `false`).
 
-Для manual-моделей vision-флаг задаётся в `MODELS_MANUAL` (7-е поле `supports_vision`).
+For manual models, the vision flag is set in `MODELS_MANUAL` (7th field `supports_vision`).
 
-**Capability API:** `GET /api/v1/models` возвращает `supports_vision` для каждой ручной модели и `auto_supports_vision: { pro: boolean, lite: boolean }` для auto-режима. Клиент использует эти флаги для отображения бейджа «Vision» в селекторе моделей.
+**Capability API:** `GET /api/v1/models` returns `supports_vision` for each manual model and `auto_supports_vision: { pro: boolean, lite: boolean }` for auto mode. The client uses these flags to display a "Vision" badge in the model selector.
 
-### Система изображений
+### Image System
 
-Изображения (фото пользователя и сгенерированные) обрабатываются по-разному в зависимости от типа модели:
+Images (user photos and generated) are handled differently depending on the model type:
 
-**Vision-модель** (`supports_vision=1`):
-- Фото отправляется напрямую в модель как `image_url` (base64) — модель видит изображение нативно
-- В истории (при следующем сообщении) фото восстанавливается с диска и снова передаётся как `image_url`
-- Сгенерированные изображения тоже попадают в историю
+**Vision model** (`supports_vision=1`):
+- The photo is sent directly to the model as `image_url` (base64) — the model sees the image natively
+- In history (on the next message), the photo is restored from disk and passed again as `image_url`
+- Generated images are also included in history
 
-**Не-vision модель** (`supports_vision=0`):
-- В текст сообщения добавляется маркер `[Images attached N: /api/v1/images/xxx.webp]`
-- Модель может вызвать tool `describe_image({ question, image_url?, image_index? })` для анализа через vision-провайдер
-- `image_url` позволяет анализировать любое фото из истории (файл читается с диска)
-- Tool всегда доступен в списке инструментов (статичный список, не зависит от наличия фото)
+**Non-vision model** (`supports_vision=0`):
+- A marker `[Images attached N: /api/v1/images/xxx.webp]` is added to the message text
+- The model can call the `describe_image({ question, image_url?, image_index? })` tool for analysis via a vision provider
+- `image_url` allows analyzing any photo from history (file is read from disk)
+- The tool is always available in the tool list (static list, does not depend on photo presence)
 
-**Хранилище:**
-- БД: колонка `images` (JSON `[{ url, type }]`), `content` остаётся чистым текстом
-- Диск: `uploads/xxx_thumb.webp`, ресайз до 1920×1080, quality 80
-- Формат истории формируется динамически в `getHistoryForAi(supportsVision)` — БД не хранит маркеры
+**Storage:**
+- DB: `images` column (JSON `[{ url, type }]`), `content` remains plain text
+- Disk: `uploads/xxx_thumb.webp`, resized to 1920×1080, quality 80
+- History format is built dynamically in `getHistoryForAi(supportsVision)` — the DB does not store markers
 
-**Подсчёт токенов изображений:**
-- При сохранении сообщения (`appendChatMessage`) вес каждого изображения оценивается по тайловому алгоритму (стандарт OpenAI)
-- `sharp.metadata()` читает размеры файла → `estimateImageTokens(width, height)` считает тайлы 512×512: `(tiles × 170) + 85`
-- Фото 1920×1080 ≈ 1105 токенов, маленький скриншот ≈ 250 токенов
-- Fallback: 1000 токенов если файл не читается
-- Результат записывается в `token_count` один раз, `trimUserHistoryByChat` использует его для архивации
-- `appendChatMessage` — асинхронная (из-за `sharp.metadata()`)
+**Image token counting:**
+- When saving a message (`appendChatMessage`), the weight of each image is estimated using a tile-based algorithm (OpenAI standard)
+- `sharp.metadata()` reads file dimensions → `estimateImageTokens(width, height)` counts 512×512 tiles: `(tiles × 170) + 85`
+- A 1920×1080 photo ≈ 1105 tokens, a small screenshot ≈ 250 tokens
+- Fallback: 1000 tokens if the file can't be read
+- The result is written to `token_count` once; `trimUserHistoryByChat` uses it for archiving
+- `appendChatMessage` — async (due to `sharp.metadata()`)
 
-## Типы авторизации
+## Authorization Types
 
-- JWT API: `Authorization: Bearer <access_token>` для `/api/v1/*` (кроме `/api/v1/auth/*`).
-- Internal API: `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>` для `/internal/*`.
+- JWT API: `Authorization: Bearer <access_token>` for `/api/v1/*` (except `/api/v1/auth/*`).
+- Internal API: `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>` for `/internal/*`.
 
-## Быстрая проверка (ввод/вывод)
+## Quick Check (input/output)
 
 1. Health
 
@@ -272,7 +272,7 @@ curl -s http://127.0.0.1:3050/health
 {"ok":true,"service":"backend-api","now":1710000000}
 ```
 
-2. Регистрация пользователя (JWT)
+2. User registration (JWT)
 
 ```bash
 curl -s -X POST http://127.0.0.1:3050/api/v1/auth/register \
@@ -290,13 +290,13 @@ curl -s -X POST http://127.0.0.1:3050/api/v1/auth/register \
 }
 ```
 
-3. Сообщение в AI (JWT)
+3. AI message (JWT)
 
 ```bash
 curl -s -X POST http://127.0.0.1:3050/api/v1/chat/send \
   -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"text":"Привет, что умеешь?"}'
+  -d '{"text":"Hello, what can you do?"}'
 ```
 
 ```json
@@ -307,7 +307,7 @@ curl -s -X POST http://127.0.0.1:3050/api/v1/chat/send \
 }
 ```
 
-4. Создание pending-пользователя (internal, бот-сценарий)
+4. Create pending user (internal, bot scenario)
 
 ```bash
 curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
@@ -323,307 +323,307 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
 }
 ```
 
-## Эндпоинты (ввод/вывод)
+## Endpoints (input/output)
 
 ### Public JWT API
 
 - `POST /api/v1/auth/register`
-  - Ввод: `{ login, password, name? }`
-  - Вывод: `{ access_token, refresh_token, access_expires_in, refresh_expires_in, user }`
+  - Input: `{ login, password, name? }`
+  - Output: `{ access_token, refresh_token, access_expires_in, refresh_expires_in, user }`
 - `POST /api/v1/auth/login`
-  - Ввод: `{ login, password }`
-  - Вывод: `{ access_token, refresh_token, access_expires_in, refresh_expires_in, user }`
+  - Input: `{ login, password }`
+  - Output: `{ access_token, refresh_token, access_expires_in, refresh_expires_in, user }`
 - `POST /api/v1/auth/telegram`
-  - Ввод: `{ initData }`
-  - Вывод: `{ access_token, refresh_token, access_expires_in, refresh_expires_in, user }`
+  - Input: `{ initData }`
+  - Output: `{ access_token, refresh_token, access_expires_in, refresh_expires_in, user }`
 - `POST /api/v1/auth/refresh`
-  - Ввод: `{ refresh_token }`
-  - Вывод: `{ access_token, refresh_token, access_expires_in, refresh_expires_in }`
+  - Input: `{ refresh_token }`
+  - Output: `{ access_token, refresh_token, access_expires_in, refresh_expires_in }`
 - `POST /api/v1/auth/logout`
-  - Требует access JWT и отзывает все ранее выданные access/refresh токены аккаунта.
+  - Requires an access JWT and revokes all previously issued access/refresh tokens for the account.
 - `GET /api/v1/chats?limit=&offset=`
-  - Ввод: query `limit` по умолчанию 50, максимум 100; `offset` по умолчанию 0
-  - Вывод: `{ chats, active_chat_id, limit, offset }`
+  - Input: query `limit` defaults to 50, max 100; `offset` defaults to 0
+  - Output: `{ chats, active_chat_id, limit, offset }`
 - `GET /api/v1/chats/search?q=&limit=`
-  - Полнотекстовый поиск по сообщениям (FTS5). Возвращает чаты, в которых есть совпадения, со сниппетом найденного текста.
-  - Минимальная длина запроса: 3 символа. `limit` по умолчанию 20, максимум 50.
-  - Вывод: `{ results: [{ chat_id, chat_title, snippet, rank }] }`
-  - `snippet` содержит текст вокруг совпадения, совпадение обёрнуто в `<< >>`.
-  - Результаты сгруппированы по чатам, отсортированы по релевантности (`rank`).
+  - Full-text search across messages (FTS5). Returns chats that have matches, with a snippet of the found text.
+  - Minimum query length: 3 characters. `limit` defaults to 20, max 50.
+  - Output: `{ results: [{ chat_id, chat_title, snippet, rank }] }`
+  - `snippet` contains text around the match; the match is wrapped in `<< >>`.
+  - Results are grouped by chat, sorted by relevance (`rank`).
 - `POST /api/v1/chats`
-  - Ввод: `{ title? }`
-  - Вывод: `{ chat_id }`
+  - Input: `{ title? }`
+  - Output: `{ chat_id }`
 - `POST /api/v1/chats/:id/fork`
-  - Ввод: `{ from_message_id, title? }` — создаёт новый чат и копирует все сообщения исходного чата от начала до `from_message_id` включительно
-  - Вывод: `{ chat_id, forked_messages }` — новый чат становится активным
-  - См. [Форк чата (dialog branch)](#форк-чата-dialog-branch)
+  - Input: `{ from_message_id, title? }` — creates a new chat and copies all messages from the original chat from the beginning through `from_message_id` inclusive
+  - Output: `{ chat_id, forked_messages }` — the new chat becomes active
+  - See [Chat Fork (dialog branch)](#chat-fork-dialog-branch)
 - `POST /api/v1/chats/:id/activate`
-  - Ввод: path `:id`
-  - Вывод: `{ ok: true, active_chat_id }`
+  - Input: path `:id`
+  - Output: `{ ok: true, active_chat_id }`
 - `GET /api/v1/chats/:id/messages?limit=&offset=`
-  - Ввод: path/query
-  - Вывод: `{ messages, limit, offset }`
+  - Input: path/query
+  - Output: `{ messages, limit, offset }`
 - `PUT /api/v1/chats/:chatId/messages/:messageId`
-  - Ввод: `{ content }`
-  - Вывод: `{ ok, token_count }` — редактирование текста сообщения (user или assistant). Пересчитывает `token_count`, обновляет FTS-индекс.
+  - Input: `{ content }`
+  - Output: `{ ok, token_count }` — edit message text (user or assistant). Recalculates `token_count`, updates the FTS index.
 - `POST /api/v1/chat/send`
-  - Ввод: `{ text, chat_id? }`
-  - Вывод: AI-ответ (`reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?` и метрики в зависимости от сервиса AI)
+  - Input: `{ text, chat_id? }`
+  - Output: AI response (`reply_text`, ids, `reasoning_content?`, `tool_calls?`, `generated_images?` and metrics depending on the AI service)
 - `GET /api/v1/notes?query=&limit=&offset=`
-  - Ввод: query
-  - Вывод: `{ notes, total, limit, offset }`
+  - Input: query
+  - Output: `{ notes, total, limit, offset }`
 - `POST /api/v1/notes`
-  - Ввод: `{ title?, content }`
-  - Вывод: `{ note_id }`
+  - Input: `{ title?, content }`
+  - Output: `{ note_id }`
 - `GET /api/v1/notes/:id`
-  - Ввод: path `:id`
-  - Вывод: `{ note }`
+  - Input: path `:id`
+  - Output: `{ note }`
 - `DELETE /api/v1/notes/:id`
-  - Ввод: path `:id`
-  - Вывод: `{ ok: true }`
+  - Input: path `:id`
+  - Output: `{ ok: true }`
 - `GET /api/v1/tasks?status=&limit=`
-  - Ввод: query (`status`: `pending|done|error|all`)
-  - Вывод: `{ tasks }`
+  - Input: query (`status`: `pending|done|error|all`)
+  - Output: `{ tasks }`
 - `POST /api/v1/tasks`
-  - Ввод: `{ execute_at, task_type, payload, recurrence_type?, recurrence_weekday?, timezone_offset?, notify_mode?, notify_condition? }`
-  - Вывод: `{ task_id }`
+  - Input: `{ execute_at, task_type, payload, recurrence_type?, recurrence_weekday?, timezone_offset?, notify_mode?, notify_condition? }`
+  - Output: `{ task_id }`
 - `DELETE /api/v1/tasks/:id`
-  - Ввод: path `:id`
-  - Вывод: `{ ok: true }`
+  - Input: path `:id`
+  - Output: `{ ok: true }`
 - `GET /api/v1/map-pins`
-  - Ввод: без body
-  - Вывод: `{ pins: [{ id, lat, lng, label, created_at, updated_at }] }` (координаты расшифровываются)
+  - Input: no body
+  - Output: `{ pins: [{ id, lat, lng, label, created_at, updated_at }] }` (coordinates are decrypted)
 - `POST /api/v1/map-pins`
-  - Ввод: `{ lat, lng, label? }`
-  - Вывод: `{ pin_id }` (координаты шифруются перед сохранением)
+  - Input: `{ lat, lng, label? }`
+  - Output: `{ pin_id }` (coordinates are encrypted before saving)
 - `PUT /api/v1/map-pins/:id`
-  - Ввод: `{ lat?, lng?, label? }` (lat+lng только вместе)
-  - Вывод: `{ ok: true }`
+  - Input: `{ lat?, lng?, label? }` (lat+lng only together)
+  - Output: `{ ok: true }`
 - `DELETE /api/v1/map-pins/:id`
-  - Ввод: path `:id`
-  - Вывод: `{ ok: true }`
+  - Input: path `:id`
+  - Output: `{ ok: true }`
 - `GET /api/v1/macros`
-  - Ввод: без body
-  - Вывод: `{ macros: [{ id, title, description, commands, enabled, pinned, return_output, created_at, updated_at }] }`
+  - Input: no body
+  - Output: `{ macros: [{ id, title, description, commands, enabled, pinned, return_output, created_at, updated_at }] }`
 - `POST /api/v1/macros`
-  - Ввод: `{ title, description?, commands: string[], enabled?, pinned?, return_output? }`
-  - Вывод: `{ id }` (201) или ошибка (400/429/422)
+  - Input: `{ title, description?, commands: string[], enabled?, pinned?, return_output? }`
+  - Output: `{ id }` (201) or error (400/429/422)
 - `PUT /api/v1/macros/:id`
-  - Ввод: `{ title?, description?, commands?, enabled?, pinned?, return_output? }`
-  - Вывод: `{ ok: true }`
+  - Input: `{ title?, description?, commands?, enabled?, pinned?, return_output? }`
+  - Output: `{ ok: true }`
 - `DELETE /api/v1/macros/:id`
-  - Ввод: path `:id`
-  - Вывод: `{ ok: true }`
+  - Input: path `:id`
+  - Output: `{ ok: true }`
 - `POST /api/v1/macro/explain`
-  - Ввод: `{ commands: string[] }`
-  - Вывод: `{ explanation: string }` — ИИ объясняет что делают команды (лёгкий LITE-запрос)
+  - Input: `{ commands: string[] }`
+  - Output: `{ explanation: string }` — AI explains what the commands do (lightweight LITE request)
 - `POST /api/v1/macro/describe`
-  - Ввод: `{ commands: string[], current_title?, current_description? }`
-  - Вывод: `{ title: string, description: string }` — ИИ предлагает название/описание (лёгкий LITE-запрос)
+  - Input: `{ commands: string[], current_title?, current_description? }`
+  - Output: `{ title: string, description: string }` — AI suggests a title/description (lightweight LITE request)
 - `GET /api/v1/models`
-  - Вывод: `{ models: [{ id, name, description, supported_params? }], preferred_model }` — каталог моделей для ручного выбора + текущая модель юзера. `supported_params` — массив параметров генерации, поддерживаемых провайдером модели (см. [Model Settings](#model-settings-параметры-генерации)).
+  - Output: `{ models: [{ id, name, description, supported_params? }], preferred_model }` — model catalog for manual selection + the user's current model. `supported_params` — array of generation parameters supported by the model's provider (see [Model Settings](#model-settings-generation-parameters)).
 - `PUT /api/v1/user/preferred-model`
-  - Ввод: `{ model_id: string | null }` (null = авто)
-  - Вывод: `{ ok, preferred_model }`
+  - Input: `{ model_id: string | null }` (null = auto)
+  - Output: `{ ok, preferred_model }`
 - `GET /api/v1/user/model-settings`
-  - Вывод: `{ settings: { [modelId]: { temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, repetition_penalty?, max_tokens? } } }` — параметры генерации по моделям
+  - Output: `{ settings: { [modelId]: { temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, repetition_penalty?, max_tokens? } } }` — generation parameters per model
 - `PUT /api/v1/user/model-settings`
-  - Ввод: `{ model_id: string, settings: { temperature?, ... } }` — merge с существующими настройками модели
-  - Вывод: `{ ok: true, settings }`
+  - Input: `{ model_id: string, settings: { temperature?, ... } }` — merge with existing model settings
+  - Output: `{ ok: true, settings }`
 - `DELETE /api/v1/user/model-settings/:modelId`
-  - Вывод: `{ ok: true }` — удаляет настройки для конкретной модели
+  - Output: `{ ok: true }` — deletes settings for a specific model
 
 ### DevOps Agent Runtime (JWT)
 
-Управление SSH-серверами, политиками авто-разрешения и инструкциями (runbooks). Доступно desktop-клиентам и Telegram (через SSE-стриминг и inline-кнопки подтверждения).
+Manage SSH servers, auto-approve policies, and runbooks. Available to desktop clients and Telegram (via SSE streaming and inline confirmation buttons).
 
-**Серверы:**
+**Servers:**
 
-- `GET /api/v1/devops/servers` — список серверов пользователя (без паролей/ключей)
-- `POST /api/v1/devops/servers` — добавить сервер (`{ name, host, port, username, password?, private_key?, sudo_password?, default_ssh_key_id?, use_ssh_key_for_login? }`)
-- `GET /api/v1/devops/servers/:id` — информация о сервере
-- `PUT /api/v1/devops/servers/:id` — обновить сервер (частичное обновление). Поля: `{ name?, host?, port?, username?, password?, private_key?, sudo_password?, default_ssh_key_id?, use_ssh_key_for_login? }`
-- `DELETE /api/v1/devops/servers/:id` — удалить сервер
-- `POST /api/v1/devops/servers/:id/test` — проверить SSH-подключение
-- `POST /api/v1/devops/servers/:id/exec` — выполнить команду на сервере (только для внутренних вызовов, не из AI)
+- `GET /api/v1/devops/servers` — list of user's servers (no passwords/keys)
+- `POST /api/v1/devops/servers` — add a server (`{ name, host, port, username, password?, private_key?, sudo_password?, default_ssh_key_id?, use_ssh_key_for_login? }`)
+- `GET /api/v1/devops/servers/:id` — server info
+- `PUT /api/v1/devops/servers/:id` — update server (partial update). Fields: `{ name?, host?, port?, username?, password?, private_key?, sudo_password?, default_ssh_key_id?, use_ssh_key_for_login? }`
+- `DELETE /api/v1/devops/servers/:id` — delete server
+- `POST /api/v1/devops/servers/:id/test` — test SSH connection
+- `POST /api/v1/devops/servers/:id/exec` — execute a command on the server (internal calls only, not from AI)
 
-**Политики (авто-разрешение команд):**
+**Policies (auto-approve commands):**
 
-- `GET /api/v1/devops/servers/:id/policies` — список политик для сервера
-- `POST /api/v1/devops/servers/:id/policies` — создать политику (`{ pattern, auto_approve }`). `pattern` — regex для команды.
-- `DELETE /api/v1/devops/policies/:id` — удалить политику
+- `GET /api/v1/devops/servers/:id/policies` — list policies for a server
+- `POST /api/v1/devops/servers/:id/policies` — create a policy (`{ pattern, auto_approve }`). `pattern` — regex for the command.
+- `DELETE /api/v1/devops/policies/:id` — delete a policy
 
-**Подтверждение команд (HitL):**
+**Command confirmation (HitL):**
 
-- `POST /api/v1/devops/approve` — подтвердить/отклонить выполнение команды (`{ confirmation_id, approved: boolean, sudo_password?, save_sudo_password?, new_password? }`)
-- `POST /api/v1/email/approve` — подтвердить/отклонить отправку письма (`{ confirmation_id, approved: boolean }`). Резолвит pending Promise, при approve — вызывает `runEmailSend`.
+- `POST /api/v1/devops/approve` — approve/reject command execution (`{ confirmation_id, approved: boolean, sudo_password?, save_sudo_password?, new_password? }`)
+- `POST /api/v1/email/approve` — approve/reject email sending (`{ confirmation_id, approved: boolean }`). Resolves the pending Promise; on approve — calls `runEmailSend`.
 
-**Инструкции (runbooks):**
+**Runbooks:**
 
-- `GET /api/v1/devops/runbooks` — список инструкций пользователя
-- `POST /api/v1/devops/runbooks` — создать инструкцию (`{ title, content, commands? }`)
-- `PUT /api/v1/devops/runbooks/:id` — обновить инструкцию
-- `DELETE /api/v1/devops/runbooks/:id` — удалить инструкцию
-- `POST /api/v1/devops/runbooks/extract-commands` — извлечь shell-команды из текста инструкции через AI (`{ content }`)
-- `POST /api/v1/devops/runbooks/review-commands` — проверить безопасность команд через AI (`{ commands: string[] }`)
+- `GET /api/v1/devops/runbooks` — list of user's runbooks
+- `POST /api/v1/devops/runbooks` — create a runbook (`{ title, content, commands? }`)
+- `PUT /api/v1/devops/runbooks/:id` — update a runbook
+- `DELETE /api/v1/devops/runbooks/:id` — delete a runbook
+- `POST /api/v1/devops/runbooks/extract-commands` — extract shell commands from runbook text via AI (`{ content }`)
+- `POST /api/v1/devops/runbooks/review-commands` — review command safety via AI (`{ commands: string[] }`)
 
-**Привязка инструкций к серверам:**
+**Attaching runbooks to servers:**
 
-- `POST /api/v1/devops/servers/:id/attach-runbook` — привязать инструкцию к серверу (`{ runbook_id }`). Создаёт авто-разрешающие политики для каждой команды инструкции.
+- `POST /api/v1/devops/servers/:id/attach-runbook` — attach a runbook to a server (`{ runbook_id }`). Creates auto-approve policies for each command in the runbook.
 
 ### Subagent System (desktop-only, `isDesktop`)
 
-Система вложенных агентов (субагентов). Главный AI-агент может делегировать задачи субагентам двумя способами:
+A system of nested agents (subagents). The main AI agent can delegate tasks to subagents in two ways:
 
-1. **Специализированные субагенты** (`invoke_subagent`) — из статического реестра (заранее настроенные промпты и инструменты).
-2. **Ad-hoc субагенты** (`spawn_subagent`) — создаются моделью «на лету» с кастомным промптом, выбранными инструментами и лимитом итераций.
+1. **Specialized subagents** (`invoke_subagent`) — from a static registry (preconfigured prompts and tools).
+2. **Ad-hoc subagents** (`spawn_subagent`) — created by the model on the fly with a custom prompt, selected tools, and an iteration limit.
 
-Каждый субагент имеет свой системный промпт, собственный набор инструментов и отдельный агентский цикл.
+Each subagent has its own system prompt, its own set of tools, and a separate agent loop.
 
-**Архитектура:**
+**Architecture:**
 
 ```
-Главный агент (ai.ts)
-  ├── invoke_subagent(agent, task, context)         — статический реестр
-  ├── spawn_subagent(task, system_prompt, tools)    — ad-hoc, динамический
+Main agent (ai.ts)
+  ├── invoke_subagent(agent, task, context)         — static registry
+  ├── spawn_subagent(task, system_prompt, tools)    — ad-hoc, dynamic
   │     └── buildAdhocSubagent() → runSubagent()
-  │           ├── Собственные инструменты (ownTools) — выполняются напрямую
-  │           └── Разделяемые инструменты (sharedTools) — через runTool главного агента
-  └── Возврат результата (answer, summary, toolCallsHistory)
+  │           ├── Own tools (ownTools) — executed directly
+  │           └── Shared tools (sharedTools) — via main agent's runTool
+  └── Return result (answer, summary, toolCallsHistory)
 ```
 
-**Параллельный запуск:** если модель возвращает несколько `spawn_subagent` вызовов в одной итерации, они выполняются параллельно (до `MAX_PARALLEL_SPAWN_SUBAGENTS = 3` одновременно). Остальные инструменты выполняются последовательно, как и раньше.
+**Parallel execution:** if the model returns multiple `spawn_subagent` calls in the same iteration, they execute in parallel (up to `MAX_PARALLEL_SPAWN_SUBAGENTS = 3` concurrently). Other tools execute sequentially, as before.
 
-**Интеграция:**
-- `invoke_subagent` — добавляется в `executionTools` только если `isDesktop=true` и в реестре есть зарегистрированные субагенты
-- `spawn_subagent` — добавляется только если `isDesktop=true` и флаг `disable_adhoc_subagents` не установлен. Динамически генерирует список **всех** runtime-инструментов (базовые + serverOnlyTools + desktopOnlyTools + macros), исключая `spawn_subagent` и `invoke_subagent` (рекурсивный спавн запрещён). Список передаётся через `availableToolDefs` → `ctx.runtimeToolDefs` в runner
-- `initSubagentRunner()` — вызывается при старте сервера (`server.ts`), передаёт ссылки на `runCompletion`, `runTool`, `toolDefinitions` для разрыва циклических зависимостей
-- Субагент использует тот же `AbortSignal` что и основной запрос — остановка генерации (`chat_stop`) останавливает и субагента (soft-abort — возвращает partial-результат)
-- Модель субагента: пользователь выбирает в настройках `subagent_mode` (`auto` = наследует модель основного агента, или конкретная модель из каталога). Reasoning level также настраивается отдельно через `subagent_reasoning_level`
-- **Trace субагентов** сохраняется отдельно в `chat_messages.subagents_json` (не в `tool_calls_json`), чтобы не засорять AI-контекст. В `tool_calls_json` попадает только вызов `spawn_subagent` + краткий результат. Полный trace (промпт, задача, список инструментов, пошаговые tool calls, ответ) доступен для отображения в UI
+**Integration:**
+- `invoke_subagent` — added to `executionTools` only if `isDesktop=true` and the registry has registered subagents
+- `spawn_subagent` — added only if `isDesktop=true` and the `disable_adhoc_subagents` flag is not set. Dynamically generates a list of **all** runtime tools (base + serverOnlyTools + desktopOnlyTools + macros), excluding `spawn_subagent` and `invoke_subagent` (recursive spawning is prohibited). The list is passed via `availableToolDefs` → `ctx.runtimeToolDefs` in the runner
+- `initSubagentRunner()` — called at server startup (`server.ts`), passes references to `runCompletion`, `runTool`, `toolDefinitions` to break circular dependencies
+- The subagent uses the same `AbortSignal` as the main request — stopping generation (`chat_stop`) also stops the subagent (soft-abort — returns a partial result)
+- Subagent model: the user selects in settings `subagent_mode` (`auto` = inherits main agent's model, or a specific model from the catalog). Reasoning level is also configured separately via `subagent_reasoning_level`
+- **Subagent trace** is stored separately in `chat_messages.subagents_json` (not in `tool_calls_json`) to avoid polluting the AI context. Only the `spawn_subagent` call + a brief result go into `tool_calls_json`. The full trace (prompt, task, tool list, step-by-step tool calls, answer) is available for UI display
 
-**Структура файлов:**
+**File structure:**
 
 ```
 services/subagents/
-  types.ts          — типы: SubagentConfig, SubagentTool, SubagentContext, SubagentResult, SubagentMode, SubagentTraceEntry
-  registry.ts       — реестр субагентов: REGISTRY, getSubagent(), buildSubagentListDescription(), buildAdhocSubagent()
-  runner.ts         — агентский цикл: runSubagent(), initSubagentRunner(), soft-abort
+  types.ts          — types: SubagentConfig, SubagentTool, SubagentContext, SubagentResult, SubagentMode, SubagentTraceEntry
+  registry.ts       — subagent registry: REGISTRY, getSubagent(), buildSubagentListDescription(), buildAdhocSubagent()
+  runner.ts         — agent loop: runSubagent(), initSubagentRunner(), soft-abort
   prompts/
   tools/
 ```
 
-**Как добавить новый субагент:**
-1. Создать инструменты в `tools/<name>-tools.ts`
-2. Создать промпт в `prompts/<name>.md`
-3. Добавить entry в `REGISTRY` в `registry.ts`
+**How to add a new subagent:**
+1. Create tools in `tools/<name>-tools.ts`
+2. Create a prompt in `prompts/<name>.md`
+3. Add an entry to `REGISTRY` in `registry.ts`
 
-**Ad-hoc субагенты (`buildAdhocSubagent`):**
+**Ad-hoc subagents (`buildAdhocSubagent`):**
 
-Создаются моделью через `spawn_subagent` без регистрации в `REGISTRY`. Параметры:
-- `systemPrompt` — прямой текст промпта (не из файла), лимит 16KB. Если модель не передаёт — используется дефолтный промпт общего ассистента.
-- `sharedTools` — массив имён инструментов из полного runtime-набора (базовые `toolDefinitions` + динамические `serverOnlyTools` / `desktopOnlyTools` / macros), которые субагент может использовать. Валидируется на бэкенде — неизвестные имена отбрасываются. Runner получает definitions через `ctx.runtimeToolDefs`.
-- `maxLoops` — лимит итераций (1–50, по умолчанию 20).
-- Не имеет `ownTools` — только разделяемые инструменты главного агента.
+Created by the model via `spawn_subagent` without registration in `REGISTRY`. Parameters:
+- `systemPrompt` — direct prompt text (not from a file), 16KB limit. If the model doesn't provide one — a default general assistant prompt is used.
+- `sharedTools` — array of tool names from the full runtime set (base `toolDefinitions` + dynamic `serverOnlyTools` / `desktopOnlyTools` / macros) that the subagent can use. Validated on the backend — unknown names are discarded. The runner gets definitions via `ctx.runtimeToolDefs`.
+- `maxLoops` — iteration limit (1–50, default 20).
+- Has no `ownTools` — only shared tools from the main agent.
 
-**Агентский цикл (runner.ts):**
-- Лимит итераций: `maxLoops` из конфига (default 50 для статических, default 20 для ad-hoc, hard cap 50)
-- За 2 итерации до лимота — nudge "заверши задачу"
-- Debug: `DEBUG_AI_RAW_SUBAGENT=1` — логирует полные ответы модели
-- `setMaxListeners(100)` на signal — предотвращает `MaxListenersExceededWarning` при длинных циклах
-- **Soft-abort:** при прерывании (`AbortSignal`) субагент не бросает исключение, а возвращает partial-результат — последний assistant-контент и накопленные tool calls. Результат помечается `aborted: true`.
+**Agent loop (runner.ts):**
+- Iteration limit: `maxLoops` from config (default 50 for static, default 20 for ad-hoc, hard cap 50)
+- 2 iterations before the limit — nudge "finish the task"
+- Debug: `DEBUG_AI_RAW_SUBAGENT=1` — logs full model responses
+- `setMaxListeners(100)` on signal — prevents `MaxListenersExceededWarning` during long loops
+- **Soft-abort:** on interruption (`AbortSignal`), the subagent doesn't throw an exception but returns a partial result — the last assistant content and accumulated tool calls. The result is marked `aborted: true`.
 
 ### Vector Memory (JWT, feature-flag)
 
-- Нужно `BACKEND_VECTOR_MEMORY_API_ENABLED=1`.
-- `POST /api/v1/vector-memory/chunks` -> ввод `{ text, source? }`, вывод: созданный chunk.
-- `POST /api/v1/vector-memory/search` -> ввод `{ query, top_k? }`, вывод: найденные chunk.
-- `DELETE /api/v1/vector-memory/chunks/:id` -> вывод `{ ok: true, ... }`.
-- `DELETE /api/v1/vector-memory/chunks?all=1` -> вывод `{ ok: true, ... }`.
+- Requires `BACKEND_VECTOR_MEMORY_API_ENABLED=1`.
+- `POST /api/v1/vector-memory/chunks` → input `{ text, source? }`, output: created chunk.
+- `POST /api/v1/vector-memory/search` → input `{ query, top_k? }`, output: found chunks.
+- `DELETE /api/v1/vector-memory/chunks/:id` → output `{ ok: true, ... }`.
+- `DELETE /api/v1/vector-memory/chunks?all=1` → output `{ ok: true, ... }`.
 
-### Admin JWT API (только admin)
+### Admin JWT API (admin only)
 
-- `GET /api/v1/admin/users?filter=all|pending|banned&limit=&offset=` -> `{ users, total, filter, limit, offset }`
-- `GET /api/v1/admin/users/:id` -> `{ user, ban }`
-- `PUT /api/v1/admin/users/:id/status` (ввод `{ status }`) -> `{ ok: true, status }`
-- `PUT /api/v1/admin/users/:id/role` (ввод `{ role }`) -> `{ ok: true, role }`
-- `PUT /api/v1/admin/users/:id/name` (ввод `{ name }`) -> `{ ok: true, name }`
-- `DELETE /api/v1/admin/users/:id` -> `{ ok: true }`
-- `POST /api/v1/admin/users/:id/plan` (ввод `{ plan, duration? }`, duration: `forever|day|week|month|year`) -> `{ ok: true, plan, ends_at }`
-- `POST /api/v1/admin/users/:id/ban` (ввод `{ reason? }`) -> `{ ok: true, reason }`
-- `DELETE /api/v1/admin/users/:id/ban` -> `{ ok: true, status: "none" }`
-- `POST /api/v1/admin/sync-plan-limits` -> `{ ok: true }`
+- `GET /api/v1/admin/users?filter=all|pending|banned&limit=&offset=` → `{ users, total, filter, limit, offset }`
+- `GET /api/v1/admin/users/:id` → `{ user, ban }`
+- `PUT /api/v1/admin/users/:id/status` (input `{ status }`) → `{ ok: true, status }`
+- `PUT /api/v1/admin/users/:id/role` (input `{ role }`) → `{ ok: true, role }`
+- `PUT /api/v1/admin/users/:id/name` (input `{ name }`) → `{ ok: true, name }`
+- `DELETE /api/v1/admin/users/:id` → `{ ok: true }`
+- `POST /api/v1/admin/users/:id/plan` (input `{ plan, duration? }`, duration: `forever|day|week|month|year`) → `{ ok: true, plan, ends_at }`
+- `POST /api/v1/admin/users/:id/ban` (input `{ reason? }`) → `{ ok: true, reason }`
+- `DELETE /api/v1/admin/users/:id/ban` → `{ ok: true, status: "none" }`
+- `POST /api/v1/admin/sync-plan-limits` → `{ ok: true }`
 
-### Internal API (для бота/сервисов)
+### Internal API (for bot/services)
 
-- Все эндпоинты ниже требуют `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
+- All endpoints below require `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
 - AI:
-  - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options?, documents? }` -> `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
-  - `POST /internal/ai/stream` -> SSE-стриминг для Telegram: `{ user_id, text, chat_id?, options?, documents? }`
-    - `documents[]` — опциональный массив `{ filename, base64 }`, парсится и сохраняется идентично `/api/v1/chat/send` (см. [Документы (attachments)](#документы-attachments)).
-    - События: `intermediate`, `tool_status`, `display_state`, `desktop_action`, `done`, `error` (см. [SSE-стриминг](#sse-striing-i-dual-delivery-podtverzhdeniy))
-    - Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`
-  - `POST /internal/ai/lite` -> `{ text }` -> `{ reply_text }` — LITE AI для проверки безопасности команд
-  - `POST /internal/ai/admin-outreach` -> `{ target_user_id, admin_instruction }`
-  - `POST /internal/ai/generate-image` -> `{ user_id, prompt }` -> `{ ok: true, image_base64, prompt_used }` (требует `PROXYAPI_KEY`)
-  - `POST /internal/messages/bind-telegram` -> `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
+  - `POST /internal/ai/send` → `{ user_id, text, chat_id?, options?, documents? }` → `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
+  - `POST /internal/ai/stream` → SSE streaming for Telegram: `{ user_id, text, chat_id?, options?, documents? }`
+    - `documents[]` — optional array of `{ filename, base64 }`, parsed and saved identically to `/api/v1/chat/send` (see [Document Attachments](#document-attachments)).
+    - Events: `intermediate`, `tool_status`, `display_state`, `desktop_action`, `done`, `error` (see [SSE Streaming](#sse-streaming-and-dual-delivery-of-confirmations))
+    - Passes `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` callbacks to `sendMessageThroughAi`
+  - `POST /internal/ai/lite` → `{ text }` → `{ reply_text }` — LITE AI for command safety checks
+  - `POST /internal/ai/admin-outreach` → `{ target_user_id, admin_instruction }`
+  - `POST /internal/ai/generate-image` → `{ user_id, prompt }` → `{ ok: true, image_base64, prompt_used }` (requires `PROXYAPI_KEY`)
+  - `POST /internal/messages/bind-telegram` → `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
-  - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) -> `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` -> `{ reply_text, message_id, chat_id, usage, ... }`
-    - `extra_images` - массив дополнительных изображений (до лимита плана): `[{ base64, mime_type? }]`
-    - Первое изображение (обязательное) передаётся в `image_base64`, остальные через `extra_images`
-    - Лимит зависит от плана пользователя (см. таблицу ниже)
-    - Ошибки: `images_not_allowed_for_plan` (free), `too_many_images_max_N`
+  - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) → `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` → `{ reply_text, message_id, chat_id, usage, ... }`
+    - `extra_images` — array of additional images (up to the plan limit): `[{ base64, mime_type? }]`
+    - The first image (required) is passed in `image_base64`, the rest via `extra_images`
+    - The limit depends on the user's plan (see the table below)
+    - Errors: `images_not_allowed_for_plan` (free), `too_many_images_max_N`
 - URL tool:
-  - `POST /internal/tools/read_url` -> `{ url }` -> `{ ok, url, text }`
+  - `POST /internal/tools/read_url` → `{ url }` → `{ ok, url, text }`
 - Prompts:
   - `GET /internal/prompts`, `GET /internal/prompts/:id`
-  - `POST /internal/prompts` -> `{ name, description?, content, is_default? }`
+  - `POST /internal/prompts` → `{ name, description?, content, is_default? }`
   - `PUT /internal/prompts/:id/name|description|content|default`
   - `DELETE /internal/prompts/:id`
-  - `POST /internal/prompts/reset-users` -> `{ prompt_id }`
+  - `POST /internal/prompts/reset-users` → `{ prompt_id }`
 - User prompt/timezone/context/mail:
-  - `POST /internal/user/prompt/select` -> `{ user_id, prompt_id }`
-  - `PUT /internal/user/prompt/custom` -> `{ user_id, content }`
-  - `POST /internal/user/timezone` -> `{ user_id, timezone_offset }`
-  - `POST /internal/user/context-window` -> `{ user_id, context_window, is_admin? }`
+  - `POST /internal/user/prompt/select` → `{ user_id, prompt_id }`
+  - `PUT /internal/user/prompt/custom` → `{ user_id, content }`
+  - `POST /internal/user/timezone` → `{ user_id, timezone_offset }`
+  - `POST /internal/user/context-window` → `{ user_id, context_window, is_admin? }`
   - `POST /internal/mail/setup|use`, `PUT /internal/mail/limit`, `DELETE /internal/mail/account`
 - User lifecycle/plan/ban:
-  - `POST /internal/users/upsert-telegram` -> `{ tg_id, name, role?, status?, tg_username?, default_prompt_id? }`
-  - `POST /internal/users/create-pending` -> `{ tg_id, name?, tg_username?, default_prompt_id? }`
+  - `POST /internal/users/upsert-telegram` → `{ tg_id, name, role?, status?, tg_username?, default_prompt_id? }`
+  - `POST /internal/users/create-pending` → `{ tg_id, name?, tg_username?, default_prompt_id? }`
   - `GET /internal/users/:id`
-  - `PUT /internal/users/:id/tg-username` -> `{ user_id?, tg_username }`
+  - `PUT /internal/users/:id/tg-username` → `{ user_id?, tg_username }`
   - `GET /internal/users?filter=all|pending|banned&limit=&offset=`
   - `PUT /internal/users/:id/status|role|name`
   - `DELETE /internal/users/:id`
-  - `POST /internal/users/:id/plan` -> `{ plan }`
+  - `POST /internal/users/:id/plan` → `{ plan }`
   - `POST /internal/sync-plan-limits`
-  - `POST /internal/users/:id/ban` -> `{ reason?, banned_by? }`
+  - `POST /internal/users/:id/ban` → `{ reason?, banned_by? }`
   - `DELETE /internal/users/:id/ban`
   - `GET /internal/users/:id/ban`
   - `POST /internal/users/:id/prompt/select`
   - `PUT /internal/users/:id/prompt/custom`
-- Сервисные:
-  - `POST /internal/daily-reset` -> `{ ok: true }`
-  - `POST /internal/reset-daily-counters` -> `{ ok: true }` — ручной сброс дневных счётчиков всех пользователей
-- Models (ручной выбор):
-  - `GET /internal/models` -> `{ models: [{ id, name, description }] }`
-  - `GET /internal/users/:id/preferred-model` -> `{ models, preferred_model }`
-  - `PUT /internal/users/:id/preferred-model` -> `{ model_id: string | null }` -> `{ ok, preferred_model }`
-- PC Command confirmation (для TG-бота):
-  - `POST /internal/pc-commands/approve` -> `{ confirmation_id, approved, user_id }` -> `{ ok, status, result? }`
-  - `POST /internal/pc-commands/policies` -> `{ user_id, pattern }` -> `{ ok, id }` — создание auto-approve policy
-- DevOps SSH confirmation (для TG-бота):
-  - `POST /internal/devops/approve` -> `{ confirmation_id, approved, user_id, sudo_password?, new_password? }` -> `{ ok, status, result? }`
-  - `POST /internal/devops/servers/:id/policies` -> `{ user_id, pattern, auto_approve }` -> `{ id }` — создание SSH auto-approve policy
-- Email Send confirmation (для TG-бота):
-  - `POST /internal/email/approve` -> `{ confirmation_id, approved, user_id }` -> `{ ok, status, result? }`
+- Service:
+  - `POST /internal/daily-reset` → `{ ok: true }`
+  - `POST /internal/reset-daily-counters` → `{ ok: true }` — manual reset of all users' daily counters
+- Models (manual selection):
+  - `GET /internal/models` → `{ models: [{ id, name, description }] }`
+  - `GET /internal/users/:id/preferred-model` → `{ models, preferred_model }`
+  - `PUT /internal/users/:id/preferred-model` → `{ model_id: string | null }` → `{ ok, preferred_model }`
+- PC Command confirmation (for TG bot):
+  - `POST /internal/pc-commands/approve` → `{ confirmation_id, approved, user_id }` → `{ ok, status, result? }`
+  - `POST /internal/pc-commands/policies` → `{ user_id, pattern }` → `{ ok, id }` — create auto-approve policy
+- DevOps SSH confirmation (for TG bot):
+  - `POST /internal/devops/approve` → `{ confirmation_id, approved, user_id, sudo_password?, new_password? }` → `{ ok, status, result? }`
+  - `POST /internal/devops/servers/:id/policies` → `{ user_id, pattern, auto_approve }` → `{ id }` — create SSH auto-approve policy
+- Email Send confirmation (for TG bot):
+  - `POST /internal/email/approve` → `{ confirmation_id, approved, user_id }` → `{ ok, status, result? }`
 
-## Лимиты по планам
+## Plan Limits
 
-Задаются в `PLAN_LIMITS` в `services/chats.ts`, применяются при создании пользователя, смене плана и `/sync_plan_limits`.
+Defined in `PLAN_LIMITS` in `services/chats.ts`, applied on user creation, plan change, and `/sync_plan_limits`.
 
-| Параметр | free | standart | pro |
+| Parameter | free | standart | pro |
 |---|---|---|---|
 | `context_window_max` | 10 | 20 | 50 |
 | `daily_message_limit` | 10 | 20 | 50 |
@@ -631,139 +631,139 @@ services/subagents/
 | `daily_image_gen_limit` | 0 | 3 | 10 |
 | `max_images_per_request` | 0 | 5 | 10 |
 
-Админы (`is_admin = 1`) обходят дневные лимиты.
+Admins (`is_admin = 1`) bypass daily limits.
 
-### Хранение изображений
+### Image Storage
 
-Пользовательские и сгенерированные изображения сохраняются на сервере. Без этого base64 терялся, в истории чата картинки не отображались.
+User-generated and AI-generated images are saved on the server. Without this, base64 would be lost and images wouldn't display in chat history.
 
-**Сервис:** `services/image-storage.ts` (зависимость `sharp`):
-- `saveUserImageThumbnail()` — ресайзит до 512px, конвертирует в webp, сохраняет в `uploads/`.
-- `saveGeneratedImage()` — сохраняет PNG без сжатия.
-- API скачивания `GET /api/v1/images/:filename?token=<access_token>` — только для владельца. Статического роута `/uploads/` нет.
+**Service:** `services/image-storage.ts` (`sharp` dependency):
+- `saveUserImageThumbnail()` — resizes to 512px, converts to webp, saves to `uploads/`.
+- `saveGeneratedImage()` — saves PNG without compression.
+- Download API `GET /api/v1/images/:filename?token=<access_token>` — owner-only. There is no static `/uploads/` route.
 
-**БД:**
-- Колонка `images TEXT` в `chat_messages` — JSON-массив `[{ "url": "/api/v1/images/abc.webp", "type": "user_photo" | "generated" }]`.
-- `appendChatMessage` принимает параметр `images[]`. `getChatMessages` парсит и возвращает `images` в ответе.
+**DB:**
+- `images TEXT` column in `chat_messages` — JSON array `[{ "url": "/api/v1/images/abc.webp", "type": "user_photo" | "generated" }]`.
+- `appendChatMessage` accepts an `images[]` parameter. `getChatMessages` parses and returns `images` in the response.
 
-**Токены AI:**
-- Картинки не отправляются повторно в контексте — AI видит только текст `[Фото]caption`. В `getHistoryForAi()` это обеспечивается тем, что для user-сообщений выбирается только `content` (без `images`).
-- Разделение: "история для AI" = текст + развёрнутый trace tool calls (см. [Tool calls trace](#tool-calls-trace-и-контекст-для-ai)), "история для отображения" = текст + images[] + плоская проекция tool_calls.
+**AI tokens:**
+- Images are not re-sent in context — the AI only sees the text `[Photo]caption`. In `getHistoryForAi()`, this is ensured by selecting only `content` for user messages (without `images`).
+- Separation: "history for AI" = text + expanded tool calls trace (see [Tool calls trace](#tool-calls-trace-and-ai-context)), "history for display" = text + images[] + flat projection of tool_calls.
 
-**Потоки данных:**
-- **Desktop отправляет фото:** base64 → сервер ресайзит + сохраняет thumbnail → оригинал в AI vision → в БД: `images: [{ url, type: "user_photo" }]`.
-- **Генерация изображения:** AI вызывает `generate_image` → b64 сохраняется на диск → возвращается `image_url` → в БД assistant-сообщения: `images: [{ url, type: "generated" }]`.
-- **Telegram фото:** бот скачивает фото → `/internal/photo/analyze` → thumbnail сохраняется → в БД user-сообщения.
+**Data flows:**
+- **Desktop sends photo:** base64 → server resizes + saves thumbnail → original to AI vision → DB: `images: [{ url, type: "user_photo" }]`.
+- **Image generation:** AI calls `generate_image` → b64 saved to disk → `image_url` returned → DB assistant message: `images: [{ url, type: "generated" }]`.
+- **Telegram photo:** bot downloads photo → `/internal/photo/analyze` → thumbnail saved → DB user message.
 
-**Типы:**
+**Types:**
 - `MessageImage` — `{ url: string; type: 'user_photo' | 'generated' }`.
-- `GeneratedImage` — добавлено поле `image_url`.
-- `ChatSendResponse` — добавлено поле `generated_images`.
+- `GeneratedImage` — added `image_url` field.
+- `ChatSendResponse` — added `generated_images` field.
 
-### Документы (attachments)
+### Document Attachments
 
-Пользователь может прикреплять текстовые документы к сообщениям. В отличие от фото, документы **инджектятся в AI-контекст каждый раз** как текстовые блоки (а не показываются один раз через vision).
+Users can attach text documents to messages. Unlike photos, documents are **injected into the AI context every time** as text blocks (rather than shown once via vision).
 
-**Поддерживаемые форматы:**
-- Текстовые: txt, md, json, csv, log, xml, yaml, ini, toml, код (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css и т.д.)
-- DOCX (через `mammoth`)
-- PDF (через `pdf-parse`)
+**Supported formats:**
+- Text: txt, md, json, csv, log, xml, yaml, ini, toml, code (py, js, ts, go, rs, java, c, cpp, cs, php, sh, sql, html, css, etc.)
+- DOCX (via `mammoth`)
+- PDF (via `pdf-parse`)
 - RTF
 
-**Лимиты:**
-- Размер raw-файла: **5 МБ** (`MAX_RAW_FILE_SIZE`)
-- Извлечённый текст обрезается до **500 000 символов** (`MAX_EXTRACTED_TEXT_CHARS`) — сохраняются head + tail
-- Токен-бюджет на документы: `attachment_max_tokens` (user setting). `0` = авто (90% от `max_context_tokens`). Лимит можно менять в настройках (slider, 0 = Авто).
+**Limits:**
+- Raw file size: **5 MB** (`MAX_RAW_FILE_SIZE`)
+- Extracted text is trimmed to **500,000 characters** (`MAX_EXTRACTED_TEXT_CHARS`) — head + tail are preserved
+- Token budget for documents: `attachment_max_tokens` (user setting). `0` = auto (90% of `max_context_tokens`). The limit can be changed in settings (slider, 0 = Auto).
 
-**Сервисы:**
-- `services/document-parser.ts` — извлечение текста (`parseDocument`), MIME-типы (`guessMimeType`)
-- `services/attachment-storage.ts` — сохранение/удаление файлов (`saveUserDocument`, `resolveAttachmentFile`, `deleteAttachmentFile`)
+**Services:**
+- `services/document-parser.ts` — text extraction (`parseDocument`), MIME types (`guessMimeType`)
+- `services/attachment-storage.ts` — save/delete files (`saveUserDocument`, `resolveAttachmentFile`, `deleteAttachmentFile`)
 
-**БД:**
-- Колонка `attachments TEXT` в `chat_messages` — JSON-массив `[MessageAttachment]`.
-- Колонка `attachment_max_tokens INTEGER NOT NULL DEFAULT 0` в `users`.
+**DB:**
+- `attachments TEXT` column in `chat_messages` — JSON array `[MessageAttachment]`.
+- `attachment_max_tokens INTEGER NOT NULL DEFAULT 0` column in `users`.
 - `MessageAttachment`: `{ name, size_bytes, mime_type, extracted_text, url, filename }`.
 
-**Хранение файлов:**
-- Файлы сохраняются как `<id>_<sanitized_name>` в `uploads/` (рядом с изображениями).
-- API скачивания `GET /api/v1/attachments/:filename?token=<access_token>` — только для владельца (проверка через JSON `attachments LIKE`).
-- Удаление через `DELETE /api/v1/chats/:chatId/messages/:messageId/attachments/:filename` — удаляет файл с диска, убирает из JSON, пересчитывает `token_count`.
+**File storage:**
+- Files are saved as `<id>_<sanitized_name>` in `uploads/` (alongside images).
+- Download API `GET /api/v1/attachments/:filename?token=<access_token>` — owner-only (verified via JSON `attachments LIKE`).
+- Deletion via `DELETE /api/v1/chats/:chatId/messages/:messageId/attachments/:filename` — deletes file from disk, removes from JSON, recalculates `token_count`.
 
-**Инъекция в AI-контекст:**
-- `injectAttachments()` форматирует каждый документ как:
+**Injection into AI context:**
+- `injectAttachments()` formats each document as:
   ```
-  [Пользователь прикрепил файл: server_logs.txt]
-  --- НАЧАЛО ФАЙЛА ---
-  <содержимое>
-  --- КОНЕЦ ФАЙЛА ---
+  [User attached file: server_logs.txt]
+  --- FILE START ---
+  <content>
+  --- FILE END ---
   ```
-- `getHistoryForAi()` инджектит attachments для каждого user-сообщения в истории.
-- Текущий запрос (`sendMessageThroughAi`) инджектит attachments в `userMessageContent`.
-- Бюджет `attachmentMaxTokens` передаётся в `getHistoryForAi()` для ограничения объёма инъекции.
+- `getHistoryForAi()` injects attachments for each user message in history.
+- The current request (`sendMessageThroughAi`) injects attachments into `userMessageContent`.
+- The `attachmentMaxTokens` budget is passed to `getHistoryForAi()` to limit injection volume.
 
-**Токен-учёт:**
-- `appendChatMessage()` считает `token_count` включая injected attachments для user-сообщений.
-- `getChatAttachments(userId, chatId)` — список всех attachments чата для ToolsPanel.
+**Token accounting:**
+- `appendChatMessage()` calculates `token_count` including injected attachments for user messages.
+- `getChatAttachments(userId, chatId)` — list of all attachments in a chat for the ToolsPanel.
 
-**Поток данных:**
-- **Desktop:** drag-and-drop/выбор файлов → base64 → POST `/api/v1/chat/send` (`documents[]`) или WS `chat_send` → сервер парсит, сохраняет файл, сохраняет extracted_text → инджектит в AI.
-- **Telegram:** файлы скачиваются TG-ботом → base64 → POST `/internal/ai/send` или `/internal/ai/stream` с тем же полем `documents[]` → та же обработка. Поддержка: одиночный файл (с/без caption), альбомы (`media_group_id`).
-- **Удаление:** ToolsPanel → DELETE → файл с диска + JSON в БД → пересчёт токенов → инъекция прекращается.
+**Data flow:**
+- **Desktop:** drag-and-drop/file selection → base64 → POST `/api/v1/chat/send` (`documents[]`) or WS `chat_send` → server parses, saves file, saves extracted_text → injects into AI.
+- **Telegram:** files are downloaded by the TG bot → base64 → POST `/internal/ai/send` or `/internal/ai/stream` with the same `documents[]` field → same processing. Supports: single file (with/without caption), albums (`media_group_id`).
+- **Deletion:** ToolsPanel → DELETE → file from disk + JSON in DB → token recalculation → injection stops.
 
 **API:**
 
-| Эндпоинт | Метод | Описание |
+| Endpoint | Method | Description |
 |---|---|---|
-| `/api/v1/attachments/:filename` | GET | Скачивание файла (owner-only) |
-| `/api/v1/chats/:chatId/attachments` | GET | Список всех attachments чата |
-| `/api/v1/chats/:chatId/messages/:messageId/attachments/:filename` | DELETE | Удаление attachment (файл + БД + инъекция) |
-| `/api/v1/user/attachment-tokens-limit` | GET | Текущий лимит токенов на документы |
-| `/api/v1/user/attachment-tokens-limit` | PUT | Установка лимита (0 = Авто) |
+| `/api/v1/attachments/:filename` | GET | Download file (owner-only) |
+| `/api/v1/chats/:chatId/attachments` | GET | List all attachments in a chat |
+| `/api/v1/chats/:chatId/messages/:messageId/attachments/:filename` | DELETE | Delete attachment (file + DB + injection) |
+| `/api/v1/user/attachment-tokens-limit` | GET | Current document token limit |
+| `/api/v1/user/attachment-tokens-limit` | PUT | Set limit (0 = Auto) |
 
-### Архивация сообщений (soft delete)
+### Message Archiving (soft delete)
 
-Когда количество активных сообщений в чате превышает `context_window_max`, старые сообщения **не удаляются**, а помечаются как архивные:
+When the number of active messages in a chat exceeds `context_window_max`, older messages are **not deleted** but marked as archived:
 
-- Колонки `chat_messages.archived` (INTEGER, 0/1) и `chat_messages.archived_at` (DATETIME).
-- `trimUserHistoryByChat()` выполняет `UPDATE ... SET archived = 1` вместо `DELETE` для сообщений, выходящих за пределы context window.
-- `getHistoryForAi()` выбирает только `archived = 0` — архив не отправляется в AI-контекст. Развёрнутый trace tool_calls из неархивных assistant-сообщений попадает в контекст (см. [Tool calls trace](#tool-calls-trace-и-контекст-для-ai)).
-- `getChatMessages()` возвращает **все** сообщения (включая архивные) с полем `archived: boolean` — десктоп показывает полную историю.
-- FTS-поиск продолжает работать по архивным сообщениям (триггер `AFTER DELETE` не срабатывает при UPDATE, поэтому записи остаются в `messages_fts`).
-- Удаление чата (`deleteUserChat`) и удаление конкретного сообщения (`deleteUserMessage`) выполняют физический `DELETE` — это не связано с архивацией.
-- Индекс `idx_chat_messages_active` для эффективной фильтрации по `archived = 0`.
-- Desktop отображает архивные сообщения с пониженной прозрачностью (opacity 0.55) и меткой «архив».
+- Columns `chat_messages.archived` (INTEGER, 0/1) and `chat_messages.archived_at` (DATETIME).
+- `trimUserHistoryByChat()` performs `UPDATE ... SET archived = 1` instead of `DELETE` for messages that fall outside the context window.
+- `getHistoryForAi()` selects only `archived = 0` — archived messages are not sent to the AI context. The expanded tool_calls trace from non-archived assistant messages is included in the context (see [Tool calls trace](#tool-calls-trace-and-ai-context)).
+- `getChatMessages()` returns **all** messages (including archived) with an `archived: boolean` field — desktop shows the full history.
+- FTS search continues to work on archived messages (the `AFTER DELETE` trigger doesn't fire on UPDATE, so records remain in `messages_fts`).
+- Deleting a chat (`deleteUserChat`) and deleting a specific message (`deleteUserMessage`) perform a physical `DELETE` — this is unrelated to archiving.
+- Index `idx_chat_messages_active` for efficient filtering by `archived = 0`.
+- Desktop displays archived messages with reduced opacity (0.55) and an "archived" label.
 
-### Подсчёт токенов (token accounting)
+### Token Accounting
 
-Локальная оценка размера сообщений и контекста через `gpt-tokenizer` (BPE `o200k_base`, чистый JS — без WASM-зависимостей). Используется для отображения, **не влияет на архивацию** (пока что).
+Local estimation of message and context size via `gpt-tokenizer` (BPE `o200k_base`, pure JS — no WASM dependencies). Used for display, **does not affect archiving** (for now).
 
-**БД:**
+**DB:**
 
-| Колонка | Тип | Описание |
+| Column | Type | Description |
 |---|---|---|
-| `chat_messages.token_count` | INTEGER NOT NULL DEFAULT 0 | Токены сообщения в AI-контексте (без `reasoning_content`) |
-| `chat_messages.reasoning_tokens` | INTEGER NOT NULL DEFAULT 0 | Токены `reasoning_content` (только для assistant, отдельный счётчик) |
+| `chat_messages.token_count` | INTEGER NOT NULL DEFAULT 0 | Message tokens in AI context (excluding `reasoning_content`) |
+| `chat_messages.reasoning_tokens` | INTEGER NOT NULL DEFAULT 0 | `reasoning_content` tokens (assistant only, separate counter) |
 
-**Когда считается:**
+**When calculated:**
 
-- **При сохранении сообщения** (`appendChatMessage` в `services/chats.ts`):
-  - **user**: `countMessageTokens('user', content)` — только текст, без images (они не уходят в контекст).
-  - **assistant**: токены развёрнутого trace через `expandAssistantMessage()` — тот же хелпер, что использует `getHistoryForAi()`. Считаются `content`, `tool_calls` и `tool results` каждой итерации. `reasoning_content` **исключён**.
-  - **reasoning_tokens**: отдельный счётчик из `reasoning_content`.
-- **Backfill при старте сервера** (`backfillMessageTokens`): порциями по 1000 строк через `setImmediate`, чтобы не блокировать event loop. Лог: `[tokens] backfill complete: N messages updated`.
-- **Динамический системный промпт** не кешируется в БД — считается на лету в `getChatContextTokens()`.
+- **On message save** (`appendChatMessage` in `services/chats.ts`):
+  - **user**: `countMessageTokens('user', content)` — text only, no images (they don't go into context).
+  - **assistant**: tokens of the expanded trace via `expandAssistantMessage()` — the same helper used by `getHistoryForAi()`. Counts `content`, `tool_calls`, and `tool results` of each iteration. `reasoning_content` **excluded**.
+  - **reasoning_tokens**: separate counter from `reasoning_content`.
+- **Backfill on server startup** (`backfillMessageTokens`): in batches of 1000 rows via `setImmediate`, to avoid blocking the event loop. Log: `[tokens] backfill complete: N messages updated`.
+- **Dynamic system prompt** is not cached in the DB — calculated on the fly in `getChatContextTokens()`.
 
-**Сервис:** `services/tokenizer.ts` — `countTokens()`, `countMessageTokens()`, `countToolCallTokens()`, `countToolResultTokens()`.
+**Service:** `services/tokenizer.ts` — `countTokens()`, `countMessageTokens()`, `countToolCallTokens()`, `countToolResultTokens()`.
 
-**Сборка системного промпта** (`services/system-prompt.ts`):
-- `buildBaseSystemPromptForUser()` — базовый промпт без надбавок за голос/аватар/изображения.
-- Включает: выбранный промпт + core memory + cold memory hint + tool usage rules + временной контекст + pinned macros.
-- Вынесен в отдельный модуль, чтобы избежать цикла `ai.ts ↔ chats.ts`.
-- В `ai.ts` (`sendMessageThroughAi`) — полный промпт с надбавками (`voicePromptHint`, `avatarPromptHint`, images hint).
+**System prompt assembly** (`services/system-prompt.ts`):
+- `buildBaseSystemPromptForUser()` — base prompt without voice/avatar/image additions.
+- Includes: selected prompt + core memory + cold memory hint + tool usage rules + temporal context + pinned macros.
+- Extracted into a separate module to avoid the `ai.ts ↔ chats.ts` circular dependency.
+- In `ai.ts` (`sendMessageThroughAi`) — full prompt with additions (`voicePromptHint`, `avatarPromptHint`, images hint).
 
 **API:**
 
-- `GET /api/v1/chats/:id/context-tokens` — суммарные токены контекста чата:
+- `GET /api/v1/chats/:id/context-tokens` — total chat context tokens:
   ```json
   {
     "messages_tokens": 12345,
@@ -774,269 +774,269 @@ services/subagents/
     "system_prompt_tokens": 1876
   }
   ```
-  - `messages_tokens` — сумма `token_count` неархивных сообщений (без reasoning).
-  - `system_prompt_tokens` — оценка базового системного промпта (динамический, без голоса/аватара). **Не плюсуется** в `messages_tokens`.
-  - Полный контекст запроса к AI ≈ `messages_tokens + system_prompt_tokens` (+ надбавки).
-- `MessageDto` (`GET /api/v1/chats/:id/messages`) включает `token_count` и `reasoning_tokens`.
-- `AiSendResult` (WS/SSE `done`, `/api/v1/chat/send`) включает `token_count` и `reasoning_tokens` для assistant-ответа, а также `user_token_count` для нового user-сообщения (если оно было сохранено).
+  - `messages_tokens` — sum of `token_count` for non-archived messages (excluding reasoning).
+  - `system_prompt_tokens` — estimate of the base system prompt (dynamic, without voice/avatar). **Not added** to `messages_tokens`.
+  - Full AI request context ≈ `messages_tokens + system_prompt_tokens` (+ additions).
+- `MessageDto` (`GET /api/v1/chats/:id/messages`) includes `token_count` and `reasoning_tokens`.
+- `AiSendResult` (WS/SSE `done`, `/api/v1/chat/send`) includes `token_count` and `reasoning_tokens` for the assistant response, as well as `user_token_count` for the new user message (if one was saved).
 
-**Desktop отображение:**
-- Бейдж `Ntk` у каждого сообщения в metaRow (серый, справа).
-- `reasoning_tokens` — в кнопке «Рассуждение»: `Рассуждение · 1234tk`.
-- Compact-бейдж в top bar справа: `12 345tk · 1 876pk` (сообщения + промпт).
+**Desktop display:**
+- `Ntk` badge on each message in the metaRow (gray, right side).
+- `reasoning_tokens` — in the "Reasoning" button: `Reasoning · 1234tk`.
+- Compact badge in the top bar on the right: `12 345tk · 1 876pk` (messages + prompt).
 
-**Что НЕ считается:**
-- `reasoning_content` в `token_count` (он не уходит в контекст AI).
-- `usage` от провайдеров (нестабилен при streaming/tool calls/fallback).
-- Надбавки системного промпта за голос/аватар/изображения в `/context-tokens` (они появляются только при конкретных типах запросов).
-- Images в user-сообщениях (в контекст уходит только текст `[Фото]caption`).
+**What is NOT counted:**
+- `reasoning_content` in `token_count` (it doesn't go into AI context).
+- `usage` from providers (unstable with streaming/tool calls/fallback).
+- System prompt additions for voice/avatar/images in `/context-tokens` (they only appear for specific request types).
+- Images in user messages (only text `[Photo]caption` goes into context).
 
-## AI-инструменты
+## AI Tools
 
-Инструменты доступны AI через tool calling. Определены в `services/ai.ts` в `toolDefinitions`.
+Tools are available to the AI via tool calling. Defined in `services/ai.ts` in `toolDefinitions`.
 
-Агентский цикл ограничен константами в `services/ai.ts`: `MAX_TOOL_LOOPS = 80`, `MAX_TOOL_LOOPS_VOICE = 10`. Это лимит итераций "модель → tool calls → модель", а не строгий лимит количества отдельных tool calls: за одну итерацию модель может вернуть несколько вызовов инструментов.
+The agent loop is limited by constants in `services/ai.ts`: `MAX_TOOL_LOOPS = 80`, `MAX_TOOL_LOOPS_VOICE = 10`. This is a limit on "model → tool calls → model" iterations, not a strict limit on the number of individual tool calls: the model can return multiple tool calls in a single iteration.
 
-### Reasoning и tool-call metadata
+### Reasoning and tool-call metadata
 
-`sendMessageThroughAi()` сохраняет дополнительную метаинформацию assistant-ответа в двух разных форматах: **плоский** (для UI/клиентов) и **trace** (для AI-контекста).
+`sendMessageThroughAi()` saves additional assistant response metadata in two different formats: **flat** (for UI/clients) and **trace** (for AI context).
 
-- `reasoning_content` — человекочитаемое reasoning/thinking, если провайдер его вернул. Извлекается из `message.reasoning_content` (DeepSeek/vLLM), `message.reasoning` (OpenRouter/vLLM), Anthropic-style `content[]` blocks с `type: "thinking"`, а также из `response.output[]` items с `type: "reasoning"` для Responses-like формата.
-- `tool_calls` (в `AiSendResult` / `ChatSendResponse` / WS/SSE `done`) — **плоский** список `{ id, name, arguments, result_preview? }`, собирается параллельно с trace в `toolCallsHistory`. `result_preview` содержит до 250 символов tool response (через `formatToolResultPreview`) — только для popover десктопа.
-- `tool_calls_json` (в БД) — **trace**-формат (массив `ToolIteration`), см. [Tool calls trace и контекст для AI](#tool-calls-trace-и-контекст-для-ai).
-- `reasoning_content` **не отправляется** обратно в AI-контекст (односторонний вывод модели).
+- `reasoning_content` — human-readable reasoning/thinking, if the provider returned it. Extracted from `message.reasoning_content` (DeepSeek/vLLM), `message.reasoning` (OpenRouter/vLLM), Anthropic-style `content[]` blocks with `type: "thinking"`, and from `response.output[]` items with `type: "reasoning"` for Responses-like format.
+- `tool_calls` (in `AiSendResult` / `ChatSendResponse` / WS/SSE `done`) — **flat** list of `{ id, name, arguments, result_preview? }`, collected in parallel with the trace in `toolCallsHistory`. `result_preview` contains up to 250 characters of the tool response (via `formatToolResultPreview`) — for the desktop popover only.
+- `tool_calls_json` (in DB) — **trace** format (array of `ToolIteration`), see [Tool calls trace and AI context](#tool-calls-trace-and-ai-context).
+- `reasoning_content` **is not sent** back into the AI context (one-way model output).
 
-БД:
+DB:
 
-- `chat_messages.reasoning_content TEXT` — склеенный reasoning по шагам ответа.
-- `chat_messages.tool_calls_json TEXT` — JSON в trace-формате (массив `ToolIteration`). Старые записи (плоский массив без поля `step`) поддерживаются как fallback при чтении.
-- `chat_messages.subagents_json TEXT` — JSON-массив полных trace ad-hoc субагентов (`SubagentTraceEntry[]`). Хранится отдельно от `tool_calls_json`, **не отправляется** в AI-контекст (модель видит только краткий результат `spawn_subagent` в `tool_calls_json`). Содержит: task, system_prompt, tools, tools_used, answer, summary, aborted, trace (пошаговые tool calls).
+- `chat_messages.reasoning_content TEXT` — concatenated reasoning across response steps.
+- `chat_messages.tool_calls_json TEXT` — JSON in trace format (array of `ToolIteration`). Old records (flat array without the `step` field) are supported as a fallback on read.
+- `chat_messages.subagents_json TEXT` — JSON array of full ad-hoc subagent traces (`SubagentTraceEntry[]`). Stored separately from `tool_calls_json`, **not sent** into the AI context (the model only sees the brief `spawn_subagent` result in `tool_calls_json`). Contains: task, system_prompt, tools, tools_used, answer, summary, aborted, trace (step-by-step tool calls).
 
-Desktop показывает эти поля как раскрывающиеся popover-кнопки у assistant-сообщения. Если reasoning или tool calls отсутствуют, соответствующая кнопка не отображается. `getChatMessages()` при чтении разворачивает trace-формат обратно в плоский массив с `result_preview` (обрезка `slice(0, 250)`).
+Desktop shows these fields as expandable popover buttons on the assistant message. If reasoning or tool calls are missing, the corresponding button is not displayed. `getChatMessages()` expands the trace format back into a flat array with `result_preview` (trimmed to `slice(0, 250)`) on read.
 
-### Tool calls trace и контекст для AI
+### Tool calls trace and AI context
 
-Чтобы модель «помнила» результаты вызванных инструментов на следующих запросах в чате, в `tool_calls_json` сохраняется **полный trace** агентского цикла по итерациям (тип `ToolIteration` в `services/ai.ts`):
+So that the model "remembers" the results of called tools on subsequent requests in the chat, the **full trace** of the agent loop by iterations is saved in `tool_calls_json` (type `ToolIteration` in `services/ai.ts`):
 
 ```ts
 type ToolIteration = {
-  step: number;        // маркер нового формата + номер итерации
-  content: string;     // промежуточный текст модели на этой итерации (может быть "")
+  step: number;        // marker of the new format + iteration number
+  content: string;     // intermediate model text in this iteration (can be "")
   tool_calls: Array<{ id?: string; name: string; arguments: any }>;
-  results: Array<{ id?: string; name: string; content: string }>;  // полные результаты runTool (до TOOL_RESULT_FULL_MAX = 10000 символов)
-  is_final?: boolean;  // true у финальной итерации без tool_calls (только текст)
+  results: Array<{ id?: string; name: string; content: string }>;  // full runTool results (up to TOOL_RESULT_FULL_MAX = 10000 chars)
+  is_final?: boolean;  // true on the final iteration without tool_calls (text only)
 };
 ```
 
-Маркер нового формата — поле `step` у первого элемента массива. Старые записи (плоский `[{id, name, arguments, result_preview}]`) определяются по его отсутствию.
+The marker of the new format is the `step` field on the first element of the array. Old records (flat `[{id, name, arguments, result_preview}]`) are identified by its absence.
 
-**Сбор trace в `sendMessageThroughAi()`:**
+**Trace collection in `sendMessageThroughAi()`:**
 
-- На каждой итерации `while`-цикла создаётся `currentIteration` после `runCompletion`.
-- Из `message.tool_calls` заполняется `currentIteration.tool_calls` (в порядке, как вернула модель).
-- После каждого `runTool()` полный результат (`toolContent`, с обрезкой до 10000 символов и пометкой) добавляется в `currentIteration.results` в порядке вызовов.
-- Итерация push'ится в `iterations[]` после полного цикла tool_calls (если не было abort/escalation в PRO).
-- Финальная итерация без tool_calls помечается `is_final: true`.
-- При эскалации LITE→PRO (`escalate_to_pro`) текущая итерация **не сохраняется** — история пересоздаётся с нуля.
+- On each iteration of the `while` loop, a `currentIteration` is created after `runCompletion`.
+- `currentIteration.tool_calls` is filled from `message.tool_calls` (in the order returned by the model).
+- After each `runTool()`, the full result (`toolContent`, trimmed to 10000 chars with a marker) is added to `currentIteration.results` in call order.
+- The iteration is pushed to `iterations[]` after the full tool_calls cycle (if there was no abort/escalation to PRO).
+- The final iteration without tool_calls is marked `is_final: true`.
+- On LITE→PRO escalation (`escalate_to_pro`), the current iteration **is not saved** — history is rebuilt from scratch.
 
-**Разворот в `getHistoryForAi()` (`services/chats.ts`):**
+**Expansion in `getHistoryForAi()` (`services/chats.ts`):**
 
-- SELECT добавлено поле `tool_calls_json`.
-- Для user-сообщений — `{role, content}` как раньше.
-- Для assistant с новым trace-форматом — каждая итерация разворачивается в корректную последовательность OpenAI-совместимых сообщений:
+- SELECT added the `tool_calls_json` field.
+- For user messages — `{role, content}` as before.
+- For assistant messages with the new trace format — each iteration is expanded into the correct sequence of OpenAI-compatible messages:
   ```
   assistant(content: intermediate_text | null, tool_calls: [...])
-    → tool(tool_call_id, name, content: полный результат) для каждого вызова
-    → ... (следующая итерация)
-    → assistant(content: финальный текст)  ← итерация без tool_calls
+    → tool(tool_call_id, name, content: full result) for each call
+    → ... (next iteration)
+    → assistant(content: final text)  ← iteration without tool_calls
   ```
-- `content` у assistant(tool_calls) = `intermediate content` итерации, либо `null` (когда модель только вызывала тулзы без текста). OpenAI-совместимые API требуют именно `null`, не пустую строку.
-- Если у tool_call нет `id` (некоторые провайдеры) — генерируется стабильный fallback `call_{step}_{name}`.
-- Для assistant со **старым плоским форматом** или без `tool_calls_json` — fallback `{role: 'assistant', content}`. Tool-context теряется (как было раньше), но чат не ломается.
+- `content` for assistant(tool_calls) = the iteration's `intermediate content`, or `null` (when the model only called tools without text). OpenAI-compatible APIs require exactly `null`, not an empty string.
+- If a tool_call has no `id` (some providers) — a stable fallback `call_{step}_{name}` is generated.
+- For assistant messages with the **old flat format** or without `tool_calls_json` — fallback `{role: 'assistant', content}`. Tool context is lost (as before), but the chat doesn't break.
 
-**Почему так:**
+**Why this approach:**
 
-- Решает «амнезию» модели — она видит всю цепочку: какие тулзы вызвала, что они вернули, какой промежуточный текст был между ними.
-- Не требует миграций БД: используется та же колонка `tool_calls_json TEXT`, просто другой JSON внутри.
-- Reasoning намеренно исключён — это односторонний вывод модели, не предназначенный для контекстуальной памяти.
-- Десктоп не затронут: UI popover по-прежнему работает с плоской проекцией, реконструируемой из trace в `getChatMessages()`.
+- Solves model "amnesia" — it sees the full chain: which tools it called, what they returned, what intermediate text was between them.
+- Doesn't require DB migrations: the same `tool_calls_json TEXT` column is used, just with different JSON inside.
+- Reasoning is intentionally excluded — it's a one-way model output, not meant for contextual memory.
+- Desktop is unaffected: the UI popover still works with the flat projection reconstructed from the trace in `getChatMessages()`.
 
-**Размер:** `results.content` ограничен `TOOL_RESULT_FULL_MAX = 10000` символов с пометкой об обрезке. Для типичных чатов этого достаточно; для экстремальных DevOps-сессий с 50+ итерациями — `MAX_TOOL_LOOPS` ограничивает длину trace сверху.
+**Size:** `results.content` is limited to `TOOL_RESULT_FULL_MAX = 10000` chars with a truncation marker. For typical chats this is sufficient; for extreme DevOps sessions with 50+ iterations — `MAX_TOOL_LOOPS` caps the trace length.
 
-### Регенерация сообщений
+### Message Regeneration
 
-Desktop может отправлять `regenerate_from_history: true` вместе с `skip_user_history`.
+Desktop can send `regenerate_from_history: true` along with `skip_user_history`.
 
-- Backend удаляет из рабочей истории хвостовые assistant-сообщения, вынимает последнее user-сообщение и добавляет его обратно ровно один раз как текущий user request.
-- `regenerate_hint` дописывается в текущий user request и не сохраняется как новое пользовательское сообщение.
+- The backend removes trailing assistant messages from the working history, extracts the last user message, and adds it back exactly once as the current user request.
+- `regenerate_hint` is appended to the current user request and is not saved as a new user message.
 
-### Форк чата (dialog branch)
+### Chat Fork (dialog branch)
 
-Создаёт новый чат как ветку существующего — копирует все сообщения исходного чата от начала до указанного сообщения включительно. Юзер может продолжить диалог в ветке с того же контекста, не трогая оригинал.
+Creates a new chat as a branch of an existing one — copies all messages from the original chat from the beginning through the specified message inclusive. The user can continue the conversation in the branch from the same context, without touching the original.
 
-**Эндпоинт:** `POST /api/v1/chats/:sourceChatId/fork` ← `{ from_message_id, title? }` → `{ chat_id, forked_messages }`
+**Endpoint:** `POST /api/v1/chats/:sourceChatId/fork` ← `{ from_message_id, title? }` → `{ chat_id, forked_messages }`
 
-**Поведение:**
-- Создаётся новый чат через стандартный `createUserChat` и **становится активным**.
-- Копируются **все** столбцы сообщений: `content`, `images`, `audio`, `reasoning_content`, `tool_calls_json`, `token_count`, `reasoning_tokens`, `attachments`, `subagents_json`, `archived`.
-- `telegram_chat_id` / `telegram_message_id` обнуляются — у ветки нет TG-привязки.
-- `token_count` / `reasoning_tokens` копируются как есть (они детерминированы для того же контента, рекомпут не нужен).
-- FTS-индекс обновляется автоматически триггером `trg_chat_messages_fts_ai`.
-- Архивация (`archived`) сохраняется как в оригинале; `trimUserHistoryByChat` пересчитается при первом новом ответе AI в ветке.
+**Behavior:**
+- A new chat is created via the standard `createUserChat` and **becomes active**.
+- **All** message columns are copied: `content`, `images`, `audio`, `reasoning_content`, `tool_calls_json`, `token_count`, `reasoning_tokens`, `attachments`, `subagents_json`, `archived`.
+- `telegram_chat_id` / `telegram_message_id` are zeroed — the branch has no TG binding.
+- `token_count` / `reasoning_tokens` are copied as-is (they are deterministic for the same content, no recomputation needed).
+- The FTS index is updated automatically by the `trg_chat_messages_fts_ai` trigger.
+- Archival (`archived`) is preserved as in the original; `trimUserHistoryByChat` will recalculate on the first new AI response in the branch.
 
-**Title по умолчанию (если не передан кастомный):**
+**Default title (if no custom title is provided):**
 
-Добавляется числовой префикс `[N]`:
-- `"Отчёт"` → `"[2] Отчёт"`
-- `"[2] Отчёт"` → `"[3] Отчёт"` (индекс инкрементируется)
-- `"[5] [важное] письмо"` → `"[2] [5] [важное] письмо"` (новый `[2]` спереди, остальные скобки не трогаются)
-- `"[заметка] текст"` → `"[2] [заметка] текст"` (внутри скобок не число — не считается)
+A numeric prefix `[N]` is added:
+- `"Report"` → `"[2] Report"`
+- `"[2] Report"` → `"[3] Report"` (index is incremented)
+- `"[5] [important] letter"` → `"[2] [5] [important] letter"` (new `[2]` at the front, other brackets are not touched)
+- `"[note] text"` → `"[2] [note] text"` (inside brackets is not a number — not counted)
 
-**Файлы (attachments vs images/audio):**
+**Files (attachments vs images/audio):**
 
-| Ресурс | Стратегия | Причина |
+| Resource | Strategy | Reason |
 |---|---|---|
-| **Attachments** | **Копируются физически** (`copyAttachmentFile`, новый 24-hex random) | Удаление attachment в одном чате не должно ломать другой. Текст извлечён один раз — `extracted_text` копируется как есть. |
-| **Images** | Общие ссылки (без копирования) | Эндпоинта удаления images сегодня нет — общая ссылка безопасна. Когда добавишь удаление photos — нужна проверка «используется ли filename в др. чате». |
-| **Audio** | Общая ссылка | Удалений audio нет в коде. |
+| **Attachments** | **Physically copied** (`copyAttachmentFile`, new 24-hex random) | Deleting an attachment in one chat shouldn't break the other. Text is extracted once — `extracted_text` is copied as-is. |
+| **Images** | Shared references (no copying) | There is no image deletion endpoint today — a shared reference is safe. When photo deletion is added — a "is this filename used in another chat" check will be needed. |
+| **Audio** | Shared reference | There are no audio deletions in the code. |
 
-**Защита от orphan-ссылок:** если исходный файл attachment был удалён с диска (но остался в JSON), `copyAttachmentFile` вернёт null и эта запись будет **опущена** из JSON нового сообщения — UI не покажет битую плашку.
+**Orphan reference protection:** if the source attachment file was deleted from disk (but remains in JSON), `copyAttachmentFile` returns null and that entry is **omitted** from the new message's JSON — the UI won't show a broken tile.
 
-**Сервис:** `forkChat()` в `services/chats.ts`. Хелпер копирования: `copyAttachmentFile()` в `services/attachment-storage.ts`.
+**Service:** `forkChat()` in `services/chats.ts`. Copy helper: `copyAttachmentFile()` in `services/attachment-storage.ts`.
 
-| Инструмент | Описание |
+| Tool | Description |
 |---|---|
-| `search_web` | Поиск в интернете (Tavily) |
-| `read_webpage` | Чтение текста веб-страницы по URL |
-| `control_smart_home` | Управление устройством умного дома по device_id (сначала вызывается `get_smart_devices`) |
-| `get_smart_devices` | Возвращает список устройств, комнат и их ID из БД |
-| `schedule_task` | Создание задачи/напоминания по времени. Типы: `message` (напоминание), `smart_home` (команда умному дому), `ai_instruction` (AI-инструкция — поиск, проверка почты, анализ и т.д., AI сам вызывает нужные инструменты). Для `ai_instruction` поддерживает `target_chat_id` (в какой чат сохранить результат) и `create_new_chat` (создать новый чат). |
-| `get_my_tasks` | Список задач пользователя |
-| `delete_my_task` | Удаление задачи |
-| `set_user_timezone` | Установка часового пояса |
-| `check_emails` | Поиск писем в почте |
-| `read_email_content` | Чтение содержимого письма |
-| `send_email` | Отправка письма (требует подтверждения пользователя — HitL-карточка `email_confirmation`) |
-| `save_note` | Сохранение заметки |
-| `list_my_notes` | Список заметок |
-| `read_note` | Чтение заметки |
-| `delete_note` | Удаление заметки |
-| `update_core_memory` | Обновление статического профиля пользователя |
-| `search_cold_memory` | Поиск по векторному архиву |
-| `save_to_cold_memory` | Сохранение в векторный архив |
-| `delete_from_cold_memory` | Удаление из векторного архива |
-| `random_roll` | Бросок монетки/кубиков |
-| `generate_image` | Генерация изображения (ProxyAPI, `b64_json`). Автоматически маршрутизируется через PRO. |
-| `get_exchange_rates` | Курсы валют ЦБ РФ с динамикой изменения. По умолчанию возвращает USD и EUR. |
+| `search_web` | Web search (Tavily) |
+| `read_webpage` | Read webpage text by URL |
+| `control_smart_home` | Control a smart home device by device_id (call `get_smart_devices` first) |
+| `get_smart_devices` | Returns a list of devices, rooms, and their IDs from the DB |
+| `schedule_task` | Create a timed task/reminder. Types: `message` (reminder), `smart_home` (smart home command), `ai_instruction` (AI instruction — search, check email, analyze, etc., AI calls the needed tools itself). For `ai_instruction`, supports `target_chat_id` (which chat to save the result to) and `create_new_chat` (create a new chat). |
+| `get_my_tasks` | List user's tasks |
+| `delete_my_task` | Delete a task |
+| `set_user_timezone` | Set timezone |
+| `check_emails` | Search emails |
+| `read_email_content` | Read email content |
+| `send_email` | Send email (requires user confirmation — HitL `email_confirmation` card) |
+| `save_note` | Save a note |
+| `list_my_notes` | List notes |
+| `read_note` | Read a note |
+| `delete_note` | Delete a note |
+| `update_core_memory` | Update static user profile |
+| `search_cold_memory` | Search the vector archive |
+| `save_to_cold_memory` | Save to the vector archive |
+| `delete_from_cold_memory` | Delete from the vector archive |
+| `random_roll` | Coin/dice roll |
+| `generate_image` | Generate an image (ProxyAPI, `b64_json`). Automatically routed through PRO. |
+| `get_exchange_rates` | Central Bank of Russia exchange rates with change dynamics. Returns USD and EUR by default. |
 
-### Клиентские инструменты (desktop + Telegram)
+### Client Tools (desktop + Telegram)
 
-Большинство инструментов доступно как из desktop, так и из Telegram через SSE-стриминг. Разделение на `serverOnlyTools` и `desktopOnlyTools` описано в [Tool availability split](#tool-availability-split).
+Most tools are available both from desktop and from Telegram via SSE streaming. The split into `serverOnlyTools` and `desktopOnlyTools` is described in [Tool availability split](#tool-availability-split).
 
-**Desktop-only (не доступны из TG):** `desktop_action` (управление UI десктопа), `invoke_subagent` (специализированные субагенты), `spawn_subagent` (ad-hoc субагенты).
+**Desktop-only (not available from TG):** `desktop_action` (desktop UI control), `invoke_subagent` (specialized subagents), `spawn_subagent` (ad-hoc subagents).
 
-### Smart Home (Умный дом)
+### Smart Home
 
-Архитектура: DB-driven, провайдер-агностик (сейчас реализован Яндекс, заложен фундамент для Zigbee2MQTT).
+Architecture: DB-driven, provider-agnostic (Yandex is currently implemented, foundation laid for Zigbee2MQTT).
 
-**Два AI-инструмента:**
-- `get_smart_devices` — возвращает JSON-массив устройств из БД (`id`, `name`, `room`, `type`, `capabilities`). AI вызывает первым.
-- `control_smart_home` — управляет устройством по `device_id` (полученному из `get_smart_devices`). Actions: `on`, `off`, `set_color`, `set_brightness`.
+**Two AI tools:**
+- `get_smart_devices` — returns a JSON array of devices from the DB (`id`, `name`, `room`, `type`, `capabilities`). AI calls this first.
+- `control_smart_home` — controls a device by `device_id` (obtained from `get_smart_devices`). Actions: `on`, `off`, `set_color`, `set_brightness`.
 
-**Поток:** `get_smart_devices()` → AI выбирает устройство → `control_smart_home({ device_id, action })` → `POST api.iot.yandex.net/v1.0/devices/actions`.
+**Flow:** `get_smart_devices()` → AI selects a device → `control_smart_home({ device_id, action })` → `POST api.iot.yandex.net/v1.0/devices/actions`.
 
-**Таблицы БД:**
-- `smart_home_settings` — OAuth-токен провайдера (шифрование aes-256-cbc через `ENCRYPTION_KEY`), `synced_at`.
-- `smart_devices` — плоский список устройств: группы и одиночные девайсы. Группы приоритетнее — устройства внутри групп не дублируются. Поля: `id` (`yandex_group_*` / `yandex_device_*`), `name`, `room_name`, `provider`, `is_group`, `target_ids` (JSON-массив реальных UUID для API), `capabilities`.
+**DB tables:**
+- `smart_home_settings` — provider OAuth token (AES-256-CBC encryption via `ENCRYPTION_KEY`), `synced_at`.
+- `smart_devices` — flat list of devices: groups and individual devices. Groups take priority — devices inside groups are not duplicated. Fields: `id` (`yandex_group_*` / `yandex_device_*`), `name`, `room_name`, `provider`, `is_group`, `target_ids` (JSON array of real UUIDs for the API), `capabilities`.
 
-**API эндпоинты:**
-- `GET /api/v1/smart-home/settings` — статус (есть ли токен, `synced_at`)
-- `GET /api/v1/smart-home/devices` — список устройств
-- `POST /api/v1/smart-home/token` — сохранить токен `{ token }`
-- `DELETE /api/v1/smart-home/token` — удалить токен + устройства
-- `POST /api/v1/smart-home/sync` — синхронизация с Яндексом (запрос `/user/info` → парсинг → upsert в БД)
+**API endpoints:**
+- `GET /api/v1/smart-home/settings` — status (whether token exists, `synced_at`)
+- `GET /api/v1/smart-home/devices` — device list
+- `POST /api/v1/smart-home/token` — save token `{ token }`
+- `DELETE /api/v1/smart-home/token` — delete token + devices
+- `POST /api/v1/smart-home/sync` — sync with Yandex (request `/user/info` → parse → upsert to DB)
 
-**Синхронизация:** парсер берёт группы Яндекса как приоритетные сущности. Устройства, входящие в группы, не добавляются отдельно — это предотвращает дублирование для AI.
+**Sync:** the parser takes Yandex groups as priority entities. Devices that are part of groups are not added separately — this prevents duplication for the AI.
 
-**Маршрутизация AI:** Smart Home идёт через LITE-роутер (cheap-route `SMART_HOME`), не требует PRO-модели.
+**AI routing:** Smart Home goes through the LITE router (cheap-route `SMART_HOME`), doesn't require a PRO model.
 
-### Feature Flags (ограничения инструментов)
+### Feature Flags (tool restrictions)
 
-Система позволяет пользователю выборочно отключать AI-инструменты через галочки в настройках десктоп-приложения. Флаги хранятся в БД (`users.feature_flags`, JSON) и применяются сервером при каждом запросе к AI.
+The system allows the user to selectively disable AI tools via checkboxes in the desktop app settings. Flags are stored in the DB (`users.feature_flags`, JSON) and applied by the server on every AI request.
 
 **API:**
 
-- `GET /api/v1/user/feature-flags` — возвращает текущие флаги `{ flags: { ... } }`
-- `PUT /api/v1/user/feature-flags` — сохраняет флаги `{ flags: { ... } }` (валидация по whitelist)
+- `GET /api/v1/user/feature-flags` — returns current flags `{ flags: { ... } }`
+- `PUT /api/v1/user/feature-flags` — saves flags `{ flags: { ... } }` (validated against a whitelist)
 
-**Флаги (ключи JSON):**
+**Flags (JSON keys):**
 
-| Ключ | Название в UI | Отключаемые инструменты |
+| Key | UI name | Disabled tools |
 |---|---|---|
-| `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
-| `disable_pc_control_lite` | Ограниченный режим | `execute_ssh_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
-| `disable_pc_commands` | Без команд на ПК | `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` |
-| `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
-| `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
-| `disable_personal` | Гостевой режим | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + скрытие промпта и горячей памяти из system prompt |
-| `disable_specialized_subagents` | Без специализированных субагентов | `invoke_subagent` |
-| `disable_adhoc_subagents` | Без создания субагентов | `spawn_subagent` |
+| `disable_memory_write` | Disable data writing | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
+| `disable_pc_control_lite` | Limited mode | `execute_ssh_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
+| `disable_pc_commands` | No PC commands | `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` |
+| `disable_pc_control_full` | Full lockdown | Everything from lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
+| `disable_internet` | No internet & generation | `search_web`, `read_webpage`, `generate_image` |
+| `disable_personal` | Guest mode | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + hide prompt and hot memory from system prompt |
+| `disable_specialized_subagents` | No specialized subagents | `invoke_subagent` |
+| `disable_adhoc_subagents` | No subagent creation | `spawn_subagent` |
 
-**Как это работает (ai.ts):**
+**How it works (ai.ts):**
 
-1. Все 3 обработчика (TG internal `/internal/ai/send`, SSE `/api/v1/chat/send`, WS `chat_send`) загружают `feature_flags` из записи пользователя через `parseFeatureFlags(user)`
-2. Флаги передаются в `sendMessageThroughAi({ featureFlags })`
-3. В `sendMessageThroughAi` формируется `disabledToolSet` (Set<string>) на основе активных флагов
-4. **Двойная защита:**
-   - `executionTools.filter()` — инструменты убираются из schema (AI не знает об их существовании)
-   - Guard перед `runTool()` — даже если модель hallucinate tool call, `runTool` вернёт `"Инструмент отключён"` вместо выполнения
-5. LITE-роутер: если cheap-маршрут содержит отключённый инструмент — форсируется PRO
-6. Гостевой режим (`disable_personal`): дополнительно очищаются `core_memory`, `custom_prompt` и `pinned_macros` из system prompt
+1. All 3 handlers (TG internal `/internal/ai/send`, SSE `/api/v1/chat/send`, WS `chat_send`) load `feature_flags` from the user record via `parseFeatureFlags(user)`
+2. Flags are passed to `sendMessageThroughAi({ featureFlags })`
+3. In `sendMessageThroughAi`, a `disabledToolSet` (Set<string>) is built based on active flags
+4. **Double protection:**
+   - `executionTools.filter()` — tools are removed from the schema (the AI doesn't know they exist)
+   - Guard before `runTool()` — even if the model hallucinates a tool call, `runTool` returns `"Tool disabled"` instead of executing
+5. LITE router: if a cheap-route contains a disabled tool — PRO is forced
+6. Guest mode (`disable_personal`): additionally clears `core_memory`, `custom_prompt`, and `pinned_macros` from the system prompt
 
-**Как добавить новый флаг:**
+**How to add a new flag:**
 
-1. Добавить ключ в `VALID_FLAG_KEYS` в `server.ts`
-2. Добавить ключ в тип `FeatureFlags` в `desktop-app/src/renderer/lib/api.ts`
-3. Добавить инструменты в соответствующий блок `if (flags?.new_flag)` в `ai.ts` (в `sendMessageThroughAi`)
-4. Добавить чекбокс в `SettingsModal.tsx` (desktop)
+1. Add the key to `VALID_FLAG_KEYS` in `server.ts`
+2. Add the key to the `FeatureFlags` type in `desktop-app/src/renderer/lib/api.ts`
+3. Add tools to the corresponding `if (flags?.new_flag)` block in `ai.ts` (in `sendMessageThroughAi`)
+4. Add a checkbox in `SettingsModal.tsx` (desktop)
 
-**Как добавить новый инструмент, который подчиняется флагам:**
+**How to add a new tool that respects flags:**
 
-Новый инструмент автоматически попадёт под фильтрацию если его `function.name` совпадает с именем, добавленным в `disabledToolSet`. Нужно добавить имя инструмента в соответствующий блок флага в `ai.ts` (секция `// ── Feature flags → disabled tools ──`).
+A new tool will automatically be filtered if its `function.name` matches a name added to `disabledToolSet`. You need to add the tool name to the corresponding flag block in `ai.ts` (section `// ── Feature flags → disabled tools ──`).
 
 ### UI Settings
 
-UI-настройки (отображение в десктопе) хранятся в БД (`users.ui_settings`, JSON), привязаны к `effectiveUser` (linked TG user или сам user). Применяются на клиенте, сервер только хранит.
+UI settings (desktop display) are stored in the DB (`users.ui_settings`, JSON), bound to `effectiveUser` (linked TG user or the user themselves). Applied on the client; the server only stores them.
 
-Хелпер `parseUiSettings(user)` парсит JSON-колонку, фильтрует невалидные ключи/типы, возвращает объект. На клиенте `user?.ui_settings?.show_tokens !== false` означает «по умолчанию включено».
+The `parseUiSettings(user)` helper parses the JSON column, filters invalid keys/types, returns an object. On the client, `user?.ui_settings?.show_tokens !== false` means "enabled by default".
 
-**Ключи:**
+**Keys:**
 
-| Ключ | Тип | Default | Описание |
+| Key | Type | Default | Description |
 |---|---|---|---|
-| `show_tokens` | boolean | `true` | Показывать счётчики токенов (бейджи у сообщений, reasoning-бейдж, топ-бар контекста) |
-| `dice_roll_enabled` | boolean | `false` | Режим кубика d20 (roleplay). При каждом сообщении бэкенд бросает d20 и инджектит результат в system prompt бота, влияя только на нарративный тон ответа (не на выполнение tool calls). Результат броска пушится клиентам через отдельное событие `dice_roll` сразу после броска. См. [Dice Roll Mode](#dice-roll-mode-d20). |
+| `show_tokens` | boolean | `true` | Show token counters (message badges, reasoning badge, top-bar context) |
+| `dice_roll_enabled` | boolean | `false` | Dice d20 mode (roleplay). On each message, the backend rolls a d20 and injects the result into the bot's system prompt, affecting only the narrative tone of the response (not tool call execution). The roll result is pushed to clients via a separate `dice_roll` event immediately after the roll. See [Dice Roll Mode](#dice-roll-mode-d20). |
 
 **API:**
 
-- `GET /api/v1/user/ui-settings` — `{ settings: { show_tokens: true, dice_roll_enabled: false } }` (merge с дефолтами)
-- `PUT /api/v1/user/ui-settings` — `{ settings: { show_tokens: false, dice_roll_enabled: true } }` (валидация по whitelist `VALID_UI_KEYS`, merge с существующими)
-- Поле `ui_settings` также включено в `/api/v1/auth/me` (через `toAuthUserDto`)
+- `GET /api/v1/user/ui-settings` — `{ settings: { show_tokens: true, dice_roll_enabled: false } }` (merged with defaults)
+- `PUT /api/v1/user/ui-settings` — `{ settings: { show_tokens: false, dice_roll_enabled: true } }` (validated against whitelist `VALID_UI_KEYS`, merged with existing)
+- The `ui_settings` field is also included in `/api/v1/auth/me` (via `toAuthUserDto`)
 
 ### Dice Roll Mode (d20)
 
-Режим «кубика» для roleplay-фана. Включается чекбоксом во вкладке настроек «Приложение» (`dice_roll_enabled` в `users.ui_settings`). Флаг серверный — применяется для всех клиентов (desktop + Telegram).
+A "dice" mode for roleplay fun. Enabled via a checkbox in the "Application" settings tab (`dice_roll_enabled` in `users.ui_settings`). The flag is server-side — applied for all clients (desktop + Telegram).
 
-**Поток броска:**
+**Roll flow:**
 
-1. Пользователь отправляет сообщение.
-2. `sendMessageThroughAi` читает `ui_settings.dice_roll_enabled` (через `parseUiSettings`), передаётся как `diceRollMode: true`.
-3. Если включено — сервер **до начала запроса к LLM** бросает `Math.floor(Math.random() * 20) + 1` (1..20). Если клиент прислал `dice_mode: 'always_one' | 'always_twenty'` в body, сервер форсирует результат (1 или 20) через `diceRollForceValue` (хелпер `resolveDiceForceValue`). Режим хранится только на клиенте (localStorage десктопа), бэк stateless относительно режима.
-4. Сразу после броска вызывается `onDiceRoll(roll)` — клиент получает результат мгновенно, не дожидаясь ответа AI.
-5. Результат инджектится в начало `proSystemPrompt` через `buildDiceRollPrompt(roll)` (полный текст хинта см. в `services/ai.ts`).
-6. После завершения генерации `dice_roll` дублируется в `done` payload (как fallback на случай потери realtime-события).
+1. The user sends a message.
+2. `sendMessageThroughAi` reads `ui_settings.dice_roll_enabled` (via `parseUiSettings`), passed as `diceRollMode: true`.
+3. If enabled — the server, **before starting the LLM request**, rolls `Math.floor(Math.random() * 20) + 1` (1..20). If the client sent `dice_mode: 'always_one' | 'always_twenty'` in the body, the server forces the result (1 or 20) via `diceRollForceValue` (helper `resolveDiceForceValue`). The mode is stored only on the client (desktop localStorage); the backend is stateless regarding the mode.
+4. Immediately after the roll, `onDiceRoll(roll)` is called — the client gets the result instantly, without waiting for the AI response.
+5. The result is injected at the beginning of `proSystemPrompt` via `buildDiceRollPrompt(roll)` (see full hint text in `services/ai.ts`).
+6. After generation completes, `dice_roll` is duplicated in the `done` payload (as a fallback in case the realtime event is lost).
 
-**Промпт dice hint:**
+**Dice hint prompt:**
 
 ```text
 [DICE ROLL MODE: ACTIVE]
@@ -1044,489 +1044,489 @@ The user rolled a d20 dice for this specific message.
 Dice Roll Result: {roll} out of 20.
 
 You MUST adapt the narrative tone and flavor of your response based strictly on this result:
-- 1 (Critical Failure): эпический провал, насмешка
-- 2–9 (Failure): провал, препятствия
-- 10–19 (Success): стандартный успех
-- 20 (Critical Success): триумф, восторг
+- 1 (Critical Failure): spectacular failure, severe or unexpected consequences
+- 2–9 (Failure): failure, obstacles
+- 10–19 (Success): standard success
+- 20 (Critical Success): triumph, delight
 
-CRITICAL SYSTEM RULE: даже при roll=1, если требуется tool call — он выполняется. Кубик влияет ТОЛЬКО на стиль ответа, не на механику.
+CRITICAL SYSTEM RULE: even on roll=1, if a tool call is required — it is executed. The dice affects ONLY the response style, not the mechanics.
 ```
 
-**Событие `dice_roll` (WS + SSE):**
+**`dice_roll` event (WS + SSE):**
 
-| Канал | Формат |
+| Channel | Format |
 |---|---|
-| WS (`chat_send` ответ) | `{ type: 'dice_roll', roll: number }` |
+| WS (`chat_send` response) | `{ type: 'dice_roll', roll: number }` |
 | SSE `/api/v1/chat/send` | `event: dice_roll\ndata: { "roll": 13 }` |
 | SSE `/internal/ai/stream` (TG) | `event: dice_roll\ndata: { "roll": 13 }` |
 
-Поле `dice_roll` также включается в `AiSendResult` (`done` payload) для восстановления в случае потери realtime-события.
+The `dice_roll` field is also included in `AiSendResult` (`done` payload) for recovery in case the realtime event is lost.
 
-**Точки проброса `diceRollMode`:**
+**`diceRollMode` propagation points:**
 - `/api/v1/chat/send` (SSE desktop) — `parseUiSettings(rawUserRecord).dice_roll_enabled`
-- WS `chat_send` — то же
-- `/internal/ai/send` и `/internal/ai/stream` (TG) — `parseUiSettings(tgUser).dice_roll_enabled`
+- WS `chat_send` — same
+- `/internal/ai/send` and `/internal/ai/stream` (TG) — `parseUiSettings(tgUser).dice_roll_enabled`
 
-### Клиентские инструменты — продолжение
+### Client Tools — continued
 
-| Инструмент | Описание |
+| Tool | Description |
 |---|---|
-| `set_display_state` | Управление пиксельным аватаром. Enum-значения (moods/reactions) берутся из `display_manifest` — массива, который клиент передаёт в body. Если манифеста нет (Telegram) — tool не добавляется. |
-| `desktop_action` | Единый роутер управления интерфейсом десктопного приложения. Действия: `open_widget`, `close_widget`, `set_widget_data`, `open_note`, `read_widget_state`, `toggle_panel`. Цели: `notebook`, `tasks`. Позволяет боту открывать/закрывать виджеты, создавать черновики заметок, открывать конкретные записи по ID, читать состояние. |
-| `map_control` | Управление картой в десктопе. Действия: `show_place` (геокодирование через Nominatim), `draw_route` (маршрут через OSRM). Результат отправляется как SSE `event: map_update`. |
-| `get_map_pins` | Получить список сохранённых меток пользователя на карте. Возвращает расшифрованные координаты + названия. |
-| `find_transit_route` | Поиск маршрутов общественного транспорта (автобус, маршрутка, троллейбус, трамвай) через Overpass API. Принимает координаты точки А и Б, опционально `radius_meters` (по умолчанию 500). Auto-retry с расширением радиуса если ничего не найдено. Возвращает текстовое описание маршрутов (доступно всем клиентам) + отправляет визуал на карту через SSE (desktop-only). |
-| `search_nearby` | Поиск заведений и объектов (POI) рядом с точкой по названию через Overpass API. Принимает координаты, текст запроса (`query`) и `radius_meters` (по умолчанию 3000). Ищет по `name` (regex, case-insensitive) среди nodes и ways. Возвращает список мест с адресом/часами (доступно всем клиентам) + отправляет маркеры на карту через SSE (desktop-only). Auto-retry с расширением радиуса. |
-| `list_my_macros` | Показывает список включённых макросов пользователя (id, title, description, commands). Lazy loading — AI вызывает инструмент, когда упоминается закреплённый макрос или пользователь просит выполнить макрос. |
-| `execute_macro` | Запускает макрос по `macro_id` (number) или `macro_name` (string). Если `return_output: true` и десктоп подключён через WS — ожидает результат (stdout). Иначе — fire-and-forget через `desktop_action` (SSE/WS). Доступен и из Telegram: если десктоп онлайн — команды пушатся через WS. |
-| `explore_fs` | Чтение директории на ПК пользователя. Если десктоп подключён через WS — возвращает listing (имя, тип, размер) как tool response для AI. Иначе — fire-and-forget (результат недоступен AI). Доступен и из Telegram при подключённом десктопе. |
-| `get_file_info` | Возвращает метаданные пути на ПК без чтения содержимого: `exists`, тип, `size_bytes`, timestamps, имя и расширение. Параметр `include_line_count=true` дополнительно считает строки потоковым проходом по файлу и возвращает `line_count`; использовать только когда число строк реально нужно. Требует включённый `fs_scan_enabled`, как `explore_fs`. |
-| `execute_pc_command` | Выполняет команду на ПК пользователя через desktop IPC. Параметры: `command` и опциональный `background`. Для GUI/open-сценариев (`notepad`, `code`, браузер, открыть файл/папку), где не нужен stdout/stderr, AI должен ставить `background: true`: desktop запускает команду detached и сразу возвращает результат. Обычные команды с выводом идут с `background=false`/без параметра. Не-auto-approved команды требуют HitL-карточку `pc_command_confirmation`; pending регистрируется до отправки карточки, а сама карточка уходит через текущий WS callback активного `chat_send`. AI получает последние 15k символов stdout/stderr (`PC_COMMAND_OUTPUT_MAX`). |
-| `read_file` | Читает файл на ПК пользователя нативно через Node.js fs (в обход терминала). Параметры: `file_path`, `start_line` (по умолчанию 1), `max_lines` (по умолчанию 500, макс. 2000), `line_numbers` (по умолчанию false). При `line_numbers=true` каждая строка имеет префикс с номером (формат `cat -n`). Возвращает UTF-8 контент с пагинацией. Поддерживает `.docx` через mammoth. Если `file_read_enabled=true` — выполняется сразу; иначе требует HitL-карточку `file_action_confirmation`. |
-| `search_file_keywords` | Ищет ключевые слова/фразы в конкретном файле на ПК и возвращает только строки с совпадениями и номерами строк. Параметры: `file_path`, `query`, `max_matches` (по умолчанию 100, максимум 500). Удобен для больших файлов перед точечным `read_file`. |
-| `write_file` | Записывает файл на ПК пользователя нативно через Node.js fs. Параметры: `file_path`, `content`, `mode` (`overwrite`/`append`). Поддерживает `.docx` — генерирует валидный Word-документ (каждая строка = абзац, только `overwrite`). **Всегда требует HitL-карточку `file_action_confirmation`** (игнорирует auto-approve). Лимит контента: 5 МБ. Запись в системные директории (`C:\Windows`, `/etc`, `/usr`, `/bin`) заблокирована. |
-| `edit_file_lines` | Точечно заменяет строки в файле через `Array.splice`. Параметры: `file_path`, `start_line`, `end_line`, `new_content`. Поддерживает замену, вставку (`end_line = start_line - 1`) и удаление (`new_content = ""`). Перед HitL бэкенд читает старые строки для diff-превью. **Всегда требует HitL-карточку `edit_file_lines_confirmation`** с визуальным diff (красный/зелёный). Не поддерживает `.docx`. |
-| `suggest_macro` | Предлагает пользователю сохранить новый макрос. AI формирует `title, description, commands` → SSE `desktop_action` с `action: suggest_macro` → десктоп-клиент рендерит карточку «Сохранить/Отклонить». Может вызываться несколько раз за один ответ (множественные карточки). |
-| `invoke_subagent` | Делегирует задачу специализированному субагенту из статического реестра. Динамически генерируется из `services/subagents/registry.ts`. Добавляется только при `isDesktop=true` и наличии зарегистрированных субагентов. |
-| `spawn_subagent` | Создаёт ad-hoc субагента «на лету»: модель задаёт задачу, опциональный системный промпт, набор инструментов и лимит итераций (1–50). Доступны **все** runtime-инструменты (кроме `spawn_subagent` / `invoke_subagent`). Несколько вызовов в одной итерации выполняются параллельно (до `MAX_PARALLEL_SPAWN_SUBAGENTS = 3`). Добавляется только при `isDesktop=true`. Полный trace сохраняется в `subagents_json` отдельно от `tool_calls_json`. |
+| `set_display_state` | Control the pixel avatar. Enum values (moods/reactions) are taken from `display_manifest` — an array passed by the client in the body. If no manifest (Telegram) — the tool is not added. |
+| `desktop_action` | Unified router for desktop app UI control. Actions: `open_widget`, `close_widget`, `set_widget_data`, `open_note`, `read_widget_state`, `toggle_panel`. Targets: `notebook`, `tasks`. Allows the bot to open/close widgets, create note drafts, open specific notes by ID, read state. |
+| `map_control` | Control the map in the desktop. Actions: `show_place` (geocoding via Nominatim), `draw_route` (routing via OSRM). Result is sent as an SSE `event: map_update`. |
+| `get_map_pins` | Get the user's saved map pins. Returns decrypted coordinates + labels. |
+| `find_transit_route` | Search public transit routes (bus, share_taxi, trolleybus, tram) via Overpass API. Accepts coordinates of point A and B, optionally `radius_meters` (default 500). Auto-retry with radius expansion if nothing is found. Returns a text description of routes (available to all clients) + sends visuals to the map via SSE (desktop-only). |
+| `search_nearby` | Search establishments and objects (POI) near a point by name via Overpass API. Accepts coordinates, a query text (`query`), and `radius_meters` (default 3000). Searches by `name` (regex, case-insensitive) among nodes and ways. Returns a list of places with address/hours (available to all clients) + sends markers to the map via SSE (desktop-only). Auto-retry with radius expansion. |
+| `list_my_macros` | Shows the user's enabled macros (id, title, description, commands). Lazy loading — the AI calls the tool when a pinned macro is mentioned or the user asks to run a macro. |
+| `execute_macro` | Runs a macro by `macro_id` (number) or `macro_name` (string). If `return_output: true` and the desktop is connected via WS — waits for the result (stdout). Otherwise — fire-and-forget via `desktop_action` (SSE/WS). Also available from Telegram: if the desktop is online — commands are pushed via WS. |
+| `explore_fs` | Read a directory on the user's PC. If the desktop is connected via WS — returns a listing (name, type, size) as a tool response for the AI. Otherwise — fire-and-forget (result unavailable to the AI). Also available from Telegram when the desktop is connected. |
+| `get_file_info` | Returns path metadata on the PC without reading content: `exists`, type, `size_bytes`, timestamps, name, and extension. Parameter `include_line_count=true` additionally counts lines by streaming through the file and returns `line_count`; use only when the line count is actually needed. Requires `fs_scan_enabled`, same as `explore_fs`. |
+| `execute_pc_command` | Executes a command on the user's PC via desktop IPC. Parameters: `command` and optional `background`. For GUI/open scenarios (`notepad`, `code`, browser, open file/folder), where stdout/stderr is not needed, the AI should set `background: true`: the desktop launches the command detached and immediately returns a result. Regular commands with output go with `background=false`/no parameter. Non-auto-approved commands require a HitL `pc_command_confirmation` card; the pending is registered before sending the card, and the card itself goes through the current WS callback of the active `chat_send`. The AI receives the last 15k characters of stdout/stderr (`PC_COMMAND_OUTPUT_MAX`). |
+| `read_file` | Reads a file on the user's PC natively via Node.js fs (bypassing the terminal). Parameters: `file_path`, `start_line` (default 1), `max_lines` (default 500, max 2000), `line_numbers` (default false). With `line_numbers=true`, each line has a line number prefix (`cat -n` format). Returns UTF-8 content with pagination. Supports `.docx` via mammoth. If `file_read_enabled=true` — executes immediately; otherwise requires a HitL `file_action_confirmation` card. |
+| `search_file_keywords` | Searches for keywords/phrases in a specific file on the PC and returns only matching lines with line numbers. Parameters: `file_path`, `query`, `max_matches` (default 100, max 500). Convenient for large files before a targeted `read_file`. |
+| `write_file` | Writes a file on the user's PC natively via Node.js fs. Parameters: `file_path`, `content`, `mode` (`overwrite`/`append`). Supports `.docx` — generates a valid Word document (each line = paragraph, `overwrite` only). **Always requires a HitL `file_action_confirmation` card** (ignores auto-approve). Content limit: 5 MB. Writing to system directories (`C:\Windows`, `/etc`, `/usr`, `/bin`) is blocked. |
+| `edit_file_lines` | Surgically replaces lines in a file via `Array.splice`. Parameters: `file_path`, `start_line`, `end_line`, `new_content`. Supports replace, insert (`end_line = start_line - 1`), and delete (`new_content = ""`). Before HitL, the backend reads the old lines for a diff preview. **Always requires a HitL `edit_file_lines_confirmation` card** with a visual diff (red/green). Does not support `.docx`. |
+| `suggest_macro` | Suggests the user save a new macro. The AI generates `title, description, commands` → SSE `desktop_action` with `action: suggest_macro` → the desktop client renders a "Save/Reject" card. Can be called multiple times in a single response (multiple cards). |
+| `invoke_subagent` | Delegates a task to a specialized subagent from the static registry. Dynamically generated from `services/subagents/registry.ts`. Added only when `isDesktop=true` and there are registered subagents. |
+| `spawn_subagent` | Creates an ad-hoc subagent on the fly: the model defines a task, optional system prompt, a set of tools, and an iteration limit (1–50). **All** runtime tools are available (except `spawn_subagent` / `invoke_subagent`). Multiple calls in the same iteration run in parallel (up to `MAX_PARALLEL_SPAWN_SUBAGENTS = 3`). Added only when `isDesktop=true`. The full trace is saved in `subagents_json` separately from `tool_calls_json`. |
 
-HitL-отклонения (`pc_command_confirmation`, file/email/devops confirmations) могут передавать `rejection_comment`. Бэкенд прокидывает его в tool response как `user_comment`, чтобы модель понимала, что пользователь хочет изменить.
+HitL rejections (`pc_command_confirmation`, file/email/devops confirmations) can pass a `rejection_comment`. The backend forwards it into the tool response as `user_comment`, so the model can understand what the user wants changed.
 
-### DevOps Agent Runtime — продолжение
+### DevOps Agent Runtime — continued
 
-Система удалённого выполнения SSH-команд на серверах пользователя с подтверждением через HitL (Human-in-the-Loop). Доступна из desktop и Telegram.
+A system for remote SSH command execution on user servers with Human-in-the-Loop (HitL) confirmation. Available from desktop and Telegram.
 
-**AI-инструменты (desktop + Telegram через SSE):**
+**AI tools (desktop + Telegram via SSE):**
 
-| Инструмент | Описание |
+| Tool | Description |
 |---|---|
-| `list_devops_servers` | Показывает список серверов пользователя (id, name, host, port, username). Без паролей/ключей. |
-| `execute_ssh_command` | Выполняет SSH-команду на сервере. Сначала проверяет auto-approve политики → если есть совпадение, выполняет сразу. Иначе — отправляет карточку подтверждения на десктоп (HitL), блокирует tool call до ответа пользователя. |
-| `list_devops_runbooks` | Показывает список инструкций пользователя (id, title, updated_at). |
-| `read_devops_runbook` | Читает содержимое инструкции по id (title, content). |
-| `suggest_devops_runbook` | Предлагает пользователю сохранить инструкцию. AI формирует `title, content, commands` → карточка в чате с кнопками «Сохранить»/«Проверить»/«Отклонить». |
-| `install_ssh_public_key` | Устанавливает публичный SSH-ключ в `authorized_keys` выбранного пользователя. Если `key_id` не указан, берётся дефолтный ключ сервера. |
-| `create_server_user` | Создаёт Linux-пользователя с sudo-группой. Пароль нового пользователя берётся из `sudo_password` сервера; если он не сохранён, пользователь вводит его в карточке подтверждения. `nopasswd_sudo` по умолчанию `false`. |
-| `change_server_user_password` | Меняет пароль существующего Linux-пользователя. Новый пароль вводится пользователем в карточке подтверждения и не передаётся в аргументах tool call. |
-| `suggest_server_creds_update` | Предлагает сменить credentials сервера: `username`, `use_ssh_key_for_login`, опционально очистить обычный SSH `password`. Блокирует tool call до подтверждения пользователя. |
+| `list_devops_servers` | Shows the user's server list (id, name, host, port, username). No passwords/keys. |
+| `execute_ssh_command` | Executes an SSH command on a server. First checks auto-approve policies → if there's a match, executes immediately. Otherwise — sends a confirmation card to desktop (HitL), blocks the tool call until the user responds. |
+| `list_devops_runbooks` | Shows the user's runbook list (id, title, updated_at). |
+| `read_devops_runbook` | Reads runbook content by id (title, content). |
+| `suggest_devops_runbook` | Suggests the user save a runbook. The AI generates `title, content, commands` → a card in chat with "Save"/"Check"/"Reject" buttons. |
+| `install_ssh_public_key` | Installs a public SSH key into the selected user's `authorized_keys`. If `key_id` is not specified, the server's default key is used. |
+| `create_server_user` | Creates a Linux user with a sudo group. The new user's password is taken from the server's `sudo_password`; if not saved, the user enters it in the confirmation card. `nopasswd_sudo` defaults to `false`. |
+| `change_server_user_password` | Changes an existing Linux user's password. The new password is entered by the user in the confirmation card and is not passed in the tool call arguments. |
+| `suggest_server_creds_update` | Suggests updating server credentials: `username`, `use_ssh_key_for_login`, optionally clear the plain SSH `password`. Blocks the tool call until user confirmation. |
 
-**Архитектура безопасности:**
+**Security architecture:**
 
-- **Шифрование:** все учётные данные (SSH пароль, приватный ключ, sudo-пароль) шифруются через AES-256-CBC и хранятся в `devops_servers`. Дешифровка только in-memory в момент выполнения команды.
-- **Human-in-the-Loop:** каждая SSH-команда (кроме auto-approved) требует подтверждения пользователя. Карточка с информацией о команде отправляется одновременно на десктоп (WS `desktop_action`) и в Telegram (SSE `desktop_action` → inline-кнопки). Кнопки: «Разрешить» / «Разрешить всегда» / «? Проверить» / «Отклонить».
-- **Auto-approve политики:** regex-паттерны для автоматического разрешения команд. Создаются вручную или при привязке инструкции к серверу. Точное совпадение: `^systemctl restart nginx$`.
-- **Опасные команды:** блокируются на уровне SSH-executor (`rm -rf /`, `mkfs`, `dd of=/dev/`, `shutdown`, `init 0/6`, `chmod 000 /`, `chown` root-директорий).
-- **Sudo:** если команда содержит `sudo` и в настройках сервера указан sudo-пароль — пароль передаётся через stdin stream (`sudo -S`), не виден в process list.
-- **Буфер:** stdout/stderr ограничен 1MB, таймаут выполнения — 30 секунд.
+- **Encryption:** all credentials (SSH password, private key, sudo password) are encrypted with AES-256-CBC and stored in `devops_servers`. Decryption only happens in-memory at the moment of command execution.
+- **Human-in-the-Loop:** every SSH command (except auto-approved) requires user confirmation. A card with command info is sent simultaneously to desktop (WS `desktop_action`) and Telegram (SSE `desktop_action` → inline buttons). Buttons: "Allow" / "Always allow" / "? Check" / "Reject".
+- **Auto-approve policies:** regex patterns for automatic command approval. Created manually or when attaching a runbook to a server. Exact match example: `^systemctl restart nginx$`.
+- **Dangerous commands:** blocked at the SSH-executor level (`rm -rf /`, `mkfs`, `dd of=/dev/`, `shutdown`, `init 0/6`, `chmod 000 /`, `chown` of root directories).
+- **Sudo:** if the command contains `sudo` and the server settings specify a sudo password — the password is passed via stdin stream (`sudo -S`), not visible in the process list.
+- **Buffer:** stdout/stderr is limited to 1MB, execution timeout — 30 seconds.
 
-**SSH/password поля:**
+**SSH/password fields:**
 
-- `password` — обычный пароль для SSH-login. Не используется, если `use_ssh_key_for_login=true`.
-- `private_key` / `default_ssh_key_id` — ключи для входа/установки. Дефолтный ключ можно хранить на сервере и ставить пользователям через `install_ssh_public_key`.
-- `use_ssh_key_for_login` — явная галочка выбора способа входа. Если `true`, backend логинится по дефолтному SSH-ключу; если ключ не подходит, fallback на password не делается.
-- `sudo_password` — пароль для `sudo -S` и пароль, который используется при `create_server_user`, если создаваемому пользователю нужен пароль.
-- `change_server_user_password` не использует `sudo_password` как новый пароль: новый пароль вводится отдельно в confirmation card как `new_password`.
+- `password` — regular SSH login password. Not used if `use_ssh_key_for_login=true`.
+- `private_key` / `default_ssh_key_id` — keys for login/installation. The default key can be stored on the server and installed for users via `install_ssh_public_key`.
+- `use_ssh_key_for_login` — explicit checkbox for login method. If `true`, the backend logs in with the default SSH key; if the key doesn't work, no password fallback.
+- `sudo_password` — password for `sudo -S` and the password used in `create_server_user` if the new user needs a password.
+- `change_server_user_password` doesn't use `sudo_password` as the new password: the new password is entered separately in the confirmation card as `new_password`.
 
-**Поток выполнения команды:**
+**Command execution flow:**
 
 ```
 AI: execute_ssh_command(server_id, command)
-  → ai.ts: проверка isAutoApproved()
-    → Да: прямой вызов execSshCommand() → stdout/stderr/exitCode
-    → Нет: dual-delivery карточки подтверждения:
-        ├─ TG (SSE): inline-кнопки Разрешить / Разрешить всегда / Проверить / Отклонить
+  → ai.ts: check isAutoApproved()
+    → Yes: direct call execSshCommand() → stdout/stderr/exitCode
+    → No: dual-delivery of confirmation card:
+        ├─ TG (SSE): inline buttons Allow / Always allow / Check / Reject
         └─ Desktop (WS): desktop_action { action: 'devops_confirmation' }
-      → ai.ts: блокировка на Promise (ожидание ответа из любого источника)
-      → Разрешить: POST /internal/devops/approve { approved: true }
-      → Разрешить всегда: создаёт политику + approve
-      → Проверить: POST /internal/ai/lite (LITE AI анализ безопасности)
-      → Отклонить: POST /internal/devops/approve { approved: false }
-      → Promise резолвится → execSshCommand() → результат AI
+      → ai.ts: block on Promise (waiting for response from either source)
+      → Allow: POST /internal/devops/approve { approved: true }
+      → Always allow: creates policy + approve
+      → Check: POST /internal/ai/lite (LITE AI safety analysis)
+      → Reject: POST /internal/devops/approve { approved: false }
+      → Promise resolves → execSshCommand() → result to AI
 ```
 
-**Инструкции (runbooks):**
+**Runbooks:**
 
-Универсальные пошаговые руководства (Markdown) с набором shell-команд. Не привязаны к конкретному серверу.
+Universal step-by-step guides (Markdown) with a set of shell commands. Not tied to a specific server.
 
-- AI может предложить сохранить инструкцию (`suggest_devops_runbook`) — карточка в чате
-- AI может извлечь команды из текста (`POST /api/v1/devops/runbooks/extract-commands`, LITE AI)
-- AI может проверить безопасность команд (`POST /api/v1/devops/runbooks/review-commands`, LITE AI)
-- Кнопка «Привязать инструкцию» в настройках сервера создаёт auto-approve политики для каждой команды
+- The AI can suggest saving a runbook (`suggest_devops_runbook`) — a card in chat
+- The AI can extract commands from text (`POST /api/v1/devops/runbooks/extract-commands`, LITE AI)
+- The AI can review command safety (`POST /api/v1/devops/runbooks/review-commands`, LITE AI)
+- The "Attach runbook" button in server settings creates auto-approve policies for each command
 
-**Таблицы БД:**
+**DB tables:**
 
-| Таблица | Описание |
+| Table | Description |
 |---|---|
-| `devops_servers` | SSH-серверы (name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, use_ssh_key_for_login) |
-| `devops_policies` | Auto-approve политики (server_id, pattern, auto_approve) |
-| `devops_runbooks` | Инструкции (user_id, title, content, commands JSON) |
+| `devops_servers` | SSH servers (name, host, port, username, password_enc, private_key_enc, sudo_password_enc, default_ssh_key_id, use_ssh_key_for_login) |
+| `devops_policies` | Auto-approve policies (server_id, pattern, auto_approve) |
+| `devops_runbooks` | Runbooks (user_id, title, content, commands JSON) |
 
-**Подтверждения (in-memory):**
+**Confirmations (in-memory):**
 
-Ожидающие подтверждения хранятся в `Map<string, PendingDevopsConfirmation>` в `services/devops-confirmations.ts`. Авто-очистка каждые 30 секунд, TTL — 5 минут.
+Pending confirmations are stored in a `Map<string, PendingDevopsConfirmation>` in `services/devops-confirmations.ts`. Auto-cleanup every 30 seconds, TTL — 5 minutes.
 
-### Система макросов
+### Macro System
 
-Макросы — пользовательские наборы консольных команд, которые AI может запускать на десктоп-клиенте.
+Macros are user-defined sets of console commands that the AI can run on the desktop client.
 
-**Хранение:** таблица `macros` в SQLite (`services/macros.ts`):
-- `id INTEGER` (автоинкремент), `user_id`, `title`, `description`, `commands` (JSON), `enabled`, `pinned`, `return_output`, `created_at`, `updated_at`
-- Лимит: 50 макросов на пользователя
-- Команды хранятся как JSON-массив строк, максимум 30 команд на макрос
+**Storage:** `macros` table in SQLite (`services/macros.ts`):
+- `id INTEGER` (auto-increment), `user_id`, `title`, `description`, `commands` (JSON), `enabled`, `pinned`, `return_output`, `created_at`, `updated_at`
+- Limit: 50 macros per user
+- Commands stored as a JSON array of strings, max 30 commands per macro
 
-**Поля макроса:**
-| Поле | Тип | Описание |
+**Macro fields:**
+| Field | Type | Description |
 |---|---|---|
-| `title` | string | Название (до 100 символов) |
-| `description` | string | Описание (до 500 символов), может генерироваться ИИ |
-| `commands` | string[] | Массив консольных команд |
-| `enabled` | boolean | Включён/выключен |
-| `pinned` | boolean | Закреплён — название попадает в системный промпт как подсказка для AI |
-| `return_output` | boolean | Если `true` — бот ожидает stdout команд от десктопа (требует WS-подключение). Если десктоп не подключён — fire-and-forget |
+| `title` | string | Name (up to 100 characters) |
+| `description` | string | Description (up to 500 characters), can be AI-generated |
+| `commands` | string[] | Array of console commands |
+| `enabled` | boolean | Enabled/disabled |
+| `pinned` | boolean | Pinned — the name is added to the system prompt as a hint for the AI |
+| `return_output` | boolean | If `true` — the bot waits for command stdout from the desktop (requires WS connection). If the desktop is not connected — fire-and-forget |
 
-**Архитектура видимости макросов для AI:**
-1. **Pinned-подсказка** — если у макроса `pinned: true`, его название добавляется в системный промпт: `[ЗАКРЕПЛЁННЫЕ МАКРОСЫ] У пользователя есть ... "Макрос 1", "Макрос 2". Если запрос совпадает — вызови list_my_macros.`
-2. **Lazy loading** — AI вызывает `list_my_macros` чтобы увидеть полный список с командами, затем `execute_macro` для запуска конкретного макроса
-3. Макросы загружаются из БД (`getEnabledMacros(userId)`) при каждом запросе, не передаются клиентом
-4. Макросы доступны из всех клиентов (desktop, Telegram), а не только из desktop
+**AI macro visibility architecture:**
+1. **Pinned hint** — if a macro has `pinned: true`, its name is added to the system prompt: `[PINNED MACROS] The user has ... "Macro 1", "Macro 2". If a request matches — call list_my_macros.`
+2. **Lazy loading** — the AI calls `list_my_macros` to see the full list with commands, then `execute_macro` to run a specific macro
+3. Macros are loaded from the DB (`getEnabledMacros(userId)`) on every request, not passed by the client
+4. Macros are available from all clients (desktop, Telegram), not just desktop
 
-**TG→Desktop push (запуск макроса из Telegram):**
-- Эндпоинт `/internal/ai/send` передаёт `activeMacros` в `sendMessageThroughAi`
-- Если AI вызывает `execute_macro` (fire-and-forget), результат записывается в `desktopActionSink`
-- После возврата `sendMessageThroughAi`, server.ts проверяет `result.desktop_action` и `isDesktopOnline(userId)`
-- Если десктоп подключён через WS — `desktop_action` пушится через WebSocket
-- Десктоп-клиент при получении `desktop_action` с `action === 'execute_macro'` выполняет команды через `electronAPI.executeCommands()`
-- Условие: TG-аккаунт должен быть привязан к desktop-аккаунту (через `linked_tg_id`)
+**TG→Desktop push (running a macro from Telegram):**
+- The `/internal/ai/send` endpoint passes `activeMacros` to `sendMessageThroughAi`
+- If the AI calls `execute_macro` (fire-and-forget), the result is written to `desktopActionSink`
+- After `sendMessageThroughAi` returns, server.ts checks `result.desktop_action` and `isDesktopOnline(userId)`
+- If the desktop is connected via WS — `desktop_action` is pushed via WebSocket
+- The desktop client, upon receiving `desktop_action` with `action === 'execute_macro'`, executes the commands via `electronAPI.executeCommands()`
+- Requirement: the TG account must be linked to the desktop account (via `linked_tg_id`)
 
-**Поток выполнения макроса:**
-1. AI видит pinned-подсказку или пользователь просит запустить макрос
-2. AI вызывает `list_my_macros` → получает список (id, title, description, commands)
-3. AI вызывает `execute_macro` с `macro_id` или `macro_name`
-4. Бэкенд находит макрос в `activeMacros`, формирует SSE payload: `{ action: 'execute_macro', target: '<macro_id>', value: { macro_name, commands } }`
-5. Сервер отправляет SSE `event: desktop_action` → десктоп-клиент получает payload
-6. `handleDesktopAction()` в `tools.ts` извлекает `commands` из payload и вызывает `window.electronAPI.executeCommands(commands)`
-7. Electron IPC `execute-commands` выполняет команды последовательно через `child_process.exec` с блокировкой опасных команд
+**Macro execution flow:**
+1. The AI sees a pinned hint or the user asks to run a macro
+2. The AI calls `list_my_macros` → gets the list (id, title, description, commands)
+3. The AI calls `execute_macro` with `macro_id` or `macro_name`
+4. The backend finds the macro in `activeMacros`, builds an SSE payload: `{ action: 'execute_macro', target: '<macro_id>', value: { macro_name, commands } }`
+5. The server sends an SSE `event: desktop_action` → the desktop client receives the payload
+6. `handleDesktopAction()` in `tools.ts` extracts `commands` from the payload and calls `window.electronAPI.executeCommands(commands)`
+7. Electron IPC `execute-commands` executes the commands sequentially via `child_process.exec` with blocking of dangerous commands
 
-**AI-помощники для макросов (лёгкие LITE-запросы через `callLiteAi`):**
-- `POST /api/v1/macro/explain` — ИИ объясняет, что делают команды
-- `POST /api/v1/macro/describe` — ИИ предлагает лучшее название и описание (отправляет текущие `current_title`/`current_description` для улучшения)
+**AI macro assistants (lightweight LITE requests via `callLiteAi`):**
+- `POST /api/v1/macro/explain` — AI explains what the commands do
+- `POST /api/v1/macro/describe` — AI suggests a better title and description (sends current `current_title`/`current_description` for improvement)
 
-**Предложение макроса (`suggest_macro`):**
-1. AI решает предложить пользователю сохранить макрос → вызывает `suggest_macro` с `title, description, commands`
-2. SSE `desktop_action` с `action: 'suggest_macro'` → клиент рендерит карточку
-3. Пользователь нажимает «Сохранить» → POST `/api/v1/macros` → макрос сохраняется в БД
-4. Может быть несколько карточек одновременно (массив `pendingMacros`)
+**Macro suggestion (`suggest_macro`):**
+1. The AI decides to suggest the user save a macro → calls `suggest_macro` with `title, description, commands`
+2. SSE `desktop_action` with `action: 'suggest_macro'` → the client renders a card
+3. The user clicks "Save" → POST `/api/v1/macros` → the macro is saved to the DB
+4. Multiple cards can exist simultaneously (array `pendingMacros`)
 
-**Ограничения (текущие):**
-- Опасные команды блокируются на уровне IPC (`rm -rf /`, `format`, `shutdown` и т.д.)
-- `return_output` и `explore_fs` требуют WS-подключение десктопа; без WS — fire-and-forget
-1. AI вызывает `desktop_action` tool → `runTool` парсит action/target/value → записывает в `desktopActionSink`
-2. Сервер отправляет SSE `event: desktop_action` с payload на клиент
-3. Клиент (`handleDesktopAction`) выполняет команду: открывает панель, переключает виджет, заполняет черновик и т.д.
-4. Результат также возвращается в `done` событии как `desktop_action`
+**Limitations (current):**
+- Dangerous commands are blocked at the IPC level (`rm -rf /`, `format`, `shutdown`, etc.)
+- `return_output` and `explore_fs` require a WS-connected desktop; without WS — fire-and-forget
+1. The AI calls the `desktop_action` tool → `runTool` parses action/target/value → writes to `desktopActionSink`
+2. The server sends an SSE `event: desktop_action` with the payload to the client
+3. The client (`handleDesktopAction`) executes the command: opens a panel, toggles a widget, fills a draft, etc.
+4. The result is also returned in the `done` event as `desktop_action`
 
-**Поток `map_control`:**
-1. AI вызывает `map_control` tool → `runTool` геокодирует адрес (Nominatim) или строит маршрут (OSRM)
-2. Результат записывается в `mapUpdateSink` → сервер отправляет SSE `event: map_update` с `{ action, lat, lng, label, from?, to?, route? }`
-3. Клиент ловит `onMapUpdate` → открывает MapTool, обновляет карту (flyTo / fitBounds / polyline)
-4. Координаты маршрута конвертируются из OSRM [lng,lat] в Leaflet [lat,lng]
+**`map_control` flow:**
+1. The AI calls the `map_control` tool → `runTool` geocodes the address (Nominatim) or builds a route (OSRM)
+2. The result is written to `mapUpdateSink` → the server sends an SSE `event: map_update` with `{ action, lat, lng, label, from?, to?, route? }`
+3. The client catches `onMapUpdate` → opens MapTool, updates the map (flyTo / fitBounds / polyline)
+4. Route coordinates are converted from OSRM [lng,lat] to Leaflet [lat,lng]
 
-**Поток `find_transit_route`:**
-1. AI вызывает `find_transit_route` tool с координатами `from_lat, from_lon, to_lat, to_lon`, опционально `radius_meters` (default 500)
-2. `runTool` вызывает `services/transit.ts` → Overpass API запрос находит OSM route relations (bus, share_taxi, trolleybus, tram). Auto-retry с расширением радиуса если ничего не найдено
-3. Парсинг ответа: `members` с `role=stop|platform` → остановки, `type=way` → геометрия маршрута (polyline)
-4. Для каждого маршрута: haversine distance → ближайшие остановки к точке А (pickup) и Б (dropoff) → обрезка stops/path до сегмента между ними → scoring по мин. пешему расстоянию
-5. Лучший вариант отправляется в `mapUpdateSink` с `action: 'transit_route'` → SSE `event: map_update` с `{ action, routeName, path (sliced), stops (sliced) }`
-6. AI получает JSON с `pickupStop`, `dropoffStop`, `stopsToRideList`, `totalWalkingMeters` — формулирует ответ (доступно для всех клиентов)
-7. На desktop-клиенте MapTool рендерит зелёную polyline (только сегмент поездки) + оранжевые маркеры остановок + fitBounds
+**`find_transit_route` flow:**
+1. The AI calls the `find_transit_route` tool with coordinates `from_lat, from_lon, to_lat, to_lon`, optionally `radius_meters` (default 500)
+2. `runTool` calls `services/transit.ts` → Overpass API query finds OSM route relations (bus, share_taxi, trolleybus, tram). Auto-retry with radius expansion if nothing is found
+3. Parse response: `members` with `role=stop|platform` → stops, `type=way` → route geometry (polyline)
+4. For each route: haversine distance → nearest stops to point A (pickup) and B (dropoff) → trim stops/path to the segment between them → scoring by min walking distance
+5. The best option is sent to `mapUpdateSink` with `action: 'transit_route'` → SSE `event: map_update` with `{ action, routeName, path (sliced), stops (sliced) }`
+6. The AI gets JSON with `pickupStop`, `dropoffStop`, `stopsToRideList`, `totalWalkingMeters` — formulates the response (available to all clients)
+7. On the desktop client, MapTool renders a green polyline (only the ride segment) + orange stop markers + fitBounds
 
-**Поток `search_nearby`:**
-1. AI вызывает `search_nearby` с `latitude, longitude, query, radius_meters?`
-2. `runTool` вызывает `services/transit.ts` → Overpass ищет nodes/ways с `name~"query"` в указанном радиусе
-3. Ответ парсится: извлекаются координаты, название, адрес, часы работы, категория
-4. Результат записывается в `mapUpdateSink` с `action: 'poi_search'` → SSE `event: map_update` с `{ action, lat, lng, query, places }`
-5. Инструмент возвращает текстовый JSON со списком найденных мест — AI формулирует ответ (доступно для всех клиентов)
-6. На desktop-клиенте MapTool рендерит фиолетовые маркеры POI + flyTo к первому результату
-7. Auto-retry: если поиск в указанном радиусе пуст, бэкенд расширяет радиус и повторяет запрос
+**`search_nearby` flow:**
+1. The AI calls `search_nearby` with `latitude, longitude, query, radius_meters?`
+2. `runTool` calls `services/transit.ts` → Overpass searches nodes/ways with `name~"query"` in the specified radius
+3. The response is parsed: coordinates, name, address, opening hours, category are extracted
+4. The result is written to `mapUpdateSink` with `action: 'poi_search'` → SSE `event: map_update` with `{ action, lat, lng, query, places }`
+5. The tool returns a textual JSON with a list of found places — the AI formulates the response (available to all clients)
+6. On the desktop client, MapTool renders purple POI markers + flyTo the first result
+7. Auto-retry: if the search in the specified radius is empty, the backend expands the radius and retries
 
-**Хранение меток:**
-- Таблица `map_pins`: `id, user_id, lat_enc, lng_enc, label, created_at, updated_at`
-- Координаты шифруются через `aes-256-cbc` с ключом из `MAP_PINS_ENCRYPTION_KEY` (fallback на `ENCRYPTION_KEY`)
-- Бот получает расшифрованные координаты через `get_map_pins` tool
-- Клиент управляет через REST API `/api/v1/map-pins`
+**Pin storage:**
+- `map_pins` table: `id, user_id, lat_enc, lng_enc, label, created_at, updated_at`
+- Coordinates are encrypted via `aes-256-cbc` with the key from `MAP_PINS_ENCRYPTION_KEY` (fallback to `ENCRYPTION_KEY`)
+- The bot gets decrypted coordinates via the `get_map_pins` tool
+- The client manages via REST API `/api/v1/map-pins`
 
-## Типовые ошибки
+## Common Errors
 
-- `400` - плохой ввод (`bad_*`, `*_required`).
-- `401` - неверный токен (`unauthorized`, `unauthorized_internal`).
-- `403` - доступ запрещен (`access_not_approved`, `forbidden_admin_only`).
-- `404` - сущность не найдена (`user_not_found`, `note_not_found` и т.д.).
-- `409` - конфликт (`name_already_exists`, `login_already_exists`).
-- `422` - бизнес-ограничение (`notes_limit`, `cannot_delete_default_prompt`, `cannot_ban_admin`).
-- `429` - лимиты (`daily_message_limit_reached`).
-- `500` - внутренняя ошибка (`internal_error`/`*_failed`).
+- `400` — bad input (`bad_*`, `*_required`).
+- `401` — invalid token (`unauthorized`, `unauthorized_internal`).
+- `403` — access denied (`access_not_approved`, `forbidden_admin_only`).
+- `404` — entity not found (`user_not_found`, `note_not_found`, etc.).
+- `409` — conflict (`name_already_exists`, `login_already_exists`).
+- `422` — business restriction (`notes_limit`, `cannot_delete_default_prompt`, `cannot_ban_admin`).
+- `429` — rate limits (`daily_message_limit_reached`).
+- `500` — internal error (`internal_error`/`*_failed`).
 
-## Полнотекстовый поиск (FTS5)
+## Full-Text Search (FTS5)
 
-Поиск по сообщениям использует встроенный в SQLite полнотекстовый индекс (FTS5). Таблица `messages_fts` создаётся автоматически при первом запуске и заполняется из существующих `chat_messages`.
+Message search uses the built-in SQLite full-text index (FTS5). The `messages_fts` table is created automatically on first startup and populated from existing `chat_messages`.
 
-### Как это работает
+### How It Works
 
-- **Индекс:** виртуальная таблица `messages_fts USING fts5(content, user_id UNINDEXED, chat_id UNINDEXED, message_id UNINDEXED, tokenize="unicode61")`. Токенайзер `unicode61` поддерживает кириллицу из коробки.
-- **Автообновление:** триггеры на INSERT/DELETE в `chat_messages` автоматически добавляют/удаляют записи из FTS.
-- **Fallback:** при каждом запуске сервер проверяет наличие триггеров. Если хотя бы один отсутствует -- оба пересоздаются, а FTS полностью перестраивается из `chat_messages`. Это гарантирует полноту индекса после сбоев.
-- **Поиск:** префиксный (`word*`) -- ищет по части слова. Результаты сгруппированы по `chat_id`, отсортированы по релевантности (`rank`). Для каждого чата возвращается `snippet()` -- фрагмент текста с выделенным совпадением.
+- **Index:** virtual table `messages_fts USING fts5(content, user_id UNINDEXED, chat_id UNINDEXED, message_id UNINDEXED, tokenize="unicode61")`. The `unicode61` tokenizer supports Cyrillic out of the box.
+- **Auto-update:** triggers on INSERT/DELETE in `chat_messages` automatically add/remove records from FTS.
+- **Fallback:** on every server startup, the presence of triggers is checked. If at least one is missing — both are recreated, and FTS is fully rebuilt from `chat_messages`. This guarantees index completeness after failures.
+- **Search:** prefix-based (`word*`) — searches by word part. Results are grouped by `chat_id`, sorted by relevance (`rank`). For each chat, a `snippet()` is returned — a fragment of text with the match highlighted.
 
-### Безопасность
+### Security
 
-- Поиск scoped по `user_id` -- юзер видит только свои сообщения.
-- Минимальная длина запроса: 3 символа.
-- Результаты ограничены `LIMIT` (по умолчанию 20, максимум 50).
-- Клиент использует debounce (300 мс) -- не более ~3 запросов/сек.
+- Search is scoped by `user_id` — the user only sees their own messages.
+- Minimum query length: 3 characters.
+- Results are limited by `LIMIT` (default 20, max 50).
+- The client uses debounce (300 ms) — no more than ~3 requests/sec.
 
-## Курсы валют (ЦБ РФ)
+## Currency Rates (Central Bank of Russia)
 
-Автоматическое обновление курсов валют с ЦБ РФ. Бесплатно, без ключей авторизации.
+Automatic currency rate updates from the Central Bank of Russia. Free, no auth keys required.
 
-### Архитектура
+### Architecture
 
-- **Источник:** `https://www.cbr.ru/scripts/XML_daily.asp` — XML с курсами всех валют.
-- **Парсер:** `fast-xml-parser`. Нюанс: ЦБ отдаёт значения с запятой (`89,1234`) → `.replace(',', '.')` → `parseFloat`.
-- **Хранение:** таблица `currency_rates` — `code` (PK), `name`, `value`, `prev_value`, `nominal`, `updated_at`. При обновлении старое `value` перетекает в `prev_value`.
-- **Обновление:** scheduler дергает API при старте, затем каждый день в ~14:00 МСК (11:00 UTC) — ЦБ обновляет курсы примерно в это время.
-- **Сервис:** `services/currency.ts` — `fetchAndSaveCurrencyRates()`, `getCurrencyRates()`, `formatRateForAi()`.
+- **Source:** `https://www.cbr.ru/scripts/XML_daily.asp` — XML with all currency rates.
+- **Parser:** `fast-xml-parser`. Caveat: the CBR returns values with a comma (`89,1234`) → `.replace(',', '.')` → `parseFloat`.
+- **Storage:** `currency_rates` table — `code` (PK), `name`, `value`, `prev_value`, `nominal`, `updated_at`. On update, the old `value` flows into `prev_value`.
+- **Updates:** the scheduler fetches the API on startup, then every day at ~14:00 MSK (11:00 UTC) — the CBR updates rates around that time.
+- **Service:** `services/currency.ts` — `fetchAndSaveCurrencyRates()`, `getCurrencyRates()`, `formatRateForAi()`.
 
-### AI-инструмент
+### AI Tool
 
-- `get_exchange_rates` — возвращает курсы с динамикой. Если код не указан — по умолчанию USD и EUR.
-- Формат ответа: `USD (Доллар США): 89.5000 RUB (-0.5000)`
+- `get_exchange_rates` — returns rates with dynamics. If no code is specified — defaults to USD and EUR.
+- Response format: `USD (US Dollar): 89.5000 RUB (-0.5000)`
 
 ## WebSocket Transport
 
-WebSocket сервер на том же порту (3050), путь `/ws`, аутентификация через JWT access token в query-параметре. Десктоп-клиент подключается при старте приложения, auto-reconnect (exponential backoff 1s → 30s). Эндпоинт `POST /api/v1/chat/send` работает через SSE (Server-Sent Events) и используется как fallback (если WS не подключён). Формат событий: `intermediate`, `tool_status`, `display_state`, `done`, `error`. Валидация изображений остаётся обычной HTTP-ошибкой (до переключения на SSE).
+WebSocket server on the same port (3050), path `/ws`, authenticated via JWT access token in the query parameter. The desktop client connects on app startup, auto-reconnect (exponential backoff 1s → 30s). The `POST /api/v1/chat/send` endpoint works via SSE (Server-Sent Events) and is used as a fallback (if WS is not connected). Event format: `intermediate`, `tool_status`, `display_state`, `done`, `error`. Image validation remains a regular HTTP error (before switching to SSE).
 
-### Архитектура
+### Architecture
 
-- `ws-clients.ts` — общий реестр подключений (`wsClients` Map), `sendIpcToDesktop()`, `sendToDesktop()`, `isDesktopOnline()`. Для каждого подключения хранится `connectionId`, `connectedAt`, `lastMessageAt`, `lastPingAt`, `lastPongAt`, `missedPongs`. Online-проверка требует `WebSocket.OPEN` и свежий `lastPongAt` (grace window 75s), поэтому stale-сокет не считается рабочим.
-- `server.ts` — `WebSocketServer` на `/ws`, обработчики `chat_send` / `ipc_result` / `ping` / `pong`. Серверный heartbeat каждые 25s шлёт `{ type: 'ping' }`; если `pong` не приходит дольше grace window, соединение `terminate()`-ится, а pending IPC отклоняются. Realtime callbacks (`desktop_action`, `tool_status`, `execute_ipc`) отправляются с callback-ошибкой `ws.send`.
-- `ai.ts` — `execute_macro`, `explore_fs` и `execute_pc_command` используют desktop IPC для запросов с ожиданием результата; `execute_pc_command` с HitL отправляет confirmation через callback текущего `chat_send`.
-- Диагностика IPC пишет логи `[pc_command] ...` и `[ipc] ...` (dispatch, write complete, `ipc_result`, timeout, resolve/reject), связываемые по `request_id`.
+- `ws-clients.ts` — general connection registry (`wsClients` Map), `sendIpcToDesktop()`, `sendToDesktop()`, `isDesktopOnline()`. For each connection, `connectionId`, `connectedAt`, `lastMessageAt`, `lastPingAt`, `lastPongAt`, `missedPongs` are stored. The online check requires `WebSocket.OPEN` and a fresh `lastPongAt` (grace window 75s), so a stale socket is not considered working.
+- `server.ts` — `WebSocketServer` on `/ws`, handlers for `chat_send` / `ipc_result` / `ping` / `pong`. Server heartbeat every 25s sends `{ type: 'ping' }`; if `pong` doesn't arrive within the grace window, the connection is `terminate()`-ed, and pending IPC is rejected. Realtime callbacks (`desktop_action`, `tool_status`, `execute_ipc`) are sent with callback-error handling on `ws.send`.
+- `ai.ts` — `execute_macro`, `explore_fs`, and `execute_pc_command` use desktop IPC for requests awaiting a result; `execute_pc_command` with HitL sends confirmation via the callback of the current `chat_send`.
+- IPC diagnostics write logs `[pc_command] ...` and `[ipc] ...` (dispatch, write complete, `ipc_result`, timeout, resolve/reject), linked by `request_id`.
 
-### Разблокированные функции (через IPC)
+### Unlocked Features (via IPC)
 
-- `explore_fs` — AI получает листинг директории как tool response (ранее fire-and-forget).
-- `execute_macro` с `return_output: true` — AI получает stdout команд (ранее не работало).
-- Обратный канал: сервер шлёт `execute_ipc` с `request_id` → десктоп выполняет IPC → отвечает `ipc_result`.
+- `explore_fs` — the AI gets a directory listing as a tool response (previously fire-and-forget).
+- `execute_macro` with `return_output: true` — the AI gets command stdout (previously didn't work).
+- Reverse channel: the server sends `execute_ipc` with a `request_id` → the desktop executes IPC → responds with `ipc_result`.
 
-### Протокол WS-сообщений (JSON `{ type, ...data }`)
+### WS Message Protocol (JSON `{ type, ...data }`)
 
-| Клиент → Сервер | Описание |
+| Client → Server | Description |
 |---|---|
-| `chat_send` | Отправить сообщение AI |
-| `chat_stop` | Остановить текущую генерацию AI для пользователя |
-| `ipc_result` | Результат IPC-команды |
+| `chat_send` | Send a message to AI |
+| `chat_stop` | Stop the current AI generation for the user |
+| `ipc_result` | IPC command result |
 | `ping` | Keepalive |
-| `pong` | Ответ на серверный heartbeat `ping` |
+| `pong` | Response to server heartbeat `ping` |
 
-| Сервер → Клиент | Описание |
+| Server → Client | Description |
 |---|---|
-| `intermediate` | Промежуточный текст AI (между tool-call итерациями) |
-| `stream_token` | Чанк текста от модели в реальном времени (token-by-token, ~20 FPS) |
-| `reasoning_token` | Чанк reasoning (DeepSeek `reasoning_content`, OpenRouter `reasoning`) |
-| `display_state` | Состояние аватара |
-| `desktop_action` | Команда UI / макрос |
-| `tool_status` | Статус выполнения инструмента |
-| `map_update` | Данные карты |
-| `dice_roll` | Результат броска d20 в Dice Roll Mode (приходит сразу после броска, до `done`) |
-| `task_result` | Результат выполнения scheduler-задачи: `{ chat_id, text, is_new_chat }`. Если чат открыт — десктоп перезагружает сообщения; если другой чат — инкрементируется бейдж непрочитанных. |
-| `done` | Финальный ответ |
-| `error` | Ошибка |
-| `execute_ipc` | Запрос выполнить IPC и вернуть результат |
-| `ping` | Серверный heartbeat; desktop должен ответить `pong` |
-| `pong` | Ответ на клиентский `ping` |
+| `intermediate` | Intermediate AI text (between tool-call iterations) |
+| `stream_token` | Real-time text chunk from the model (token-by-token, ~20 FPS) |
+| `reasoning_token` | Reasoning chunk (DeepSeek `reasoning_content`, OpenRouter `reasoning`) |
+| `display_state` | Avatar state |
+| `desktop_action` | UI command / macro |
+| `tool_status` | Tool execution status |
+| `map_update` | Map data |
+| `dice_roll` | d20 roll result in Dice Roll Mode (arrives immediately after the roll, before `done`) |
+| `task_result` | Scheduler task execution result: `{ chat_id, text, is_new_chat }`. If the chat is open — desktop reloads messages; if a different chat — the unread badge is incremented. |
+| `done` | Final response |
+| `error` | Error |
+| `execute_ipc` | Request to execute IPC and return result |
+| `ping` | Server heartbeat; desktop must respond with `pong` |
+| `pong` | Response to client `ping` |
 
-### Остановка генерации (`chat_stop` / `/api/v1/chat/stop`)
+### Stopping Generation (`chat_stop` / `/api/v1/chat/stop`)
 
-- На каждый `sendMessageThroughAi` создаётся один `AbortController`, который сразу регистрируется в `activeGenerations` по `userId`.
-- `chat_stop` по WS и `POST /api/v1/chat/stop` делают одно и то же: находят controller пользователя и вызывают `abort()`.
-- Обычный маршрут запроса не меняется: `sendMessageThroughAi` → `runCompletion` → `runTool` → финальный `runCompletion`. `AbortSignal` только прокидывается в места ожидания.
-- Signal слушают OpenAI-запросы, retry-паузы, ожидание tool через `withAbort`, desktop IPC (`sendIpcToDesktop`) и web-search транспорт Tavily через `fetch(..., { signal })`.
-- `finally` удаляет controller из `activeGenerations` только если это тот же controller, чтобы старый завершившийся запрос не снёс controller нового запроса.
+- For each `sendMessageThroughAi`, one `AbortController` is created and immediately registered in `activeGenerations` by `userId`.
+- `chat_stop` via WS and `POST /api/v1/chat/stop` do the same thing: find the user's controller and call `abort()`.
+- The normal request flow doesn't change: `sendMessageThroughAi` → `runCompletion` → `runTool` → final `runCompletion`. The `AbortSignal` is only propagated to waiting points.
+- The signal is listened to by OpenAI requests, retry pauses, tool waiting via `withAbort`, desktop IPC (`sendIpcToDesktop`), and Tavily web-search transport via `fetch(..., { signal })`.
+- `finally` removes the controller from `activeGenerations` only if it's the same controller, so an old completed request doesn't clear the new request's controller.
 
-## SSE-стриминг и Dual-Delivery подтверждений
+## SSE Streaming and Dual-Delivery of Confirmations
 
-### Scheduler (задачи по расписанию)
+### Scheduler (scheduled tasks)
 
-Scheduler выполняет отложенные задачи. Живёт в `services/scheduler.ts`, запускается через `setInterval` (по умолчанию каждые 30 сек, настраивается через `BACKEND_SCHEDULER_INTERVAL_MS`). Включается через `BACKEND_SCHEDULER_ENABLED=1`.
+The scheduler executes deferred tasks. Lives in `services/scheduler.ts`, runs via `setInterval` (default every 30 sec, configurable via `BACKEND_SCHEDULER_INTERVAL_MS`). Enabled via `BACKEND_SCHEDULER_ENABLED=1`.
 
-**Типы задач:**
+**Task types:**
 
-| task_type | Что делает |
+| task_type | What it does |
 |---|---|
-| `message` | Возвращает payload как напоминание, сохраняет в чат как assistant-сообщение |
-| `smart_home` | Управляет устройством через `runSmartHomeControl()`, сохраняет результат в чат |
-| `ai_instruction` | Вызывает `sendMessageThroughAi()` с инструкцией из payload. AI сам вызывает нужные инструменты (`search_web`, `check_emails` и т.д.). Сохраняет полный ответ (включая tool_calls, reasoning) в чат. |
+| `message` | Returns the payload as a reminder, saves to chat as an assistant message |
+| `smart_home` | Controls a device via `runSmartHomeControl()`, saves the result to chat |
+| `ai_instruction` | Calls `sendMessageThroughAi()` with the instruction from the payload. The AI calls the needed tools itself (`search_web`, `check_emails`, etc.). Saves the full response (including tool_calls, reasoning) to chat. |
 
-**Параметры `ai_instruction` в payload:**
-- `_target_chat_id` — ID чата для результата. Если не указан — используется активный чат.
-- `_create_new_chat` — `true` создаёт новый чат. `_target_chat_id` игнорируется.
+**`ai_instruction` parameters in payload:**
+- `_target_chat_id` — chat ID for the result. If not specified — the active chat is used.
+- `_create_new_chat` — `true` creates a new chat. `_target_chat_id` is ignored.
 
-**Auto-reject HitL (автоматическое отклонение подтверждений):**
+**Auto-reject HitL (automatic confirmation rejection):**
 
-Задачи выполняются в авто-режиме — подтверждения (HitL) автоматически отклоняются, если команда не проходит auto-approve. Реализовано через флаг `autoRejectHitl: true` в `sendMessageThroughAi`, который пробрасывается в `runTool`. Проверка стоит перед каждым `registerPending*` вызовом (10 точек). Auto-approve политики (`auto_approve_all`, regex patterns) срабатывают как обычно — до проверки `autoRejectHitl`.
+Tasks run in auto mode — confirmations (HitL) are automatically rejected if the command doesn't pass auto-approve. Implemented via the `autoRejectHitl: true` flag in `sendMessageThroughAi`, which is passed to `runTool`. The check is placed before every `registerPending*` call (10 points). Auto-approve policies (`auto_approve_all`, regex patterns) fire as usual — before the `autoRejectHitl` check.
 
-**Доставка результатов (`deliverTaskResult`):**
-- Если десктоп онлайн — пуш через WS: `{ type: 'task_result', chat_id, text, is_new_chat }`
-- Всегда — отправка в Telegram через `sendTelegramMessage()` (Rich HTML при `TG_USE_RICH_MESSAGES=1` или совместимом `TG_USE_RICH_STREAMING=1`, fallback на Markdown/plain, разбивка длинных текстов)
+**Result delivery (`deliverTaskResult`):**
+- If the desktop is online — push via WS: `{ type: 'task_result', chat_id, text, is_new_chat }`
+- Always — send to Telegram via `sendTelegramMessage()` (Rich HTML when `TG_USE_RICH_MESSAGES=1` or compatible `TG_USE_RICH_STREAMING=1`, fallback to Markdown/plain, splitting long texts)
 
-**Изоляция от обычного чата:**
-- Флаг `isBackgroundTask: true` — scheduler-задача не регистрируется в `activeGenerations`, и обычное сообщение юзера её не отменяет.
-- `forcePro: true`, `ignoreDailyLimit: true` — использует PRO-модель, не упирается в дневные лимиты.
+**Isolation from regular chat:**
+- The `isBackgroundTask: true` flag — a scheduler task is not registered in `activeGenerations`, and a regular user message doesn't cancel it.
+- `forcePro: true`, `ignoreDailyLimit: true` — uses the PRO model, doesn't count against daily limits.
 
-**Общая утилита отправки в Telegram:** `services/telegram-send.ts` — `sendTelegramMessage()`, `markdownToTelegramRichHtml()`, `splitTextForTelegram()`, `formatForTelegram()`. Используется scheduler'ом и endpoint'ом `send-to-telegram`.
+**General Telegram send utility:** `services/telegram-send.ts` — `sendTelegramMessage()`, `markdownToTelegramRichHtml()`, `splitTextForTelegram()`, `formatForTelegram()`. Used by the scheduler and the `send-to-telegram` endpoint.
 
-- `sendMessageToTelegram` из desktop вызывает `POST /api/v1/messages/:id/send-to-telegram`.
-- Text-only сообщения и остатки текста после media caption идут через `sendTelegramMessage(..., { strict: true, preferRich: true })`.
-- Это не streaming: endpoint отправляет один финальный `sendRichMessage`, без `sendRichMessageDraft`.
-- При rich-отправке Markdown конвертируется в Telegram Rich HTML через `marked` с кастомным renderer'ом; если `sendRichMessage` недоступен или падает, отправитель откатывается на старый `sendMessage`.
-- Endpoint проверяет ответы `sendPhoto` / `sendMediaGroup` / `sendMessage` и возвращает `telegram_send_failed`, если Telegram API реально отказал, чтобы desktop не показывал ложный success.
+- `sendMessageToTelegram` from desktop calls `POST /api/v1/messages/:id/send-to-telegram`.
+- Text-only messages and remaining text after media caption go via `sendTelegramMessage(..., { strict: true, preferRich: true })`.
+- This is not streaming: the endpoint sends a single final `sendRichMessage`, without `sendRichMessageDraft`.
+- On rich send, Markdown is converted to Telegram Rich HTML via `marked` with a custom renderer; if `sendRichMessage` is unavailable or fails, the sender falls back to the old `sendMessage`.
+- The endpoint checks `sendPhoto` / `sendMediaGroup` / `sendMessage` responses and returns `telegram_send_failed` if the Telegram API actually refused, so desktop doesn't show a false success.
 
-### SSE-стриминг
+### SSE Streaming
 
-Потоковая передача AI-ответов для TG-бота (вместо обычного JSON `/internal/ai/send`). Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`, позволяя TG-боту получать процесс работы AI в реалтайме.
+Streaming AI responses for the TG bot (instead of the regular JSON `/internal/ai/send`). Passes `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` callbacks to `sendMessageThroughAi`, allowing the TG bot to get the AI's progress in real time.
 
-**События SSE:**
+**SSE events:**
 
-| Событие | Payload | Описание |
+| Event | Payload | Description |
 |---|---|---|
-| `intermediate` | `{ text }` | Промежуточный текст AI |
-| `tool_status` | `{ text }` | Статус инструмента |
-| `display_state` | `{ state, ... }` | Состояние аватара |
-| `desktop_action` | `{ action, target?, value? }` | Карточка подтверждения / макрос |
-| `dice_roll` | `{ roll }` | Результат броска d20 (только если включён `dice_roll_enabled`), приходит сразу после броска |
-| `done` | `{ reply_text, chat_id, message_id, dice_roll?, ... }` | Финальный ответ AI |
-| `error` | `{ error }` | Ошибка |
+| `intermediate` | `{ text }` | Intermediate AI text |
+| `tool_status` | `{ text }` | Tool status |
+| `display_state` | `{ state, ... }` | Avatar state |
+| `desktop_action` | `{ action, target?, value? }` | Confirmation card / macro |
+| `dice_roll` | `{ roll }` | d20 roll result (only if `dice_roll_enabled` is on), arrives immediately after the roll |
+| `done` | `{ reply_text, chat_id, message_id, dice_roll?, ... }` | Final AI response |
+| `error` | `{ error }` | Error |
 
-### Dual-Delivery подтверждений
+### Dual-Delivery of Confirmations
 
-Confirmation-карточки (`pc_command_confirmation`, `devops_confirmation`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `email_confirmation`) доставляются через **один** из двух каналов: либо через `onDesktopAction` колбэк (если он передан — SSE для TG или WS для desktop), либо через `sendToDesktop` напрямую (fallback, если колбэка нет). Если одновременно онлайн и TG (через SSE), и desktop (через WS) — карточка уходит в оба канала, кто первый ответил — резолвит Promise, второй игнорируется. Дедупликация по `confirmation_id` на стороне клиента защищает от возможных дублей.
+Confirmation cards (`pc_command_confirmation`, `devops_confirmation`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `email_confirmation`) are delivered via **one** of two channels: either via the `onDesktopAction` callback (if one is passed — SSE for TG or WS for desktop), or via `sendToDesktop` directly (fallback if no callback). If both TG (via SSE) and desktop (via WS) are online simultaneously — the card goes to both channels; whoever responds first resolves the Promise, the second is ignored. Deduplication by `confirmation_id` on the client side protects against potential duplicates.
 
 ### Tool availability split
 
-Инструменты разделены на две группы:
+Tools are divided into two groups:
 
-- **`serverOnlyTools`** (всегда доступны, без `isDesktop`): SSH, DevOps, PC commands, maps, transit.
-- **`desktopOnlyTools`** (только `isDesktop=true`): `desktop_action` (UI-управление).
-- `invoke_subagent` — только `isDesktop=true`.
-- `spawn_subagent` — только `isDesktop=true`.
+- **`serverOnlyTools`** (always available, without `isDesktop`): SSH, DevOps, PC commands, maps, transit.
+- **`desktopOnlyTools`** (only `isDesktop=true`): `desktop_action` (UI control).
+- `invoke_subagent` — only `isDesktop=true`.
+- `spawn_subagent` — only `isDesktop=true`.
 
 ### Intermediate content: `fullDbHistory`
 
-`sendMessageThroughAi` всегда возвращает `fullDbHistory` (аккумулированный текст за весь цикл), а не `finalAnswer` (последний чанк). Это гарантирует что desktop `done` handler не затирает промежуточный контент последним чанком. Раньше если AI генерировал текст + tool call одновременно, текст уходил через `onIntermediateMessage`, а `done` содержал только последний чанк.
+`sendMessageThroughAi` always returns `fullDbHistory` (accumulated text across the entire cycle), not `finalAnswer` (the last chunk). This ensures the desktop `done` handler doesn't overwrite intermediate content with the last chunk. Previously, if the AI generated text + a tool call simultaneously, the text went via `onIntermediateMessage`, and `done` contained only the last chunk.
 
-**Колбэки real-time в `sendMessageThroughAi`:**
-- `onIntermediateMessage` — текст, сгенерированный на промежуточных шагах (текст + tool call одновременно).
-- `onStateChange` — мгновенная передача изменений аватара при вызове `set_display_state`.
-- `onToolStatus` — статусы типа "Ищу информацию..." в реалтайме.
-- `onStreamToken` — текстовые токены от модели в реальном времени (token-by-token streaming).
-- `onReasoningStream` — reasoning-токены (DeepSeek `reasoning_content`, OpenRouter `reasoning`) в реальном времени.
+**Real-time callbacks in `sendMessageThroughAi`:**
+- `onIntermediateMessage` — text generated on intermediate steps (text + tool call simultaneously).
+- `onStateChange` — instant avatar state changes when `set_display_state` is called.
+- `onToolStatus` — statuses like "Searching for information..." in real time.
+- `onStreamToken` — text tokens from the model in real time (token-by-token streaming).
+- `onReasoningStream` — reasoning tokens (DeepSeek `reasoning_content`, OpenRouter `reasoning`) in real time.
 
 ### Token-by-token streaming
 
-Побуквенный стриминг ответа AI (как в ChatGPT) вместо чанков после tool-call итераций.
+Character-by-character streaming of the AI response (like ChatGPT) instead of chunks after tool-call iterations.
 
-**Архитектура — стратегия "stream and assemble":**
+**Architecture — "stream and assemble" strategy:**
 
-Хелпер `streamAndAssemble()` в `services/ai.ts` включает `stream: true` в запросе к провайдеру, читает поток по chunks, одновременно:
-1. **Собирает** assembled-сообщение (`content`, `reasoning_content`, `tool_calls`) в памяти.
-2. **Прокидывает** токены в колбеки `onToken`/`onReasoningToken` (оттроттлено по времени).
+The `streamAndAssemble()` helper in `services/ai.ts` enables `stream: true` in the request to the provider, reads the stream chunk by chunk, simultaneously:
+1. **Assembles** the message (`content`, `reasoning_content`, `tool_calls`) in memory.
+2. **Propagates** tokens to `onToken`/`onReasoningToken` callbacks (throttled by time).
 
-Возвращает объект того же формата, что `client.chat.completions.create()` — `{ choices: [{ message }] }`. Агентский цикл, `runTool`, scheduler, vision — ничего не замечают.
+Returns an object of the same format as `client.chat.completions.create()` — `{ choices: [{ message }] }`. The agent loop, `runTool`, scheduler, vision — none of them notice.
 
 **Throttling:**
-- **Бэкенд:** `STREAM_FLUSH_INTERVAL_MS = 50` в `services/ai.ts` (~20 FPS). Это главное ограничение скорости прихода новых `stream_token` / `reasoning_token` в WS/SSE. Буферы накапливаются, flush по таймеру. Гарантированный финальный flush в `try/catch` — токены не теряются при ошибке провайдера.
-- **Десктоп:** `requestAnimationFrame` throttle. Буферы накапливаются между кадрами, один `setState` на кадр. Flush перед `onDone`/`onError`/`onIntermediate`.
+- **Backend:** `STREAM_FLUSH_INTERVAL_MS = 50` in `services/ai.ts` (~20 FPS). This is the main speed limit for incoming `stream_token` / `reasoning_token` in WS/SSE. Buffers accumulate, flush on timer. Guaranteed final flush in `try/catch` — tokens are not lost on provider error.
+- **Desktop:** `requestAnimationFrame` throttle. Buffers accumulate between frames, one `setState` per frame. Flush before `onDone`/`onError`/`onIntermediate`.
 
-**Каскад колбеков:**
+**Callback cascade:**
 ```
 streamAndAssemble (throttle 50ms)
   → StreamCallbacks.onToken / onReasoningToken
     → createCompletionWithModelFallback
       → createCompletionWithProProviderFallback / Lite
-        → runCompletion (параметр streamCallbacks)
+        → runCompletion (streamCallbacks parameter)
           → sendMessageThroughAi (options.onStreamToken / onReasoningStream)
             → WS { type: 'stream_token' } / SSE event: stream_token
               → desktop api.ts → ChatPage streamAppenderRef
 ```
 
-**Что НЕ стримится:**
-- Vision-запросы (`vision-pro`, `vision-lite`) — анализ фото, не диалог.
-- Lite router (классификация intent) — быстрый одиночный запрос.
-- Scheduler tasks (background) — стрим некуда пушить.
-- Subagents — могут добавить позже.
+**What is NOT streamed:**
+- Vision requests (`vision-pro`, `vision-lite`) — photo analysis, not a dialog.
+- Lite router (intent classification) — a fast single request.
+- Scheduler tasks (background) — nowhere to push the stream.
+- Subagents — may be added later.
 
-**Сборка `tool_calls` из дельт:**
-OpenAI/DeepSeek шлют tool_calls фрагментированно — по index. Хелпер собирает через `Map<index, { id, type, function: { name, arguments } }>`, доклеивая `function.arguments` по кускам. В конце сортируется по index.
+**Assembling `tool_calls` from deltas:**
+OpenAI/DeepSeek send tool_calls fragmented — by index. The helper assembles via `Map<index, { id, type, function: { name, arguments } }>`, appending `function.arguments` piece by piece. At the end, sorted by index.
 
-**Reasoning-поля:**
-Поддерживаются оба варианта:
-- `delta.reasoning_content` (DeepSeek R1, нативный vLLM)
-- `delta.reasoning` (OpenRouter для некоторых провайдеров)
+**Reasoning fields:**
+Both variants are supported:
+- `delta.reasoning_content` (DeepSeek R1, native vLLM)
+- `delta.reasoning` (OpenRouter for some providers)
 
 **Abort:**
-- `signal` передаётся в опциях `create()` → SDK сам вызовет `stream.controller.abort()`.
-- Дополнительно — ручная проверка `signal?.aborted` в цикле с `throw new AbortError`.
+- `signal` is passed in `create()` options → the SDK itself calls `stream.controller.abort()`.
+- Additionally — manual `signal?.aborted` check in the loop with `throw new AbortError`.
 
-**WS/SSE события:**
+**WS/SSE events:**
 
-| Событие | Канал | Payload | Описание |
+| Event | Channel | Payload | Description |
 |---|---|---|---|
-| `stream_token` | WS / SSE | `{ text }` | Чанк текста (оттроттлено ~20 FPS) |
-| `reasoning_token` | WS / SSE | `{ text }` | Чанк reasoning |
+| `stream_token` | WS / SSE | `{ text }` | Text chunk (throttled ~20 FPS) |
+| `reasoning_token` | WS / SSE | `{ text }` | Reasoning chunk |
 
-События `intermediate` (текст между tool-call итерациями) и `stream_token` (побуквенный текст внутри итерации) **не конфликтуют** — на стороне desktop вызывается `flushNow()` перед `onIntermediate`, чтобы разделить шаги.
+`intermediate` events (text between tool-call iterations) and `stream_token` (character-by-character text within an iteration) **do not conflict** — on the desktop side, `flushNow()` is called before `onIntermediate` to separate steps.
 
-**Desktop UI при стриме:**
-- `reasoning_token` создаёт временное assistant-сообщение так же, как `stream_token`, чтобы кнопка reasoning появилась сразу и её можно было раскрыть во время генерации.
-- Пока есть reasoning, но ещё нет обычного content-текста, bubble временного assistant-сообщения показывает анимированные typing dots вместо пустой плашки.
-- Кнопка `Рассуждает...` использует тот же toggle-контрол, что и обычное `Рассуждение`, поэтому popover открывается/закрывается без ожидания `done`.
+**Desktop UI during streaming:**
+- `reasoning_token` creates a temporary assistant message just like `stream_token`, so the reasoning button appears immediately and can be expanded during generation.
+- While there is reasoning but no regular content text yet, the temporary assistant message bubble shows animated typing dots instead of an empty tile.
+- The `Reasoning...` button uses the same toggle control as regular `Reasoning`, so the popover opens/closes without waiting for `done`.
 
-**Fallback моделей при стриме:**
-Если первая модель падает на середине стрима, пользователь видит частичный текст. Fallback-каскад (`createCompletionWithModelFallback`) перехватывает ошибку и пробует следующую модель. Стрим начинается заново. Сейчас это приемлемо — fallback срабатывает редко.
+**Model fallback during streaming:**
+If the first model crashes mid-stream, the user sees partial text. The fallback cascade (`createCompletionWithModelFallback`) catches the error and tries the next model. Streaming starts anew. This is currently acceptable — fallback rarely triggers.
 
-### Soft Abort (остановка генерации с сохранением)
+### Soft Abort (stopping generation with preservation)
 
-При остановке генерации (`chat_stop` / `POST /api/v1/chat/stop`) бот **не удаляет** то, что успело сгенерироваться. Вместо этого:
+When generation is stopped (`chat_stop` / `POST /api/v1/chat/stop`), the bot **does not delete** what was already generated. Instead:
 
-1. Цикл tool-calls прерывается (`break` вместо `throw AbortError`) — даже неполная итерация сохраняется.
-2. Все накопленные артефакты (`answer`, `reasoningParts`, `iterations`, `toolCallsHistory`, `subagentTraces`) объявлены вне `try` блока, чтобы catch имел к ним доступ.
-3. Сохраняется assistant-сообщение в БД с всем накопленным контентом: `reasoning_content`, `tool_calls_json`, `subagents_json`.
-4. Ответ помечается `aborted: true` и `_⏹ Генерация остановлена пользователем_` добавляется в конец текста.
-5. Субагенты внутри цикла тоже получают soft-abort — возвращают partial-результат с `aborted: true`.
+1. The tool-calls loop is interrupted (`break` instead of `throw AbortError`) — even a partial iteration is saved.
+2. All accumulated artifacts (`answer`, `reasoningParts`, `iterations`, `toolCallsHistory`, `subagentTraces`) are declared outside the `try` block, so `catch` has access to them.
+3. An assistant message is saved to the DB with all accumulated content: `reasoning_content`, `tool_calls_json`, `subagents_json`.
+4. The response is marked `aborted: true` and `_⏹ Generation stopped by user_` is appended to the end of the text.
+5. Subagents within the loop also get a soft-abort — they return a partial result with `aborted: true`.
 
-Поведение клиента (desktop): при `res.aborted` временное сообщение финализируется с реальным `message_id` и всем накопленным контентом вместо удаления.
+Client behavior (desktop): on `res.aborted`, the temporary message is finalized with the real `message_id` and all accumulated content, instead of being deleted.
 
-## Система обновлений (Admin)
+## Update System (Admin)
 
-Кастомный механизм обновлений desktop-клиента. Сервер хранит `version.json` и payload-файлы, а desktop-клиент сам проверяет манифест и устанавливает обновление.
+A custom desktop client update mechanism. The server stores `version.json` and payload files, while the desktop client checks the manifest and installs the update itself.
 
-Типы обновлений:
+Update types:
 
-| Тип | Payload | Когда использовать |
+| Type | Payload | When to use |
 |---|---|---|
-| `minor` | новый `app.asar` | Код приложения и assets внутри `app.asar` |
-| `major` | NSIS `.exe` | Electron, native/unpacked files, `extraResources`, модели, DLL |
+| `minor` | new `app.asar` | App code and assets inside `app.asar` |
+| `major` | NSIS `.exe` | Electron, native/unpacked files, `extraResources`, models, DLLs |
 
-### Файловая структура
+### File Structure
 
 ```
 backend-api/updates/
-  version.json                 # манифест, создаётся админкой или вручную
-  chatter-update-<ts>.asar      # minor payload, имя генерирует админка
-  chatter-update-<ts>.exe       # major payload, если exe загружен на сервер
+  version.json                 # manifest, created by admin panel or manually
+  chatter-update-<ts>.asar      # minor payload, name generated by admin panel
+  chatter-update-<ts>.exe       # major payload, if exe is uploaded to the server
 ```
 
-Папка `updates/` раздаётся через `express.static` на `/updates/` и автоматически создаётся при старте.
+The `updates/` folder is served via `express.static` at `/updates/` and created automatically on startup.
 
 ### version.json
 
@@ -1535,48 +1535,48 @@ backend-api/updates/
   "version": "1.4.0",
   "type": "minor",
   "downloadUrl": "chatter-update-1780866466318.asar",
-  "releaseNotes": "Что нового",
+  "releaseNotes": "What's new",
   "size": 49467302
 }
 ```
 
-- `version` — версия, с которой desktop сравнивает `app.getVersion()`. Обновление показывается только если manifest version новее текущей.
-- `type` — `minor` или `major`.
-- `downloadUrl` — имя файла внутри `/updates/` или полный прямой URL.
-- `releaseNotes` — текст в модалке обновления.
-- `size` — размер payload в байтах, используется для отображения.
+- `version` — the version that desktop compares with `app.getVersion()`. An update is shown only if the manifest version is newer than the current one.
+- `type` — `minor` or `major`.
+- `downloadUrl` — filename inside `/updates/` or a full direct URL.
+- `releaseNotes` — text in the update modal.
+- `size` — payload size in bytes, used for display.
 
-Для `major` внешний URL должен быть прямой ссылкой на `.exe`. Публичная страница облака не подходит: клиент скачает HTML вместо инсталлера. Если URL не заканчивается на `.exe`, desktop сохранит файл как `.tmp` и откажется устанавливать major.
+For `major`, the external URL must be a direct link to the `.exe`. A public cloud page won't work: the client would download HTML instead of the installer. If the URL doesn't end with `.exe`, desktop saves the file as `.tmp` and refuses to install a major update.
 
-### Админка обновлений
+### Update Admin Panel
 
-HTML-страница с формой для публикации обновлений.
+An HTML page with a form for publishing updates.
 
-- `GET /admin/updates` — HTML-страница (login → dashboard)
-- `GET /admin/updates/status` — текущий манифест + список файлов (admin JWT)
-- `POST /admin/updates/upload` — загрузка файла + генерация `version.json` (multipart/form-data, admin JWT)
-- `DELETE /admin/updates/file/:name` — удаление файла (admin JWT)
+- `GET /admin/updates` — HTML page (login → dashboard)
+- `GET /admin/updates/status` — current manifest + file list (admin JWT)
+- `POST /admin/updates/upload` — file upload + `version.json` generation (multipart/form-data, admin JWT)
+- `DELETE /admin/updates/file/:name` — delete a file (admin JWT)
 
-Форма позволяет загрузить файл (`.asar`, `.exe`, `.zip`), указать версию, тип, release notes, либо указать внешний URL вместо файла.
+The form allows uploading a file (`.asar`, `.exe`, `.zip`), specifying version, type, release notes, or specifying an external URL instead of a file.
 
-Upload реализован через `busboy`: файл пишется потоково в `updates/`, после завершения записи создаётся `version.json`.
+Upload is implemented via `busboy`: the file is written as a stream to `updates/`, and after the write completes, `version.json` is created.
 
-Админ-доступ:
-- пользователь логинится логином/паролем desktop/API-аккаунта через `/api/v1/auth/login`;
-- доступ разрешён, если `is_admin = 1` у самого desktop/API user или у привязанного Telegram user (`linked_tg_id`);
-- `version.json` не показывается в списке файлов для удаления, его содержимое отображается наверху как `Current`.
+Admin access:
+- the user logs in with the desktop/API account login/password via `/api/v1/auth/login`;
+- access is granted if `is_admin = 1` on the desktop/API user themselves or on the linked Telegram user (`linked_tg_id`);
+- `version.json` is not shown in the file list for deletion; its content is displayed at the top as `Current`.
 
-### Публикация minor
+### Publishing a minor
 
-1. В `desktop-app/package.json` поднять `version`.
-2. Собрать desktop: `npm run build:win`.
-3. Достать `resources/app.asar` из release zip/unpacked-сборки.
-4. Открыть `/admin/updates`, выбрать `type: minor`, загрузить `app.asar`.
-5. Админка сохранит файл как `chatter-update-<timestamp>.asar` и обновит `version.json`.
+1. Bump `version` in `desktop-app/package.json`.
+2. Build desktop: `npm run build:win`.
+3. Extract `resources/app.asar` from the release zip/unpacked build.
+4. Open `/admin/updates`, select `type: minor`, upload `app.asar`.
+5. The admin panel saves the file as `chatter-update-<timestamp>.asar` and updates `version.json`.
 
-### Публикация major
+### Publishing a major
 
-1. В `desktop-app/package.json` поднять `version`.
-2. Собрать desktop: `npm run build:win`.
-3. В `/admin/updates` выбрать `type: major`.
-4. Загрузить NSIS `.exe` или указать прямой `.exe` URL.
+1. Bump `version` in `desktop-app/package.json`.
+2. Build desktop: `npm run build:win`.
+3. In `/admin/updates`, select `type: major`.
+4. Upload the NSIS `.exe` or specify a direct `.exe` URL.
