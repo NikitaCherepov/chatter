@@ -19,8 +19,8 @@ const requireEnv = (name) => {
 
 // --- НАСТРОЙКИ ---
 const BOT_TOKEN = requireEnv('TELEGRAM_TOKEN');
-const KZ_SERVER_URL = requireEnv('VOICE_TRANSCRIBE_URL');
-const KZ_SECRET = requireEnv('VOICE_TRANSCRIBE_TOKEN');
+const VOICE_SERVER_URL = requireEnv('VOICE_TRANSCRIBE_URL');
+const VOICE_SERVER_TOKEN = requireEnv('VOICE_TRANSCRIBE_TOKEN');
 const ADMIN_ID = Number(requireEnv('TRANSCRIBER_ADMIN_ID'));
 
 if (!Number.isSafeInteger(ADMIN_ID) || ADMIN_ID <= 0) {
@@ -329,16 +329,16 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
             }).on('error', reject);
         });
 
-        // 3. Отправляем на KZ сервер
+        // 3. Отправляем на сервер расшифровки
         richStream.onStatus('📨 Отправляю на сервер...');
 
-        // 3. Отправляем файл на KZ сервер и слушаем SSE-стрим
+        // 3. Отправляем файл на сервер расшифровки и слушаем SSE-стрим
         const formData = new FormData();
         formData.append('audio', fs.createReadStream(tempFilePath));
 
-        const kzResponse = await axios.post(KZ_SERVER_URL, formData, {
+        const voiceServerResponse = await axios.post(VOICE_SERVER_URL, formData, {
             headers: {
-                'Authorization': `Bearer ${KZ_SECRET}`,
+                'Authorization': `Bearer ${VOICE_SERVER_TOKEN}`,
                 ...formData.getHeaders()
             },
             maxContentLength: Infinity,
@@ -353,7 +353,7 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
         await new Promise((resolve, reject) => {
             let buffer = '';
 
-            kzResponse.data.on('data', (chunk) => {
+            voiceServerResponse.data.on('data', (chunk) => {
                 buffer += chunk.toString();
                 const lines = buffer.split('\n');
                 // Последний элемент может быть неполным — оставляем в буфере
@@ -389,8 +389,8 @@ bot.on(['voice', 'audio', 'document'], async (ctx) => {
                 }
             });
 
-            kzResponse.data.on('end', resolve);
-            kzResponse.data.on('error', reject);
+            voiceServerResponse.data.on('end', resolve);
+            voiceServerResponse.data.on('error', reject);
         });
 
         // 4. Удаляем временный аудиофайл

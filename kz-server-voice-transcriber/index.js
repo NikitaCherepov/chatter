@@ -247,10 +247,10 @@ const processQueue = async () => {
     } catch (error) {
         console.error('Queue processing error:', formatSafeError(error));
         if (isStream) {
-            sseSend({ status: 'error', error: 'Ошибка конвертации на стороне KZ' });
+            sseSend({ status: 'error', error: 'Ошибка конвертации на сервере расшифровки' });
             sseEnd();
         } else {
-            res.status(500).json({ error: 'Ошибка на стороне KZ' });
+            res.status(500).json({ error: 'Ошибка на сервере расшифровки' });
         }
         cleanupAndNext();
     }
@@ -441,4 +441,4 @@ app.post('/api/voice/stream', requireBearerAuth, uploadAudio, (req, res) => {
     processQueue();
 });
 
-app.listen(VOICE_API_PORT, () => console.log(`KZ Voice API с очередью запущен на порту ${VOICE_API_PORT}...`));
+app.listen(VOICE_API_PORT, () => console.log(`Voice Transcription API с очередью запущен на порту ${VOICE_API_PORT}...`));
