@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import s from './RejectWithComment.module.scss';
 
 type RejectWithCommentProps = {
@@ -7,6 +8,7 @@ type RejectWithCommentProps = {
 };
 
 export function RejectWithComment({ className, onReject }: RejectWithCommentProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
@@ -26,10 +28,10 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
             }
           }}
         >
-          {sending ? 'Отклоняю...' : 'Отклонить'}
+          {sending ? t('review.rejecting') : t('review.reject')}
         </button>
         <button className={className} disabled={sending} onClick={() => setOpen(true)}>
-          Отклонить с комментарием
+          {t('review.rejectWithComment')}
         </button>
       </>
     );
@@ -41,7 +43,7 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
         className={s.rejectInput}
         value={comment}
         onChange={(event) => setComment(event.target.value)}
-        placeholder="Что изменить или почему отклонить?"
+        placeholder={t('review.commentPlaceholder')}
         rows={3}
         autoFocus
       />
@@ -58,10 +60,10 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
             }
           }}
         >
-          {sending ? 'Отправляю...' : 'Отправить'}
+          {sending ? t('common.sending') : t('common.send')}
         </button>
         <button className={s.cancelBtn} disabled={sending} onClick={() => setOpen(false)}>
-          Назад
+          {t('common.back')}
         </button>
       </div>
     </div>

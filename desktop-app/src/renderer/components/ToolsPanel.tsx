@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import { DndContext, type DragEndEvent } from '@dnd-kit/core';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
@@ -75,36 +76,36 @@ const TOOL_ICON_DOCUMENTS = (
   </svg>
 );
 
-const buildTools = (contentMax: number): ToolEntry[] => [
+const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[] => [
   {
     id: 'notebook',
-    title: 'Блокнот',
-    description: 'Заметки',
+    title: t('tools.panel.notebook'),
+    description: t('tools.panel.notes'),
     icon: TOOL_ICON_NOTEBOOK,
     contentMax,
   },
   {
     id: 'tasks',
-    title: 'Задачи',
-    description: 'Запланированные',
+    title: t('tools.panel.tasks'),
+    description: t('tools.panel.scheduled'),
     icon: TOOL_ICON_TASKS,
   },
   {
     id: 'map',
-    title: 'Карта',
-    description: 'Места и маршруты',
+    title: t('tools.panel.map'),
+    description: t('tools.panel.placesRoutes'),
     icon: TOOL_ICON_MAP,
   },
   {
     id: 'gallery',
-    title: 'Галерея',
-    description: 'Фото из чата',
+    title: t('tools.panel.gallery'),
+    description: t('tools.panel.chatPhotos'),
     icon: TOOL_ICON_GALLERY,
   },
   {
     id: 'documents',
-    title: 'Документы',
-    description: 'Файлы чата',
+    title: t('tools.panel.documents'),
+    description: t('tools.panel.chatFiles'),
     icon: TOOL_ICON_DOCUMENTS,
   },
 ];
@@ -126,6 +127,7 @@ const CONTENT_LIMITS: Record<string, number> = {
 };
 
 export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSelect }: Props) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
   const [openTools, setOpenTools] = useState<ToolId[]>(() => getToolsPanelState().openTools);
   // Per-tool layout states
@@ -158,7 +160,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
   }, [openTools]);
 
   const contentMax = isAdmin === 1 ? 3000 : (CONTENT_LIMITS[plan] || 400);
-  const tools = useMemo(() => buildTools(contentMax), [contentMax]);
+  const tools = useMemo(() => buildTools(contentMax, t), [contentMax, t]);
 
   // Find the first tool in sidebar mode (it occupies the sidebar slot)
   const sidebarToolId = openTools.find(id => (toolLayouts[id]?.mode ?? 'sidebar') === 'sidebar') ?? null;
@@ -260,7 +262,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
               transition={{ duration: 0.15 }}
               style={{ pointerEvents: isOpen && sidebarToolId ? 'auto' : 'none' }}
             >
-              <button className={s.backBtn} onClick={handleBack} title="Назад">
+              <button className={s.backBtn} onClick={handleBack} title={t('common.back')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
@@ -271,17 +273,17 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
               animate={{ opacity: isOpen ? 1 : 0 }}
               transition={{ duration: 0.15 }}
             >
-              {sidebarToolId && sidebarTool ? sidebarTool.title : 'Инструменты'}
+              {sidebarToolId && sidebarTool ? sidebarTool.title : t('tools.panel.tools')}
             </motion.span>
             {/* Layout mode buttons — visible when a tool is active in sidebar */}
             {isOpen && sidebarToolId && (
               <div className={s.layoutBtns}>
-                <button className={s.layoutBtn} onClick={() => handleLayoutChange(sidebarToolId, 'floating')} title="Плавающее окно">
+                <button className={s.layoutBtn} onClick={() => handleLayoutChange(sidebarToolId, 'floating')} title={t('tools.panel.floating')}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="5" y="5" width="14" height="14" rx="2" ry="2" />
                   </svg>
                 </button>
-                <button className={s.layoutBtn} onClick={() => handleLayoutChange(sidebarToolId, 'fullscreen')} title="На весь экран">
+                <button className={s.layoutBtn} onClick={() => handleLayoutChange(sidebarToolId, 'fullscreen')} title={t('tools.panel.fullscreen')}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 3 21 3 21 9" />
                     <polyline points="9 21 3 21 3 15" />
@@ -293,7 +295,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
             )}
           </div>
 
-          <button className={s.toolsIconBtn} onClick={handleToggle} title={isOpen ? 'Свернуть' : 'Инструменты'}>
+          <button className={s.toolsIconBtn} onClick={handleToggle} title={isOpen ? t('tools.panel.collapse') : t('tools.panel.tools')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
             </svg>

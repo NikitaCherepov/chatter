@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { Trans, useTranslation } from 'react-i18next';
 import * as api from '../lib/api';
 import s from './LinkTelegramModal.module.scss';
 
@@ -21,6 +22,7 @@ const modalVariants = {
 };
 
 export function LinkTelegramModal({ onClose, onLinked }: Props) {
+  const { t } = useTranslation();
   const [code, setCode] = useState<string | null>(null);
   const [expiresIn, setExpiresIn] = useState(0);
   const [error, setError] = useState('');
@@ -36,11 +38,11 @@ export function LinkTelegramModal({ onClose, onLinked }: Props) {
       setCode(res.code);
       setExpiresIn(res.expires_in);
     } catch (err: any) {
-      setError(err?.message || 'Failed to generate code');
+      setError(err?.message || t('telegram.error.generateCode'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { generate(); }, [generate]);
 
@@ -104,7 +106,7 @@ export function LinkTelegramModal({ onClose, onLinked }: Props) {
           </svg>
         </div>
 
-        <h2 className={s.title}>Link Telegram</h2>
+        <h2 className={s.title}>{t('telegram.title')}</h2>
 
         {linked && (
           <div className={s.success}>
@@ -113,29 +115,28 @@ export function LinkTelegramModal({ onClose, onLinked }: Props) {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <p className={s.successText}>Account linked successfully!</p>
+            <p className={s.successText}>{t('telegram.linked')}</p>
           </div>
         )}
 
         {!linked && loading && (
           <div className={s.loadingState}>
             <div className={s.spinner} />
-            <p className={s.loadingText}>Generating code...</p>
+            <p className={s.loadingText}>{t('telegram.generating')}</p>
           </div>
         )}
 
         {!linked && !loading && error && (
           <div className={s.errorBlock}>
             <p className={s.errorText}>{error}</p>
-            <button className={s.actionBtn} onClick={generate}>Try again</button>
+            <button className={s.actionBtn} onClick={generate}>{t('common.tryAgain')}</button>
           </div>
         )}
 
         {!linked && !loading && !error && code && (
           <>
             <p className={s.hint}>
-              Send <span className={s.codeTag}>/link</span> in the Telegram bot
-              and enter this code:
+              <Trans i18nKey="telegram.instructions" components={{ command: <span className={s.codeTag} /> }} />
             </p>
             <div className={s.codeBlock}>
               {code.split('').map((ch, i) => (
@@ -143,18 +144,18 @@ export function LinkTelegramModal({ onClose, onLinked }: Props) {
               ))}
             </div>
             <p className={s.timer}>
-              Valid for <span className={s.timerBold}>{formatCountdown(expiresIn)}</span>
+              {t('telegram.validFor')} <span className={s.timerBold}>{formatCountdown(expiresIn)}</span>
             </p>
             {expiresIn <= 0 && (
-              <button className={s.actionBtn} onClick={generate}>Get new code</button>
+              <button className={s.actionBtn} onClick={generate}>{t('telegram.getNewCode')}</button>
             )}
           </>
         )}
 
         {!linked && !loading && !error && !code && (
           <div className={s.errorBlock}>
-            <p className={s.errorText}>Code expired</p>
-            <button className={s.actionBtn} onClick={generate}>Get new code</button>
+            <p className={s.errorText}>{t('telegram.expired')}</p>
+            <button className={s.actionBtn} onClick={generate}>{t('telegram.getNewCode')}</button>
           </div>
         )}
       </motion.div>

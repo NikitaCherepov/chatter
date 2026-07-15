@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import s from './UpdateModal.module.scss';
 
 interface UpdateInfo {
@@ -38,6 +39,7 @@ const modalVariants = {
 };
 
 export function UpdateModal({ info, onClose }: Props) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<UpdateStatus>('available');
   const [progress, setProgress] = useState(0);
   const [transferred, setTransferred] = useState(0);
@@ -112,13 +114,13 @@ export function UpdateModal({ info, onClose }: Props) {
           <div className={s.header}>
             <div className={s.titleSection}>
               <div className={s.title}>
-                Доступно обновление {info.version}
+                {t('update.available', { version: info.version })}
               </div>
               <div className={`${s.badge} ${isMinor ? s.minor : s.major}`}>
-                {isMinor ? 'Быстрое обновление' : 'Полное обновление'}
+                {isMinor ? t('update.quick') : t('update.full')}
               </div>
             </div>
-            <button className={s.closeBtn} onClick={onClose} aria-label="Закрыть">
+            <button className={s.closeBtn} onClick={onClose} aria-label={t('common.close')}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
@@ -133,8 +135,8 @@ export function UpdateModal({ info, onClose }: Props) {
           {/* Size info */}
           {sizeLabel && status === 'available' && (
             <div className={s.sizeInfo}>
-              Размер загрузки: ~{sizeLabel}
-              {!isMinor && ' • Требуется полная переустановка'}
+              {t('update.downloadSize', { size: sizeLabel })}
+              {!isMinor && t('update.reinstallRequired')}
             </div>
           )}
 
@@ -150,9 +152,9 @@ export function UpdateModal({ info, onClose }: Props) {
               <div className={s.progressText}>
                 <span>
                   {status === 'downloaded'
-                    ? 'Загрузка завершена'
+                    ? t('update.downloadComplete')
                     : status === 'installing'
-                      ? 'Перезапуск...'
+                      ? t('update.restarting')
                       : `${progress}% • ${formatBytes(transferred)} / ${formatBytes(total || info.size)}`}
                 </span>
               </div>
@@ -162,7 +164,7 @@ export function UpdateModal({ info, onClose }: Props) {
           {/* Error */}
           {status === 'error' && (
             <div className={s.errorText}>
-              Ошибка загрузки: {errorMsg}
+              {t('update.downloadError', { error: errorMsg })}
             </div>
           )}
 
@@ -171,47 +173,47 @@ export function UpdateModal({ info, onClose }: Props) {
             {status === 'available' && (
               <>
                 <button className={`${s.btn} ${s.btnSecondary}`} onClick={onClose}>
-                  Позже
+                  {t('common.later')}
                 </button>
                 <button className={`${s.btn} ${s.btnPrimary}`} onClick={handleDownload}>
-                  Скачать
+                  {t('common.download')}
                 </button>
               </>
             )}
 
             {status === 'downloading' && (
               <button className={`${s.btn} ${s.btnSecondary}`} disabled>
-                Загрузка...
+                {t('common.downloading')}
               </button>
             )}
 
             {status === 'installing' && (
               <button className={`${s.btn} ${s.btnSecondary}`} disabled>
-                Перезапуск...
+                {t('update.restarting')}
               </button>
             )}
 
             {status === 'downloaded' && (
               <>
                 <button className={`${s.btn} ${s.btnSecondary}`} onClick={onClose}>
-                  Позже
+                  {t('common.later')}
                 </button>
                 <button className={`${s.btn} ${s.btnDanger}`} onClick={handleInstall}>
-                  {isMinor ? 'Перезапустить и обновить' : 'Установить обновление'}
+                  {isMinor ? t('update.restartAndUpdate') : t('update.install')}
                 </button>
               </>
             )}
 
             {status === 'error' && (
               <button className={`${s.btn} ${s.btnSecondary}`} onClick={onClose}>
-                Закрыть
+                {t('common.close')}
               </button>
             )}
           </div>
 
           {/* Current version */}
           <div className={s.versionInfo}>
-            Текущая версия: {electronAPI?.appVersion || '—'}
+            {t('update.currentVersion', { version: electronAPI?.appVersion || '—' })}
           </div>
         </motion.div>
       </motion.div>

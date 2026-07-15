@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -54,9 +55,9 @@ const reasoningPanelVariants = {
   exit: { opacity: 0, y: -16, transition: { duration: 0.15 } },
 };
 
-const formatMessageTime = (ts: number) => {
+const formatMessageTime = (ts: number, locale?: string) => {
   const d = new Date(ts * 1000);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 };
 
 const formatToolValue = (value: unknown) => {
@@ -132,6 +133,8 @@ const MessageItem = React.memo(function MessageItem({
   onDeleteAttachment,
   onDeleteImage,
 }: MessageItemProps) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage || i18n.language;
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
   const hasToolCalls = msg.role === 'assistant' && Boolean(msg.tool_calls?.length);
@@ -142,7 +145,7 @@ const MessageItem = React.memo(function MessageItem({
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
       <div className={s.metaRow}>
-        <span>{msg.role === 'user' ? 'You' : 'Chatter'} &bull; {formatMessageTime(msg.created_at)}{msg.archived ? ' \u00b7 архив' : ''}</span>
+        <span>{msg.role === 'user' ? t('chat.message.you') : 'Chatter'} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
         <button
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
           onClick={(e) => {
@@ -151,7 +154,7 @@ const MessageItem = React.memo(function MessageItem({
               onSetMessages(prev => prev.map(m => m.id === id ? { ...m, audio } : m));
             });
           }}
-          title={isTtsPlaying ? 'Остановить' : 'Озвучить'}
+          title={isTtsPlaying ? t('chat.message.stopSpeaking') : t('chat.message.speak')}
         >
           {isTtsPlaying ? (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -172,9 +175,9 @@ const MessageItem = React.memo(function MessageItem({
                 e.stopPropagation();
                 onToggleReasoning(msg.id);
               }}
-              title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+              title={reasoningOpen ? t('chat.message.hideReasoning') : t('chat.message.showReasoning')}
             >
-              <span className={s.streamingLabel}>Рассуждает...</span>
+              <span className={s.streamingLabel}>{t('chat.message.reasoning')}</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -186,9 +189,9 @@ const MessageItem = React.memo(function MessageItem({
               e.stopPropagation();
               onToggleReasoning(msg.id);
             }}
-            title={reasoningOpen ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+            title={reasoningOpen ? t('chat.message.hideReasoning') : t('chat.message.showReasoning')}
           >
-            <span>Рассуждение{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
+            <span>{t('chat.message.reasoningLabel')}{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -202,9 +205,9 @@ const MessageItem = React.memo(function MessageItem({
               e.stopPropagation();
               onToggleToolCalls(msg.id);
             }}
-            title={isToolCallsOpen ? 'Скрыть инструменты' : 'Показать инструменты'}
+            title={isToolCallsOpen ? t('chat.message.hideTools') : t('chat.message.showTools')}
           >
-            <span>{msg.tool_calls!.length} {msg.tool_calls!.length === 1 ? 'инструмент' : msg.tool_calls!.length < 5 ? 'инструмента' : 'инструментов'}</span>
+            <span>{msg.tool_calls!.length} {msg.tool_calls!.length === 1 ? t('chat.message.tool_one') : msg.tool_calls!.length < 5 ? t('chat.message.tool_few') : t('chat.message.tool_many')}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -217,9 +220,9 @@ const MessageItem = React.memo(function MessageItem({
               e.stopPropagation();
               onToggleSubagents(msg.id);
             }}
-            title={isSubagentsOpen ? 'Скрыть сабагентов' : 'Показать сабагентов'}
+            title={isSubagentsOpen ? t('chat.message.hideSubagents') : t('chat.message.showSubagents')}
           >
-            <span>{msg.subagents!.length} {msg.subagents!.length === 1 ? 'сабагент' : msg.subagents!.length < 5 ? 'сабагента' : 'сабагентов'}</span>
+            <span>{msg.subagents!.length} {msg.subagents!.length === 1 ? t('chat.message.subagent_one') : msg.subagents!.length < 5 ? t('chat.message.subagent_few') : t('chat.message.subagent_many')}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -227,7 +230,7 @@ const MessageItem = React.memo(function MessageItem({
         )}
         {isLastAssistant && (
           <>
-            <button className={s.playBtn} onClick={(e) => { e.stopPropagation(); onRegenerate(msg.id); }} title="Перегенерировать" disabled={sending}>
+            <button className={s.playBtn} onClick={(e) => { e.stopPropagation(); onRegenerate(msg.id); }} title={t('chat.message.regenerate')} disabled={sending}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="23 4 23 10 17 10" />
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
@@ -240,7 +243,7 @@ const MessageItem = React.memo(function MessageItem({
                   <input
                     className={s.regenHintInput}
                     autoFocus
-                    placeholder="Инструкция для бота..."
+                    placeholder={t('chat.message.regenerateHintPlaceholder')}
                     value={regenHintText}
                     onChange={(e) => onSetRegenHintText(e.target.value)}
                     onKeyDown={(e) => {
@@ -252,7 +255,7 @@ const MessageItem = React.memo(function MessageItem({
                     className={s.regenHintSend}
                     onClick={() => { if (regenHintText.trim()) onRegenerateWithHint(msg.id, regenHintText); }}
                     disabled={!regenHintText.trim() || sending}
-                    title="Отправить"
+                    title={t('common.send')}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21 5 3" />
@@ -264,7 +267,7 @@ const MessageItem = React.memo(function MessageItem({
               <button
                 className={s.playBtn}
                 onClick={(e) => { e.stopPropagation(); onOpenRegenHint(msg.id); }}
-                title="Перегенерировать с инструкцией"
+                title={t('chat.message.regenerateWithHint')}
                 disabled={sending}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -275,7 +278,7 @@ const MessageItem = React.memo(function MessageItem({
           </>
         )}
         {showTokens && typeof msg.token_count === 'number' && msg.token_count > 0 && (
-          <span className={s.tokenBadge} title="Локальная оценка токенов сообщения (без reasoning)">
+          <span className={s.tokenBadge} title={t('chat.message.localTokenEstimate')}>
             {msg.token_count} tk
           </span>
         )}
@@ -288,14 +291,14 @@ const MessageItem = React.memo(function MessageItem({
                 const src = resolveImageUrl(img.url);
                 return (
                   <div key={i} className={s.messageImageWrap}>
-                    <img className={s.messageImage} src={src} alt={img.type === 'generated' ? 'Generated' : 'Photo'} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
-                    <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title="Удалить">
+                    <img className={s.messageImage} src={src} alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
+                    <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title={t('common.delete')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
                     </button>
-                    <button className={s.messageImageDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(src); }} title="Скачать">
+                    <button className={s.messageImageDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(src); }} title={t('common.download')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="7 10 12 15 17 10" />
@@ -324,7 +327,7 @@ const MessageItem = React.memo(function MessageItem({
                       <span className={s.attachmentSize}>{att.size_bytes < 1024 * 1024 ? `${(att.size_bytes / 1024).toFixed(1)} KB` : `${(att.size_bytes / (1024 * 1024)).toFixed(1)} MB`}</span>
                     </div>
                     {downloadUrl && (
-                      <button className={s.attachmentDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(downloadUrl); }} title="Скачать">
+                      <button className={s.attachmentDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(downloadUrl); }} title={t('common.download')}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                           <polyline points="7 10 12 15 17 10" />
@@ -333,7 +336,7 @@ const MessageItem = React.memo(function MessageItem({
                       </button>
                     )}
                     {msg.id > 0 && att.filename && (
-                      <button className={s.attachmentDelete} onClick={(e) => { e.stopPropagation(); onDeleteAttachment(msg.id, att.filename); }} title="Удалить">
+                      <button className={s.attachmentDelete} onClick={(e) => { e.stopPropagation(); onDeleteAttachment(msg.id, att.filename); }} title={t('common.delete')}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="3 6 5 6 21 6" />
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -369,8 +372,8 @@ const MessageItem = React.memo(function MessageItem({
                 }}
               />
               <div className={s.editActions}>
-                <button className={s.editSaveBtn} onClick={() => onSaveEdit(msg.id)}>Сохранить</button>
-                <button className={s.editCancelBtn} onClick={onCancelEdit}>Отмена</button>
+                <button className={s.editSaveBtn} onClick={() => onSaveEdit(msg.id)}>{t('common.save')}</button>
+                <button className={s.editCancelBtn} onClick={onCancelEdit}>{t('common.cancel')}</button>
               </div>
             </div>
           ) : (
@@ -404,11 +407,11 @@ const MessageItem = React.memo(function MessageItem({
                   return (
                     <div key={tc.id || i} className={s.toolCallItem}>
                       <div className={s.toolCallName}>{tc.name}</div>
-                      <div className={s.toolCallLabel}>Аргументы</div>
+                      <div className={s.toolCallLabel}>{t('chat.message.arguments')}</div>
                       <pre className={s.toolCallArgs}>{args || '{}'}</pre>
                       {result && (
                         <>
-                          <div className={s.toolCallLabel}>Результат</div>
+                          <div className={s.toolCallLabel}>{t('chat.message.result')}</div>
                           <pre className={s.toolCallArgs}>{result}</pre>
                         </>
                       )}
@@ -425,19 +428,19 @@ const MessageItem = React.memo(function MessageItem({
                   const totalToolCalls = sa.iterations?.reduce((sum, it) => sum + (it.tool_calls?.length || 0), 0) ?? 0;
                   return (
                     <div key={i} className={s.toolCallItem}>
-                      <div className={s.toolCallName}>🧠 Сабагент {i + 1}{sa.aborted ? ' · ⏹ прерван' : ''}</div>
-                      <div className={s.toolCallLabel}>Задача</div>
+                      <div className={s.toolCallName}>{t('chat.message.subagentNumber', { number: i + 1 })}{sa.aborted ? t('chat.message.interruptedSuffix') : ''}</div>
+                      <div className={s.toolCallLabel}>{t('chat.message.task')}</div>
                       <pre className={s.toolCallArgs}>{sa.task}</pre>
-                      <div className={s.toolCallLabel}>Системный промпт</div>
+                      <div className={s.toolCallLabel}>{t('chat.message.systemPrompt')}</div>
                       <pre className={s.toolCallArgs}>{sa.system_prompt.slice(0, 500)}{sa.system_prompt.length > 500 ? '…' : ''}</pre>
-                      <div className={s.toolCallLabel}>Инструменты ({sa.tools.length})</div>
+                      <div className={s.toolCallLabel}>{t('chat.message.tools')} ({sa.tools.length})</div>
                       <pre className={s.toolCallArgs}>{sa.tools.join(', ')}</pre>
-                      <div className={s.toolCallLabel}>Выполнено инструментов ({totalToolCalls})</div>
+                      <div className={s.toolCallLabel}>{t('chat.message.completedTools')} ({totalToolCalls})</div>
                       {sa.iterations?.map((iter, j) => (
                         <div key={j} style={{ marginTop: 4 }}>
                           {iter.content && (
                             <>
-                              <div className={s.toolCallLabel} style={{ opacity: 0.6 }}>Шаг {iter.step} · текст</div>
+                              <div className={s.toolCallLabel} style={{ opacity: 0.6 }}>{t('chat.message.stepWithText', { step: iter.step })}</div>
                               <pre className={s.toolCallArgs} style={{ opacity: 0.7 }}>{iter.content.slice(0, 500)}{iter.content.length > 500 ? '…' : ''}</pre>
                             </>
                           )}
@@ -447,11 +450,11 @@ const MessageItem = React.memo(function MessageItem({
                             const resultText = result?.content || '';
                             return (
                               <div key={k} style={{ marginTop: 2 }}>
-                                <div className={s.toolCallLabel}>Шаг {iter.step} · {tc.name}</div>
+                                <div className={s.toolCallLabel}>{t('chat.message.step', { step: iter.step })} · {tc.name}</div>
                                 <pre className={s.toolCallArgs}>{formatToolValue(args) || '{}'}</pre>
                                 {resultText && (
                                   <>
-                                    <div className={s.toolCallLabel} style={{ opacity: 0.6 }}>Результат</div>
+                                    <div className={s.toolCallLabel} style={{ opacity: 0.6 }}>{t('chat.message.result')}</div>
                                     <pre className={s.toolCallArgs} style={{ opacity: 0.8 }}>{formatToolValue(resultText.slice(0, 250))}{resultText.length > 250 ? `\n...[truncated ${resultText.length - 250} chars]` : ''}</pre>
                                   </>
                                 )}
@@ -460,7 +463,7 @@ const MessageItem = React.memo(function MessageItem({
                           })}
                         </div>
                       ))}
-                      <div className={s.toolCallLabel}>Ответ</div>
+                      <div className={s.toolCallLabel}>{t('chat.message.answer')}</div>
                       <pre className={s.toolCallArgs}>{sa.answer.slice(0, 1000)}{sa.answer.length > 1000 ? '…' : ''}</pre>
                     </div>
                   );
@@ -469,7 +472,7 @@ const MessageItem = React.memo(function MessageItem({
             </motion.div>
           )}
         </AnimatePresence>
-        <button className={s.msgKebabBtn} onClick={(e) => onMsgKebabClick(e, msg.id)} title="Действия">
+        <button className={s.msgKebabBtn} onClick={(e) => onMsgKebabClick(e, msg.id)} title={t('common.actions')}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <circle cx="8" cy="3" r="1.5" />
             <circle cx="8" cy="8" r="1.5" />
@@ -491,6 +494,8 @@ function getMaxImagesForPlan(plan: string, isAdmin: number): number {
 }
 
 export function ChatPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage || i18n.language;
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
   const showTokens = user?.ui_settings?.show_tokens !== false;
@@ -749,7 +754,7 @@ export function ChatPage() {
   }, [preferredModel, modelsCatalog, autoReasoningLevels]);
 
   const LEVEL_LABELS: Record<string, string> = {
-    'null': 'Авто', 'none': 'Выкл', 'minimal': 'Мин', 'low': 'Низк', 'medium': 'Ср', 'high': 'Выс', 'xhigh': 'Макс',
+    'null': t('chat.reasoning.auto'), 'none': t('chat.reasoning.off'), 'minimal': t('chat.reasoning.minimalShort'), 'low': t('chat.reasoning.lowShort'), 'medium': t('chat.reasoning.mediumShort'), 'high': t('chat.reasoning.highShort'), 'xhigh': t('chat.reasoning.maxShort'),
   };
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
@@ -979,7 +984,7 @@ export function ChatPage() {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
           return [...prev, {
             confirmation_id: val.confirmation_id!,
-            server_name: val.server_name || 'Unknown',
+            server_name: val.server_name || t('common.unknown'),
             server_id: val.server_id || 0,
             host: val.host || '',
             command: val.command!,
@@ -1065,7 +1070,7 @@ export function ChatPage() {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
           return [...prev, {
             confirmation_id: val.confirmation_id!,
-            purpose: val.purpose || 'Опиши что видит камера',
+            purpose: val.purpose || t('chat.webcam.defaultTask'),
             camera_name: val.camera_name || 'default',
           }];
         });
@@ -1309,7 +1314,7 @@ export function ChatPage() {
                     return {
                       ...m,
                       id: res.message_id,
-                      ...(res.reply_text ? { content: res.reply_text } : { content: '_⏹ Генерация остановлена_' }),
+                      ...(res.reply_text ? { content: res.reply_text } : { content: t('chat.generationStopped') }),
                       reasoning_content: res.reasoning_content ?? null,
                       tool_calls: res.tool_calls ?? null,
                       subagents: res.subagents ?? null,
@@ -1328,7 +1333,7 @@ export function ChatPage() {
                     : prev;
                   return [...updated, {
                     id: res.message_id, role: 'assistant' as const,
-                    content: res.reply_text || '_⏹ Генерация остановлена_',
+                    content: res.reply_text || t('chat.generationStopped'),
                     created_at: Math.floor(Date.now() / 1000),
                     reasoning_content: res.reasoning_content ?? null,
                     tool_calls: res.tool_calls ?? null,
@@ -1483,7 +1488,7 @@ export function ChatPage() {
           if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
         } catch (err) {
           console.error('[voice] Transcription failed:', err);
-          toast.error('Ошибка распознавания голоса');
+          toast.error(t('chat.toasts.speechRecognitionFailed'));
         } finally {
           setIsTranscribing(false);
         }
@@ -1493,7 +1498,7 @@ export function ChatPage() {
       setIsRecording(true);
     } catch (err) {
       console.error('[voice] Microphone access denied:', err);
-      toast.error('Нет доступа к микрофону');
+      toast.error(t('chat.toasts.microphoneDenied'));
     }
   }, []);
 
@@ -1578,7 +1583,7 @@ export function ChatPage() {
         setMessages(prev => prev.map(m => m.id === messageId ? { ...m, token_count: res.token_count } : m));
       }
     } catch {
-      toast.error('Не удалось удалить файл');
+      toast.error(t('chat.toasts.fileDeleteFailed'));
       // Reload to restore
       const data = await api.getMessages(activeChatId);
       setMessages(data.messages);
@@ -1656,11 +1661,11 @@ export function ChatPage() {
   const handleExportChat = async (chatId: number) => {
     setContextMenuChatId(null);
     const chat = chats.find(c => c.id === chatId);
-    const chatName = chat?.title || 'Чат';
+    const chatName = chat?.title || t('chat.export.defaultTitle');
     try {
       const res = await api.getMessages(chatId, 10000);
       if (res.messages.length === 0) {
-        toast.error('Чат пуст');
+        toast.error(t('chat.toasts.emptyChat'));
         return;
       }
       const blob = await generateChatDocxBlob(res.messages, chatName);
@@ -1670,11 +1675,11 @@ export function ChatPage() {
       const safeName = chatName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60);
       const result = await window.electronAPI?.saveFile(`${safeName} ${dateStr}.docx`, buffer);
       if (result && !result.canceled) {
-        toast.success('Чат сохранён');
+        toast.success(t('chat.toasts.chatSaved'));
       }
     } catch (err) {
       console.error('Failed to export chat:', err);
-      toast.error('Не удалось экспортировать чат');
+      toast.error(t('chat.toasts.chatExportFailed'));
     }
   };
 
@@ -1845,7 +1850,7 @@ export function ChatPage() {
                     return {
                       ...m,
                       id: res.message_id,
-                      ...(res.reply_text ? { content: res.reply_text } : { content: '_⏹ Генерация остановлена_' }),
+                      ...(res.reply_text ? { content: res.reply_text } : { content: t('chat.generationStopped') }),
                       reasoning_content: res.reasoning_content ?? null,
                       tool_calls: res.tool_calls ?? null,
                       subagents: res.subagents ?? null,
@@ -1856,7 +1861,7 @@ export function ChatPage() {
               } else {
                 setMessages((prev) => [...prev, {
                   id: res.message_id, role: 'assistant' as const,
-                  content: res.reply_text || '_⏹ Генерация остановлена_',
+                  content: res.reply_text || t('chat.generationStopped'),
                   created_at: Math.floor(Date.now() / 1000),
                   reasoning_content: res.reasoning_content ?? null,
                   tool_calls: res.tool_calls ?? null,
@@ -2008,7 +2013,7 @@ export function ChatPage() {
                     return {
                       ...m,
                       id: res.message_id,
-                      ...(res.reply_text ? { content: res.reply_text } : { content: '_⏹ Генерация остановлена_' }),
+                      ...(res.reply_text ? { content: res.reply_text } : { content: t('chat.generationStopped') }),
                       reasoning_content: res.reasoning_content ?? null,
                       tool_calls: res.tool_calls ?? null,
                       subagents: res.subagents ?? null,
@@ -2019,7 +2024,7 @@ export function ChatPage() {
               } else {
                 setMessages((prev) => [...prev, {
                   id: res.message_id, role: 'assistant' as const,
-                  content: res.reply_text || '_⏹ Генерация остановлена_',
+                  content: res.reply_text || t('chat.generationStopped'),
                   created_at: Math.floor(Date.now() / 1000),
                   reasoning_content: res.reasoning_content ?? null,
                   tool_calls: res.tool_calls ?? null,
@@ -2090,8 +2095,8 @@ export function ChatPage() {
     const msg = messages.find(m => m.id === messageId);
     if (!msg) return;
     navigator.clipboard.writeText(msg.content).then(
-      () => toast.success('Скопировано'),
-      () => toast.error('Не удалось скопировать'),
+      () => toast.success(t('chat.toasts.copied')),
+      () => toast.error(t('chat.toasts.copyFailed')),
     );
     closeMsgMenu();
   };
@@ -2107,11 +2112,11 @@ export function ChatPage() {
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const result = await window.electronAPI?.saveFile(`message ${dateStr}.docx`, buffer);
       if (result && !result.canceled) {
-        toast.success('Файл сохранён');
+        toast.success(t('chat.toasts.fileSaved'));
       }
     } catch (err) {
       console.error('Failed to export docx:', err);
-      toast.error('Не удалось сохранить файл');
+      toast.error(t('chat.toasts.fileSaveFailed'));
     }
   };
 
@@ -2119,15 +2124,15 @@ export function ChatPage() {
     closeMsgMenu();
     try {
       await api.sendMessageToTelegram(messageId);
-      toast.success('Отправлено в Telegram');
+      toast.success(t('chat.toasts.telegramSent'));
     } catch (err: any) {
       const error = err?.data?.error || err?.message || '';
       if (error === 'telegram_not_linked') {
-        toast.error('Telegram не привязан. Привяжите аккаунт в настройках.');
+        toast.error(t('chat.toasts.telegramNotLinked'));
       } else if (error === 'telegram_not_configured') {
-        toast.error('Telegram не настроен на сервере');
+        toast.error(t('chat.toasts.telegramNotConfigured'));
       } else {
-        toast.error('Не удалось отправить в Telegram');
+        toast.error(t('chat.toasts.telegramSendFailed'));
       }
     }
   };
@@ -2189,7 +2194,7 @@ export function ChatPage() {
         const result = await window.electronAPI.startWakeWord();
         if (!result.ok) {
           console.error('[wakeword] failed to start:', result.error);
-          toast.error('Не удалось запустить wake word');
+          toast.error(t('chat.toasts.wakeWordFailed'));
           return;
         }
 
@@ -2198,7 +2203,7 @@ export function ChatPage() {
         }
       } catch (error) {
         console.error('[wakeword] failed to start:', error);
-        toast.error('Не удалось запустить wake word');
+        toast.error(t('chat.toasts.wakeWordFailed'));
       }
     })();
 
@@ -2245,7 +2250,7 @@ export function ChatPage() {
             }
           } catch (err) {
             console.error('[speech] Transcription failed:', err);
-            toast.error('Ошибка распознавания голоса');
+            toast.error(t('chat.toasts.speechRecognitionFailed'));
           } finally {
             setIsTranscribing(false);
           }
@@ -2264,7 +2269,7 @@ export function ChatPage() {
 
         onError: (error) => {
           console.error('[speech] Recorder error:', error);
-          toast.error('Ошибка записи голоса');
+          toast.error(t('chat.toasts.voiceRecordingFailed'));
           recorder.stop();
           speechRecorderRef.current = null;
           setIsRecording(false);
@@ -2296,7 +2301,7 @@ export function ChatPage() {
   }, []);
 
   const lastAssistantId = messages.filter(m => m.role === 'assistant').pop()?.id ?? null;
-  const formatTime = formatMessageTime;
+  const formatTime = (timestamp: number) => formatMessageTime(timestamp, locale);
 
   // ── Search ──────────────────────────────────────────────────────────────
 
@@ -2359,11 +2364,11 @@ export function ChatPage() {
       const fileName = `image_${dateStr}_${uuid}.${ext}`;
       const result = await window.electronAPI?.saveFile(fileName, buffer);
       if (result && !result.canceled) {
-        toast.success('Изображение сохранено');
+        toast.success(t('chat.toasts.imageSaved'));
       }
     } catch (err) {
       console.error('Failed to download image:', err);
-      toast.error('Не удалось сохранить изображение');
+      toast.error(t('chat.toasts.imageSaveFailed'));
     }
   }, []);
 
@@ -2383,7 +2388,7 @@ export function ChatPage() {
       setViewerImageUrl(null);
     } catch (err) {
       console.error('Failed to delete image:', err);
-      toast.error('Не удалось удалить изображение');
+      toast.error(t('chat.toasts.imageDeleteFailed'));
     } finally {
       setDeletingImage(false);
     }
@@ -2437,7 +2442,7 @@ export function ChatPage() {
         transition={{ duration: 0.2, ease: 'easeInOut' }}
       >
         <div className={s.sidebarHeader}>
-          <button className={s.burgerBtn} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? 'Развернуть' : 'Свернуть'}>
+          <button className={s.burgerBtn} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? t('chat.sidebar.expand') : t('chat.sidebar.collapse')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="12" x2="21" y2="12" />
@@ -2449,7 +2454,7 @@ export function ChatPage() {
             animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
             transition={{ duration: 0.15 }}
           >
-            Чаты
+            {t('chat.sidebar.chats')}
           </motion.span>
           <motion.button
             className={s.newChatBtn}
@@ -2479,7 +2484,7 @@ export function ChatPage() {
           <input
             className={s.searchInput}
             type="text"
-            placeholder="Поиск..."
+            placeholder={t('chat.sidebar.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
           />
@@ -2503,10 +2508,10 @@ export function ChatPage() {
           {searchQuery.trim().length >= 3 ? (
             <div className={s.chatList}>
               {searchLoading && (
-                <div className={s.emptyChats}>Поиск...</div>
+                <div className={s.emptyChats}>{t('chat.sidebar.searching')}</div>
               )}
               {!searchLoading && searchResults.length === 0 && (
-                <div className={s.emptyChats}>Ничего не найдено</div>
+                <div className={s.emptyChats}>{t('chat.sidebar.nothingFound')}</div>
               )}
               {!searchLoading && searchResults.map((result) => (
                 <div
@@ -2553,14 +2558,14 @@ export function ChatPage() {
                     <div className={s.chatItemTitle}>
                       <AnimatePresence mode="popLayout" initial={false}>
                         <motion.span
-                          key={chat.title || 'Новый чат'}
+                          key={chat.title || t('chat.sidebar.newChat')}
                           initial={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
                           animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
                           exit={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
                           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                           style={{ display: 'inline-block' }}
                         >
-                          {chat.title || 'Новый чат'}
+                          {chat.title || t('chat.sidebar.newChat')}
                         </motion.span>
                       </AnimatePresence>
                     </div>
@@ -2571,7 +2576,7 @@ export function ChatPage() {
                   <button
                     className={s.kebabBtn}
                     onClick={(e) => handleKebabClick(e, chat.id)}
-                    title="Действия"
+                    title={t('common.actions')}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <circle cx="8" cy="3" r="1.5" />
@@ -2586,10 +2591,10 @@ export function ChatPage() {
               </div>
             ))}
             {chats.length === 0 && (
-              <div className={s.emptyChats}>{loadingChats ? 'Загрузка...' : 'Нет чатов'}</div>
+              <div className={s.emptyChats}>{loadingChats ? t('common.loading') : t('chat.sidebar.noChats')}</div>
             )}
             {loadingMoreChats && (
-              <div className={s.emptyChats}>Загрузка...</div>
+              <div className={s.emptyChats}>{t('common.loading')}</div>
             )}
           </div>
           )}
@@ -2607,7 +2612,7 @@ export function ChatPage() {
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
-              Изменить название
+              {t('chat.sidebar.rename')}
             </button>
             <button className={s.contextMenuItem} onClick={() => handleExportChat(contextMenuChatId)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2615,20 +2620,20 @@ export function ChatPage() {
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              Скачать docx
+              {t('chat.sidebar.downloadDocx')}
             </button>
             <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
-              Удалить
+              {t('common.delete')}
             </button>
           </div>
         )}
 
         <div className={s.sidebarFooter}>
-          <div className={s.userInfo} style={{ cursor: 'pointer' }} onClick={() => setShowSettings(true)} title="Настройки">
+          <div className={s.userInfo} style={{ cursor: 'pointer' }} onClick={() => setShowSettings(true)} title={t('settings.title')}>
             <div className={s.avatar}>
               {(user?.name || user?.username || 'U')[0].toUpperCase()}
             </div>
@@ -2637,7 +2642,7 @@ export function ChatPage() {
               animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
               transition={{ duration: 0.15 }}
             >
-              {user?.name || user?.username || 'User'}
+              {user?.name || user?.username || t('common.user')}
             </motion.span>
           </div>
           <motion.div
@@ -2655,21 +2660,21 @@ export function ChatPage() {
                   setUser(freshUser);
                   localStorage.setItem('chatter_user', JSON.stringify(freshUser));
                 } catch {}
-              }} title="Отвязать Telegram">
+              }} title={t('chat.sidebar.unlinkTelegram')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 6L6 18" />
                   <path d="M6 6l12 12" />
                 </svg>
               </button>
             ) : (
-              <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title="Привязать Telegram">
+              <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title={t('chat.sidebar.linkTelegram')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                   <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                 </svg>
               </button>
             )}
-            <button className={s.iconBtn} onClick={handleLogout} title="Выйти">
+            <button className={s.iconBtn} onClick={handleLogout} title={t('chat.sidebar.logout')}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
@@ -2687,7 +2692,7 @@ export function ChatPage() {
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-placeholder)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-            <p className={s.emptyStateText}>Выберите чат или создайте новый</p>
+            <p className={s.emptyStateText}>{t('chat.empty.selectOrCreate')}</p>
           </div>
         ) : (
           <>
@@ -2695,11 +2700,11 @@ export function ChatPage() {
               <div className={s.modelSelector}>
                 {modelsCatalog.length > 0 && (
                   <>
-                    <label className={s.modelLabel}>Модель:</label>
+                    <label className={s.modelLabel}>{t('chat.model.label')}</label>
                     <div className={s.modelSelectWrap}>
                       <Select
                         options={[
-                          { value: '', label: 'Авто', hint: 'Автоматический выбор', badge: (user?.plan === 'pro' ? autoSupportsVision.pro : autoSupportsVision.lite) ? { text: 'Vision', color: 'success' as const } : undefined },
+                          { value: '', label: t('chat.reasoning.auto'), hint: t('chat.model.automatic'), badge: (user?.plan === 'pro' ? autoSupportsVision.pro : autoSupportsVision.lite) ? { text: 'Vision', color: 'success' as const } : undefined },
                           ...modelsCatalog.map(m => ({
                             value: m.id,
                             label: m.name,
@@ -2714,10 +2719,10 @@ export function ChatPage() {
                             await api.setPreferredModel(modelId);
                             setPreferredModel(modelId);
                           } catch {
-                            toast.error('Не удалось сменить модель');
+                            toast.error(t('chat.toasts.modelChangeFailed'));
                           }
                         }}
-                        placeholder="Авто"
+                        placeholder={t('chat.reasoning.auto')}
                       />
                     </div>
                   </>
@@ -2726,7 +2731,7 @@ export function ChatPage() {
                 <div className={s.reasoningControl}>
                   <Slider
                     mode="discrete"
-                    label="Размышление:"
+                    label={t('chat.reasoning.label')}
                     values={availableLevels}
                     labels={LEVEL_LABELS}
                     value={reasoningLevel}
@@ -2735,7 +2740,7 @@ export function ChatPage() {
                       try {
                         await api.setReasoningLevel(reasoningLevel);
                       } catch {
-                        toast.error('Не удалось изменить уровень размышления');
+                        toast.error(t('chat.toasts.reasoningChangeFailed'));
                       }
                     }}
                   />
@@ -2743,28 +2748,28 @@ export function ChatPage() {
                 )}
               </div>
               {showTokens && contextTokens && (
-                <div className={s.contextTokensCompact} title={`Сообщений: ${contextTokens.active_messages} (архив: ${contextTokens.archived_messages})\nТокены промпта: ${contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}${contextTokens.reasoning_tokens > 0 ? `\nReasoning: ${contextTokens.reasoning_tokens.toLocaleString('ru-RU')} tk` : ''}`}>
-                  <span className={s.contextTokensValue}>{contextTokens.messages_tokens.toLocaleString('ru-RU')}</span>
+                <div className={s.contextTokensCompact} title={t('chat.context.tooltip', { active: contextTokens.active_messages, archived: contextTokens.archived_messages, promptTokens: contextTokens.system_prompt_tokens.toLocaleString(locale), reasoning: contextTokens.reasoning_tokens > 0 ? `\n${t('chat.context.reasoning')}: ${contextTokens.reasoning_tokens.toLocaleString(locale)} tk` : '' })}>
+                  <span className={s.contextTokensValue}>{contextTokens.messages_tokens.toLocaleString(locale)}</span>
                   <span className={s.contextTokensLabel}> tk</span>
                   <span className={s.contextTokensSep}>·</span>
-                  <span className={s.contextTokensPromptValue}>{contextTokens.system_prompt_tokens.toLocaleString('ru-RU')}</span>
-                  <span className={s.contextTokensLabel}> prompt</span>
+                  <span className={s.contextTokensPromptValue}>{contextTokens.system_prompt_tokens.toLocaleString(locale)}</span>
+                  <span className={s.contextTokensLabel}> {t('chat.context.prompt')}</span>
                 </div>
               )}
             </div>
             <div className={s.messages} ref={messagesScrollRef}>
               {loadingMessages && (
-                <div className={s.loadingRow}>Загрузка сообщений...</div>
+                <div className={s.loadingRow}>{t('chat.messages.loading')}</div>
               )}
               {!loadingMessages && hiddenMessagesCount > 0 && (
                 <button className={s.loadOlderBtn} onClick={showMoreHidden}>
-                  Показать ещё {hiddenMessagesCount} сообщ.
-                  {hiddenTokensSum > 0 ? ` (~${Math.round(hiddenTokensSum / 1000)}k токенов)` : ''}
+                  {t('chat.messages.showMoreCount', { count: hiddenMessagesCount })}
+                  {hiddenTokensSum > 0 ? t('chat.messages.hiddenTokens', { count: Math.round(hiddenTokensSum / 1000) }) : ''}
                 </button>
               )}
               {!loadingMessages && hiddenMessagesCount === 0 && hasMoreMessages && (
                 <button className={s.loadOlderBtn} onClick={loadOlderMessages} disabled={loadingOlderMessages}>
-                  {loadingOlderMessages ? 'Загрузка...' : 'Загрузить старые сообщения'}
+                  {loadingOlderMessages ? t('common.loading') : t('chat.messages.loadOlderTitle')}
                 </button>
               )}
               {visibleMessages.map((msg) => (
@@ -2819,7 +2824,7 @@ export function ChatPage() {
                           setMessages(prev => prev.map(m => m.id === id ? { ...m, audio } : m));
                         });
                       }}
-                      title={ttsPlayingId === msg.id ? 'Остановить' : 'Озвучить'}
+                      title={ttsPlayingId === msg.id ? t('chat.message.stopSpeaking') : t('chat.message.speak')}
                     >
                       {ttsPlayingId === msg.id ? (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -2841,9 +2846,9 @@ export function ChatPage() {
                             e.stopPropagation();
                             setOpenReasoningId((current) => current === msg.id ? null : msg.id);
                           }}
-                          title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+                          title={openReasoningId === msg.id ? t('chat.message.hideReasoning') : t('chat.message.showReasoning')}
                         >
-                          <span className={s.streamingLabel}>Рассуждает...</span>
+                          <span className={s.streamingLabel}>{t('chat.message.reasoning')}</span>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <polyline points="6 9 12 15 18 9" />
                           </svg>
@@ -2855,9 +2860,9 @@ export function ChatPage() {
                             e.stopPropagation();
                             setOpenReasoningId((current) => current === msg.id ? null : msg.id);
                           }}
-                          title={openReasoningId === msg.id ? 'Скрыть рассуждение' : 'Показать рассуждение'}
+                          title={openReasoningId === msg.id ? t('chat.message.hideReasoning') : t('chat.message.showReasoning')}
                         >
-                          <span>Рассуждение{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
+                          <span>{t('chat.message.reasoningLabel')}{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <polyline points="6 9 12 15 18 9" />
                           </svg>
@@ -2871,9 +2876,9 @@ export function ChatPage() {
                           e.stopPropagation();
                           setOpenToolCallsId((current) => current === msg.id ? null : msg.id);
                         }}
-                        title={openToolCallsId === msg.id ? 'Скрыть инструменты' : 'Показать инструменты'}
+                        title={openToolCallsId === msg.id ? t('chat.message.hideTools') : t('chat.message.showTools')}
                       >
-                        <span>{msg.tool_calls.length} {msg.tool_calls.length === 1 ? 'инструмент' : msg.tool_calls.length < 5 ? 'инструмента' : 'инструментов'}</span>
+                        <span>{msg.tool_calls.length} {msg.tool_calls.length === 1 ? t('chat.message.tool_one') : msg.tool_calls.length < 5 ? t('chat.message.tool_few') : t('chat.message.tool_many')}</span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <polyline points="6 9 12 15 18 9" />
                         </svg>
@@ -2887,7 +2892,7 @@ export function ChatPage() {
                             e.stopPropagation();
                             handleRegenerate(msg.id);
                           }}
-                          title="Перегенерировать"
+                          title={t('chat.message.regenerate')}
                           disabled={sending}
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2902,7 +2907,7 @@ export function ChatPage() {
                               <input
                                 className={s.regenHintInput}
                                 autoFocus
-                                placeholder="Инструкция для бота..."
+                                placeholder={t('chat.message.regenerateHintPlaceholder')}
                                 value={regenHintText}
                                 onChange={(e) => setRegenHintText(e.target.value)}
                                 onKeyDown={(e) => {
@@ -2920,7 +2925,7 @@ export function ChatPage() {
                                   if (regenHintText.trim()) handleRegenerateWithHint(msg.id, regenHintText);
                                 }}
                                 disabled={!regenHintText.trim() || sending}
-                                title="Отправить"
+                                title={t('common.send')}
                               >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                   <polygon points="5 3 19 12 5 21 5 3" />
@@ -2936,7 +2941,7 @@ export function ChatPage() {
                               setRegenHintMsgId(msg.id);
                               setRegenHintText('');
                             }}
-                            title="Перегенерировать с инструкцией"
+                            title={t('chat.message.regenerateWithHint')}
                             disabled={sending}
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2947,7 +2952,7 @@ export function ChatPage() {
                       </>
                     )}
                     {typeof msg.token_count === 'number' && msg.token_count > 0 && (
-                      <span className={s.tokenBadge} title="Локальная оценка токенов сообщения (без reasoning)">
+                      <span className={s.tokenBadge} title={t('chat.message.localTokenEstimate')}>
                         {msg.token_count} tk
                       </span>
                     )}
@@ -2963,7 +2968,7 @@ export function ChatPage() {
                                 <img
                                   className={s.messageImage}
                                   src={src}
-                                  alt={img.type === 'generated' ? 'Generated' : 'Photo'}
+                                  alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')}
                                   loading="lazy"
                                   onClick={() => {
                                     setViewerImageSrc(src);
@@ -2974,7 +2979,7 @@ export function ChatPage() {
                                 <button
                                   className={s.messageImageDownload}
                                   onClick={(e) => { e.stopPropagation(); handleDownloadImage(src); }}
-                                  title="Скачать"
+                                  title={t('common.download')}
                                 >
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -2985,7 +2990,7 @@ export function ChatPage() {
                                 <button
                                   className={s.messageImageDelete}
                                   onClick={(e) => { e.stopPropagation(); setImageDeleteTarget({ messageId: msg.id, url: img.url }); }}
-                                  title="Удалить"
+                                  title={t('common.delete')}
                                 >
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <polyline points="3 6 5 6 21 6" />
@@ -3014,7 +3019,7 @@ export function ChatPage() {
                                   <span className={s.attachmentSize}>{att.size_bytes < 1024 * 1024 ? `${(att.size_bytes / 1024).toFixed(1)} KB` : `${(att.size_bytes / (1024 * 1024)).toFixed(1)} MB`}</span>
                                 </div>
                                 {downloadUrl && (
-                                  <button className={s.attachmentDownload} onClick={(e) => { e.stopPropagation(); handleDownloadImage(downloadUrl); }} title="Скачать">
+                                  <button className={s.attachmentDownload} onClick={(e) => { e.stopPropagation(); handleDownloadImage(downloadUrl); }} title={t('common.download')}>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                       <polyline points="7 10 12 15 17 10" />
@@ -3023,7 +3028,7 @@ export function ChatPage() {
                                   </button>
                                 )}
                                 {msg.id > 0 && att.filename && (
-                                  <button className={s.attachmentDelete} onClick={(e) => { e.stopPropagation(); handleDeleteAttachment(msg.id, att.filename); }} title="Удалить">
+                                  <button className={s.attachmentDelete} onClick={(e) => { e.stopPropagation(); handleDeleteAttachment(msg.id, att.filename); }} title={t('common.delete')}>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <polyline points="3 6 5 6 21 6" />
                                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -3066,13 +3071,13 @@ export function ChatPage() {
                             return (
                               <div key={tc.id || i} style={{ marginBottom: i < msg.tool_calls!.length - 1 ? '8px' : 0 }}>
                                 <div style={{ fontWeight: 600, marginBottom: 2 }}>{tc.name}</div>
-                                <div className={s.toolCallLabel}>Аргументы</div>
+                                <div className={s.toolCallLabel}>{t('chat.message.arguments')}</div>
                                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
                                   {args || '{}'}
                                 </pre>
                                 {result && (
                                   <>
-                                    <div className={s.toolCallLabel}>Результат</div>
+                                    <div className={s.toolCallLabel}>{t('chat.message.result')}</div>
                                     <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.8 }}>
                                       {result}
                                     </pre>
@@ -3087,7 +3092,7 @@ export function ChatPage() {
                     <button
                       className={s.msgKebabBtn}
                       onClick={(e) => handleMsgKebabClick(e, msg.id)}
-                      title="Действия"
+                      title={t('common.actions')}
                     >
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                         <circle cx="8" cy="3" r="1.5" />
@@ -3100,7 +3105,7 @@ export function ChatPage() {
               ))}
               {showTyping && (
                 <div className={s.messageGroup}>
-                  <div className={s.metaRow}>Chatter &bull; {streamingState === 'reasoning' ? 'Рассуждает...' : 'typing...'}</div>
+                  <div className={s.metaRow}>Chatter &bull; {streamingState === 'reasoning' ? t('chat.message.reasoning') : t('chat.message.typing')}</div>
                   <div className={s.bubble}>
                     <div className={`${s.typingDots} ${streamingState === 'reasoning' ? s.typingDotsStreaming : ''}`}>
                       <span className={s.dot} />
@@ -3118,7 +3123,7 @@ export function ChatPage() {
                       <polyline points="16 18 22 12 16 6" />
                       <polyline points="8 6 2 12 8 18" />
                     </svg>
-                    <span className={s.suggestMacroTitle}>Предложение макроса</span>
+                    <span className={s.suggestMacroTitle}>{t('chat.macro.title')}</span>
                     <button
                       className={s.suggestMacroClose}
                       onClick={() => setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx))}
@@ -3153,20 +3158,20 @@ export function ChatPage() {
                               pinned: false,
                             }),
                           });
-                          toast.success('Макрос сохранён в настройки');
+                          toast.success(t('chat.toasts.macroSaved'));
                           setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx));
                         } catch {
-                          toast.error('Не удалось сохранить макрос');
+                          toast.error(t('chat.toasts.macroSaveFailed'));
                         }
                       }}
                     >
-                      Сохранить в настройки
+                      {t('chat.macro.save')}
                     </button>
                     <button
                       className={s.suggestMacroDismissBtn}
                       onClick={() => setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx))}
                     >
-                      Отклонить
+                      {t('common.reject')}
                     </button>
                   </div>
                 </div>
@@ -3180,7 +3185,7 @@ export function ChatPage() {
                       <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
                       <path d="M7 15h0M12 15h0M17 15h0" />
                     </svg>
-                    <span className={s.suggestMacroTitle}>Подтверждение команды</span>
+                    <span className={s.suggestMacroTitle}>{t('chat.confirm.commandTitle')}</span>
                     <button
                       className={s.suggestMacroClose}
                       onClick={() => setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
@@ -3200,7 +3205,7 @@ export function ChatPage() {
                     <div style={{ marginTop: '8px', marginBottom: conf.needs_sudo_password ? '0' : '8px' }}>
                       <input
                         type="password"
-                        placeholder="New password"
+                        placeholder={t('chat.confirm.newPassword')}
                         value={conf.new_password || ''}
                         onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, new_password: e.target.value } : c))}
                         style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', width: '100%' }}
@@ -3212,7 +3217,7 @@ export function ChatPage() {
                       <>
                           <input
                             type="password"
-                            placeholder="Sudo пароль"
+                            placeholder={t('chat.confirm.sudoPassword')}
                             value={conf.sudo_password || ''}
                             onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
                             style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
@@ -3224,7 +3229,7 @@ export function ChatPage() {
                               checked={conf.save_sudo_password || false}
                               onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, save_sudo_password: e.target.checked } : c))}
                             />
-                            Сохранить sudo пароль в настройках сервера
+                            {t('chat.confirm.saveSudoPassword')}
                           </label>
                       </>
                     </div>
@@ -3243,7 +3248,7 @@ export function ChatPage() {
                           };
                           if (conf.needs_sudo_password) {
                             if (!conf.sudo_password?.trim()) {
-                              toast.error('Введите sudo пароль');
+                              toast.error(t('chat.toasts.enterSudoPassword'));
                               return;
                             }
                             body.sudo_password = conf.sudo_password;
@@ -3251,7 +3256,7 @@ export function ChatPage() {
                           }
                           if (conf.needs_new_password) {
                             if (!conf.new_password?.trim()) {
-                              toast.error('Enter new password');
+                              toast.error(t('chat.toasts.enterNewPassword'));
                               return;
                             }
                             body.new_password = conf.new_password;
@@ -3260,14 +3265,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify(body),
                           });
-                          toast.success('Команда подтверждена');
+                          toast.success(t('chat.toasts.commandApproved'));
                           setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка подтверждения');
+                          toast.error(t('chat.toasts.commandApprovalFailed'));
                         }
                       }}
                     >
-                      Разрешить
+                      {t('chat.confirm.allow')}
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
@@ -3275,11 +3280,11 @@ export function ChatPage() {
                       onClick={async () => {
                         try {
                           if (conf.needs_sudo_password && !conf.sudo_password?.trim()) {
-                            toast.error('Введите sudo пароль');
+                            toast.error(t('chat.toasts.enterSudoPassword'));
                             return;
                           }
                           if (conf.needs_new_password && !conf.new_password?.trim()) {
-                            toast.error('Enter new password');
+                            toast.error(t('chat.toasts.enterNewPassword'));
                             return;
                           }
                           // Create auto-approve policy for this exact command
@@ -3301,14 +3306,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify(body),
                           });
-                          toast.success('Команда одобрена навсегда');
+                          toast.success(t('chat.toasts.commandAlwaysApproved'));
                           setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка сохранения политики');
+                          toast.error(t('chat.toasts.policySaveFailed'));
                         }
                       }}
                     >
-                      Разрешить всегда
+                      {t('chat.confirm.alwaysAllow')}
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
@@ -3322,12 +3327,12 @@ export function ChatPage() {
                           });
                           setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
                         } catch {
-                          toast.error('Не удалось проверить команду');
+                          toast.error(t('chat.toasts.commandReviewFailed'));
                           setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
                         }
                       }}
                     >
-                      {conf._reviewing ? 'Проверяю...' : 'Проверить'}
+                      {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
@@ -3354,7 +3359,7 @@ export function ChatPage() {
                       <line x1="8" y1="21" x2="16" y2="21" />
                       <line x1="12" y1="17" x2="12" y2="21" />
                     </svg>
-                    <span className={s.suggestMacroTitle}>Команда на ПК</span>
+                    <span className={s.suggestMacroTitle}>{t('chat.confirm.pcCommand')}</span>
                     <button
                       className={s.suggestMacroClose}
                       onClick={() => setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
@@ -3380,14 +3385,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
-                          toast.success('Команда выполнена');
+                          toast.success(t('chat.toasts.commandExecuted'));
                           setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка выполнения');
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
                         }
                       }}
                     >
-                      Разрешить
+                      {t('chat.confirm.allow')}
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
@@ -3405,14 +3410,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
-                          toast.success('Команда одобрена навсегда');
+                          toast.success(t('chat.toasts.commandAlwaysApproved'));
                           setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка сохранения политики');
+                          toast.error(t('chat.toasts.policySaveFailed'));
                         }
                       }}
                     >
-                      Разрешить всегда
+                      {t('chat.confirm.alwaysAllow')}
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
@@ -3426,12 +3431,12 @@ export function ChatPage() {
                           });
                           setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
                         } catch {
-                          toast.error('Не удалось проверить команду');
+                          toast.error(t('chat.toasts.commandReviewFailed'));
                           setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
                         }
                       }}
                     >
-                      {conf._reviewing ? 'Проверяю...' : 'Проверить'}
+                      {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
@@ -3458,7 +3463,7 @@ export function ChatPage() {
                       <polyline points="14 2 14 8 20 8"/>
                     </svg>
                     <span className={s.suggestMacroTitle}>
-                      {conf.action_type === 'write' ? `Запись файла${conf.mode === 'append' ? ' (добавление)' : ''}` : 'Чтение файла'}
+                      {conf.action_type === 'write' ? t('chat.file.writingTitle', { append: conf.mode === 'append' ? t('chat.file.appendMarker') : '' }) : t('chat.file.reading')}
                     </span>
                     <button
                       className={s.suggestMacroClose}
@@ -3475,13 +3480,13 @@ export function ChatPage() {
                   </div>
                   {conf.action_type === 'write' && conf.size_bytes !== undefined && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      Размер: {(conf.size_bytes / 1024).toFixed(1)} КБ
-                      {conf.mode === 'append' ? ' · режим: добавление в конец' : ' · режим: перезапись'}
+                      {t('chat.file.sizeValue', { size: (conf.size_bytes / 1024).toFixed(1) })}
+                      {conf.mode === 'append' ? t('chat.file.appendMode') : t('chat.file.overwriteMode')}
                     </div>
                   )}
                   {conf.action_type === 'read' && conf.start_line !== undefined && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      Строки {conf.start_line}–{(conf.start_line + (conf.max_lines || 500) - 1)}
+                      {t('chat.file.lineRange', { start: conf.start_line, end: conf.start_line + (conf.max_lines || 500) - 1 })}
                     </div>
                   )}
                   {conf.content_preview && (
@@ -3498,14 +3503,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
-                          toast.success(conf.action_type === 'write' ? 'Файл записан' : 'Файл прочитан');
+                          toast.success(conf.action_type === 'write' ? t('chat.toasts.fileWritten') : t('chat.toasts.fileRead'));
                           setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка выполнения');
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
                         }
                       }}
                     >
-                      {conf.action_type === 'write' ? 'Записать' : 'Прочитать'}
+                      {conf.action_type === 'write' ? t('chat.file.write') : t('chat.file.read')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
@@ -3532,7 +3537,7 @@ export function ChatPage() {
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                     </svg>
                     <span className={s.suggestMacroTitle}>
-                      Редактирование: строки {conf.start_line}–{conf.end_line}
+                      {t('chat.file.editingLines', { start: conf.start_line, end: conf.end_line })}
                     </span>
                     <button
                       className={s.suggestMacroClose}
@@ -3549,7 +3554,7 @@ export function ChatPage() {
                   </div>
                   {conf.old_content_preview && (
                     <div style={{ fontSize: '12px', marginTop: '6px' }}>
-                      <div style={{ color: '#e74c3c', marginBottom: '2px', fontWeight: 600 }}>Удаляется (строки {conf.start_line}–{conf.end_line}):</div>
+                      <div style={{ color: '#e74c3c', marginBottom: '2px', fontWeight: 600 }}>{t('chat.file.removingLines', { start: conf.start_line, end: conf.end_line })}</div>
                       <div style={{ padding: '8px', background: 'rgba(231, 76, 60, 0.08)', borderRadius: '6px', borderLeft: '3px solid #e74c3c', maxHeight: '150px', overflow: 'auto' }}>
                         <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.old_content_preview.slice(0, 1000)}</pre>
                       </div>
@@ -3557,7 +3562,7 @@ export function ChatPage() {
                   )}
                   {conf.new_content_preview && (
                     <div style={{ fontSize: '12px', marginTop: '6px' }}>
-                      <div style={{ color: '#27ae60', marginBottom: '2px', fontWeight: 600 }}>Добавляется:</div>
+                      <div style={{ color: '#27ae60', marginBottom: '2px', fontWeight: 600 }}>{t('chat.file.added')}</div>
                       <div style={{ padding: '8px', background: 'rgba(39, 174, 96, 0.08)', borderRadius: '6px', borderLeft: '3px solid #27ae60', maxHeight: '150px', overflow: 'auto' }}>
                         <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.new_content_preview.slice(0, 1000)}</pre>
                       </div>
@@ -3565,7 +3570,7 @@ export function ChatPage() {
                   )}
                   {!conf.new_content_preview && conf.old_content_preview && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', fontStyle: 'italic' }}>
-                      (новый контент пуст — строки будут удалены)
+                      {t('chat.file.emptyReplacement')}
                     </div>
                   )}
                   <div className={s.suggestMacroActions}>
@@ -3577,14 +3582,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
-                          toast.success('Строки заменены');
+                          toast.success(t('chat.toasts.linesReplaced'));
                           setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка выполнения');
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
                         }
                       }}
                     >
-                      Применить
+                      {t('common.apply')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
@@ -3611,7 +3616,7 @@ export function ChatPage() {
                       <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                       <circle cx="12" cy="13" r="4"/>
                     </svg>
-                    <span className={s.suggestMacroTitle}>Фото с веб-камеры</span>
+                    <span className={s.suggestMacroTitle}>{t('chat.webcam.title')}</span>
                     <button
                       className={s.suggestMacroClose}
                       onClick={() => setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
@@ -3623,10 +3628,10 @@ export function ChatPage() {
                     </button>
                   </div>
                   <div className={s.suggestMacroCommands}>
-                    <code className={s.suggestMacroCmd}>Камера: {conf.camera_name}</code>
+                    <code className={s.suggestMacroCmd}>{t('chat.webcam.cameraValue', { camera: conf.camera_name })}</code>
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Задача: {conf.purpose}
+                    {t('chat.webcam.taskValue', { task: conf.purpose })}
                   </div>
                   <div className={s.suggestMacroActions}>
                     <button
@@ -3637,14 +3642,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
-                          toast.success('Фото сделано');
+                          toast.success(t('chat.toasts.photoCaptured'));
                           setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка захвата');
+                          toast.error(t('chat.toasts.captureFailed'));
                         }
                       }}
                     >
-                      Разрешить
+                      {t('chat.confirm.allow')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
@@ -3671,7 +3676,7 @@ export function ChatPage() {
                       <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
                       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                     </svg>
-                    <span className={s.suggestMacroTitle}>Отправка письма</span>
+                    <span className={s.suggestMacroTitle}>{t('chat.email.title')}</span>
                     <button
                       className={s.suggestMacroClose}
                       onClick={() => setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
@@ -3684,14 +3689,14 @@ export function ChatPage() {
                   </div>
                   {conf.from && (
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                      От: <span style={{ color: 'var(--text-primary)' }}>{conf.from}</span>
+                      {t('chat.email.from')} <span style={{ color: 'var(--text-primary)' }}>{conf.from}</span>
                     </div>
                   )}
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                    Кому: <span style={{ color: 'var(--text-primary)' }}>{conf.to}</span>
+                    {t('chat.email.to')} <span style={{ color: 'var(--text-primary)' }}>{conf.to}</span>
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                    Тема: <span style={{ color: 'var(--text-primary)' }}>{conf.subject}</span>
+                    {t('chat.email.subject')} <span style={{ color: 'var(--text-primary)' }}>{conf.subject}</span>
                   </div>
                   <div style={{ fontSize: '12px', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto' }}>
                     <MarkdownRenderer content={conf.body} />
@@ -3705,14 +3710,14 @@ export function ChatPage() {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
-                          toast.success('Письмо отправлено');
+                          toast.success(t('chat.toasts.emailSent'));
                           setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
-                          toast.error('Ошибка отправки письма');
+                          toast.error(t('chat.toasts.emailSendFailed'));
                         }
                       }}
                     >
-                      Отправить
+                      {t('common.send')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
@@ -3738,7 +3743,7 @@ export function ChatPage() {
                       <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
                       <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
                     </svg>
-                    <span className={s.suggestMacroTitle}>Предложение инструкции</span>
+                    <span className={s.suggestMacroTitle}>{t('chat.runbook.title')}</span>
                     <button
                       className={s.suggestMacroClose}
                       onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}
@@ -3773,14 +3778,14 @@ export function ChatPage() {
                               commands: rb.commands,
                             }),
                           });
-                          toast.success('Инструкция сохранена');
+                          toast.success(t('chat.toasts.runbookSaved'));
                           setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx));
                         } catch {
-                          toast.error('Не удалось сохранить инструкцию');
+                          toast.error(t('chat.toasts.runbookSaveFailed'));
                         }
                       }}
                     >
-                      Сохранить
+                      {t('common.save')}
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
@@ -3794,18 +3799,18 @@ export function ChatPage() {
                           });
                           setPendingRunbooks(prev => prev.map((r, i) => i === rbIdx ? { ...r, _reviewing: false, _verdict: res.verdict } : r));
                         } catch {
-                          toast.error('Не удалось проверить команды');
+                          toast.error(t('chat.toasts.commandsReviewFailed'));
                           setPendingRunbooks(prev => prev.map((r, i) => i === rbIdx ? { ...r, _reviewing: false } : r));
                         }
                       }}
                     >
-                      {rb._reviewing ? 'Проверяю...' : 'Проверить'}
+                      {rb._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
                     </button>
                     <button
                       className={s.suggestMacroDismissBtn}
                       onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}
                     >
-                      Отклонить
+                      {t('common.reject')}
                     </button>
                   </div>
                 </div>
@@ -3818,7 +3823,7 @@ export function ChatPage() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
-                    <span className={s.suggestMacroTitle}>Смена учётных данных</span>
+                    <span className={s.suggestMacroTitle}>{t('chat.credentials.title')}</span>
                     <button
                       className={s.suggestMacroClose}
                       onClick={() => setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx))}
@@ -3834,21 +3839,21 @@ export function ChatPage() {
                     <div>{upd.reason}</div>
                     <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Пользователь:</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.user')}</span>
                         <code style={{ fontSize: '11px', color: 'var(--danger, #e53935)', textDecoration: 'line-through' }}>{upd.current_username}</code>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                         <code style={{ fontSize: '11px', color: 'var(--accent)' }}>{upd.new_username}</code>
                       </div>
                       {upd.use_ssh_key && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Авторизация:</span>
-                          <span style={{ fontSize: '11px', color: 'var(--accent)' }}>SSH-ключ</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.authentication')}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--accent)' }}>{t('chat.credentials.sshKey')}</span>
                         </div>
                       )}
                       {upd.remove_password && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Пароль:</span>
-                          <span style={{ fontSize: '11px', color: 'var(--danger, #e53935)' }}>будет удалён</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.password')}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--danger, #e53935)' }}>{t('chat.credentials.willBeRemoved')}</span>
                         </div>
                       )}
                     </div>
@@ -3877,11 +3882,11 @@ export function ChatPage() {
                           toast.success(`Учётные данные для "${upd.server_name}" обновлены`);
                           setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx));
                         } catch (err: any) {
-                          toast.error(err?.body?.error || 'Ошибка обновления кредов');
+                          toast.error(err?.body?.error || t('chat.toasts.credentialsUpdateFailed'));
                         }
                       }}
                     >
-                      Применить
+                      {t('common.apply')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
@@ -3918,7 +3923,7 @@ export function ChatPage() {
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                   </svg>
-                  Копировать
+                  {t('common.copy')}
                 </button>
                 <button className={s.contextMenuItem} onClick={() => handleDownloadDocx(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3926,16 +3931,16 @@ export function ChatPage() {
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
-                  Скачать docx
+                  {t('chat.sidebar.downloadDocx')}
                 </button>
                 <button className={s.contextMenuItem} onClick={() => handleSendToTelegram(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13" />
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
-                  Отправить в Telegram
+                  {t('chat.message.sendTelegram')}
                 </button>
-                <button className={s.contextMenuItem} onClick={() => handleForkFromMessage(msgMenuId)} disabled={forking} title="Создать новый чат-ветку с копией истории до этого сообщения">
+                <button className={s.contextMenuItem} onClick={() => handleForkFromMessage(msgMenuId)} disabled={forking} title={t('chat.message.branchTitle')}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="6" cy="6" r="2" />
                     <circle cx="6" cy="18" r="2" />
@@ -3943,21 +3948,21 @@ export function ChatPage() {
                     <path d="M6 8v8" />
                     <path d="M18 8c0 4-4 4-6 6" />
                   </svg>
-                  Создать ветку
+                  {t('chat.message.createBranch')}
                 </button>
                 <button className={s.contextMenuItem} onClick={() => handleStartEdit(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
-                  Редактировать
+                  {t('common.edit')}
                 </button>
                 <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleDeleteMessage(msgMenuId)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6" />
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                   </svg>
-                  Удалить
+                  {t('common.delete')}
                 </button>
               </div>
             )}
@@ -3974,7 +3979,7 @@ export function ChatPage() {
                   </div>
                 ))}
                 <button className={s.imageClearAll} onClick={clearAttachedImages}>
-                  Очистить
+                  {t('common.clear')}
                 </button>
               </div>
             )}
@@ -3997,14 +4002,14 @@ export function ChatPage() {
                     <button
                       style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '16px', padding: '0 4px', lineHeight: 1 }}
                       onClick={() => setAttachedDocuments((prev) => prev.filter((_, idx) => idx !== i))}
-                      title="Удалить"
+                      title={t('common.delete')}
                     >
                       &times;
                     </button>
                   </div>
                 ))}
                 <button className={s.imageClearAll} onClick={() => setAttachedDocuments([])}>
-                  Очистить
+                  {t('common.clear')}
                 </button>
               </div>
             )}
@@ -4026,14 +4031,14 @@ export function ChatPage() {
                   onClick={cycleDiceMode}
                   style={{ cursor: 'pointer' }}
                   title={
-                    diceStatus === 'rolling' ? 'Бросок d20...'
+                    diceStatus === 'rolling' ? t('chat.dice.rolling')
                     : diceStatus === 'crit' ? `Критический успех! (${diceValue})`
                     : diceStatus === 'success' ? `Успех (${diceValue})`
                     : diceStatus === 'fail' ? `Неудача (${diceValue})`
                     : diceStatus === 'crit_fail' ? `Критический провал! (${diceValue})`
-                    : diceMode === 'always_one' ? 'Режим: всегда 1 (крит. провал). Клик для смены.'
-                    : diceMode === 'always_twenty' ? 'Режим: всегда 20 (крит. успех). Клик для смены.'
-                    : 'Режим кубика d20. Клик для смены режима.'
+                    : diceMode === 'always_one' ? t('chat.dice.alwaysOneTitle')
+                    : diceMode === 'always_twenty' ? t('chat.dice.alwaysTwentyTitle')
+                    : t('chat.dice.normalTitle')
                   }
                 >
                   {diceRolling || diceValue !== null ? diceValue : (diceMode === 'always_one' ? '1' : diceMode === 'always_twenty' ? '20' : '🎲')}
@@ -4070,7 +4075,7 @@ export function ChatPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder="Введите сообщение..."
+                placeholder={t('chat.composer.placeholder')}
                 rows={1}
                 disabled={sending}
               />
@@ -4158,8 +4163,8 @@ export function ChatPage() {
         <ConfirmDialog
           key="confirm-delete-chat"
           open={deletingChatId !== null}
-          title="Удалить чат?"
-          text="Это действие нельзя отменить. Все сообщения будут удалены безвозвратно."
+          title={t('chat.deleteChat.title')}
+          text={t('chat.deleteChat.message')}
           onCancel={() => setDeletingChatId(null)}
           onConfirm={handleConfirmDelete}
         />
@@ -4167,11 +4172,11 @@ export function ChatPage() {
         <ConfirmDialog
           key="confirm-delete-image"
           open={imageDeleteTarget !== null}
-          title="Удалить изображение?"
-          text="Файл будет удалён безвозвратно."
+          title={t('chat.deleteImage.title')}
+          text={t('chat.deleteImage.message')}
           onCancel={() => setImageDeleteTarget(null)}
           onConfirm={() => imageDeleteTarget && handleDeleteImage(imageDeleteTarget.messageId, imageDeleteTarget.url)}
-          confirmLabel={deletingImage ? '...' : 'Удалить'}
+          confirmLabel={deletingImage ? '...' : t('common.delete')}
         />
 
         {viewerImageSrc && (
@@ -4191,7 +4196,7 @@ export function ChatPage() {
             <button
               className={s.imageViewerDownload}
               onClick={(e) => { e.stopPropagation(); handleDownloadImage(viewerImageSrc); }}
-              title="Скачать"
+              title={t('common.download')}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -4203,7 +4208,7 @@ export function ChatPage() {
               <button
                 className={s.imageViewerDelete}
                 onClick={(e) => { e.stopPropagation(); setImageDeleteTarget({ messageId: viewerImageMsgId, url: viewerImageUrl }); }}
-                title="Удалить"
+                title={t('common.delete')}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
@@ -4214,7 +4219,7 @@ export function ChatPage() {
             <button
               className={s.imageViewerClose}
               onClick={() => setViewerImageSrc(null)}
-              title="Закрыть"
+              title={t('common.close')}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />

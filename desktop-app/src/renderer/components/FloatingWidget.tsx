@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
 import type { LayoutMode } from '../lib/tools';
 import s from './FloatingWidget.module.scss';
 
@@ -37,6 +38,7 @@ export function FloatingWidget({
   title,
   children,
 }: Props) {
+  const { t } = useTranslation();
   const [exiting, setExiting] = useState(false);
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: dragId,
@@ -94,7 +96,7 @@ export function FloatingWidget({
           <button
             className={s.modeBtn}
             onClick={() => onLayoutChange('sidebar')}
-            title="В сайдбар"
+            title={t('widget.toSidebar')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -105,7 +107,7 @@ export function FloatingWidget({
             <button
               className={s.modeBtn}
               onClick={() => onLayoutChange('floating')}
-              title="Плавающее окно"
+              title={t('widget.floating')}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="5" y="5" width="14" height="14" rx="2" ry="2" />
@@ -115,7 +117,7 @@ export function FloatingWidget({
             <button
               className={s.modeBtn}
               onClick={() => onLayoutChange('fullscreen')}
-              title="На весь экран"
+              title={t('widget.fullscreen')}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 3 21 3 21 9" />
@@ -128,7 +130,7 @@ export function FloatingWidget({
           <button
             className={s.modeBtn}
             onClick={handleClose}
-            title="Закрыть"
+            title={t('common.close')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -22,6 +23,7 @@ const slideVariants = {
 const slideTransition = { duration: 0.18, ease: 'easeOut' as const };
 
 export function NotebookTool({ contentMax }: Props) {
+  const { t, i18n } = useTranslation();
   const [view, setView] = useState<View>('list');
   const [notes, setNotes] = useState<api.NoteDto[]>([]);
   const [total, setTotal] = useState(0);
@@ -147,7 +149,7 @@ export function NotebookTool({ contentMax }: Props) {
     const cleanTitle = title.trim();
     const cleanContent = content.trim();
     if (!cleanContent) {
-      toast.error('Текст заметки обязателен');
+      toast.error(t('tools.notebook.textRequired'));
       return;
     }
 
@@ -157,27 +159,27 @@ export function NotebookTool({ contentMax }: Props) {
         await api.deleteNote(editId);
         const res = await api.createNote(cleanTitle, cleanContent);
         if (res?.error) {
-          if (res.error === 'notes_limit') toast.error('Лимит заметок исчерпан');
-          else if (res.error === 'content_too_long') toast.error('Текст слишком длинный');
-          else toast.error('Не удалось сохранить');
+          if (res.error === 'notes_limit') toast.error(t('tools.notebook.limitReached'));
+          else if (res.error === 'content_too_long') toast.error(t('tools.notebook.tooLong'));
+          else toast.error(t('tools.notebook.saveFailed'));
           return;
         }
-        toast.success('Заметка сохранена');
+        toast.success(t('tools.notebook.saved'));
       } else {
         const res = await api.createNote(cleanTitle, cleanContent);
         if (res?.error) {
-          if (res.error === 'notes_limit') toast.error('Лимит заметок исчерпан');
-          else if (res.error === 'content_too_long') toast.error('Текст слишком длинный');
-          else toast.error('Не удалось создать заметку');
+          if (res.error === 'notes_limit') toast.error(t('tools.notebook.limitReached'));
+          else if (res.error === 'content_too_long') toast.error(t('tools.notebook.tooLong'));
+          else toast.error(t('tools.notebook.createFailed'));
           return;
         }
-        toast.success('Заметка создана');
+        toast.success(t('tools.notebook.created'));
       }
       await loadNotes(searchQuery);
       backToList();
     } catch (err) {
       console.error('Failed to save note:', err);
-      toast.error('Ошибка сохранения');
+      toast.error(t('tools.notebook.saveError'));
     } finally {
       setSaving(false);
     }
@@ -186,12 +188,12 @@ export function NotebookTool({ contentMax }: Props) {
   const handleDelete = async (id: number) => {
     try {
       await api.deleteNote(id);
-      toast.success('Заметка удалена');
+      toast.success(t('tools.notebook.deleted'));
       await loadNotes(searchQuery);
       backToList();
     } catch (err) {
       console.error('Failed to delete note:', err);
-      toast.error('Не удалось удалить');
+      toast.error(t('tools.notebook.deleteFailed'));
     }
   };
 
@@ -202,13 +204,13 @@ export function NotebookTool({ contentMax }: Props) {
 
   const preview = (text: string, max = 60) => {
     const compact = text.replace(/\s+/g, ' ').trim();
-    if (!compact) return 'Пусто';
+    if (!compact) return t('tools.notebook.emptyValue');
     return compact.length <= max ? compact : compact.slice(0, max) + '...';
   };
 
   const formatTs = (ts: number) => {
     const d = new Date(ts * 1000);
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    return d.toLocaleDateString(i18n.resolvedLanguage || i18n.language, { day: 'numeric', month: 'short' });
   };
 
   return (
@@ -230,12 +232,12 @@ export function NotebookTool({ contentMax }: Props) {
                 <input
                   className={s.searchInput}
                   type="text"
-                  placeholder="Поиск..."
+                  placeholder={t('common.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                 />
-                <button className={s.searchBtn} onClick={handleSearch} title="Искать">
+                <button className={s.searchBtn} onClick={handleSearch} title={t('common.search')}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="11" cy="11" r="8" />
                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -247,15 +249,15 @@ export function NotebookTool({ contentMax }: Props) {
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                Создать
+                {t('common.create')}
               </button>
             </div>
 
             {/* Notes */}
             <div className={s.notesList}>
-              {loading && <div className={s.hint}>Загрузка...</div>}
+              {loading && <div className={s.hint}>{t('common.loading')}</div>}
               {!loading && notes.length === 0 && (
-                <div className={s.hint}>{searchQuery ? 'Ничего не найдено' : 'Пока нет заметок'}</div>
+                <div className={s.hint}>{searchQuery ? t('common.nothingFound') : t('tools.notebook.empty')}</div>
               )}
               {!loading && notes.map((note) => (
                 <div
@@ -271,7 +273,7 @@ export function NotebookTool({ contentMax }: Props) {
                   <button
                     className={s.noteItemDelete}
                     onClick={(e) => { e.stopPropagation(); handleDelete(note.id); }}
-                    title="Удалить"
+                    title={t('common.delete')}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" />
@@ -295,10 +297,10 @@ export function NotebookTool({ contentMax }: Props) {
             {/* Editor header */}
             <div className={s.editorHeader}>
               <span className={s.editorTitle}>
-                {isEditing ? `#${editId}` : 'Новая заметка'}
+                {isEditing ? `#${editId}` : t('tools.notebook.newNote')}
               </span>
               {isEditing && (
-                <button className={s.deleteBtn} onClick={() => handleDelete(editId!)} title="Удалить">
+                <button className={s.deleteBtn} onClick={() => handleDelete(editId!)} title={t('common.delete')}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6" />
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -312,7 +314,7 @@ export function NotebookTool({ contentMax }: Props) {
               <input
                 className={s.titleInput}
                 type="text"
-                placeholder="Заголовок..."
+                placeholder={t('tools.notebook.titlePlaceholder')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={TITLE_MAX}
@@ -322,7 +324,7 @@ export function NotebookTool({ contentMax }: Props) {
               <textarea
                 ref={textareaRef}
                 className={s.contentInput}
-                placeholder="Текст заметки..."
+                placeholder={t('tools.notebook.textPlaceholder')}
                 value={content}
                 onChange={(e) => {
                   setContent(e.target.value);
@@ -341,7 +343,7 @@ export function NotebookTool({ contentMax }: Props) {
                   onClick={handleSave}
                   disabled={saving || !content.trim() || (isEditing && !isDirty)}
                 >
-                  {saving ? '...' : isEditing ? 'Сохранить' : 'Создать'}
+                  {saving ? '...' : isEditing ? t('common.save') : t('common.create')}
                 </button>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import s from './PromptSelector.module.scss';
 
 /** Один элемент в селекторе — либо default-промпт, либо custom. */
@@ -21,7 +22,9 @@ type Props = {
 
 const NEW_PROMPT_ID = -1;
 
-export function PromptSelector({ options, value, onChange, disabled = false, placeholder = 'Выберите промпт...', maxVisibleItems = 6 }: Props) {
+export function PromptSelector({ options, value, onChange, disabled = false, placeholder, maxVisibleItems = 6 }: Props) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t('promptSelector.placeholder');
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -35,10 +38,10 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
   const filteredCustoms  = useMemo(() => q ? customs.filter(p  => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) : customs,  [q, customs]);
 
   const selectedLabel = useMemo(() => {
-    if (value === NEW_PROMPT_ID) return '+ Новый промпт';
+    if (value === NEW_PROMPT_ID) return t('promptSelector.newPrompt');
     const found = options.find(p => p.id === value);
-    return found ? found.name : placeholder;
-  }, [value, options, placeholder]);
+    return found ? found.name : resolvedPlaceholder;
+  }, [value, options, resolvedPlaceholder, t]);
 
   // Close on outside click
   useEffect(() => {
@@ -68,7 +71,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
 
   const renderBadge = (kind: 'default' | 'custom') => (
     <span className={`${s.badge} ${kind === 'default' ? s.badgeDefault : s.badgeCustom}`}>
-      {kind === 'default' ? 'default' : 'custom'}
+      {kind === 'default' ? t('promptSelector.defaultBadge') : t('promptSelector.customBadge')}
     </span>
   );
 
@@ -81,7 +84,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
         type="button"
       >
         {value === null ? (
-          <span className={s.triggerPlaceholder}>{placeholder}</span>
+          <span className={s.triggerPlaceholder}>{resolvedPlaceholder}</span>
         ) : (
           <span>{selectedLabel}</span>
         )}
@@ -101,7 +104,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск..."
+              placeholder={t('common.searchPlaceholder')}
             />
           </div>
           <div className={s.list} style={{ maxHeight: `${maxVisibleItems * 52}px` }}>
@@ -122,7 +125,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
 
             {filteredCustoms.length > 0 && (
               <>
-                <div className={s.sectionLabel}>Мои промпты</div>
+                <div className={s.sectionLabel}>{t('promptSelector.myPrompts')}</div>
                 {filteredCustoms.map(p => (
                   <button
                     key={p.id}
@@ -141,7 +144,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
             )}
 
             {(filteredDefaults.length === 0 && filteredCustoms.length === 0) && (
-              <div className={s.emptyState}>Ничего не найдено</div>
+              <div className={s.emptyState}>{t('common.nothingFound')}</div>
             )}
 
             <div className={s.customDivider} />
@@ -151,10 +154,10 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
               type="button"
             >
               <span className={s.optionTop}>
-                <span className={s.optionName}>+ Новый промпт</span>
+                <span className={s.optionName}>{t('promptSelector.newPrompt')}</span>
                 {renderBadge('custom')}
               </span>
-              <span className={s.optionDesc}>Создать свой промпт</span>
+              <span className={s.optionDesc}>{t('promptSelector.createOwn')}</span>
             </button>
           </div>
         </div>

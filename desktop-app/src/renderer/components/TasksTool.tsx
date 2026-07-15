@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import * as api from '../lib/api';
 import s from './TasksTool.module.scss';
@@ -13,25 +14,11 @@ const slideTransition = { duration: 0.18, ease: 'easeOut' as const };
 
 type StatusFilter = 'pending' | 'done' | 'all';
 
-const STATUS_LABELS: Record<StatusFilter, string> = {
-  pending: 'Ожидание',
-  done: 'Выполнено',
-  all: 'Все',
-};
-
-const RECURRENCE_LABELS: Record<string, string> = {
-  once: 'Один раз',
-  daily: 'Каждый день',
-  weekly: 'Каждую неделю',
-};
-
-const TASK_TYPE_LABELS: Record<string, string> = {
-  message: 'Сообщение',
-  ai_instruction: 'AI-задача',
-  smart_home: 'Умный дом',
-};
-
 export function TasksTool() {
+  const { t, i18n } = useTranslation();
+  const statusLabels: Record<StatusFilter, string> = { pending: t('tools.tasks.pending'), done: t('tools.tasks.done'), all: t('tools.tasks.all') };
+  const recurrenceLabels: Record<string, string> = { once: t('tools.tasks.once'), daily: t('tools.tasks.daily'), weekly: t('tools.tasks.weekly') };
+  const taskTypeLabels: Record<string, string> = { message: t('tools.tasks.message'), ai_instruction: t('tools.tasks.aiTask'), smart_home: t('tools.tasks.smartHome') };
   const [tasks, setTasks] = useState<api.TaskDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
@@ -53,7 +40,7 @@ export function TasksTool() {
 
   const formatTs = (ts: number) => {
     const d = new Date(ts * 1000);
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString(i18n.resolvedLanguage || i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
   const preview = (task: api.TaskDto, max = 140) => {
@@ -71,10 +58,10 @@ export function TasksTool() {
           const targetChatId = Number.isFinite(Number(parsed._target_chat_id)) ? Math.floor(Number(parsed._target_chat_id)) : null;
           const parts: string[] = [];
           if (instruction) parts.push(instruction.replace(/\s+/g, ' ').trim());
-          if (createNewChat) parts.push('⟨новый чат⟩');
+          if (createNewChat) parts.push(t('tools.tasks.newChat'));
           if (targetChatId) parts.push(`→ чат #${targetChatId}`);
           const text = parts.join(' · ');
-          if (!text) return 'Без описания';
+          if (!text) return t('tools.tasks.noDescription');
           return text.length <= max ? text : text.slice(0, max) + '…';
         }
       } catch {
@@ -94,10 +81,10 @@ export function TasksTool() {
 
           // Human-readable action label
           const ACTION_LABELS: Record<string, string> = {
-            on: 'Включить',
-            off: 'Выключить',
-            set_color: 'Цвет',
-            set_brightness: 'Яркость',
+            on: t('tools.tasks.turnOn'),
+            off: t('tools.tasks.turnOff'),
+            set_color: t('tools.tasks.color'),
+            set_brightness: t('tools.tasks.brightness'),
           };
           const actionLabel = ACTION_LABELS[action] || action;
 
@@ -107,7 +94,7 @@ export function TasksTool() {
           if (brightness !== null) parts.push(`${brightness}%`);
           if (deviceId) parts.push(deviceId);
           const text = parts.join(' · ');
-          if (!text) return 'Без описания';
+          if (!text) return t('tools.tasks.noDescription');
           return text.length <= max ? text : text.slice(0, max) + '…';
         }
       } catch {
@@ -116,7 +103,7 @@ export function TasksTool() {
     }
 
     const compact = raw.replace(/\s+/g, ' ').trim();
-    if (!compact) return 'Без описания';
+    if (!compact) return t('tools.tasks.noDescription');
     return compact.length <= max ? compact : compact.slice(0, max) + '…';
   };
 
@@ -152,7 +139,7 @@ export function TasksTool() {
           {/* Filter tabs */}
           <div className={s.listHeader}>
             <div className={s.filterRow}>
-              {(Object.entries(STATUS_LABELS) as [StatusFilter, string][]).map(([key, label]) => (
+              {(Object.entries(statusLabels) as [StatusFilter, string][]).map(([key, label]) => (
                 <button
                   key={key}
                   className={`${s.filterBtn} ${statusFilter === key ? s.filterBtnActive : ''}`}
@@ -166,9 +153,9 @@ export function TasksTool() {
 
           {/* Tasks list */}
           <div className={s.tasksList}>
-            {loading && <div className={s.hint}>Загрузка...</div>}
+            {loading && <div className={s.hint}>{t('common.loading')}</div>}
             {!loading && tasks.length === 0 && (
-              <div className={s.hint}>Нет задач</div>
+              <div className={s.hint}>{t('tools.tasks.empty')}</div>
             )}
             {!loading && tasks.map((task) => (
               <div
@@ -178,21 +165,21 @@ export function TasksTool() {
                 <div className={s.taskItemHeader}>
                   <div className={s.taskItemLeft}>
                     <span className={`${s.statusDot} ${statusDot(task.status)}`} />
-                    <span className={s.taskItemType}>{TASK_TYPE_LABELS[task.task_type] || task.task_type}</span>
+                    <span className={s.taskItemType}>{taskTypeLabels[task.task_type] || task.task_type}</span>
                   </div>
                   <span className={s.taskItemDate}>{formatTs(task.execute_at)}</span>
                 </div>
                 <div className={s.taskItemPreview}>{preview(task)}</div>
                 <div className={s.taskItemMeta}>
                   <span className={s.taskItemRecurrence}>
-                    {RECURRENCE_LABELS[task.recurrence_type] || task.recurrence_type}
+                    {recurrenceLabels[task.recurrence_type] || task.recurrence_type}
                   </span>
                   <div className={s.taskItemActions}>
                     <span className={s.taskItemId}>#{task.id}</span>
                     <button
                       className={s.taskItemDelete}
                       onClick={() => handleDelete(task.id)}
-                      title="Удалить"
+                      title={t('common.delete')}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" />

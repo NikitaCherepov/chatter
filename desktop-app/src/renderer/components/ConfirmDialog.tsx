@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import s from './ConfirmDialog.module.scss';
 
 type ConfirmDialogProps = {
@@ -10,7 +11,8 @@ type ConfirmDialogProps = {
   onConfirm: () => void;
 };
 
-export function ConfirmDialog({ open, title, text, confirmLabel = 'Удалить', onCancel, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, text, confirmLabel, onCancel, onConfirm }: ConfirmDialogProps) {
+  const { t } = useTranslation();
   return (
     <motion.div
       key="confirm-dialog"
@@ -41,8 +43,8 @@ export function ConfirmDialog({ open, title, text, confirmLabel = 'Удалит�
         <div className={s.confirmTitle}>{title}</div>
         <div className={s.confirmText}>{text}</div>
         <div className={s.confirmBtns}>
-          <button className={s.confirmCancel} onClick={onCancel}>Отмена</button>
-          <button className={s.confirmDanger} onClick={onConfirm}>{confirmLabel}</button>
+          <button className={s.confirmCancel} onClick={onCancel}>{t('common.cancel')}</button>
+          <button className={s.confirmDanger} onClick={onConfirm}>{confirmLabel ?? t('common.delete')}</button>
         </div>
       </motion.div>
     </motion.div>

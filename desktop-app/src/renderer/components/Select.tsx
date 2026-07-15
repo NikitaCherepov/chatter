@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import s from './Select.module.scss';
 
 /** Ограниченный набор цветов бейджа — каждый берётся из CSS-переменной. */
@@ -35,11 +36,13 @@ export function Select({
   options,
   value,
   onChange,
-  placeholder = 'Выберите...',
+  placeholder,
   disabled = false,
   searchable = false,
   maxVisibleItems = 8,
 }: Props) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t('common.selectPlaceholder');
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -58,7 +61,7 @@ export function Select({
     return options.find((o) => o.value === value) ?? null;
   }, [value, options]);
 
-  const selectedLabel = selectedOption ? selectedOption.label : placeholder;
+  const selectedLabel = selectedOption ? selectedOption.label : resolvedPlaceholder;
 
   // Close on outside click
   useEffect(() => {
@@ -131,7 +134,7 @@ export function Select({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск..."
+                placeholder={t('common.searchPlaceholder')}
               />
             </div>
           )}
@@ -152,7 +155,7 @@ export function Select({
             ))}
 
             {filtered.length === 0 && (
-              <div className={s.emptyState}>Ничего не найдено</div>
+              <div className={s.emptyState}>{t('common.nothingFound')}</div>
             )}
           </div>
         </div>

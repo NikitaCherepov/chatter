@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
@@ -14,6 +15,7 @@ type SshKey = {
 };
 
 export function SshKeySettings() {
+  const { t } = useTranslation();
   const [keys, setKeys] = useState<SshKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [formName, setFormName] = useState('');
@@ -45,7 +47,7 @@ export function SshKeySettings() {
     const trimmedKey = formPublicKey.trim();
 
     if (!trimmedName || !trimmedKey) {
-      toast.error('Заполните название и публичный ключ');
+      toast.error(t('advanced.ssh.fillRequired'));
       return;
     }
 
@@ -59,11 +61,11 @@ export function SshKeySettings() {
           private_key: formPrivateKey.trim() || undefined,
         }),
       });
-      toast.success('SSH-ключ добавлен');
+      toast.success(t('advanced.ssh.added'));
       resetForm();
       loadKeys();
     } catch (err: any) {
-      toast.error(err?.body?.error || 'Ошибка сохранения');
+      toast.error(err?.body?.error || t('advanced.common.saveFailed'));
     } finally {
       setFormSaving(false);
     }
@@ -75,10 +77,10 @@ export function SshKeySettings() {
     setDeleteConfirmId(null);
     try {
       await api.apiFetch(`/api/v1/devops/ssh-keys/${id}`, { method: 'DELETE' });
-      toast.success('SSH-ключ удалён');
+      toast.success(t('advanced.ssh.deleted'));
       loadKeys();
     } catch {
-      toast.error('Ошибка удаления');
+      toast.error(t('advanced.common.deleteFailed'));
     }
   };
 
@@ -88,20 +90,20 @@ export function SshKeySettings() {
 
   const handleDetectKeys = async () => {
     if (!window.electronAPI?.readSshKeys) {
-      toast.error('Доступно только в десктоп-приложении');
+      toast.error(t('advanced.ssh.desktopOnly'));
       return;
     }
     setImporting(true);
     try {
       const found = await window.electronAPI.readSshKeys();
       if (found.length === 0) {
-        toast.info('В ~/.ssh/ не найдены ключи (id_ed25519, id_rsa и т.д.)');
+        toast.info(t('advanced.ssh.notFound'));
       } else {
         setDetectedKeys(found);
         setShowImport(true);
       }
     } catch (err: any) {
-      toast.error(err?.message === 'no_ssh_dir' ? 'Папка ~/.ssh/ не найдена' : 'Ошибка чтения ключей');
+      toast.error(err?.message === 'no_ssh_dir' ? t('advanced.ssh.folderNotFound') : t('advanced.ssh.readFailed'));
     } finally {
       setImporting(false);
     }
@@ -126,35 +128,35 @@ export function SshKeySettings() {
       setDetectedKeys(prev => prev.filter(k => k.filename !== key.filename));
       if (detectedKeys.length <= 1) setShowImport(false);
     } catch (err: any) {
-      toast.error(err?.body?.error || 'Ошибка импорта');
+      toast.error(err?.body?.error || t('advanced.ssh.importFailed'));
     } finally {
       setFormSaving(false);
     }
   };
 
-  if (loading) return <div className={s.panel}><div className={s.promptLoading}>Загрузка...</div></div>;
+  if (loading) return <div className={s.panel}><div className={s.promptLoading}>{t('common.loading')}</div></div>;
 
   return (
     <div className={s.panel}>
-      <div className={s.panelTitle}>SSH-ключи</div>
+      <div className={s.panelTitle}>{t('settings.sections.sshkeys')}</div>
       <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-        SSH-ключи для установки на серверы. Публичный ключ устанавливается в authorized_keys, приватный — опционально для входа. В настройках сервера можно выбрать ключ по умолчанию.
+        {t('advanced.ssh.help')}
       </div>
 
       {/* Form */}
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Название</label>
+        <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
         <input
           className={s.fieldInput}
           type="text"
           value={formName}
           onChange={(e) => setFormName(e.target.value)}
-          placeholder="Название ключа"
+          placeholder={t('advanced.ssh.namePlaceholder')}
         />
       </div>
 
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Публичный ключ</label>
+        <label className={s.fieldLabel}>{t('advanced.ssh.publicKey')}</label>
         <textarea
           className={s.textareaInput}
           value={formPublicKey}
@@ -166,7 +168,7 @@ export function SshKeySettings() {
       </div>
 
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Приватный ключ (опционально)</label>
+        <label className={s.fieldLabel}>{t('advanced.ssh.privateKey')}</label>
         <textarea
           className={s.textareaInput}
           value={formPrivateKey}
@@ -183,7 +185,7 @@ export function SshKeySettings() {
           onClick={handleSave}
           disabled={formSaving}
         >
-          {formSaving ? 'Сохранение...' : 'Добавить'}
+          {formSaving ? t('common.saving') : t('advanced.common.add')}
         </button>
         {typeof window.electronAPI?.readSshKeys === 'function' && (
           <button
@@ -191,7 +193,7 @@ export function SshKeySettings() {
             onClick={handleDetectKeys}
             disabled={importing}
           >
-            {importing ? 'Поиск...' : 'Импорт из ~/.ssh'}
+            {importing ? t('common.searchPlaceholder') : t('advanced.ssh.import')}
           </button>
         )}
       </div>
@@ -199,13 +201,13 @@ export function SshKeySettings() {
       {/* Detected keys */}
       {showImport && detectedKeys.length > 0 && (
         <div style={{ marginTop: '12px' }}>
-          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>Найдены ключи в ~/.ssh</div>
+          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.ssh.found')}</div>
           {detectedKeys.map((key) => (
             <div key={key.filename} className={s.macroCard}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 500, fontSize: '13px' }}>
                   {key.filename}
-                  {key.publicKey && key.privateKey && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>пара</span>}
+                  {key.publicKey && key.privateKey && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>{t('advanced.ssh.pair')}</span>}
                 </div>
                 <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {key.publicKey ? 'pub + ' : ''}{key.privateKey ? 'private' : ''}
@@ -216,7 +218,7 @@ export function SshKeySettings() {
                 style={{ fontSize: '11px', padding: '4px 10px' }}
                 onClick={() => handleImportKey(key)}
               >
-                Сохранить
+                {t('common.save')}
               </button>
             </div>
           ))}
@@ -226,13 +228,13 @@ export function SshKeySettings() {
       {/* Key list */}
       {keys.length > 0 && (
         <div style={{ marginTop: '16px' }}>
-          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>Сохранённые ключи</div>
+          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.ssh.savedKeys')}</div>
           {keys.map((key) => (
             <div key={key.id} className={s.macroCard}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 500, fontSize: '13px' }}>
                   {key.name}
-                  {key.has_private_key && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>пара</span>}
+                  {key.has_private_key && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>{t('advanced.ssh.pair')}</span>}
                 </div>
                 <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {key.public_key.substring(0, 60)}...
@@ -242,7 +244,7 @@ export function SshKeySettings() {
                 <button
                   className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
                   onClick={() => setDeleteConfirmId(key.id)}
-                  title="Удалить"
+                  title={t('common.delete')}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6" />
@@ -257,8 +259,8 @@ export function SshKeySettings() {
 
       <ConfirmDialog
         open={deleteConfirmId !== null}
-        title="Удалить SSH-ключ?"
-        text="Этот ключ будет удалён. Если он выбран как ключ по умолчанию для какого-либо сервера, ссылка будет сброшена."
+        title={t('advanced.ssh.deleteTitle')}
+        text={t('advanced.ssh.deleteMessage')}
         onCancel={() => setDeleteConfirmId(null)}
         onConfirm={() => handleDelete(deleteConfirmId!)}
       />

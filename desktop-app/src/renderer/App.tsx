@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { AuthPage } from './pages/AuthPage';
 import { ChatPage } from './pages/ChatPage';
 import { useAuth, AuthProvider } from './lib/auth';
@@ -9,9 +10,10 @@ import s from './App.module.scss';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, initialized } = useAuth();
+  const { t } = useTranslation();
 
   if (!initialized) {
-    return <div className={s.loading}>Loading...</div>;
+    return <div className={s.loading}>{t('common.loading')}</div>;
   }
 
   return user ? <>{children}</> : <Navigate to="/login" replace />;
@@ -19,9 +21,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, initialized } = useAuth();
+  const { t } = useTranslation();
 
   if (!initialized) {
-    return <div className={s.loading}>Loading...</div>;
+    return <div className={s.loading}>{t('common.loading')}</div>;
   }
 
   return user ? <Navigate to="/chat" replace /> : <>{children}</>;

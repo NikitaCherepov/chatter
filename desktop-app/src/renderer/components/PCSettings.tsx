@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
@@ -16,6 +17,7 @@ type PcPolicy = {
 };
 
 export function PCSettings() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<PcSettings>({ fs_scan_enabled: false, auto_approve_all: false, file_read_enabled: true });
   const [policies, setPolicies] = useState<PcPolicy[]>([]);
   const [newPattern, setNewPattern] = useState('');
@@ -79,12 +81,12 @@ export function PCSettings() {
   };
 
   if (loading) {
-    return <div className={s.panel}><div className={s.promptLoading}>Загрузка...</div></div>;
+    return <div className={s.panel}><div className={s.promptLoading}>{t('common.loading')}</div></div>;
   }
 
   return (
     <div className={s.panel}>
-      <div className={s.panelTitle}>Управление ПК</div>
+      <div className={s.panelTitle}>{t('settings.sections.pc')}</div>
 
       {/* Settings toggles */}
       <div className={s.fieldGroup}>
@@ -97,7 +99,7 @@ export function PCSettings() {
             disabled={saving}
           />
           <span className={s.fieldLabel} style={{ color: 'var(--text-body)' }}>
-            Разрешить ИИ сканировать файловую систему (ls/dir/cd)
+            {t('advanced.pc.scanFilesystem')}
           </span>
         </label>
       </div>
@@ -113,10 +115,10 @@ export function PCSettings() {
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-body)' }}>
-              Разрешить чтение файлов без подтверждения
+              {t('advanced.pc.readWithoutConfirmation')}
             </span>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              ИИ сможет читать файлы на вашем ПК без запроса разрешения. Запись всегда требует подтверждения.
+              {t('advanced.pc.readHelp')}
             </span>
           </div>
         </label>
@@ -133,10 +135,10 @@ export function PCSettings() {
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <span style={{ fontSize: '13px', fontWeight: 500, color: '#e74c3c' }}>
-              Автоматически одобрять все команды ИИ на ПК (без подтверждения)
+              {t('advanced.pc.autoApproveAll')}
             </span>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              ИИ сможет выполнять любые команды на вашем компьютере без запроса разрешения
+              {t('advanced.pc.autoApproveHelp')}
             </span>
           </div>
         </label>
@@ -147,10 +149,10 @@ export function PCSettings() {
       {/* Auto-approve policies */}
       <div className={s.fieldGroup}>
         <span className={s.fieldLabel} style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px', display: 'block' }}>
-          Разрешённые команды (auto-approve)
+          {t('advanced.pc.allowedCommands')}
         </span>
         <span className={s.fieldLabel} style={{ marginBottom: '8px', display: 'block' }}>
-          Regex-паттерны команд, которые ИИ может выполнять без подтверждения
+          {t('advanced.pc.patternsHelp')}
         </span>
 
         {/* Existing policies list */}
@@ -162,7 +164,7 @@ export function PCSettings() {
                 <button
                   className={s.removeCmdBtn}
                   onClick={() => handleDeletePolicy(policy.id)}
-                  title="Удалить"
+                  title={t('common.delete')}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
@@ -179,7 +181,7 @@ export function PCSettings() {
           <input
             className={s.fieldInput}
             type="text"
-            placeholder='Regex-паттерн (например ^dir$ или ^ipconfig)'
+            placeholder={t('advanced.pc.patternPlaceholder')}
             value={newPattern}
             onChange={(e) => setNewPattern(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAddPolicy(); }}
@@ -189,7 +191,7 @@ export function PCSettings() {
             onClick={handleAddPolicy}
             disabled={!newPattern.trim()}
           >
-            Добавить
+            {t('advanced.common.add')}
           </button>
         </div>
       </div>

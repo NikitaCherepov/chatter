@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
@@ -25,6 +26,7 @@ type Props = {
 };
 
 export function MacroSettings({ onChange }: Props) {
+  const { t } = useTranslation();
   const [macros, setMacros] = useState<Macro[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,8 +43,8 @@ export function MacroSettings({ onChange }: Props) {
 
   // Execution mode select options
   const execModeOptions: SelectOption[] = [
-    { value: 'execute', label: 'Исполнение', hint: 'Запустить и забыть' },
-    { value: 'output', label: 'С выводом', hint: 'AI увидит результат в консоли' },
+    { value: 'execute', label: t('advanced.macros.execution'), hint: t('advanced.macros.fireAndForget') },
+    { value: 'output', label: t('advanced.macros.withOutput'), hint: t('advanced.macros.outputHint') },
   ];
 
   // AI request states
@@ -111,7 +113,7 @@ export function MacroSettings({ onChange }: Props) {
   const handleSave = async () => {
     const commands = formCommands.map(c => c.trim()).filter(Boolean);
     if (commands.length === 0) {
-      toast.error('Добавьте хотя бы одну команду');
+      toast.error(t('advanced.macros.addCommandWarning'));
       return;
     }
 
@@ -123,18 +125,18 @@ export function MacroSettings({ onChange }: Props) {
           method: 'PUT',
           body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned, return_output: formReturnOutput }),
         });
-        toast.success('Макрос обновлён');
+        toast.success(t('advanced.macros.updated'));
       } else {
         await api.apiFetch('/api/v1/macros', {
           method: 'POST',
           body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned, return_output: formReturnOutput }),
         });
-        toast.success('Макрос создан');
+        toast.success(t('advanced.macros.created'));
       }
       resetForm();
       fetchMacros();
     } catch (err) {
-      toast.error('Ошибка сохранения макроса');
+      toast.error(t('advanced.macros.saveFailed'));
       console.error(err);
     }
   };
@@ -147,7 +149,7 @@ export function MacroSettings({ onChange }: Props) {
       if (editingId === id) resetForm();
       fetchMacros();
     } catch (err) {
-      toast.error('Ошибка удаления');
+      toast.error(t('advanced.common.deleteFailed'));
       console.error(err);
     }
   };
@@ -164,7 +166,7 @@ export function MacroSettings({ onChange }: Props) {
       });
       fetchMacros();
     } catch (err) {
-      toast.error('Ошибка');
+      toast.error(t('advanced.common.error'));
       console.error(err);
     }
   };
@@ -181,7 +183,7 @@ export function MacroSettings({ onChange }: Props) {
       });
       setExplainResult(res.explanation);
     } catch (err) {
-      toast.error('Не удалось получить объяснение от ИИ');
+      toast.error(t('advanced.macros.explainFailed'));
       console.error(err);
     } finally {
       setExplaining(null);
@@ -203,9 +205,9 @@ export function MacroSettings({ onChange }: Props) {
         body: JSON.stringify({ title: res.title || macro.title, description: res.description || macro.description }),
       });
       fetchMacros();
-      toast.success('Описание обновлено через ИИ');
+      toast.success(t('advanced.macros.descriptionUpdated'));
     } catch (err) {
-      toast.error('Не удалось сгенерировать описание');
+      toast.error(t('advanced.macros.descriptionFailed'));
       console.error(err);
     } finally {
       setDescribing(null);
@@ -216,16 +218,16 @@ export function MacroSettings({ onChange }: Props) {
 
   const handleExecute = async (macro: Macro) => {
     if (!window.electronAPI?.executeCommands) {
-      toast.error('Выполнение команд недоступно');
+      toast.error(t('advanced.macros.executionUnavailable'));
       return;
     }
     setExecuting(macro.id);
     try {
       const result = await window.electronAPI.executeCommands(macro.commands);
-      toast.success('Макрос выполнен');
+      toast.success(t('advanced.macros.executed'));
       console.log('[macro] execution result:', result);
     } catch (err: any) {
-      toast.error(`Ошибка: ${err?.message || 'выполнение не удалось'}`);
+      toast.error(`Ошибка: ${err?.message || t('advanced.macros.executionFailed')}`);
     } finally {
       setExecuting(null);
     }
@@ -234,17 +236,17 @@ export function MacroSettings({ onChange }: Props) {
   // ── Render ──
 
   if (loading) {
-    return <div className={s.panel}><div className={s.panelTitle}>Макросы</div><div style={{ color: 'var(--text-hint)', fontSize: 13 }}>Загрузка...</div></div>;
+    return <div className={s.panel}><div className={s.panelTitle}>{t('settings.sections.macros')}</div><div style={{ color: 'var(--text-hint)', fontSize: 13 }}>{t('common.loading')}</div></div>;
   }
 
   return (
     <div className={s.panel}>
-      <div className={s.panelTitle}>Макросы</div>
+      <div className={s.panelTitle}>{t('settings.sections.macros')}</div>
 
       {/* Macros list */}
       {macros.length === 0 && !editingId && (
         <div style={{ color: 'var(--text-hint)', fontSize: 13, marginBottom: 16 }}>
-          Нет макросов. Создайте первый ниже.
+          {t('advanced.macros.empty')}
         </div>
       )}
 
@@ -264,7 +266,7 @@ export function MacroSettings({ onChange }: Props) {
               <button
                 className={s.macroActionBtn}
                 onClick={() => startEdit(macro)}
-                title="Редактировать"
+                title={t('common.edit')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -275,7 +277,7 @@ export function MacroSettings({ onChange }: Props) {
                 className={s.macroActionBtn}
                 onClick={() => handleExecute(macro)}
                 disabled={executing === macro.id}
-                title="Выполнить сейчас"
+                title={t('advanced.macros.runNow')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="5 3 19 12 5 21 5 3" />
@@ -285,7 +287,7 @@ export function MacroSettings({ onChange }: Props) {
                 className={s.macroActionBtn}
                 onClick={() => handleExplain(macro)}
                 disabled={explaining === macro.id}
-                title="Спросить ИИ, что это делает"
+                title={t('advanced.macros.askAi')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
@@ -297,7 +299,7 @@ export function MacroSettings({ onChange }: Props) {
                 className={s.macroActionBtn}
                 onClick={() => handleDescribe(macro)}
                 disabled={describing === macro.id}
-                title="Улучшить описание ИИ"
+                title={t('advanced.macros.improveDescription')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -306,7 +308,7 @@ export function MacroSettings({ onChange }: Props) {
               <button
                 className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
                 onClick={() => handleDelete(macro.id)}
-                title="Удалить"
+                title={t('common.delete')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
@@ -325,12 +327,12 @@ export function MacroSettings({ onChange }: Props) {
               <code key={i} className={s.macroCmd}>{cmd}</code>
             ))}
             {macro.return_output && (
-              <span className={s.macroModeBadge} title="AI видит вывод команд">
+              <span className={s.macroModeBadge} title={t('advanced.macros.aiSeesOutput')}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="4 17 10 11 4 5" />
                   <line x1="12" y1="19" x2="20" y2="19" />
                 </svg>
-                вывод
+                {t('advanced.macros.output')}
               </span>
             )}
           </div>
@@ -341,10 +343,10 @@ export function MacroSettings({ onChange }: Props) {
       {explainResult !== null && (
         <div className={s.explainOverlay} onClick={() => setExplainResult(null)}>
           <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
-            <div className={s.explainTitle}>Объяснение ИИ</div>
+            <div className={s.explainTitle}>{t('advanced.macros.aiExplanation')}</div>
             <div className={s.explainText}>{explainResult}</div>
             <button className={s.saveBtn} onClick={() => setExplainResult(null)}>
-              Закрыть
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -354,29 +356,29 @@ export function MacroSettings({ onChange }: Props) {
       <div className={s.macroFormDivider} />
 
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Название</label>
+        <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
         <input
           className={s.fieldInput}
           type="text"
           value={formTitle}
           onChange={(e) => setFormTitle(e.target.value)}
-          placeholder="Название макроса..."
+          placeholder={t('advanced.macros.namePlaceholder')}
         />
       </div>
 
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Описание</label>
+        <label className={s.fieldLabel}>{t('advanced.common.description')}</label>
         <input
           className={s.fieldInput}
           type="text"
           value={formDescription}
           onChange={(e) => setFormDescription(e.target.value)}
-          placeholder="Описание макроса..."
+          placeholder={t('advanced.macros.descriptionPlaceholder')}
         />
       </div>
 
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Команды</label>
+        <label className={s.fieldLabel}>{t('advanced.common.commands')}</label>
         {formCommands.map((cmd, i) => (
           <div key={i} className={s.commandRow}>
             <input
@@ -384,7 +386,7 @@ export function MacroSettings({ onChange }: Props) {
               type="text"
               value={cmd}
               onChange={(e) => updateCommandField(i, e.target.value)}
-              placeholder={`Команда ${i + 1}...`}
+              placeholder={t('advanced.common.commandNumberPlaceholder', { number: i + 1 })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && i === formCommands.length - 1) {
                   e.preventDefault();
@@ -396,7 +398,7 @@ export function MacroSettings({ onChange }: Props) {
               <button
                 className={s.removeCmdBtn}
                 onClick={() => removeCommandField(i)}
-                title="Удалить команду"
+                title={t('advanced.common.deleteCommand')}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -407,7 +409,7 @@ export function MacroSettings({ onChange }: Props) {
           </div>
         ))}
         <button className={s.addCmdBtn} onClick={addCommandField}>
-          + Добавить команду
+          {t('advanced.common.addCommand')}
         </button>
       </div>
 
@@ -419,7 +421,7 @@ export function MacroSettings({ onChange }: Props) {
             onChange={(e) => setFormEnabled(e.target.checked)}
             className={s.macroCheckbox}
           />
-          <span className={s.fieldLabel}>Включён</span>
+          <span className={s.fieldLabel}>{t('advanced.macros.enabled')}</span>
         </label>
         <label className={s.macroToggleLabel}>
           <input
@@ -428,12 +430,12 @@ export function MacroSettings({ onChange }: Props) {
             onChange={(e) => setFormPinned(e.target.checked)}
             className={s.macroCheckbox}
           />
-          <span className={s.fieldLabel}>Закреплён (AI всегда видит название)</span>
+          <span className={s.fieldLabel}>{t('advanced.macros.pinned')}</span>
         </label>
       </div>
 
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>Режим выполнения</label>
+        <label className={s.fieldLabel}>{t('advanced.macros.executionMode')}</label>
         <Select
           options={execModeOptions}
           value={formReturnOutput ? 'output' : 'execute'}
@@ -443,11 +445,11 @@ export function MacroSettings({ onChange }: Props) {
 
       <div className={s.macroFormButtons}>
         <button className={s.saveBtn} onClick={handleSave}>
-          {editingId ? 'Сохранить изменения' : 'Создать макрос'}
+          {editingId ? t('advanced.common.saveChanges') : t('advanced.macros.create')}
         </button>
         {editingId && (
           <button className={s.cancelBtn} onClick={resetForm}>
-            Отмена
+            {t('common.cancel')}
           </button>
         )}
       </div>

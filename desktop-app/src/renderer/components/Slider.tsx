@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import s from './Slider.module.scss';
 
 type CommonProps = {
@@ -29,6 +30,7 @@ type DiscreteSliderProps = CommonProps & {
 export type SliderProps = NumericSliderProps | DiscreteSliderProps;
 
 export default function Slider(props: SliderProps) {
+  const { t } = useTranslation();
   const handleCommit = useCallback(() => {
     props.onCommit?.();
   }, [props]);
@@ -90,7 +92,7 @@ export default function Slider(props: SliderProps) {
           }}
         />
         <span className={s.value}>
-          {value === null ? 'авто' : (formatValue ? formatValue(value) : String(value))}
+          {value === null ? t('settings.reasoning.autoLower') : (formatValue ? formatValue(value) : String(value))}
         </span>
       </div>
     </div>

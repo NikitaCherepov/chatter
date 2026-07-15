@@ -40,15 +40,6 @@ const ZOOM_STEP_PCT = 5;
 const ZOOM_MIN_PCT = 40;
 const ZOOM_MAX_PCT = 200;
 
-const REASONING_LEVEL_LABELS: Record<string, string> = {
-  null: 'Авто',
-  none: 'Выкл',
-  minimal: 'Мин',
-  low: 'Низк',
-  medium: 'Ср',
-  high: 'Выс',
-  xhigh: 'Макс',
-};
 
 const overlayVariants = {
   hidden: { opacity: 0 },
@@ -62,19 +53,19 @@ const modalVariants = {
   exit: { opacity: 0, y: 16, transition: { duration: 0.15 } },
 };
 
-const SECTIONS: { key: Section; label: string }[] = [
-  { key: 'account', label: 'Аккаунт' },
-  { key: 'prompt', label: 'Промпт' },
-  { key: 'voice', label: 'Голос' },
-  { key: 'macros', label: 'Макросы' },
-  { key: 'pc', label: 'Управление ПК' },
-  { key: 'servers', label: 'Серверы' },
-  { key: 'runbooks', label: 'Инструкции' },
-  { key: 'sshkeys', label: 'SSH-ключи' },
-  { key: 'smart_home', label: 'Умный дом' },
-  { key: 'restrictions', label: 'Ограничения' },
-  { key: 'models', label: 'Модели' },
-  { key: 'app', label: 'Приложение' },
+const SECTIONS: { key: Section; labelKey: string }[] = [
+  { key: 'account', labelKey: 'settings.sections.account' },
+  { key: 'prompt', labelKey: 'settings.sections.prompt' },
+  { key: 'voice', labelKey: 'settings.sections.voice' },
+  { key: 'macros', labelKey: 'settings.sections.macros' },
+  { key: 'pc', labelKey: 'settings.sections.pc' },
+  { key: 'servers', labelKey: 'settings.sections.servers' },
+  { key: 'runbooks', labelKey: 'settings.sections.runbooks' },
+  { key: 'sshkeys', labelKey: 'settings.sections.sshkeys' },
+  { key: 'smart_home', labelKey: 'settings.sections.smartHome' },
+  { key: 'restrictions', labelKey: 'settings.sections.restrictions' },
+  { key: 'models', labelKey: 'settings.sections.models' },
+  { key: 'app', labelKey: 'settings.sections.app' },
 ];
 
 // Electron uses logarithmic zoom: zoomFactor = 1.2^level
@@ -93,7 +84,16 @@ function clampZoomPct(pct: number): number {
 
 export function SettingsModal({ onClose }: Props) {
   const { user, setUser } = useAuth();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const reasoningLevelLabels: Record<string, string> = {
+    null: t('settings.reasoning.auto'),
+    none: t('settings.reasoning.off'),
+    minimal: t('settings.reasoning.minimalShort'),
+    low: t('settings.reasoning.lowShort'),
+    medium: t('settings.reasoning.mediumShort'),
+    high: t('settings.reasoning.highShort'),
+    xhigh: t('settings.reasoning.maxShort'),
+  };
   const [section, setSection] = useState<Section>('account');
 
   // Account
@@ -178,13 +178,15 @@ export function SettingsModal({ onClose }: Props) {
     () => getLanguagePreference(),
   );
   const languageOptions = useMemo<SelectOption[]>(() => {
-    const currentSystemLanguage = getDetectedSystemLanguage() === 'ru' ? 'Русский' : 'English';
+    const currentSystemLanguage = getDetectedSystemLanguage() === 'ru'
+      ? t('settings.language.russian')
+      : t('settings.language.english');
     return [
-      { value: 'system', label: `Системный (${currentSystemLanguage})` },
-      { value: 'ru', label: 'Русский' },
-      { value: 'en', label: 'English' },
+      { value: 'system', label: t('settings.language.systemWithLanguage', { language: currentSystemLanguage }) },
+      { value: 'ru', label: t('settings.language.russian') },
+      { value: 'en', label: t('settings.language.english') },
     ];
-  }, [i18n.language]);
+  }, [i18n.language, t]);
   const [subagentModel, setSubagentModelState] = useState<string | null>(null);
   const [subagentModelSaving, setSubagentModelSaving] = useState(false);
   const [subagentReasoningLevel, setSubagentReasoningLevelState] = useState<api.ReasoningLevel | null>(null);
@@ -292,7 +294,7 @@ export function SettingsModal({ onClose }: Props) {
       }
     } catch {
       setUiSettingsState(prev); // rollback
-      toast.error('Не удалось сохранить настройку');
+      toast.error(t('settings.toasts.saveSettingFailed'));
     } finally {
       setUiSettingsSaving(false);
     }
@@ -311,7 +313,7 @@ export function SettingsModal({ onClose }: Props) {
       }
     } catch {
       setUiSettingsState(prev); // rollback
-      toast.error('Не удалось сохранить настройку');
+      toast.error(t('settings.toasts.saveSettingFailed'));
     } finally {
       setUiSettingsSaving(false);
     }
@@ -330,7 +332,7 @@ export function SettingsModal({ onClose }: Props) {
       }
     } catch {
       setSubagentModelState(prev);
-      toast.error('Не удалось сохранить модель субагентов');
+      toast.error(t('settings.toasts.saveSubagentModelFailed'));
     } finally {
       setSubagentModelSaving(false);
     }
@@ -355,7 +357,7 @@ export function SettingsModal({ onClose }: Props) {
         setUser({ ...user, subagent_reasoning_level: res.reasoning_level });
       }
     } catch {
-      toast.error('Не удалось сохранить уровень размышления субагентов');
+      toast.error(t('settings.toasts.saveSubagentReasoningFailed'));
     } finally {
       setSubagentReasoningSaving(false);
     }
@@ -382,7 +384,7 @@ export function SettingsModal({ onClose }: Props) {
       api.getAttachmentTokenLimit().then(setAttachmentTokenLimitState).catch(() => {});
     } catch {
       setContextTokenLimitState(prev);
-      toast.error('Не удалось сохранить лимит токенов');
+      toast.error(t('settings.toasts.saveTokenLimitFailed'));
     } finally {
       setContextTokenLimitSaving(false);
     }
@@ -405,7 +407,7 @@ export function SettingsModal({ onClose }: Props) {
       setAttachmentTokenLimitState(res);
     } catch {
       setAttachmentTokenLimitState(prev);
-      toast.error('Не удалось сохранить лимит документов');
+      toast.error(t('settings.toasts.saveAttachmentLimitFailed'));
     } finally {
       setAttachmentTokenLimitSaving(false);
     }
@@ -418,7 +420,7 @@ export function SettingsModal({ onClose }: Props) {
       const res = await api.setModelSettings(modelId, settings);
       setModelSettingsMap(res.model_settings);
     } catch {
-      toast.error('Не удалось сохранить настройки модели');
+      toast.error(t('settings.toasts.saveModelSettingsFailed'));
     } finally {
       setModelsSavingId(null);
     }
@@ -433,7 +435,7 @@ export function SettingsModal({ onClose }: Props) {
       setFeatureFlagsState(res.flags);
     } catch {
       setFeatureFlagsState(featureFlags); // rollback
-      toast.error('Не удалось сохранить настройки');
+      toast.error(t('settings.toasts.saveSettingsFailed'));
     } finally {
       setFlagsSaving(false);
     }
@@ -500,10 +502,10 @@ export function SettingsModal({ onClose }: Props) {
       const updated = { ...user!, name: trimmed };
       setUser(updated);
       localStorage.setItem('chatter_user', JSON.stringify(updated));
-      toast.success('Имя сохранено');
+      toast.success(t('settings.toasts.nameSaved'));
     } catch (err) {
       console.error('Failed to save name:', err);
-      toast.error('Не удалось сохранить имя');
+      toast.error(t('settings.toasts.nameSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -526,9 +528,9 @@ export function SettingsModal({ onClose }: Props) {
       const updated = { ...user!, core_memory: coreMemory };
       setUser(updated);
       localStorage.setItem('chatter_user', JSON.stringify(updated));
-      toast.success('Память сохранена');
+      toast.success(t('settings.toasts.memorySaved'));
     } catch {
-      toast.error('Не удалось сохранить память');
+      toast.error(t('settings.toasts.memorySaveFailed'));
     } finally {
       setCoreMemorySaving(false);
     }
@@ -542,11 +544,11 @@ export function SettingsModal({ onClose }: Props) {
       if (promptId === CUSTOM_PROMPT_ID) {
         // "New prompt" — don't show success, user hasn't saved anything yet
       } else {
-        toast.success('Промпт выбран');
+        toast.success(t('settings.toasts.promptSelected'));
       }
     } catch (err) {
       console.error('Failed to select prompt:', err);
-      toast.error('Не удалось выбрать промпт');
+      toast.error(t('settings.toasts.promptSelectFailed'));
     } finally {
       setPromptSaving(false);
     }
@@ -555,11 +557,11 @@ export function SettingsModal({ onClose }: Props) {
   const handleSaveCustomPrompt = async () => {
     const name = promptName.trim();
     if (!name) {
-      toast.error('Введите название промпта');
+      toast.error(t('settings.toasts.enterPromptName'));
       return;
     }
     if (!customContent.trim()) {
-      toast.error('Введите текст промпта');
+      toast.error(t('settings.toasts.enterPromptText'));
       return;
     }
     setPromptSaving(true);
@@ -577,7 +579,7 @@ export function SettingsModal({ onClose }: Props) {
             ? { ...p, name, description: promptDesc.trim(), content: customContent }
             : p
         ));
-        toast.success('Промпт обновлён');
+        toast.success(t('settings.toasts.promptUpdated'));
       } else {
         // Create new (selectedPromptId === -1 or null)
         const res = await api.createCustomPrompt({
@@ -594,11 +596,11 @@ export function SettingsModal({ onClose }: Props) {
           content: customContent,
         }]);
         setSelectedPromptId(newId);
-        toast.success('Промпт создан и выбран');
+        toast.success(t('settings.toasts.promptCreated'));
       }
     } catch (err) {
       console.error('Failed to save custom prompt:', err);
-      toast.error('Не удалось сохранить промпт');
+      toast.error(t('settings.toasts.promptSaveFailed'));
     } finally {
       setPromptSaving(false);
     }
@@ -618,10 +620,10 @@ export function SettingsModal({ onClose }: Props) {
       if (fallbackId !== null) {
         try { await api.selectPrompt(fallbackId); } catch { /* non-critical */ }
       }
-      toast.success('Промпт удалён');
+      toast.success(t('settings.toasts.promptDeleted'));
     } catch (err) {
       console.error('Failed to delete custom prompt:', err);
-      toast.error('Не удалось удалить промпт');
+      toast.error(t('settings.toasts.promptDeleteFailed'));
     } finally {
       setPromptDeleting(false);
     }
@@ -630,7 +632,7 @@ export function SettingsModal({ onClose }: Props) {
   const handleAiGenerate = async () => {
     const instruction = aiInstruction.trim();
     if (!instruction) {
-      toast.error('Опишите что хотите получить');
+      toast.error(t('settings.toasts.describePrompt'));
       return;
     }
     setAiGenerating(true);
@@ -645,7 +647,7 @@ export function SettingsModal({ onClose }: Props) {
       setAiGenerated(res.generated_prompt);
     } catch (err) {
       console.error('AI prompt generation failed:', err);
-      toast.error('Не удалось сгенерировать промпт');
+      toast.error(t('settings.toasts.promptGenerateFailed'));
     } finally {
       setAiGenerating(false);
     }
@@ -655,7 +657,7 @@ export function SettingsModal({ onClose }: Props) {
     if (aiGenerated === null) return;
     setCustomContent(aiGenerated);
     setAiGenerated(null);
-    toast.success('Промпт применён');
+    toast.success(t('settings.toasts.promptApplied'));
   };
 
   const handleAiDismiss = () => {
@@ -729,7 +731,7 @@ export function SettingsModal({ onClose }: Props) {
         setCartesiaLoading(false);
       }).catch(() => {
         setCartesiaLoading(false);
-        toast.error('Не удалось загрузить голоса Cartesia');
+        toast.error(t('settings.toasts.cartesiaVoicesFailed'));
       });
       setPreviewPlaying(false);
       return;
@@ -796,7 +798,7 @@ export function SettingsModal({ onClose }: Props) {
         exit="exit"
       >
         <div className={s.header}>
-          <span className={s.title}>Настройки</span>
+          <span className={s.title}>{t('settings.title')}</span>
           <span className={s.versionLabel}>v{(window as any).electronAPI?.appVersion || ''}</span>
           <button className={s.closeBtn} onClick={onClose}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round">
@@ -815,7 +817,7 @@ export function SettingsModal({ onClose }: Props) {
                 className={`${s.menuItem} ${sec.key === section ? s.menuItemActive : ''}`}
                 onClick={() => setSection(sec.key)}
               >
-                {sec.label}
+                {t(sec.labelKey)}
               </button>
             ))}
           </div>
@@ -823,16 +825,16 @@ export function SettingsModal({ onClose }: Props) {
           {/* Right panel */}
           {section === 'account' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>Аккаунт</div>
+              <div className={s.panelTitle}>{t('settings.sections.account')}</div>
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Имя</label>
+                <label className={s.fieldLabel}>{t('settings.account.name')}</label>
                 <input
                   className={s.fieldInput}
                   type="text"
                   value={nameValue}
                   onChange={(e) => setNameValue(e.target.value)}
                   onKeyDown={handleNameKeyDown}
-                  placeholder="Введите имя..."
+                  placeholder={t('settings.account.namePlaceholder')}
                   autoFocus
                 />
               </div>
@@ -841,21 +843,21 @@ export function SettingsModal({ onClose }: Props) {
                 onClick={handleSaveName}
                 disabled={saving || !nameValue.trim()}
               >
-                {saving ? 'Сохранение...' : 'Сохранить'}
+                {saving ? t('common.saving') : t('common.save')}
               </button>
 
               <div className={s.macroFormDivider} />
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Горячая память</label>
+                <label className={s.fieldLabel}>{t('settings.account.memory')}</label>
                 <span className={s.fieldLabel} style={{ marginTop: '-4px', display: 'block' }}>
-                  То, что ИИ всегда помнит о вас. Заполняется автоматически, но вы можете редактировать вручную.
+                  {t('settings.account.memoryHelp')}
                 </span>
                 <textarea
                   className={s.textareaInput}
                   value={coreMemory}
                   onChange={(e) => setCoreMemory(e.target.value.slice(0, 800))}
-                  placeholder="Имя, город, работа, предпочтения..."
+                  placeholder={t('settings.account.memoryPlaceholder')}
                   rows={5}
                   maxLength={800}
                 />
@@ -865,7 +867,7 @@ export function SettingsModal({ onClose }: Props) {
                     onClick={handleSaveCoreMemory}
                     disabled={coreMemorySaving}
                   >
-                    {coreMemorySaving ? 'Сохранение...' : 'Сохранить'}
+                    {coreMemorySaving ? t('common.saving') : t('common.save')}
                   </button>
                   <span style={{ fontSize: '11px', color: coreMemory.length > 700 ? '#e74c3c' : 'var(--text-hint)' }}>
                     {coreMemory.length} / 800
@@ -877,14 +879,14 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'prompt' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>Промпт</div>
+              <div className={s.panelTitle}>{t('settings.sections.prompt')}</div>
 
               {promptsLoading ? (
-                <div className={s.promptLoading}>Загрузка...</div>
+                <div className={s.promptLoading}>{t('common.loading')}</div>
               ) : (
                 <>
                   <div className={s.fieldGroup}>
-                    <label className={s.fieldLabel}>Стиль общения</label>
+                    <label className={s.fieldLabel}>{t('settings.prompt.style')}</label>
                     <PromptSelector
                       options={[
                         ...prompts.map(p => ({ id: p.id, name: p.name, description: p.description, kind: 'default' as const })),
@@ -900,27 +902,27 @@ export function SettingsModal({ onClose }: Props) {
                   {(selectedPromptId === CUSTOM_PROMPT_ID || (selectedPromptId !== null && selectedPromptId <= -1000)) && (
                     <div className={s.fieldGroup}>
                       <label className={s.fieldLabel}>
-                        {selectedPromptId === CUSTOM_PROMPT_ID ? 'Новый промпт' : 'Редактирование промпта'}
+                        {selectedPromptId === CUSTOM_PROMPT_ID ? t('settings.prompt.new') : t('settings.prompt.edit')}
                       </label>
                       <input
                         className={s.fieldInput}
                         value={promptName}
                         onChange={(e) => setPromptName(e.target.value.slice(0, 80))}
-                        placeholder="Название (например: «Саркастичный помощник»)"
+                        placeholder={t('settings.prompt.namePlaceholder')}
                         maxLength={80}
                       />
                       <input
                         className={s.fieldInput}
                         value={promptDesc}
                         onChange={(e) => setPromptDesc(e.target.value.slice(0, 200))}
-                        placeholder="Короткое описание (необязательно)"
+                        placeholder={t('settings.prompt.descriptionPlaceholder')}
                         maxLength={200}
                       />
                       <textarea
                         className={s.textareaInput}
                         value={customContent}
                         onChange={(e) => setCustomContent(e.target.value.slice(0, 10000))}
-                        placeholder="Текст промпта..."
+                        placeholder={t('settings.prompt.textPlaceholder')}
                         rows={6}
                         maxLength={10000}
                       />
@@ -931,7 +933,7 @@ export function SettingsModal({ onClose }: Props) {
                             onClick={handleSaveCustomPrompt}
                             disabled={promptSaving}
                           >
-                            {promptSaving ? 'Сохранение...' : (selectedPromptId === CUSTOM_PROMPT_ID ? 'Создать' : 'Сохранить')}
+                            {promptSaving ? t('common.saving') : (selectedPromptId === CUSTOM_PROMPT_ID ? t('common.create') : t('common.save'))}
                           </button>
                           {selectedPromptId !== null && selectedPromptId <= -1000 && (
                             <button
@@ -940,7 +942,7 @@ export function SettingsModal({ onClose }: Props) {
                               disabled={promptDeleting}
                               style={{ color: '#e74c3c' }}
                             >
-                              {promptDeleting ? 'Удаление...' : 'Удалить'}
+                              {promptDeleting ? t('common.deleting') : t('common.delete')}
                             </button>
                           )}
                         </div>
@@ -968,7 +970,7 @@ export function SettingsModal({ onClose }: Props) {
                           }}
                           type="button"
                         >
-                          <span>ИИ</span>
+                          <span>{t('settings.prompt.ai')}</span>
                           <svg
                             width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -988,26 +990,26 @@ export function SettingsModal({ onClose }: Props) {
                             >
                               <div style={{ marginTop: '10px' }}>
                                 <span className={s.fieldLabel} style={{ display: 'block', marginBottom: '6px' }}>
-                                  Используется ваша основная нейросеть
+                                  {t('settings.prompt.primaryModelHelp')}
                                 </span>
                                 <textarea
                                   className={s.textareaInput}
                                   value={aiInstruction}
                                   onChange={(e) => setAiInstruction(e.target.value.slice(0, 50000))}
-                                  placeholder="Опишите что хотите получить (например: «саркастичный помощник, который не церемонится»)"
+                                  placeholder={t('settings.prompt.aiPlaceholder')}
                                   rows={2}
                                   maxLength={50000}
                                 />
                                 <div style={{ marginTop: '8px' }}>
                                   <label className={s.fieldLabel} style={{ display: 'block', marginBottom: '4px' }}>
-                                    Детализация
+                                    {t('settings.prompt.detail')}
                                   </label>
                                   <Select
                                     options={[
-                                      { value: 'minimal', label: 'Минимально' },
-                                      { value: 'medium', label: 'Средне' },
-                                      { value: 'detailed', label: 'Подробно' },
-                                      { value: 'none', label: 'Не имеет значения' },
+                                      { value: 'minimal', label: t('settings.prompt.detailMinimal') },
+                                      { value: 'medium', label: t('settings.prompt.detailMedium') },
+                                      { value: 'detailed', label: t('settings.prompt.detailDetailed') },
+                                      { value: 'none', label: t('settings.prompt.detailAny') },
                                     ]}
                                     value={aiDetail}
                                     onChange={setAiDetail}
@@ -1020,28 +1022,28 @@ export function SettingsModal({ onClose }: Props) {
                                   style={{ marginTop: '8px' }}
                                   type="button"
                                 >
-                                  {aiGenerating ? 'Генерация...' : 'Сгенерировать'}
+                                  {aiGenerating ? t('settings.prompt.generating') : t('settings.prompt.generate')}
                                 </button>
 
                                 {/* Diff preview */}
                                 {aiDiff && (
                                   <div className={s.aiDiffWrap}>
                                     <div className={s.aiDiffHeader}>
-                                      <span>Предпросмотр изменений</span>
+                                      <span>{t('settings.prompt.preview')}</span>
                                       <div style={{ display: 'flex', gap: '6px' }}>
                                         <button
                                           type="button"
                                           className={s.aiDiffApplyBtn}
                                           onClick={handleAiApply}
                                         >
-                                          Применить
+                                          {t('common.apply')}
                                         </button>
                                         <button
                                           type="button"
                                           className={s.cancelBtn}
                                           onClick={handleAiDismiss}
                                         >
-                                          Отмена
+                                          {t('common.cancel')}
                                         </button>
                                       </div>
                                     </div>
@@ -1077,30 +1079,30 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'voice' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>Голос</div>
+              <div className={s.panelTitle}>{t('settings.sections.voice')}</div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Модель озвучки</label>
+                <label className={s.fieldLabel}>{t('settings.voice.model')}</label>
                 <Select
                   options={modelOptions}
                   value={ttsSettings.modelId}
                   onChange={handleModelChange}
-                  placeholder="Выберите модель..."
+                  placeholder={t('settings.voice.modelPlaceholder')}
                 />
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Голос</label>
+                <label className={s.fieldLabel}>{t('settings.sections.voice')}</label>
                 <div className={s.voiceRow}>
                   <div className={s.voiceSelect}>
                     {cartesiaLoading ? (
-                      <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>Загрузка голосов...</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>{t('settings.voice.loadingVoices')}</div>
                     ) : (
                       <Select
                         options={voiceOptions}
                         value={ttsSettings.voiceId}
                         onChange={handleVoiceChange}
-                        placeholder="Выберите голос..."
+                        placeholder={t('settings.voice.voicePlaceholder')}
                         searchable
                         maxVisibleItems={6}
                       />
@@ -1109,7 +1111,7 @@ export function SettingsModal({ onClose }: Props) {
                   <button
                     className={`${s.previewBtn} ${previewPlaying ? s.previewBtnPlaying : ''}`}
                     onClick={handlePreview}
-                    title="Прослушать"
+                    title={t('settings.voice.preview')}
                     type="button"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1122,7 +1124,7 @@ export function SettingsModal({ onClose }: Props) {
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Громкость озвучки</label>
+                <label className={s.fieldLabel}>{t('settings.voice.speechVolume')}</label>
                 <div className={s.volumeRow}>
                   <input
                     type="range"
@@ -1138,7 +1140,7 @@ export function SettingsModal({ onClose }: Props) {
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Громкость звуков</label>
+                <label className={s.fieldLabel}>{t('settings.voice.effectsVolume')}</label>
                 <div className={s.volumeRow}>
                   <input
                     type="range"
@@ -1181,13 +1183,13 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'restrictions' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>Ограничения</div>
+              <div className={s.panelTitle}>{t('settings.sections.restrictions')}</div>
               <span className={s.fieldLabel} style={{ display: 'block', marginBottom: 12, marginTop: -4 }}>
-                Управление доступными AI-инструментами. Изменения применяются мгновенно.
+                {t('settings.restrictions.help')}
               </span>
 
               {flagsLoading ? (
-                <div className={s.promptLoading}>Загрузка...</div>
+                <div className={s.promptLoading}>{t('common.loading')}</div>
               ) : (
                 <>
                   <div className={s.fieldGroup}>
@@ -1200,9 +1202,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Запрет записи данных</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.memoryWrite')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          AI не может записывать в архив (cold memory) и заметки. Горячая память и чтение остаются доступными.
+                          {t('settings.restrictions.memoryWriteHelp')}
                         </div>
                       </div>
                     </label>
@@ -1218,9 +1220,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Ограниченный режим</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.lite')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает SSH, макросы, отправку писем, создание задач. Умный дом, карты, чтение почты и виджеты остаются.
+                          {t('settings.restrictions.liteHelp')}
                         </div>
                       </div>
                     </label>
@@ -1236,9 +1238,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без команд на ПК</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noPcCommands')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает только выполнение команд на компьютере (execute_pc_command). SSH, макросы и чтение файловой системы остаются.
+                          {t('settings.restrictions.noPcCommandsHelp')}
                         </div>
                       </div>
                     </label>
@@ -1254,9 +1256,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Полная блокировка</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.full')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает всё десктопное: серверы, макросы, умный дом, почту, карты, виджеты, файловую систему, команды на ПК.
+                          {t('settings.restrictions.fullHelp')}
                         </div>
                       </div>
                     </label>
@@ -1272,9 +1274,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без интернета и генерации</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noInternet')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает поиск в интернете, чтение веб-страниц и генерацию изображений.
+                          {t('settings.restrictions.noInternetHelp')}
                         </div>
                       </div>
                     </label>
@@ -1290,9 +1292,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Гостевой режим</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.guest')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          AI не видит ваш промпт, профиль, архив, заметки и задачи. Общение с чистого листа.
+                          {t('settings.restrictions.guestHelp')}
                         </div>
                       </div>
                     </label>
@@ -1308,9 +1310,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без специализированных субагентов</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noSpecializedSubagents')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает вызов заранее настроенных субагентов (invoke_subagent).
+                          {t('settings.restrictions.noSpecializedSubagentsHelp')}
                         </div>
                       </div>
                     </label>
@@ -1326,9 +1328,9 @@ export function SettingsModal({ onClose }: Props) {
                         disabled={flagsSaving}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>Без создания субагентов</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noAdhocSubagents')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          Отключает создание субагентов на лету (spawn_subagent).
+                          {t('settings.restrictions.noAdhocSubagentsHelp')}
                         </div>
                       </div>
                     </label>
@@ -1340,15 +1342,15 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'models' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>Настройки моделей</div>
+              <div className={s.panelTitle}>{t('settings.models.title')}</div>
               <span className={s.fieldLabel} style={{ display: 'block', marginBottom: 12, marginTop: -4 }}>
-                Параметры генерации для каждой модели. «Авто» — использовать серверный дефолт.
+                {t('settings.models.help')}
               </span>
 
               {modelsLoading ? (
-                <div className={s.promptLoading}>Загрузка...</div>
+                <div className={s.promptLoading}>{t('common.loading')}</div>
               ) : modelsCatalog.length === 0 ? (
-                <div className={s.fieldLabel}>Нет кастомных моделей. Добавьте модели через MODELS_MANUAL на сервере.</div>
+                <div className={s.fieldLabel}>{t('settings.models.empty')}</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {modelsCatalog.map((model) => {
@@ -1359,7 +1361,7 @@ export function SettingsModal({ onClose }: Props) {
                       <div key={model.id} style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: 12 }}>
                         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
                           {model.name}
-                          {isSaving && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-hint)' }}>сохранение...</span>}
+                          {isSaving && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-hint)' }}>{t('common.savingLower')}</span>}
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {(
@@ -1379,7 +1381,7 @@ export function SettingsModal({ onClose }: Props) {
                               <div key={param.key} className={s.modelParamRow}>
                                 <Checkbox
                                   checked={useDefault}
-                                  label="авто"
+                                  label={t('settings.reasoning.autoLower')}
                                   onChange={(checked) => {
                                     const updated = { ...settings };
                                     if (checked) {
@@ -1423,20 +1425,20 @@ export function SettingsModal({ onClose }: Props) {
 
           {section === 'app' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>Приложение</div>
+              <div className={s.panelTitle}>{t('settings.sections.app')}</div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Язык интерфейса</label>
+                <label className={s.fieldLabel}>{t('settings.app.interfaceLanguage')}</label>
                 <Select
                   options={languageOptions}
                   value={languagePreference}
                   onChange={handleLanguagePreferenceChange}
-                  placeholder="Системный"
+                  placeholder={t('settings.language.system')}
                 />
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Масштаб интерфейса</label>
+                <label className={s.fieldLabel}>{t('settings.app.zoom')}</label>
                 <div className={s.zoomControl}>
                   <button
                     className={s.zoomBtn}
@@ -1475,7 +1477,7 @@ export function SettingsModal({ onClose }: Props) {
                 <Checkbox
                   checked={uiSettings.show_tokens !== false}
                   onChange={handleToggleShowTokens}
-                  label="Показывать токены"
+                  label={t('settings.app.showTokens')}
                   disabled={uiSettingsSaving}
                 />
               </div>
@@ -1484,11 +1486,11 @@ export function SettingsModal({ onClose }: Props) {
                 <div className={chatS.modelSelector}>
                   {modelsCatalog.length > 0 && (
                     <>
-                      <label className={chatS.modelLabel}>Модель субагентов:</label>
+                      <label className={chatS.modelLabel}>{t('settings.app.subagentModel')}</label>
                       <div className={chatS.modelSelectWrap}>
                         <Select
                           options={[
-                            { value: '', label: 'Авто', hint: 'Автоматический выбор' },
+                            { value: '', label: t('settings.reasoning.auto'), hint: t('settings.app.automaticSelection') },
                             ...modelsCatalog.map(m => ({
                               value: m.id,
                               label: m.name,
@@ -1497,7 +1499,7 @@ export function SettingsModal({ onClose }: Props) {
                           ]}
                           value={subagentModel || ''}
                           onChange={handleSubagentModelChange}
-                          placeholder="Авто"
+                          placeholder={t('settings.reasoning.auto')}
                           disabled={subagentModelSaving}
                         />
                       </div>
@@ -1507,9 +1509,9 @@ export function SettingsModal({ onClose }: Props) {
                     <div className={chatS.reasoningControl}>
                       <Slider
                         mode="discrete"
-                        label="Размышление:"
+                        label={t('settings.app.reasoning')}
                         values={subagentAvailableReasoningLevels}
-                        labels={REASONING_LEVEL_LABELS}
+                        labels={reasoningLevelLabels}
                         value={subagentReasoningLevel}
                         onChange={(v) => setSubagentReasoningLevelState(v as api.ReasoningLevel | null)}
                         onCommit={handleSubagentReasoningCommit}
@@ -1519,7 +1521,7 @@ export function SettingsModal({ onClose }: Props) {
                   )}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  Отдельные модель и размышление для субагентов. В tool call модель режим не выбирает.
+                  {t('settings.app.subagentHelp')}
                 </div>
               </div>
 
@@ -1527,7 +1529,7 @@ export function SettingsModal({ onClose }: Props) {
               {contextTokenLimit && (
                 <div className={s.fieldGroup}>
                   <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
-                    Лимит контекста чата
+                    {t('settings.app.contextLimit')}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Slider
@@ -1565,7 +1567,7 @@ export function SettingsModal({ onClose }: Props) {
                     />
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
-                    Старые сообщения архивируются, когда контекст превышает лимит. При превышении контекст схлопывается до 50%. Максимум для тарифа: {(contextTokenLimit.max_context_tokens_limit / 1000).toFixed(0)}k токенов.
+                    {t('settings.app.contextLimitHelp', { max: (contextTokenLimit.max_context_tokens_limit / 1000).toFixed(0) })}
                   </div>
                   {/* Quick presets */}
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
@@ -1597,7 +1599,7 @@ export function SettingsModal({ onClose }: Props) {
               {attachmentTokenLimit && (
                 <div className={s.fieldGroup}>
                   <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
-                    Лимит документов
+                    {t('settings.app.attachmentLimit')}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Slider
@@ -1612,7 +1614,7 @@ export function SettingsModal({ onClose }: Props) {
                       }}
                       onCommit={handleAttachmentTokenLimitCommit}
                       disabled={attachmentTokenLimitSaving}
-                      formatValue={(v) => v === 0 ? 'Авто' : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
+                      formatValue={(v) => v === 0 ? t('settings.reasoning.auto') : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
                     />
                     <input
                       type="number"
@@ -1635,7 +1637,7 @@ export function SettingsModal({ onClose }: Props) {
                     />
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
-                    Сколько токенов из контекста может занимать содержимое прикреплённых документов. 0 = авто (90% от лимита контекста). Максимум: {(attachmentTokenLimit.attachment_max_tokens_limit / 1000).toFixed(0)}k токенов.
+                    {t('settings.app.attachmentLimitHelp', { max: (attachmentTokenLimit.attachment_max_tokens_limit / 1000).toFixed(0) })}
                   </div>
                 </div>
               )}
@@ -1644,11 +1646,11 @@ export function SettingsModal({ onClose }: Props) {
                 <Checkbox
                   checked={Boolean(uiSettings.dice_roll_enabled)}
                   onChange={handleToggleDiceRoll}
-                  label="Режим кубика (d20)"
+                  label={t('settings.app.diceMode')}
                   disabled={uiSettingsSaving}
                 />
                 <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  Добавляет кубик d20 рядом с полем ввода. Ответы ИИ зависят от вашей удачи.
+                  {t('settings.app.diceHelp')}
                 </div>
               </div>
             </div>

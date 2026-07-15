@@ -14,6 +14,7 @@
  */
 
 import { audioManager } from './audioManager';
+import i18n from '../i18n';
 import { generateTts, fetchAudioBuffer } from './api';
 import type { MessageAudio } from './api';
 
@@ -128,19 +129,19 @@ export function getTtsModels(): TtsModel[] {
   return [
     {
       id: 'piper',
-      name: 'Piper (локальный)',
+      name: i18n.t('tts.piper'),
       voices: PIPER_VOICES,
     },
     {
       id: 'builtin',
-      name: 'Встроенный (Chromium)',
+      name: i18n.t('tts.builtin'),
       voices: builtinVoices.length > 0
         ? builtinVoices
-        : [{ id: '__default', name: 'По умолчанию', lang: 'ru-RU' }],
+        : [{ id: '__default', name: i18n.t('tts.defaultVoice'), lang: 'ru-RU' }],
     },
     {
       id: 'cartesia',
-      name: 'Cartesia (облачная)',
+      name: i18n.t('tts.cartesia'),
       voices: cachedCartesiaVoices || [],
     },
   ];
@@ -378,7 +379,7 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
 
   if (modelId === 'piper') {
     try {
-      const text = 'Привет, я Чаттер!';
+      const text = i18n.t('tts.previewText');
       const buffer = await window.electronAPI.ttsGenerate(text, voiceId);
       if (!buffer) { previewPlaying = false; return; }
 

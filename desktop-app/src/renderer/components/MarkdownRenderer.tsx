@@ -1,4 +1,5 @@
 import React, { useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -9,6 +10,7 @@ type MarkdownRendererProps = {
 };
 
 export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+  const { t } = useTranslation();
   const codeRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const handleCopy = useCallback((codeEl: HTMLElement | undefined) => {
@@ -47,7 +49,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
                     className={s.copyBtn}
                     onClick={() => handleCopy(codeRefs.current.get(codeId))}
                   >
-                    Copy
+                    {t('common.copy')}
                   </button>
                 </div>
                 <code

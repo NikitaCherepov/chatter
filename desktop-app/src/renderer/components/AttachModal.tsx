@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import s from './AttachModal.module.scss';
 
 /* ── Image config ── */
@@ -89,6 +90,7 @@ function getExt(name: string): string {
 }
 
 export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCount }: Props) {
+  const { t } = useTranslation();
   const [images, setImages] = useState<ImageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -108,11 +110,11 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
       // Try image first
       if (ALLOWED_IMAGE_FORMATS.includes(file.type)) {
         if (file.size > MAX_IMAGE_SIZE) {
-          setError(`Файл слишком большой: ${file.name} (макс. 20 МБ)`);
+          setError(t('attach.error.imageTooLarge', { name: file.name }));
           continue;
         }
         if (images.length + validImages.length >= remainingImages) {
-          setError(`Максимум ${maxImageCount} изображений для вашего плана`);
+          setError(t('attach.error.imageLimit', { count: maxImageCount }));
           break;
         }
         try {
@@ -124,7 +126,7 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
             mime_type: file.type,
           });
         } catch {
-          setError(`Не удалось прочитать: ${file.name}`);
+          setError(t('attach.error.read', { name: file.name }));
         }
         continue;
       }
@@ -133,7 +135,7 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
       const ext = getExt(file.name);
       if (ALLOWED_DOC_EXTENSIONS.includes(ext)) {
         if (file.size > MAX_DOC_SIZE) {
-          setError(`Файл слишком большой: ${file.name} (макс. 5 МБ)`);
+          setError(t('attach.error.documentTooLarge', { name: file.name }));
           continue;
         }
         try {
@@ -145,13 +147,13 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
             size_bytes: file.size,
           });
         } catch {
-          setError(`Не удалось прочитать: ${file.name}`);
+          setError(t('attach.error.read', { name: file.name }));
         }
         continue;
       }
 
       // Neither image nor document
-      setError(`Неподдерживаемый формат: ${file.name}`);
+      setError(t('attach.error.unsupported', { name: file.name }));
     }
 
     if (validImages.length > 0) {
@@ -241,7 +243,7 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
             </svg>
           </button>
 
-          <h2 className={s.title}>Прикрепить файлы</h2>
+          <h2 className={s.title}>{t('attach.title')}</h2>
 
           <div
             className={s.dropZone}
@@ -256,12 +258,12 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
               </svg>
             </div>
-            <span className={s.dropText}>Нажмите для выбора или перетащите файлы</span>
+            <span className={s.dropText}>{t('attach.drop')}</span>
             <span className={s.dropHint}>
-              {IMAGE_FORMAT_LABELS} — макс. 20 МБ
+              {t('attach.imageHint', { formats: IMAGE_FORMAT_LABELS })}
             </span>
             <span className={s.dropHint}>
-              txt, md, json, pdf, docx, код… — макс. 5 МБ
+              {t('attach.documentHint')}
             </span>
           </div>
 
@@ -305,7 +307,7 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
                     <span className={s.docName}>{doc.filename}</span>
                     <span className={s.docSize}>{formatSize(doc.size_bytes)}</span>
                   </div>
-                  <button className={s.docRemove} onClick={() => handleRemoveDoc(i)} title="Удалить">
+                  <button className={s.docRemove} onClick={() => handleRemoveDoc(i)} title={t('common.delete')}>
                     &times;
                   </button>
                 </div>
@@ -314,9 +316,9 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
           )}
 
           <div className={s.footer}>
-            <button className={s.btnCancel} onClick={onClose}>Отмена</button>
+            <button className={s.btnCancel} onClick={onClose}>{t('common.cancel')}</button>
             <button className={s.btnAttach} disabled={totalCount === 0} onClick={handleAttach}>
-              Прикрепить ({totalCount})
+              {t('attach.action', { count: totalCount })}
             </button>
           </div>
         </motion.div>

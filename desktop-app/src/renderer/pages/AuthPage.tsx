@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/auth';
 import s from './AuthPage.module.scss';
 
 export function AuthPage() {
   const { loginAndSet, registerAndSet } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [login, setLogin] = useState('');
@@ -27,7 +29,7 @@ export function AuthPage() {
       }
       navigate('/chat', { replace: true });
     } catch (err: any) {
-      setError(err?.message || err?.code || 'Something went wrong');
+      setError(err?.message || err?.code || t('auth.error.generic'));
     } finally {
       setLoading(false);
     }
@@ -49,7 +51,7 @@ export function AuthPage() {
           <h1 className={s.title}>Chatter</h1>
         </div>
         <p className={s.subtitle}>
-          {mode === 'login' ? 'Sign in to continue' : 'Create an account'}
+          {mode === 'login' ? t('auth.subtitle.signIn') : t('auth.subtitle.createAccount')}
         </p>
 
         <form onSubmit={handleSubmit} className={s.form}>
@@ -57,7 +59,7 @@ export function AuthPage() {
             <input
               className={s.input}
               type="text"
-              placeholder="Name (optional)"
+              placeholder={t('auth.fields.nameOptional')}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -66,7 +68,7 @@ export function AuthPage() {
           <input
             className={s.input}
             type="text"
-            placeholder="Login"
+            placeholder={t('auth.fields.login')}
             value={login}
             onChange={(e) => setLogin(e.target.value)}
             required
@@ -76,7 +78,7 @@ export function AuthPage() {
           <input
             className={s.input}
             type="password"
-            placeholder="Password"
+            placeholder={t('auth.fields.password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -86,16 +88,16 @@ export function AuthPage() {
           {error && <div className={s.error}>{error}</div>}
 
           <button className={s.button} type="submit" disabled={loading}>
-            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Sign Up'}
+            {loading ? t('common.pleaseWait') : mode === 'login' ? t('auth.actions.signIn') : t('auth.actions.signUp')}
           </button>
         </form>
 
         <div className={s.divider} />
 
         <p className={s.switchText}>
-          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+          {mode === 'login' ? t('auth.switch.noAccount') : t('auth.switch.hasAccount')}
           <a href="#" className={s.link} onClick={(e) => { e.preventDefault(); toggleMode(); }}>
-            {mode === 'login' ? 'Sign Up' : 'Sign In'}
+            {mode === 'login' ? t('auth.actions.signUp') : t('auth.actions.signIn')}
           </a>
         </p>
       </div>

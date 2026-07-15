@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -7,6 +8,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import s from './SettingsModal.module.scss';
 
 export function SmartHomeSettings() {
+  const { t, i18n } = useTranslation();
   const [settings, setSettings] = useState<SmartHomeSettingsDto | null>(null);
   const [devices, setDevices] = useState<SmartDeviceDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,7 @@ export function SmartHomeSettings() {
       setSettings(settingsRes.settings);
       setDevices(devicesRes.devices || []);
     } catch {
-      toast.error('Не удалось загрузить настройки умного дома');
+      toast.error(t('advanced.smart.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -36,15 +38,15 @@ export function SmartHomeSettings() {
 
   const handleSaveToken = async () => {
     const token = tokenInput.trim();
-    if (!token) { toast.error('Введите токен'); return; }
+    if (!token) { toast.error(t('advanced.smart.enterToken')); return; }
     setSavingToken(true);
     try {
       await api.setSmartHomeToken(token);
-      toast.success('Токен сохранён');
+      toast.success(t('advanced.smart.tokenSaved'));
       setTokenInput('');
       await loadData();
     } catch {
-      toast.error('Ошибка сохранения токена');
+      toast.error(t('advanced.smart.tokenSaveFailed'));
     } finally {
       setSavingToken(false);
     }
@@ -54,11 +56,11 @@ export function SmartHomeSettings() {
     setConfirmDelete(false);
     try {
       await api.deleteSmartHomeToken();
-      toast.success('Токен и устройства удалены');
+      toast.success(t('advanced.smart.tokenDeleted'));
       setSettings(null);
       setDevices([]);
     } catch {
-      toast.error('Ошибка удаления токена');
+      toast.error(t('advanced.smart.tokenDeleteFailed'));
     }
   };
 
@@ -70,32 +72,32 @@ export function SmartHomeSettings() {
       await loadData();
     } catch (err: any) {
       const msg = err?.message || '';
-      if (msg.includes('no_token')) toast.error('Сначала сохраните токен');
-      else if (msg.includes('401')) toast.error('Неверный или истекший токен Яндекса');
-      else toast.error('Ошибка синхронизации: ' + msg);
+      if (msg.includes('no_token')) toast.error(t('advanced.smart.saveFirst'));
+      else if (msg.includes('401')) toast.error(t('advanced.smart.invalidToken'));
+      else toast.error(t('advanced.smart.syncErrorWithMessage', { message: msg }));
     } finally {
       setSyncing(false);
     }
   };
 
   if (loading) {
-    return <div className={s.panel}><div className={s.promptLoading}>Загрузка...</div></div>;
+    return <div className={s.panel}><div className={s.promptLoading}>{t('common.loading')}</div></div>;
   }
 
   const hasToken = !!settings?.has_token;
 
   return (
     <div className={s.panel}>
-      <div className={s.panelTitle}>Умный дом (Яндекс)</div>
+      <div className={s.panelTitle}>{t('advanced.smart.title')}</div>
 
       {/* Token input */}
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>OAuth-токен Яндекса</label>
+        <label className={s.fieldLabel}>{t('advanced.smart.oauthToken')}</label>
         <div className={s.commandRow}>
           <input
             className={s.fieldInput}
             type={showToken ? 'text' : 'password'}
-            placeholder={hasToken ? '•••••••• (токен сохранён)' : 'Вставьте токен (y0_...)'}
+            placeholder={hasToken ? t('advanced.smart.savedPlaceholder') : t('advanced.smart.tokenPlaceholder')}
             value={tokenInput}
             onChange={e => setTokenInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !savingToken) handleSaveToken(); }}
@@ -103,7 +105,7 @@ export function SmartHomeSettings() {
           <button
             className={s.macroActionBtn}
             onClick={() => setShowToken(v => !v)}
-            title={showToken ? 'Скрыть' : 'Показать'}
+            title={showToken ? t('advanced.common.hide') : t('advanced.common.show')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               {showToken ? (
@@ -126,7 +128,7 @@ export function SmartHomeSettings() {
             onClick={handleSaveToken}
             disabled={savingToken || !tokenInput.trim()}
           >
-            {savingToken ? 'Сохранение...' : 'Сохранить токен'}
+            {savingToken ? t('common.saving') : t('advanced.smart.saveToken')}
           </button>
           {hasToken && (
             <button
@@ -134,13 +136,13 @@ export function SmartHomeSettings() {
               style={{ color: '#e74c3c' }}
               onClick={() => setConfirmDelete(true)}
             >
-              Удалить
+              {t('common.delete')}
             </button>
           )}
         </div>
         {settings?.synced_at && (
           <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-            Последняя синхронизация: {new Date(settings.synced_at * 1000).toLocaleString('ru-RU')}
+            {t('advanced.smart.lastSyncWithDate', { date: new Date(settings.synced_at * 1000).toLocaleString(i18n.resolvedLanguage || i18n.language) })}
           </div>
         )}
       </div>
@@ -152,24 +154,24 @@ export function SmartHomeSettings() {
 
           <div className={s.fieldGroup}>
             <span className={s.fieldLabel} style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px', display: 'block' }}>
-              Синхронизация устройств
+              {t('advanced.smart.deviceSync')}
             </span>
             <span className={s.fieldLabel} style={{ marginBottom: '8px', display: 'block' }}>
-              Загрузить актуальный список устройств и групп из Яндекса
+              {t('advanced.smart.syncHelp')}
             </span>
             <button
               className={s.saveBtn}
               onClick={handleSync}
               disabled={syncing}
             >
-              {syncing ? 'Синхронизация...' : 'Синхронизировать'}
+              {syncing ? t('advanced.smart.syncing') : t('advanced.smart.sync')}
             </button>
           </div>
 
           {devices.length > 0 && (
             <div className={s.fieldGroup}>
               <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>
-                Устройства ({devices.length})
+                {t('advanced.smart.devicesCount', { count: devices.length })}
               </div>
               {devices.map(d => (
                 <div key={d.id} className={s.macroCard}>
@@ -181,7 +183,7 @@ export function SmartHomeSettings() {
                           fontSize: '10px', padding: '1px 6px', borderRadius: '3px',
                           background: 'var(--border-light)', color: 'var(--text-muted)',
                         }}>
-                          группа
+                          {t('advanced.smart.group')}
                         </span>
                       )}
                     </div>
@@ -212,7 +214,7 @@ export function SmartHomeSettings() {
           {devices.length === 0 && !syncing && (
             <div className={s.fieldGroup}>
               <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
-                Устройства не синхронизированы. Нажмите кнопку выше.
+                {t('advanced.smart.notSynced')}
               </div>
             </div>
           )}
@@ -232,7 +234,7 @@ export function SmartHomeSettings() {
             transition: 'color 0.1s',
           }}
         >
-          <span>Как получить токен Яндекс.Умного Дома</span>
+          <span>{t('advanced.smart.instructionsTitle')}</span>
           <svg
             width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -252,37 +254,37 @@ export function SmartHomeSettings() {
             >
             <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.7, marginTop: '10px' }}>
             <div style={{ marginBottom: '10px' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>1. Создание приложения</span><br />
-              Перейдите на сайт <code style={{ color: 'var(--accent)' }}>oauth.yandex.ru</code>. Нажмите «Создать приложение».
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.step1')}</span><br />
+              {t('advanced.smart.goToSite')} <code style={{ color: 'var(--accent)' }}>oauth.yandex.ru</code>{t('advanced.smart.clickCreate')}
             </div>
             <div style={{ marginBottom: '10px' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>2. Параметры</span><br />
-              Название: любое (например, Chatter IoT). Платформа: «Веб-сервисы».<br />
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.step2')}</span><br />
+              {t('advanced.smart.parameters')}<br />
               Redirect URI: <code style={{ color: 'var(--accent)' }}>https://oauth.yandex.ru/verification_code</code>
             </div>
             <div style={{ marginBottom: '10px' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>3. Доступы</span><br />
-              В блоке «Умный дом Яндекса» отметьте:<br />
-              — <code style={{ color: 'var(--accent)' }}>iot:view</code> (просмотр устройств)<br />
-              — <code style={{ color: 'var(--accent)' }}>iot:control</code> (управление)<br />
-              Нажмите «Создать приложение».
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.step3')}</span><br />
+              {t('advanced.smart.selectScopes')}<br />
+              — <code style={{ color: 'var(--accent)' }}>iot:view</code> {t('advanced.smart.viewDevices')}<br />
+              — <code style={{ color: 'var(--accent)' }}>iot:control</code> {t('advanced.smart.controlDevices')}<br />
+              {t('advanced.smart.createApplication')}
             </div>
             <div style={{ marginBottom: '10px' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>4. Получение токена</span><br />
-              Скопируйте <code style={{ color: 'var(--accent)' }}>Client ID</code>. Подставьте его в ссылку и перейдите:<br />
-              <code style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>https://oauth.yandex.ru/authorize?response_type=token&client_id=ВАШ_CLIENT_ID</code><br />
-              Нажмите «Разрешить» — откроется страница с токеном.
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.step4')}</span><br />
+              {t('advanced.smart.copy')} <code style={{ color: 'var(--accent)' }}>Client ID</code>{t('advanced.smart.insertClientId')}<br />
+              <code style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>{t('advanced.smart.authorizeUrl')}</code><br />
+              {t('advanced.smart.allow')}
             </div>
             <div style={{ marginBottom: '10px' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>5. Готово</span><br />
-              Скопируйте токен (начинается с <code style={{ color: 'var(--accent)' }}>y0_...</code>) и вставьте в поле выше.
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.step5')}</span><br />
+              {t('advanced.smart.copyToken')} <code style={{ color: 'var(--accent)' }}>y0_...</code>{t('advanced.smart.pasteAbove')}
             </div>
             <div style={{
               padding: '8px 10px', borderRadius: '6px',
               background: 'var(--bg-modal-hover)', fontSize: '11px',
               color: 'var(--text-muted)',
             }}>
-              Токен хранится на сервере в зашифрованном виде (AES-256). Никому не передавайте его — он даёт полный доступ к управлению устройствами.
+              {t('advanced.smart.security')}
             </div>
           </div>
             </motion.div>
@@ -293,8 +295,8 @@ export function SmartHomeSettings() {
       {confirmDelete && (
         <ConfirmDialog
           open={true}
-          title="Удаление токена"
-          text="Удалить токен и все синхронизированные устройства?"
+          title={t('advanced.smart.deleteTitle')}
+          text={t('advanced.smart.deleteMessage')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={handleDeleteToken}
         />

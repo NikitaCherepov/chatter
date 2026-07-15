@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -72,12 +73,6 @@ const TILE_LAYERS: Record<string, { url: string; attribution: string }> = {
     attribution: '&copy; OpenStreetMap',
   },
 };
-
-const TILE_OPTIONS: RadioOption[] = [
-  { value: 'light', label: 'Светлая' },
-  { value: 'satellite', label: 'Спутник' },
-  { value: 'standard', label: 'Стандартная' },
-];
 
 const TILE_STORAGE_KEY = 'chatter-map-tile';
 
@@ -175,6 +170,12 @@ function TileSync({ tileKey }: { tileKey: string }) {
 }
 
 export function MapTool() {
+  const { t } = useTranslation();
+  const tileOptions: RadioOption[] = [
+    { value: 'light', label: t('tools.map.light') },
+    { value: 'satellite', label: t('tools.map.satellite') },
+    { value: 'standard', label: t('tools.map.standard') },
+  ];
   const [mapData, setMapData] = useState<MapData | null>(() => getMapData());
   const [tileKey, setTileKey] = useState<string>(loadTile);
   const [pins, setPins] = useState<MapPinDto[]>([]);
@@ -248,7 +249,7 @@ export function MapTool() {
       <button
         className={`${s.pinBtn} ${placingPin ? s.pinBtnActive : ''}`}
         onClick={() => setPlacingPin(prev => !prev)}
-        title={placingPin ? 'Отмена' : 'Добавить точку'}
+        title={placingPin ? t('common.cancel') : t('tools.map.addPoint')}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -259,7 +260,7 @@ export function MapTool() {
       {/* Tile layer selector */}
       <div className={s.tileSelector}>
         <RadioGroup
-          options={TILE_OPTIONS}
+          options={tileOptions}
           value={tileKey}
           onChange={setTileKey}
         />
@@ -288,7 +289,7 @@ export function MapTool() {
         {mapData?.action === 'show_place' && (
           <Marker position={center}>
             <Popup>
-              <strong>{mapData.label || 'Место'}</strong>
+              <strong>{mapData.label || t('tools.map.place')}</strong>
             </Popup>
           </Marker>
         )}
@@ -297,7 +298,7 @@ export function MapTool() {
         {mapData?.action === 'draw_route' && mapData.from && (
           <Marker position={[mapData.from.lat, mapData.from.lng]}>
             <Popup>
-              <strong>Откуда</strong><br />
+              <strong>{t('tools.map.from')}</strong><br />
               {mapData.from.label}
             </Popup>
           </Marker>
@@ -307,7 +308,7 @@ export function MapTool() {
         {mapData?.action === 'draw_route' && mapData.to && (
           <Marker position={[mapData.to.lat, mapData.to.lng]}>
             <Popup>
-              <strong>Куда</strong><br />
+              <strong>{t('tools.map.to')}</strong><br />
               {mapData.to.label}
             </Popup>
           </Marker>
@@ -385,7 +386,7 @@ export function MapTool() {
                   <input
                     className={s.pinEditInput}
                     type="text"
-                    placeholder="Название..."
+                    placeholder={t('tools.map.namePlaceholder')}
                     value={editLabel}
                     onChange={(e) => setEditLabel(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handlePinLabelSave(pin.id); }}
@@ -395,13 +396,13 @@ export function MapTool() {
                 </div>
               ) : (
                 <div className={s.pinPopup}>
-                  <strong>{pin.label || 'Без названия'}</strong>
+                  <strong>{pin.label || t('tools.map.untitled')}</strong>
                   <div className={s.pinPopupCoords}>
                     {pin.lat.toFixed(4)}, {pin.lng.toFixed(4)}
                   </div>
                   <div className={s.pinPopupActions}>
-                    <button className={s.pinPopupBtn} onClick={() => { setEditingPinId(pin.id); setEditLabel(pin.label); }}>Править</button>
-                    <button className={s.pinPopupBtn} onClick={() => handlePinDelete(pin.id)}>Удалить</button>
+                    <button className={s.pinPopupBtn} onClick={() => { setEditingPinId(pin.id); setEditLabel(pin.label); }}>{t('common.edit')}</button>
+                    <button className={s.pinPopupBtn} onClick={() => handlePinDelete(pin.id)}>{t('common.delete')}</button>
                   </div>
                 </div>
               )}

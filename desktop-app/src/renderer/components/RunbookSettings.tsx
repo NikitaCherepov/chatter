@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
@@ -26,9 +27,6 @@ type PublicRunbook = {
 };
 
 type Tab = 'personal' | 'public';
-
-const commandsLabel = (n: number) =>
-  `${n} команд${n === 1 ? 'а' : n > 1 && n < 5 ? 'ы' : ''}`;
 
 const tabStyle = (active: boolean): React.CSSProperties => ({
   padding: '6px 12px',
@@ -92,6 +90,8 @@ const RemoveIcon = () => (
 );
 
 export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
+  const { t } = useTranslation();
+  const commandsLabel = (count: number) => t('advanced.runbook.commandCount', { count });
   const [tab, setTab] = useState<Tab>('personal');
   const [runbooks, setRunbooks] = useState<Runbook[]>([]);
   const [publicRunbooks, setPublicRunbooks] = useState<PublicRunbook[]>([]);
@@ -172,7 +172,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
 
   const handleExtractCommands = async () => {
     if (!formContent.trim()) {
-      toast.error('Введите текст инструкции');
+      toast.error(t('advanced.runbook.enterText'));
       return;
     }
     setExtracting(true);
@@ -185,10 +185,10 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
         setFormCommands([...res.commands, '']);
         toast.success(`Найдено ${res.commands.length} команд`);
       } else {
-        toast.info('Команды не найдены в тексте');
+        toast.info(t('advanced.runbook.noCommandsFound'));
       }
     } catch {
-      toast.error('Ошибка извлечения команд');
+      toast.error(t('advanced.runbook.extractFailed'));
     } finally {
       setExtracting(false);
     }
@@ -198,7 +198,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
     const trimmedTitle = formTitle.trim();
     const trimmedContent = formContent.trim();
     if (!trimmedTitle || !trimmedContent) {
-      toast.error('Заполните название и текст');
+      toast.error(t('advanced.runbook.fillRequired'));
       return;
     }
 
@@ -210,18 +210,18 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
           method: 'PUT',
           body: JSON.stringify({ title: trimmedTitle, content: trimmedContent, commands }),
         });
-        toast.success('Инструкция обновлена');
+        toast.success(t('advanced.runbook.updated'));
       } else {
         await api.apiFetch('/api/v1/devops/runbooks', {
           method: 'POST',
           body: JSON.stringify({ title: trimmedTitle, content: trimmedContent, commands }),
         });
-        toast.success('Инструкция создана');
+        toast.success(t('advanced.runbook.created'));
       }
       resetForm();
       loadRunbooks();
     } catch (err: any) {
-      toast.error(err?.body?.error || 'Ошибка сохранения');
+      toast.error(err?.body?.error || t('advanced.common.saveFailed'));
     } finally {
       setFormSaving(false);
     }
@@ -234,11 +234,11 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
     setDeleteConfirmId(null);
     try {
       await api.apiFetch(`/api/v1/devops/runbooks/${id}`, { method: 'DELETE' });
-      toast.success('Инструкция удалена');
+      toast.success(t('advanced.runbook.deleted'));
       if (editingId === id) resetForm();
       loadRunbooks();
     } catch {
-      toast.error('Ошибка удаления');
+      toast.error(t('advanced.common.deleteFailed'));
     }
   };
 
@@ -248,20 +248,20 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
         method: 'POST',
         body: JSON.stringify({ title: runbook.title, content: runbook.content, commands: runbook.commands }),
       });
-      toast.success('Инструкция опубликована');
+      toast.success(t('advanced.runbook.published'));
       loadPublicRunbooks();
     } catch (err: any) {
-      toast.error(err?.body?.error === 'forbidden_admin_only' ? 'Только для администраторов' : 'Ошибка публикации');
+      toast.error(err?.body?.error === 'forbidden_admin_only' ? t('advanced.runbook.adminOnly') : t('advanced.runbook.publishFailed'));
     }
   };
 
   const handleSavePublic = async (publicId: number) => {
     try {
       await api.apiFetch(`/api/v1/devops/runbooks/public/${publicId}/save`, { method: 'POST' });
-      toast.success('Инструкция сохранена в ваши');
+      toast.success(t('advanced.runbook.savedToMine'));
       loadRunbooks();
     } catch (err: any) {
-      toast.error(err?.body?.error === 'runbooks_limit' ? 'Достигнут лимит инструкций' : 'Ошибка сохранения');
+      toast.error(err?.body?.error === 'runbooks_limit' ? t('advanced.runbook.limitReached') : t('advanced.common.saveFailed'));
     }
   };
 
@@ -270,7 +270,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
     const trimmedTitle = editPublicTitle.trim();
     const trimmedContent = editPublicContent.trim();
     if (!trimmedTitle || !trimmedContent) {
-      toast.error('Заполните название и текст');
+      toast.error(t('advanced.runbook.fillRequired'));
       return;
     }
     const commands = editPublicCommands.filter(c => c.trim());
@@ -280,11 +280,11 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
         method: 'PUT',
         body: JSON.stringify({ title: trimmedTitle, content: trimmedContent, commands }),
       });
-      toast.success('Публичная инструкция обновлена');
+      toast.success(t('advanced.runbook.publicUpdated'));
       setEditingPublicId(null);
       loadPublicRunbooks();
     } catch (err: any) {
-      toast.error(err?.body?.error || 'Ошибка обновления');
+      toast.error(err?.body?.error || t('advanced.runbook.updateFailed'));
     } finally {
       setEditPublicSaving(false);
     }
@@ -294,17 +294,17 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
     setDeletePublicConfirmId(null);
     try {
       await api.apiFetch(`/api/v1/devops/runbooks/public/${id}`, { method: 'DELETE' });
-      toast.success('Публичная инструкция удалена');
+      toast.success(t('advanced.runbook.publicDeleted'));
       if (editingPublicId === id) setEditingPublicId(null);
       loadPublicRunbooks();
     } catch {
-      toast.error('Ошибка удаления');
+      toast.error(t('advanced.common.deleteFailed'));
     }
   };
 
   const handleReview = async (commands: string[], id: number) => {
     if (commands.length === 0) {
-      toast.info('В инструкции нет команд для проверки');
+      toast.info(t('advanced.runbook.noCommandsToReview'));
       return;
     }
     setReviewingId(id);
@@ -316,48 +316,48 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
       });
       setReviewResult(res.verdict);
     } catch {
-      toast.error('Не удалось проверить команды');
+      toast.error(t('advanced.runbook.reviewFailed'));
     } finally {
       setReviewingId(null);
     }
   };
 
-  if (loading) return <div className={s.panel}><div className={s.promptLoading}>Загрузка...</div></div>;
+  if (loading) return <div className={s.panel}><div className={s.promptLoading}>{t('common.loading')}</div></div>;
 
   return (
     <div className={s.panel}>
-      <div className={s.panelTitle}>Инструкции</div>
+      <div className={s.panelTitle}>{t('settings.sections.runbooks')}</div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
         <button style={tabStyle(tab === 'personal')} onClick={() => setTab('personal')}>
-          Мои
+          {t('advanced.runbook.mine')}
         </button>
         <button style={tabStyle(tab === 'public')} onClick={() => setTab('public')}>
-          Публичные
+          {t('advanced.runbook.public')}
         </button>
       </div>
 
       {tab === 'personal' && (<>
         {/* ── Personal: Form ──────────────────────────────────────────────── */}
         <div className={s.fieldGroup}>
-          <label className={s.fieldLabel}>Название</label>
+          <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
           <input
             className={s.fieldInput}
             type="text"
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
-            placeholder="Рестарт pm2"
+            placeholder={t('advanced.runbook.titlePlaceholder')}
           />
         </div>
 
         <div className={s.fieldGroup}>
-          <label className={s.fieldLabel}>Текст инструкции (Markdown)</label>
+          <label className={s.fieldLabel}>{t('advanced.runbook.markdownText')}</label>
           <textarea
             className={s.textareaInput}
             value={formContent}
             onChange={(e) => setFormContent(e.target.value)}
-            placeholder="# Как рестартовать pm2&#10;1. Проверить статус: `pm2 status`&#10;2. Перезапустить: `pm2 restart all`&#10;3. Проверить: `pm2 status`"
+            placeholder={t('advanced.runbook.textPlaceholder')}
             rows={6}
           />
           <button
@@ -366,12 +366,12 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
             onClick={handleExtractCommands}
             disabled={extracting}
           >
-            {extracting ? 'Извлекаю...' : '✨ Извлечь команды из текста'}
+            {extracting ? t('advanced.runbook.extracting') : t('advanced.runbook.extract')}
           </button>
         </div>
 
         <div className={s.fieldGroup}>
-          <label className={s.fieldLabel}>Команды</label>
+          <label className={s.fieldLabel}>{t('advanced.common.commands')}</label>
           {formCommands.map((cmd, i) => (
             <div key={i} className={s.commandRow}>
               <input
@@ -380,7 +380,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                 value={cmd}
                 onChange={(e) => updateCommandField(i, e.target.value, setFormCommands)}
                 onKeyDown={(e) => handleCommandKeyDown(i, e, formCommands, setFormCommands)}
-                placeholder={`Команда ${i + 1}`}
+                placeholder={t('advanced.common.commandNumber', { number: i + 1 })}
                 style={{ flex: 1 }}
               />
               {formCommands.length > 1 && (
@@ -391,23 +391,23 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
             </div>
           ))}
           <button className={s.cancelBtn} style={{ fontSize: '11px' }} onClick={() => addCommandField(setFormCommands)}>
-            + Добавить команду
+            {t('advanced.common.addCommand')}
           </button>
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className={s.saveBtn} onClick={handleSave} disabled={formSaving}>
-            {formSaving ? 'Сохранение...' : editingId ? 'Обновить' : 'Создать'}
+            {formSaving ? t('common.saving') : editingId ? t('advanced.common.update') : t('common.create')}
           </button>
           {editingId !== null && (
-            <button className={s.cancelBtn} onClick={resetForm}>Отмена</button>
+            <button className={s.cancelBtn} onClick={resetForm}>{t('common.cancel')}</button>
           )}
         </div>
 
         {/* ── Personal: List ──────────────────────────────────────────────── */}
         {runbooks.length > 0 && (
           <div style={{ marginTop: '16px' }}>
-            <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>Сохранённые инструкции</div>
+            <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.runbook.saved')}</div>
             {runbooks.map((runbook) => (
               <div key={runbook.id} className={s.macroCard}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -421,7 +421,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                     <button
                       className={s.macroActionBtn}
                       onClick={() => handlePublish(runbook)}
-                      title="Опубликовать для всех"
+                      title={t('advanced.runbook.publishForAll')}
                     >
                       <ShareIcon />
                     </button>
@@ -429,7 +429,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                   <button
                     className={s.macroActionBtn}
                     onClick={() => startEdit(runbook)}
-                    title="Редактировать"
+                    title={t('common.edit')}
                   >
                     <EditIcon />
                   </button>
@@ -437,14 +437,14 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                     className={s.macroActionBtn}
                     onClick={() => handleReview(runbook.commands, runbook.id)}
                     disabled={reviewingId === runbook.id}
-                    title="Спросить ИИ, безопасные ли команды"
+                    title={t('advanced.runbook.askSafety')}
                   >
                     <ReviewIcon />
                   </button>
                   <button
                     className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
                     onClick={() => setDeleteConfirmId(runbook.id)}
-                    title="Удалить"
+                    title={t('common.delete')}
                   >
                     <DeleteIcon />
                   </button>
@@ -459,14 +459,14 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
         {/* ── Public: Admin edit form ─────────────────────────────────────── */}
         {editingPublicId !== null && (
           <div style={{ marginBottom: '12px', padding: '10px', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-            <div className={s.fieldLabel} style={{ marginBottom: '6px' }}>Редактирование публичной инструкции</div>
+            <div className={s.fieldLabel} style={{ marginBottom: '6px' }}>{t('advanced.runbook.editPublic')}</div>
             <div className={s.fieldGroup}>
               <input
                 className={s.fieldInput}
                 type="text"
                 value={editPublicTitle}
                 onChange={(e) => setEditPublicTitle(e.target.value)}
-                placeholder="Название"
+                placeholder={t('advanced.common.name')}
               />
             </div>
             <div className={s.fieldGroup}>
@@ -474,12 +474,12 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                 className={s.textareaInput}
                 value={editPublicContent}
                 onChange={(e) => setEditPublicContent(e.target.value)}
-                placeholder="Текст инструкции"
+                placeholder={t('advanced.runbook.text')}
                 rows={5}
               />
             </div>
             <div className={s.fieldGroup}>
-              <label className={s.fieldLabel}>Команды</label>
+              <label className={s.fieldLabel}>{t('advanced.common.commands')}</label>
               {editPublicCommands.map((cmd, i) => (
                 <div key={i} className={s.commandRow}>
                   <input
@@ -488,7 +488,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                     value={cmd}
                     onChange={(e) => updateCommandField(i, e.target.value, setEditPublicCommands)}
                     onKeyDown={(e) => handleCommandKeyDown(i, e, editPublicCommands, setEditPublicCommands)}
-                    placeholder={`Команда ${i + 1}`}
+                    placeholder={t('advanced.common.commandNumber', { number: i + 1 })}
                     style={{ flex: 1 }}
                   />
                   {editPublicCommands.length > 1 && (
@@ -499,14 +499,14 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                 </div>
               ))}
               <button className={s.cancelBtn} style={{ fontSize: '11px' }} onClick={() => addCommandField(setEditPublicCommands)}>
-                + Добавить команду
+                {t('advanced.common.addCommand')}
               </button>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className={s.saveBtn} onClick={handleUpdatePublic} disabled={editPublicSaving}>
-                {editPublicSaving ? 'Сохранение...' : 'Сохранить'}
+                {editPublicSaving ? t('common.saving') : t('common.save')}
               </button>
-              <button className={s.cancelBtn} onClick={() => setEditingPublicId(null)}>Отмена</button>
+              <button className={s.cancelBtn} onClick={() => setEditingPublicId(null)}>{t('common.cancel')}</button>
             </div>
           </div>
         )}
@@ -525,7 +525,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                 <button
                   className={s.macroActionBtn}
                   onClick={() => handleSavePublic(runbook.id)}
-                  title="Сохранить в мои инструкции"
+                  title={t('advanced.runbook.saveToMine')}
                 >
                   <SaveIcon />
                 </button>
@@ -533,7 +533,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                   className={s.macroActionBtn}
                   onClick={() => handleReview(runbook.commands, runbook.id)}
                   disabled={reviewingId === runbook.id}
-                  title="Спросить ИИ, безопасные ли команды"
+                  title={t('advanced.runbook.askSafety')}
                 >
                   <ReviewIcon />
                 </button>
@@ -541,14 +541,14 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
                   <button
                     className={s.macroActionBtn}
                     onClick={() => startEditPublic(runbook)}
-                    title="Редактировать"
+                    title={t('common.edit')}
                   >
                     <EditIcon />
                   </button>
                   <button
                     className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
                     onClick={() => setDeletePublicConfirmId(runbook.id)}
-                    title="Удалить"
+                    title={t('common.delete')}
                   >
                     <DeleteIcon />
                   </button>
@@ -558,7 +558,7 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
           ))
         ) : (
           <div style={{ color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center', padding: '20px' }}>
-            Публичных инструкций пока нет
+            {t('advanced.runbook.noPublic')}
           </div>
         )}
       </>)}
@@ -567,10 +567,10 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
       {reviewResult !== null && (
         <div className={s.explainOverlay} onClick={() => setReviewResult(null)}>
           <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
-            <div className={s.explainTitle}>Проверка безопасности ИИ</div>
+            <div className={s.explainTitle}>{t('advanced.runbook.safetyReview')}</div>
             <div className={s.explainText}><MarkdownRenderer content={reviewResult} /></div>
             <button className={s.saveBtn} onClick={() => setReviewResult(null)}>
-              Закрыть
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -578,16 +578,16 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
 
       <ConfirmDialog
         open={deleteConfirmId !== null}
-        title="Удалить инструкцию?"
-        text="Инструкция и все привязанные политики будут удалены."
+        title={t('advanced.runbook.deleteTitle')}
+        text={t('advanced.runbook.deleteMessage')}
         onCancel={() => setDeleteConfirmId(null)}
         onConfirm={() => handleDelete(deleteConfirmId!)}
       />
 
       <ConfirmDialog
         open={deletePublicConfirmId !== null}
-        title="Удалить публичную инструкцию?"
-        text="Инструкция будет удалена для всех пользователей."
+        title={t('advanced.runbook.deletePublicTitle')}
+        text={t('advanced.runbook.deletePublicMessage')}
         onCancel={() => setDeletePublicConfirmId(null)}
         onConfirm={() => handleDeletePublic(deletePublicConfirmId!)}
       />

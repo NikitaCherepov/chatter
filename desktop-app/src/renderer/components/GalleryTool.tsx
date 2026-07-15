@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import * as api from '../lib/api';
@@ -15,6 +16,7 @@ const PAGE_SIZE = 50;
 type GalleryMode = 'current' | 'all';
 
 export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<GalleryMode>('current');
   const [media, setMedia] = useState<api.ChatMediaItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,15 +93,15 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
   return (
     <div className={s.root}>
       <div className={s.modeSwitch}>
-        <ModeButton active={isCurrent} onClick={() => setMode('current')}>Этот чат</ModeButton>
-        <ModeButton active={isAll} onClick={() => setMode('all')}>Все чаты</ModeButton>
+        <ModeButton active={isCurrent} onClick={() => setMode('current')}>{t('tools.gallery.thisChat')}</ModeButton>
+        <ModeButton active={isAll} onClick={() => setMode('all')}>{t('tools.gallery.allChats')}</ModeButton>
       </div>
 
       {isCurrent && !chatId ? (
-        <div className={s.empty}>Выберите чат</div>
+        <div className={s.empty}>{t('tools.gallery.selectChat')}</div>
       ) : media.length === 0 && !loading ? (
         <div className={s.empty}>
-          {isAll ? 'Нет изображений' : 'В этом чате нет изображений'}
+          {isAll ? t('tools.gallery.empty') : t('tools.gallery.emptyChat')}
         </div>
       ) : (
         <div className={s.grid}>
@@ -111,10 +113,10 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
                 <button
                   className={s.thumb}
                   onClick={() => onImageClick?.(src, item.message_id, item.url)}
-                  title={item.type === 'generated' ? 'Сгенерировано' : 'Фото пользователя'}
+                  title={item.type === 'generated' ? t('tools.gallery.generated') : t('tools.gallery.userPhoto')}
                 >
                   <img src={src} alt="" loading="lazy" />
-                  {item.type === 'generated' && <span className={s.badge}>AI</span>}
+                  {item.type === 'generated' && <span className={s.badge}>{t('tools.gallery.ai')}</span>}
                 </button>
 
                 {/* В режиме "все чаты" — badge с названием чата и кнопка перехода */}
@@ -145,7 +147,7 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
                     e.stopPropagation();
                     setDeleteTarget(item);
                   }}
-                  title="Удалить"
+                  title={t('common.delete')}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6" />
@@ -159,7 +161,7 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
       )}
       {hasMore && (
         <button className={s.loadMore} onClick={handleLoadMore} disabled={loading}>
-          {loading ? '...' : 'Загрузить ещё'}
+          {loading ? '...' : t('tools.gallery.loadMore')}
         </button>
       )}
 
@@ -167,11 +169,11 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
         <ConfirmDialog
           key="confirm-delete-gallery-image"
           open={deleteTarget !== null}
-          title="Удалить изображение?"
-          text="Файл будет удалён безвозвратно."
+          title={t('chat.deleteImage.title')}
+          text={t('chat.deleteImage.message')}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={handleDelete}
-          confirmLabel={deleting ? '...' : 'Удалить'}
+          confirmLabel={deleting ? '...' : t('common.delete')}
         />
       </AnimatePresence>
     </div>

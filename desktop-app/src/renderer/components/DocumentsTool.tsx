@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useCallback, useEffect, useState } from 'react';
 import * as api from '../lib/api';
 import s from './DocumentsTool.module.scss';
@@ -12,12 +13,13 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatDate(unix: number): string {
+function formatDate(unix: number, locale: string): string {
   const d = new Date(unix * 1000);
-  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  return d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
 export function DocumentsTool({ chatId }: Props) {
+  const { t, i18n } = useTranslation();
   const [attachments, setAttachments] = useState<api.ChatAttachmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function DocumentsTool({ chatId }: Props) {
   if (!chatId) {
     return (
       <div className={s.root}>
-        <div className={s.empty}>Выберите чат</div>
+        <div className={s.empty}>{t('tools.documents.selectChat')}</div>
       </div>
     );
   }
@@ -81,7 +83,7 @@ export function DocumentsTool({ chatId }: Props) {
   return (
     <div className={s.root}>
       {attachments.length === 0 && !loading ? (
-        <div className={s.empty}>Нет документов</div>
+        <div className={s.empty}>{t('tools.documents.empty')}</div>
       ) : (
         attachments.map((item, i) => {
           const itemKey = `${item.message_id}-${item.filename}-${i}`;
@@ -91,20 +93,20 @@ export function DocumentsTool({ chatId }: Props) {
           if (isConfirming) {
             return (
               <div key={itemKey} className={s.confirmDelete}>
-                <span className={s.confirmText}>Удалить {item.name}?</span>
+                <span className={s.confirmText}>{t('tools.documents.deleteQuestion', { name: item.name })}</span>
                 <button
                   className={`${s.confirmBtn} ${s.yes}`}
                   onClick={() => handleDelete(item)}
                   disabled={isDeleting}
                 >
-                  {isDeleting ? '...' : 'Да'}
+                  {isDeleting ? '...' : t('common.yes')}
                 </button>
                 <button
                   className={`${s.confirmBtn} ${s.no}`}
                   onClick={() => setConfirmId(null)}
                   disabled={isDeleting}
                 >
-                  Нет
+                  {t('common.no')}
                 </button>
               </div>
             );
@@ -124,14 +126,14 @@ export function DocumentsTool({ chatId }: Props) {
                 <span className={s.docName}>{item.name}</span>
                 <span className={s.docMeta}>
                   <span>{formatSize(item.size_bytes)}</span>
-                  <span>{formatDate(item.created_at)}</span>
+                  <span>{formatDate(item.created_at, i18n.resolvedLanguage || i18n.language)}</span>
                 </span>
               </div>
               <div className={s.docActions}>
                 <button
                   className={s.docBtn}
                   onClick={() => handleDownload(item)}
-                  title="Скачать"
+                  title={t('common.download')}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -142,7 +144,7 @@ export function DocumentsTool({ chatId }: Props) {
                 <button
                   className={`${s.docBtn} ${s.danger}`}
                   onClick={() => setConfirmId(itemKey)}
-                  title="Удалить"
+                  title={t('common.delete')}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6" />
