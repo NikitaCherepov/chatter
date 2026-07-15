@@ -13,7 +13,8 @@
     "stop": "pm2 stop chatter",
     "stop:api": "pm2 stop chatter-api",
     "logs": "pm2 logs chatter",
-    "logs:api": "pm2 logs chatter-api"
+    "logs:api": "pm2 logs chatter-api",
+    "security:secrets": "node scripts/security/scan-secrets.mjs --mode all --report .secret-scan-report.json --fail-on high"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^7.2.0",

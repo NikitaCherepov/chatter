@@ -1,5 +1,6 @@
 node_modules/
 .npm-cache/
+.secret-scan-report*.json
 whisper.cpp/
 __pycache__/
 *.py[cod]
