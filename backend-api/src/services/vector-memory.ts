@@ -66,6 +66,25 @@ const logError = (message: string, payload?: Record<string, unknown>) => {
   console.error(`[vector-memory] ${message}`);
 };
 
+const isPineconeNotFoundError = (error: unknown) =>
+  error instanceof Error
+  && (
+    error.name === 'PineconeNotFoundError'
+    || /\bHTTP status 404\b/i.test(error.message)
+  );
+
+const deletePineconeResource = async (operation: () => Promise<void>) => {
+  try {
+    await operation();
+    return 'deleted' as const;
+  } catch (error) {
+    // Pinecone returns 404 when a namespace or vector is already absent.
+    // Delete operations are intentionally idempotent, so this is success.
+    if (isPineconeNotFoundError(error)) return 'already_absent' as const;
+    throw error;
+  }
+};
+
 const getOpenAIClient = () => {
   if (!TIMEWEB_EMBED_API_KEY) {
     throw new Error('TIMEWEB_EMBED_API_KEY is not configured');
@@ -305,7 +324,9 @@ export class VectorMemoryService {
       const readableNamespaces = getReadableNamespaces(userId);
       const index = getPineconeIndex();
       await Promise.all(readableNamespaces.map(readableNamespace =>
-        index.namespace(readableNamespace).deleteOne(safeChunkId)
+        deletePineconeResource(() =>
+          index.namespace(readableNamespace).deleteOne(safeChunkId)
+        )
       ));
 
       const out = {
@@ -334,7 +355,9 @@ export class VectorMemoryService {
       const readableNamespaces = getReadableNamespaces(userId);
       const index = getPineconeIndex();
       await Promise.all(readableNamespaces.map(readableNamespace =>
-        index.namespace(readableNamespace).deleteAll()
+        deletePineconeResource(() =>
+          index.namespace(readableNamespace).deleteAll()
+        )
       ));
 
       const out = {
@@ -399,7 +422,7 @@ const migrateNamespace = async (migration: NamespaceMigration) => {
   } while (paginationToken);
 
   // The source remains readable until every upsert has completed successfully.
-  await source.deleteAll();
+  const sourceCleanup = await deletePineconeResource(() => source.deleteAll());
   db.prepare(`
     UPDATE account_namespace_migrations
     SET target_account_id = ?,
@@ -414,6 +437,7 @@ const migrateNamespace = async (migration: NamespaceMigration) => {
     source_account_id: sourceAccountId,
     target_account_id: targetAccountId,
     copied,
+    source_cleanup: sourceCleanup,
   });
 };
 
