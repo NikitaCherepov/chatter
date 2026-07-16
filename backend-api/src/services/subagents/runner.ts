@@ -286,7 +286,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       } else if (agent.sharedTools.includes(toolName)) {
         // Shared tool — delegate to the main agent's runTool
         // This ensures auto-approve policies, HitL confirmations, sudo passwords, etc.
-        // Pass full user record for plan checks, feature flags, linked_tg_id, etc.
+        // Pass the full canonical account record for plan checks and feature flags.
         const userRecord = ctx.user || { id: ctx.userId } as any;
 
         try {

@@ -8,6 +8,7 @@ import { db } from '../db.js';
 import { fetchAndSaveCurrencyRates } from './currency.js';
 import { sendToDesktop, isDesktopOnline } from '../ws-clients.js';
 import { sendTelegramMessage } from './telegram-send.js';
+import { getTelegramIdentityForAccount } from './accounts.js';
 
 const PRO_MODEL_CHAIN = (process.env.TIMEWEB_MODEL || 'gemini/gemini-3.1-flash-lite-preview')
   .split(',')
@@ -69,8 +70,11 @@ const deliverTaskResult = (
     });
   }
 
-  // Always push to Telegram
-  sendTelegramMessage(userId, text);
+  const telegramIdentity = getTelegramIdentityForAccount(userId);
+  const telegramChatId = Number(telegramIdentity?.provider_subject);
+  if (Number.isFinite(telegramChatId) && telegramChatId > 0) {
+    sendTelegramMessage(telegramChatId, text);
+  }
 };
 
 const getIsoWeekday = (date: Date) => {

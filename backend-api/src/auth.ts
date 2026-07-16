@@ -1,6 +1,7 @@
 ﻿import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { getUserById } from './services/chats.js';
+import { getAuthPrincipal, resolveAccountId } from './services/accounts.js';
 
 dotenv.config();
 
@@ -57,16 +58,16 @@ export const verifyToken = (token: string, expectedType: 'access' | 'refresh') =
   if (decoded.typ !== expectedType) return null;
   if (!decoded.sub || !Number.isFinite(decoded.exp) || decoded.exp <= Math.floor(Date.now() / 1000)) return null;
 
-  const user = getUserById(decoded.sub);
-  if (!user || (user.status !== 'approved' && user.is_admin !== 1)) return null;
+  const principal = getAuthPrincipal(decoded.sub);
+  if (!principal || (principal.status !== 'approved' && principal.is_admin !== 1)) return null;
   const tokenVersion = Number.isFinite(Number(decoded.ver)) ? Math.floor(Number(decoded.ver)) : 0;
-  const currentVersion = Math.max(0, Math.floor(Number(user.auth_token_version || 0)));
+  const currentVersion = principal.auth_token_version;
   if (tokenVersion !== currentVersion) return null;
 
-  if (user.linked_tg_id) {
-    const linkedUser = getUserById(user.linked_tg_id);
-    if (!linkedUser || (linkedUser.status !== 'approved' && linkedUser.is_admin !== 1)) return null;
-  }
+  const canonicalAccountId = principal.account_id;
+  const user = getUserById(canonicalAccountId);
+  if (!user || (user.status !== 'approved' && user.is_admin !== 1)) return null;
+  decoded.sub = canonicalAccountId;
   return decoded;
 };
 
@@ -116,6 +117,7 @@ const parseInitData = (initData: string) => {
 export const validateTelegramInitData = (initData: string) => parseInitData(initData);
 
 export const issueAuthTokens = (userId: number) => {
+  userId = resolveAccountId(userId);
   const user = getUserById(userId);
   if (!user || (user.status !== 'approved' && user.is_admin !== 1)) {
     throw new Error('user_not_authorized');
@@ -154,9 +156,6 @@ export const adminMiddleware = (req: AuthedRequest, res: any, next: any) => {
   const user = getUserById(userId);
   if (!user) return res.status(401).json({ error: 'unauthorized' });
   if (user.is_admin === 1) return next();
-
-  const linkedTelegramUser = user.linked_tg_id ? getUserById(user.linked_tg_id) : null;
-  if (linkedTelegramUser?.is_admin === 1) return next();
 
   return res.status(403).json({ error: 'forbidden_admin_only' });
 };

@@ -2686,18 +2686,9 @@ export function ChatPage() {
             style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
           >
             {isLinked ? (
-              <button className={s.iconBtn} onClick={async () => {
-                try {
-                  await api.unlinkTelegram();
-                  setIsLinked(false);
-                  const freshUser = await api.fetchMe();
-                  setUser(freshUser);
-                  localStorage.setItem('chatter_user', JSON.stringify(freshUser));
-                } catch {}
-              }} title={t('chat.sidebar.unlinkTelegram')}>
+              <button className={s.iconBtn} disabled title={t('chat.sidebar.linkTelegram')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6L6 18" />
-                  <path d="M6 6l12 12" />
+                  <path d="M20 6L9 17l-5-5" />
                 </svg>
               </button>
             ) : (
@@ -4196,6 +4187,7 @@ export function ChatPage() {
             onLinked={async () => {
               setShowLinkModal(false);
               setIsLinked(true);
+              api.reconnectWebSocket();
               loadChats();
               // Refresh user data so plan/limits update from the backend
               try {

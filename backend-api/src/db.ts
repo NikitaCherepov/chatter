@@ -87,18 +87,53 @@ if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx
 db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS api_accounts (
+  CREATE TABLE IF NOT EXISTS account_identities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL UNIQUE,
-    login TEXT NOT NULL UNIQUE,
-    password_salt TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    account_id INTEGER NOT NULL,
+    provider TEXT NOT NULL,
+    provider_subject TEXT NOT NULL,
+    username TEXT,
+    password_salt TEXT,
+    password_hash TEXT,
+    metadata_json TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(provider, provider_subject)
   )
 `);
 
-db.exec("CREATE INDEX IF NOT EXISTS idx_api_accounts_login ON api_accounts(login)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_account_identities_account ON account_identities(account_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_account_identities_provider ON account_identities(provider, provider_subject)");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS account_redirects (
+    source_account_id INTEGER PRIMARY KEY,
+    target_account_id INTEGER NOT NULL,
+    source_auth_token_version INTEGER NOT NULL DEFAULT 0,
+    source_status TEXT NOT NULL DEFAULT 'approved',
+    source_is_admin INTEGER NOT NULL DEFAULT 0,
+    reason TEXT NOT NULL DEFAULT 'account_merge',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+db.exec("CREATE INDEX IF NOT EXISTS idx_account_redirects_target ON account_redirects(target_account_id)");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS account_namespace_migrations (
+    source_account_id INTEGER PRIMARY KEY,
+    target_account_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME
+  )
+`);
+
+db.exec("CREATE INDEX IF NOT EXISTS idx_account_namespace_migrations_target ON account_namespace_migrations(target_account_id, status)");
 
 // Telegram link codes
 db.exec(`
@@ -112,9 +147,6 @@ db.exec(`
 
 // Cleanup expired codes on startup
 db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
-
-// linked_tg_id column on users — stores TG user_id when linked
-ensureUserColumn('linked_tg_id', 'ALTER TABLE users ADD COLUMN linked_tg_id INTEGER');
 
 // Token-based context limit (replaces message-count-based context_window_max)
 ensureUserColumn('max_context_tokens_limit', 'ALTER TABLE users ADD COLUMN max_context_tokens_limit INTEGER NOT NULL DEFAULT 30000');

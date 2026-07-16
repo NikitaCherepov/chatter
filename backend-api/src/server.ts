@@ -1,10 +1,10 @@
-﻿import express from 'express';
+import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createApiAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, forkChat, getApiAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
 import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -26,7 +26,7 @@ import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
-import { VectorMemoryService } from './services/vector-memory.js';
+import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret, runEmailSend } from './services/mail.js';
@@ -38,8 +38,17 @@ import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/d
 import { resolveAudioFile, saveTtsAudio } from './services/audio-storage.js';
 import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './services/tts-cartesia.js';
 import type { UserRecord } from './types.js';
+import {
+  getAccountIdByTelegramId,
+  getAccountIdentities,
+  getTelegramIdentityForAccount,
+  linkAccountToTelegram,
+  resolveAccountId,
+  runAccountIdentityMigration,
+} from './services/accounts.js';
 
 dotenv.config();
+runAccountIdentityMigration();
 
 const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
 
@@ -102,6 +111,14 @@ const internalAuth = (req: any, res: any, next: any) => {
   next();
 };
 
+// Internal routes are called by the Telegram bot and receive Telegram user IDs.
+// Identity lookup comes first; redirect lookup keeps old canonical IDs usable too.
+const resolveInternalAccountId = (rawUserId: unknown): number => {
+  const userId = Math.floor(Number(rawUserId));
+  if (!Number.isFinite(userId) || userId <= 0) return Number.NaN;
+  return getAccountIdByTelegramId(userId) ?? resolveAccountId(userId);
+};
+
 const BACKEND_VOICE_API_ENABLED = `${process.env.BACKEND_VOICE_API_ENABLED || '0'}`.trim() === '1';
 const BACKEND_PHOTO_API_ENABLED = `${process.env.BACKEND_PHOTO_API_ENABLED || '0'}`.trim() === '1';
 const BACKEND_VECTOR_MEMORY_API_ENABLED = `${process.env.BACKEND_VECTOR_MEMORY_API_ENABLED || '0'}`.trim() === '1';
@@ -118,7 +135,7 @@ app.post('/internal/tools/read_url', internalAuth, async (req, res) => {
 });
 
 app.post('/internal/ai/send', internalAuth, async (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const text = `${req.body?.text || ''}`;
   const chatIdRaw = req.body?.chat_id;
   const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
@@ -212,7 +229,7 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
 // ── Internal: AI Send (SSE streaming for Telegram) ──────────────────────────
 
 app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const text = `${req.body?.text || ''}`;
   const chatIdRaw = req.body?.chat_id;
   const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
@@ -327,7 +344,7 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
 });
 
 app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
-  const targetUserId = Number(req.body?.target_user_id);
+  const targetUserId = resolveInternalAccountId(req.body?.target_user_id);
   const adminInstruction = `${req.body?.admin_instruction || ''}`;
 
   if (!Number.isFinite(targetUserId) || targetUserId <= 0) return res.status(400).json({ error: 'bad_target_user_id' });
@@ -348,14 +365,14 @@ app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
 // ── Internal: Models ─────────────────────────────────────────────────────────
 
 app.get('/internal/models', internalAuth, (req, res) => {
-  const userId = Number(req.query?.user_id);
+  const userId = resolveInternalAccountId(req.query?.user_id);
   const user = Number.isFinite(userId) && userId > 0 ? getUserById(userId) : undefined;
   const catalog = getModelsCatalog(user?.is_admin === 1);
   return res.json({ models: catalog });
 });
 
 app.get('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -364,7 +381,7 @@ app.get('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
 });
 
 app.put('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -384,7 +401,7 @@ app.post('/internal/reset-daily-counters', internalAuth, (_req, res) => {
 });
 
 app.post('/internal/ai/generate-image', internalAuth, async (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const prompt = `${req.body?.prompt || ''}`.trim();
 
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -406,7 +423,7 @@ app.post('/internal/ai/generate-image', internalAuth, async (req, res) => {
 });
 
 app.post('/internal/messages/bind-telegram', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const messageId = Number(req.body?.message_id);
   const telegramChatId = Number.isFinite(Number(req.body?.telegram_chat_id))
     ? Math.floor(Number(req.body?.telegram_chat_id))
@@ -428,7 +445,7 @@ app.post('/internal/voice/turn', internalAuth, async (req, res) => {
     return res.status(503).json({ error: 'backend_voice_api_disabled' });
   }
 
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const audioBase64 = `${req.body?.audio_base64 || ''}`;
   const mimeType = `${req.body?.mime_type || 'audio/ogg'}`;
   const chatIdRaw = req.body?.chat_id;
@@ -467,7 +484,7 @@ app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
     return res.status(503).json({ error: 'backend_photo_api_disabled' });
   }
 
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const imageBase64 = `${req.body?.image_base64 || ''}`;
   const imageMimeType = `${req.body?.image_mime_type || 'image/jpeg'}`;
   const caption = `${req.body?.caption || ''}`;
@@ -521,11 +538,14 @@ app.post('/api/v1/auth/register', (req, res) => {
   if (!/^[-_.a-z0-9]{3,64}$/i.test(login)) return res.status(400).json({ error: 'bad_login' });
   if (password.length < 8 || password.length > 128) return res.status(400).json({ error: 'bad_password_length' });
 
-  if (getApiAccountByLogin(login)) return res.status(409).json({ error: 'login_already_exists' });
+  if (getPasswordAccountByLogin(login)) return res.status(409).json({ error: 'login_already_exists' });
 
-  const userId = createOrUpdateUserForApiRegistration(name);
   const hashed = makePasswordHash(password);
-  createApiAccount(userId, login, hashed.salt, hashed.hash);
+  const userId = db.transaction(() => {
+    const createdUserId = createOrUpdateUserForApiRegistration(name);
+    createPasswordAccount(createdUserId, login, hashed.salt, hashed.hash);
+    return createdUserId;
+  })();
 
   const user = getUserById(userId);
   if (!user) return res.status(500).json({ error: 'user_create_failed' });
@@ -543,10 +563,6 @@ app.post('/api/v1/auth/register', (req, res) => {
     }
   });
 });
-
-const getLinkedTelegramUser = (user: UserRecord) => {
-  return user.linked_tg_id ? getUserById(user.linked_tg_id) : null;
-};
 
 const parseFeatureFlags = (user: UserRecord): Record<string, boolean> => {
   try {
@@ -566,13 +582,15 @@ export const parseUiSettings = (user: UserRecord): { show_tokens?: boolean; dice
 };
 
 const toAuthUserDto = (user: UserRecord) => {
-  const linkedTelegramUser = getLinkedTelegramUser(user);
-  const effectiveUser = linkedTelegramUser || user;
+  const accountId = resolveAccountId(user.id);
+  const effectiveUser = getUserById(accountId) || user;
+  const identities = getAccountIdentities(accountId);
+  const telegramIdentity = identities.find(identity => identity.provider === 'telegram');
 
   return {
-    id: user.id,
+    id: accountId,
     name: effectiveUser.name,
-    username: effectiveUser.tg_username,
+    username: telegramIdentity?.username || effectiveUser.tg_username,
     role: effectiveUser.role,
     is_admin: effectiveUser.is_admin,
     plan: effectiveUser.plan,
@@ -582,6 +600,13 @@ const toAuthUserDto = (user: UserRecord) => {
     ui_settings: parseUiSettings(effectiveUser),
     subagent_model: effectiveUser.subagent_mode && effectiveUser.subagent_mode !== 'auto' ? effectiveUser.subagent_mode : null,
     subagent_reasoning_level: effectiveUser.subagent_reasoning_level ?? null,
+    telegram_linked: Boolean(telegramIdentity),
+    telegram_id: telegramIdentity ? Number(telegramIdentity.provider_subject) : null,
+    identities: identities.map(identity => ({
+      provider: identity.provider,
+      provider_subject: identity.provider_subject,
+      username: identity.username,
+    })),
   };
 };
 
@@ -590,7 +615,7 @@ app.post('/api/v1/auth/login', (req, res) => {
   const password = `${req.body?.password || ''}`;
 
   if (!login || !password) return res.status(400).json({ error: 'login_password_required' });
-  const account = getApiAccountByLogin(login);
+  const account = getPasswordAccountByLogin(login);
   if (!account) return res.status(401).json({ error: 'invalid_credentials' });
   if (!verifyPassword(password, account.password_salt, account.password_hash)) {
     return res.status(401).json({ error: 'invalid_credentials' });
@@ -620,23 +645,17 @@ app.post('/api/v1/auth/telegram', (req, res) => {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
   upsertUserFromTelegram(user.id, user.username || null, fullName);
 
-  const userRecord = getUserById(user.id);
+  const accountId = getAccountIdByTelegramId(user.id) ?? user.id;
+  const userRecord = getUserById(accountId);
   if (!userRecord) return res.status(500).json({ error: 'user_create_failed' });
   if (userRecord.status !== 'approved' && userRecord.is_admin !== 1) {
     return res.status(403).json({ error: 'access_not_approved', status: userRecord.status });
   }
 
-  const tokens = issueAuthTokens(user.id);
+  const tokens = issueAuthTokens(accountId);
   return res.json({
     ...tokens,
-    user: {
-      id: userRecord.id,
-      name: userRecord.name,
-      username: userRecord.tg_username,
-      role: userRecord.role,
-      is_admin: userRecord.is_admin,
-      plan: userRecord.plan
-    }
+    user: toAuthUserDto(userRecord)
   });
 });
 
@@ -663,9 +682,7 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
 
   const userId = payload.sub;
 
-  // Resolve effective user (linked TG user) — same as other endpoints
-  const rawUser = getUserById(userId);
-  const effectiveId = rawUser?.linked_tg_id || userId;
+  const effectiveId = resolveAccountId(userId);
   const filename = path.basename(req.params.filename || '');
   if (!filename) return res.status(400).json({ error: 'bad_filename' });
 
@@ -675,7 +692,7 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
   // Verify ownership: check that this image belongs to a message owned by this user
   // images column may be JSON: [{"url":"/api/v1/images/xxx.png",...}] or plain text: "generated: /uploads/xxx.png"
   const likePattern = `%${filename}%`;
-  console.log(`[image-access] userId=${userId}, effectiveId=${effectiveId}, linked_tg_id=${rawUser?.linked_tg_id}, filename=${filename}`);
+  console.log(`[image-access] userId=${userId}, effectiveId=${effectiveId}, filename=${filename}`);
   const row = db.prepare(`
     SELECT 1 FROM chat_messages
     WHERE user_id = ? AND images LIKE ?
@@ -703,8 +720,7 @@ app.get('/api/v1/attachments/:filename', (req: AuthedRequest, res) => {
   if (!payload) return res.status(401).json({ error: 'unauthorized' });
 
   const userId = payload.sub;
-  const rawUser = getUserById(userId);
-  const effectiveId = rawUser?.linked_tg_id || userId;
+  const effectiveId = resolveAccountId(userId);
   const filename = path.basename(req.params.filename || '');
   if (!filename) return res.status(400).json({ error: 'bad_filename' });
 
@@ -739,8 +755,7 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
   if (!payload) return res.status(401).json({ error: 'unauthorized' });
 
   const userId = payload.sub;
-  const rawUser = getUserById(userId);
-  const effectiveId = rawUser?.linked_tg_id || userId;
+  const effectiveId = resolveAccountId(userId);
   const filename = path.basename(req.params.filename || '');
   if (!filename) return res.status(400).json({ error: 'bad_filename' });
 
@@ -784,25 +799,21 @@ app.post('/api/v1/auth/logout', (req: AuthedRequest, res) => {
 
 // Update core memory
 app.put('/api/v1/account/core-memory', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const content = typeof req.body?.content === 'string' ? req.body.content.slice(0, 800) : '';
   db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(content, userId);
   return res.json({ ok: true });
 });
 
-// Resolve effective user: if web user has linked_tg_id, act as TG user
-const effectiveUserId = (req: AuthedRequest): number => {
-  const rawId = req.authUserId!;
-  const user = getUserById(rawId);
-  if (user?.linked_tg_id) return user.linked_tg_id;
-  return rawId;
+const accountIdFromRequest = (req: AuthedRequest): number => {
+  return resolveAccountId(req.authUserId!);
 };
 
 app.post('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
     return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   }
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const text = `${req.body?.text || ''}`;
   const source = `${req.body?.source || 'manual'}`;
 
@@ -821,7 +832,7 @@ app.post('/api/v1/vector-memory/search', async (req: AuthedRequest, res) => {
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
     return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   }
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const query = `${req.body?.query || ''}`;
   const topK = Number(req.body?.top_k);
 
@@ -840,7 +851,7 @@ app.delete('/api/v1/vector-memory/chunks/:id', async (req: AuthedRequest, res) =
   if (!BACKEND_VECTOR_MEMORY_API_ENABLED) {
     return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   }
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chunkId = `${req.params.id || ''}`;
 
   try {
@@ -860,7 +871,7 @@ app.delete('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
   if (`${req.query.all || ''}` !== '1') {
     return res.status(400).json({ error: 'set_all_1_to_confirm' });
   }
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
 
   try {
     const out = await VectorMemoryService.deleteAll(userId);
@@ -872,7 +883,7 @@ app.delete('/api/v1/vector-memory/chunks', async (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/chats', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const limit = Number.parseInt(`${req.query.limit || '50'}`, 10);
   const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
   const chats = listUserChats(userId, limit, offset);
@@ -883,7 +894,7 @@ app.get('/api/v1/chats', (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/chats/search', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const query = `${req.query.q || ''}`.trim();
   const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
 
@@ -894,14 +905,14 @@ app.get('/api/v1/chats/search', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/chats', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const title = `${req.body?.title || ''}`;
   const chatId = createUserChat(userId, title);
   res.status(201).json({ chat_id: chatId });
 });
 
 app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const sourceChatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(sourceChatId) || sourceChatId <= 0) {
     return res.status(400).json({ error: 'bad_chat_id' });
@@ -917,7 +928,7 @@ app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/chats/:id/activate', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const ok = activateUserChat(userId, chatId);
@@ -926,7 +937,7 @@ app.post('/api/v1/chats/:id/activate', (req: AuthedRequest, res) => {
 });
 
 app.put('/api/v1/chats/:id/rename', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const title = `${req.body?.title || ''}`.trim();
@@ -937,7 +948,7 @@ app.put('/api/v1/chats/:id/rename', (req: AuthedRequest, res) => {
 });
 
 app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.chatId, 10);
   const messageId = Number.parseInt(req.params.messageId, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
@@ -949,7 +960,7 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res
 
 // List all attachments in a chat (for ToolsPanel "Documents" view)
 app.get('/api/v1/chats/:chatId/attachments', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.chatId, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const attachments = getChatAttachments(userId, chatId);
@@ -958,7 +969,7 @@ app.get('/api/v1/chats/:chatId/attachments', (req: AuthedRequest, res) => {
 
 // Delete a single attachment from a message by filename
 app.delete('/api/v1/chats/:chatId/messages/:messageId/attachments/:filename', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.chatId, 10);
   const messageId = Number.parseInt(req.params.messageId, 10);
   const filename = path.basename(decodeURIComponent(req.params.filename || ''));
@@ -972,7 +983,7 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId/attachments/:filename', (r
 
 // Удаление изображения из messages.images по URL (картинка может принадлежать любому чату юзера)
 app.delete('/api/v1/messages/:messageId/images', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const messageId = Number.parseInt(req.params.messageId, 10);
   const imageUrl = `${req.query.url || ''}`.trim();
   if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
@@ -983,7 +994,7 @@ app.delete('/api/v1/messages/:messageId/images', (req: AuthedRequest, res) => {
 });
 
 app.put('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.chatId, 10);
   const messageId = Number.parseInt(req.params.messageId, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
@@ -996,7 +1007,7 @@ app.put('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) =
 });
 
 app.delete('/api/v1/chats/:chatId', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.chatId, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const ok = deleteUserChat(userId, chatId);
@@ -1011,17 +1022,15 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
   const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
   if (!TELEGRAM_TOKEN) return res.status(500).json({ error: 'telegram_not_configured' });
 
-  const rawUserId = req.authUserId!;
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const messageId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
 
-  // Check linked TG account — use the raw (non-effective) user to find linked_tg_id
-  const rawUser = getUserById(rawUserId);
-  const linkedTgId = rawUser?.linked_tg_id;
+  const telegramIdentity = getTelegramIdentityForAccount(userId);
+  const linkedTgId = Number(telegramIdentity?.provider_subject);
   if (!linkedTgId) return res.status(400).json({ error: 'telegram_not_linked' });
 
-  console.log(`[send-to-telegram] rawUserId=${rawUserId}, effectiveUserId=${userId}, linkedTgId=${linkedTgId}, messageId=${messageId}`);
+  console.log(`[send-to-telegram] accountId=${userId}, linkedTgId=${linkedTgId}, messageId=${messageId}`);
 
   // Fetch the message, verify ownership
   const row = db.prepare(`
@@ -1121,7 +1130,7 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
 });
 
 app.get('/api/v1/chats/:id/messages', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
@@ -1131,7 +1140,7 @@ app.get('/api/v1/chats/:id/messages', (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/chats/:id/media', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const limit = Number.parseInt(`${req.query.limit || '100'}`, 10);
@@ -1142,7 +1151,7 @@ app.get('/api/v1/chats/:id/media', (req: AuthedRequest, res) => {
 
 // Медиа (изображения) из всех чатов пользователя.
 app.get('/api/v1/media/all', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const limit = Number.parseInt(`${req.query.limit || '100'}`, 10);
   const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
   const media = getAllUserMedia(userId, limit, offset);
@@ -1152,7 +1161,7 @@ app.get('/api/v1/media/all', (req: AuthedRequest, res) => {
 // Суммарные токены контекста чата (сообщения без системного промпта).
 // Системный промпт динамический, считается отдельно при необходимости.
 app.get('/api/v1/chats/:id/context-tokens', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   const tokens = getChatContextTokens(userId, chatId);
@@ -1160,7 +1169,7 @@ app.get('/api/v1/chats/:id/context-tokens', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const text = `${req.body?.text || ''}`;
   const chatIdRaw = req.body?.chat_id;
   const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
@@ -1256,7 +1265,6 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   res.write(': connected\n\n');
 
   try {
-    const apiUserId = req.authUserId!;
     const rawUserRecord = getUserById(userId);
     const result = await sendMessageThroughAi(userId, text, chatId, {
       ...(images.length > 0 ? { images } : {}),
@@ -1274,7 +1282,6 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(() => { const fv = resolveDiceForceValue(req.body?.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
-      ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
       },
@@ -1312,7 +1319,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
 // ── Остановка генерации ────────────────────────────────────────────────────
 app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const controller = activeGenerations.get(userId);
   if (controller) {
     controller.abort();
@@ -1349,7 +1356,7 @@ app.post('/api/v1/tts/generate', async (req: AuthedRequest, res) => {
     return res.status(503).json({ error: 'tts_not_configured' });
   }
 
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const text = `${req.body?.text || ''}`.trim();
   const voiceId = `${req.body?.voice_id || ''}`.trim();
   const language = `${req.body?.language || 'ru'}`.trim();
@@ -1422,7 +1429,7 @@ app.get('/api/v1/tts/preview', async (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/notes', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const limit = Number.parseInt(`${req.query.limit || '20'}`, 10);
   const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
   const query = `${req.query.query || ''}`;
@@ -1432,7 +1439,7 @@ app.get('/api/v1/notes', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/notes', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const title = `${req.body?.title || ''}`;
@@ -1448,7 +1455,7 @@ app.post('/api/v1/notes', (req: AuthedRequest, res) => {
 });
 
 app.delete('/api/v1/notes/:id', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const noteId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_note_id' });
   const ok = deleteNote(userId, noteId);
@@ -1457,7 +1464,7 @@ app.delete('/api/v1/notes/:id', (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/notes/:id', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const noteId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_note_id' });
   const note = getNoteById(userId, noteId);
@@ -1466,7 +1473,7 @@ app.get('/api/v1/notes/:id', (req: AuthedRequest, res) => {
 });
 
 app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const statusRaw = `${req.query.status || 'pending'}` as 'pending' | 'done' | 'error' | 'all';
   const status = ['pending', 'done', 'error', 'all'].includes(statusRaw) ? statusRaw : 'pending';
   const limit = Number.parseInt(`${req.query.limit || '50'}`, 10);
@@ -1475,7 +1482,7 @@ app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
 });
 
 app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const executeAt = Number(req.body?.execute_at);
   const taskType = `${req.body?.task_type || ''}` as any;
   const payload = `${req.body?.payload || ''}`;
@@ -1497,7 +1504,7 @@ app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
 });
 
 app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const taskId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_task_id' });
   const ok = deletePendingTask(userId, taskId);
@@ -1508,13 +1515,13 @@ app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
 // ── Map Pins (JWT) ─────────────────────────────────────────────────────────
 
 app.get('/api/v1/map-pins', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const pins = listMapPins(userId);
   return res.json({ pins });
 });
 
 app.post('/api/v1/map-pins', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const lat = typeof req.body?.lat === 'number' ? req.body.lat : NaN;
   const lng = typeof req.body?.lng === 'number' ? req.body.lng : NaN;
   const label = `${req.body?.label || ''}`;
@@ -1524,7 +1531,7 @@ app.post('/api/v1/map-pins', (req: AuthedRequest, res) => {
 });
 
 app.put('/api/v1/map-pins/:id', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const pinId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(pinId) || pinId <= 0) return res.status(400).json({ error: 'bad_pin_id' });
   const updates: { lat?: number; lng?: number; label?: string } = {};
@@ -1540,7 +1547,7 @@ app.put('/api/v1/map-pins/:id', (req: AuthedRequest, res) => {
 });
 
 app.delete('/api/v1/map-pins/:id', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const pinId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(pinId) || pinId <= 0) return res.status(400).json({ error: 'bad_pin_id' });
   const ok = deleteMapPin(userId, pinId);
@@ -1561,9 +1568,12 @@ app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
-  if (user.linked_tg_id) {
-    const tgUser = getUserById(user.linked_tg_id);
-    return res.json({ linked: true, tg_username: tgUser?.tg_username || tgUser?.name || null });
+  const telegramIdentity = getTelegramIdentityForAccount(userId);
+  if (telegramIdentity) {
+    return res.json({
+      linked: true,
+      tg_username: telegramIdentity.username || user.tg_username || user.name || null,
+    });
   }
 
   // Check if there's a pending code
@@ -1578,16 +1588,8 @@ app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
 
 app.post('/api/v1/link/unlink', authMiddleware, (req: AuthedRequest, res) => {
   const userId = req.authUserId!;
-  const user = getUserById(userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
-  if (!user.linked_tg_id) return res.status(400).json({ error: 'not_linked' });
-
-  db.prepare('UPDATE users SET linked_tg_id = NULL WHERE id = ?').run(userId);
-
-  // Reset plan back to free for the web user
-  updateUserPlan(userId, 'free');
-
-  return res.json({ ok: true });
+  if (!getTelegramIdentityForAccount(userId)) return res.status(400).json({ error: 'not_linked' });
+  return res.status(409).json({ error: 'unified_account_cannot_be_unlinked' });
 });
 
 // ── Prompts (public, for desktop) ──────────────────────────────────────
@@ -1714,7 +1716,7 @@ app.put('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
 
 // AI prompt generation — uses user's preferred model (or auto PRO)
 app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const instruction = `${req.body?.instruction || ''}`.trim();
   const currentContent = `${req.body?.current_content || ''}`;
   const detail = `${req.body?.detail || 'medium'}`.trim() as 'minimal' | 'medium' | 'detailed' | 'none';
@@ -1744,7 +1746,7 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
     const manualModel = preferredModelId ? resolveManualModel(preferredModelId, user?.is_admin === 1) : undefined;
     console.log('[prompts/generate] model selection', {
       authUserId: req.authUserId,
-      effectiveUserId: userId,
+      accountId: userId,
       bodyPreferredModel: requestedModelId || null,
       dbPreferredModel: user?.preferred_model || null,
       preferredModelId,
@@ -1811,7 +1813,8 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
   if (!code) return res.status(400).json({ error: 'code_required' });
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'tg_id_required' });
 
-  const tgUser = getUserById(tgId);
+  const tgAccountId = getAccountIdByTelegramId(tgId);
+  const tgUser = tgAccountId ? getUserById(tgAccountId) : undefined;
   if (!tgUser) return res.status(404).json({ error: 'telegram_user_not_found' });
   if (tgUser.status !== 'approved' && tgUser.is_admin !== 1) {
     return res.status(403).json({ error: 'telegram_user_not_approved', status: tgUser.status });
@@ -1839,36 +1842,21 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
 
   telegramLinkAttempts.delete(tgId);
 
-  const webUserId = result.userId!;
+  const webUserId = resolveAccountId(result.userId!);
   const webUser = getUserById(webUserId);
   if (!webUser) return res.status(404).json({ error: 'web_user_not_found' });
 
-  // A Telegram account is the canonical identity. Move the link instead of
-  // allowing several desktop accounts to consume one TG user's chats/limits.
-  db.prepare('UPDATE users SET linked_tg_id = NULL WHERE linked_tg_id = ? AND id <> ?').run(tgId, webUserId);
-
-  // Write linked_tg_id to the web user
-  db.prepare('UPDATE users SET linked_tg_id = ? WHERE id = ?').run(tgId, webUserId);
-
-  // Sync plan and limits from TG user to web user so the desktop client
-  // sees updated feature flags (images, search, etc.) immediately.
-  updateUserPlan(webUserId, tgUser.plan);
-
-  return res.json({ ok: true, tg_id: tgId, tg_username: tgUsername });
+  const accountId = linkAccountToTelegram(webUserId, tgId, tgUsername);
+  return res.json({ ok: true, account_id: accountId, tg_id: tgId, tg_username: tgUsername });
 });
 
 app.post('/internal/link/unlink', internalAuth, (req, res) => {
   const tgId = Number(req.body?.tg_id);
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'tg_id_required' });
 
-  // Find web user linked to this TG account and clear the link
-  const webUser = db.prepare('SELECT id FROM users WHERE linked_tg_id = ?').get(tgId) as { id: number } | undefined;
-  if (!webUser) return res.status(404).json({ error: 'not_linked' });
-
-  db.prepare('UPDATE users SET linked_tg_id = NULL WHERE id = ?').run(webUser.id);
-  updateUserPlan(webUser.id, 'free');
-
-  return res.json({ ok: true });
+  const accountId = getAccountIdByTelegramId(tgId);
+  if (!accountId) return res.status(404).json({ error: 'not_linked' });
+  return res.status(409).json({ error: 'unified_account_cannot_be_unlinked', account_id: accountId });
 });
 
 // ── Internal: Prompts CRUD ─────────────────────────────────────────────────
@@ -1975,7 +1963,7 @@ app.delete('/internal/prompts/:id', internalAuth, (req, res) => {
 // ── Internal: User prompt selection ────────────────────────────────────────
 
 app.post('/internal/user/prompt/select', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const promptId = Number(req.body?.prompt_id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!Number.isFinite(promptId)) return res.status(400).json({ error: 'bad_prompt_id' });
@@ -1994,7 +1982,7 @@ app.post('/internal/user/prompt/select', internalAuth, (req, res) => {
 });
 
 app.put('/internal/user/prompt/custom', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const content = `${req.body?.content || ''}`;
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
@@ -2008,7 +1996,7 @@ app.put('/internal/user/prompt/custom', internalAuth, (req, res) => {
 // ── Internal: Timezone ────────────────────────────────────────────────────
 
 app.post('/internal/user/timezone', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const offset = Number(req.body?.timezone_offset);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!Number.isFinite(offset) || offset < -12 || offset > 14) return res.status(400).json({ error: 'bad_timezone_offset' });
@@ -2020,7 +2008,7 @@ app.post('/internal/user/timezone', internalAuth, (req, res) => {
 // ── Internal: Context Window ──────────────────────────────────────────────
 
 app.post('/internal/user/context-window', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const contextWindow = Number(req.body?.context_window);
   const isAdmin = Boolean(req.body?.is_admin);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -2045,7 +2033,7 @@ app.post('/internal/user/context-window', internalAuth, (req, res) => {
 // ── Internal: Context Token Limit (for TG bot) ─────────────────────────────
 
 app.get('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
-  const userId = Number(req.query?.user_id || req.body?.user_id);
+  const userId = resolveInternalAccountId(req.query?.user_id || req.body?.user_id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -2056,7 +2044,7 @@ app.get('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
 });
 
 app.post('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const maxContextTokens = Number(req.body?.max_context_tokens);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!Number.isFinite(maxContextTokens) || maxContextTokens < 1000) return res.status(400).json({ error: 'bad_max_context_tokens' });
@@ -2072,7 +2060,7 @@ app.post('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
 // ── Internal: Mail Accounts Management ────────────────────────────────────
 
 app.post('/internal/mail/setup', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const provider = normalizeMailProvider(req.body?.provider);
   const email = `${req.body?.email || ''}`.trim();
   const appPassword = `${req.body?.app_password || ''}`;
@@ -2098,7 +2086,7 @@ app.post('/internal/mail/setup', internalAuth, (req, res) => {
 });
 
 app.post('/internal/mail/use', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const provider = normalizeMailProvider(req.body?.provider);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!provider) return res.status(400).json({ error: 'bad_provider' });
@@ -2112,7 +2100,7 @@ app.post('/internal/mail/use', internalAuth, (req, res) => {
 });
 
 app.put('/internal/mail/limit', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const limit = Number(req.body?.limit);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!Number.isFinite(limit) || limit <= 0) return res.status(400).json({ error: 'bad_limit' });
@@ -2125,7 +2113,7 @@ app.put('/internal/mail/limit', internalAuth, (req, res) => {
 });
 
 app.delete('/internal/mail/account', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const provider = normalizeMailProvider(req.body?.provider);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
@@ -2169,8 +2157,9 @@ app.post('/internal/users/upsert-telegram', internalAuth, (req, res) => {
   if (!name) return res.status(400).json({ error: 'name_required' });
 
   upsertTelegramUser(tgId, name, role, status, tgUsername, defaultPromptId);
-  const user = getUserById(tgId);
-  return res.json({ ok: true, user });
+  const accountId = getAccountIdByTelegramId(tgId) ?? tgId;
+  const user = getUserById(accountId);
+  return res.json({ ok: true, user: user ? withInternalAccountIdentities(user) : null });
 });
 
 app.post('/internal/users/create-pending', internalAuth, (req, res) => {
@@ -2182,20 +2171,46 @@ app.post('/internal/users/create-pending', internalAuth, (req, res) => {
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'bad_tg_id' });
 
   createPendingTelegramUser(tgId, name, tgUsername, defaultPromptId);
-  const user = getUserById(tgId);
-  return res.json({ ok: true, user });
+  const accountId = getAccountIdByTelegramId(tgId) ?? tgId;
+  const user = getUserById(accountId);
+  return res.json({ ok: true, user: user ? withInternalAccountIdentities(user) : null });
 });
 
+const withAccountIdentities = <T extends { id: number }>(user: T) => {
+  const identities = getAccountIdentities(user.id);
+  const telegramIdentity = identities.find(identity => identity.provider === 'telegram');
+  return {
+    ...user,
+    telegram_id: telegramIdentity ? Number(telegramIdentity.provider_subject) : null,
+    identities: identities.map(identity => ({
+      provider: identity.provider,
+      provider_subject: identity.provider_subject,
+      username: identity.username,
+    })),
+  };
+};
+
+// Keep the existing Telegram bot contract (`id` is the Telegram ID), while
+// exposing the new canonical account ID explicitly.
+const withInternalAccountIdentities = <T extends { id: number }>(user: T) => {
+  const enriched = withAccountIdentities(user);
+  return {
+    ...enriched,
+    account_id: user.id,
+    id: enriched.telegram_id ?? user.id,
+  };
+};
+
 app.get('/internal/users/:id', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ user });
+  return res.json({ user: withInternalAccountIdentities(user) });
 });
 
 app.put('/internal/users/:id/tg-username', internalAuth, (req, res) => {
-  const userId = Number(req.body?.user_id || req.params.id);
+  const userId = resolveInternalAccountId(req.body?.user_id || req.params.id);
   const tgUsername = req.body?.tg_username ?? null;
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
@@ -2214,24 +2229,24 @@ app.get('/internal/users', internalAuth, (req, res) => {
   if (filter === 'pending') {
     const count = getPendingUsersCount();
     const users = getPendingUsersPage(limit, offset);
-    return res.json({ users, total: count, filter, limit, offset });
+    return res.json({ users: users.map(withInternalAccountIdentities), total: count, filter, limit, offset });
   }
 
   if (filter === 'banned') {
     const count = getBannedUsersCount();
     const users = getBannedUsersPage(limit, offset);
-    return res.json({ users, total: count, filter, limit, offset });
+    return res.json({ users: users.map(withInternalAccountIdentities), total: count, filter, limit, offset });
   }
 
   const count = getUsersCount();
   const users = getUsersPage(limit, offset);
-  return res.json({ users, total: count, filter: 'all', limit, offset });
+  return res.json({ users: users.map(withInternalAccountIdentities), total: count, filter: 'all', limit, offset });
 });
 
 // ── Internal: User status/role/name management ────────────────────────────
 
 app.put('/internal/users/:id/status', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   const status = `${req.body?.status || ''}`.trim() as 'none' | 'approved' | 'disapproved' | 'banned';
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!['none', 'approved', 'disapproved', 'banned'].includes(status)) return res.status(400).json({ error: 'bad_status' });
@@ -2244,7 +2259,7 @@ app.put('/internal/users/:id/status', internalAuth, (req, res) => {
 });
 
 app.put('/internal/users/:id/role', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   const role = `${req.body?.role || ''}`.trim();
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'bad_role' });
@@ -2257,7 +2272,7 @@ app.put('/internal/users/:id/role', internalAuth, (req, res) => {
 });
 
 app.put('/internal/users/:id/name', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   const name = `${req.body?.name || ''}`.trim();
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!name) return res.status(400).json({ error: 'name_required' });
@@ -2270,7 +2285,7 @@ app.put('/internal/users/:id/name', internalAuth, (req, res) => {
 });
 
 app.delete('/internal/users/:id', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
   const user = getUserById(userId);
@@ -2285,7 +2300,7 @@ app.delete('/internal/users/:id', internalAuth, (req, res) => {
 // ── Internal: User plan management ────────────────────────────────────────
 
 app.post('/internal/users/:id/plan', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   const plan = `${req.body?.plan || ''}`.trim() as 'free' | 'standart' | 'pro';
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!['free', 'standart', 'pro'].includes(plan)) return res.status(400).json({ error: 'bad_plan' });
@@ -2305,9 +2320,9 @@ app.post('/internal/sync-plan-limits', internalAuth, (_req, res) => {
 // ── Internal: Ban management ──────────────────────────────────────────────
 
 app.post('/internal/users/:id/ban', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   const reason = `${req.body?.reason || ''}`.trim() || 'Решение администратора';
-  const bannedBy = Number(req.body?.banned_by) || 0;
+  const bannedBy = resolveInternalAccountId(req.body?.banned_by) || 0;
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -2319,7 +2334,7 @@ app.post('/internal/users/:id/ban', internalAuth, (req, res) => {
 });
 
 app.delete('/internal/users/:id/ban', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
   const user = getUserById(userId);
@@ -2331,7 +2346,7 @@ app.delete('/internal/users/:id/ban', internalAuth, (req, res) => {
 });
 
 app.get('/internal/users/:id/ban', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const ban = getBanRecord(userId);
   return res.json({ ban: ban || null });
@@ -2340,7 +2355,7 @@ app.get('/internal/users/:id/ban', internalAuth, (req, res) => {
 // ── Internal: User prompt management (for index.ts) ───────────────────────
 
 app.post('/internal/users/:id/prompt/select', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   const promptId = Number(req.body?.prompt_id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!Number.isFinite(promptId)) return res.status(400).json({ error: 'bad_prompt_id' });
@@ -2359,7 +2374,7 @@ app.post('/internal/users/:id/prompt/select', internalAuth, (req, res) => {
 });
 
 app.put('/internal/users/:id/prompt/custom', internalAuth, (req, res) => {
-  const userId = Number.parseInt(req.params.id, 10);
+  const userId = resolveInternalAccountId(req.params.id);
   const content = `${req.body?.content || ''}`;
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
@@ -2387,18 +2402,18 @@ app.get('/api/v1/admin/users', adminMiddleware, (req: AuthedRequest, res) => {
   if (filter === 'pending') {
     const count = getPendingUsersCount();
     const users = getPendingUsersPage(limit, offset);
-    return res.json({ users, total: count, filter, limit, offset });
+    return res.json({ users: users.map(withAccountIdentities), total: count, filter, limit, offset });
   }
 
   if (filter === 'banned') {
     const count = getBannedUsersCount();
     const users = getBannedUsersPage(limit, offset);
-    return res.json({ users, total: count, filter, limit, offset });
+    return res.json({ users: users.map(withAccountIdentities), total: count, filter, limit, offset });
   }
 
   const count = getUsersCount();
   const users = getUsersPage(limit, offset);
-  return res.json({ users, total: count, filter: 'all', limit, offset });
+  return res.json({ users: users.map(withAccountIdentities), total: count, filter: 'all', limit, offset });
 });
 
 app.get('/api/v1/admin/users/:id', adminMiddleware, (req: AuthedRequest, res) => {
@@ -2412,7 +2427,7 @@ app.get('/api/v1/admin/users/:id', adminMiddleware, (req: AuthedRequest, res) =>
     ban = getBanRecord(userId) || null;
   }
 
-  return res.json({ user, ban });
+  return res.json({ user: withAccountIdentities(user), ban });
 });
 
 app.put('/api/v1/admin/users/:id/status', adminMiddleware, (req: AuthedRequest, res) => {
@@ -2656,7 +2671,7 @@ app.post('/admin/updates/upload', authMiddleware, adminMiddleware, (req: AuthedR
 // ─── Models catalog & preferred model ────────────────────────────────────────
 
 app.get('/api/v1/models', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   const catalog = getModelsCatalog(user?.is_admin === 1);
   return res.json({
@@ -2668,7 +2683,7 @@ app.get('/api/v1/models', (req: AuthedRequest, res) => {
 });
 
 app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const modelId = req.body?.model_id ?? null; // null = auto
   if (modelId !== null && typeof modelId !== 'string') {
     return res.status(400).json({ error: 'bad_model_id' });
@@ -2688,13 +2703,13 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
 // ─── Subagent preferred model ───────────────────────────────────────────────
 
 app.get('/api/v1/user/subagent-model', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   return res.json({ subagent_model: user?.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null });
 });
 
 app.put('/api/v1/user/subagent-model', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const modelId = req.body?.model_id ?? null;
   if (modelId !== null && typeof modelId !== 'string') {
     return res.status(400).json({ error: 'bad_model_id' });
@@ -2715,13 +2730,13 @@ app.put('/api/v1/user/subagent-model', (req: AuthedRequest, res: any) => {
 const VALID_REASONING_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 
 app.get('/api/v1/user/reasoning-level', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   return res.json({ reasoning_level: user?.reasoning_level || null });
 });
 
 app.put('/api/v1/user/reasoning-level', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const level = req.body?.reasoning_level ?? null;
   if (level !== null) {
     if (typeof level !== 'string' || !VALID_REASONING_LEVELS.includes(level as any)) {
@@ -2733,13 +2748,13 @@ app.put('/api/v1/user/reasoning-level', (req: AuthedRequest, res: any) => {
 });
 
 app.get('/api/v1/user/subagent-reasoning-level', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   return res.json({ reasoning_level: user?.subagent_reasoning_level || null });
 });
 
 app.put('/api/v1/user/subagent-reasoning-level', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const level = req.body?.reasoning_level ?? null;
   if (level !== null) {
     if (typeof level !== 'string' || !VALID_REASONING_LEVELS.includes(level as any)) {
@@ -2778,14 +2793,14 @@ const parseModelSettings = (raw: string | null | undefined): Record<string, any>
 };
 
 app.get('/api/v1/user/model-settings', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   const settings = parseModelSettings(user?.model_settings);
   return res.json({ model_settings: settings });
 });
 
 app.put('/api/v1/user/model-settings', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
@@ -2824,7 +2839,7 @@ app.put('/api/v1/user/model-settings', (req: AuthedRequest, res: any) => {
 });
 
 app.delete('/api/v1/user/model-settings/:modelId', (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
@@ -2843,7 +2858,7 @@ app.delete('/api/v1/user/model-settings/:modelId', (req: AuthedRequest, res) => 
 const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_specialized_subagents', 'disable_adhoc_subagents'] as const;
 
 app.get('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const flags: Record<string, boolean> = {};
@@ -2857,7 +2872,7 @@ app.get('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
 });
 
 app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const incoming = req.body?.flags;
   if (!incoming || typeof incoming !== 'object') {
     return res.status(400).json({ error: 'bad_flags' });
@@ -2882,7 +2897,7 @@ const resolveDiceForceValue = (mode: unknown): number | undefined => {
 };
 
 app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const settings: Record<string, boolean> = { show_tokens: true, dice_roll_enabled: false };
@@ -2896,7 +2911,7 @@ app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
 });
 
 app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const incoming = req.body?.settings;
   if (!incoming || typeof incoming !== 'object') {
     return res.status(400).json({ error: 'bad_settings' });
@@ -2920,7 +2935,7 @@ app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
 // ─── Context Token Limit ────────────────────────────────────────────────────
 
 app.get('/api/v1/user/context-tokens-limit', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   return res.json({
@@ -2930,7 +2945,7 @@ app.get('/api/v1/user/context-tokens-limit', (req: AuthedRequest, res: any) => {
 });
 
 app.put('/api/v1/user/context-tokens-limit', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const requested = Number(req.body?.max_context_tokens);
@@ -2945,7 +2960,7 @@ app.put('/api/v1/user/context-tokens-limit', (req: AuthedRequest, res: any) => {
 // ─── Attachment tokens limit (documents injection budget) ────────────────────
 
 app.get('/api/v1/user/attachment-tokens-limit', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const maxCtx = resolveMaxContextTokens(user);
@@ -2958,7 +2973,7 @@ app.get('/api/v1/user/attachment-tokens-limit', (req: AuthedRequest, res: any) =
 });
 
 app.put('/api/v1/user/attachment-tokens-limit', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const requested = Number(req.body?.attachment_max_tokens);
@@ -2974,12 +2989,12 @@ app.put('/api/v1/user/attachment-tokens-limit', (req: AuthedRequest, res: any) =
 // ─── Macros CRUD ────────────────────────────────────────────────────────────
 
 app.get('/api/v1/macros', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   return res.json({ macros: listMacros(userId) });
 });
 
 app.post('/api/v1/macros', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const title = `${req.body?.title || ''}`.trim();
   const description = `${req.body?.description || ''}`.trim();
   const commands: unknown = req.body?.commands;
@@ -3002,7 +3017,7 @@ app.post('/api/v1/macros', (req: AuthedRequest, res: any) => {
 });
 
 app.put('/api/v1/macros/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const macroId = Number(req.params.id);
   if (!Number.isFinite(macroId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3028,7 +3043,7 @@ app.put('/api/v1/macros/:id', (req: AuthedRequest, res: any) => {
 });
 
 app.delete('/api/v1/macros/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const macroId = Number(req.params.id);
   if (!Number.isFinite(macroId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3102,12 +3117,12 @@ app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
 // ─── DevOps Servers CRUD ────────────────────────────────────────────────────
 
 app.get('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   return res.json({ servers: listServers(userId) });
 });
 
 app.get('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3117,7 +3132,7 @@ app.get('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
 });
 
 app.post('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const name = `${req.body?.name || ''}`;
   const host = `${req.body?.host || ''}`;
   const port = Number(req.body?.port || 22);
@@ -3140,7 +3155,7 @@ app.post('/api/v1/devops/servers', (req: AuthedRequest, res: any) => {
 });
 
 app.put('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3171,7 +3186,7 @@ app.put('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
 });
 
 app.delete('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3183,7 +3198,7 @@ app.delete('/api/v1/devops/servers/:id', (req: AuthedRequest, res: any) => {
 // ─── DevOps: Test SSH connection ────────────────────────────────────────────
 
 app.post('/api/v1/devops/servers/:id/test', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3201,7 +3216,7 @@ app.post('/api/v1/devops/servers/:id/test', async (req: AuthedRequest, res: any)
 // ─── DevOps: Execute command (manual, from desktop) ─────────────────────────
 
 app.post('/api/v1/devops/servers/:id/exec', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3224,7 +3239,7 @@ app.post('/api/v1/devops/servers/:id/exec', async (req: AuthedRequest, res: any)
 // ─── DevOps Policies CRUD ───────────────────────────────────────────────────
 
 app.get('/api/v1/devops/servers/:id/policies', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3232,7 +3247,7 @@ app.get('/api/v1/devops/servers/:id/policies', (req: AuthedRequest, res: any) =>
 });
 
 app.post('/api/v1/devops/servers/:id/policies', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3249,7 +3264,7 @@ app.post('/api/v1/devops/servers/:id/policies', (req: AuthedRequest, res: any) =
 });
 
 app.delete('/api/v1/devops/policies/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const policyId = Number(req.params.id);
   if (!Number.isFinite(policyId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3261,7 +3276,7 @@ app.delete('/api/v1/devops/policies/:id', (req: AuthedRequest, res: any) => {
 // ─── DevOps Runbooks CRUD ───────────────────────────────────────────────────
 
 app.get('/api/v1/devops/runbooks', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   return res.json({ runbooks: listRunbooks(userId) });
 });
 
@@ -3270,7 +3285,7 @@ app.get('/api/v1/devops/runbooks/public', (_req: AuthedRequest, res: any) => {
 });
 
 app.get('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const runbookId = Number(req.params.id);
   if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3280,7 +3295,7 @@ app.get('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
 });
 
 app.post('/api/v1/devops/runbooks', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const title = `${req.body?.title || ''}`;
   const content = `${req.body?.content || ''}`;
   const commands: string[] = Array.isArray(req.body?.commands) ? req.body.commands.filter((c: unknown) => typeof c === 'string') : [];
@@ -3296,7 +3311,7 @@ app.post('/api/v1/devops/runbooks', (req: AuthedRequest, res: any) => {
 });
 
 app.put('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const runbookId = Number(req.params.id);
   if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3317,7 +3332,7 @@ app.put('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
 });
 
 app.delete('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const runbookId = Number(req.params.id);
   if (!Number.isFinite(runbookId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3329,9 +3344,7 @@ app.delete('/api/v1/devops/runbooks/:id', (req: AuthedRequest, res: any) => {
 // ─── DevOps: Public Runbooks (shared by admins) ──────────────────────────────
 
 app.post('/api/v1/devops/runbooks/public', (req: AuthedRequest, res: any) => {
-  const rawUserId = req.authUserId!;
-  const rawUser = getUserById(rawUserId);
-  const userId = rawUser?.linked_tg_id || rawUserId;
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user || user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
 
@@ -3349,9 +3362,7 @@ app.post('/api/v1/devops/runbooks/public', (req: AuthedRequest, res: any) => {
 });
 
 app.put('/api/v1/devops/runbooks/public/:id', (req: AuthedRequest, res: any) => {
-  const rawUserId = req.authUserId!;
-  const rawUser = getUserById(rawUserId);
-  const userId = rawUser?.linked_tg_id || rawUserId;
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user || user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
 
@@ -3375,9 +3386,7 @@ app.put('/api/v1/devops/runbooks/public/:id', (req: AuthedRequest, res: any) => 
 });
 
 app.delete('/api/v1/devops/runbooks/public/:id', (req: AuthedRequest, res: any) => {
-  const rawUserId = req.authUserId!;
-  const rawUser = getUserById(rawUserId);
-  const userId = rawUser?.linked_tg_id || rawUserId;
+  const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user || user.is_admin !== 1) return res.status(403).json({ error: 'forbidden_admin_only' });
 
@@ -3390,7 +3399,7 @@ app.delete('/api/v1/devops/runbooks/public/:id', (req: AuthedRequest, res: any) 
 });
 
 app.post('/api/v1/devops/runbooks/public/:id/save', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const publicId = Number(req.params.id);
   if (!Number.isFinite(publicId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3409,7 +3418,7 @@ app.post('/api/v1/devops/runbooks/public/:id/save', (req: AuthedRequest, res: an
 // ─── DevOps: Attach runbook to server (creates auto-approve policies) ────────
 
 app.post('/api/v1/devops/servers/:id/attach-runbook', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const serverId = Number(req.params.id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
 
@@ -3428,7 +3437,7 @@ app.post('/api/v1/devops/servers/:id/attach-runbook', (req: AuthedRequest, res: 
 // ─── DevOps: AI extract commands from runbook text ───────────────────────────
 
 app.post('/api/v1/devops/runbooks/extract-commands', async (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
 
   const content = `${req.body?.content || ''}`.trim();
@@ -3453,7 +3462,7 @@ app.post('/api/v1/devops/runbooks/extract-commands', async (req: AuthedRequest, 
 });
 
 app.post('/api/v1/devops/runbooks/review-commands', async (req: AuthedRequest, res) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
 
   const commands: string[] = req.body?.commands;
@@ -3477,14 +3486,14 @@ app.post('/api/v1/devops/runbooks/review-commands', async (req: AuthedRequest, r
 // ── SSH Keys ──────────────────────────────────────────────────────────────
 
 app.get('/api/v1/devops/ssh-keys', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
   const keys = listSshKeys(userId);
   return res.json({ keys });
 });
 
 app.post('/api/v1/devops/ssh-keys', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
 
   const name = `${req.body?.name || ''}`;
@@ -3500,7 +3509,7 @@ app.post('/api/v1/devops/ssh-keys', (req: AuthedRequest, res: any) => {
 });
 
 app.delete('/api/v1/devops/ssh-keys/:id', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
   const keyId = Number(req.params.id);
   if (!Number.isFinite(keyId)) return res.status(400).json({ error: 'invalid_id' });
@@ -3513,19 +3522,19 @@ app.delete('/api/v1/devops/ssh-keys/:id', (req: AuthedRequest, res: any) => {
 // ── Smart Home ─────────────────────────────────────────────────────────────
 
 app.get('/api/v1/smart-home/settings', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const settings = getSmartHomeSettings(userId);
   return res.json({ settings });
 });
 
 app.get('/api/v1/smart-home/devices', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const devices = listSmartDevices(userId);
   return res.json({ devices });
 });
 
 app.post('/api/v1/smart-home/token', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
   if (!token) return res.status(400).json({ error: 'token_required' });
   setSmartHomeToken(userId, token);
@@ -3533,13 +3542,13 @@ app.post('/api/v1/smart-home/token', (req: AuthedRequest, res: any) => {
 });
 
 app.delete('/api/v1/smart-home/token', (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   deleteSmartHomeToken(userId);
   return res.json({ ok: true });
 });
 
 app.post('/api/v1/smart-home/sync', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   try {
     const result = await syncSmartHomeDevices(userId);
     return res.json(result);
@@ -3552,7 +3561,7 @@ app.post('/api/v1/smart-home/sync', async (req: AuthedRequest, res: any) => {
 // ─── DevOps: Approve/reject pending command (from desktop via WS) ───────────
 
 app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
   const rejectionComment = req.body?.rejection_comment;
@@ -3606,7 +3615,7 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
 // ─── Email Send: Approve/reject pending email ──────────────────────────────
 
 app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
   const rejectionComment = req.body?.rejection_comment;
@@ -3639,13 +3648,13 @@ app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
 // ─── PC Commands: Settings ─────────────────────────────────────────────────
 
 app.get('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const settings = getPcCommandsSettings(userId);
   return res.json(settings);
 });
 
 app.put('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const updates: { fs_scan_enabled?: boolean; auto_approve_all?: boolean; file_read_enabled?: boolean } = {};
   if (typeof req.body?.fs_scan_enabled === 'boolean') updates.fs_scan_enabled = req.body.fs_scan_enabled;
   if (typeof req.body?.auto_approve_all === 'boolean') updates.auto_approve_all = req.body.auto_approve_all;
@@ -3657,13 +3666,13 @@ app.put('/api/v1/pc-commands/settings', async (req: AuthedRequest, res: any) => 
 // ─── PC Commands: Policies ─────────────────────────────────────────────────
 
 app.get('/api/v1/pc-commands/policies', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const policies = listPcCommandPolicies(userId);
   return res.json({ policies });
 });
 
 app.post('/api/v1/pc-commands/policies', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const pattern = `${req.body?.pattern || ''}`;
   const result = createPcCommandPolicy(userId, pattern);
   if (!result.ok) return res.status(400).json({ error: (result as { ok: false; error: string }).error });
@@ -3671,7 +3680,7 @@ app.post('/api/v1/pc-commands/policies', async (req: AuthedRequest, res: any) =>
 });
 
 app.delete('/api/v1/pc-commands/policies/:id', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const policyId = Number(req.params.id);
   if (!policyId) return res.status(400).json({ error: 'id_required' });
   const deleted = deletePcCommandPolicy(userId, policyId);
@@ -3682,7 +3691,7 @@ app.delete('/api/v1/pc-commands/policies/:id', async (req: AuthedRequest, res: a
 // ─── PC Commands: Approve/reject pending command ───────────────────────────
 
 app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => {
-  const userId = effectiveUserId(req);
+  const userId = accountIdFromRequest(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
   const rejectionComment = req.body?.rejection_comment;
@@ -3742,7 +3751,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
 app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     const confirmationId = `${req.body?.confirmation_id || ''}`;
     const approved = req.body?.approved === true;
-    const userId = Number(req.body?.user_id);
+    const userId = resolveInternalAccountId(req.body?.user_id);
     const rejectionComment = req.body?.rejection_comment;
 
     if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
@@ -3777,7 +3786,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
 // ── Internal: PC Command auto-approve policy create (for TG bot) ───────────
 
 app.post('/internal/pc-commands/policies', internalAuth, async (req, res) => {
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const pattern = `${req.body?.pattern || ''}`;
 
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -3793,7 +3802,7 @@ app.post('/internal/pc-commands/policies', internalAuth, async (req, res) => {
 app.post('/internal/visual-click/approve', internalAuth, async (req, res) => {
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
   if (!Number.isSafeInteger(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -3848,7 +3857,7 @@ app.post('/internal/ai/lite', internalAuth, async (req, res) => {
 app.post('/internal/devops/approve', internalAuth, async (req, res) => {
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const sudoPassword = typeof req.body?.sudo_password === 'string' ? req.body.sudo_password : undefined;
   const newPassword = typeof req.body?.new_password === 'string' ? req.body.new_password : undefined;
   const rejectionComment = req.body?.rejection_comment;
@@ -3895,7 +3904,7 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
 app.post('/internal/email/approve', internalAuth, async (req, res) => {
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   const rejectionComment = req.body?.rejection_comment;
 
   if (!confirmationId) return res.status(400).json({ error: 'confirmation_id_required' });
@@ -3926,7 +3935,7 @@ app.post('/internal/email/approve', internalAuth, async (req, res) => {
 
 app.post('/internal/devops/servers/:id/policies', internalAuth, async (req, res) => {
   const serverId = Number(req.params.id);
-  const userId = Number(req.body?.user_id);
+  const userId = resolveInternalAccountId(req.body?.user_id);
   if (!Number.isFinite(serverId)) return res.status(400).json({ error: 'invalid_id' });
   if (!Number.isFinite(userId)) return res.status(400).json({ error: 'user_id_required' });
 
@@ -3966,6 +3975,17 @@ const server = app.listen(PORT, () => {
   }
   startTaskScheduler();
   initSubagentRunner({ runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions });
+
+  setImmediate(async () => {
+    try {
+      const result = await migratePendingAccountNamespaces();
+      if (result.migrated > 0 || result.failed > 0) {
+        console.log('[vector-memory] namespace migration pass finished', result);
+      }
+    } catch (err) {
+      console.error('[vector-memory] namespace migration startup error:', formatSafeError(err));
+    }
+  });
 
   // ── Token accounting backfill ────────────────────────────────────────────
   // Считаем token_count для старых сообщений (порциями, чтобы не блокировать старт).
@@ -4012,16 +4032,11 @@ wss.on('connection', (ws, req) => {
   const payload = verifyToken(token, 'access');
   if (!payload) { console.log('[WS] REJECTED: invalid token'); ws.close(4001, 'invalid_token'); return; }
 
-  const apiUserId = payload.sub;
-  console.log(`[WS] Token valid, apiUserId=${apiUserId}`);
-
-  // Resolve effective user (linked TG account)
-  const rawUser = getUserById(apiUserId);
-  const effectiveUserId = rawUser?.linked_tg_id || apiUserId;
-  console.log(`[WS] rawUser linked_tg_id=${rawUser?.linked_tg_id}, effectiveUserId=${effectiveUserId}`);
+  const accountId = payload.sub;
+  console.log(`[WS] Token valid, accountId=${accountId}`);
 
   // 2. Kick existing connection for this user
-  const existing = wsClients.get(apiUserId);
+  const existing = wsClients.get(accountId);
   if (existing) {
     unregisterWsClient(existing);
     for (const [, pending] of existing.pendingIpc) {
@@ -4033,15 +4048,14 @@ wss.on('connection', (ws, req) => {
     existing.ws.close(4002, 'replaced');
   }
 
-  // 3. Register client (under both apiUserId and effectiveUserId)
+  // 3. Register client under the canonical account ID
   const now = Date.now();
   const client: WsClient = {
     ws,
     accessToken: token,
-    apiUserId,
-    effectiveUserId,
+    accountId,
     pendingIpc: new Map(),
-    connectionId: `${apiUserId}:${now}:${Math.random().toString(36).slice(2, 8)}`,
+    connectionId: `${accountId}:${now}:${Math.random().toString(36).slice(2, 8)}`,
     connectedAt: now,
     lastMessageAt: now,
     lastPingAt: 0,
@@ -4049,7 +4063,7 @@ wss.on('connection', (ws, req) => {
     missedPongs: 0,
   };
   registerWsClient(client);
-  console.log(`[ws] user ${apiUserId} (effective: ${effectiveUserId}) connected, total: ${wsClients.size}`);
+  console.log(`[ws] account ${accountId} connected, total: ${wsClients.size}`);
 
   // 4. Handle incoming messages
   ws.on('message', async (raw) => {
@@ -4064,7 +4078,7 @@ wss.on('connection', (ws, req) => {
       if (msg.type === 'chat_send') {
         await handleWsChatSend(client, msg);
       } else if (msg.type === 'chat_stop') {
-        const userId = client.effectiveUserId;
+        const userId = client.accountId;
         const controller = activeGenerations.get(userId);
         if (controller) {
           controller.abort();
@@ -4092,7 +4106,7 @@ wss.on('connection', (ws, req) => {
       clearTimeout(pending.timer);
       pending.reject(new Error('ws_disconnected'));
     }
-    console.log(`[ws] user ${apiUserId} (effective: ${effectiveUserId}) disconnected, total: ${wsClients.size}`);
+    console.log(`[ws] account ${accountId} disconnected, total: ${wsClients.size}`);
   });
 });
 
@@ -4110,8 +4124,7 @@ setInterval(() => {
     const lastPongAgeMs = now - client.lastPongAt;
     if (lastPongAgeMs > WS_HEARTBEAT_GRACE_MS) {
       console.warn('[ws] heartbeat stale, terminating connection', {
-        apiUserId: client.apiUserId,
-        effectiveUserId: client.effectiveUserId,
+        accountId: client.accountId,
         connectionId: client.connectionId,
         lastPongAgeMs,
         pendingIpcCount: client.pendingIpc.size,
@@ -4125,8 +4138,7 @@ setInterval(() => {
     client.ws.send(JSON.stringify({ type: 'ping', t: now }), (err) => {
       if (err) {
         console.warn('[ws] heartbeat ping failed', {
-          apiUserId: client.apiUserId,
-          effectiveUserId: client.effectiveUserId,
+          accountId: client.accountId,
           connectionId: client.connectionId,
           error: err.message,
         });
@@ -4144,9 +4156,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     return;
   }
 
-  // Resolve effective user (linked TG account)
-  const userId = client.effectiveUserId;
-  const apiUserId = client.apiUserId;
+  const userId = client.accountId;
 
   // Parse & validate images
   const MAX_IMAGE_BYTES_API = 20 * 1024 * 1024;
@@ -4254,7 +4264,6 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(() => { const fv = resolveDiceForceValue(msg.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
-      ...(apiUserId !== userId ? { promptUserId: apiUserId } : {}),
       onIntermediateMessage: async (stepText) => {
         await sendWsJson({ type: 'intermediate', text: stepText });
       },
@@ -4296,8 +4305,7 @@ function handleIpcResult(client: WsClient, msg: any) {
   const { request_id, data, error } = msg;
   const pending = client.pendingIpc.get(request_id);
   console.log('[ipc] ipc_result received', {
-    apiUserId: client.apiUserId,
-    effectiveUserId: client.effectiveUserId,
+    accountId: client.accountId,
     requestId: request_id,
     hasPending: Boolean(pending),
     hasError: Boolean(error),

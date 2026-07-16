@@ -27,6 +27,12 @@ type User = {
   ui_settings?: UiSettings;
   subagent_model?: string | null;
   subagent_reasoning_level?: ReasoningLevel | null;
+  telegram_linked?: boolean;
+  identities?: Array<{
+    provider: string;
+    provider_subject: string;
+    username: string | null;
+  }>;
 };
 
 // ---------- Token storage ----------

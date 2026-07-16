@@ -5,27 +5,42 @@ import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTo
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
 import { resolvePromptForUser } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
+import {
+  allocateAccountId,
+  createPasswordIdentity,
+  ensureTelegramIdentity,
+  getPasswordIdentityByLogin,
+  resolveAccountId,
+  resolveTelegramAccountForUpsert,
+} from './accounts.js';
 
-export const getUserById = (userId: number) => db
+export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
   .get(userId) as UserRecord | undefined;
 
-export const upsertUserFromTelegram = (userId: number, username: string | null, name: string | null) => db.prepare(`
-  INSERT INTO users (id, name, role, is_admin, status, plan, tg_username)
-  VALUES (?, ?, ?, ?, 'none', 'free', ?)
-  ON CONFLICT(id) DO UPDATE SET
-    tg_username = COALESCE(excluded.tg_username, users.tg_username),
-    name = COALESCE(users.name, excluded.name),
-    is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
-    role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
-`).run(userId, name, 'user', 0, username);
+export const getUserById = (userId: number) => getRawUserById(resolveAccountId(userId));
+
+export const upsertUserFromTelegram = (userId: number, username: string | null, name: string | null) => db.transaction(() => {
+  const accountId = resolveTelegramAccountForUpsert(userId);
+  const result = db.prepare(`
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username)
+    VALUES (?, ?, ?, ?, 'none', 'free', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      tg_username = COALESCE(excluded.tg_username, users.tg_username),
+      name = COALESCE(users.name, excluded.name),
+      is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
+      role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
+  `).run(accountId, name, 'user', 0, username);
+  ensureTelegramIdentity(accountId, userId, username);
+  return result;
+})();
 
 export const createOrUpdateUserForApiRegistration = (name: string | null = null) => {
-  const inserted = db.prepare(`
-    INSERT INTO users (name, role, is_admin, status, plan)
-    VALUES (?, 'user', 0, 'approved', 'free')
-  `).run(name);
-  const userId = Number(inserted.lastInsertRowid);
+  const userId = allocateAccountId();
+  db.prepare(`
+    INSERT INTO users (id, name, role, is_admin, status, plan)
+    VALUES (?, ?, 'user', 0, 'approved', 'free')
+  `).run(userId, name);
   ensureActiveChat(userId);
   return userId;
 };
@@ -36,16 +51,20 @@ export const setUserTimezone = (userId: number, timezoneOffset: number) => db.pr
   WHERE id = ?
 `).run(timezoneOffset, userId);
 
-export const getApiAccountByLogin = (login: string) => db.prepare(`
-  SELECT id, user_id, login, password_salt, password_hash
-  FROM api_accounts
-  WHERE login = ?
-`).get(login) as { id: number; user_id: number; login: string; password_salt: string; password_hash: string } | undefined;
+export const getPasswordAccountByLogin = (login: string) => {
+  const identity = getPasswordIdentityByLogin(login);
+  if (!identity?.password_salt || !identity.password_hash) return undefined;
+  return {
+    id: identity.id,
+    user_id: resolveAccountId(identity.account_id),
+    login: identity.provider_subject,
+    password_salt: identity.password_salt,
+    password_hash: identity.password_hash,
+  };
+};
 
-export const createApiAccount = (userId: number, login: string, passwordSalt: string, passwordHash: string) => db.prepare(`
-  INSERT INTO api_accounts (user_id, login, password_salt, password_hash)
-  VALUES (?, ?, ?, ?)
-`).run(userId, login, passwordSalt, passwordHash);
+export const createPasswordAccount = (userId: number, login: string, passwordSalt: string, passwordHash: string) =>
+  createPasswordIdentity(userId, login, passwordSalt, passwordHash);
 
 export const createChat = (userId: number, title: string) => db.prepare(`
   INSERT INTO user_chats (user_id, title)
@@ -1539,7 +1558,8 @@ export const upsertTelegramUser = (
   status: UserStatus,
   tgUsername: string | null,
   defaultPromptId: number | null
-) => {
+) => db.transaction(() => {
+  const accountId = resolveTelegramAccountForUpsert(tgId);
   const effectiveRole = role === 'admin' ? 'admin' : 'user';
   const effectiveIsAdmin = effectiveRole === 'admin' ? 1 : 0;
   const limits = PLAN_LIMITS['free'];
@@ -1556,20 +1576,22 @@ export const upsertTelegramUser = (
       status = excluded.status,
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
-  `).run(tgId, name, effectiveRole, effectiveIsAdmin, status, tgUsername, defaultPromptId,
+  `).run(accountId, name, effectiveRole, effectiveIsAdmin, status, tgUsername, defaultPromptId,
     limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
     limits.max_context_tokens, limits.max_context_tokens);
 
-  ensureActiveChat(tgId);
+  ensureTelegramIdentity(accountId, tgId, tgUsername);
+  ensureActiveChat(accountId);
   return result;
-};
+})();
 
 export const createPendingTelegramUser = (
   tgId: number,
   name: string | null,
   tgUsername: string | null,
   defaultPromptId: number | null
-) => {
+) => db.transaction(() => {
+  const accountId = resolveTelegramAccountForUpsert(tgId);
   const limits = PLAN_LIMITS['free'];
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
@@ -1580,13 +1602,14 @@ export const createPendingTelegramUser = (
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       name = COALESCE(excluded.name, users.name),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
-  `).run(tgId, name, tgUsername, defaultPromptId,
+  `).run(accountId, name, tgUsername, defaultPromptId,
     limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
     limits.max_context_tokens, limits.max_context_tokens);
 
-  ensureActiveChat(tgId);
+  ensureTelegramIdentity(accountId, tgId, tgUsername);
+  ensureActiveChat(accountId);
   return result;
-};
+})();
 
 export const updateUserStatus = (userId: number, status: UserStatus) => {
   const updateStatus = db.prepare(`
@@ -1595,43 +1618,53 @@ export const updateUserStatus = (userId: number, status: UserStatus) => {
         auth_token_version = auth_token_version + CASE WHEN ? = 'approved' THEN 0 ELSE 1 END
     WHERE id = ?
   `);
-  const revokeLinkedAccounts = db.prepare(`
-    UPDATE users
-    SET auth_token_version = auth_token_version + 1
-    WHERE linked_tg_id = ?
-  `);
-
-  return db.transaction(() => {
-    const result = updateStatus.run(status, status, userId);
-    if (status !== 'approved') revokeLinkedAccounts.run(userId);
-    return result;
-  })();
+  return updateStatus.run(status, status, resolveAccountId(userId));
 };
 
-export const revokeUserAuthTokens = (userId: number) => db
-  .prepare('UPDATE users SET auth_token_version = auth_token_version + 1 WHERE id = ?')
-  .run(userId);
+export const revokeUserAuthTokens = (userId: number) => db.transaction(() => {
+  const accountId = resolveAccountId(userId);
+  db.prepare(`
+    UPDATE users
+    SET auth_token_version = auth_token_version + 1
+    WHERE id = ?
+  `).run(accountId);
+  db.prepare(`
+    UPDATE account_redirects
+    SET source_auth_token_version = source_auth_token_version + 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE target_account_id = ?
+  `).run(accountId);
+})();
 
 export const updateUserRole = (userId: number, role: string) => db
   .prepare('UPDATE users SET role = ?, is_admin = ? WHERE id = ?')
-  .run(role, role === 'admin' ? 1 : 0, userId);
+  .run(role, role === 'admin' ? 1 : 0, resolveAccountId(userId));
 
 export const updateUserName = (userId: number, name: string) => db
   .prepare('UPDATE users SET name = ? WHERE id = ?')
-  .run(name, userId);
+  .run(name, resolveAccountId(userId));
 
-export const updateUserTelegramUsername = (userId: number, tgUsername: string | null) => db
-  .prepare('UPDATE users SET tg_username = ? WHERE id = ?')
-  .run(tgUsername, userId);
+export const updateUserTelegramUsername = (userId: number, tgUsername: string | null) => db.transaction(() => {
+  const accountId = resolveAccountId(userId);
+  db.prepare('UPDATE users SET tg_username = ? WHERE id = ?').run(tgUsername, accountId);
+  db.prepare(`
+    UPDATE account_identities
+    SET username = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE account_id = ? AND provider = 'telegram'
+  `).run(tgUsername, accountId);
+})();
 
 export const removeUser = (userId: number) => {
+  userId = resolveAccountId(userId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM user_chats WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM notes WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM tasks WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM mail_accounts WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM user_plan_subscriptions WHERE user_id = ?').run(userId);
-  db.prepare('DELETE FROM api_accounts WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM account_identities WHERE account_id = ?').run(userId);
+  db.prepare('DELETE FROM account_namespace_migrations WHERE source_account_id = ? OR target_account_id = ?').run(userId, userId);
+  db.prepare('DELETE FROM account_redirects WHERE source_account_id = ? OR target_account_id = ?').run(userId, userId);
   db.prepare('DELETE FROM bans WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM users WHERE id = ?').run(userId);
 };
@@ -1681,6 +1714,7 @@ export const getBannedUsersPage = (limit: number, offset: number) => {
 };
 
 export const updateUserPlan = (userId: number, plan: UserPlan) => {
+  userId = resolveAccountId(userId);
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['free'];
   return db.prepare(`
     UPDATE users
@@ -1725,6 +1759,7 @@ export const syncAllUsersPlanLimits = () => {
 import crypto from 'node:crypto';
 
 export const generateLinkCode = (userId: number): { code: string; expires_in: number } => {
+  userId = resolveAccountId(userId);
   // Cleanup expired first
   db.prepare('DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()').run();
 

@@ -28,7 +28,7 @@ export interface SubagentTool {
 /** Context passed into every subagent run — mirrors the relevant parts of the main agent context. */
 export interface SubagentContext {
   userId: number;
-  /** Full user record — needed for plan checks, feature flags, linked_tg_id, etc. in shared tools. */
+  /** Full canonical account record used for plan checks and feature flags in shared tools. */
   user?: any;
   isDesktop: boolean;
   timezoneOffset: number;

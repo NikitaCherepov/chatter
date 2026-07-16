@@ -5514,7 +5514,6 @@ export const sendMessageThroughAi = async (
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
     userAttachments?: MessageAttachment[] | null;
-    promptUserId?: number;
     onIntermediateMessage?: (text: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
@@ -5742,7 +5741,7 @@ export const sendMessageThroughAi = async (
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const dynamicContextToolHint = `\n\n[ДИНАМИЧЕСКИЙ КОНТЕКСТ]\nТекущее время пользователя доступно через tool get_user_time. Не угадывай текущую дату/время: вызывай get_user_time, когда это важно для ответа или планирования.\nТекущее состояние пиксельного аватара доступно через tool get_avatar_state. Для изменения эмоций используй set_display_state.`;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
-  const promptUser = options?.promptUserId ? getUserById(options.promptUserId) ?? user : user;
+  const promptUser = user;
   const voicePromptHint = options?.isVoice ? `\n\nСТРОГО, ОБЯЗАТЕЛЬНО СЕЙЧАС, ОБЯЗАТЕЛЬНО!!! соблюдай:\n1. Отвечай МАКСИМАЛЬНО кратко. МАКСИМАЛЬНО КРАТКО и естественно, как в устном диалоге.\n2. НИКАКИХ длинных списков, Markdown-таблиц или блоков кода, если только об этом не попросили напрямую.\n3. Используй разговорный стиль. МАКСИМАЛЬНО краткий, УДОБНЫЙ к прослушиванию и содержательный. 4. Замена символов словами: Заменяй любые технические знаки, аббревиатуры и единицы измерения их полными словесными названиями. 
    - Запрещено: "%", "°C", "м/с", "км/ч", "$", "руб."
    - Обязательно писать: "процентов", "градусов Цельсия", "метров в секунду", "километров в час", "долларов", "рублей".` : '';

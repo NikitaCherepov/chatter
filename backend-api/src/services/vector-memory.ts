@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
+import { db } from '../db.js';
+import { resolveAccountId } from './accounts.js';
 
 const TIMEWEB_EMBED_API_KEY = `${process.env.TIMEWEB_EMBED_API_KEY || process.env.TIMEWEB_API_KEY || ''}`.trim();
 const TIMEWEB_EMBED_BASE_URL = `${process.env.TIMEWEB_EMBED_BASE_URL || process.env.TIMEWEB_BASE_URL || 'https://api.timeweb.ai/v1'}`.trim();
@@ -15,6 +17,37 @@ const VECTOR_MEMORY_LOG_SUCCESS = `${process.env.VECTOR_MEMORY_LOG_SUCCESS || '0
 
 let openaiClient: OpenAI | null = null;
 let pineconeClient: Pinecone | null = null;
+
+type NamespaceMigration = {
+  source_account_id: number;
+  target_account_id: number;
+  status: 'pending' | 'failed' | 'completed';
+  attempts: number;
+};
+
+const canonicalNamespace = (userId: number) => `${resolveAccountId(Math.floor(userId))}`;
+
+const getReadableNamespaces = (userId: number) => {
+  const accountId = resolveAccountId(Math.floor(userId));
+  const rows = db.prepare(`
+    SELECT source_account_id
+    FROM account_namespace_migrations
+    WHERE target_account_id = ? AND status <> 'completed'
+    ORDER BY source_account_id ASC
+  `).all(accountId) as Array<{ source_account_id: number }>;
+  return [...new Set([`${accountId}`, ...rows.map(row => `${row.source_account_id}`)])];
+};
+
+const markNamespaceMigrationFailed = (sourceAccountId: number, error: unknown) => {
+  db.prepare(`
+    UPDATE account_namespace_migrations
+    SET status = 'failed',
+        attempts = attempts + 1,
+        last_error = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE source_account_id = ?
+  `).run(error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000), sourceAccountId);
+};
 
 const logSuccess = (message: string, payload?: Record<string, unknown>) => {
   if (!VECTOR_MEMORY_LOG_SUCCESS) return;
@@ -120,7 +153,7 @@ export class VectorMemoryService {
 
       const safeSource = `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
       const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
-      const namespace = `${Math.floor(userId)}`;
+      const namespace = canonicalNamespace(userId);
 
       const openai = getOpenAIClient();
 
@@ -200,18 +233,34 @@ export class VectorMemoryService {
       if (safeQuery.length > VECTOR_MEMORY_MAX_QUERY) throw new Error(`query_too_long_max_${VECTOR_MEMORY_MAX_QUERY}`);
 
       const safeTopK = Math.max(1, Math.min(VECTOR_MEMORY_TOP_K_MAX, Math.floor(Number(topK) || 3)));
-      const namespace = `${Math.floor(userId)}`;
+      const namespace = canonicalNamespace(userId);
+      const readableNamespaces = getReadableNamespaces(userId);
       const queryVector = await getEmbedding(safeQuery);
       const index = getPineconeIndex();
 
-      const result = await index.namespace(namespace).query({
-        vector: queryVector,
-        topK: safeTopK,
-        includeMetadata: true
-      } as any);
+      const results = await Promise.all(readableNamespaces.map(readableNamespace =>
+        index.namespace(readableNamespace).query({
+          vector: queryVector,
+          topK: safeTopK,
+          includeMetadata: true
+        } as any)
+      ));
 
-      const matches = Array.isArray(result?.matches) ? result.matches : [];
-      const items = matches.map((match: any) => ({
+      const matchesById = new Map<string, any>();
+      for (const result of results) {
+        const matches = Array.isArray(result?.matches) ? result.matches : [];
+        for (const match of matches) {
+          const id = `${match?.id || ''}`;
+          const previous = matchesById.get(id);
+          if (!previous || Number(match?.score || 0) > Number(previous?.score || 0)) {
+            matchesById.set(id, match);
+          }
+        }
+      }
+      const items = [...matchesById.values()]
+        .sort((left, right) => Number(right?.score || 0) - Number(left?.score || 0))
+        .slice(0, safeTopK)
+        .map((match: any) => ({
         id: `${match?.id || ''}`,
         score: Number(match?.score || 0),
         text: `${match?.metadata?.text || ''}`,
@@ -252,9 +301,12 @@ export class VectorMemoryService {
       const safeChunkId = `${chunkId || ''}`.trim();
       if (!safeChunkId) throw new Error('chunk_id_required');
 
-      const namespace = `${Math.floor(userId)}`;
+      const namespace = canonicalNamespace(userId);
+      const readableNamespaces = getReadableNamespaces(userId);
       const index = getPineconeIndex();
-      await index.namespace(namespace).deleteOne(safeChunkId);
+      await Promise.all(readableNamespaces.map(readableNamespace =>
+        index.namespace(readableNamespace).deleteOne(safeChunkId)
+      ));
 
       const out = {
         ok: true,
@@ -278,9 +330,12 @@ export class VectorMemoryService {
 
   static async deleteAll(userId: number) {
     try {
-      const namespace = `${Math.floor(userId)}`;
+      const namespace = canonicalNamespace(userId);
+      const readableNamespaces = getReadableNamespaces(userId);
       const index = getPineconeIndex();
-      await index.namespace(namespace).deleteAll();
+      await Promise.all(readableNamespaces.map(readableNamespace =>
+        index.namespace(readableNamespace).deleteAll()
+      ));
 
       const out = {
         ok: true,
@@ -301,3 +356,92 @@ export class VectorMemoryService {
     }
   }
 }
+
+const migrateNamespace = async (migration: NamespaceMigration) => {
+  const sourceAccountId = Math.floor(migration.source_account_id);
+  const targetAccountId = resolveAccountId(migration.target_account_id);
+  if (sourceAccountId === targetAccountId) {
+    db.prepare(`
+      UPDATE account_namespace_migrations
+      SET status = 'completed',
+          attempts = attempts + 1,
+          last_error = NULL,
+          completed_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE source_account_id = ?
+    `).run(sourceAccountId);
+    return;
+  }
+
+  const index = getPineconeIndex();
+  const source = index.namespace(`${sourceAccountId}`);
+  const target = index.namespace(`${targetAccountId}`);
+  let paginationToken: string | undefined;
+  let copied = 0;
+
+  do {
+    const page = await source.listPaginated({
+      limit: 100,
+      ...(paginationToken ? { paginationToken } : {}),
+    });
+    const ids = (page.vectors || [])
+      .map(item => `${item.id || ''}`.trim())
+      .filter(Boolean);
+    if (ids.length > 0) {
+      const fetched = await source.fetch(ids);
+      const records = Object.values(fetched.records || {});
+      if (records.length > 0) {
+        await target.upsert(records as any);
+        copied += records.length;
+      }
+    }
+    paginationToken = page.pagination?.next || undefined;
+  } while (paginationToken);
+
+  // The source remains readable until every upsert has completed successfully.
+  await source.deleteAll();
+  db.prepare(`
+    UPDATE account_namespace_migrations
+    SET target_account_id = ?,
+        status = 'completed',
+        attempts = attempts + 1,
+        last_error = NULL,
+        completed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE source_account_id = ?
+  `).run(targetAccountId, sourceAccountId);
+  console.log('[vector-memory] namespace migration complete', {
+    source_account_id: sourceAccountId,
+    target_account_id: targetAccountId,
+    copied,
+  });
+};
+
+export const migratePendingAccountNamespaces = async () => {
+  if (!PINECONE_API_KEY || !PINECONE_INDEX_NAME) return { migrated: 0, failed: 0 };
+
+  const migrations = db.prepare(`
+    SELECT source_account_id, target_account_id, status, attempts
+    FROM account_namespace_migrations
+    WHERE status IN ('pending', 'failed')
+    ORDER BY created_at ASC, source_account_id ASC
+  `).all() as NamespaceMigration[];
+
+  let migrated = 0;
+  let failed = 0;
+  for (const migration of migrations) {
+    try {
+      await migrateNamespace(migration);
+      migrated += 1;
+    } catch (error) {
+      failed += 1;
+      markNamespaceMigrationFailed(migration.source_account_id, error);
+      logError('namespace migration failed; legacy namespace remains readable', {
+        source_account_id: migration.source_account_id,
+        target_account_id: migration.target_account_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return { migrated, failed };
+};

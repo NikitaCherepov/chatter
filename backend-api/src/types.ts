@@ -33,7 +33,6 @@ export type UserRecord = {
   daily_image_gen_count?: number;
   daily_image_gen_limit?: number;
   total_image_gen_count?: number;
-  linked_tg_id?: number | null;
   preferred_model?: string | null;
   subagent_mode?: string | null;
   feature_flags?: string | null;
@@ -45,6 +44,12 @@ export type UserRecord = {
   max_context_tokens?: number;
   attachment_max_tokens?: number;
   auth_token_version?: number;
+};
+
+export type AccountIdentityDto = {
+  provider: string;
+  provider_subject: string;
+  username: string | null;
 };
 
 export type ChatDto = {

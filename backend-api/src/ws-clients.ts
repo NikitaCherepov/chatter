@@ -7,8 +7,7 @@ import { WebSocket } from 'ws';
 export type WsClient = {
   ws: WebSocket;
   accessToken: string;
-  apiUserId: number;        // JWT subject — the API account that connected
-  effectiveUserId: number;  // linked_tg_id || apiUserId — the user AI operates on
+  accountId: number;
   pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>;
   connectionId: string;
   connectedAt: number;
@@ -18,8 +17,7 @@ export type WsClient = {
   missedPongs: number;
 };
 
-// Keyed by BOTH apiUserId and effectiveUserId (they can differ when TG account is linked).
-// When looking up, ai.ts passes effectiveUserId — which is what sendMessageThroughAi uses.
+// Keyed by the single canonical account ID used by every client.
 export const wsClients = new Map<number, WsClient>();
 
 export const WS_HEARTBEAT_INTERVAL_MS = 25_000;
@@ -57,7 +55,7 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
   // Если уже отменено — не отправляем вообще
   if (signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
 
-  console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} FOUND, apiUserId=${client.apiUserId}, effectiveUserId=${client.effectiveUserId}`);
+  console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} FOUND, accountId=${client.accountId}`);
 
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
@@ -109,8 +107,7 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
         requestId,
         ipcType,
         timeoutMs,
-        apiUserId: client.apiUserId,
-        effectiveUserId: client.effectiveUserId,
+        accountId: client.accountId,
         wsState: wsStateName(client.ws.readyState),
         connectionId: client.connectionId,
         lastPongAgeMs: Date.now() - client.lastPongAt,
@@ -142,7 +139,7 @@ export function isDesktopOnline(userId: number): boolean {
   const client = wsClients.get(userId);
   const now = Date.now();
   const fresh = !!client && now - client.lastPongAt <= WS_HEARTBEAT_GRACE_MS;
-  console.log(`[DEBUG] isDesktopOnline(${userId}): ${client ? 'FOUND (apiUserId=' + client.apiUserId + ', effectiveUserId=' + client.effectiveUserId + ', state=' + wsStateName(client.ws.readyState) + ', connectionId=' + client.connectionId + ', lastPongAgeMs=' + (now - client.lastPongAt) + ')' : 'NOT FOUND'} (wsClients keys: [${[...wsClients.keys()].join(',')}])`);
+  console.log(`[DEBUG] isDesktopOnline(${userId}): ${client ? 'FOUND (accountId=' + client.accountId + ', state=' + wsStateName(client.ws.readyState) + ', connectionId=' + client.connectionId + ', lastPongAgeMs=' + (now - client.lastPongAt) + ')' : 'NOT FOUND'} (wsClients keys: [${[...wsClients.keys()].join(',')}])`);
   return !!client && client.ws.readyState === WebSocket.OPEN && fresh;
 }
 
@@ -173,20 +170,14 @@ export function sendToDesktop(userId: number, data: any): boolean {
   }
 }
 
-/** Register a WS client under both apiUserId and effectiveUserId keys. */
+/** Register a WS client under its canonical account ID. */
 export function registerWsClient(client: WsClient) {
-  wsClients.set(client.apiUserId, client);
-  if (client.effectiveUserId !== client.apiUserId) {
-    wsClients.set(client.effectiveUserId, client);
-  }
+  wsClients.set(client.accountId, client);
 }
 
-/** Unregister a WS client from both keys. Only removes if the stored client matches. */
+/** Unregister a WS client. Only removes if the stored client matches. */
 export function unregisterWsClient(client: WsClient) {
-  if (wsClients.get(client.apiUserId) === client) {
-    wsClients.delete(client.apiUserId);
-  }
-  if (client.effectiveUserId !== client.apiUserId && wsClients.get(client.effectiveUserId) === client) {
-    wsClients.delete(client.effectiveUserId);
+  if (wsClients.get(client.accountId) === client) {
+    wsClients.delete(client.accountId);
   }
 }
