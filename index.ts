@@ -1,4 +1,4 @@
-﻿import { Markup, Telegraf } from 'telegraf';
+import { Markup, Telegraf } from 'telegraf';
 import Database from 'better-sqlite3';
 import type { Context } from 'telegraf';
 import * as dotenv from 'dotenv';
@@ -3281,9 +3281,9 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number, t: BotTransl
     ]);
 };
 const buildAdminPlanChoiceKeyboard = (userId: number, page: number, t: BotTranslate) => Markup.inlineKeyboard([
-    [Markup.button.callback(`FREE (${PLAN_MAX_CONTEXT_TOKENS.free / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
-    [Markup.button.callback(`STANDART (${PLAN_MAX_CONTEXT_TOKENS.standart / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
-    [Markup.button.callback(`PRO (${PLAN_MAX_CONTEXT_TOKENS.pro / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
+    [Markup.button.callback(t('generated.freePlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.free / 1000, free: PLAN_DAILY_WEB_SEARCH_LIMITS.free }), `usr:plan:pick:${userId}:${page}:free`)],
+    [Markup.button.callback(t('generated.standardPlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.standart / 1000, standart: PLAN_DAILY_WEB_SEARCH_LIMITS.standart }), `usr:plan:pick:${userId}:${page}:standart`)],
+    [Markup.button.callback(t('generated.proPlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.pro / 1000, pro: PLAN_DAILY_WEB_SEARCH_LIMITS.pro }), `usr:plan:pick:${userId}:${page}:pro`)],
     [Markup.button.callback(t('admin.buttons.backToUser'), `usr:view:${userId}:${page}`)]
 ]);
 const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan, t: BotTranslate) => Markup.inlineKeyboard([
@@ -4456,7 +4456,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
 
     if (actionId === 'rename') {
         if (ctx.state.role === 'admin') {
-            await ctx.reply('Для себя: /rename НовоеИмя\nДля пользователя: /rename 123456789 НовоеИмя');
+            await ctx.reply(ctx.t('generated.renameUsage'));
             return;
         }
         await startSelfRenameFlow(ctx);
@@ -4541,17 +4541,17 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (actionId === 'add') {
-        await ctx.reply('Формат: /add 123456789 Имя');
+        await ctx.reply(ctx.t('generated.addUsage'));
         return;
     }
 
     if (actionId === 'remove') {
-        await ctx.reply('Формат: /remove 123456789');
+        await ctx.reply(ctx.t('generated.removeUsage'));
         return;
     }
 
     if (actionId === 'prompt_admin') {
-        await ctx.reply('Промпт-админ команды:\n/prompt_add Имя | Описание | Текст\n/prompt_show <id>\n/prompt_set <id> | Текст\n/prompt_desc <id> | Описание\n/prompt_rename <id> Имя\n/prompt_default <id>\n/prompt_delete <id>');
+        await ctx.reply(ctx.t('generated.promptAdminCommands'));
         return;
     }
 
@@ -4578,11 +4578,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /chats, /chat_new, /chat_use, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use, /add, /remove, /users, /sync_plan_limits, /history_user, /history_delete, /ban, /unban, /prompt_add, /prompt_show, /prompt_set, /prompt_desc, /prompt_rename, /prompt_delete, /prompt_default');
+        await ctx.reply(ctx.t('generated.allCommands'));
         return;
     }
 
-    await ctx.reply('Команды: /menu, /clear, /tz, /tasks, /task_delete, /chats, /chat_new, /chat_use, /note_add, /notes, /note_find, /note_delete, /mail_setup, /mail_use, /mail_limit, /mail_forget, /rename, /prompts, /prompt_use');
+    await ctx.reply(ctx.t('generated.userCommands'));
 });
 
 bot.action('context:change', async (ctx) => {
@@ -6474,7 +6474,7 @@ const processUserTextThroughAi = async (
     // Allow empty text when documents are attached (placeholder for AI).
     if (!userText && !hasDocuments) {
         if (!options?.suppressFinalReply) {
-            await ctx.reply('Пустое сообщение. Попробуй ещё раз.');
+            await ctx.reply(ctx.t('generated.emptyMessage'));
         }
         return null;
     }
@@ -6484,7 +6484,7 @@ const processUserTextThroughAi = async (
     }
     if (forceProRoute && !userText && !hasDocuments) {
         if (!options?.suppressFinalReply) {
-            await ctx.reply('После !!! нужен текст запроса.');
+            await ctx.reply(ctx.t('generated.missingQueryAfterExclamation'));
         }
         return null;
     }
@@ -6498,7 +6498,7 @@ const processUserTextThroughAi = async (
     const userRecord = await getUser(userId);
     if (!userRecord) {
         if (!options?.suppressFinalReply) {
-            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            await ctx.reply(ctx.t('common.userMissing'));
         }
         return null;
     }
@@ -6571,27 +6571,27 @@ const processUserTextThroughAi = async (
                     const preview = command.slice(0, 200);
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('✅ Разрешить', `pcconfirm:allow:${confirmationId}`),
-                            Markup.button.callback('🔓 Разрешить всегда', `pcconfirm:always:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.allow'), `pcconfirm:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.alwaysAllow'), `pcconfirm:always:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('❓ Проверить', `pcconfirm:review:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.review'), `pcconfirm:review:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `pcconfirm:reject:${confirmationId}`),
                         ]
                         ,
                         [
-                            Markup.button.callback('💬 Отклонить с комментарием', `pcconfirm:reject_comment:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `pcconfirm:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     const escapedCmd = preview.replace(/`/g, '\\`');
                     try {
                         await ctx.reply(
-                            `🔐 **Подтверждение команды на ПК**\n\n\`${escapedCmd}\`\n\nРазрешить выполнение?`,
+                            ctx.t('generated.pcCommandConfirmation', { escapedCmd: escapedCmd }),
                             { parse_mode: 'Markdown', ...keyboard }
                         );
                     } catch {
                         try {
-                            await ctx.reply(`🔐 Подтверждение команды на ПК\n\n${preview}\n\nРазрешить выполнение?`, keyboard);
+                            await ctx.reply(ctx.t('generated.pcCommandConfirmationPreview', { preview: preview }), keyboard);
                         } catch {
                             // ignore
                         }
@@ -6608,27 +6608,32 @@ const processUserTextThroughAi = async (
                     const isWrite = actionType === 'write';
                     const titleIcon = isWrite ? '📝' : '📖';
                     const titleText = isWrite
-                        ? `Запись файла${mode === 'append' ? ' (добавление)' : ''}`
-                        : 'Чтение файла';
+                        ? ctx.t(mode === 'append' ? 'fileConfirmation.writeAppendTitle' : 'fileConfirmation.writeTitle')
+                        : ctx.t('fileConfirmation.readTitle');
 
                     const sizeLine = isWrite && sizeBytes > 0
-                        ? `\nРазмер: ${(sizeBytes / 1024).toFixed(1)} КБ`
+                        ? ctx.t('fileConfirmation.sizeLine', { size: (sizeBytes / 1024).toFixed(1) })
                         : '';
+                    const confirmationQuestion = ctx.t(isWrite
+                        ? 'fileConfirmation.allowWriteQuestion'
+                        : 'fileConfirmation.allowReadQuestion');
 
                     let msgText = `${titleIcon} ${titleText}\n\n${filePath}${sizeLine}`;
                     if (contentPreview) {
                         const preview = contentPreview.slice(0, 800).replace(/```/g, "'''");
                         msgText += `\n\n${preview}`;
                     }
-                    msgText += `\n\n${isWrite ? 'Разрешить запись?' : 'Разрешить чтение?'}`;
+                    msgText += `\n\n${confirmationQuestion}`;
 
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback(`✅ ${isWrite ? 'Записать' : 'Прочитать'}`, `fileconfirm:allow:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `fileconfirm:reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t(isWrite
+                                ? 'fileConfirmation.buttons.write'
+                                : 'fileConfirmation.buttons.read'), `fileconfirm:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `fileconfirm:reject:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('💬 Отклонить с комментарием', `fileconfirm:reject_comment:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `fileconfirm:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     console.log('[tg][desktop_action] file_action_confirmation', {
@@ -6641,7 +6646,7 @@ const processUserTextThroughAi = async (
                     } catch (err: any) {
                         console.warn('[tg][desktop_action] file_action reply failed:', formatSafeError(err));
                         try {
-                            await ctx.reply(`${titleIcon} ${titleText}\n\n${filePath}${sizeLine}\n\n${isWrite ? 'Разрешить запись?' : 'Разрешить чтение?'}`, keyboard);
+                            await ctx.reply(`${titleIcon} ${titleText}\n\n${filePath}${sizeLine}\n\n${confirmationQuestion}`, keyboard);
                         } catch (fallbackErr: any) {
                             console.warn('[tg][desktop_action] file_action fallback reply failed:', formatSafeError(fallbackErr));
                             throw fallbackErr;
@@ -6670,11 +6675,11 @@ const processUserTextThroughAi = async (
 
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('✅ Применить', `fileconfirm:allow:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `fileconfirm:reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t('generated.applyButton'), `fileconfirm:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `fileconfirm:reject:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('💬 Отклонить с комментарием', `fileconfirm:reject_comment:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `fileconfirm:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     console.log('[tg][desktop_action] edit_file_lines_confirmation', {
@@ -6688,7 +6693,7 @@ const processUserTextThroughAi = async (
                     } catch (err: any) {
                         console.warn('[tg][desktop_action] edit_file_lines reply failed:', formatSafeError(err));
                         try {
-                            await ctx.reply(`✏️ Редактирование файла\n\n${filePath}\nСтроки: ${startLine}–${endLine}\n\nПрименить изменения?`, keyboard);
+                            await ctx.reply(ctx.t('generated.fileEditConfirmation', { filePath: filePath, startLine: startLine, endLine: endLine }), keyboard);
                         } catch (fallbackErr: any) {
                             console.warn('[tg][desktop_action] edit_file_lines fallback reply failed:', formatSafeError(fallbackErr));
                             throw fallbackErr;
@@ -6702,11 +6707,11 @@ const processUserTextThroughAi = async (
 
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('Разрешить фото', `pcconfirm:allow:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t('generated.allowPhotoButton'), `pcconfirm:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `pcconfirm:reject:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('💬 Отклонить с комментарием', `pcconfirm:reject_comment:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `pcconfirm:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     console.log('[tg][desktop_action] webcam_capture_confirmation', {
@@ -6716,12 +6721,12 @@ const processUserTextThroughAi = async (
                     });
                     try {
                         await ctx.reply(
-                            `**Захват с веб-камеры**\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`,
+                            ctx.t('generated.webcamCaptureConfirmation', { cameraName: cameraName, purpose: purpose }),
                             { parse_mode: 'Markdown', ...keyboard }
                         );
                     } catch {
                         try {
-                            await ctx.reply(`Захват с веб-камеры\n\nКамера: ${cameraName}\nЗадача: ${purpose}\n\nРазрешить фото?`, keyboard);
+                            await ctx.reply(ctx.t('generated.webcamCaptureConfirmationPlain', { cameraName: cameraName, purpose: purpose }), keyboard);
                         } catch {
                             // ignore
                         }
@@ -6741,22 +6746,22 @@ const processUserTextThroughAi = async (
                     let msgText = `🖥 **SSH: ${serverName}** (${host})\n\n\`${escapedCmd}\`\n\nРазрешить выполнение?`;
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('✅ Разрешить', `devops:allow:${confirmationId}`),
-                            Markup.button.callback('🔓 Разрешить всегда', `devops:always:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.allow'), `devops:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.alwaysAllow'), `devops:always:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('❓ Проверить', `devops:review:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `devops:reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.review'), `devops:review:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `devops:reject:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('💬 Отклонить с комментарием', `devops:reject_comment:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `devops:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     try {
                         await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
                     } catch {
                         try {
-                            await ctx.reply(`🖥 SSH: ${serverName} (${host})\n\n${preview}\n\nРазрешить выполнение?`, keyboard);
+                            await ctx.reply(ctx.t('generated.sshCommandConfirmation', { serverName: serverName, host: host, preview: preview }), keyboard);
                         } catch {
                             // ignore
                         }
@@ -6768,21 +6773,21 @@ const processUserTextThroughAi = async (
                     const reason = action.value.reason || '';
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('✅ Применить', `devops:creds_apply:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `devops:creds_reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t('generated.applyButton'), `devops:creds_apply:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `devops:creds_reject:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('💬 Отклонить с комментарием', `devops:creds_reject_comment:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `devops:creds_reject_comment:${confirmationId}`),
                         ]
                     ]);
                     try {
                         await ctx.reply(
-                            `🔑 **Обновление credentials: ${serverName}**\n\n${reason}\n\nПрименить?`,
+                            ctx.t('generated.updateCredentialsConfirmation', { serverName: serverName, reason: reason }),
                             { parse_mode: 'Markdown', ...keyboard }
                         );
                     } catch {
                         try {
-                            await ctx.reply(`🔑 Обновление credentials: ${serverName}\n\n${reason}\n\nПрименить?`, keyboard);
+                            await ctx.reply(ctx.t('generated.updateCredentialsConfirmationPlain', { serverName: serverName, reason: reason }), keyboard);
                         } catch {
                             // ignore
                         }
@@ -6796,11 +6801,11 @@ const processUserTextThroughAi = async (
                     const bodyPreview = (action.value.body || '').slice(0, 1000);
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('✅ Отправить', `email:allow:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `email:reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t('generated.sendButton'), `email:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `email:reject:${confirmationId}`),
                         ],
                         [
-                            Markup.button.callback('💬 Отклонить с комментарием', `email:reject_comment:${confirmationId}`),
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `email:reject_comment:${confirmationId}`),
                         ]
                     ]);
                     const fromLine = fromAddr ? `От: ${fromAddr}\n` : '';
@@ -6809,7 +6814,7 @@ const processUserTextThroughAi = async (
                         await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
                     } catch {
                         try {
-                            await ctx.reply(`📧 Отправка письма\n\n${fromLine}Кому: ${toAddr}\nТема: ${subject}\n\n${bodyPreview}\n\nОтправить?`, keyboard);
+                            await ctx.reply(ctx.t('generated.emailSendConfirmation', { fromLine: fromLine, toAddr: toAddr, subject: subject, bodyPreview: bodyPreview }), keyboard);
                         } catch {
                             // ignore
                         }
@@ -6829,8 +6834,8 @@ const processUserTextThroughAi = async (
                     }));
                     const keyboard = Markup.inlineKeyboard([
                         [
-                            Markup.button.callback('✅ Кликнуть', `vclick:allow:${confirmationId}`),
-                            Markup.button.callback('❌ Отклонить', `vclick:reject:${confirmationId}`),
+                            Markup.button.callback(ctx.t('generated.clickButton'), `vclick:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `vclick:reject:${confirmationId}`),
                         ]
                     ]);
                     const caption = `🖱 Клик по экрану\n\n${reason}\nКоординаты: ${xPct}%, ${yPct}% (${btn} кнопка)`;
@@ -6852,7 +6857,7 @@ const processUserTextThroughAi = async (
                     }
                     if (!photoSent) {
                         try {
-                            await ctx.reply(`${caption}\n\nПодтвердить?`, keyboard);
+                            await ctx.reply(ctx.t('generated.genericConfirmation', { caption: caption }), keyboard);
                         } catch {
                             // ignore
                         }
@@ -6916,7 +6921,7 @@ const processUserTextThroughAi = async (
                         await ctx.replyWithPhoto({ source: imageBuffer });
                     } catch (imgErr) {
                         console.error('Ошибка отправки сгенерированного изображения:', formatSafeError(imgErr));
-                        await ctx.reply('Не удалось отправить сгенерированное изображение.').catch(() => {});
+                        await ctx.reply(ctx.t('generated.sendGeneratedImageFailed')).catch(() => {});
                     }
                 }
             }
@@ -6928,7 +6933,7 @@ const processUserTextThroughAi = async (
     } catch (err) {
         console.error('Ошибка backend-ai вызова:', formatSafeError(err));
         if (!options?.suppressFinalReply) {
-            await ctx.reply('Блин, какая-то ошибка в системе. Проверь логи backend-api.');
+            await ctx.reply(ctx.t('generated.systemErrorCheckBackendLogs'));
         }
         return null;
     }
@@ -6952,7 +6957,7 @@ bot.on('text', async (ctx) => {
     if (pendingRejection) {
         if (userText.toLowerCase() === '/cancel' || userText.toLowerCase() === 'отмена') {
             pendingRejectionComments.delete(userId);
-            await ctx.reply('Отклонение с комментарием отменено. Кнопки подтверждения выше остаются активными.');
+            await ctx.reply(ctx.t('generated.rejectWithCommentCancelled'));
             return;
         }
         pendingRejectionComments.delete(userId);
@@ -6963,9 +6968,9 @@ bot.on('text', async (ctx) => {
                 userId,
                 userText,
             );
-            await ctx.reply('❌ Отклонено с комментарием.');
+            await ctx.reply(ctx.t('generated.rejectedWithComment'));
         } catch {
-            await ctx.reply('⚠️ Не удалось отклонить (возможно, подтверждение уже истекло или было обработано).');
+            await ctx.reply(ctx.t('generated.rejectFailedExpiredOrProcessed'));
         }
         return;
     }
@@ -7324,11 +7329,11 @@ const processUserVoiceThroughAi = async (ctx: any) => {
     if (!voice || !chatId) return;
 
     if (typeof voice.file_size === 'number' && voice.file_size > MAX_TELEGRAM_VOICE_BYTES) {
-        await ctx.reply(`⚠️ Голосовое слишком большое (${formatBytes(voice.file_size)}). Максимум — 10 МБ.`);
+        await ctx.reply(ctx.t('generated.voiceTooLarge', { value: formatBytes(voice.file_size) }));
         return;
     }
 
-    const processingMsg = await ctx.reply('🎙 Перевариваю аудио в текст...');
+    const processingMsg = await ctx.reply(ctx.t('generated.transcribingAudioToText'));
 
     try {
         const fileLink = await ctx.telegram.getFileLink(voice.file_id);
@@ -7343,7 +7348,7 @@ const processUserVoiceThroughAi = async (ctx: any) => {
                 chatId,
                 processingMsg.message_id,
                 undefined,
-                `⚠️ Голосовое слишком большое (${formatBytes(audioBuffer.byteLength)}). Максимум — 10 МБ.`
+                ctx.t('generated.voiceTooLarge', { value: formatBytes(audioBuffer.byteLength) })
             );
             return;
         }
@@ -7361,11 +7366,11 @@ const processUserVoiceThroughAi = async (ctx: any) => {
 
         const text = typeof backend?.recognized_text === 'string' ? backend.recognized_text.trim() : '';
         if (!text) {
-            await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, '🗣 Ничего не расслышал.');
+            await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, ctx.t('generated.voiceNotRecognized'));
             return;
         }
 
-        await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, `🗣 Распознано:\n${text}`);
+        await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, ctx.t('generated.voiceRecognized', { text: text }));
 
         if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length) {
             for (const message of backend.tool_user_messages) {
@@ -7415,10 +7420,10 @@ const processUserVoiceThroughAi = async (ctx: any) => {
                 chatId,
                 processingMsg.message_id,
                 undefined,
-                '❌ Сбой связи с сервером расшифровки или внутренняя ошибка.'
+                ctx.t('generated.transcriptionServerError')
             );
         } catch {
-            await ctx.reply('❌ Сбой связи с сервером расшифровки или внутренняя ошибка.');
+            await ctx.reply(ctx.t('generated.transcriptionServerError'));
         }
     }
 };

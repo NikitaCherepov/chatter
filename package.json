@@ -4,6 +4,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:api": "tsc -p backend-api/tsconfig.json",
+    "i18n:extract:bot": "node scripts/extract-bot-i18n.mjs --source index.ts --catalog i18n/locales/ru/translation.json",
+    "i18n:extract:bot:ai": "node scripts/extract-bot-i18n.mjs --source index.ts --catalog i18n/locales/ru/translation.json --env .env.i18n --ai-keys",
     "i18n:translate:bot": "node scripts/translate-i18n.mjs --locales i18n/locales --env .env.i18n --from en",
     "i18n:translate:bot:all": "node scripts/translate-i18n.mjs --locales i18n/locales --env .env.i18n --from en --all",
     "i18n:translate:desktop": "node scripts/translate-i18n.mjs --locales desktop-app/src/renderer/i18n/locales --env .env.i18n",
