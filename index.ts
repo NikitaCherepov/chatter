@@ -41,6 +41,46 @@ const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
     pro: 20
 };
 const DEFAULT_USER_PLAN: UserPlan = 'free';
+const SUPPORTED_LANGUAGES = [
+    'ru',
+    'en',
+    'de',
+    'es',
+    'fr',
+    'it',
+    'ja',
+    'ko',
+    'pl',
+    'pt-BR',
+    'zh-CN'
+] as const;
+type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
+const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
+const SUPPORTED_LANGUAGE_BY_CODE = new Map<string, SupportedLanguage>(
+    SUPPORTED_LANGUAGES.map(language => [language.toLowerCase(), language])
+);
+
+const normalizeSupportedLanguage = (value: unknown): SupportedLanguage | null => {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim().toLowerCase().replace(/_/g, '-');
+    if (!normalized) return null;
+
+    const exact = SUPPORTED_LANGUAGE_BY_CODE.get(normalized);
+    if (exact) return exact;
+
+    if (normalized === 'pt' || normalized.startsWith('pt-')) return 'pt-BR';
+    if (
+        normalized === 'zh'
+        || normalized === 'zh-hans'
+        || normalized.startsWith('zh-hans-')
+        || normalized === 'zh-sg'
+        || normalized.startsWith('zh-sg-')
+    ) {
+        return 'zh-CN';
+    }
+
+    return SUPPORTED_LANGUAGE_BY_CODE.get(normalized.split('-')[0]) ?? null;
+};
 
 const formatSafeError = (error: unknown) => {
     if (axios.isAxiosError(error)) {
@@ -105,6 +145,7 @@ db.exec(`
         status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('none', 'approved', 'disapproved', 'banned')),
         plan TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free', 'standart', 'pro')),
         tg_username TEXT,
+        language TEXT,
         selected_prompt_id INTEGER,
         custom_prompt_content TEXT,
         core_memory TEXT DEFAULT '',
@@ -279,6 +320,7 @@ ensureUserColumn('active_chat_id', 'ALTER TABLE users ADD COLUMN active_chat_id 
 ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
 ensureUserColumn('plan', `ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT '${DEFAULT_USER_PLAN}'`);
 ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
+ensureUserColumn('language', 'ALTER TABLE users ADD COLUMN language TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
 ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER DEFAULT 5');
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
@@ -614,6 +656,7 @@ type UserRecord = {
     status: UserStatus;
     plan: UserPlan;
     tg_username: string | null;
+    language?: string | null;
     selected_prompt_id: number | null;
     custom_prompt_content: string | null;
     core_memory: string | null;
@@ -1473,15 +1516,15 @@ const runBackendMailForget = async (userId: number, provider?: string | null) =>
 
 // ── Backend API helpers for user management ───────────────────────────────
 
-const runBackendUpsertTelegramUser = async (tgId: number, name: string, role: string, status: string, tgUsername: string | null, defaultPromptId: number | null) => {
+const runBackendUpsertTelegramUser = async (tgId: number, name: string, role: string, status: string, tgUsername: string | null, defaultPromptId: number | null, language?: SupportedLanguage | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/upsert-telegram`, { tg_id: tgId, name, role, status, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/upsert-telegram`, { tg_id: tgId, name, role, status, tg_username: tgUsername, default_prompt_id: defaultPromptId, language }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; user: UserRecord };
 };
 
-const runBackendCreatePendingUser = async (tgId: number, name: string | null, tgUsername: string | null, defaultPromptId: number | null) => {
+const runBackendCreatePendingUser = async (tgId: number, name: string | null, tgUsername: string | null, defaultPromptId: number | null, language?: SupportedLanguage | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/create-pending`, { tg_id: tgId, name, tg_username: tgUsername, default_prompt_id: defaultPromptId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/create-pending`, { tg_id: tgId, name, tg_username: tgUsername, default_prompt_id: defaultPromptId, language }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; user: UserRecord };
 };
 
@@ -1500,6 +1543,12 @@ const runBackendUpdateTgUsername = async (userId: number, tgUsername: string | n
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tg-username`, { user_id: userId, tg_username: tgUsername }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
+};
+
+const runBackendUpdateUserLanguage = async (userId: number, language: SupportedLanguage) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/language`, { user_id: userId, language }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: boolean; language: SupportedLanguage };
 };
 
 const runBackendUpdateUserStatus = async (userId: number, status: string) => {
@@ -2224,9 +2273,9 @@ const addUser = async (id: number, name: string, role: string, status: UserStatu
     const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
     await runBackendUpsertTelegramUser(id, name, role, status, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
 };
-const createPendingUser = async (id: number, name: string | null, tgUsername: string | null) => {
+const createPendingUser = async (id: number, name: string | null, tgUsername: string | null, language?: SupportedLanguage | null) => {
     const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
-    const data = await runBackendCreatePendingUser(id, name, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
+    const data = await runBackendCreatePendingUser(id, name, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id, language);
     return data.user;
 };
 const updateUserName = async (id: number, name: string) => {
@@ -2234,6 +2283,9 @@ const updateUserName = async (id: number, name: string) => {
 };
 const updateUserTelegramUsername = async (id: number, tgUsername: string | null) => {
     await runBackendUpdateTgUsername(id, tgUsername);
+};
+const updateUserLanguage = async (id: number, language: SupportedLanguage) => {
+    await runBackendUpdateUserLanguage(id, language);
 };
 const updateUserRole = async (id: number, role: string) => {
     await runBackendUpdateUserRole(id, role);
@@ -2700,8 +2752,24 @@ const unlinkChoiceFlows = new Map<number, { expiresAt: number }>();
 bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+    const telegramLanguage = normalizeSupportedLanguage(ctx.from?.language_code);
+    ctx.state.language = telegramLanguage ?? DEFAULT_LANGUAGE;
     const telegramUsername = ctx.from?.username?.trim() || null;
     let userRecord = await getUser(userId);
+
+    const savedLanguage = normalizeSupportedLanguage(userRecord?.language);
+    if (savedLanguage) {
+        ctx.state.language = savedLanguage;
+    } else if (userRecord && telegramLanguage) {
+        try {
+            await updateUserLanguage(userId, telegramLanguage);
+            userRecord = { ...userRecord, language: telegramLanguage };
+            ctx.state.language = telegramLanguage;
+        } catch (error) {
+            console.warn(`Не удалось сохранить язык Telegram для пользователя ${userId}:`, formatSafeError(error));
+        }
+    }
+
     const isAdminByDb = userRecord?.role === 'admin' && userRecord.status === 'approved';
 
     if (isAdminByDb && userRecord) {
@@ -2732,7 +2800,7 @@ bot.use(async (ctx, next) => {
 
     if (!userRecord) {
         const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
-        const pendingUser = await createPendingUser(userId, initialName, telegramUsername);
+        const pendingUser = await createPendingUser(userId, initialName, telegramUsername, telegramLanguage);
         await syncCommandScopeForUser(userId, false);
 
         if (pendingUser) {

@@ -13,6 +13,7 @@ export type UserRecord = {
   status: 'none' | 'approved' | 'disapproved' | 'banned';
   plan: UserPlan;
   tg_username: string | null;
+  language?: string | null;
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
   core_memory: string | null;

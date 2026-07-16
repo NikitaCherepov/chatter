@@ -13,6 +13,7 @@ import {
   resolveAccountId,
   resolveTelegramAccountForUpsert,
 } from './accounts.js';
+import { normalizeSupportedLanguage } from '../i18n/languages.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -20,17 +21,24 @@ export const getRawUserById = (userId: number) => db
 
 export const getUserById = (userId: number) => getRawUserById(resolveAccountId(userId));
 
-export const upsertUserFromTelegram = (userId: number, username: string | null, name: string | null) => db.transaction(() => {
+export const upsertUserFromTelegram = (
+  userId: number,
+  username: string | null,
+  name: string | null,
+  language?: string | null,
+) => db.transaction(() => {
   const accountId = resolveTelegramAccountForUpsert(userId);
+  const normalizedLanguage = normalizeSupportedLanguage(language);
   const result = db.prepare(`
-    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username)
-    VALUES (?, ?, ?, ?, 'none', 'free', ?)
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, language)
+    VALUES (?, ?, ?, ?, 'none', 'free', ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       name = COALESCE(users.name, excluded.name),
+      language = COALESCE(users.language, excluded.language),
       is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
       role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
-  `).run(accountId, name, 'user', 0, username);
+  `).run(accountId, name, 'user', 0, username, normalizedLanguage);
   ensureTelegramIdentity(accountId, userId, username);
   return result;
 })();
@@ -1557,26 +1565,29 @@ export const upsertTelegramUser = (
   role: string,
   status: UserStatus,
   tgUsername: string | null,
-  defaultPromptId: number | null
+  defaultPromptId: number | null,
+  language?: string | null,
 ) => db.transaction(() => {
   const accountId = resolveTelegramAccountForUpsert(tgId);
+  const normalizedLanguage = normalizeSupportedLanguage(language);
   const effectiveRole = role === 'admin' ? 'admin' : 'user';
   const effectiveIsAdmin = effectiveRole === 'admin' ? 1 : 0;
   const limits = PLAN_LIMITS['free'];
 
   const result = db.prepare(`
-    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, language, selected_prompt_id,
       context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit,
       max_context_tokens_limit, max_context_tokens)
-    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       role = excluded.role,
       is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
       status = excluded.status,
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
+      language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
-  `).run(accountId, name, effectiveRole, effectiveIsAdmin, status, tgUsername, defaultPromptId,
+  `).run(accountId, name, effectiveRole, effectiveIsAdmin, status, tgUsername, normalizedLanguage, defaultPromptId,
     limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
     limits.max_context_tokens, limits.max_context_tokens);
 
@@ -1589,20 +1600,23 @@ export const createPendingTelegramUser = (
   tgId: number,
   name: string | null,
   tgUsername: string | null,
-  defaultPromptId: number | null
+  defaultPromptId: number | null,
+  language?: string | null,
 ) => db.transaction(() => {
   const accountId = resolveTelegramAccountForUpsert(tgId);
+  const normalizedLanguage = normalizeSupportedLanguage(language);
   const limits = PLAN_LIMITS['free'];
   const result = db.prepare(`
-    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, selected_prompt_id,
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, language, selected_prompt_id,
       context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit,
       max_context_tokens_limit, max_context_tokens)
-    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tg_username = COALESCE(excluded.tg_username, users.tg_username),
       name = COALESCE(excluded.name, users.name),
+      language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
-  `).run(accountId, name, tgUsername, defaultPromptId,
+  `).run(accountId, name, tgUsername, normalizedLanguage, defaultPromptId,
     limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
     limits.max_context_tokens, limits.max_context_tokens);
 

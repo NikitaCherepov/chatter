@@ -303,8 +303,26 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
   const handleLanguagePreferenceChange = async (value: string) => {
     if (!isLanguagePreference(value)) return;
 
+    const previousPreference = languagePreference;
     setLanguagePreferenceState(value);
-    await setLanguagePreference(value);
+
+    try {
+      const language = await setLanguagePreference(value);
+      const result = await api.setUserLanguage(language);
+      if (user) {
+        const updatedUser = { ...user, language: result.language };
+        setUser(updatedUser);
+        localStorage.setItem('chatter_user', JSON.stringify(updatedUser));
+      }
+    } catch {
+      setLanguagePreferenceState(previousPreference);
+      try {
+        await setLanguagePreference(previousPreference);
+      } catch {
+        // The save error below is enough; keep the modal responsive.
+      }
+      toast.error(t('settings.toasts.saveSettingFailed'));
+    }
   };
 
   const handleTelegramLinked = async () => {

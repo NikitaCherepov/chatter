@@ -54,6 +54,7 @@ ensureUserColumn('feature_flags', 'ALTER TABLE users ADD COLUMN feature_flags TE
 ensureUserColumn('reasoning_level', 'ALTER TABLE users ADD COLUMN reasoning_level TEXT');
 ensureUserColumn('model_settings', 'ALTER TABLE users ADD COLUMN model_settings TEXT');
 ensureUserColumn('ui_settings', 'ALTER TABLE users ADD COLUMN ui_settings TEXT');
+ensureUserColumn('language', 'ALTER TABLE users ADD COLUMN language TEXT');
 ensureUserColumn('subagent_mode', "ALTER TABLE users ADD COLUMN subagent_mode TEXT NOT NULL DEFAULT 'auto'");
 ensureUserColumn('subagent_reasoning_level', 'ALTER TABLE users ADD COLUMN subagent_reasoning_level TEXT');
 ensureUserColumn('auth_token_version', 'ALTER TABLE users ADD COLUMN auth_token_version INTEGER NOT NULL DEFAULT 0');

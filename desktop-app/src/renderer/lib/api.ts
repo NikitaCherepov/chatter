@@ -24,6 +24,7 @@ type User = {
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
   core_memory: string | null;
+  language?: string | null;
   ui_settings?: UiSettings;
   subagent_model?: string | null;
   subagent_reasoning_level?: ReasoningLevel | null;
@@ -1228,6 +1229,20 @@ export async function setUiSettings(settings: Partial<UiSettings>): Promise<{ ok
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ settings }),
+  });
+}
+
+// ---------- Interface language ----------
+
+export async function getUserLanguage(): Promise<{ language: string | null }> {
+  return apiFetch('/api/v1/user/language');
+}
+
+export async function setUserLanguage(language: string): Promise<{ ok: boolean; language: string }> {
+  return apiFetch('/api/v1/user/language', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language }),
   });
 }
 

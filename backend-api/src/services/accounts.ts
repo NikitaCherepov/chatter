@@ -363,6 +363,7 @@ const mergeUserScalarData = (
     'reasoning_level',
     'model_settings',
     'ui_settings',
+    'language',
     'subagent_mode',
     'subagent_reasoning_level',
     'max_context_tokens',
@@ -570,12 +571,13 @@ export const unlinkTelegramFromAccount = (
   const detachedAccountId = allocateAccountId();
   const detachedTelegram = dataOwner === 'desktop';
   db.prepare(`
-    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username)
-    VALUES (?, ?, 'user', 0, 'approved', 'free', ?)
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, language)
+    VALUES (?, ?, 'user', 0, 'approved', 'free', ?, ?)
   `).run(
     detachedAccountId,
     account.name,
     detachedTelegram ? telegramIdentity.username : null,
+    account.language ?? null,
   );
 
   if (detachedTelegram) {

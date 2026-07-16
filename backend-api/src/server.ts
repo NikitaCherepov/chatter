@@ -47,6 +47,7 @@ import {
   runAccountIdentityMigration,
   unlinkTelegramFromAccount,
 } from './services/accounts.js';
+import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 
 dotenv.config();
 runAccountIdentityMigration();
@@ -554,14 +555,7 @@ app.post('/api/v1/auth/register', (req, res) => {
   const tokens = issueAuthTokens(userId);
   return res.status(201).json({
     ...tokens,
-    user: {
-      id: user.id,
-      name: user.name,
-      username: user.tg_username,
-      role: user.role,
-      is_admin: user.is_admin,
-      plan: user.plan
-    }
+    user: toAuthUserDto(user)
   });
 });
 
@@ -598,6 +592,7 @@ const toAuthUserDto = (user: UserRecord) => {
     selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
     core_memory: effectiveUser.core_memory ?? null,
+    language: normalizeSupportedLanguage(effectiveUser.language),
     ui_settings: parseUiSettings(effectiveUser),
     subagent_model: effectiveUser.subagent_mode && effectiveUser.subagent_mode !== 'auto' ? effectiveUser.subagent_mode : null,
     subagent_reasoning_level: effectiveUser.subagent_reasoning_level ?? null,
@@ -644,7 +639,7 @@ app.post('/api/v1/auth/telegram', (req, res) => {
 
   const user = validated.user;
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
-  upsertUserFromTelegram(user.id, user.username || null, fullName);
+  upsertUserFromTelegram(user.id, user.username || null, fullName, user.language_code || null);
 
   const accountId = getAccountIdByTelegramId(user.id) ?? user.id;
   const userRecord = getUserById(accountId);
@@ -790,6 +785,28 @@ app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   return res.json({ user: toAuthUserDto(user) });
+});
+
+app.get('/api/v1/user/language', (req: AuthedRequest, res) => {
+  const userId = resolveAccountId(req.authUserId!);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ language: normalizeSupportedLanguage(user.language) });
+});
+
+app.put('/api/v1/user/language', (req: AuthedRequest, res) => {
+  const language = normalizeSupportedLanguage(req.body?.language);
+  if (!language) {
+    return res.status(400).json({
+      error: 'unsupported_language',
+      supported_languages: SUPPORTED_LANGUAGES,
+    });
+  }
+
+  const userId = resolveAccountId(req.authUserId!);
+  const result = db.prepare('UPDATE users SET language = ? WHERE id = ?').run(language, userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, language });
 });
 
 // Revoke every access/refresh token previously issued to this account.
@@ -2196,11 +2213,12 @@ app.post('/internal/users/upsert-telegram', internalAuth, (req, res) => {
   const status = `${req.body?.status || 'none'}` as 'none' | 'approved' | 'disapproved' | 'banned';
   const tgUsername = req.body?.tg_username ?? null;
   const defaultPromptId = req.body?.default_prompt_id ?? null;
+  const language = req.body?.language ?? null;
 
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'bad_tg_id' });
   if (!name) return res.status(400).json({ error: 'name_required' });
 
-  upsertTelegramUser(tgId, name, role, status, tgUsername, defaultPromptId);
+  upsertTelegramUser(tgId, name, role, status, tgUsername, defaultPromptId, language);
   const accountId = getAccountIdByTelegramId(tgId) ?? tgId;
   const user = getUserById(accountId);
   return res.json({ ok: true, user: user ? withInternalAccountIdentities(user) : null });
@@ -2211,10 +2229,11 @@ app.post('/internal/users/create-pending', internalAuth, (req, res) => {
   const name = req.body?.name ?? null;
   const tgUsername = req.body?.tg_username ?? null;
   const defaultPromptId = req.body?.default_prompt_id ?? null;
+  const language = req.body?.language ?? null;
 
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'bad_tg_id' });
 
-  createPendingTelegramUser(tgId, name, tgUsername, defaultPromptId);
+  createPendingTelegramUser(tgId, name, tgUsername, defaultPromptId, language);
   const accountId = getAccountIdByTelegramId(tgId) ?? tgId;
   const user = getUserById(accountId);
   return res.json({ ok: true, user: user ? withInternalAccountIdentities(user) : null });
@@ -2251,6 +2270,22 @@ app.get('/internal/users/:id', internalAuth, (req, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   return res.json({ user: withInternalAccountIdentities(user) });
+});
+
+app.put('/internal/users/:id/language', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.body?.user_id || req.params.id);
+  const language = normalizeSupportedLanguage(req.body?.language);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!language) {
+    return res.status(400).json({
+      error: 'unsupported_language',
+      supported_languages: SUPPORTED_LANGUAGES,
+    });
+  }
+
+  const result = db.prepare('UPDATE users SET language = ? WHERE id = ?').run(language, userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, language });
 });
 
 app.put('/internal/users/:id/tg-username', internalAuth, (req, res) => {
