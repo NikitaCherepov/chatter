@@ -219,6 +219,11 @@ const VISION_PROVIDERS = parseVisionProviders();
 // Формат env: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only;...
 // supports_vision: опционально, "1" или "0" (по умолчанию "0")
 // admin_only: опционально, "1" или "0" (по умолчанию "0")
+const parseManualModelFlag = (value: unknown): boolean => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return normalized === '1' || normalized === 'true';
+};
+
 const parseManualModels = (): ManualModelEntry[] => {
   const raw = (process.env.MODELS_MANUAL || '').trim();
   if (!raw) return [];
@@ -235,8 +240,8 @@ const parseManualModels = (): ManualModelEntry[] => {
       description: description || '',
       client: new OpenAI({ apiKey, baseURL }),
       baseURL,
-      supportsVision: supportsVisionRaw === '1' || supportsVisionRaw.toLowerCase() === 'true',
-      adminOnly: adminOnlyRaw === '1' || adminOnlyRaw.toLowerCase() === 'true',
+      supportsVision: parseManualModelFlag(supportsVisionRaw),
+      adminOnly: parseManualModelFlag(adminOnlyRaw),
     });
   }
   return models;
