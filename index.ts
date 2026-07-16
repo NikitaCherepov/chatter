@@ -2694,6 +2694,7 @@ const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_
 };
 
 const linkCodeFlows = new Map<number, 'await_code'>();
+const unlinkChoiceFlows = new Map<number, { expiresAt: number }>();
 
 // Middleware для авторизации
 bot.use(async (ctx, next) => {
@@ -3821,23 +3822,83 @@ bot.command('cancellink', (ctx) => {
 bot.command('unlink', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+    unlinkChoiceFlows.set(userId, { expiresAt: Date.now() + 10 * 60 * 1000 });
+    return ctx.reply(
+        '⚠️ Отвязка разделит общий аккаунт на два.\n\n' +
+        'Выбери, где останутся все текущие чаты, изображения, промпты, настройки и память.\n' +
+        'Второй аккаунт станет новым и пустым.\n\n' +
+        'Данные не удаляются.',
+        Markup.inlineKeyboard([
+            [Markup.button.callback('💻 Оставить данные в Desktop', `unlink:desktop:${userId}`)],
+            [Markup.button.callback('✈️ Оставить данные в Telegram', `unlink:telegram:${userId}`)],
+            [Markup.button.callback('❌ Отмена', `unlink:cancel:${userId}`)]
+        ])
+    );
+});
+
+bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
+    const action = (ctx as any).match[1] as 'desktop' | 'telegram' | 'cancel';
+    const ownerTelegramId = Number.parseInt((ctx as any).match[2], 10);
+    const userId = ctx.from?.id;
+
+    if (!userId || userId !== ownerTelegramId) {
+        await ctx.answerCbQuery('Эта кнопка предназначена другому пользователю.');
+        return;
+    }
+
+    const pending = unlinkChoiceFlows.get(userId);
+    if (!pending || pending.expiresAt <= Date.now()) {
+        unlinkChoiceFlows.delete(userId);
+        await ctx.answerCbQuery('Выбор устарел. Отправь /unlink ещё раз.');
+        await ctx.editMessageText('Время выбора истекло. Отправь /unlink ещё раз.').catch(() => {});
+        return;
+    }
+
+    unlinkChoiceFlows.delete(userId);
+    if (action === 'cancel') {
+        await ctx.answerCbQuery('Отвязка отменена');
+        await ctx.editMessageText('Отвязка отменена. Аккаунты остались связаны.').catch(() => {});
+        return;
+    }
+
+    await ctx.answerCbQuery('Отвязываю аккаунт...');
+    await ctx.editMessageText('⏳ Разделяю аккаунты. Не нажимай /unlink повторно...').catch(() => {});
+
     try {
         const response = await axios.post(
             `${BACKEND_API_BASE_URL}/internal/link/unlink`,
-            { tg_id: userId },
-            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` } }
+            { tg_id: userId, data_owner: action },
+            {
+                headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` },
+                timeout: 30000
+            }
         );
-        if (response.data?.ok) {
-            return ctx.reply('Аккаунт отвязан от десктоп-приложения.', buildMenuTriggerKeyboard());
+
+        if (!response.data?.ok) {
+            await ctx.editMessageText('Аккаунт не был отвязан. Попробуй ещё раз через /unlink.').catch(() => {});
+            return;
         }
-        return ctx.reply('Аккаунт не был привязан.', buildMenuTriggerKeyboard());
+
+        const ownerText = action === 'telegram'
+            ? 'Все текущие данные остались в Telegram. Desktop получил новый пустой аккаунт.'
+            : 'Все текущие данные остались в Desktop. Telegram получил новый пустой аккаунт.';
+        await ctx.editMessageText(`✅ Аккаунты разделены.\n\n${ownerText}`).catch(() => {});
     } catch (err: any) {
         const msg = err?.response?.data?.error;
         if (msg === 'not_linked') {
-            return ctx.reply('Аккаунт не был привязан к десктоп-приложению.', buildMenuTriggerKeyboard());
+            await ctx.editMessageText('Аккаунт не был привязан к desktop-приложению.').catch(() => {});
+            return;
+        }
+        if (msg === 'password_identity_required') {
+            await ctx.editMessageText(
+                'Нельзя разделить аккаунты: у текущего аккаунта нет входа по логину и паролю в Desktop.'
+            ).catch(() => {});
+            return;
         }
         console.error('Unlink error:', formatSafeError(err));
-        return ctx.reply('Ошибка при отвязке. Попробуй позже.');
+        await ctx.editMessageText(
+            'Не удалось получить подтверждение отвязки. Проверь статус в Desktop или отправь /unlink ещё раз.'
+        ).catch(() => {});
     }
 });
 
