@@ -6,6 +6,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .env
+.env.i18n
 *.db
 *.db-journal
 dist/
@@ -23,4 +24,3 @@ desktop-app/models/
 desktop-app/.venv-wakeword/
 desktop-app/*.spec
 *.exe
-desktop-app/.env.i18n

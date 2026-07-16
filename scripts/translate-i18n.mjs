@@ -10,13 +10,15 @@ const projectRoot = path.resolve(scriptDir, '..');
 
 function printHelp() {
   console.log(`Usage:
-  npm run i18n:translate -- --from ru --to de
-  npm run i18n:translate:all
+  npm run i18n:translate:bot -- --from en --to ru
+  npm run i18n:translate:desktop -- --from en --to de
+  npm run i18n:translate:bot:all
 
 Options:
   --all                  Fill every existing locale catalog
   --from <locale>        Source locale (default: ru; en with --all)
   --to <locale>          Target locale (default: en)
+  --locales <directory>  Locale catalogs root (default: i18n/locales)
   --source <file>        Source JSON path
   --target <file>        Target JSON path
   --env <file>           Env file path (default: .env.i18n)
@@ -38,6 +40,7 @@ function parseArgs(argv) {
     all: false,
     from: '',
     to: '',
+    locales: '',
     source: '',
     target: '',
     env: '',
@@ -63,6 +66,7 @@ function parseArgs(argv) {
       case '--all': args.all = true; break;
       case '--from': args.from = takeValue(); break;
       case '--to': args.to = takeValue(); break;
+      case '--locales': args.locales = takeValue(); break;
       case '--source': args.source = takeValue(); break;
       case '--target': args.target = takeValue(); break;
       case '--env': args.env = takeValue(); break;
@@ -487,7 +491,7 @@ async function main() {
 
   const sourceLocale = args.from || (args.all ? 'en' : 'ru');
   const targetLocale = args.to || 'en';
-  const localesRoot = path.resolve(projectRoot, 'src/renderer/i18n/locales');
+  const localesRoot = path.resolve(projectRoot, args.locales || 'i18n/locales');
   const envFile = path.resolve(projectRoot, args.env || '.env.i18n');
   const sourceFile = path.resolve(projectRoot, args.source || path.join(localesRoot, sourceLocale, 'translation.json'));
   loadEnvFile(envFile);

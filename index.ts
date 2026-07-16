@@ -1,9 +1,18 @@
 ﻿import { Markup, Telegraf } from 'telegraf';
 import Database from 'better-sqlite3';
+import type { Context } from 'telegraf';
 import * as dotenv from 'dotenv';
 import crypto from 'crypto';
 import axios from 'axios';
 import { marked, Renderer } from 'marked';
+import {
+    createBotTranslator,
+    DEFAULT_LANGUAGE,
+    ensureBotI18nReady,
+    normalizeSupportedLanguage,
+    type BotTranslate,
+    type SupportedLanguage
+} from './i18n/index.js';
 
 dotenv.config();
 
@@ -41,45 +50,14 @@ const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
     pro: 20
 };
 const DEFAULT_USER_PLAN: UserPlan = 'free';
-const SUPPORTED_LANGUAGES = [
-    'ru',
-    'en',
-    'de',
-    'es',
-    'fr',
-    'it',
-    'ja',
-    'ko',
-    'pl',
-    'pt-BR',
-    'zh-CN'
-] as const;
-type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
-const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
-const SUPPORTED_LANGUAGE_BY_CODE = new Map<string, SupportedLanguage>(
-    SUPPORTED_LANGUAGES.map(language => [language.toLowerCase(), language])
-);
 
-const normalizeSupportedLanguage = (value: unknown): SupportedLanguage | null => {
-    if (typeof value !== 'string') return null;
-    const normalized = value.trim().toLowerCase().replace(/_/g, '-');
-    if (!normalized) return null;
-
-    const exact = SUPPORTED_LANGUAGE_BY_CODE.get(normalized);
-    if (exact) return exact;
-
-    if (normalized === 'pt' || normalized.startsWith('pt-')) return 'pt-BR';
-    if (
-        normalized === 'zh'
-        || normalized === 'zh-hans'
-        || normalized.startsWith('zh-hans-')
-        || normalized === 'zh-sg'
-        || normalized.startsWith('zh-sg-')
-    ) {
-        return 'zh-CN';
-    }
-
-    return SUPPORTED_LANGUAGE_BY_CODE.get(normalized.split('-')[0]) ?? null;
+type BotContext = Context & {
+    state: Context['state'] & {
+        language: SupportedLanguage;
+        role?: 'admin' | 'user';
+        userName?: string;
+    };
+    t: BotTranslate;
 };
 
 const formatSafeError = (error: unknown) => {
@@ -95,7 +73,7 @@ const formatSafeError = (error: unknown) => {
     return String(error);
 };
 
-const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
+const bot = new Telegraf<BotContext>(process.env.TELEGRAM_TOKEN!);
 bot.catch(async (err, ctx) => {
     console.error('Telegraf update error:', formatSafeError(err));
     try {
@@ -2752,8 +2730,10 @@ const unlinkChoiceFlows = new Map<number, { expiresAt: number }>();
 bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+    await ensureBotI18nReady();
     const telegramLanguage = normalizeSupportedLanguage(ctx.from?.language_code);
     ctx.state.language = telegramLanguage ?? DEFAULT_LANGUAGE;
+    ctx.t = createBotTranslator(() => ctx.state.language);
     const telegramUsername = ctx.from?.username?.trim() || null;
     let userRecord = await getUser(userId);
 
