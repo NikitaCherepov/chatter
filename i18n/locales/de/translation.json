@@ -1,1 +1,66 @@
-{}
+{
+  "common": {
+    "unknown": "unbekannt",
+    "unlimited": "unbegrenzt"
+  },
+  "roles": {
+    "admin": "Admin",
+    "user": "Benutzer"
+  },
+  "access": {
+    "requestSent": "Ihre Zugriffsanfrage wurde an einen Admin gesendet. Bitte warten Sie auf die Genehmigung.",
+    "requestSentNeedsName": "Ihre Zugriffsanfrage wurde an einen Admin gesendet. Bitte warten Sie auf die Genehmigung.\nSie haben keinen Telegram @Benutzernamen, senden Sie daher Ihren Namen hier in einer Nachricht.",
+    "blocked": "🚫 Zugriff blockiert.\nGrund: {{reason}}\nDatum: {{date}}",
+    "noReason": "Kein Grund angegeben",
+    "unknownDate": "unbekannt",
+    "nameSaved": "Name gespeichert. Ihre Anfrage wurde an einen Admin gesendet; bitte warten Sie auf die Genehmigung.",
+    "pendingNeedsName": "Ihre Anfrage wurde bereits gesendet. Sie haben keinen Telegram @Benutzernamen, senden Sie daher Ihren Namen in einer Nachricht.",
+    "pending": "Ihre Anfrage wurde bereits an einen Admin gesendet. Bitte warten Sie auf Genehmigung.",
+    "rejected": "Ihre Anfrage wurde von einem Admin abgelehnt. Wenn dies ein Fehler ist, kontaktieren Sie den Admin."
+  },
+  "menu": {
+    "trigger": "📋 Menü",
+    "pinned": "Der Menü-Button ist jetzt unten angeheftet.",
+    "title": "📁 Hauptmenü",
+    "name": "👤 Name: {{name}}",
+    "id": "🆔 ID: {{id}}",
+    "role": "🛡️ Rolle: {{role}}",
+    "plan": "💳 Plan: {{plan}}",
+    "context": "🗂 Kontext (Tokens): {{value}}",
+    "contextDefault": "🗂 Kontext: {{value}}",
+    "messagesToday": "📨 Nachrichten heute: {{value}}",
+    "messages": "📨 Nachrichten: {{value}}",
+    "webToday": "🌐 Websuchen heute: {{value}}",
+    "imagesToday": "🎨 Bilder heute: {{value}}",
+    "model": "🤖 Modell: {{model}}",
+    "modelAuto": "Auto",
+    "notesWebApp": "📝 Notizen: verfügbar über die WebApp-Schaltfläche",
+    "notesCommands": "📝 Notizen: Befehle /note_add, /notes, /note_find, /note_delete",
+    "activeChat": "💬 Aktiver Chat: #{{id}} ({{title}})",
+    "activeChatMissing": "💬 Aktiver Chat: nicht ausgewählt",
+    "promptCustom": "🧠 Aktueller Prompt: Benutzerdefiniert",
+    "prompt": "🧠 Aktueller Prompt: #{{id}} {{name}}",
+    "promptMissing": "🧠 Aktueller Prompt: nicht gefunden",
+    "moderation": "🕓 Anfragen: {{pending}} | ⛔ Sperren: {{banned}}",
+    "chooseAction": "Wähle eine Aktion:",
+    "cleared": "Der Speicher des aktiven Chats wurde gelöscht.",
+    "buttons": {
+      "clear": "🧹 Speicher löschen",
+      "users": "👥 Benutzerliste",
+      "rename": "✏️ Umbenennen",
+      "prompts": "🧠 Prompts",
+      "currentPrompt": "✅ Mein Prompt",
+      "model": "🤖 Modell wechseln",
+      "contextSize": "🗂 Kontextgröße",
+      "addUser": "➕ Benutzer hinzufügen",
+      "removeUser": "➖ Benutzer entfernen",
+      "promptAdmin": "⚙️ Prompt-Admin",
+      "pending": "🕓 Anfragen",
+      "banned": "⛔ Gebannte Benutzer",
+      "mail": "📬 Mail",
+      "notes": "📝 Notizen",
+      "help": "ℹ️ Hilfe",
+      "notesWebApp": "📝 Notizen (WebApp)"
+    }
+  }
+}

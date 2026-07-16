@@ -1,1 +1,66 @@
-{}
+{
+  "common": {
+    "unknown": "未知",
+    "unlimited": "无限制"
+  },
+  "roles": {
+    "admin": "管理员",
+    "user": "用户"
+  },
+  "access": {
+    "requestSent": "您的访问请求已发送给管理员，请等待批准。",
+    "requestSentNeedsName": "您的访问请求已发送给管理员，请等待批准。\n您没有Telegram @用户名，请在此处发送您的姓名。",
+    "blocked": "🚫 访问被阻止。\n原因：{{reason}}\n日期：{{date}}",
+    "noReason": "未提供原因",
+    "unknownDate": "未知",
+    "nameSaved": "姓名已保存。您的请求已发送给管理员，请等待批准。",
+    "pendingNeedsName": "您的请求已发送。您没有Telegram @用户名，请在一则消息中发送您的姓名。",
+    "pending": "您的请求已发送给管理员。请等待批准。",
+    "rejected": "您的请求已被管理员拒绝。如果这是错误，请联系管理员。"
+  },
+  "menu": {
+    "trigger": "📋 菜单",
+    "pinned": "菜单按钮现已固定在下方。",
+    "title": "📁 主菜单",
+    "name": "👤 姓名：{{name}}",
+    "id": "🆔 ID：{{id}}",
+    "role": "🛡️ 角色：{{role}}",
+    "plan": "💳 计划：{{plan}}",
+    "context": "🗂 上下文（令牌）：{{value}}",
+    "contextDefault": "🗂 上下文：{{value}}",
+    "messagesToday": "📨 今日消息：{{value}}",
+    "messages": "📨 消息：{{value}}",
+    "webToday": "🌐 今日网络搜索：{{value}}",
+    "imagesToday": "🎨 今日图片：{{value}}",
+    "model": "🤖 模型：{{model}}",
+    "modelAuto": "自动",
+    "notesWebApp": "📝 笔记：可通过 WebApp 按钮使用",
+    "notesCommands": "📝 笔记：命令 /note_add、/notes、/note_find、/note_delete",
+    "activeChat": "💬 当前对话: #{{id}} ({{title}})",
+    "activeChatMissing": "💬 当前对话: 未选择",
+    "promptCustom": "🧠 当前提示: 自定义",
+    "prompt": "🧠 当前提示: #{{id}} {{name}}",
+    "promptMissing": "🧠 当前提示: 未找到",
+    "moderation": "🕓 请求: {{pending}} | ⛔ 封禁: {{banned}}",
+    "chooseAction": "选择一个操作:",
+    "cleared": "当前对话记忆已清除。",
+    "buttons": {
+      "clear": "🧹 清除记忆",
+      "users": "👥 用户列表",
+      "rename": "✏️ 重命名自己",
+      "prompts": "🧠 提示词",
+      "currentPrompt": "✅ 我的提示词",
+      "model": "🤖 切换模型",
+      "contextSize": "🗂 上下文大小",
+      "addUser": "➕ 添加用户",
+      "removeUser": "➖ 移除用户",
+      "promptAdmin": "⚙️ 提示词管理",
+      "pending": "🕓 请求",
+      "banned": "⛔ 封禁用户",
+      "mail": "📬 邮件",
+      "notes": "📝 笔记",
+      "help": "ℹ️ 帮助",
+      "notesWebApp": "📝 笔记（WebApp）"
+    }
+  }
+}

@@ -1,1 +1,66 @@
-{}
+{
+  "common": {
+    "unknown": "nieznany",
+    "unlimited": "nieograniczony"
+  },
+  "roles": {
+    "admin": "Admin",
+    "user": "Użytkownik"
+  },
+  "access": {
+    "requestSent": "Twoja prośba o dostęp została wysłana do administratora. Proszę czekać na zatwierdzenie.",
+    "requestSentNeedsName": "Twoja prośba o dostęp została wysłana do administratora. Proszę czekać na zatwierdzenie.\nNie masz nazwy użytkownika Telegram @username, więc wyślij swoje imię tutaj w jednej wiadomości.",
+    "blocked": "🚫 Dostęp zablokowany.\nPowód: {{reason}}\nData: {{date}}",
+    "noReason": "Nie podano powodu",
+    "unknownDate": "nieznana",
+    "nameSaved": "Imię zapisane. Twoja prośba została wysłana do administratora; proszę czekać na zatwierdzenie.",
+    "pendingNeedsName": "Twoja prośba została już wysłana. Nie masz @username na Telegramie, więc wyślij swoje imię w jednej wiadomości.",
+    "pending": "Twoja prośba została już wysłana do administratora. Proszę czekać na zatwierdzenie.",
+    "rejected": "Twoja prośba została odrzucona przez administratora. Jeśli to pomyłka, skontaktuj się z administratorem."
+  },
+  "menu": {
+    "trigger": "📋 Menu",
+    "pinned": "Przycisk menu został przypięty poniżej.",
+    "title": "📁 Menu główne",
+    "name": "👤 Imię: {{name}}",
+    "id": "🆔 ID: {{id}}",
+    "role": "🛡️ Rola: {{role}}",
+    "plan": "💳 Plan: {{plan}}",
+    "context": "🗂 Kontekst (tokeny): {{value}}",
+    "contextDefault": "🗂 Kontekst: {{value}}",
+    "messagesToday": "📨 Wiadomości dzisiaj: {{value}}",
+    "messages": "📨 Wiadomości: {{value}}",
+    "webToday": "🌐 Wyszukiwania w sieci dzisiaj: {{value}}",
+    "imagesToday": "🎨 Obrazy dzisiaj: {{value}}",
+    "model": "🤖 Model: {{model}}",
+    "modelAuto": "Auto",
+    "notesWebApp": "📝 Notatki: dostępne przez przycisk WebApp",
+    "notesCommands": "📝 Notatki: komendy /note_add, /notes, /note_find, /note_delete",
+    "activeChat": "💬 Aktywny czat: #{{id}} ({{title}})",
+    "activeChatMissing": "💬 Aktywny czat: nie wybrano",
+    "promptCustom": "🧠 Aktualny prompt: Niestandardowy",
+    "prompt": "🧠 Aktualny prompt: #{{id}} {{name}}",
+    "promptMissing": "🧠 Aktualny prompt: nie znaleziono",
+    "moderation": "🕓 Żądania: {{pending}} | ⛔ Blokady: {{banned}}",
+    "chooseAction": "Wybierz akcję:",
+    "cleared": "Pamięć aktywnego czatu została wyczyszczona.",
+    "buttons": {
+      "clear": "🧹 Wyczyść pamięć",
+      "users": "👥 Lista użytkowników",
+      "rename": "✏️ Zmień nazwę",
+      "prompts": "🧠 Podpowiedzi",
+      "currentPrompt": "✅ Moja podpowiedź",
+      "model": "🤖 Zmień model",
+      "contextSize": "🗂 Rozmiar kontekstu",
+      "addUser": "➕ Dodaj użytkownika",
+      "removeUser": "➖ Usuń użytkownika",
+      "promptAdmin": "⚙️ Zarządzaj podpowiedziami",
+      "pending": "🕓 Prośby",
+      "banned": "⛔ Zbanowani użytkownicy",
+      "mail": "📬 Poczta",
+      "notes": "📝 Notatki",
+      "help": "ℹ️ Pomoc",
+      "notesWebApp": "📝 Notatki (WebApp)"
+    }
+  }
+}

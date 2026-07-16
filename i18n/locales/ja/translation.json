@@ -1,1 +1,66 @@
-{}
+{
+  "common": {
+    "unknown": "不明",
+    "unlimited": "無制限"
+  },
+  "roles": {
+    "admin": "管理者",
+    "user": "ユーザー"
+  },
+  "access": {
+    "requestSent": "アクセスリクエストが管理者に送信されました。承認をお待ちください。",
+    "requestSentNeedsName": "アクセスリクエストが管理者に送信されました。承認をお待ちください。\nTelegramの@ユーザー名がないため、ここに名前を1メッセージで送信してください。",
+    "blocked": "🚫 アクセスがブロックされました。\n理由: {{reason}}\n日付: {{date}}",
+    "noReason": "理由なし",
+    "unknownDate": "不明",
+    "nameSaved": "名前を保存しました。リクエストが管理者に送信されました。承認をお待ちください。",
+    "pendingNeedsName": "リクエストは既に送信されています。Telegramの@ユーザー名がないため、お名前を1メッセージで送信してください。",
+    "pending": "リクエストは既に管理者に送信されています。承認をお待ちください。",
+    "rejected": "リクエストは管理者によって拒否されました。誤りがある場合は管理者に連絡してください。"
+  },
+  "menu": {
+    "trigger": "📋 メニュー",
+    "pinned": "メニューボタンが下部に固定されました。",
+    "title": "📁 メインメニュー",
+    "name": "👤 名前: {{name}}",
+    "id": "🆔 ID: {{id}}",
+    "role": "🛡️ 役割: {{role}}",
+    "plan": "💳 プラン: {{plan}}",
+    "context": "🗂 コンテキスト（トークン）: {{value}}",
+    "contextDefault": "🗂 コンテキスト: {{value}}",
+    "messagesToday": "📨 今日のメッセージ: {{value}}",
+    "messages": "📨 メッセージ: {{value}}",
+    "webToday": "🌐 今日のウェブ検索: {{value}}",
+    "imagesToday": "🎨 今日の画像: {{value}}",
+    "model": "🤖 モデル: {{model}}",
+    "modelAuto": "自動",
+    "notesWebApp": "📝 メモ: WebAppボタンから利用可能",
+    "notesCommands": "📝 メモ: コマンド /note_add, /notes, /note_find, /note_delete",
+    "activeChat": "💬 アクティブチャット: #{{id}} ({{title}})",
+    "activeChatMissing": "💬 アクティブチャット: 未選択",
+    "promptCustom": "🧠 現在のプロンプト: カスタム",
+    "prompt": "🧠 現在のプロンプト: #{{id}} {{name}}",
+    "promptMissing": "🧠 現在のプロンプト: 見つかりません",
+    "moderation": "🕓 リクエスト: {{pending}} | ⛔ 禁止: {{banned}}",
+    "chooseAction": "アクションを選択:",
+    "cleared": "アクティブチャットのメモリがクリアされました。",
+    "buttons": {
+      "clear": "🧹 メモリをクリア",
+      "users": "👥 ユーザー一覧",
+      "rename": "✏️ 名前を変更",
+      "prompts": "🧠 プロンプト",
+      "currentPrompt": "✅ 自分のプロンプト",
+      "model": "🤖 モデルを変更",
+      "contextSize": "🗂 コンテキストサイズ",
+      "addUser": "➕ ユーザーを追加",
+      "removeUser": "➖ ユーザーを削除",
+      "promptAdmin": "⚙️ プロンプト管理",
+      "pending": "🕓 リクエスト",
+      "banned": "⛔ 禁止ユーザー",
+      "mail": "📬 メール",
+      "notes": "📝 メモ",
+      "help": "ℹ️ ヘルプ",
+      "notesWebApp": "📝 メモ（Webアプリ）"
+    }
+  }
+}

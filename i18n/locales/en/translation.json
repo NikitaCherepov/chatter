@@ -1,1 +1,66 @@
-{}
+{
+  "common": {
+    "unknown": "unknown",
+    "unlimited": "unlimited"
+  },
+  "roles": {
+    "admin": "Admin",
+    "user": "User"
+  },
+  "access": {
+    "requestSent": "Your access request was sent to an admin. Please wait for approval.",
+    "requestSentNeedsName": "Your access request was sent to an admin. Please wait for approval.\nYou do not have a Telegram @username, so send your name here in one message.",
+    "blocked": "🚫 Access blocked.\nReason: {{reason}}\nDate: {{date}}",
+    "noReason": "No reason provided",
+    "unknownDate": "unknown",
+    "nameSaved": "Name saved. Your request was sent to an admin; please wait for approval.",
+    "pendingNeedsName": "Your request has already been sent. You do not have a Telegram @username, so send your name in one message.",
+    "pending": "Your request has already been sent to an admin. Please wait for approval.",
+    "rejected": "Your request was rejected by an admin. If this is a mistake, contact the admin."
+  },
+  "menu": {
+    "trigger": "📋 Menu",
+    "pinned": "The menu button is now pinned below.",
+    "title": "📁 Main menu",
+    "name": "👤 Name: {{name}}",
+    "id": "🆔 ID: {{id}}",
+    "role": "🛡️ Role: {{role}}",
+    "plan": "💳 Plan: {{plan}}",
+    "context": "🗂 Context (tokens): {{value}}",
+    "contextDefault": "🗂 Context: {{value}}",
+    "messagesToday": "📨 Messages today: {{value}}",
+    "messages": "📨 Messages: {{value}}",
+    "webToday": "🌐 Web searches today: {{value}}",
+    "imagesToday": "🎨 Images today: {{value}}",
+    "model": "🤖 Model: {{model}}",
+    "modelAuto": "Auto",
+    "notesWebApp": "📝 Notes: available through the WebApp button",
+    "notesCommands": "📝 Notes: commands /note_add, /notes, /note_find, /note_delete",
+    "activeChat": "💬 Active chat: #{{id}} ({{title}})",
+    "activeChatMissing": "💬 Active chat: not selected",
+    "promptCustom": "🧠 Current prompt: Custom",
+    "prompt": "🧠 Current prompt: #{{id}} {{name}}",
+    "promptMissing": "🧠 Current prompt: not found",
+    "moderation": "🕓 Requests: {{pending}} | ⛔ Bans: {{banned}}",
+    "chooseAction": "Choose an action:",
+    "cleared": "The active chat memory has been cleared.",
+    "buttons": {
+      "clear": "🧹 Clear memory",
+      "users": "👥 User list",
+      "rename": "✏️ Rename yourself",
+      "prompts": "🧠 Prompts",
+      "currentPrompt": "✅ My prompt",
+      "model": "🤖 Change model",
+      "contextSize": "🗂 Context size",
+      "addUser": "➕ Add user",
+      "removeUser": "➖ Remove user",
+      "promptAdmin": "⚙️ Prompt admin",
+      "pending": "🕓 Requests",
+      "banned": "⛔ Banned users",
+      "mail": "📬 Mail",
+      "notes": "📝 Notes",
+      "help": "ℹ️ Help",
+      "notesWebApp": "📝 Notes (WebApp)"
+    }
+  }
+}

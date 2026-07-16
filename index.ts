@@ -10,6 +10,8 @@ import {
     DEFAULT_LANGUAGE,
     ensureBotI18nReady,
     normalizeSupportedLanguage,
+    SUPPORTED_LANGUAGES,
+    translateBot,
     type BotTranslate,
     type SupportedLanguage
 } from './i18n/index.js';
@@ -719,33 +721,35 @@ type NoteStatsRecord = {
 type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
-    label: string;
+    labelKey: string;
     adminOnly: boolean;
     row: number;
 };
 
-const MAIN_MENU_TRIGGER_BUTTON = '📋 Меню';
+const MAIN_MENU_TRIGGER_BUTTONS = [...new Set(
+    SUPPORTED_LANGUAGES.map(language => translateBot(language, 'menu.trigger'))
+)];
 const MAIN_MENU_ACTIONS: MenuActionButton[] = [
-    { id: 'clear', label: '🧹 Очистить память', adminOnly: false, row: 1 },
-    { id: 'users', label: '👥 Список пользователей', adminOnly: true, row: 1 },
-    { id: 'rename', label: '✏️ Переименовать себя', adminOnly: false, row: 2 },
-    { id: 'prompts', label: '🧠 Промпты', adminOnly: false, row: 2 },
-    { id: 'current_prompt', label: '✅ Мой промпт', adminOnly: false, row: 3 },
-    { id: 'model', label: '🤖 Сменить модель', adminOnly: false, row: 3 },
-    { id: 'context_size', label: '🗂 Размер контекста', adminOnly: false, row: 3 },
-    { id: 'add', label: '➕ Добавить пользователя', adminOnly: true, row: 3 },
-    { id: 'remove', label: '➖ Удалить пользователя', adminOnly: true, row: 4 },
-    { id: 'prompt_admin', label: '⚙️ Промпт-админ', adminOnly: true, row: 4 },
-    { id: 'pending', label: '🕓 Заявки', adminOnly: true, row: 5 },
-    { id: 'banned', label: '⛔ Забаненные', adminOnly: true, row: 5 },
-    { id: 'mail', label: '📬 Почта', adminOnly: false, row: 6 },
-    { id: 'notes', label: '📝 Заметки', adminOnly: false, row: 7 },
-    { id: 'help', label: 'ℹ️ Подсказка', adminOnly: false, row: 8 }
+    { id: 'clear', labelKey: 'menu.buttons.clear', adminOnly: false, row: 1 },
+    { id: 'users', labelKey: 'menu.buttons.users', adminOnly: true, row: 1 },
+    { id: 'rename', labelKey: 'menu.buttons.rename', adminOnly: false, row: 2 },
+    { id: 'prompts', labelKey: 'menu.buttons.prompts', adminOnly: false, row: 2 },
+    { id: 'current_prompt', labelKey: 'menu.buttons.currentPrompt', adminOnly: false, row: 3 },
+    { id: 'model', labelKey: 'menu.buttons.model', adminOnly: false, row: 3 },
+    { id: 'context_size', labelKey: 'menu.buttons.contextSize', adminOnly: false, row: 3 },
+    { id: 'add', labelKey: 'menu.buttons.addUser', adminOnly: true, row: 3 },
+    { id: 'remove', labelKey: 'menu.buttons.removeUser', adminOnly: true, row: 4 },
+    { id: 'prompt_admin', labelKey: 'menu.buttons.promptAdmin', adminOnly: true, row: 4 },
+    { id: 'pending', labelKey: 'menu.buttons.pending', adminOnly: true, row: 5 },
+    { id: 'banned', labelKey: 'menu.buttons.banned', adminOnly: true, row: 5 },
+    { id: 'mail', labelKey: 'menu.buttons.mail', adminOnly: false, row: 6 },
+    { id: 'notes', labelKey: 'menu.buttons.notes', adminOnly: false, row: 7 },
+    { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 8 }
 ];
 
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
 
-const buildMenuTriggerKeyboard = () => Markup.keyboard([[MAIN_MENU_TRIGGER_BUTTON]]).resize().persistent();
+const buildMenuTriggerKeyboard = (t: BotTranslate) => Markup.keyboard([[t('menu.trigger')]]).resize().persistent();
 const TZ_BUTTON_SET_UTC = '🕒 Указать UTC';
 const TZ_BUTTON_SEND_LOCATION = '📍 Отправить геопозицию';
 const buildTimezoneSetupKeyboard = () => Markup.keyboard([
@@ -753,17 +757,17 @@ const buildTimezoneSetupKeyboard = () => Markup.keyboard([
     [Markup.button.locationRequest(TZ_BUTTON_SEND_LOCATION)]
 ]).resize().oneTime();
 
-const buildMainMenuInlineKeyboard = (isAdmin: boolean) => {
+const buildMainMenuInlineKeyboard = (isAdmin: boolean, t: BotTranslate) => {
     const visibleItems = MAIN_MENU_ACTIONS.filter(item => isAdmin || !item.adminOnly);
     const rows = [...new Set(visibleItems.map(item => item.row))]
         .sort((a, b) => a - b)
         .map(row => visibleItems
             .filter(item => item.row === row)
-            .map(item => Markup.button.callback(item.label, `main:${item.id}`)));
+            .map(item => Markup.button.callback(t(item.labelKey), `main:${item.id}`)));
 
     if (NOTES_WEBAPP_URL) {
         rows.push([
-            { text: '📝 Заметки (WebApp)', web_app: { url: NOTES_WEBAPP_URL } } as any
+            { text: t('menu.buttons.notesWebApp'), web_app: { url: NOTES_WEBAPP_URL } } as any
         ]);
     }
 
@@ -2791,10 +2795,10 @@ bot.use(async (ctx, next) => {
         }
 
         if (!telegramUsername) {
-            return ctx.reply('Отправили вашу заявку админу, ждём подтверждения.\nУ тебя нет @username, отправь сюда имя одним сообщением.');
+            return ctx.reply(ctx.t('access.requestSentNeedsName'));
         }
 
-        return ctx.reply('Отправили вашу заявку админу, ждём подтверждения.');
+        return ctx.reply(ctx.t('access.requestSent'));
     }
 
     if (userRecord.tg_username !== telegramUsername) {
@@ -2804,10 +2808,10 @@ bot.use(async (ctx, next) => {
 
     if (userRecord.status === 'banned') {
         const ban = getBanRecord(userId);
-        const reason = ban?.reason ?? 'Без причины';
-        const date = ban?.banned_at ?? 'неизвестно';
+        const reason = ban?.reason ?? ctx.t('access.noReason');
+        const date = ban?.banned_at ?? ctx.t('access.unknownDate');
         await syncCommandScopeForUser(userId, false);
-        return ctx.reply(`🚫 Доступ заблокирован.\nПричина: ${reason}\nДата: ${date}`);
+        return ctx.reply(ctx.t('access.blocked', { reason, date }));
     }
 
     if (userRecord.status === 'none') {
@@ -2819,19 +2823,19 @@ bot.use(async (ctx, next) => {
         await syncCommandScopeForUser(userId, false);
 
         if (savedName) {
-            return ctx.reply('Имя сохранено. Заявка отправлена админу, ожидаем подтверждения.');
+            return ctx.reply(ctx.t('access.nameSaved'));
         }
 
         if (!telegramUsername && !(userRecord.name && userRecord.name.trim())) {
-            return ctx.reply('Заявка уже отправлена. У тебя нет @username, отправь своё имя одним сообщением.');
+            return ctx.reply(ctx.t('access.pendingNeedsName'));
         }
 
-        return ctx.reply('Заявка уже отправлена администратору. Ожидаем подтверждения.');
+        return ctx.reply(ctx.t('access.pending'));
     }
 
     if (userRecord.status === 'disapproved') {
         await syncCommandScopeForUser(userId, false);
-        return ctx.reply('Заявка была отклонена администратором. Если это ошибка, свяжись с админом.');
+        return ctx.reply(ctx.t('access.rejected'));
     }
 
     if (userRecord.role !== 'user') {
@@ -2853,7 +2857,7 @@ bot.use(async (ctx, next) => {
 
     await syncCommandScopeForUser(userId, false);
     ctx.state.role = 'user';
-    ctx.state.userName = userRecord.name || ctx.from?.first_name || 'Пользователь';
+    ctx.state.userName = userRecord.name || ctx.from?.first_name || ctx.t('roles.user');
     return next();
 });
 
@@ -2864,60 +2868,62 @@ const showMenu = async (ctx: any) => {
     const userId = ctx.from?.id;
     const userRecord = userId ? await getUser(userId) : undefined;
     const activePrompt = userRecord ? resolvePromptForUser(userRecord) : ensureDefaultPrompt();
-    const userName = (ctx.state.userName as string | undefined) || userRecord?.name || 'Пользователь';
-    const roleLabel = isAdmin ? 'Админ' : 'Пользователь';
+    const userName = (ctx.state.userName as string | undefined) || userRecord?.name || ctx.t('roles.user');
+    const roleLabel = isAdmin ? ctx.t('roles.admin') : ctx.t('roles.user');
     const promptLine = activePrompt
         ? activePrompt.id === CUSTOM_PROMPT_ID
-            ? '🧠 Текущий промпт: Кастомный'
-            : `🧠 Текущий промпт: #${activePrompt.id} ${activePrompt.name}`
-        : '🧠 Текущий промпт: не найден';
+            ? ctx.t('menu.promptCustom')
+            : ctx.t('menu.prompt', { id: activePrompt.id, name: activePrompt.name })
+        : ctx.t('menu.promptMissing');
     const userPlan = userRecord ? parsePlanFromDb(userRecord.plan) : DEFAULT_USER_PLAN;
-    const planLine = `💳 План: ${getPlanLabel(userPlan)}`;
+    const planLine = ctx.t('menu.plan', { plan: getPlanLabel(userPlan) });
     const contextLine = userRecord
-        ? `🗂 Контекст (токены): ${getContextWindowText(userRecord)}`
-        : `🗂 Контекст: ${(PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN] / 1000).toFixed(0)}k`;
+        ? ctx.t('menu.context', { value: getContextWindowText(userRecord) })
+        : ctx.t('menu.contextDefault', { value: `${(PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN] / 1000).toFixed(0)}k` });
     const messageLimitLine = userRecord
-        ? `📨 Сообщения сегодня: ${getDailyMessageLimitText(userRecord)}`
-        : `📨 Сообщения: безлимит`;
+        ? ctx.t('menu.messagesToday', { value: ctx.t('common.unlimited') })
+        : ctx.t('menu.messages', { value: ctx.t('common.unlimited') });
     const webLimitLine = userRecord
-        ? `🌐 Web-поиск сегодня: ${getDailyWebSearchLimitText(userRecord)}`
-        : `🌐 Web-поиск сегодня: 0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`;
+        ? ctx.t('menu.webToday', { value: getDailyWebSearchLimitText(userRecord) })
+        : ctx.t('menu.webToday', { value: `0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}` });
     const imageGenLine = userRecord
-        ? `🎨 Картинок сегодня: ${userRecord.daily_image_gen_count ?? 0}/${userRecord.daily_image_gen_limit ?? 0}`
-        : `🎨 Картинок сегодня: 0/0`;
+        ? ctx.t('menu.imagesToday', { value: `${userRecord.daily_image_gen_count ?? 0}/${userRecord.daily_image_gen_limit ?? 0}` })
+        : ctx.t('menu.imagesToday', { value: '0/0' });
     const modelLine = userRecord?.preferred_model
-        ? `🤖 Модель: ${userRecord.preferred_model}`
-        : '🤖 Модель: Авто';
+        ? ctx.t('menu.model', { model: userRecord.preferred_model })
+        : ctx.t('menu.model', { model: ctx.t('menu.modelAuto') });
     const notesLine = NOTES_WEBAPP_URL
-        ? '📝 Заметки: доступны в кнопке WebApp'
-        : '📝 Заметки: команды /note_add, /notes, /note_find, /note_delete';
+        ? ctx.t('menu.notesWebApp')
+        : ctx.t('menu.notesCommands');
     const activeChat = userId ? getActiveChatForUser(userId) : null;
     const chatLine = activeChat
-        ? `💬 Активный чат: #${activeChat.id} (${activeChat.title})`
-        : '💬 Активный чат: не выбран';
+        ? ctx.t('menu.activeChat', { id: activeChat.id, title: activeChat.title })
+        : ctx.t('menu.activeChatMissing');
     const moderationLine = isAdmin
-        ? `\n🕓 Заявки: ${getPendingUsersCount()} | ⛔ Баны: ${getBannedUsersCount()}`
+        ? ctx.t('menu.moderation', { pending: getPendingUsersCount(), banned: getBannedUsersCount() })
         : '';
 
-    const text = `📁 Главное меню
+    const text = [
+        ctx.t('menu.title'),
+        '',
+        ctx.t('menu.name', { name: userName }),
+        ctx.t('menu.id', { id: userId ?? ctx.t('common.unknown') }),
+        ctx.t('menu.role', { role: roleLabel }),
+        planLine,
+        contextLine,
+        messageLimitLine,
+        webLimitLine,
+        imageGenLine,
+        modelLine,
+        chatLine,
+        notesLine,
+        promptLine,
+        ...(moderationLine ? [moderationLine] : []),
+        '',
+        ctx.t('menu.chooseAction')
+    ].join('\n');
 
-👤 Имя: ${userName}
-🆔 ID: ${userId ?? 'unknown'}
-🛡️ Роль: ${roleLabel}
-${planLine}
-${contextLine}
-${messageLimitLine}
-${webLimitLine}
-${imageGenLine}
-${modelLine}
-${chatLine}
-${notesLine}
-${promptLine}
-${moderationLine}
-
-Выберите действие:`;
-
-    return ctx.reply(text, buildMainMenuInlineKeyboard(isAdmin));
+    return ctx.reply(text, buildMainMenuInlineKeyboard(isAdmin, ctx.t));
 };
 
 const handleClear = (ctx: any) => {
@@ -2931,7 +2937,7 @@ const handleClear = (ctx: any) => {
     adminUserContextLimitFlows.delete(userId);
     adminUserMessageLimitFlows.delete(userId);
     clearActiveUserHistory(userId);
-    return ctx.reply('Память активного чата очищена.');
+    return ctx.reply(ctx.t('menu.cleared'));
 };
 
 const formatPromptsList = (currentPromptId: number | null, includeDescription = false) => {
@@ -3438,11 +3444,11 @@ const notifyAdminsNewRequest = async (user: UserRecord) => {
 };
 
 bot.command('start', async (ctx) => {
-    await ctx.reply('Кнопка меню закреплена внизу.', buildMenuTriggerKeyboard());
+    await ctx.reply(ctx.t('menu.pinned'), buildMenuTriggerKeyboard(ctx.t));
     return showMenu(ctx);
 });
 bot.command('menu', async (ctx) => { await showMenu(ctx); });
-bot.hears(MAIN_MENU_TRIGGER_BUTTON, async (ctx) => { await showMenu(ctx); });
+bot.hears(MAIN_MENU_TRIGGER_BUTTONS, async (ctx) => { await showMenu(ctx); });
 
 bot.command('prompts', async (ctx) => {
     const userId = ctx.from?.id;
@@ -3864,7 +3870,7 @@ bot.command('cancellink', (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     linkCodeFlows.delete(userId);
-    return ctx.reply('Ок, привязка отменена.', buildMenuTriggerKeyboard());
+    return ctx.reply('Ок, привязка отменена.', buildMenuTriggerKeyboard(ctx.t));
 });
 
 bot.command('unlink', async (ctx) => {
@@ -3967,7 +3973,7 @@ bot.command('tz', async (ctx) => {
     }
     timezoneSetupFlows.delete(userId);
     const sign = offset >= 0 ? '+' : '';
-    return ctx.reply(`Часовой пояс успешно изменён на UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
+    return ctx.reply(`Часовой пояс успешно изменён на UTC${sign}${offset}.`, buildMenuTriggerKeyboard(ctx.t));
 });
 
 bot.command('tasks', async (ctx) => {
@@ -4305,7 +4311,7 @@ bot.on('location', async (ctx) => {
     updateUserTimezone(userId, offset);
     timezoneSetupFlows.delete(userId);
     const sign = offset >= 0 ? '+' : '';
-    return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard());
+    return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard(ctx.t));
 });
 
 bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|help)$/, async (ctx) => {
@@ -6839,7 +6845,7 @@ bot.on('text', async (ctx) => {
             if (response.data?.ok) {
                 return ctx.reply(
                     '✅ Аккаунт привязан! Теперь можешь пользоваться десктоп-приложением с данными твоего Telegram-аккаунта.',
-                    buildMenuTriggerKeyboard()
+                    buildMenuTriggerKeyboard(ctx.t)
                 );
             }
             return ctx.reply('Не удалось привязать. Возможно, код истёк. Попробуй получить новый код в приложении и снова /link.');
@@ -6947,7 +6953,7 @@ bot.on('text', async (ctx) => {
         updateUserTimezone(userId, offset);
         timezoneSetupFlows.delete(userId);
         const sign = offset >= 0 ? '+' : '';
-        return ctx.reply(`Готово, часовой пояс установлен: UTC${sign}${offset}. Теперь могу ставить таймеры.`, buildMenuTriggerKeyboard());
+        return ctx.reply(`Готово, часовой пояс установлен: UTC${sign}${offset}. Теперь могу ставить таймеры.`, buildMenuTriggerKeyboard(ctx.t));
     }
 
     if (!isAdmin) {
@@ -6962,7 +6968,7 @@ bot.on('text', async (ctx) => {
 
             if (answer === 'нет') {
                 renameFlows.delete(userId);
-                return ctx.reply('Ок, отменил.', buildMenuTriggerKeyboard());
+                return ctx.reply('Ок, отменил.', buildMenuTriggerKeyboard(ctx.t));
             }
 
             return ctx.reply('Ответь "Да" или "Нет".', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
@@ -6986,7 +6992,7 @@ bot.on('text', async (ctx) => {
             await updateUserName(userId, userText);
             ctx.state.userName = userText;
             renameFlows.delete(userId);
-            return ctx.reply('Имя принято.', buildMenuTriggerKeyboard());
+            return ctx.reply('Имя принято.', buildMenuTriggerKeyboard(ctx.t));
         }
 
         const customPromptFlow = customPromptEditFlows.get(userId);
@@ -7009,7 +7015,7 @@ bot.on('text', async (ctx) => {
             try { await runBackendSelectUserPrompt(userId, -1); } catch {}
             await selectUserCustomPrompt(userId);
             customPromptEditFlows.delete(userId);
-            return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard());
+            return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard(ctx.t));
         }
     }
 
