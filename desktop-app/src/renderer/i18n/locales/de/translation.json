@@ -75,7 +75,8 @@
     "instructions": "Senden Sie <command>/link</command> an den Telegram-Bot und geben Sie diesen Code ein:",
     "validFor": "Gültig für",
     "getNewCode": "Neuen Code anfordern",
-    "expired": "Code abgelaufen"
+    "expired": "Code abgelaufen",
+    "mergeWarning": "Durch die Verknüpfung werden beide Konten zusammengeführt. Vorhandene Chats, Bilder, Eingabeaufforderungen, Einstellungen und andere Daten werden Teil eines gemeinsamen Kontos."
   },
   "update": {
     "available": "Update {{version}} verfügbar",
@@ -119,7 +120,8 @@
       "restrictions": "Einschränkungen",
       "models": "Modelle",
       "app": "App",
-      "limits": "Grenzen"
+      "limits": "Grenzen",
+      "connections": "Verknüpfte Konten"
     },
     "language": {
       "system": "System",
@@ -236,6 +238,29 @@
       "promptGenerateFailed": "Prompt konnte nicht generiert werden",
       "promptApplied": "Prompt angewendet",
       "cartesiaVoicesFailed": "Cartesia-Stimmen konnten nicht geladen werden"
+    },
+    "connections": {
+      "help": "Verwalten Sie Dienste, die sich bei diesem Konto anmelden und es nutzen können.",
+      "connected": "Verbunden",
+      "notConnected": "Nicht verbunden",
+      "telegramAccount": "Telegram-Konto",
+      "telegramDescription": "Nutzen Sie dieselben Chats und Daten von Telegram.",
+      "link": "Verknüpfen",
+      "unlink": "Verknüpfung aufheben",
+      "unlinking": "Verknüpfung wird aufgehoben...",
+      "unlinkHelp": "Beim Entkoppeln wählen Sie, welches Konto alle gemeinsamen Daten behält. Das andere Konto startet leer.",
+      "unlinkTitle": "Telegram entkoppeln",
+      "unlinkQuestion": "Welches Konto soll die gemeinsamen Chats und anderen Daten behalten?",
+      "keepDesktop": "Daten auf Desktop behalten",
+      "keepDesktopHelp": "Desktop behält alle Chats, Bilder, Eingabeaufforderungen, Einstellungen und den Speicher. Telegram startet mit einem leeren Konto.",
+      "keepTelegram": "Daten in Telegram behalten",
+      "keepTelegramHelp": "Telegram behält alle Chats, Bilder, Eingabeaufforderungen, Einstellungen und den Speicher. Desktop startet mit einem leeren Konto.",
+      "unlinkWarning": "Dies löscht keine gemeinsamen Daten. Sie bleiben beim ausgewählten Konto. Das andere Konto erhält ein neues leeres Profil.",
+      "linked": "Telegram-Konto verknüpft",
+      "unlinked": "Telegram-Konto entkoppelt",
+      "refreshFailed": "Das Konto wurde verknüpft, aber sein Status konnte nicht aktualisiert werden",
+      "unlinkFailed": "Telegram konnte nicht getrennt werden",
+      "passwordRequired": "Für die Trennung von Telegram ist eine Passwortanmeldung erforderlich"
     }
   },
   "chat": {

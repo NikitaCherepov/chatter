@@ -75,7 +75,8 @@
     "instructions": "Telegramボットに<command>/link</command>を送信し、このコードを入力してください：",
     "validFor": "有効期限：あと",
     "getNewCode": "新しいコードを取得",
-    "expired": "コードの有効期限が切れました"
+    "expired": "コードの有効期限が切れました",
+    "mergeWarning": "リンクすると両方のアカウントが統合されます。既存のチャット、画像、プロンプト、設定、その他のデータは1つの共有アカウントの一部になります。"
   },
   "update": {
     "available": "アップデート {{version}} が利用可能です",
@@ -119,7 +120,8 @@
       "restrictions": "制限",
       "models": "モデル",
       "app": "アプリ",
-      "limits": "制限"
+      "limits": "制限",
+      "connections": "リンクされたアカウント"
     },
     "language": {
       "system": "システム",
@@ -236,6 +238,29 @@
       "promptGenerateFailed": "プロンプトの生成に失敗しました",
       "promptApplied": "プロンプトが適用されました",
       "cartesiaVoicesFailed": "Cartesiaボイスの読み込みに失敗しました"
+    },
+    "connections": {
+      "help": "このアカウントにサインインして使用できるサービスを管理します。",
+      "connected": "接続済み",
+      "notConnected": "未接続",
+      "telegramAccount": "Telegramアカウント",
+      "telegramDescription": "Telegramと同じチャットとデータを使用します。",
+      "link": "リンク",
+      "unlink": "リンク解除",
+      "unlinking": "リンク解除中...",
+      "unlinkHelp": "リンクを解除する際、共有データを保持するアカウントを選択します。もう一方のアカウントは空の状態から始まります。",
+      "unlinkTitle": "Telegramのリンクを解除",
+      "unlinkQuestion": "共有チャットやその他のデータを保持するアカウントはどちらですか？",
+      "keepDesktop": "データをDesktopに保持",
+      "keepDesktopHelp": "Desktopはすべてのチャット、画像、プロンプト、設定、メモリを保持します。Telegramは空のアカウントで始まります。",
+      "keepTelegram": "データをTelegramに保持",
+      "keepTelegramHelp": "Telegramはすべてのチャット、画像、プロンプト、設定、メモリを保持します。Desktopは空のアカウントで始まります。",
+      "unlinkWarning": "これにより共有データは削除されません。選択したアカウントに残ります。もう一方のアカウントは新しい空のプロフィールを受け取ります。",
+      "linked": "Telegramアカウントがリンクされました",
+      "unlinked": "Telegramアカウントのリンクが解除されました",
+      "refreshFailed": "アカウントはリンクされましたが、ステータスを更新できませんでした",
+      "unlinkFailed": "Telegramのリンクを解除できませんでした",
+      "passwordRequired": "Telegramのリンクを解除するにはパスワードログインが必要です"
     }
   },
   "chat": {

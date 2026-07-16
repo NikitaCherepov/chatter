@@ -71,6 +71,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
 }
 
 .menuItem {
@@ -120,6 +121,246 @@
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
+}
+
+// ====== LINKED ACCOUNTS ======
+
+.connectionsHelp {
+  margin: -6px 0 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.connectionCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+
+.connectionIconWrap {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--bg-primary);
+}
+
+.connectionIcon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.connectionInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.connectionTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.connectionTitle {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.connectionStatus {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-modal-hover);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.connectionStatusLinked {
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--color-success);
+}
+
+.connectionSubtitle {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connectionNotice {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.connectionDangerBtn {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border: 1px solid rgba(229, 57, 53, 0.35);
+  border-radius: 6px;
+  background: rgba(229, 57, 53, 0.08);
+  color: var(--color-error);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s, background-color 0.15s;
+
+  &:hover {
+    background: rgba(229, 57, 53, 0.14);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+}
+
+.accountSplitOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--overlay-bg);
+}
+
+.accountSplitModal {
+  width: 460px;
+  max-width: 100%;
+  padding: 24px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-modal);
+}
+
+.accountSplitHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.accountSplitIcon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  object-fit: contain;
+}
+
+.accountSplitTitle {
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.accountSplitText {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.accountOwnerChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0 14px;
+}
+
+.accountOwnerChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  strong,
+  small {
+    display: block;
+  }
+
+  strong {
+    margin-bottom: 3px;
+    font-size: 13px;
+  }
+
+  small {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  &:hover {
+    border-color: var(--border-medium);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+}
+
+.accountOwnerChoiceActive {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-input));
+
+  .accountOwnerRadio {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 4px var(--bg-input);
+    background: var(--accent);
+  }
+}
+
+.accountOwnerRadio {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-top: 1px;
+  border: 1px solid var(--border-medium);
+  border-radius: 50%;
+  background: var(--bg-primary);
+}
+
+.accountSplitWarning {
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.accountSplitActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
 }
 
 .fieldGroup {

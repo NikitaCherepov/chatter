@@ -290,7 +290,8 @@
     "instructions": "Telegram 봇에게 <command>/link</command>를 보내고 이 코드를 입력하세요:",
     "validFor": "유효 기간",
     "getNewCode": "새 코드 받기",
-    "expired": "코드가 만료되었습니다"
+    "expired": "코드가 만료되었습니다",
+    "mergeWarning": "연결하면 두 계정이 결합됩니다. 기존 채팅, 이미지, 프롬프트, 설정 및 기타 데이터가 하나의 공유 계정의 일부가 됩니다."
   },
   "update": {
     "available": "업데이트 가능 {{version}}",
@@ -334,7 +335,8 @@
       "restrictions": "제한",
       "models": "모델",
       "app": "앱",
-      "limits": "제한"
+      "limits": "제한",
+      "connections": "연결된 계정"
     },
     "language": {
       "system": "시스템",
@@ -451,6 +453,29 @@
       "promptGenerateFailed": "프롬프트를 생성하지 못했습니다",
       "promptApplied": "프롬프트가 적용되었습니다",
       "cartesiaVoicesFailed": "Cartesia 음성을 불러오지 못했습니다"
+    },
+    "connections": {
+      "help": "이 계정에 로그인하고 사용할 수 있는 서비스를 관리합니다.",
+      "connected": "연결됨",
+      "notConnected": "연결되지 않음",
+      "telegramAccount": "Telegram 계정",
+      "telegramDescription": "Telegram의 동일한 채팅 및 데이터를 사용합니다.",
+      "link": "연결",
+      "unlink": "연결 해제",
+      "unlinking": "연결 해제 중...",
+      "unlinkHelp": "연결 해제 시, 공유 데이터를 유지할 계정을 선택합니다. 다른 계정은 빈 상태로 시작됩니다.",
+      "unlinkTitle": "Telegram 연결 해제",
+      "unlinkQuestion": "공유 채팅 및 기타 데이터를 유지할 계정은 무엇인가요?",
+      "keepDesktop": "데스크톱에 데이터 유지",
+      "keepDesktopHelp": "데스크톱이 모든 채팅, 이미지, 프롬프트, 설정 및 메모리를 유지합니다. Telegram은 빈 계정으로 시작됩니다.",
+      "keepTelegram": "Telegram에 데이터 유지",
+      "keepTelegramHelp": "Telegram이 모든 채팅, 이미지, 프롬프트, 설정 및 메모리를 유지합니다. 데스크톱은 빈 계정으로 시작됩니다.",
+      "unlinkWarning": "공유 데이터가 삭제되지 않습니다. 선택한 계정에 그대로 유지되며, 다른 계정은 새로운 빈 프로필을 받습니다.",
+      "linked": "Telegram 계정 연결됨",
+      "unlinked": "Telegram 계정 연결 해제됨",
+      "refreshFailed": "계정이 연결되었지만 상태를 새로고침할 수 없습니다",
+      "unlinkFailed": "Telegram 연결을 해제할 수 없습니다",
+      "passwordRequired": "Telegram 연결을 해제하려면 비밀번호 로그인이 필요합니다"
     }
   },
   "chat": {

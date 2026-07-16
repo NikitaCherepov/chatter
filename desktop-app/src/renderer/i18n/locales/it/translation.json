@@ -290,7 +290,8 @@
     "instructions": "Invia <command>/link</command> al bot Telegram e inserisci questo codice:",
     "validFor": "Valido ancora per",
     "getNewCode": "Ottieni un nuovo codice",
-    "expired": "Il codice è scaduto"
+    "expired": "Il codice è scaduto",
+    "mergeWarning": "Il collegamento unisce entrambi gli account. Chat, immagini, prompt, impostazioni e altri dati esistenti diventeranno parte di un unico account condiviso."
   },
   "update": {
     "available": "Aggiornamento {{version}} disponibile",
@@ -334,7 +335,8 @@
       "restrictions": "Restrizioni",
       "models": "Modelli",
       "app": "App",
-      "limits": "Limiti"
+      "limits": "Limiti",
+      "connections": "Account collegati"
     },
     "language": {
       "system": "Sistema",
@@ -451,6 +453,29 @@
       "promptGenerateFailed": "Impossibile generare il prompt",
       "promptApplied": "Prompt applicato",
       "cartesiaVoicesFailed": "Impossibile caricare le voci Cartesia"
+    },
+    "connections": {
+      "help": "Gestisci i servizi che possono accedere e utilizzare questo account.",
+      "connected": "Collegato",
+      "notConnected": "Non collegato",
+      "telegramAccount": "Account Telegram",
+      "telegramDescription": "Utilizza le stesse chat e gli stessi dati di Telegram.",
+      "link": "Collega",
+      "unlink": "Scollega",
+      "unlinking": "Scollegamento in corso...",
+      "unlinkHelp": "Quando scolleghi, scegli quale account conserva tutti i dati condivisi. L'altro account parte vuoto.",
+      "unlinkTitle": "Scollega Telegram",
+      "unlinkQuestion": "Quale account dovrebbe conservare le chat condivise e altri dati?",
+      "keepDesktop": "Mantieni i dati in Desktop",
+      "keepDesktopHelp": "Desktop conserva tutte le chat, immagini, prompt, impostazioni e memoria. Telegram parte con un account vuoto.",
+      "keepTelegram": "Mantieni i dati in Telegram",
+      "keepTelegramHelp": "Telegram conserva tutte le chat, immagini, prompt, impostazioni e memoria. Desktop parte con un account vuoto.",
+      "unlinkWarning": "Questo non elimina i dati condivisi. Rimangono con l'account selezionato. L'altro account riceve un nuovo profilo vuoto.",
+      "linked": "Account Telegram collegato",
+      "unlinked": "Account Telegram scollegato",
+      "refreshFailed": "L'account è stato collegato, ma non è stato possibile aggiornarne lo stato",
+      "unlinkFailed": "Impossibile scollegare Telegram",
+      "passwordRequired": "È richiesto l'accesso con password prima di poter scollegare Telegram"
     }
   },
   "chat": {

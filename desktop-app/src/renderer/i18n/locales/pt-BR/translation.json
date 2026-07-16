@@ -75,7 +75,8 @@
     "instructions": "Envie <command>/link</command> para o bot do Telegram e digite este código:",
     "validFor": "Válido por mais",
     "getNewCode": "Obter novo código",
-    "expired": "O código expirou"
+    "expired": "O código expirou",
+    "mergeWarning": "A vinculação combina ambas as contas. Chats, imagens, prompts, configurações e outros dados existentes se tornarão parte de uma conta compartilhada."
   },
   "update": {
     "available": "Atualização {{version}} disponível",
@@ -119,7 +120,8 @@
       "restrictions": "Restrições",
       "models": "Modelos",
       "app": "Aplicativo",
-      "limits": "Limites"
+      "limits": "Limites",
+      "connections": "Contas vinculadas"
     },
     "language": {
       "system": "Sistema",
@@ -236,6 +238,29 @@
       "promptGenerateFailed": "Falha ao gerar o prompt",
       "promptApplied": "Prompt aplicado",
       "cartesiaVoicesFailed": "Falha ao carregar vozes Cartesia"
+    },
+    "connections": {
+      "help": "Gerencie serviços que podem fazer login e usar esta conta.",
+      "connected": "Conectado",
+      "notConnected": "Não conectado",
+      "telegramAccount": "Conta do Telegram",
+      "telegramDescription": "Use os mesmos chats e dados do Telegram.",
+      "link": "Vincular",
+      "unlink": "Desvincular",
+      "unlinking": "Desvinculando...",
+      "unlinkHelp": "Ao desvincular, você escolhe qual conta mantém todos os dados compartilhados. A outra conta começa vazia.",
+      "unlinkTitle": "Desvincular Telegram",
+      "unlinkQuestion": "Qual conta deve manter os chats compartilhados e outros dados?",
+      "keepDesktop": "Manter dados no Desktop",
+      "keepDesktopHelp": "O Desktop mantém todos os chats, imagens, prompts, configurações e memória. O Telegram começa com uma conta vazia.",
+      "keepTelegram": "Manter dados no Telegram",
+      "keepTelegramHelp": "O Telegram mantém todos os chats, imagens, prompts, configurações e memória. O Desktop começa com uma conta vazia.",
+      "unlinkWarning": "Isso não exclui dados compartilhados. Eles permanecem com a conta selecionada. A outra conta recebe um novo perfil vazio.",
+      "linked": "Conta do Telegram vinculada",
+      "unlinked": "Conta do Telegram desvinculada",
+      "refreshFailed": "A conta foi vinculada, mas o status não pôde ser atualizado",
+      "unlinkFailed": "Não foi possível desvincular o Telegram",
+      "passwordRequired": "É necessário fazer login com senha antes de desvincular o Telegram"
     }
   },
   "chat": {

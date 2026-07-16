@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Trans, useTranslation } from 'react-i18next';
 import * as api from '../lib/api';
+import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './LinkTelegramModal.module.scss';
 
 type Props = {
@@ -100,13 +101,14 @@ export function LinkTelegramModal({ onClose, onLinked }: Props) {
         </button>
 
         <div className={s.iconWrap}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-          </svg>
+          <img className={s.telegramIcon} src={telegramIcon} alt="" />
         </div>
 
         <h2 className={s.title}>{t('telegram.title')}</h2>
+
+        {!linked && (
+          <div className={s.mergeWarning}>{t('telegram.mergeWarning')}</div>
+        )}
 
         {linked && (
           <div className={s.success}>

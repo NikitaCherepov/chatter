@@ -27,14 +27,17 @@ import { RunbookSettings } from './RunbookSettings';
 import { SshKeySettings } from './SshKeySettings';
 import { SmartHomeSettings } from './SmartHomeSettings';
 import { PCSettings } from './PCSettings';
+import { LinkTelegramModal } from './LinkTelegramModal';
+import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 import chatS from '../pages/ChatPage.module.scss';
 
 type Props = {
   onClose: () => void;
+  onAccountChanged?: () => void | Promise<void>;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'limits' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'smart_home' | 'restrictions' | 'models';
+type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'smart_home' | 'restrictions' | 'models';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -57,6 +60,7 @@ const modalVariants = {
 
 const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'account', labelKey: 'settings.sections.account' },
+  { key: 'connections', labelKey: 'settings.sections.connections' },
   { key: 'prompt', labelKey: 'settings.sections.prompt' },
   { key: 'voice', labelKey: 'settings.sections.voice' },
   { key: 'macros', labelKey: 'settings.sections.macros' },
@@ -85,7 +89,7 @@ function clampZoomPct(pct: number): number {
   return Math.min(ZOOM_MAX_PCT, Math.max(ZOOM_MIN_PCT, snapped));
 }
 
-export function SettingsModal({ onClose }: Props) {
+export function SettingsModal({ onClose, onAccountChanged }: Props) {
   const { user, setUser } = useAuth();
   const { t, i18n } = useTranslation();
   const reasoningLevelLabels: Record<string, string> = {
@@ -197,6 +201,14 @@ export function SettingsModal({ onClose }: Props) {
   const [attachmentTokenLimit, setAttachmentTokenLimitState] = useState<api.AttachmentTokenLimit | null>(null);
   const [attachmentTokenLimitSaving, setAttachmentTokenLimitSaving] = useState(false);
 
+  // Linked accounts
+  const [linkStatus, setLinkStatus] = useState<api.LinkStatusResponse | null>(null);
+  const [linkStatusLoading, setLinkStatusLoading] = useState(false);
+  const [showTelegramLinkModal, setShowTelegramLinkModal] = useState(false);
+  const [showTelegramUnlinkModal, setShowTelegramUnlinkModal] = useState(false);
+  const [unlinkDataOwner, setUnlinkDataOwner] = useState<api.UnlinkDataOwner>('desktop');
+  const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
+
   // Load account data
   useEffect(() => {
     if (user) {
@@ -267,6 +279,15 @@ export function SettingsModal({ onClose }: Props) {
     }
   }, [section]);
 
+  useEffect(() => {
+    if (section !== 'connections') return;
+    setLinkStatusLoading(true);
+    api.getLinkStatus()
+      .then(setLinkStatus)
+      .catch(() => setLinkStatus(null))
+      .finally(() => setLinkStatusLoading(false));
+  }, [section]);
+
   // Load context/document limits when the limits tab opens
   useEffect(() => {
     if (section === 'limits') {
@@ -284,6 +305,47 @@ export function SettingsModal({ onClose }: Props) {
 
     setLanguagePreferenceState(value);
     await setLanguagePreference(value);
+  };
+
+  const handleTelegramLinked = async () => {
+    setShowTelegramLinkModal(false);
+    try {
+      const [freshUser, status] = await Promise.all([
+        api.fetchMe(),
+        api.getLinkStatus(),
+      ]);
+      setUser(freshUser);
+      localStorage.setItem('chatter_user', JSON.stringify(freshUser));
+      setLinkStatus(status);
+      api.reconnectWebSocket();
+      await onAccountChanged?.();
+      toast.success(t('settings.connections.linked'));
+    } catch {
+      toast.error(t('settings.connections.refreshFailed'));
+    }
+  };
+
+  const handleTelegramUnlink = async () => {
+    setUnlinkingTelegram(true);
+    try {
+      const res = await api.unlinkTelegram(unlinkDataOwner);
+      setUser(res.user);
+      localStorage.setItem('chatter_user', JSON.stringify(res.user));
+      setLinkStatus({ linked: false });
+      setShowTelegramUnlinkModal(false);
+      api.reconnectWebSocket();
+      await onAccountChanged?.();
+      toast.success(t('settings.connections.unlinked'));
+    } catch (error: any) {
+      const code = error?.code || error?.message;
+      if (code === 'password_identity_required') {
+        toast.error(t('settings.connections.passwordRequired'));
+      } else {
+        toast.error(t('settings.connections.unlinkFailed'));
+      }
+    } finally {
+      setUnlinkingTelegram(false);
+    }
   };
 
   const handleToggleShowTokens = async () => {
@@ -880,6 +942,66 @@ export function SettingsModal({ onClose }: Props) {
                   </span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {section === 'connections' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('settings.sections.connections')}</div>
+              <div className={s.connectionsHelp}>{t('settings.connections.help')}</div>
+
+              {linkStatusLoading ? (
+                <div className={s.promptLoading}>{t('common.loading')}</div>
+              ) : (
+                <div className={s.connectionCard}>
+                  <div className={s.connectionIconWrap}>
+                    <img className={s.connectionIcon} src={telegramIcon} alt="" />
+                  </div>
+                  <div className={s.connectionInfo}>
+                    <div className={s.connectionTitleRow}>
+                      <span className={s.connectionTitle}>Telegram</span>
+                      <span className={`${s.connectionStatus} ${linkStatus?.linked ? s.connectionStatusLinked : ''}`}>
+                        {linkStatus?.linked
+                          ? t('settings.connections.connected')
+                          : t('settings.connections.notConnected')}
+                      </span>
+                    </div>
+                    <div className={s.connectionSubtitle}>
+                      {linkStatus?.linked
+                        ? (linkStatus.tg_username
+                          ? `${linkStatus.tg_username.startsWith('@') ? '' : '@'}${linkStatus.tg_username}`
+                          : t('settings.connections.telegramAccount'))
+                        : t('settings.connections.telegramDescription')}
+                    </div>
+                  </div>
+
+                  {linkStatus?.linked ? (
+                    <button
+                      className={s.connectionDangerBtn}
+                      onClick={() => {
+                        setUnlinkDataOwner('desktop');
+                        setShowTelegramUnlinkModal(true);
+                      }}
+                      disabled={linkStatus.can_unlink === false}
+                    >
+                      {t('settings.connections.unlink')}
+                    </button>
+                  ) : (
+                    <button
+                      className={s.saveBtn}
+                      onClick={() => setShowTelegramLinkModal(true)}
+                    >
+                      {t('settings.connections.link')}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {linkStatus?.linked && (
+                <div className={s.connectionNotice}>
+                  {t('settings.connections.unlinkHelp')}
+                </div>
+              )}
             </div>
           )}
 
@@ -1668,6 +1790,93 @@ export function SettingsModal({ onClose }: Props) {
           )}
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {showTelegramLinkModal && (
+          <LinkTelegramModal
+            key="settings-telegram-link"
+            onClose={() => setShowTelegramLinkModal(false)}
+            onLinked={handleTelegramLinked}
+          />
+        )}
+
+        {showTelegramUnlinkModal && (
+          <motion.div
+            key="settings-telegram-unlink"
+            className={s.accountSplitOverlay}
+            onClick={() => {
+              if (!unlinkingTelegram) setShowTelegramUnlinkModal(false);
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className={s.accountSplitModal}
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+            >
+              <div className={s.accountSplitHeader}>
+                <img className={s.accountSplitIcon} src={telegramIcon} alt="" />
+                <div>
+                  <div className={s.accountSplitTitle}>{t('settings.connections.unlinkTitle')}</div>
+                  <div className={s.accountSplitText}>{t('settings.connections.unlinkQuestion')}</div>
+                </div>
+              </div>
+
+              <div className={s.accountOwnerChoices}>
+                <button
+                  className={`${s.accountOwnerChoice} ${unlinkDataOwner === 'desktop' ? s.accountOwnerChoiceActive : ''}`}
+                  onClick={() => setUnlinkDataOwner('desktop')}
+                  disabled={unlinkingTelegram}
+                >
+                  <span className={s.accountOwnerRadio} />
+                  <span>
+                    <strong>{t('settings.connections.keepDesktop')}</strong>
+                    <small>{t('settings.connections.keepDesktopHelp')}</small>
+                  </span>
+                </button>
+                <button
+                  className={`${s.accountOwnerChoice} ${unlinkDataOwner === 'telegram' ? s.accountOwnerChoiceActive : ''}`}
+                  onClick={() => setUnlinkDataOwner('telegram')}
+                  disabled={unlinkingTelegram}
+                >
+                  <span className={s.accountOwnerRadio} />
+                  <span>
+                    <strong>{t('settings.connections.keepTelegram')}</strong>
+                    <small>{t('settings.connections.keepTelegramHelp')}</small>
+                  </span>
+                </button>
+              </div>
+
+              <div className={s.accountSplitWarning}>
+                {t('settings.connections.unlinkWarning')}
+              </div>
+
+              <div className={s.accountSplitActions}>
+                <button
+                  className={s.cancelBtn}
+                  onClick={() => setShowTelegramUnlinkModal(false)}
+                  disabled={unlinkingTelegram}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  className={s.connectionDangerBtn}
+                  onClick={handleTelegramUnlink}
+                  disabled={unlinkingTelegram}
+                >
+                  {unlinkingTelegram
+                    ? t('settings.connections.unlinking')
+                    : t('settings.connections.unlink')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

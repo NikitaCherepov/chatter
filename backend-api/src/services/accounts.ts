@@ -24,6 +24,18 @@ export type AuthPrincipal = {
   is_admin: number;
 };
 
+export type UnlinkDataOwner = 'desktop' | 'telegram';
+
+export type TelegramUnlinkResult = {
+  data_owner: UnlinkDataOwner;
+  data_account_id: number;
+  desktop_account_id: number;
+  telegram_account_id: number;
+  detached_account_id: number;
+  telegram_id: number;
+  telegram_username: string | null;
+};
+
 type LegacyApiAccount = {
   id: number;
   user_id: number;
@@ -535,6 +547,78 @@ export const linkAccountToTelegram = (
   ensureTelegramIdentity(targetAccountId, telegramId, username || getRawAccountById(targetAccountId)?.tg_username || null);
   return mergeAccounts(sourceAccountId, targetAccountId, 'telegram_link');
 };
+
+export const unlinkTelegramFromAccount = (
+  accountIdRaw: number,
+  dataOwner: UnlinkDataOwner,
+): TelegramUnlinkResult => db.transaction(() => {
+  const dataAccountId = resolveAccountId(accountIdRaw);
+  const account = getRawAccountById(dataAccountId);
+  if (!account) throw new Error('account_not_found');
+
+  const identities = getAccountIdentities(dataAccountId);
+  const telegramIdentity = identities.find(identity => identity.provider === 'telegram');
+  const passwordIdentities = identities.filter(identity => identity.provider === 'password');
+  if (!telegramIdentity) throw new Error('telegram_not_linked');
+  if (passwordIdentities.length === 0) throw new Error('password_identity_required');
+
+  const telegramId = Math.floor(Number(telegramIdentity.provider_subject));
+  if (!Number.isFinite(telegramId) || telegramId <= 0) {
+    throw new Error('telegram_identity_invalid');
+  }
+
+  const detachedAccountId = allocateAccountId();
+  const detachedTelegram = dataOwner === 'desktop';
+  db.prepare(`
+    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username)
+    VALUES (?, ?, 'user', 0, 'approved', 'free', ?)
+  `).run(
+    detachedAccountId,
+    account.name,
+    detachedTelegram ? telegramIdentity.username : null,
+  );
+
+  if (detachedTelegram) {
+    db.prepare(`
+      UPDATE account_identities
+      SET account_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(detachedAccountId, telegramIdentity.id);
+    db.prepare('UPDATE users SET tg_username = NULL WHERE id = ?').run(dataAccountId);
+  } else {
+    db.prepare(`
+      UPDATE account_identities
+      SET account_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE account_id = ? AND provider = 'password'
+    `).run(detachedAccountId, dataAccountId);
+  }
+
+  // Revoke tokens issued before the split. Redirect-backed legacy tokens must
+  // be revoked as well, otherwise they could still resolve to the data account.
+  db.prepare(`
+    UPDATE users
+    SET auth_token_version = auth_token_version + 1
+    WHERE id = ?
+  `).run(dataAccountId);
+  db.prepare(`
+    UPDATE account_redirects
+    SET source_auth_token_version = source_auth_token_version + 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE target_account_id = ?
+  `).run(dataAccountId);
+  db.prepare('DELETE FROM telegram_link_codes WHERE user_id IN (?, ?)')
+    .run(dataAccountId, detachedAccountId);
+
+  return {
+    data_owner: dataOwner,
+    data_account_id: dataAccountId,
+    desktop_account_id: dataOwner === 'desktop' ? dataAccountId : detachedAccountId,
+    telegram_account_id: dataOwner === 'telegram' ? dataAccountId : detachedAccountId,
+    detached_account_id: detachedAccountId,
+    telegram_id: telegramId,
+    telegram_username: telegramIdentity.username,
+  };
+})();
 
 const collectLegacyLinks = (): LegacyLink[] => {
   const links = new Map<number, LegacyLink>();

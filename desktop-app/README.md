@@ -179,6 +179,16 @@ In the dropdown next to models that support vision, a `[Vision]` badge is displa
 
 Both sidebars work identically: `motion.aside` with width animation, always in the DOM. Collapsing does not reset internal state.
 
+## Linked Accounts
+
+The Settings modal has a dedicated "Linked accounts" tab. Telegram is currently the only supported external identity.
+
+- Linking warns that the existing Desktop and Telegram accounts are merged into one account.
+- Unlinking asks which side keeps all shared data.
+- The selected side keeps chats, images, prompts, settings, and memory.
+- The other side receives a new empty account.
+- Old JWTs are revoked during the split; Desktop stores the fresh tokens returned by the backend and reconnects WebSocket under the resulting account ID.
+
 ## Tools Panel (ToolsPanel)
 
 Right sidebar. Collapsed by default (65px) — only a wrench icon is visible.

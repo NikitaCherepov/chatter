@@ -290,7 +290,8 @@
     "instructions": "Wyślij <command>/link</command> do bota Telegram i wprowadź ten kod:",
     "validFor": "Ważny jeszcze",
     "getNewCode": "Uzyskaj nowy kod",
-    "expired": "Kod wygasł"
+    "expired": "Kod wygasł",
+    "mergeWarning": "Połączenie łączy oba konta. Istniejące czaty, obrazy, prompty, ustawienia i inne dane staną się częścią jednego wspólnego konta."
   },
   "update": {
     "available": "Dostępna aktualizacja {{version}}",
@@ -334,7 +335,8 @@
       "restrictions": "Ograniczenia",
       "models": "Modele",
       "app": "Aplikacja",
-      "limits": "Limity"
+      "limits": "Limity",
+      "connections": "Połączone konta"
     },
     "language": {
       "system": "Systemowy",
@@ -451,6 +453,29 @@
       "promptGenerateFailed": "Nie udało się wygenerować promptu",
       "promptApplied": "Prompt zastosowany",
       "cartesiaVoicesFailed": "Nie udało się załadować głosów Cartesia"
+    },
+    "connections": {
+      "help": "Zarządzaj usługami, które mogą logować się i korzystać z tego konta.",
+      "connected": "Połączone",
+      "notConnected": "Niepołączone",
+      "telegramAccount": "Konto Telegram",
+      "telegramDescription": "Używaj tych samych czatów i danych z Telegrama.",
+      "link": "Połącz",
+      "unlink": "Odłącz",
+      "unlinking": "Odłączanie...",
+      "unlinkHelp": "Podczas odłączania wybierasz, które konto zachowuje wszystkie wspólne dane. Drugie konto zaczyna puste.",
+      "unlinkTitle": "Odłącz Telegram",
+      "unlinkQuestion": "Które konto powinno zachować wspólne czaty i inne dane?",
+      "keepDesktop": "Zachowaj dane w Desktop",
+      "keepDesktopHelp": "Desktop zachowuje wszystkie czaty, obrazy, prompty, ustawienia i pamięć. Telegram zaczyna z pustym kontem.",
+      "keepTelegram": "Zachowaj dane w Telegramie",
+      "keepTelegramHelp": "Telegram zachowuje wszystkie czaty, obrazy, prompty, ustawienia i pamięć. Desktop zaczyna z pustym kontem.",
+      "unlinkWarning": "Nie usuwa to wspólnych danych. Pozostają one na wybranym koncie. Drugie konto otrzymuje nowy pusty profil.",
+      "linked": "Konto Telegramu połączone",
+      "unlinked": "Konto Telegramu odłączone",
+      "refreshFailed": "Konto zostało połączone, ale nie można odświeżyć jego statusu",
+      "unlinkFailed": "Nie można odłączyć Telegrama",
+      "passwordRequired": "Przed odłączeniem Telegrama wymagane jest logowanie hasłem"
     }
   },
   "chat": {

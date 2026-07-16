@@ -344,6 +344,14 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - Output: `{ access_token, refresh_token, access_expires_in, refresh_expires_in }`
 - `POST /api/v1/auth/logout`
   - Requires an access JWT and revokes all previously issued access/refresh tokens for the account.
+- `GET /api/v1/link/status`
+  - Returns the linked Telegram identity and whether it can be unlinked.
+- `POST /api/v1/link/generate`
+  - Creates a one-time Telegram link code.
+- `POST /api/v1/link/unlink`
+  - Input: `{ data_owner: "desktop" | "telegram" }`.
+  - Keeps all existing chats, images, prompts, settings, and vector memory on the selected side. The other identity is moved to a new empty account.
+  - Revokes old access/refresh tokens and returns fresh Desktop tokens plus the resulting user.
 - `GET /api/v1/chats?limit=&offset=`
   - Input: query `limit` defaults to 50, max 100; `offset` defaults to 0
   - Output: `{ chats, active_chat_id, limit, offset }`

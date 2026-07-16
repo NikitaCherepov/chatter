@@ -45,6 +45,7 @@ import {
   linkAccountToTelegram,
   resolveAccountId,
   runAccountIdentityMigration,
+  unlinkTelegramFromAccount,
 } from './services/accounts.js';
 
 dotenv.config();
@@ -1568,11 +1569,15 @@ app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
+  const identities = getAccountIdentities(userId);
+  const hasPasswordIdentity = identities.some(identity => identity.provider === 'password');
   const telegramIdentity = getTelegramIdentityForAccount(userId);
   if (telegramIdentity) {
     return res.json({
       linked: true,
+      tg_id: Number(telegramIdentity.provider_subject),
       tg_username: telegramIdentity.username || user.tg_username || user.name || null,
+      can_unlink: hasPasswordIdentity,
     });
   }
 
@@ -1588,8 +1593,32 @@ app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
 
 app.post('/api/v1/link/unlink', authMiddleware, (req: AuthedRequest, res) => {
   const userId = req.authUserId!;
-  if (!getTelegramIdentityForAccount(userId)) return res.status(400).json({ error: 'not_linked' });
-  return res.status(409).json({ error: 'unified_account_cannot_be_unlinked' });
+  const dataOwner = req.body?.data_owner;
+  if (dataOwner !== 'desktop' && dataOwner !== 'telegram') {
+    return res.status(400).json({ error: 'data_owner_required' });
+  }
+
+  try {
+    const split = unlinkTelegramFromAccount(userId, dataOwner);
+    const desktopUser = getUserById(split.desktop_account_id);
+    if (!desktopUser) return res.status(500).json({ error: 'desktop_account_create_failed' });
+    const tokens = issueAuthTokens(split.desktop_account_id);
+    console.log('[accounts] Telegram identity unlinked', split);
+    return res.json({
+      ok: true,
+      ...tokens,
+      user: toAuthUserDto(desktopUser),
+      split,
+    });
+  } catch (error) {
+    const code = formatSafeError(error);
+    if (code === 'telegram_not_linked') return res.status(400).json({ error: 'not_linked' });
+    if (code === 'password_identity_required') {
+      return res.status(409).json({ error: 'password_identity_required' });
+    }
+    console.error('[accounts] Telegram unlink failed:', code);
+    return res.status(500).json({ error: 'telegram_unlink_failed' });
+  }
 });
 
 // ── Prompts (public, for desktop) ──────────────────────────────────────
@@ -1852,11 +1881,26 @@ app.post('/internal/link/verify', internalAuth, (req, res) => {
 
 app.post('/internal/link/unlink', internalAuth, (req, res) => {
   const tgId = Number(req.body?.tg_id);
+  const dataOwner = req.body?.data_owner;
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'tg_id_required' });
+  if (dataOwner !== 'desktop' && dataOwner !== 'telegram') {
+    return res.status(400).json({ error: 'data_owner_required' });
+  }
 
   const accountId = getAccountIdByTelegramId(tgId);
   if (!accountId) return res.status(404).json({ error: 'not_linked' });
-  return res.status(409).json({ error: 'unified_account_cannot_be_unlinked', account_id: accountId });
+  try {
+    const split = unlinkTelegramFromAccount(accountId, dataOwner);
+    console.log('[accounts] Telegram identity unlinked through internal API', split);
+    return res.json({ ok: true, split });
+  } catch (error) {
+    const code = formatSafeError(error);
+    if (code === 'password_identity_required') {
+      return res.status(409).json({ error: 'password_identity_required' });
+    }
+    console.error('[accounts] internal Telegram unlink failed:', code);
+    return res.status(500).json({ error: 'telegram_unlink_failed' });
+  }
 });
 
 // ── Internal: Prompts CRUD ─────────────────────────────────────────────────

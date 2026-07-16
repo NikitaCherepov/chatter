@@ -522,15 +522,16 @@ export function initWebSocket(callbacks?: WsCallbacks) {
   if (!tokens?.access_token) return;
 
   const wsBase = API_BASE.replace(/^http/, 'ws');
-  ws = new WebSocket(`${wsBase}/ws?token=${tokens.access_token}`);
+  const socket = new WebSocket(`${wsBase}/ws?token=${tokens.access_token}`);
+  ws = socket;
 
-  ws.onopen = () => {
+  socket.onopen = () => {
     reconnectDelay = 1000;
     console.log('[ws] connected');
     wsCallbacks.onConnect?.();
   };
 
-  ws.onmessage = (ev) => {
+  socket.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data as string);
 
@@ -570,8 +571,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           handleExecuteIpc(msg);
           break;
         case 'ping':
-          if (ws?.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'pong', t: msg.t || Date.now() }));
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'pong', t: msg.t || Date.now() }));
           }
           break;
         case 'pong': break;
@@ -579,13 +580,14 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     } catch { /* ignore malformed JSON */ }
   };
 
-  ws.onclose = (ev) => {
+  socket.onclose = (ev) => {
     console.warn('[ws] closed', { code: ev.code, reason: ev.reason });
-    ws = null;
-    wsCallbacks.onDisconnect?.();
+    const wasCurrentSocket = ws === socket;
+    if (wasCurrentSocket) ws = null;
+    if (wasCurrentSocket) wsCallbacks.onDisconnect?.();
 
     // Auto-reconnect if not intentional close and not replaced by a newer connection
-    if (ev.code !== 1000 && ev.code !== 4002) {
+    if (wasCurrentSocket && ev.code !== 1000 && ev.code !== 4002) {
       reconnectTimer = setTimeout(() => {
         reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
         initWebSocket();
@@ -593,7 +595,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     }
   };
 
-  ws.onerror = () => {
+  socket.onerror = () => {
     console.warn('[ws] error');
   };
 }
@@ -874,7 +876,9 @@ export type LinkGenerateResponse = {
 
 export type LinkStatusResponse = {
   linked: boolean;
+  tg_id?: number;
   tg_username?: string;
+  can_unlink?: boolean;
   pending_code?: string;
   expires_in?: number;
 };
@@ -887,8 +891,28 @@ export async function getLinkStatus(): Promise<LinkStatusResponse> {
   return apiFetch('/api/v1/link/status');
 }
 
-export async function unlinkTelegram(): Promise<{ ok: boolean }> {
-  return apiFetch('/api/v1/link/unlink', { method: 'POST' });
+export type UnlinkDataOwner = 'desktop' | 'telegram';
+
+export type TelegramUnlinkResponse = AuthResponse & {
+  ok: true;
+  split: {
+    data_owner: UnlinkDataOwner;
+    data_account_id: number;
+    desktop_account_id: number;
+    telegram_account_id: number;
+    detached_account_id: number;
+    telegram_id: number;
+    telegram_username: string | null;
+  };
+};
+
+export async function unlinkTelegram(dataOwner: UnlinkDataOwner): Promise<TelegramUnlinkResponse> {
+  const res = await apiFetch<TelegramUnlinkResponse>('/api/v1/link/unlink', {
+    method: 'POST',
+    body: JSON.stringify({ data_owner: dataOwner }),
+  });
+  saveTokens(res);
+  return res;
 }
 
 // ---------- Prompts ----------

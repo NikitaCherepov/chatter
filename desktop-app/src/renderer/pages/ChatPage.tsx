@@ -8,7 +8,6 @@ import { useAuth } from '../lib/auth';
 import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
-import { LinkTelegramModal } from '../components/LinkTelegramModal';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import { RejectWithComment } from '../components/RejectWithComment';
@@ -658,8 +657,6 @@ export function ChatPage() {
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
   const [hasMoreChats, setHasMoreChats] = useState(false);
-  const [showLinkModal, setShowLinkModal] = useState(false);
-  const [isLinked, setIsLinked] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [attachedDocuments, setAttachedDocuments] = useState<DocumentItem[]>([]);
@@ -777,13 +774,6 @@ export function ChatPage() {
 
   const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
 
-  const checkLinkStatus = async () => {
-    try {
-      const status = await api.getLinkStatus();
-      setIsLinked(status.linked);
-    } catch {}
-  };
-
   const loadChats = async () => {
     setLoadingChats(true);
     try {
@@ -829,7 +819,7 @@ export function ChatPage() {
     }
   }, [loadMoreChats]);
 
-  useEffect(() => { loadChats(); checkLinkStatus(); }, []);
+  useEffect(() => { loadChats(); }, []);
 
   useEffect(() => {
     if (activeChatId) {
@@ -2685,20 +2675,6 @@ export function ChatPage() {
             transition={{ duration: 0.15 }}
             style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
           >
-            {isLinked ? (
-              <button className={s.iconBtn} disabled title={t('chat.sidebar.linkTelegram')}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              </button>
-            ) : (
-              <button className={s.iconBtn} onClick={() => setShowLinkModal(true)} title={t('chat.sidebar.linkTelegram')}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </svg>
-              </button>
-            )}
             <button className={s.iconBtn} onClick={handleLogout} title={t('chat.sidebar.logout')}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -4177,25 +4153,7 @@ export function ChatPage() {
           <SettingsModal
             key="settings-modal"
             onClose={() => setShowSettings(false)}
-          />
-        )}
-
-        {showLinkModal && (
-          <LinkTelegramModal
-            key="link-modal"
-            onClose={() => setShowLinkModal(false)}
-            onLinked={async () => {
-              setShowLinkModal(false);
-              setIsLinked(true);
-              api.reconnectWebSocket();
-              loadChats();
-              // Refresh user data so plan/limits update from the backend
-              try {
-                const freshUser = await api.fetchMe();
-                setUser(freshUser);
-                localStorage.setItem('chatter_user', JSON.stringify(freshUser));
-              } catch {}
-            }}
+            onAccountChanged={loadChats}
           />
         )}
 

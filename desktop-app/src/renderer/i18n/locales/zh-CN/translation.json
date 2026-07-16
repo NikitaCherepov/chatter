@@ -75,7 +75,8 @@
     "instructions": "向Telegram机器人发送<command>/link</command>并输入此代码：",
     "validFor": "有效期至",
     "getNewCode": "获取新代码",
-    "expired": "代码已过期"
+    "expired": "代码已过期",
+    "mergeWarning": "链接将合并两个账户。现有的聊天、图片、提示、设置和其他数据将成为共享账户的一部分。"
   },
   "update": {
     "available": "更新可用 {{version}}",
@@ -119,7 +120,8 @@
       "restrictions": "限制",
       "models": "模型",
       "app": "应用",
-      "limits": "限制"
+      "limits": "限制",
+      "connections": "已关联账户"
     },
     "language": {
       "system": "系统",
@@ -236,6 +238,29 @@
       "promptGenerateFailed": "生成提示失败",
       "promptApplied": "提示已应用",
       "cartesiaVoicesFailed": "加载Cartesia语音失败"
+    },
+    "connections": {
+      "help": "管理可以登录并使用此账户的服务。",
+      "connected": "已连接",
+      "notConnected": "未连接",
+      "telegramAccount": "Telegram 账户",
+      "telegramDescription": "使用来自 Telegram 的相同聊天和数据。",
+      "link": "关联",
+      "unlink": "取消关联",
+      "unlinking": "正在取消关联...",
+      "unlinkHelp": "取消链接时，您选择哪个账户保留所有共享数据。另一个账户将从头开始。",
+      "unlinkTitle": "取消链接 Telegram",
+      "unlinkQuestion": "哪个账户应保留共享的聊天和其他数据？",
+      "keepDesktop": "在 Desktop 中保留数据",
+      "keepDesktopHelp": "Desktop 保留所有聊天、图片、提示、设置和记忆。Telegram 以空账户开始。",
+      "keepTelegram": "在 Telegram 中保留数据",
+      "keepTelegramHelp": "Telegram 保留所有聊天、图片、提示、设置和记忆。Desktop 以空账户开始。",
+      "unlinkWarning": "这不会删除共享数据。数据将保留在所选账户中。另一个账户将获得一个新的空配置文件。",
+      "linked": "Telegram 账户已链接",
+      "unlinked": "Telegram 账户已取消链接",
+      "refreshFailed": "账户已关联，但无法刷新其状态",
+      "unlinkFailed": "无法解除Telegram关联",
+      "passwordRequired": "需要密码登录后才能解除Telegram关联"
     }
   },
   "chat": {

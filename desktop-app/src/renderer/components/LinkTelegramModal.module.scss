@@ -53,11 +53,29 @@
   margin: 0 auto 16px;
 }
 
+.telegramIcon {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
 .title {
   margin: 0 0 20px;
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.mergeWarning {
+  margin: -8px 0 18px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
 }
 
 .hint {

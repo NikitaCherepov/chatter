@@ -75,7 +75,8 @@
     "instructions": "Envoyez <command>/link</command> au bot Telegram et saisissez ce code :",
     "validFor": "Valide encore",
     "getNewCode": "Obtenir un nouveau code",
-    "expired": "Le code a expiré"
+    "expired": "Le code a expiré",
+    "mergeWarning": "La liaison combine les deux comptes. Les discussions, images, invites, paramètres et autres données existants feront partie d'un compte partagé."
   },
   "update": {
     "available": "Mise à jour disponible {{version}}",
@@ -119,7 +120,8 @@
       "restrictions": "Restrictions",
       "models": "Modèles",
       "app": "Application",
-      "limits": "Limites"
+      "limits": "Limites",
+      "connections": "Comptes liés"
     },
     "language": {
       "system": "Système",
@@ -236,6 +238,29 @@
       "promptGenerateFailed": "Échec de la génération du prompt",
       "promptApplied": "Prompt appliqué",
       "cartesiaVoicesFailed": "Échec du chargement des voix Cartesia"
+    },
+    "connections": {
+      "help": "Gérez les services qui peuvent se connecter et utiliser ce compte.",
+      "connected": "Connecté",
+      "notConnected": "Non connecté",
+      "telegramAccount": "Compte Telegram",
+      "telegramDescription": "Utilisez les mêmes discussions et données depuis Telegram.",
+      "link": "Lier",
+      "unlink": "Délier",
+      "unlinking": "Déliaison...",
+      "unlinkHelp": "Lors du déliement, vous choisissez quel compte conserve toutes les données partagées. L'autre compte démarre vide.",
+      "unlinkTitle": "Délier Telegram",
+      "unlinkQuestion": "Quel compte doit conserver les discussions partagées et autres données ?",
+      "keepDesktop": "Conserver les données dans Desktop",
+      "keepDesktopHelp": "Desktop conserve toutes les discussions, images, invites, paramètres et mémoire. Telegram démarre avec un compte vide.",
+      "keepTelegram": "Conserver les données dans Telegram",
+      "keepTelegramHelp": "Telegram conserve toutes les discussions, images, invites, paramètres et mémoire. Desktop démarre avec un compte vide.",
+      "unlinkWarning": "Cela ne supprime pas les données partagées. Elles restent avec le compte sélectionné. L'autre compte reçoit un nouveau profil vide.",
+      "linked": "Compte Telegram lié",
+      "unlinked": "Compte Telegram délié",
+      "refreshFailed": "Le compte a été lié, mais son statut n'a pas pu être actualisé",
+      "unlinkFailed": "Impossible de dissocier Telegram",
+      "passwordRequired": "Une connexion par mot de passe est requise avant de pouvoir dissocier Telegram"
     }
   },
   "chat": {

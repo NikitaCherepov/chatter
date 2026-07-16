@@ -68,6 +68,7 @@
   "telegram": {
     "title": "Link Telegram",
     "linked": "Account linked successfully!",
+    "mergeWarning": "Linking combines both accounts. Existing chats, images, prompts, settings, and other data will become part of one shared account.",
     "generating": "Generating code...",
     "error": {
       "generateCode": "Failed to generate code"
@@ -108,6 +109,7 @@
     "title": "Settings",
     "sections": {
       "account": "Account",
+      "connections": "Linked accounts",
       "prompt": "Prompt",
       "voice": "Voice",
       "macros": "Macros",
@@ -143,6 +145,29 @@
       "memory": "Core memory",
       "memoryHelp": "What the AI always remembers about you. It is filled automatically, but you can edit it manually.",
       "memoryPlaceholder": "Name, city, job, preferences..."
+    },
+    "connections": {
+      "help": "Manage services that can sign in to and use this account.",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "telegramAccount": "Telegram account",
+      "telegramDescription": "Use the same chats and data from Telegram.",
+      "link": "Link",
+      "unlink": "Unlink",
+      "unlinking": "Unlinking...",
+      "unlinkHelp": "When unlinking, you choose which account keeps all shared data. The other account starts empty.",
+      "unlinkTitle": "Unlink Telegram",
+      "unlinkQuestion": "Which account should keep the shared chats and other data?",
+      "keepDesktop": "Keep data in Desktop",
+      "keepDesktopHelp": "Desktop keeps all chats, images, prompts, settings, and memory. Telegram starts with an empty account.",
+      "keepTelegram": "Keep data in Telegram",
+      "keepTelegramHelp": "Telegram keeps all chats, images, prompts, settings, and memory. Desktop starts with an empty account.",
+      "unlinkWarning": "This does not delete shared data. It stays with the selected account. The other account receives a new empty profile.",
+      "linked": "Telegram account linked",
+      "unlinked": "Telegram account unlinked",
+      "refreshFailed": "The account was linked, but its status could not be refreshed",
+      "unlinkFailed": "Could not unlink Telegram",
+      "passwordRequired": "A password login is required before Telegram can be unlinked"
     },
     "prompt": {
       "style": "Conversation style",
