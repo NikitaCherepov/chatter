@@ -263,6 +263,94 @@ Vision-запросы (анализ фото) могут использоват�
 - JWT API: `Authorization: Bearer <access_token>` для `/api/v1/*` (кроме `/api/v1/auth/*`).
 - Internal API: `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>` для `/internal/*`.
 
+## Архитектура аккаунтов и способов входа
+
+Бэкенд теперь разделяет **аккаунт, которому принадлежат данные**, и **способы входа в этот аккаунт**.
+
+```text
+users (один канонический аккаунт и владелец данных)
+└── id = account_id
+    ├── чаты, сообщения, картинки, промпты, настройки, счётчики, ...
+    └── account_identities
+        ├── password: provider_subject = desktop-логин
+        └── telegram: provider_subject = Telegram user ID
+
+старый/слитый ID аккаунта
+└── account_redirects ────────────────> канонический users.id
+```
+
+`users.id` — канонический `account_id`. Таблицы данных продолжают использовать существующие колонки `user_id`, но их значения должны указывать на канонический аккаунт, а не напрямую на Telegram ID или конкретный способ входа.
+
+`account_identities` хранит способы авторизации:
+
+- `provider = "password"` хранит логин в `provider_subject`, а salt/hash пароля — в строке identity.
+- `provider = "telegram"` хранит числовой Telegram user ID как текст в `provider_subject`.
+- У одного аккаунта может быть несколько identities. Сейчас в клиентах показывается только Telegram, но схема позволяет добавлять другие провайдеры.
+- `is_admin`, статус, тариф, настройки, лимиты и пользовательские данные принадлежат канонической строке `users`, а не отдельной identity.
+
+### Таблицы аккаунтов
+
+| Таблица | Назначение |
+|---|---|
+| `users` | Одна строка на канонический аккаунт; владеет профилем, настройками, лимитами, счётчиками и всеми данными через `user_id`. |
+| `account_identities` | Способы входа, прикреплённые к аккаунту (`password`, `telegram`, будущие провайдеры). Пара `(provider, provider_subject)` уникальна. |
+| `account_redirects` | Перенаправляет старый ID слитого аккаунта на текущий канонический аккаунт и хранит auth-состояние для безопасной поддержки старых JWT subject. Redirect не является вторым активным аккаунтом. |
+| `account_namespace_migrations` | Отслеживает перенос Pinecone namespace со старых ID на канонический account ID. |
+| `telegram_link_codes` | Короткоживущие одноразовые коды для привязки Desktop → Telegram. |
+
+### Разрешение ID
+
+- Desktop/API JWT разрешает subject через `getAuthPrincipal()` и `resolveAccountId()`.
+- Внутренние запросы от Telegram всё ещё могут передавать Telegram user ID. `resolveInternalAccountId()` сначала ищет identity `telegram`, затем проходит redirects.
+- Все новые чтения и записи должны использовать разрешённый канонический account ID.
+- Internal DTO пользователей для совместимости с существующим ботом сохраняет `id = Telegram ID`, если Telegram привязан, и отдельно отдаёт канонический `account_id`. Также возвращаются `telegram_id` и `identities`.
+
+### Привязка Desktop и Telegram
+
+1. Desktop создаёт одноразовый код через `POST /api/v1/link/generate`.
+2. Пользователь отправляет `/link` Telegram-боту и вводит код.
+3. Бот вызывает `POST /internal/link/verify`.
+4. Desktop-аккаунт сливается в существующий Telegram-аккаунт, текущий канонический ID которого сохраняется.
+5. Password и Telegram identities оказываются на одном каноническом аккаунте.
+
+При слиянии:
+
+- чаты, сообщения, связанные с ними картинки, заметки, задачи, промпты, макросы, точки карты, DevOps-данные, PC policies, подписки и остальные owned-строки переносятся на канонический аккаунт;
+- накопительные счётчики использования суммируются;
+- явные персональные настройки Desktop имеют приоритет при конфликтах, а Telegram identity/status остаются на сохраняемом аккаунте;
+- админ-доступ сохраняется, если админом была любая из сторон;
+- старая строка Desktop в `users` удаляется и заменяется записью в `account_redirects`;
+- FTS-индекс перестраивается;
+- перенос Pinecone namespace ставится в очередь.
+
+Старый JWT, subject которого равен ID слитого source-аккаунта, может разрешаться через redirect до отзыва его token version.
+
+### Отвязка Telegram
+
+Отвязка — это разделение аккаунта, а не удаление данных. Для неё на каноническом аккаунте должны существовать и Telegram identity, и хотя бы одна password identity.
+
+Вызывающая сторона передаёт `data_owner: "desktop" | "telegram"`:
+
+- выбранная сторона сохраняет текущий канонический аккаунт и **все существующие данные**;
+- другая сторона получает новую пустую строку `users`;
+- при разделении перемещаются только identities: при выборе Desktop Telegram identity переносится на пустой аккаунт, при выборе Telegram туда переносятся password identities;
+- чаты, картинки, промпты, настройки, счётчики, файлы и Pinecone memory при отвязке не перемещаются и не удаляются;
+- старые JWT канонического аккаунта и legacy subject из redirects отзываются;
+- публичный Desktop-эндпоинт возвращает новые access/refresh tokens Desktop и итогового пользователя.
+
+### Стартовая миграция со старой схемы
+
+`runAccountIdentityMigration()` запускается при старте backend и является идемпотентной:
+
+1. преобразует старые строки `api_accounts` в identities `password`;
+2. преобразует Telegram users и старые `linked_tg_id`/merge-записи в identities `telegram`, канонические аккаунты и redirects;
+3. переносит все ссылки на аккаунт и проверяет, что source ID больше не остались в таблицах данных;
+4. только после успешной проверки удаляет `api_accounts`, `account_merge_log`, `users.linked_tg_id` и `users.merged_into_account_id`.
+
+Миграция Pinecone выполняется отдельно. Пока namespace не скопирован успешно, поиск vector memory читает и канонический, и старый namespace. Неудачный проход оставляет старый namespace доступным для чтения и может быть повторён при следующем запуске.
+
+На уже мигрированной БД стартовая миграция ничего не меняет. Legacy-код преобразования нужно сохранять, пока каждая развёрнутая БД хотя бы один раз успешно не запустится на новой версии. После этого можно удалить только ветки обнаружения и преобразования старой схемы; `account_identities`, `account_redirects`, разрешение канонического ID, разделение при unlink и обработка миграции namespaces являются частью рабочей архитектуры и должны остаться.
+
 ## Быстрая проверка (ввод/вывод)
 
 1. Health
@@ -344,6 +432,14 @@ curl -s -X POST http://127.0.0.1:3050/internal/users/create-pending \
   - Вывод: `{ access_token, refresh_token, access_expires_in, refresh_expires_in }`
 - `POST /api/v1/auth/logout`
   - Требует access JWT и отзывает все ранее выданные access/refresh токены аккаунта.
+- `GET /api/v1/link/status`
+  - Возвращает привязанную Telegram identity и возможность отвязки.
+- `POST /api/v1/link/generate`
+  - Создаёт одноразовый код привязки Telegram.
+- `POST /api/v1/link/unlink`
+  - Ввод: `{ data_owner: "desktop" | "telegram" }`.
+  - Сохраняет все существующие чаты, картинки, промпты, настройки и vector memory на выбранной стороне. Другая identity переносится в новый пустой аккаунт.
+  - Отзывает старые access/refresh tokens и возвращает новые Desktop tokens вместе с итоговым пользователем.
 - `GET /api/v1/chats?limit=&offset=`
   - Ввод: query `limit` по умолчанию 50, максимум 100; `offset` по умолчанию 0
   - Вывод: `{ chats, active_chat_id, limit, offset }`
@@ -560,6 +656,10 @@ services/subagents/
 ### Internal API (для бота/сервисов)
 
 - Все эндпоинты ниже требуют `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
+- Привязка Telegram:
+  - `POST /internal/link/verify` -> `{ code, tg_id, tg_username? }` -> `{ ok, account_id, tg_id, tg_username }`; проверяет одобренную Telegram identity и сливает Desktop-аккаунт, указанный одноразовым кодом.
+  - `POST /internal/link/unlink` -> `{ tg_id, data_owner: "desktop" | "telegram" }` -> `{ ok, split }`.
+  - Для запросов из Telegram `user_id` может быть Telegram ID; backend разрешает его через `account_identities` в канонический аккаунт.
 - AI:
   - `POST /internal/ai/send` -> `{ user_id, text, chat_id?, options?, documents? }` -> `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
   - `POST /internal/ai/stream` -> SSE-стриминг для Telegram: `{ user_id, text, chat_id?, options?, documents? }`
@@ -1009,7 +1109,7 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 
 ### UI Settings
 
-UI-настройки (отображение в десктопе) хранятся в БД (`users.ui_settings`, JSON), привязаны к `effectiveUser` (linked TG user или сам user). Применяются на клиенте, сервер только хранит.
+UI-настройки (отображение в десктопе) хранятся в строке канонического аккаунта (`users.ui_settings`, JSON) и общие для всех identities этого аккаунта. Применяются на клиенте, сервер только хранит.
 
 Хелпер `parseUiSettings(user)` парсит JSON-колонку, фильтрует невалидные ключи/типы, возвращает объект. На клиенте `user?.ui_settings?.show_tokens !== false` означает «по умолчанию включено».
 
@@ -1199,7 +1299,7 @@ AI: execute_ssh_command(server_id, command)
 - После возврата `sendMessageThroughAi`, server.ts проверяет `result.desktop_action` и `isDesktopOnline(userId)`
 - Если десктоп подключён через WS — `desktop_action` пушится через WebSocket
 - Десктоп-клиент при получении `desktop_action` с `action === 'execute_macro'` выполняет команды через `electronAPI.executeCommands()`
-- Условие: TG-аккаунт должен быть привязан к desktop-аккаунту (через `linked_tg_id`)
+- Условие: у канонического аккаунта должны быть Telegram и password identities, а Desktop-клиент этого аккаунта должен быть подключён через WebSocket.
 
 **Поток выполнения макроса:**
 1. AI видит pinned-подсказку или пользователь просит запустить макрос
@@ -1566,7 +1666,7 @@ Upload реализован через `busboy`: файл пишется пот�
 
 Админ-доступ:
 - пользователь логинится логином/паролем desktop/API-аккаунта через `/api/v1/auth/login`;
-- доступ разрешён, если `is_admin = 1` у самого desktop/API user или у привязанного Telegram user (`linked_tg_id`);
+- доступ разрешён, если `is_admin = 1` у канонического аккаунта `users`, найденного по этой password identity;
 - `version.json` не показывается в списке файлов для удаления, его содержимое отображается наверху как `Current`.
 
 ### Публикация minor

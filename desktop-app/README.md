@@ -144,7 +144,7 @@ src/
     │   ├── DocumentsTool  # Chat documents (attachments)
     │   ├── GalleryTool    # Photo gallery from chat
     │   ├── RadioGroup     # Reusable radio selector
-    │   ├── SettingsModal  # Settings (account, prompt, voice, app, macros, servers, runbooks, smart home)
+    │   ├── SettingsModal  # Settings (account, linked accounts, prompt, voice, limits, app, macros, servers, runbooks, smart home)
     │   ├── MacroSettings  # Macro management (CRUD + AI explain/describe)
     │   ├── ServerSettings # DevOps SSH server management (CRUD + policies + runbook attachment)
     │   ├── RunbookSettings # DevOps runbook management (CRUD + AI extraction/review)
@@ -181,13 +181,47 @@ Both sidebars work identically: `motion.aside` with width animation, always in t
 
 ## Linked Accounts
 
-The Settings modal has a dedicated "Linked accounts" tab. Telegram is currently the only supported external identity.
+The Settings modal has a dedicated **Linked accounts** tab. Telegram is currently the only external identity exposed by the UI.
 
-- Linking warns that the existing Desktop and Telegram accounts are merged into one account.
-- Unlinking asks which side keeps all shared data.
-- The selected side keeps chats, images, prompts, settings, and memory.
-- The other side receives a new empty account.
-- Old JWTs are revoked during the split; Desktop stores the fresh tokens returned by the backend and reconnects WebSocket under the resulting account ID.
+The backend model is one canonical account with multiple login identities:
+
+```text
+canonical account
+├── password identity (Desktop login)
+└── Telegram identity (Telegram user ID)
+```
+
+The Desktop client never treats the Telegram ID as a second data owner. Chats, images, prompts, settings, limits, counters, and memory belong to the canonical backend account and are shared by every attached identity.
+
+### Linking flow
+
+1. The user opens Settings → Linked accounts → Telegram.
+2. Desktop requests a six-digit one-time code. The code is valid for 10 minutes.
+3. The user sends `/link` to the Telegram bot and enters the code.
+4. The backend merges the existing Desktop and Telegram accounts into one canonical account.
+5. Desktop refreshes `/api/v1/auth/me` and `/api/v1/link/status`, then reconnects WebSocket under the resolved account.
+
+The modal warns about the merge before showing the code. Existing data from both sides is preserved; Desktop personal settings take priority where the backend has to resolve a settings conflict.
+
+### Unlinking flow
+
+Unlinking is available only when the account has both Telegram and password login identities. The confirmation modal asks which side keeps the shared data:
+
+- **Desktop keeps data:** the password identity remains on the current data account; Telegram is moved to a new empty account.
+- **Telegram keeps data:** Telegram remains on the current data account; the password identity is moved to a new empty Desktop account.
+
+The operation does not delete or split individual chats, images, prompts, settings, files, counters, or vector memory. All existing data stays together on the selected side.
+
+The backend revokes pre-split JWTs and returns fresh Desktop access/refresh tokens. Desktop stores them, updates the cached user, reloads account-dependent state, and reconnects WebSocket. If Telegram was selected as data owner, the Desktop client therefore continues in the newly created empty Desktop account.
+
+The Telegram bot exposes the same split through `/unlink`: it asks which side keeps the data and calls the backend with the same `data_owner` value.
+
+Relevant client code:
+
+- `src/renderer/components/SettingsModal.tsx` — linked-account card, owner selection, token/user replacement, WebSocket reconnect.
+- `src/renderer/components/LinkTelegramModal.tsx` — code generation, countdown, polling, and merge warning.
+- `src/renderer/lib/api.ts` — `/api/v1/link/status`, `/generate`, and `/unlink` API types and calls.
+- `src/renderer/assets/integrations/telegram.webp` — bundled Telegram integration icon.
 
 ## Tools Panel (ToolsPanel)
 
@@ -454,7 +488,7 @@ TG user: "Run macro X"
   → api.ts onmessage: electronAPI.executeCommands(commands)
   → main.ts: exec() for each command
 ```
-Requirement: the desktop client must be connected via WS, and the TG account must be linked to the desktop account. If the desktop is not connected — the macro won't execute (fire-and-forget without a recipient).
+Requirement: the canonical account must have both Telegram and password identities, and its Desktop client must be connected through WebSocket. If Desktop is not connected, the macro will not execute (fire-and-forget without a recipient).
 
 **Macro with return_output (via WS):**
 ```
@@ -1051,7 +1085,7 @@ For major, a direct link to the `.exe` is required. A public cloud/Yandex.Disk p
 - `POST /admin/updates/upload` — file upload + `version.json` generation (multipart/form-data)
 - `DELETE /admin/updates/file/:name` — delete a file
 
-Admin access is granted if `is_admin = 1` on the desktop/API user themselves or on the linked Telegram user (`linked_tg_id`).
+Admin access is granted if `is_admin = 1` on the canonical backend account resolved from the Desktop password identity.
 
 `version.json` is not shown in the deletable file list: its content is displayed at the top as `Current`.
 

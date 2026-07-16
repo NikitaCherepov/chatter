@@ -140,6 +140,10 @@
   border: 1px solid var(--border-light);
   border-radius: 10px;
   background: var(--bg-input);
+
+  > .saveBtn {
+    align-self: center;
+  }
 }
 
 .connectionIconWrap {

@@ -263,6 +263,94 @@ Images (user photos and generated) are handled differently depending on the mode
 - JWT API: `Authorization: Bearer <access_token>` for `/api/v1/*` (except `/api/v1/auth/*`).
 - Internal API: `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>` for `/internal/*`.
 
+## Account and Login Identity Architecture
+
+The backend now separates the **account that owns data** from the **ways used to sign in to that account**.
+
+```text
+users (one canonical account and data owner)
+└── id = account_id
+    ├── chats, messages, images, prompts, settings, counters, ...
+    └── account_identities
+        ├── password: provider_subject = desktop login
+        └── telegram: provider_subject = Telegram user ID
+
+old/merged account ID
+└── account_redirects ────────────────> canonical users.id
+```
+
+`users.id` is the canonical `account_id`. Domain tables continue to use their existing `user_id` columns, but those values must point to the canonical account, not to a Telegram ID or login identity by assumption.
+
+`account_identities` contains authentication methods:
+
+- `provider = "password"` stores the login in `provider_subject` and the password salt/hash in the identity row.
+- `provider = "telegram"` stores the numeric Telegram user ID as text in `provider_subject`.
+- An account may have several identities. Telegram is currently the only external identity exposed in clients, but the schema supports additional providers.
+- `is_admin`, status, plan, settings, limits, and user data belong to the canonical `users` row, not to an individual identity.
+
+### Account tables
+
+| Table | Purpose |
+|---|---|
+| `users` | One row per canonical account; owns profile, settings, limits, counters, and all data referenced through `user_id`. |
+| `account_identities` | Login methods attached to an account (`password`, `telegram`, future providers). `(provider, provider_subject)` is unique. |
+| `account_redirects` | Maps an old merged account ID to the current canonical account and preserves enough auth state to resolve legacy JWT subjects safely. A redirect is not a second active account. |
+| `account_namespace_migrations` | Tracks Pinecone namespace moves from merged account IDs to the canonical account ID. |
+| `telegram_link_codes` | Short-lived one-time codes used by the Desktop → Telegram linking flow. |
+
+### ID resolution
+
+- Desktop/API JWTs resolve their token subject through `getAuthPrincipal()` and `resolveAccountId()`.
+- Telegram-facing internal requests may still send a Telegram user ID. `resolveInternalAccountId()` first looks up the `telegram` identity and then follows redirects.
+- New reads and writes must use the resolved canonical account ID.
+- Internal user DTOs keep `id = Telegram ID` when available for compatibility with the existing bot, and expose the canonical ID separately as `account_id`. They also include `telegram_id` and `identities`.
+
+### Linking Desktop and Telegram
+
+1. Desktop creates a one-time code through `POST /api/v1/link/generate`.
+2. The user sends `/link` to the Telegram bot and enters the code.
+3. The bot calls `POST /internal/link/verify`.
+4. The Desktop account is merged into the existing Telegram account, whose current canonical ID is retained.
+5. Password and Telegram identities end up on the same canonical account.
+
+During the merge:
+
+- chats, messages, images referenced by messages, notes, tasks, prompts, macros, map pins, DevOps data, PC policies, subscriptions, and other owned rows are transferred to the canonical account;
+- additive usage counters are summed;
+- explicit Desktop personal settings win on conflicts, while Telegram identity/status remain on the retained account;
+- admin access is preserved if either side was an admin;
+- the old Desktop `users` row is removed and replaced by an `account_redirects` entry;
+- the FTS index is rebuilt;
+- the Pinecone namespace migration is queued.
+
+An old JWT whose subject is the merged source ID can be resolved through the redirect until its token version is revoked.
+
+### Unlinking Telegram
+
+Unlinking is an account split, not data deletion. It requires the canonical account to have both a Telegram identity and at least one password identity.
+
+The caller chooses `data_owner: "desktop" | "telegram"`:
+
+- the selected side keeps the current canonical account and **all existing data**;
+- the other side receives a newly allocated empty `users` row;
+- only identities are moved during the split: choosing Desktop moves the Telegram identity to the empty account, while choosing Telegram moves password identities to the empty account;
+- chats, images, prompts, settings, counters, files, and Pinecone memory are not moved or deleted during unlink;
+- old JWTs for the canonical account and redirect-backed legacy subjects are revoked;
+- the public Desktop endpoint returns fresh Desktop access/refresh tokens and the resulting user.
+
+### Startup migration from the legacy schema
+
+`runAccountIdentityMigration()` runs during backend startup and is idempotent:
+
+1. converts legacy `api_accounts` rows into `password` identities;
+2. converts Telegram users and old `linked_tg_id`/merge records into `telegram` identities, canonical accounts, and redirects;
+3. moves all account-owned references and validates that no migrated source IDs remain in data tables;
+4. only after successful validation drops `api_accounts`, `account_merge_log`, `users.linked_tg_id`, and `users.merged_into_account_id`.
+
+Pinecone migration runs separately. Until a namespace is copied successfully, vector-memory searches read both the canonical and legacy namespaces. A failed pass leaves the legacy namespace readable and can be retried on a later startup.
+
+On an already migrated database, the startup migration is a no-op. Keep the legacy conversion code until every deployed database has completed at least one successful startup on the new version. After that, only the legacy discovery/conversion branches may be removed; `account_identities`, `account_redirects`, canonical ID resolution, unlink splitting, and namespace migration handling are runtime architecture and must remain.
+
 ## Quick Check (input/output)
 
 1. Health
@@ -568,6 +656,10 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
 ### Internal API (for bot/services)
 
 - All endpoints below require `Authorization: Bearer <BACKEND_INTERNAL_TOKEN>`.
+- Telegram account linking:
+  - `POST /internal/link/verify` → `{ code, tg_id, tg_username? }` → `{ ok, account_id, tg_id, tg_username }`; validates the approved Telegram identity and merges the Desktop account referenced by the one-time code.
+  - `POST /internal/link/unlink` → `{ tg_id, data_owner: "desktop" | "telegram" }` → `{ ok, split }`.
+  - For Telegram-originated endpoints, `user_id` may be the Telegram ID; the backend resolves it through `account_identities` to the canonical account.
 - AI:
   - `POST /internal/ai/send` → `{ user_id, text, chat_id?, options?, documents? }` → `{ reply_text, chat_id, message_id, reasoning_content?, tool_calls?, model_fallback_notice?, tool_user_messages?, generated_images?, usage }`
   - `POST /internal/ai/stream` → SSE streaming for Telegram: `{ user_id, text, chat_id?, options?, documents? }`
@@ -1017,7 +1109,7 @@ A new tool will automatically be filtered if its `function.name` matches a name 
 
 ### UI Settings
 
-UI settings (desktop display) are stored in the DB (`users.ui_settings`, JSON), bound to `effectiveUser` (linked TG user or the user themselves). Applied on the client; the server only stores them.
+UI settings (desktop display) are stored in the canonical account row (`users.ui_settings`, JSON). They are shared by every identity attached to that account. The client applies them; the server only stores them.
 
 The `parseUiSettings(user)` helper parses the JSON column, filters invalid keys/types, returns an object. On the client, `user?.ui_settings?.show_tokens !== false` means "enabled by default".
 
@@ -1207,7 +1299,7 @@ Macros are user-defined sets of console commands that the AI can run on the desk
 - After `sendMessageThroughAi` returns, server.ts checks `result.desktop_action` and `isDesktopOnline(userId)`
 - If the desktop is connected via WS — `desktop_action` is pushed via WebSocket
 - The desktop client, upon receiving `desktop_action` with `action === 'execute_macro'`, executes the commands via `electronAPI.executeCommands()`
-- Requirement: the TG account must be linked to the desktop account (via `linked_tg_id`)
+- Requirement: the canonical account must have both Telegram and password identities, and the Desktop client for that account must be connected through WebSocket.
 
 **Macro execution flow:**
 1. The AI sees a pinned hint or the user asks to run a macro
@@ -1574,7 +1666,7 @@ Upload is implemented via `busboy`: the file is written as a stream to `updates/
 
 Admin access:
 - the user logs in with the desktop/API account login/password via `/api/v1/auth/login`;
-- access is granted if `is_admin = 1` on the desktop/API user themselves or on the linked Telegram user (`linked_tg_id`);
+- access is granted if `is_admin = 1` on the canonical `users` account resolved from that password identity;
 - `version.json` is not shown in the file list for deletion; its content is displayed at the top as `Current`.
 
 ### Publishing a minor
