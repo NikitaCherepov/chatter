@@ -79,7 +79,7 @@ const bot = new Telegraf<BotContext>(process.env.TELEGRAM_TOKEN!);
 bot.catch(async (err, ctx) => {
     console.error('Telegraf update error:', formatSafeError(err));
     try {
-        await ctx.reply('Сервис временно недоступен. Попробуйте ещё раз через пару секунд.');
+        await ctx.reply(ctx.t('common.serviceUnavailable'));
     } catch {
         // ignore reply failures inside error handler
     }
@@ -547,48 +547,22 @@ const TG_USE_RICH_STREAMING = process.env.TG_USE_RICH_STREAMING === '1';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
 const BASE_COMMANDS = [
-    { command: 'start', description: 'Показать меню' },
-    { command: 'menu', description: 'Открыть меню кнопок' },
-    { command: 'clear', description: 'Очистить память диалога' },
-    { command: 'tz', description: 'Часовой пояс: /tz <UTC>' },
-    { command: 'tasks', description: 'Мои напоминания' },
-    { command: 'task_delete', description: 'Удалить задачу: /task_delete <id>' },
-    { command: 'note_add', description: 'Заметки: /note_add <текст>' },
-    { command: 'notes', description: 'Заметки: список /notes [page]' },
-    { command: 'note_find', description: 'Заметки: поиск /note_find <текст>' },
-    { command: 'note_delete', description: 'Заметки: удалить /note_delete <id>' },
-    { command: 'mail_setup', description: 'Почта: /mail_setup <prov> <mail> <app_pass>' },
-    { command: 'mail_use', description: 'Почта: /mail_use <yandex|google>' },
-    { command: 'mail_limit', description: 'Почта: лимит check_emails' },
-    { command: 'mail_forget', description: 'Почта: /mail_forget [yandex|google]' },
-    { command: 'chats', description: 'Список чатов и активный чат' },
-    { command: 'chat_new', description: 'Создать чат: /chat_new [название]' },
-    { command: 'chat_use', description: 'Переключить чат: /chat_use <id>' },
-    { command: 'link', description: 'Привязать десктоп-приложение' },
-    { command: 'unlink', description: 'Отвязать десктоп-приложение' },
-    { command: 'rename', description: 'Переименовать себя' },
-    { command: 'prompts', description: 'Список доступных промптов' },
-    { command: 'prompt_use', description: 'Выбрать промпт: /prompt_use <id>' }
+    'start', 'menu', 'clear', 'tz', 'tasks', 'task_delete', 'note_add', 'notes',
+    'note_find', 'note_delete', 'mail_setup', 'mail_use', 'mail_limit', 'mail_forget',
+    'chats', 'chat_new', 'chat_use', 'link', 'unlink', 'rename', 'prompts', 'prompt_use'
 ] as const;
 const ADMIN_EXTRA_COMMANDS = [
-    { command: 'add', description: 'Добавить юзера (только админ)' },
-    { command: 'remove', description: 'Удалить юзера (только админ)' },
-    { command: 'users', description: 'Список юзеров (только админ)' },
-    { command: 'ban', description: 'Бан: /ban <id> [причина]' },
-    { command: 'unban', description: 'Разбан: /unban <id>' },
-    { command: 'prompt_add', description: 'Добавить: /prompt_add Имя | Описание | Текст' },
-    { command: 'prompt_show', description: 'Показать промпт: /prompt_show <id>' },
-    { command: 'prompt_set', description: 'Изменить текст: /prompt_set <id> | Текст' },
-    { command: 'prompt_desc', description: 'Изменить описание: /prompt_desc <id> | Описание' },
-    { command: 'prompt_rename', description: 'Переименовать: /prompt_rename <id> Имя' },
-    { command: 'prompt_delete', description: 'Удалить: /prompt_delete <id>' },
-    { command: 'prompt_default', description: 'Сделать дефолтным: /prompt_default <id>' },
-    { command: 'history_user', description: 'История юзера: /history_user <user_id> [limit]' },
-    { command: 'history_delete', description: 'Удалить сообщение: /history_delete <user_id> <message_id> [db|tg]' },
-    { command: 'sync_plan_limits', description: 'Синхронизировать лимиты по планам' }
+    'add', 'remove', 'users', 'ban', 'unban', 'prompt_add', 'prompt_show',
+    'prompt_set', 'prompt_desc', 'prompt_rename', 'prompt_delete', 'prompt_default',
+    'history_user', 'history_delete', 'sync_plan_limits'
 ] as const;
-const ADMIN_COMMANDS = [...BASE_COMMANDS, ...ADMIN_EXTRA_COMMANDS] as const;
-const commandScopeCache = new Map<number, 'admin' | 'user'>();
+const buildBotCommands = (isAdmin: boolean, t: BotTranslate) => (
+    [...BASE_COMMANDS, ...(isAdmin ? ADMIN_EXTRA_COMMANDS : [])].map(command => ({
+        command,
+        description: t(`commands.${command}`)
+    }))
+);
+const commandScopeCache = new Map<number, string>();
 const encryptSecret = (text: string) => {
     const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
     const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
@@ -750,11 +724,12 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
 
 const buildMenuTriggerKeyboard = (t: BotTranslate) => Markup.keyboard([[t('menu.trigger')]]).resize().persistent();
-const TZ_BUTTON_SET_UTC = '🕒 Указать UTC';
-const TZ_BUTTON_SEND_LOCATION = '📍 Отправить геопозицию';
-const buildTimezoneSetupKeyboard = () => Markup.keyboard([
-    [TZ_BUTTON_SET_UTC],
-    [Markup.button.locationRequest(TZ_BUTTON_SEND_LOCATION)]
+const TZ_BUTTON_SET_UTC_VALUES = SUPPORTED_LANGUAGES.map(language =>
+    translateBot(language, 'timezone.buttons.setUtc')
+);
+const buildTimezoneSetupKeyboard = (t: BotTranslate) => Markup.keyboard([
+    [t('timezone.buttons.setUtc')],
+    [Markup.button.locationRequest(t('timezone.buttons.sendLocation'))]
 ]).resize().oneTime();
 
 const buildMainMenuInlineKeyboard = (isAdmin: boolean, t: BotTranslate) => {
@@ -774,32 +749,37 @@ const buildMainMenuInlineKeyboard = (isAdmin: boolean, t: BotTranslate) => {
     return Markup.inlineKeyboard(rows);
 };
 
-const buildMailMenuKeyboard = () => Markup.inlineKeyboard([
-    [Markup.button.callback('➕ Добавить/обновить', 'mail:setup_help')],
-    [Markup.button.callback('⚙️ Почта: настройки', 'mail:settings')],
-    [Markup.button.callback('🟡 Инструкция Yandex', 'mail:instr:yandex')],
-    [Markup.button.callback('🔵 Инструкция Google', 'mail:instr:google')],
-    [Markup.button.callback('🗑 Удалить привязку', 'mail:forget')]
+const buildMailMenuKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
+    [Markup.button.callback(t('mail.buttons.setup'), 'mail:setup_help')],
+    [Markup.button.callback(t('mail.buttons.settings'), 'mail:settings')],
+    [Markup.button.callback(t('mail.buttons.yandexInstructions'), 'mail:instr:yandex')],
+    [Markup.button.callback(t('mail.buttons.googleInstructions'), 'mail:instr:google')],
+    [Markup.button.callback(t('mail.buttons.forget'), 'mail:forget')]
 ]);
-const buildMailSettingsKeyboard = () => Markup.inlineKeyboard([
-    [Markup.button.callback('✏️ Изменить лимит', 'mail:limit:change')],
-    [Markup.button.callback('⬅️ Назад', 'mail:settings:back')]
+const buildMailSettingsKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
+    [Markup.button.callback(t('mail.buttons.changeLimit'), 'mail:limit:change')],
+    [Markup.button.callback(t('mail.buttons.back'), 'mail:settings:back')]
 ]);
-const buildContextSettingsKeyboard = () => Markup.inlineKeyboard([
-    [Markup.button.callback('✏️ Изменить лимит', 'context:change')],
-    [Markup.button.callback('⬅️ Назад в меню', 'context:back')]
+const buildContextSettingsKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
+    [Markup.button.callback(t('context.buttons.change'), 'context:change')],
+    [Markup.button.callback(t('context.buttons.back'), 'context:back')]
 ]);
 
-const syncCommandScopeForUser = async (userId: number, isAdmin: boolean) => {
+const syncCommandScopeForUser = async (
+    userId: number,
+    isAdmin: boolean,
+    language: SupportedLanguage
+) => {
     const nextRole: 'admin' | 'user' = isAdmin ? 'admin' : 'user';
-    if (commandScopeCache.get(userId) === nextRole) return;
+    const cacheKey = `${nextRole}:${language}`;
+    if (commandScopeCache.get(userId) === cacheKey) return;
 
-    const commands = isAdmin ? ADMIN_COMMANDS : BASE_COMMANDS;
+    const commands = buildBotCommands(isAdmin, (key, options) => translateBot(language, key, options));
     await bot.telegram.setMyCommands(commands as any, {
         scope: { type: 'chat', chat_id: userId }
     } as any);
 
-    commandScopeCache.set(userId, nextRole);
+    commandScopeCache.set(userId, cacheKey);
 };
 type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
@@ -816,7 +796,13 @@ const startSelfRenameFlow = (ctx: any) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     renameFlows.set(userId, 'confirm');
-    return ctx.reply('Вы хотите сменить имя?', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
+    return ctx.reply(
+        ctx.t('profile.renameConfirm'),
+        Markup.keyboard([[
+            ctx.t('common.yes'),
+            ctx.t('common.no')
+        ]]).resize().oneTime()
+    );
 };
 
 const sendLongMessage = async (ctx: any, text: string, extra?: Record<string, unknown>) => {
@@ -879,18 +865,18 @@ const safeSendToUser = async (chatId: number, text: string) => {
 const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction: string) => {
     const targetUser = await getUser(targetUserId);
     if (!targetUser) {
-        await ctx.reply('Юзер не найден в базе.');
+        await ctx.reply(ctx.t('admin.userNotFound'));
         return;
     }
 
     const thought = instruction.trim();
     if (!thought) {
-        await ctx.reply('Пустое сообщение. Напиши, что нужно передать.');
+        await ctx.reply(ctx.t('adminDirect.empty'));
         return;
     }
 
-    const targetUserName = targetUser.name || targetUser.tg_username || 'Друг';
-    await ctx.reply('⏳ Нейросеть формулирует послание...');
+    const targetUserName = targetUser.name || targetUser.tg_username || ctx.t('adminDirect.friend');
+    await ctx.reply(ctx.t('adminDirect.generating'));
 
     try {
         if (!BACKEND_INTERNAL_TOKEN) {
@@ -913,7 +899,7 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
 
         const finalMessage = (response.data?.reply_text || '').trim();
         if (!finalMessage) {
-            await ctx.reply('❌ Не получилось сгенерировать текст, попробуй ещё раз.');
+            await ctx.reply(ctx.t('adminDirect.emptyResult'));
             return;
         }
 
@@ -931,31 +917,33 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
             }
         }
 
-        await ctx.reply(
-            `✅ Сообщение отправлено пользователю ${targetUserName} (ID: ${targetUserId}).\n\nТекст, который отправила нейросеть:\n${finalMessage}`
-        );
+        await ctx.reply(ctx.t('adminDirect.sent', { name: targetUserName, id: targetUserId, text: finalMessage }));
     } catch (err) {
-        await ctx.reply(`❌ Ошибка генерации: ${err instanceof Error ? err.message : String(err)}`);
+        await ctx.reply(ctx.t('adminDirect.error', { error: err instanceof Error ? err.message : String(err) }));
     }
 };
 
-const ISO_WEEKDAY_LABEL: Record<number, string> = {
-    1: 'понедельник',
-    2: 'вторник',
-    3: 'среда',
-    4: 'четверг',
-    5: 'пятница',
-    6: 'суббота',
-    7: 'воскресенье'
+const ISO_WEEKDAY_KEY: Record<number, string> = {
+    1: 'tasks.weekdays.monday',
+    2: 'tasks.weekdays.tuesday',
+    3: 'tasks.weekdays.wednesday',
+    4: 'tasks.weekdays.thursday',
+    5: 'tasks.weekdays.friday',
+    6: 'tasks.weekdays.saturday',
+    7: 'tasks.weekdays.sunday'
 };
 
-const formatRecurrenceForDisplay = (task: TaskRecord) => {
-    if (task.recurrence_type === 'daily') return 'Каждый день';
+const formatRecurrenceForDisplay = (task: TaskRecord, t: BotTranslate) => {
+    if (task.recurrence_type === 'daily') return t('tasks.recurrence.daily');
     if (task.recurrence_type === 'weekly') {
-        const label = task.recurrence_weekday ? ISO_WEEKDAY_LABEL[task.recurrence_weekday] : null;
-        return label ? `Каждую неделю (${label})` : 'Каждую неделю';
+        const weekdayKey = task.recurrence_weekday
+            ? ISO_WEEKDAY_KEY[task.recurrence_weekday]
+            : null;
+        return weekdayKey
+            ? t('tasks.recurrence.weeklyOn', { weekday: t(weekdayKey) })
+            : t('tasks.recurrence.weekly');
     }
-    return 'Один раз';
+    return t('tasks.recurrence.once');
 };
 
 const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
@@ -969,20 +957,39 @@ const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
     };
 };
 
-const formatTaskForDisplay = async (task: TaskRecord) => {
+const formatTaskForDisplay = async (task: TaskRecord, t: BotTranslate) => {
     const payloadPreview = task.payload.length > 140 ? `${task.payload.slice(0, 140)}...` : task.payload;
-    const recurrence = formatRecurrenceForDisplay(task);
+    const recurrence = formatRecurrenceForDisplay(task, t);
     const fallbackOffset = (await getUser(task.user_id))?.timezone_offset ?? 5;
     const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
     const when = formatUnixForTimezone(task.execute_at, timezoneOffset);
     const notifyText = (task.notify_mode === 'on_match' || task.notify_mode === 'on_condition')
-        ? `${task.notify_mode}: ${task.notify_condition || '(пусто)'}`
-        : task.notify_mode;
-    return `#${task.id} | ${task.task_type} | ${task.status}\nКогда: ${when.local} (${when.tzLabel})\nКогда (UTC): ${when.utc} UTC\nРасписание: ${recurrence}\nУведомления: ${notifyText}\nДанные: ${payloadPreview}`;
+        ? t('tasks.notify.withCondition', {
+            mode: t(`tasks.notify.modes.${task.notify_mode}`),
+            condition: task.notify_condition || t('tasks.empty')
+        })
+        : t(`tasks.notify.modes.${task.notify_mode}`);
+    return t('tasks.item', {
+        id: task.id,
+        type: t(`tasks.types.${task.task_type}`),
+        status: t(`tasks.statuses.${task.status}`),
+        localTime: when.local,
+        timezone: when.tzLabel,
+        utcTime: when.utc,
+        recurrence,
+        notify: notifyText,
+        payload: payloadPreview
+    });
 };
 
-const formatTasksList = async (tasks: TaskRecord[], emptyText = 'Задач не найдено.') => (
-    tasks.length ? (await Promise.all(tasks.map(formatTaskForDisplay))).join('\n\n') : emptyText
+const formatTasksList = async (
+    tasks: TaskRecord[],
+    t: BotTranslate,
+    emptyText = t('tasks.notFound')
+) => (
+    tasks.length
+        ? (await Promise.all(tasks.map(task => formatTaskForDisplay(task, t)))).join('\n\n')
+        : emptyText
 );
 
 const getIsoWeekday = (date: Date) => {
@@ -1779,60 +1786,79 @@ const countNotes = (userId: number, query = '') => {
 const getPlanNotesLimit = (plan: UserPlan) => PLAN_NOTES_LIMITS[plan] ?? PLAN_NOTES_LIMITS[DEFAULT_USER_PLAN];
 const getPlanNoteContentLimit = (plan: UserPlan) => PLAN_NOTE_CONTENT_LIMITS[plan] ?? PLAN_NOTE_CONTENT_LIMITS[DEFAULT_USER_PLAN];
 const getPlanNoteListLimit = (plan: UserPlan) => PLAN_NOTE_LIST_LIMITS[plan] ?? PLAN_NOTE_LIST_LIMITS[DEFAULT_USER_PLAN];
-const formatNoteDate = (unixTs: number) => {
-    if (!Number.isFinite(unixTs) || unixTs <= 0) return 'дата неизвестна';
-    return new Date(unixTs * 1000).toLocaleString('ru-RU');
+const formatNoteDate = (unixTs: number, language: SupportedLanguage, t: BotTranslate) => {
+    if (!Number.isFinite(unixTs) || unixTs <= 0) return t('notes.unknownDate');
+    return new Date(unixTs * 1000).toLocaleString(language);
 };
-const formatNotesPage = (notes: NoteRecord[], page: number, total: number, pageSize: number, query?: string) => {
+const formatNotesPage = (
+    notes: NoteRecord[],
+    page: number,
+    total: number,
+    pageSize: number,
+    t: BotTranslate,
+    language: SupportedLanguage,
+    query?: string
+) => {
     if (!notes.length) {
         return query
-            ? `По запросу "${query}" ничего не найдено.`
-            : 'Заметок пока нет.';
+            ? t('notes.searchEmpty', { query })
+            : t('notes.none');
     }
     const safePage = Math.max(1, page);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const head = query
-        ? `Заметки по запросу "${query}" (${total}):`
-        : `Заметки (${total}):`;
+        ? t('notes.searchHead', { query, total })
+        : t('notes.listHead', { total });
     const list = notes.map(note => {
         const titlePart = note.title?.trim() ? `${normalizeTextPreview(note.title, 40)} | ` : '';
-        return `#${note.id} [${formatNoteDate(note.created_at)}] — ${titlePart}${normalizeTextPreview(note.content, 120)}`;
+        return `#${note.id} [${formatNoteDate(note.created_at, language, t)}] — ${titlePart}${normalizeTextPreview(note.content, 120)}`;
     }).join('\n');
-    return `${head}\n${list}\n\nСтраница ${safePage}/${totalPages}.`;
+    return t('notes.page', { head, list, page: safePage, pages: totalPages });
 };
-const getNoteMenuTitle = (note: NoteRecord) => {
+const getNoteMenuTitle = (note: NoteRecord, t: BotTranslate) => {
     const title = (note.title || '').trim();
     if (title) return normalizeTextPreview(title, 48);
-    return normalizeTextPreview(note.content || 'Без текста', 48);
+    return normalizeTextPreview(note.content || t('notes.noText'), 48);
 };
-const buildNotesMenuKeyboard = (notes: NoteRecord[], page: number, total: number) => {
+const buildNotesMenuKeyboard = (
+    notes: NoteRecord[],
+    page: number,
+    total: number,
+    t: BotTranslate
+) => {
     const keyboardRows = notes.map(note => [
         Markup.button.callback(
-            `#${note.id} ${getNoteMenuTitle(note)}`,
+            `#${note.id} ${getNoteMenuTitle(note, t)}`,
             `notes:view:${note.id}:${page}`
         )
     ]);
 
     const navRow = [];
-    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `notes:list:${page - 1}`));
-    if ((page + 1) * NOTES_MENU_PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `notes:list:${page + 1}`));
+    if (page > 0) {
+        navRow.push(Markup.button.callback(t('notes.buttons.previous'), `notes:list:${page - 1}`));
+    }
+    if ((page + 1) * NOTES_MENU_PAGE_SIZE < total) {
+        navRow.push(Markup.button.callback(t('notes.buttons.next'), `notes:list:${page + 1}`));
+    }
     if (navRow.length) keyboardRows.push(navRow);
 
-    keyboardRows.push([Markup.button.callback('⬅️ В меню', 'notes:back:menu')]);
+    keyboardRows.push([Markup.button.callback(t('notes.buttons.menu'), 'notes:back:menu')]);
     return Markup.inlineKeyboard(keyboardRows);
 };
-const buildNoteViewKeyboard = (noteId: number, page: number) => Markup.inlineKeyboard([
-    [Markup.button.callback('✏️ Редактировать', `notes:edit:${noteId}:${page}`)],
-    [Markup.button.callback('🗑 Удалить', `notes:delete:${noteId}:${page}`)],
-    [Markup.button.callback('⬅️ К списку заметок', `notes:list:${page}`)],
-    [Markup.button.callback('⬅️ В меню', 'notes:back:menu')]
+const buildNoteViewKeyboard = (noteId: number, page: number, t: BotTranslate) => Markup.inlineKeyboard([
+    [Markup.button.callback(t('notes.buttons.edit'), `notes:edit:${noteId}:${page}`)],
+    [Markup.button.callback(t('notes.buttons.delete'), `notes:delete:${noteId}:${page}`)],
+    [Markup.button.callback(t('notes.buttons.toList'), `notes:list:${page}`)],
+    [Markup.button.callback(t('notes.buttons.menu'), 'notes:back:menu')]
 ]);
 const renderNotesMenuList = async (ctx: any, userId: number, page: number, mode: 'reply' | 'edit' = 'reply') => {
     const safePage = Math.max(0, page);
     const total = countNotes(userId);
     if (!total) {
-        const text = 'Заметок пока нет. Можно добавить через /note_add <текст>.';
-        const keyboard = Markup.inlineKeyboard([[Markup.button.callback('⬅️ В меню', 'notes:back:menu')]]);
+        const text = ctx.t('notes.noneWithHint');
+        const keyboard = Markup.inlineKeyboard([[
+            Markup.button.callback(ctx.t('notes.buttons.menu'), 'notes:back:menu')
+        ]]);
         if (mode === 'edit') return ctx.editMessageText(text, keyboard);
         return ctx.reply(text, keyboard);
     }
@@ -1840,26 +1866,35 @@ const renderNotesMenuList = async (ctx: any, userId: number, page: number, mode:
     const offset = safePage * NOTES_MENU_PAGE_SIZE;
     const notes = getNotesPage(userId, NOTES_MENU_PAGE_SIZE, offset);
     const pages = Math.max(1, Math.ceil(total / NOTES_MENU_PAGE_SIZE));
-    const text = `📝 Заметки\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}\n\nНажми на заметку, чтобы открыть полностью.`;
-    const keyboard = buildNotesMenuKeyboard(notes, safePage, total);
+    const text = ctx.t('notes.menuList', {
+        page: safePage + 1,
+        pages,
+        total
+    });
+    const keyboard = buildNotesMenuKeyboard(notes, safePage, total, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
 const renderNoteView = async (ctx: any, userId: number, noteId: number, page: number, mode: 'reply' | 'edit' = 'edit') => {
     const note = getNoteByUserAndId(userId, noteId);
     if (!note) {
-        const text = `Заметка #${noteId} не найдена.`;
+        const text = ctx.t('notes.notFound', { id: noteId });
         const keyboard = Markup.inlineKeyboard([
-            [Markup.button.callback('⬅️ К списку заметок', `notes:list:${page}`)],
-            [Markup.button.callback('⬅️ В меню', 'notes:back:menu')]
+            [Markup.button.callback(ctx.t('notes.buttons.toList'), `notes:list:${page}`)],
+            [Markup.button.callback(ctx.t('notes.buttons.menu'), 'notes:back:menu')]
         ]);
         if (mode === 'edit') return ctx.editMessageText(text, keyboard);
         return ctx.reply(text, keyboard);
     }
 
-    const title = note.title?.trim() ? note.title.trim() : 'без заголовка';
-    const text = `Заметка #${note.id}\nДата: ${formatNoteDate(note.created_at)}\nЗаголовок: ${title}\n\n${note.content}`;
-    const keyboard = buildNoteViewKeyboard(note.id, page);
+    const title = note.title?.trim() ? note.title.trim() : ctx.t('notes.noTitle');
+    const text = ctx.t('notes.view', {
+        id: note.id,
+        date: formatNoteDate(note.created_at, ctx.state.language, ctx.t),
+        title,
+        content: note.content
+    });
+    const keyboard = buildNoteViewKeyboard(note.id, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -1926,7 +1961,7 @@ const withUserRequestLock = async <T>(
     if (!Number.isSafeInteger(userId) || userId <= 0) return undefined;
     while (activeUserRequests.has(userId)) {
         if (!waitForTurn) {
-            await ctx.reply('⏳ Предыдущий запрос ещё обрабатывается. Дождись ответа и попробуй снова.');
+            await ctx.reply(ctx.t('common.requestInProgress'));
             return undefined;
         }
         await new Promise<void>((resolve) => {
@@ -2003,26 +2038,23 @@ const processUserDocumentThroughAi = async (ctx: any) => {
     const filename = (typeof doc.file_name === 'string' && doc.file_name.trim()) ? doc.file_name.trim() : 'document';
     const ext = filename.split('.').pop()?.toLowerCase() || '';
     if (!SUPPORTED_DOCUMENT_EXTENSIONS.has(ext)) {
-        await ctx.reply(
-            `⚠️ Формат «.${ext || '?'}» не поддерживается.\n` +
-            `Разрешены: txt, md, json, csv, log, xml, yaml, ini, toml, код (py, js, ts, ...), docx, pdf, rtf.`
-        );
+        await ctx.reply(ctx.t('attachments.unsupportedFormat', { extension: ext || '?' }));
         return;
     }
 
     // Check file size from Telegram metadata (avoid downloading huge files).
     if (typeof doc.file_size === 'number' && doc.file_size > MAX_DOCUMENT_BYTES) {
-        await ctx.reply(`⚠️ Файл слишком большой (${formatBytes(doc.file_size)}). Максимум — 5 МБ.`);
+        await ctx.reply(ctx.t('attachments.tooLarge', { size: formatBytes(doc.file_size), max: '5 MB' }));
         return;
     }
 
     const downloaded = await downloadTelegramDocument(ctx, doc);
     if (!downloaded) {
-        await ctx.reply('⚠️ Не удалось скачать файл. Попробуй ещё раз.');
+        await ctx.reply(ctx.t('attachments.downloadFailed'));
         return;
     }
     if (downloaded.buffer.length > MAX_DOCUMENT_BYTES) {
-        await ctx.reply(`⚠️ Файл слишком большой (${formatBytes(downloaded.buffer.length)}). Максимум — 5 МБ.`);
+        await ctx.reply(ctx.t('attachments.tooLarge', { size: formatBytes(downloaded.buffer.length), max: '5 MB' }));
         return;
     }
 
@@ -2082,7 +2114,7 @@ const processPhotoAlbum = async (albumKey: string) => {
 
     const userRecord = await getUser(userId);
     if (!userRecord) {
-        await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+        await ctx.reply(ctx.t('common.userMissing'));
         return;
     }
 
@@ -2139,7 +2171,7 @@ const processPhotoAlbum = async (albumKey: string) => {
         }
     } catch (err) {
         console.error('Ошибка анализа изображения:', formatSafeError(err));
-        await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
+        await ctx.reply(ctx.t('attachments.imageProcessingFailed'));
     }
 };
 
@@ -2156,7 +2188,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
     try {
         const downloaded = await downloadTelegramPhoto(ctx, photos);
         if (!downloaded) {
-            await ctx.reply('Не удалось скачать фото. Попробуй ещё раз.');
+            await ctx.reply(ctx.t('attachments.photoDownloadFailed'));
             return;
         }
 
@@ -2187,7 +2219,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
         // Одиночное фото — обрабатываем сразу
         const userRecord = await getUser(userId);
         if (!userRecord) {
-            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            await ctx.reply(ctx.t('common.userMissing'));
             return;
         }
 
@@ -2195,7 +2227,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
             const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
             const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
             if (dailyLimit > 0 && dailyCount >= dailyLimit) {
-                await ctx.reply(`Лимит сообщений на сегодня исчерпан (${dailyCount}/${dailyLimit}). Попробуй снова после ежедневного сброса.`);
+                await ctx.reply(ctx.t('common.dailyLimitReached', { count: dailyCount, limit: dailyLimit }));
                 return;
             }
         }
@@ -2243,7 +2275,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
         }
     } catch (err) {
         console.error('Ошибка анализа изображения:', formatSafeError(err));
-        await ctx.reply('Не смог обработать изображение. Проверь формат файла и попробуй ещё раз.');
+        await ctx.reply(ctx.t('attachments.imageProcessingFailed'));
     }
 };
 
@@ -2559,7 +2591,7 @@ const resolveMaxContextTokens = (user: UserRecord | undefined): number => {
     return Math.max(1000, Math.min(userChoice, hardLimit));
 };
 const createUserChat = (userId: number, title: string) => {
-    const normalized = title.trim() || 'Новый чат';
+    const normalized = title.trim() || 'Chat';
     return db.prepare(`
         INSERT INTO user_chats (user_id, title)
         VALUES (?, ?)
@@ -2605,7 +2637,12 @@ const ensureActiveChatForUser = (userId: number) => {
         LIMIT 1
     `).get(userId) as { id: number } | undefined;
 
-    const chatId = firstChat?.id ?? Number(createUserChat(userId, 'Основной').lastInsertRowid);
+    const storedLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as {
+        language: string | null;
+    } | undefined)?.language;
+    const chatId = firstChat?.id ?? Number(
+        createUserChat(userId, translateBot(storedLanguage, 'chats.defaultTitle')).lastInsertRowid
+    );
     setUserActiveChat(userId, chatId);
     return chatId;
 };
@@ -2628,9 +2665,9 @@ const shortenHistoryContent = (text: string, maxLen = 10) => {
     if (clean.length <= maxLen) return clean;
     return clean.slice(0, maxLen);
 };
-const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[]) => {
+const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[], t: BotTranslate) => {
     if (!rows.length) {
-        return `История пользователя #${userId} пуста.`;
+        return t('adminHistory.empty', { id: userId });
     }
     const lines = rows.map(row => {
         const chatPart = row.chat_id ? ` chat:${row.chat_id}` : '';
@@ -2638,7 +2675,7 @@ const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[]) => {
         const preview = shortenHistoryContent(row.content);
         return `#${row.id}${chatPart} [${row.role}]${tgMsg} ${row.created_at}\n${preview}`;
     });
-    return `Последние сообщения пользователя #${userId} (новые -> старые):\n\n${lines.join('\n\n')}`;
+    return t('adminHistory.list', { id: userId, rows: lines.join('\n\n') });
 };
 const deleteHistoryByUserAndRole = (userId: number, role: ChatRole | 'all') => {
     if (role === 'all') {
@@ -2776,7 +2813,7 @@ bot.use(async (ctx, next) => {
             await ensureUserCurrentPlanSubscription(userId);
         }
 
-        await syncCommandScopeForUser(userId, true);
+        await syncCommandScopeForUser(userId, true, ctx.state.language);
         ctx.state.role = 'admin';
         ctx.state.userName = fallbackName;
         return next();
@@ -2785,7 +2822,7 @@ bot.use(async (ctx, next) => {
     if (!userRecord) {
         const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
         const pendingUser = await createPendingUser(userId, initialName, telegramUsername, telegramLanguage);
-        await syncCommandScopeForUser(userId, false);
+        await syncCommandScopeForUser(userId, false, ctx.state.language);
 
         if (pendingUser) {
             await notifyAdminsNewRequest(pendingUser);
@@ -2810,7 +2847,7 @@ bot.use(async (ctx, next) => {
         const ban = getBanRecord(userId);
         const reason = ban?.reason ?? ctx.t('access.noReason');
         const date = ban?.banned_at ?? ctx.t('access.unknownDate');
-        await syncCommandScopeForUser(userId, false);
+        await syncCommandScopeForUser(userId, false, ctx.state.language);
         return ctx.reply(ctx.t('access.blocked', { reason, date }));
     }
 
@@ -2820,7 +2857,7 @@ bot.use(async (ctx, next) => {
             return next();
         }
         const savedName = await maybeCapturePendingName(ctx, userRecord, text);
-        await syncCommandScopeForUser(userId, false);
+        await syncCommandScopeForUser(userId, false, ctx.state.language);
 
         if (savedName) {
             return ctx.reply(ctx.t('access.nameSaved'));
@@ -2834,7 +2871,7 @@ bot.use(async (ctx, next) => {
     }
 
     if (userRecord.status === 'disapproved') {
-        await syncCommandScopeForUser(userId, false);
+        await syncCommandScopeForUser(userId, false, ctx.state.language);
         return ctx.reply(ctx.t('access.rejected'));
     }
 
@@ -2855,13 +2892,15 @@ bot.use(async (ctx, next) => {
         await ensureUserCurrentPlanSubscription(userId);
     }
 
-    await syncCommandScopeForUser(userId, false);
+    await syncCommandScopeForUser(userId, false, ctx.state.language);
     ctx.state.role = 'user';
     ctx.state.userName = userRecord.name || ctx.from?.first_name || ctx.t('roles.user');
     return next();
 });
 
-bot.telegram.setMyCommands(BASE_COMMANDS as any);
+bot.telegram.setMyCommands(buildBotCommands(false, (key, options) => (
+    translateBot(DEFAULT_LANGUAGE, key, options)
+)) as any);
 
 const showMenu = async (ctx: any) => {
     const isAdmin = ctx.state.role === 'admin';
@@ -2940,89 +2979,122 @@ const handleClear = (ctx: any) => {
     return ctx.reply(ctx.t('menu.cleared'));
 };
 
-const formatPromptsList = (currentPromptId: number | null, includeDescription = false) => {
+const formatPromptsList = (currentPromptId: number | null, t: BotTranslate, includeDescription = false) => {
     const prompts = getAllPrompts();
     const defaultPrompt = getDefaultPrompt();
     const effectiveCurrentPromptId = currentPromptId ?? defaultPrompt?.id ?? null;
 
-    if (!prompts.length) return 'Промптов пока нет.';
+    if (!prompts.length) return t('prompt.none');
 
     const list = prompts.map(prompt => {
         const markers: string[] = [];
-        if (prompt.id === defaultPrompt?.id) markers.push('default');
-        if (prompt.id === effectiveCurrentPromptId) markers.push('selected');
+        if (prompt.id === defaultPrompt?.id) markers.push(t('prompt.markers.default'));
+        if (prompt.id === effectiveCurrentPromptId) markers.push(t('prompt.markers.selected'));
         const suffix = markers.length ? ` [${markers.join(', ')}]` : '';
-        const description = includeDescription ? ` — ${prompt.description || 'без описания'}` : '';
+        const description = includeDescription
+            ? ` — ${prompt.description || t('prompt.noDescriptionShort')}`
+            : '';
         return `- ${prompt.id}: ${prompt.name}${suffix}${description}`;
     }).join('\n');
 
-    return `Список промптов:\n${list}`;
+    return t('prompt.plainList', { list });
 };
 
-const getPromptDescription = (description: string) => {
+const getPromptDescription = (description: string, t: BotTranslate) => {
     const normalized = description.replace(/\s+/g, ' ').trim();
-    if (!normalized) return 'Описание отсутствует.';
+    if (!normalized) return t('prompt.noDescription');
     return normalized.length > 220 ? `${normalized.slice(0, 220)}...` : normalized;
 };
 
-const getCustomPromptPreview = (content: string | null | undefined, maxLen = 220) => {
+const getCustomPromptPreview = (
+    content: string | null | undefined,
+    t: BotTranslate,
+    maxLen = 220
+) => {
     const normalized = (content || '').replace(/\s+/g, ' ').trim();
-    if (!normalized) return 'Пока не задан.';
+    if (!normalized) return t('prompt.customEmpty');
     return normalized.length > maxLen ? `${normalized.slice(0, maxLen)}...` : normalized;
 };
 
-const buildPromptListKeyboard = (prompts: PromptRecord[], currentPromptId: number, hasCustomPrompt: boolean) => {
+const buildPromptListKeyboard = (
+    prompts: PromptRecord[],
+    currentPromptId: number,
+    hasCustomPrompt: boolean,
+    t: BotTranslate
+) => {
     const rows = prompts.map(prompt => {
         const label = prompt.id === currentPromptId ? `✅ ${prompt.name}` : prompt.name;
         return [Markup.button.callback(label, `prompt:view:${prompt.id}`)];
     });
 
     const customLabel = currentPromptId === CUSTOM_PROMPT_ID
-        ? '✅ Кастомный'
+        ? t('prompt.buttons.customSelected')
         : hasCustomPrompt
-            ? '🧩 Кастомный'
-            : '🧩 Кастомный (создать)';
+            ? t('prompt.buttons.custom')
+            : t('prompt.buttons.customCreate');
     rows.push([Markup.button.callback(customLabel, 'prompt:custom:view')]);
-    rows.push([Markup.button.callback('❌ Отменить', 'prompt:cancel')]);
+    rows.push([Markup.button.callback(t('prompt.buttons.cancel'), 'prompt:cancel')]);
     return Markup.inlineKeyboard(rows);
 };
 
-const buildPromptCardKeyboard = (promptId: number, selected: boolean) => {
+const buildPromptCardKeyboard = (promptId: number, selected: boolean, t: BotTranslate) => {
     const chooseButton = selected
-        ? Markup.button.callback('✅ Уже выбран', `prompt:noop:${promptId}`)
-        : Markup.button.callback('✅ Выбрать', `prompt:use:${promptId}`);
+        ? Markup.button.callback(t('prompt.buttons.alreadySelected'), `prompt:noop:${promptId}`)
+        : Markup.button.callback(t('prompt.buttons.select'), `prompt:use:${promptId}`);
 
     return Markup.inlineKeyboard([
         [chooseButton],
-        [Markup.button.callback('⬅️ К списку', 'prompt:list'), Markup.button.callback('❌ Отменить', 'prompt:cancel')]
+        [
+            Markup.button.callback(t('prompt.buttons.toList'), 'prompt:list'),
+            Markup.button.callback(t('prompt.buttons.cancel'), 'prompt:cancel')
+        ]
     ]);
 };
 
-const buildCustomPromptCardKeyboard = (isSelected: boolean, hasCustomPrompt: boolean) => {
+const buildCustomPromptCardKeyboard = (
+    isSelected: boolean,
+    hasCustomPrompt: boolean,
+    t: BotTranslate
+) => {
     const selectButton = isSelected
-        ? Markup.button.callback('✅ Оставить текущий', 'prompt:custom:keep')
+        ? Markup.button.callback(t('prompt.buttons.keepCurrent'), 'prompt:custom:keep')
         : Markup.button.callback(
-            hasCustomPrompt ? '✅ Использовать текущий' : '✅ Сохранить и использовать',
+            hasCustomPrompt
+                ? t('prompt.buttons.useCurrent')
+                : t('prompt.buttons.saveAndUse'),
             'prompt:custom:use'
         );
 
     return Markup.inlineKeyboard([
         [selectButton],
-        [Markup.button.callback(hasCustomPrompt ? '✏️ Отредактировать' : '✏️ Создать', 'prompt:custom:edit')],
-        [Markup.button.callback('⬅️ К списку', 'prompt:list'), Markup.button.callback('❌ Отменить', 'prompt:cancel')]
+        [
+            Markup.button.callback(
+                hasCustomPrompt ? t('prompt.buttons.edit') : t('prompt.buttons.create'),
+                'prompt:custom:edit'
+            )
+        ],
+        [
+            Markup.button.callback(t('prompt.buttons.toList'), 'prompt:list'),
+            Markup.button.callback(t('prompt.buttons.cancel'), 'prompt:cancel')
+        ]
     ]);
 };
 
 const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, mode: 'reply' | 'edit') => {
     const prompts = getAllPrompts();
     if (!prompts.length) {
-        if (mode === 'edit') return ctx.editMessageText('Промптов пока нет.');
-        return ctx.reply('Промптов пока нет.');
+        if (mode === 'edit') return ctx.editMessageText(ctx.t('prompt.none'));
+        return ctx.reply(ctx.t('prompt.none'));
     }
 
     const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID ? CUSTOM_PROMPT_ID : resolvePromptForUser(user).id;
-    const text = 'Выбери промпт кнопкой ниже:';
-    const keyboard = buildPromptListKeyboard(prompts, currentPromptId, !!(user.custom_prompt_content || '').trim());
+    const text = ctx.t('prompt.choose');
+    const keyboard = buildPromptListKeyboard(
+        prompts,
+        currentPromptId,
+        !!(user.custom_prompt_content || '').trim(),
+        ctx.t
+    );
 
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
@@ -3030,17 +3102,23 @@ const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id:
 
 // ── Model selector (TG) ──────────────────────────────────────────────────────
 
-const buildModelListKeyboard = (models: ModelsCatalogEntry[], currentModelId: string | null) => {
+const buildModelListKeyboard = (
+    models: ModelsCatalogEntry[],
+    currentModelId: string | null,
+    t: BotTranslate
+) => {
     const rows: any[] = [];
     // Авто — всегда первый
-    const autoLabel = !currentModelId ? '✅ Авто' : 'Авто';
+    const autoLabel = !currentModelId
+        ? `✅ ${t('model.auto')}`
+        : t('model.auto');
     rows.push([Markup.button.callback(autoLabel, 'model:select:auto')]);
     // Модели из каталога
     for (const m of models) {
         const label = m.id === currentModelId ? `✅ ${m.name}` : m.name;
         rows.push([Markup.button.callback(label, `model:select:${m.id}`)]);
     }
-    rows.push([Markup.button.callback('❌ Отмена', 'model:cancel')]);
+    rows.push([Markup.button.callback(t('model.buttons.cancel'), 'model:cancel')]);
     return Markup.inlineKeyboard(rows);
 };
 
@@ -3050,23 +3128,30 @@ const handleModelList = async (ctx: any) => {
     try {
         const data = await runBackendGetModels(userId);
         if (!data.models.length) {
-            await ctx.reply('Ручной выбор моделей недоступен. Используется автоматический режим.');
+            await ctx.reply(ctx.t('model.manualUnavailable'));
             return;
         }
-        const text = `🤖 Текущая модель: ${data.preferred_model || 'Авто'}\n\nВыберите модель:`;
-        await ctx.reply(text, buildModelListKeyboard(data.models, data.preferred_model));
+        const text = ctx.t('model.select', {
+            model: data.preferred_model || ctx.t('model.auto')
+        });
+        await ctx.reply(text, buildModelListKeyboard(data.models, data.preferred_model, ctx.t));
     } catch {
-        await ctx.reply('Не удалось загрузить список моделей.');
+        await ctx.reply(ctx.t('model.loadError'));
     }
 };
 
 const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, prompt: PromptRecord) => {
     const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID ? CUSTOM_PROMPT_ID : resolvePromptForUser(user).id;
     const selected = prompt.id === currentPromptId;
-    const defaultMark = prompt.is_default ? ' [default]' : '';
-    const selectedMark = selected ? ' [selected]' : '';
-    const text = `Название: ${prompt.name}${defaultMark}${selectedMark}\nОписание: ${getPromptDescription(prompt.description)}`;
-    return ctx.editMessageText(text, buildPromptCardKeyboard(prompt.id, selected));
+    const defaultMark = prompt.is_default ? ctx.t('prompt.cardDefaultMark') : '';
+    const selectedMark = selected ? ctx.t('prompt.cardSelectedMark') : '';
+    const text = ctx.t('prompt.card', {
+        name: prompt.name,
+        defaultMark,
+        selectedMark,
+        description: getPromptDescription(prompt.description, ctx.t)
+    });
+    return ctx.editMessageText(text, buildPromptCardKeyboard(prompt.id, selected, ctx.t));
 };
 
 const renderCustomPromptCardInteractive = async (
@@ -3076,10 +3161,15 @@ const renderCustomPromptCardInteractive = async (
 ) => {
     const isSelected = user.selected_prompt_id === CUSTOM_PROMPT_ID;
     const hasCustomPrompt = !!(user.custom_prompt_content || '').trim();
-    const selectedMark = isSelected ? ' [selected]' : '';
-    const body = getCustomPromptPreview(user.custom_prompt_content, 500);
-    const text = `Название: Кастомный${selectedMark}\nЛимит: до ${MAX_CUSTOM_PROMPT_LENGTH} символов.\nТекущий текст:\n${body}`;
-    const keyboard = buildCustomPromptCardKeyboard(isSelected, hasCustomPrompt);
+    const selectedMark = isSelected ? ctx.t('prompt.cardSelectedMark') : '';
+    const body = getCustomPromptPreview(user.custom_prompt_content, ctx.t, 500);
+    const text = ctx.t('prompt.customCard', {
+        name: ctx.t('prompt.customName'),
+        selectedMark,
+        limit: MAX_CUSTOM_PROMPT_LENGTH,
+        body
+    });
+    const keyboard = buildCustomPromptCardKeyboard(isSelected, hasCustomPrompt, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -3137,22 +3227,22 @@ const maybeCapturePendingName = async (ctx: any, user: UserRecord, text: string)
     return true;
 };
 
-const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: number) => {
+const buildPendingListKeyboard = (rows: PendingUserRow[], page: number, total: number, t: BotTranslate) => {
     const keyboardRows = rows.map(row => [Markup.button.callback(
         `👤 ${getUserDisplayName(row)} (#${row.id})`,
         `mod:pv:${row.id}:${page}`
     )]);
 
     const navRow = [];
-    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `mod:pp:${page - 1}`));
-    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `mod:pp:${page + 1}`));
+    if (page > 0) navRow.push(Markup.button.callback(t('admin.buttons.previous'), `mod:pp:${page - 1}`));
+    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback(t('admin.buttons.next'), `mod:pp:${page + 1}`));
     if (navRow.length) keyboardRows.push(navRow);
 
-    keyboardRows.push([Markup.button.callback('🔄 Обновить', `mod:pp:${page}`)]);
+    keyboardRows.push([Markup.button.callback(t('admin.buttons.refresh'), `mod:pp:${page}`)]);
     return Markup.inlineKeyboard(keyboardRows);
 };
 
-const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number, noteStatsMap: Map<number, NoteStatsRecord>) => {
+const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: number, noteStatsMap: Map<number, NoteStatsRecord>, t: BotTranslate) => {
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
         const planTag = getPlanLabel(parsePlanFromDb(row.plan));
@@ -3167,90 +3257,90 @@ const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: nu
     });
 
     const navRow = [];
-    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `usr:list:${page - 1}`));
-    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `usr:list:${page + 1}`));
+    if (page > 0) navRow.push(Markup.button.callback(t('admin.buttons.previous'), `usr:list:${page - 1}`));
+    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback(t('admin.buttons.next'), `usr:list:${page + 1}`));
     if (navRow.length) keyboardRows.push(navRow);
 
-    keyboardRows.push([Markup.button.callback('🔄 Обновить', `usr:list:${page}`)]);
+    keyboardRows.push([Markup.button.callback(t('admin.buttons.refresh'), `usr:list:${page}`)]);
     return Markup.inlineKeyboard(keyboardRows);
 };
 
-const buildAdminUserCardKeyboard = (user: UserRecord, page: number) => {
+const buildAdminUserCardKeyboard = (user: UserRecord, page: number, t: BotTranslate) => {
     const moderationButton = user.status === 'banned'
-        ? Markup.button.callback('✅ Разбанить', `usr:unban:${user.id}:${page}`)
-        : Markup.button.callback('⛔ Забанить', `usr:ban:${user.id}:${page}`);
+        ? Markup.button.callback(t('admin.buttons.unban'), `usr:unban:${user.id}:${page}`)
+        : Markup.button.callback(t('admin.buttons.ban'), `usr:ban:${user.id}:${page}`);
 
     return Markup.inlineKeyboard([
-        [Markup.button.callback('✉️ Написать', `ai_send:${user.id}`)],
-        [Markup.button.callback('🧩 Поменять план', `usr:plan:open:${user.id}:${page}`)],
-        [Markup.button.callback('🗂 Изменить контекст', `usr:ctx:ask:${user.id}:${page}`)],
-        [Markup.button.callback('📨 Лимит сообщений', `usr:msg:ask:${user.id}:${page}`)],
+        [Markup.button.callback(t('admin.buttons.message'), `ai_send:${user.id}`)],
+        [Markup.button.callback(t('admin.buttons.changePlan'), `usr:plan:open:${user.id}:${page}`)],
+        [Markup.button.callback(t('admin.buttons.changeContext'), `usr:ctx:ask:${user.id}:${page}`)],
+        [Markup.button.callback(t('admin.buttons.messageLimit'), `usr:msg:ask:${user.id}:${page}`)],
         [moderationButton],
-        [Markup.button.callback('🗑 Удалить', `usr:remove:${user.id}:${page}`)],
-        [Markup.button.callback('⬅️ К списку', `usr:list:${page}`)]
+        [Markup.button.callback(t('admin.buttons.delete'), `usr:remove:${user.id}:${page}`)],
+        [Markup.button.callback(t('admin.buttons.toList'), `usr:list:${page}`)]
     ]);
 };
-const buildAdminPlanChoiceKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
+const buildAdminPlanChoiceKeyboard = (userId: number, page: number, t: BotTranslate) => Markup.inlineKeyboard([
     [Markup.button.callback(`FREE (${PLAN_MAX_CONTEXT_TOKENS.free / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.free})`, `usr:plan:pick:${userId}:${page}:free`)],
     [Markup.button.callback(`STANDART (${PLAN_MAX_CONTEXT_TOKENS.standart / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.standart})`, `usr:plan:pick:${userId}:${page}:standart`)],
     [Markup.button.callback(`PRO (${PLAN_MAX_CONTEXT_TOKENS.pro / 1000}k tokens, web ${PLAN_DAILY_WEB_SEARCH_LIMITS.pro})`, `usr:plan:pick:${userId}:${page}:pro`)],
-    [Markup.button.callback('⬅️ Назад к пользователю', `usr:view:${userId}:${page}`)]
+    [Markup.button.callback(t('admin.buttons.backToUser'), `usr:view:${userId}:${page}`)]
 ]);
-const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan) => Markup.inlineKeyboard([
+const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan, t: BotTranslate) => Markup.inlineKeyboard([
     [
-        Markup.button.callback('День', `usr:plan:dur:${userId}:${page}:${plan}:day`),
-        Markup.button.callback('Неделя', `usr:plan:dur:${userId}:${page}:${plan}:week`)
+        Markup.button.callback(t('admin.durations.day'), `usr:plan:dur:${userId}:${page}:${plan}:day`),
+        Markup.button.callback(t('admin.durations.week'), `usr:plan:dur:${userId}:${page}:${plan}:week`)
     ],
     [
-        Markup.button.callback('Месяц', `usr:plan:dur:${userId}:${page}:${plan}:month`),
-        Markup.button.callback('Год', `usr:plan:dur:${userId}:${page}:${plan}:year`)
+        Markup.button.callback(t('admin.durations.month'), `usr:plan:dur:${userId}:${page}:${plan}:month`),
+        Markup.button.callback(t('admin.durations.year'), `usr:plan:dur:${userId}:${page}:${plan}:year`)
     ],
-    [Markup.button.callback('Бессрочно', `usr:plan:dur:${userId}:${page}:${plan}:forever`)],
-    [Markup.button.callback('⬅️ К выбору плана', `usr:plan:open:${userId}:${page}`)]
-]);
-
-const buildPendingCardKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
-    [
-        Markup.button.callback('✅ Подтвердить', `mod:ok:${userId}:${page}`),
-        Markup.button.callback('❌ Отклонить', `mod:no:${userId}:${page}`)
-    ],
-    [Markup.button.callback('⛔ Забанить', `mod:ban:${userId}:${page}`)],
-    [Markup.button.callback('⬅️ К заявкам', `mod:pp:${page}`)]
+    [Markup.button.callback(t('admin.durations.forever'), `usr:plan:dur:${userId}:${page}:${plan}:forever`)],
+    [Markup.button.callback(t('admin.buttons.backToPlan'), `usr:plan:open:${userId}:${page}`)]
 ]);
 
-const buildBannedListKeyboard = (rows: BannedUserRow[], page: number, total: number) => {
+const buildPendingCardKeyboard = (userId: number, page: number, t: BotTranslate) => Markup.inlineKeyboard([
+    [
+        Markup.button.callback(t('admin.buttons.approve'), `mod:ok:${userId}:${page}`),
+        Markup.button.callback(t('admin.buttons.reject'), `mod:no:${userId}:${page}`)
+    ],
+    [Markup.button.callback(t('admin.buttons.ban'), `mod:ban:${userId}:${page}`)],
+    [Markup.button.callback(t('admin.buttons.toRequests'), `mod:pp:${page}`)]
+]);
+
+const buildBannedListKeyboard = (rows: BannedUserRow[], page: number, total: number, t: BotTranslate) => {
     const keyboardRows = rows.map(row => [Markup.button.callback(
         `⛔ ${getUserDisplayName(row)} (#${row.id})`,
         `mod:bv:${row.id}:${page}`
     )]);
 
     const navRow = [];
-    if (page > 0) navRow.push(Markup.button.callback('⬅️ Назад', `mod:bp:${page - 1}`));
-    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback('➡️ Далее', `mod:bp:${page + 1}`));
+    if (page > 0) navRow.push(Markup.button.callback(t('admin.buttons.previous'), `mod:bp:${page - 1}`));
+    if ((page + 1) * PAGE_SIZE < total) navRow.push(Markup.button.callback(t('admin.buttons.next'), `mod:bp:${page + 1}`));
     if (navRow.length) keyboardRows.push(navRow);
 
-    keyboardRows.push([Markup.button.callback('🔄 Обновить', `mod:bp:${page}`)]);
+    keyboardRows.push([Markup.button.callback(t('admin.buttons.refresh'), `mod:bp:${page}`)]);
     return Markup.inlineKeyboard(keyboardRows);
 };
 
-const buildBannedCardKeyboard = (userId: number, page: number) => Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Разблокировать', `mod:unban:${userId}:${page}`)],
-    [Markup.button.callback('⬅️ К бан-листу', `mod:bp:${page}`)]
+const buildBannedCardKeyboard = (userId: number, page: number, t: BotTranslate) => Markup.inlineKeyboard([
+    [Markup.button.callback(t('admin.buttons.unblock'), `mod:unban:${userId}:${page}`)],
+    [Markup.button.callback(t('admin.buttons.toBans'), `mod:bp:${page}`)]
 ]);
 
 const renderAdminUsersList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
     const safePage = Math.max(0, page);
     const total = getUsersCount();
     if (!total) {
-        if (mode === 'edit') return ctx.editMessageText('Пользователей пока нет.');
-        return ctx.reply('Пользователей пока нет.');
+        if (mode === 'edit') return ctx.editMessageText(ctx.t('admin.usersNone'));
+        return ctx.reply(ctx.t('admin.usersNone'));
     }
 
     const rows = getUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
     const noteStatsMap = getNoteStatsForUsers(rows.map(r => r.id));
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const text = `👥 Пользователи\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}`;
-    const keyboard = buildAdminUsersListKeyboard(rows, safePage, total, noteStatsMap);
+    const text = ctx.t('admin.usersList', { page: safePage + 1, pages, total });
+    const keyboard = buildAdminUsersListKeyboard(rows, safePage, total, noteStatsMap, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -3263,59 +3353,37 @@ const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mod
     const notesLimit = getPlanNotesLimit(plan);
     const noteContentLimit = getPlanNoteContentLimit(plan);
     const subscription = getCurrentPlanSubscription(user.id);
-    const subscriptionEnds = subscription?.ends_at ? subscription.ends_at : 'бессрочно';
-    const text = `Пользователь #${user.id}
-Имя: ${user.name ?? 'не указано'}
-Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
-Роль: ${user.role}
-Статус: ${user.status}
-План: ${getPlanLabel(plan)}
-План до: ${subscriptionEnds}
-Контекст (текущий/макс): ${getContextWindowText(user)}
-Сообщения в день: ${getDailyMessageLimitText(user)}
-Web-поиск в день: ${getDailyWebSearchLimitText(user)}
-Генерация картинок в день: ${user.daily_image_gen_count ?? 0}/${user.daily_image_gen_limit ?? 0}
-Промпт: #${prompt.id} ${prompt.name}${prompt.is_default ? ' (default)' : ''}
-Сообщений сегодня: ${user.daily_message_count ?? 0}
-Токенов сегодня: ${user.daily_tokens_used ?? 0}
-Цена сегодня: ${formatRub(user.daily_cost_rub ?? 0)}
-Поисков web сегодня: ${user.daily_web_search_count ?? 0}
-Картинок сегодня: ${user.daily_image_gen_count ?? 0}/${user.daily_image_gen_limit ?? 0}
-Токенов всего: ${user.total_tokens_used ?? 0}
-Цена всего: ${formatRub(user.total_cost_rub ?? 0)}
-Поисков web всего: ${user.total_web_search_count ?? 0}
-Картинок всего: ${user.total_image_gen_count ?? 0}
-Заметок: ${notesStats.notes_count}/${notesLimit}
-Символов в заметках: ${notesStats.notes_chars}
-Лимит символов на заметку: ${noteContentLimit}
-Всего символов отправлено: ${user.total_message_length ?? 0}
-${ban ? `Бан: ${ban.reason}` : ''}`.trim();
-    const keyboard = buildAdminUserCardKeyboard(user, page);
+    const subscriptionEnds = subscription?.ends_at || ctx.t('admin.forever');
+    const text = ctx.t('admin.userCard', {
+        id: user.id, name: user.name ?? ctx.t('admin.notSpecified'),
+        username: user.tg_username ? `@${user.tg_username}` : ctx.t('admin.noneValue'),
+        role: user.role === 'admin' ? ctx.t('roles.admin') : ctx.t('roles.user'),
+        status: ctx.t(`admin.statuses.${user.status}`), plan: getPlanLabel(plan), subscriptionEnds,
+        context: getContextWindowText(user), messagesLimit: ctx.t('common.unlimited'),
+        webLimit: getDailyWebSearchLimitText(user), imagesDaily: `${user.daily_image_gen_count ?? 0}/${user.daily_image_gen_limit ?? 0}`,
+        prompt: `#${prompt.id} ${prompt.id === CUSTOM_PROMPT_ID ? ctx.t('prompt.customName') : prompt.name}${prompt.is_default ? ctx.t('prompt.currentDefaultMark') : ''}`,
+        messagesToday: user.daily_message_count ?? 0, tokensToday: user.daily_tokens_used ?? 0,
+        costToday: formatRub(user.daily_cost_rub ?? 0), webToday: user.daily_web_search_count ?? 0,
+        tokensTotal: user.total_tokens_used ?? 0, costTotal: formatRub(user.total_cost_rub ?? 0),
+        webTotal: user.total_web_search_count ?? 0, imagesTotal: user.total_image_gen_count ?? 0,
+        notes: `${notesStats.notes_count}/${notesLimit}`, noteChars: notesStats.notes_chars,
+        noteLimit: noteContentLimit, totalChars: user.total_message_length ?? 0,
+        banLine: ban ? ctx.t('admin.banLine', { reason: ban.reason }) : ''
+    }).trim();
+    const keyboard = buildAdminUserCardKeyboard(user, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
 const renderAdminPlanChoiceCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
     const plan = parsePlanFromDb(user.plan);
-    const text = `Пользователь #${user.id}
-Текущий план: ${getPlanLabel(plan)}
-Текущий контекст: ${getContextWindowText(user)}
-
-Выберите новый план:`;
-    const keyboard = buildAdminPlanChoiceKeyboard(user.id, page);
+    const text = ctx.t('admin.planChoice', { id: user.id, plan: getPlanLabel(plan), context: getContextWindowText(user) });
+    const keyboard = buildAdminPlanChoiceKeyboard(user.id, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
 const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: number, plan: UserPlan, mode: 'reply' | 'edit' = 'edit') => {
-    const text = `Пользователь #${user.id}
-Новый план: ${getPlanLabel(plan)}
-Лимит контекста у плана: ${PLAN_MAX_CONTEXT_TOKENS[plan] / 1000}k токенов
-Сообщения в день: безлимит
-Лимит web-поиска в день у плана: ${PLAN_DAILY_WEB_SEARCH_LIMITS[plan]}
-Лимит заметок: ${getPlanNotesLimit(plan)}
-Лимит символов на заметку: ${getPlanNoteContentLimit(plan)}
-
-Выберите срок действия:`;
-    const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan);
+    const text = ctx.t('admin.planDuration', { id: user.id, plan: getPlanLabel(plan), context: PLAN_MAX_CONTEXT_TOKENS[plan] / 1000, web: PLAN_DAILY_WEB_SEARCH_LIMITS[plan], notes: getPlanNotesLimit(plan), noteLimit: getPlanNoteContentLimit(plan) });
+    const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -3324,25 +3392,22 @@ const renderPendingList = async (ctx: any, page: number, mode: 'reply' | 'edit' 
     const safePage = Math.max(0, page);
     const total = getPendingUsersCount();
     if (!total) {
-        if (mode === 'edit') return ctx.editMessageText('Неподтверждённых заявок сейчас нет.');
-        return ctx.reply('Неподтверждённых заявок сейчас нет.');
+        if (mode === 'edit') return ctx.editMessageText(ctx.t('admin.requestsNone'));
+        return ctx.reply(ctx.t('admin.requestsNone'));
     }
 
     const rows = getPendingUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const header = `🕓 Заявки на доступ\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}`;
-    const keyboard = buildPendingListKeyboard(rows, safePage, total);
+    const header = ctx.t('admin.requestsList', { page: safePage + 1, pages, total });
+    const keyboard = buildPendingListKeyboard(rows, safePage, total, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(header, keyboard);
     return ctx.reply(header, keyboard);
 };
 
 const renderPendingCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
-    const username = user.tg_username ? `@${user.tg_username}` : 'нет';
-    const text = `Заявка #${user.id}
-Имя: ${user.name ?? 'не указано'}
-Username: ${username}
-Статус: ${getStatusLabel(user.status)}`;
-    const keyboard = buildPendingCardKeyboard(user.id, page);
+    const username = user.tg_username ? `@${user.tg_username}` : ctx.t('admin.noneValue');
+    const text = ctx.t('admin.requestCard', { id: user.id, name: user.name ?? ctx.t('admin.notSpecified'), username, status: ctx.t(`admin.statuses.${user.status}`) });
+    const keyboard = buildPendingCardKeyboard(user.id, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -3351,26 +3416,22 @@ const renderBannedList = async (ctx: any, page: number, mode: 'reply' | 'edit' =
     const safePage = Math.max(0, page);
     const total = getBannedUsersCount();
     if (!total) {
-        if (mode === 'edit') return ctx.editMessageText('Сейчас нет забаненных пользователей.');
-        return ctx.reply('Сейчас нет забаненных пользователей.');
+        if (mode === 'edit') return ctx.editMessageText(ctx.t('admin.bansNone'));
+        return ctx.reply(ctx.t('admin.bansNone'));
     }
 
     const rows = getBannedUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const header = `⛔ Забаненные пользователи\nСтраница: ${safePage + 1}/${pages}\nВсего: ${total}`;
-    const keyboard = buildBannedListKeyboard(rows, safePage, total);
+    const header = ctx.t('admin.bansList', { page: safePage + 1, pages, total });
+    const keyboard = buildBannedListKeyboard(rows, safePage, total, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(header, keyboard);
     return ctx.reply(header, keyboard);
 };
 
 const renderBannedCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
     const ban = getBanRecord(user.id);
-    const text = `Бан #${user.id}
-Имя: ${user.name ?? 'не указано'}
-Username: ${user.tg_username ? `@${user.tg_username}` : 'нет'}
-Причина: ${ban?.reason ?? 'Без причины'}
-Дата: ${ban?.banned_at ?? 'неизвестно'}`;
-    const keyboard = buildBannedCardKeyboard(user.id, page);
+    const text = ctx.t('admin.banCard', { id: user.id, name: user.name ?? ctx.t('admin.notSpecified'), username: user.tg_username ? `@${user.tg_username}` : ctx.t('admin.noneValue'), reason: ban?.reason ?? ctx.t('access.noReason'), date: ban?.banned_at ?? ctx.t('common.unknown') });
+    const keyboard = buildBannedCardKeyboard(user.id, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
@@ -3412,16 +3473,6 @@ const unbanUserAccess = async (targetUserId: number) => {
 };
 
 const notifyAdminsNewRequest = async (user: UserRecord) => {
-    const usernameText = user.tg_username ? `@${user.tg_username}` : 'нет username';
-    const text = `🆕 Новая заявка\nID: ${user.id}\nПрофиль: tg://user?id=${user.id}\nИмя: ${user.name ?? 'не указано'}\nUsername: ${usernameText}`;
-    const keyboard = Markup.inlineKeyboard([
-        [
-            Markup.button.callback('✅ Подтвердить', `mod:ok:${user.id}:0`),
-            Markup.button.callback('❌ Отклонить', `mod:no:${user.id}:0`)
-        ],
-        [Markup.button.callback('⛔ Забанить', `mod:ban:${user.id}:0`)]
-    ]);
-
     let adminIds: number[] = [];
     try {
         adminIds = await getDatabaseAdminIds();
@@ -3436,6 +3487,22 @@ const notifyAdminsNewRequest = async (user: UserRecord) => {
 
     for (const adminId of adminIds) {
         try {
+            const admin = await getUser(adminId);
+            const t = (key: string, options?: Record<string, unknown>) => translateBot(admin?.language, key, options);
+            const usernameText = user.tg_username ? `@${user.tg_username}` : t('admin.noneValue');
+            const text = t('admin.newRequestNotification', {
+                id: user.id,
+                profile: `tg://user?id=${user.id}`,
+                name: user.name ?? t('admin.notSpecified'),
+                username: usernameText
+            });
+            const keyboard = Markup.inlineKeyboard([
+                [
+                    Markup.button.callback(t('admin.buttons.approve'), `mod:ok:${user.id}:0`),
+                    Markup.button.callback(t('admin.buttons.reject'), `mod:no:${user.id}:0`)
+                ],
+                [Markup.button.callback(t('admin.buttons.ban'), `mod:ban:${user.id}:0`)]
+            ]);
             await bot.telegram.sendMessage(adminId, text, keyboard);
         } catch (err) {
             console.warn(`Не удалось отправить заявку админу ${adminId}`);
@@ -3455,7 +3522,7 @@ bot.command('prompts', async (ctx) => {
     if (!userId) return;
 
     const user = await getUser(userId);
-    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+    if (!user) return ctx.reply(ctx.t('common.userMissing'));
 
     if (ctx.state.role !== 'admin') {
         return renderPromptListInteractive(ctx, user, 'reply');
@@ -3465,13 +3532,17 @@ bot.command('prompts', async (ctx) => {
         const data = await runBackendGetPrompts();
         const prompts = data.prompts;
         const lines = prompts.map(p => {
-            const marker = p.is_default ? ' [default]' : '';
-            const selected = user.selected_prompt_id === p.id ? ' <-- выбран' : '';
+            const marker = p.is_default ? ctx.t('prompt.cardDefaultMark') : '';
+            const selected = user.selected_prompt_id === p.id
+                ? ctx.t('prompt.adminSelectedMark')
+                : '';
             return `#${p.id} ${p.name}${marker}${selected}: ${normalizeTextPreview(p.description || p.content, 80)}`;
         }).join('\n');
-        return ctx.reply(`Промпты:\n\n${lines || 'Нет промптов.'}`);
+        return ctx.reply(ctx.t('prompt.adminList', {
+            lines: lines || ctx.t('prompt.none')
+        }));
     } catch {
-        return ctx.reply('Ошибка получения промптов из API.');
+        return ctx.reply(ctx.t('prompt.apiError'));
     }
 });
 
@@ -3481,227 +3552,227 @@ bot.command('prompt_use', async (ctx) => {
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
-    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_use 1');
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply(ctx.t('prompt.useFormat'));
 
     const user = await getUser(userId);
-    if (!user) return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+    if (!user) return ctx.reply(ctx.t('common.userMissing'));
 
     try {
         const data = await runBackendGetPrompt(promptId);
         await runBackendSelectUserPrompt(userId, promptId);
-        return ctx.reply(`Промпт выбран: ${data.prompt.name}`);
+        return ctx.reply(ctx.t('prompt.selectedNamed', { name: data.prompt.name }));
     } catch {
-        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+        return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
     }
 });
 
 bot.command('prompt_add', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = parsePipeParts(ctx.message.text);
-    if (!parts || parts.length < 3) return ctx.reply('Формат: /prompt_add Имя | Описание | Текст промпта');
+    if (!parts || parts.length < 3) return ctx.reply(ctx.t('adminPrompt.addFormat'));
 
     const [name, description, ...contentParts] = parts;
     const content = contentParts.join(' | ').trim();
-    if (!content) return ctx.reply('Текст промпта не может быть пустым.');
+    if (!content) return ctx.reply(ctx.t('adminPrompt.contentEmpty'));
 
     try {
         const result = await runBackendCreatePrompt(name, description, content);
-        return ctx.reply(`Промпт добавлен: ${name} (ID: ${result.prompt_id})`);
+        return ctx.reply(ctx.t('adminPrompt.added', { name, id: result.prompt_id }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
-            return ctx.reply('Не удалось добавить промпт. Имя уже занято.');
+            return ctx.reply(ctx.t('adminPrompt.nameTakenAdd'));
         }
-        return ctx.reply('Не удалось добавить промпт.');
+        return ctx.reply(ctx.t('adminPrompt.addError'));
     }
 });
 
 bot.command('prompt_show', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
-    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_show 3');
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply(ctx.t('adminPrompt.showFormat'));
 
     try {
         const data = await runBackendGetPrompt(promptId);
         const p = data.prompt;
-        const defaultMark = p.is_default ? ' [default]' : '';
-        const text = `Промпт ${p.id}: ${p.name}${defaultMark}\nОписание: ${p.description || 'без описания'}\n\nТекст:\n${p.content}`;
+        const defaultMark = p.is_default ? ctx.t('prompt.cardDefaultMark') : '';
+        const text = ctx.t('adminPrompt.show', { id: p.id, name: p.name, defaultMark, description: p.description || ctx.t('prompt.noDescriptionShort'), content: p.content });
         return ctx.reply(text);
     } catch {
-        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+        return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
     }
 });
 
 bot.command('prompt_set', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = parsePipeParts(ctx.message.text);
-    if (!parts || parts.length < 2) return ctx.reply('Формат: /prompt_set 3 | Новый текст');
+    if (!parts || parts.length < 2) return ctx.reply(ctx.t('adminPrompt.setFormat'));
 
     const promptId = Number.parseInt(parts[0], 10);
-    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Укажи корректный ID: /prompt_set 3 | Новый текст');
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply(ctx.t('adminPrompt.setInvalidId'));
     const content = parts.slice(1).join(' | ').trim();
-    if (!content) return ctx.reply('Новый текст не может быть пустым.');
+    if (!content) return ctx.reply(ctx.t('adminPrompt.newContentEmpty'));
 
     try {
         const data = await runBackendGetPrompt(promptId);
         await runBackendUpdatePromptContent(promptId, content);
-        return ctx.reply(`Текст промпта "${data.prompt.name}" обновлён.`);
+        return ctx.reply(ctx.t('adminPrompt.contentUpdated', { name: data.prompt.name }));
     } catch {
-        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+        return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
     }
 });
 
 bot.command('prompt_desc', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = parsePipeParts(ctx.message.text);
-    if (!parts || parts.length < 2) return ctx.reply('Формат: /prompt_desc 3 | Новое описание');
+    if (!parts || parts.length < 2) return ctx.reply(ctx.t('adminPrompt.descFormat'));
 
     const promptId = Number.parseInt(parts[0], 10);
-    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Укажи корректный ID: /prompt_desc 3 | Новое описание');
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply(ctx.t('adminPrompt.descInvalidId'));
     const description = parts.slice(1).join(' | ').trim();
-    if (!description) return ctx.reply('Описание не может быть пустым.');
+    if (!description) return ctx.reply(ctx.t('adminPrompt.descriptionEmpty'));
 
     try {
         const data = await runBackendGetPrompt(promptId);
         await runBackendUpdatePromptDescription(promptId, description);
-        return ctx.reply(`Описание промпта "${data.prompt.name}" обновлено.`);
+        return ctx.reply(ctx.t('adminPrompt.descriptionUpdated', { name: data.prompt.name }));
     } catch {
-        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+        return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
     }
 });
 
 bot.command('prompt_rename', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
     const newName = parts.slice(2).join(' ').trim();
 
-    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_rename 3 НовоеИмя');
-    if (!newName) return ctx.reply('Формат: /prompt_rename 3 НовоеИмя');
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply(ctx.t('adminPrompt.renameFormat'));
+    if (!newName) return ctx.reply(ctx.t('adminPrompt.renameFormat'));
 
     try {
         const data = await runBackendGetPrompt(promptId);
         await runBackendUpdatePromptName(promptId, newName);
-        return ctx.reply(`Промпт переименован: ${data.prompt.name} -> ${newName}`);
+        return ctx.reply(ctx.t('adminPrompt.renamed', { oldName: data.prompt.name, newName }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
-            return ctx.reply('Не удалось переименовать промпт. Имя уже занято.');
+            return ctx.reply(ctx.t('adminPrompt.nameTakenRename'));
         }
-        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+        return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
     }
 });
 
 bot.command('prompt_default', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
-    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_default 3');
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply(ctx.t('adminPrompt.defaultFormat'));
 
     try {
         const data = await runBackendGetPrompt(promptId);
         await runBackendSetDefaultPrompt(promptId);
-        return ctx.reply(`Промпт по умолчанию обновлён: ${data.prompt.name}`);
+        return ctx.reply(ctx.t('adminPrompt.defaultUpdated', { name: data.prompt.name }));
     } catch {
-        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+        return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
     }
 });
 
 bot.command('prompt_delete', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const promptId = Number.parseInt(parts[1], 10);
-    if (!promptId || Number.isNaN(promptId)) return ctx.reply('Формат: /prompt_delete 3');
+    if (!promptId || Number.isNaN(promptId)) return ctx.reply(ctx.t('adminPrompt.deleteFormat'));
 
     try {
         const data = await runBackendGetPrompt(promptId);
         const name = data.prompt.name;
         await runBackendDeletePrompt(promptId);
-        return ctx.reply(`Промпт удалён: ${name}`);
+        return ctx.reply(ctx.t('adminPrompt.deleted', { name }));
     } catch (err: any) {
         if (axios.isAxiosError(err)) {
             const code = err.response?.data?.error;
-            if (code === 'cannot_delete_last_prompt') return ctx.reply('Нельзя удалить последний промпт.');
-            if (code === 'cannot_delete_default_prompt') return ctx.reply('Нельзя удалить промпт по умолчанию. Сначала назначь другой через /prompt_default.');
+            if (code === 'cannot_delete_last_prompt') return ctx.reply(ctx.t('adminPrompt.cannotDeleteLast'));
+            if (code === 'cannot_delete_default_prompt') return ctx.reply(ctx.t('adminPrompt.cannotDeleteDefault'));
         }
-        return ctx.reply(`Промпт с ID ${promptId} не найден.`);
+        return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
     }
 });
 
 // Команда добавления пользователя (только для админов)
 bot.command('add', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const newUserId = Number.parseInt(parts[1], 10);
-    const newUserName = parts.slice(2).join(' ') || 'Без_имени';
+    const newUserName = parts.slice(2).join(' ') || ctx.t('admin.unnamed');
 
-    if (!newUserId || Number.isNaN(newUserId)) return ctx.reply('Укажи правильный ID: /add 123456789 Имя');
+    if (!newUserId || Number.isNaN(newUserId)) return ctx.reply(ctx.t('admin.addFormat'));
 
     await addUser(newUserId, newUserName, 'user', 'approved', null);
     removeBan(newUserId);
-    ctx.reply(`Пользователь ${newUserName} (ID: ${newUserId}) успешно добавлен в базу.`);
+    ctx.reply(ctx.t('admin.userAdded', { name: newUserName, id: newUserId }));
 });
 
 // Команда удаления пользователя (только для админов)
 bot.command('remove', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
 
-    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Укажи правильный ID: /remove 123456789');
+    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply(ctx.t('admin.removeFormat'));
     const targetUser = await getUser(targetUserId);
-    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
-    if (targetUser.role === 'admin') return ctx.reply('Нельзя удалить администратора. Сначала измени его роль в БД.');
+    if (!targetUser) return ctx.reply(ctx.t('admin.userNotFoundId', { id: targetUserId }));
+    if (targetUser.role === 'admin') return ctx.reply(ctx.t('admin.cannotDeleteAdminDb'));
 
     await removeUser(targetUserId);
     removeBan(targetUserId);
     removeUserPlanSubscriptions(targetUserId);
     clearUserHistory(targetUserId);
-    ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) удалён из базы.`);
+    ctx.reply(ctx.t('admin.userRemoved', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 });
 
 bot.command('ban', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
     const adminId = ctx.from?.id;
     if (!adminId) return;
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
-    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Формат: /ban 123456789 [причина]');
+    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply(ctx.t('admin.banFormat'));
     const targetUser = await getUser(targetUserId);
-    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
-    if (targetUser.role === 'admin') return ctx.reply('Нельзя забанить администратора. Сначала измени его роль в БД.');
+    if (!targetUser) return ctx.reply(ctx.t('admin.userNotFoundId', { id: targetUserId }));
+    if (targetUser.role === 'admin') return ctx.reply(ctx.t('admin.cannotBanAdminDb'));
 
-    const reason = parts.slice(2).join(' ').trim() || 'Решение администратора';
+    const reason = parts.slice(2).join(' ').trim() || ctx.t('admin.defaultBanReason');
     await banUserAccess(targetUserId, adminId, reason);
-    ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) забанен.`);
+    ctx.reply(ctx.t('admin.userBanned', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 
-    bot.telegram.sendMessage(targetUserId, `🚫 Доступ заблокирован администратором.\nПричина: ${reason}`).catch(() => undefined);
+    bot.telegram.sendMessage(targetUserId, translateBot(targetUser.language, 'admin.notifications.bannedReason', { reason })).catch(() => undefined);
 });
 
 bot.command('unban', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
-    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply('Формат: /unban 123456789');
+    if (!targetUserId || Number.isNaN(targetUserId)) return ctx.reply(ctx.t('admin.unbanFormat'));
 
     const targetUser = await getUser(targetUserId);
-    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
-    if (targetUser.status !== 'banned') return ctx.reply('Этот пользователь не находится в бане.');
+    if (!targetUser) return ctx.reply(ctx.t('admin.userNotFoundId', { id: targetUserId }));
+    if (targetUser.status !== 'banned') return ctx.reply(ctx.t('admin.notBanned'));
 
     await unbanUserAccess(targetUserId);
-    ctx.reply(`Пользователь ${targetUser.name ?? 'Без_имени'} (ID: ${targetUserId}) разбанен и снова в ожидании.`);
+    ctx.reply(ctx.t('admin.userUnbanned', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 
-    bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.').catch(() => undefined);
+    bot.telegram.sendMessage(targetUserId, translateBot(targetUser.language, 'admin.notifications.unbanned')).catch(() => undefined);
 });
 
 // Команда смены имени
@@ -3717,8 +3788,7 @@ bot.command('rename', async (ctx) => {
     }
 
     if (parts.length < 2) {
-        if (isAdmin) return ctx.reply('Формат: /rename НовоеИмя\nили /rename 123456789 НовоеИмя');
-        return ctx.reply('Формат: /rename НовоеИмя');
+        return ctx.reply(isAdmin ? ctx.t('admin.renameFormat') : ctx.t('profile.renameFormat'));
     }
 
     let targetUserId = userId;
@@ -3734,21 +3804,20 @@ bot.command('rename', async (ctx) => {
     }
 
     if (!newUserName) {
-        if (isAdmin) return ctx.reply('Укажи новое имя: /rename НовоеИмя\nили /rename 123456789 НовоеИмя');
-        return ctx.reply('Укажи новое имя: /rename НовоеИмя');
+        return ctx.reply(isAdmin ? ctx.t('admin.renameRequired') : ctx.t('profile.renameRequired'));
     }
 
     const targetUser = await getUser(targetUserId);
-    if (!targetUser) return ctx.reply(`Пользователь с ID ${targetUserId} не найден в базе.`);
+    if (!targetUser) return ctx.reply(ctx.t('admin.userNotFoundId', { id: targetUserId }));
 
     await updateUserName(targetUserId, newUserName);
 
     if (targetUserId === userId) {
         ctx.state.userName = newUserName;
-        return ctx.reply(`Готово, теперь тебя зовут: ${newUserName}`);
+        return ctx.reply(ctx.t('profile.renamed', { name: newUserName }));
     }
 
-    ctx.reply(`Имя пользователя с ID ${targetUserId} обновлено: ${targetUser.name ?? 'Без_имени'} -> ${newUserName}`);
+    ctx.reply(ctx.t('admin.userRenamed', { id: targetUserId, oldName: targetUser.name ?? ctx.t('admin.unnamed'), newName: newUserName }));
 });
 
 // Команда просмотра списка (только для админов)
@@ -3758,28 +3827,28 @@ bot.command('users', (ctx) => {
 });
 
 bot.command('sync_plan_limits', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
     await syncAllUsersPlanLimits();
-    return ctx.reply(`✅ Лимиты по планам синхронизированы.`);
+    return ctx.reply(ctx.t('admin.planLimitsSynced'));
 });
 
 bot.command('reset_counters', async (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
     try {
         await axios.post(`${BACKEND_API_BASE_URL}/internal/reset-daily-counters`, {}, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
-        return ctx.reply('✅ Дневные счётчики всех пользователей обнулены.');
+        return ctx.reply(ctx.t('admin.countersReset'));
     } catch {
-        return ctx.reply('❌ Ошибка при сбросе счётчиков.');
+        return ctx.reply(ctx.t('admin.countersResetError'));
     }
 });
 
 bot.command('history_user', (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
     if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
-        return ctx.reply('Формат: /history_user <user_id> [limit]');
+        return ctx.reply(ctx.t('adminHistory.userFormat'));
     }
 
     const rawLimit = Number.parseInt(parts[2], 10);
@@ -3788,34 +3857,34 @@ bot.command('history_user', (ctx) => {
         : 10;
 
     const rows = getRecentHistoryRowsByUser(targetUserId, limit);
-    return ctx.reply(formatRecentHistoryRows(targetUserId, rows));
+    return ctx.reply(formatRecentHistoryRows(targetUserId, rows, ctx.t));
 });
 
 bot.command('history_delete', (ctx) => {
-    if (ctx.state.role !== 'admin') return ctx.reply('Эта команда только для админов.');
+    if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const targetUserId = Number.parseInt(parts[1], 10);
     if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
-        return ctx.reply('Формат: /history_delete <user_id> <message_id> [db|tg]\nили /history_delete <user_id> <user|assistant|all>');
+        return ctx.reply(ctx.t('adminHistory.deleteFormat'));
     }
     const secondArg = (parts[2] || '').toLowerCase();
     if (!secondArg) {
-        return ctx.reply('Формат: /history_delete <user_id> <message_id> [db|tg]\nили /history_delete <user_id> <user|assistant|all>');
+        return ctx.reply(ctx.t('adminHistory.deleteFormat'));
     }
 
     if (secondArg === 'user' || secondArg === 'assistant' || secondArg === 'all') {
         const role: ChatRole | 'all' = secondArg;
         const result = deleteHistoryByUserAndRole(targetUserId, role);
         if (!result.changes) {
-            return ctx.reply(`Ничего не удалено для user_id=${targetUserId} (role=${role}).`);
+            return ctx.reply(ctx.t('adminHistory.nothingDeletedRole', { id: targetUserId, role }));
         }
-        return ctx.reply(`Удалено ${result.changes} записей истории для user_id=${targetUserId} (role=${role}).`);
+        return ctx.reply(ctx.t('adminHistory.deletedRole', { count: result.changes, id: targetUserId, role }));
     }
 
     const messageId = Number.parseInt(secondArg, 10);
     if (!Number.isFinite(messageId) || messageId <= 0) {
-        return ctx.reply('Некорректный message_id. Формат: /history_delete <user_id> <message_id> [db|tg]');
+        return ctx.reply(ctx.t('adminHistory.invalidMessageId'));
     }
 
     const mode = (parts[3] || '').toLowerCase();
@@ -3823,27 +3892,27 @@ bot.command('history_delete', (ctx) => {
     if (mode === 'tg') {
         result = deleteHistoryMessageByUserAndTelegramMessageId(targetUserId, messageId);
         if (!result.changes) {
-            return ctx.reply(`Сообщение не найдено: user_id=${targetUserId}, telegram_message_id=${messageId}.`);
+            return ctx.reply(ctx.t('adminHistory.notFoundTg', { id: targetUserId, messageId }));
         }
-        return ctx.reply(`Удалено ${result.changes} сообщение(й): user_id=${targetUserId}, telegram_message_id=${messageId}.`);
+        return ctx.reply(ctx.t('adminHistory.deletedTg', { count: result.changes, id: targetUserId, messageId }));
     }
     if (mode === 'db') {
         result = deleteHistoryMessageByUserAndMessageId(targetUserId, messageId);
         if (!result.changes) {
-            return ctx.reply(`Сообщение не найдено: user_id=${targetUserId}, db_id=${messageId}.`);
+            return ctx.reply(ctx.t('adminHistory.notFoundDb', { id: targetUserId, messageId }));
         }
-        return ctx.reply(`Удалено ${result.changes} сообщение(й): user_id=${targetUserId}, db_id=${messageId}.`);
+        return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.changes, id: targetUserId, messageId }));
     }
 
     result = deleteHistoryMessageByUserAndMessageId(targetUserId, messageId);
     if (result.changes) {
-        return ctx.reply(`Удалено ${result.changes} сообщение(й): user_id=${targetUserId}, db_id=${messageId}.`);
+        return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.changes, id: targetUserId, messageId }));
     }
     const tgResult = deleteHistoryMessageByUserAndTelegramMessageId(targetUserId, messageId);
     if (tgResult.changes) {
-        return ctx.reply(`Удалено ${tgResult.changes} сообщение(й): user_id=${targetUserId}, telegram_message_id=${messageId}.`);
+        return ctx.reply(ctx.t('adminHistory.deletedTg', { count: tgResult.changes, id: targetUserId, messageId }));
     }
-    return ctx.reply(`Сообщение не найдено для user_id=${targetUserId}, message_id=${messageId} (проверил db_id и telegram_message_id).`);
+    return ctx.reply(ctx.t('adminHistory.notFoundAny', { id: targetUserId, messageId }));
 });
 
 bot.command('clear', (ctx) => {
@@ -3855,13 +3924,10 @@ bot.command('link', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     const userRecord = await getUser(userId);
-    if (!userRecord) return ctx.reply('Сначала попроси админа добавить тебя.');
+    if (!userRecord) return ctx.reply(ctx.t('link.askAdminFirst'));
     linkCodeFlows.set(userId, 'await_code');
     return ctx.reply(
-        '🔗 Привязка к desktop-приложению.\n\n' +
-        'Введи 6-значный код, который отображается в десктоп-приложении.\n' +
-        'Код действует 10 минут.\n\n' +
-        'Для отмены: /cancellink',
+        ctx.t('link.instructions'),
         Markup.keyboard([['/cancellink']]).resize().oneTime()
     );
 });
@@ -3870,7 +3936,7 @@ bot.command('cancellink', (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     linkCodeFlows.delete(userId);
-    return ctx.reply('Ок, привязка отменена.', buildMenuTriggerKeyboard(ctx.t));
+    return ctx.reply(ctx.t('link.cancelled'), buildMenuTriggerKeyboard(ctx.t));
 });
 
 bot.command('unlink', async (ctx) => {
@@ -3878,14 +3944,11 @@ bot.command('unlink', async (ctx) => {
     if (!userId) return;
     unlinkChoiceFlows.set(userId, { expiresAt: Date.now() + 10 * 60 * 1000 });
     return ctx.reply(
-        '⚠️ Отвязка разделит общий аккаунт на два.\n\n' +
-        'Выбери, где останутся все текущие чаты, изображения, промпты, настройки и память.\n' +
-        'Второй аккаунт станет новым и пустым.\n\n' +
-        'Данные не удаляются.',
+        ctx.t('unlink.warning'),
         Markup.inlineKeyboard([
-            [Markup.button.callback('💻 Оставить данные в Desktop', `unlink:desktop:${userId}`)],
-            [Markup.button.callback('✈️ Оставить данные в Telegram', `unlink:telegram:${userId}`)],
-            [Markup.button.callback('❌ Отмена', `unlink:cancel:${userId}`)]
+            [Markup.button.callback(ctx.t('unlink.buttons.desktop'), `unlink:desktop:${userId}`)],
+            [Markup.button.callback(ctx.t('unlink.buttons.telegram'), `unlink:telegram:${userId}`)],
+            [Markup.button.callback(ctx.t('unlink.buttons.cancel'), `unlink:cancel:${userId}`)]
         ])
     );
 });
@@ -3896,27 +3959,27 @@ bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
     const userId = ctx.from?.id;
 
     if (!userId || userId !== ownerTelegramId) {
-        await ctx.answerCbQuery('Эта кнопка предназначена другому пользователю.');
+        await ctx.answerCbQuery(ctx.t('unlink.wrongUser'));
         return;
     }
 
     const pending = unlinkChoiceFlows.get(userId);
     if (!pending || pending.expiresAt <= Date.now()) {
         unlinkChoiceFlows.delete(userId);
-        await ctx.answerCbQuery('Выбор устарел. Отправь /unlink ещё раз.');
-        await ctx.editMessageText('Время выбора истекло. Отправь /unlink ещё раз.').catch(() => {});
+        await ctx.answerCbQuery(ctx.t('unlink.expiredCallback'));
+        await ctx.editMessageText(ctx.t('unlink.expired')).catch(() => {});
         return;
     }
 
     unlinkChoiceFlows.delete(userId);
     if (action === 'cancel') {
-        await ctx.answerCbQuery('Отвязка отменена');
-        await ctx.editMessageText('Отвязка отменена. Аккаунты остались связаны.').catch(() => {});
+        await ctx.answerCbQuery(ctx.t('unlink.cancelledCallback'));
+        await ctx.editMessageText(ctx.t('unlink.cancelled')).catch(() => {});
         return;
     }
 
-    await ctx.answerCbQuery('Отвязываю аккаунт...');
-    await ctx.editMessageText('⏳ Разделяю аккаунты. Не нажимай /unlink повторно...').catch(() => {});
+    await ctx.answerCbQuery(ctx.t('unlink.processingCallback'));
+    await ctx.editMessageText(ctx.t('unlink.processing')).catch(() => {});
 
     try {
         const response = await axios.post(
@@ -3929,30 +3992,26 @@ bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
         );
 
         if (!response.data?.ok) {
-            await ctx.editMessageText('Аккаунт не был отвязан. Попробуй ещё раз через /unlink.').catch(() => {});
+            await ctx.editMessageText(ctx.t('unlink.failed')).catch(() => {});
             return;
         }
 
         const ownerText = action === 'telegram'
-            ? 'Все текущие данные остались в Telegram. Desktop получил новый пустой аккаунт.'
-            : 'Все текущие данные остались в Desktop. Telegram получил новый пустой аккаунт.';
-        await ctx.editMessageText(`✅ Аккаунты разделены.\n\n${ownerText}`).catch(() => {});
+            ? ctx.t('unlink.successTelegram')
+            : ctx.t('unlink.successDesktop');
+        await ctx.editMessageText(ctx.t('unlink.success', { details: ownerText })).catch(() => {});
     } catch (err: any) {
         const msg = err?.response?.data?.error;
         if (msg === 'not_linked') {
-            await ctx.editMessageText('Аккаунт не был привязан к desktop-приложению.').catch(() => {});
+            await ctx.editMessageText(ctx.t('unlink.notLinked')).catch(() => {});
             return;
         }
         if (msg === 'password_identity_required') {
-            await ctx.editMessageText(
-                'Нельзя разделить аккаунты: у текущего аккаунта нет входа по логину и паролю в Desktop.'
-            ).catch(() => {});
+            await ctx.editMessageText(ctx.t('unlink.passwordRequired')).catch(() => {});
             return;
         }
         console.error('Unlink error:', formatSafeError(err));
-        await ctx.editMessageText(
-            'Не удалось получить подтверждение отвязки. Проверь статус в Desktop или отправь /unlink ещё раз.'
-        ).catch(() => {});
+        await ctx.editMessageText(ctx.t('unlink.confirmationError')).catch(() => {});
     }
 });
 
@@ -3962,18 +4021,18 @@ bot.command('tz', async (ctx) => {
 
     const offset = Number.parseInt(ctx.message.text.split(' ')[1], 10);
     if (Number.isNaN(offset) || offset < -12 || offset > 14) {
-        return ctx.reply('Использование: /tz <смещение_от_utc>. Например, для Города: /tz 7');
+        return ctx.reply(ctx.t('timezone.usage'));
     }
 
     try {
         await runBackendSetTimezone(userId, offset);
         updateUserTimezone(userId, offset);
     } catch {
-        return ctx.reply('Ошибка при установке часового пояса.');
+        return ctx.reply(ctx.t('timezone.error'));
     }
     timezoneSetupFlows.delete(userId);
     const sign = offset >= 0 ? '+' : '';
-    return ctx.reply(`Часовой пояс успешно изменён на UTC${sign}${offset}.`, buildMenuTriggerKeyboard(ctx.t));
+    return ctx.reply(ctx.t('timezone.changed', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
 });
 
 bot.command('tasks', async (ctx) => {
@@ -3982,13 +4041,17 @@ bot.command('tasks', async (ctx) => {
 
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к задачам.');
+        return ctx.reply(ctx.t('tasks.noAccess'));
     }
 
     const tasks = getUserTasks(userId, 'pending', 20);
-    if (!tasks.length) return ctx.reply('У тебя нет активных напоминаний и расписаний.');
+    if (!tasks.length) return ctx.reply(ctx.t('tasks.noneActive'));
 
-    const text = `Твои активные задачи (${tasks.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${await formatTasksList(tasks)}`;
+    const text = ctx.t('tasks.list', {
+        count: tasks.length,
+        max: MAX_PENDING_TASKS_PER_USER,
+        tasks: await formatTasksList(tasks, ctx.t)
+    });
     return ctx.reply(text);
 });
 
@@ -3998,24 +4061,34 @@ bot.command('task_delete', async (ctx) => {
 
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к задачам.');
+        return ctx.reply(ctx.t('tasks.noAccess'));
     }
 
     const taskId = Number.parseInt(ctx.message.text.split(' ')[1], 10);
     if (!taskId || Number.isNaN(taskId)) {
-        return ctx.reply('Формат: /task_delete <id>. Пример: /task_delete 12');
+        return ctx.reply(ctx.t('tasks.deleteFormat'));
     }
 
     const task = getTaskByUserAndId(userId, taskId);
-    if (!task) return ctx.reply(`Задача с ID ${taskId} не найдена.`);
-    if (task.status !== 'pending') return ctx.reply(`Задача #${taskId} уже не активна (status: ${task.status}).`);
+    if (!task) return ctx.reply(ctx.t('tasks.notFoundId', { id: taskId }));
+    if (task.status !== 'pending') {
+        return ctx.reply(ctx.t('tasks.notActive', {
+            id: taskId,
+            status: ctx.t(`tasks.statuses.${task.status}`)
+        }));
+    }
 
     const result = deletePendingTaskByUserAndId(userId, taskId);
-    if (!result.changes) return ctx.reply(`Не удалось удалить задачу #${taskId}.`);
+    if (!result.changes) return ctx.reply(ctx.t('tasks.deleteError', { id: taskId }));
 
     const updated = getUserTasks(userId, 'pending', 20);
-    const updatedText = await formatTasksList(updated, 'Активных задач больше нет.');
-    return ctx.reply(`Удалил задачу #${taskId}.\n\nТекущие задачи (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n\n${updatedText}`);
+    const updatedText = await formatTasksList(updated, ctx.t, ctx.t('tasks.noneRemaining'));
+    return ctx.reply(ctx.t('tasks.deleted', {
+        id: taskId,
+        count: updated.length,
+        max: MAX_PENDING_TASKS_PER_USER,
+        tasks: updatedText
+    }));
 });
 
 bot.command('chats', async (ctx) => {
@@ -4023,17 +4096,20 @@ bot.command('chats', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к чатам.');
+        return ctx.reply(ctx.t('chats.noAccess'));
     }
 
     const active = getActiveChatForUser(userId);
     const chats = getUserChats(userId, 50);
-    if (!chats.length) return ctx.reply('Чатов пока нет.');
+    if (!chats.length) return ctx.reply(ctx.t('chats.none'));
     const lines = chats.map(chat => {
-        const marker = active?.id === chat.id ? ' [активный]' : '';
+        const marker = active?.id === chat.id ? ctx.t('chats.activeMark') : '';
         return `#${chat.id}${marker} ${chat.title}`;
     });
-    return ctx.reply(`Твои чаты (${chats.length}):\n\n${lines.join('\n')}\n\nКоманды:\n/chat_new <название>\n/chat_use <id>`);
+    return ctx.reply(ctx.t('chats.list', {
+        count: chats.length,
+        chats: lines.join('\n')
+    }));
 });
 
 bot.command('chat_new', async (ctx) => {
@@ -4041,17 +4117,17 @@ bot.command('chat_new', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к чатам.');
+        return ctx.reply(ctx.t('chats.noAccess'));
     }
 
     const titleRaw = extractCommandPayload(ctx.message.text, 'chat_new');
     const existingCount = getUserChats(userId, 500).length;
-    const autoTitle = `Чат ${existingCount + 1}`;
+    const autoTitle = ctx.t('chats.autoTitle', { number: existingCount + 1 });
     const title = (titleRaw || autoTitle).slice(0, 80).trim() || autoTitle;
     const created = createUserChat(userId, title);
     const chatId = Number(created.lastInsertRowid);
     setUserActiveChat(userId, chatId);
-    return ctx.reply(`Создал и активировал чат #${chatId}: ${title}`);
+    return ctx.reply(ctx.t('chats.created', { id: chatId, title }));
 });
 
 bot.command('chat_use', async (ctx) => {
@@ -4059,20 +4135,20 @@ bot.command('chat_use', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к чатам.');
+        return ctx.reply(ctx.t('chats.noAccess'));
     }
 
     const chatId = Number.parseInt(ctx.message.text.split(' ').filter(Boolean)[1], 10);
     if (!Number.isFinite(chatId) || chatId <= 0) {
-        return ctx.reply('Формат: /chat_use <id>');
+        return ctx.reply(ctx.t('chats.useFormat'));
     }
 
     const chat = getUserChatById(userId, chatId);
     if (!chat) {
-        return ctx.reply(`Чат #${chatId} не найден.`);
+        return ctx.reply(ctx.t('chats.notFound', { id: chatId }));
     }
     setUserActiveChat(userId, chatId);
-    return ctx.reply(`Активный чат переключен на #${chat.id}: ${chat.title}`);
+    return ctx.reply(ctx.t('chats.switched', { id: chat.id, title: chat.title }));
 });
 
 bot.command('note_add', async (ctx) => {
@@ -4080,25 +4156,32 @@ bot.command('note_add', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к заметкам.');
+        return ctx.reply(ctx.t('notes.noAccess'));
     }
 
     const content = extractCommandPayload(ctx.message.text, 'note_add');
-    if (!content) return ctx.reply('Формат: /note_add <текст заметки>');
+    if (!content) return ctx.reply(ctx.t('notes.addFormat'));
     const userPlan = parsePlanFromDb(user.plan);
     const contentLimit = getPlanNoteContentLimit(userPlan);
     if (content.length > contentLimit) {
-        return ctx.reply(`Слишком длинная заметка: ${content.length} символов. Лимит для плана ${getPlanLabel(userPlan)}: ${contentLimit}.`);
+        return ctx.reply(ctx.t('notes.tooLong', {
+            length: content.length,
+            plan: getPlanLabel(userPlan),
+            limit: contentLimit
+        }));
     }
     const notesLimit = getPlanNotesLimit(userPlan);
     const notesCount = countNotes(userId);
     if (notesCount >= notesLimit) {
-        return ctx.reply(`Лимит записной книжки для плана ${getPlanLabel(userPlan)}: ${notesLimit}. Удали старые заметки (/note_delete <id>) или обнови план.`);
+        return ctx.reply(ctx.t('notes.limitReached', {
+            plan: getPlanLabel(userPlan),
+            limit: notesLimit
+        }));
     }
 
     const created = createNote(userId, content, '');
     const noteId = Number(created.lastInsertRowid);
-    return ctx.reply(`✅ Заметка сохранена (ID: ${noteId}).`);
+    return ctx.reply(ctx.t('notes.saved', { id: noteId }));
 });
 
 bot.command('notes', async (ctx) => {
@@ -4106,7 +4189,7 @@ bot.command('notes', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к заметкам.');
+        return ctx.reply(ctx.t('notes.noAccess'));
     }
 
     const pageRaw = ctx.message.text.split(' ').filter(Boolean)[1];
@@ -4116,7 +4199,14 @@ bot.command('notes', async (ctx) => {
     const offset = (page - 1) * listLimit;
     const notes = getNotesPage(userId, listLimit, offset);
     const total = countNotes(userId);
-    return ctx.reply(formatNotesPage(notes, page, total, listLimit));
+    return ctx.reply(formatNotesPage(
+        notes,
+        page,
+        total,
+        listLimit,
+        ctx.t,
+        ctx.state.language
+    ));
 });
 
 bot.command('note_find', async (ctx) => {
@@ -4124,19 +4214,30 @@ bot.command('note_find', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к заметкам.');
+        return ctx.reply(ctx.t('notes.noAccess'));
     }
 
     const query = extractCommandPayload(ctx.message.text, 'note_find');
-    if (!query) return ctx.reply('Формат: /note_find <поисковая строка>');
+    if (!query) return ctx.reply(ctx.t('notes.findFormat'));
     if (query.length > NOTE_QUERY_MAX_LENGTH) {
-        return ctx.reply(`Слишком длинный запрос: ${query.length} символов. Лимит: ${NOTE_QUERY_MAX_LENGTH}.`);
+        return ctx.reply(ctx.t('notes.queryTooLong', {
+            length: query.length,
+            limit: NOTE_QUERY_MAX_LENGTH
+        }));
     }
 
     const listLimit = getPlanNoteListLimit(parsePlanFromDb(user.plan));
     const notes = getNotesPage(userId, listLimit, 0, query);
     const total = countNotes(userId, query);
-    return ctx.reply(formatNotesPage(notes, 1, total, listLimit, query));
+    return ctx.reply(formatNotesPage(
+        notes,
+        1,
+        total,
+        listLimit,
+        ctx.t,
+        ctx.state.language,
+        query
+    ));
 });
 
 bot.command('note_delete', async (ctx) => {
@@ -4144,18 +4245,18 @@ bot.command('note_delete', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к заметкам.');
+        return ctx.reply(ctx.t('notes.noAccess'));
     }
 
     const noteId = Number.parseInt(ctx.message.text.split(' ').filter(Boolean)[1], 10);
     if (!noteId || Number.isNaN(noteId)) {
-        return ctx.reply('Формат: /note_delete <id>');
+        return ctx.reply(ctx.t('notes.deleteFormat'));
     }
     const note = getNoteByUserAndId(userId, noteId);
-    if (!note) return ctx.reply(`Заметка #${noteId} не найдена.`);
+    if (!note) return ctx.reply(ctx.t('notes.notFound', { id: noteId }));
     const result = deleteNoteByUserAndId(userId, noteId);
-    if (!result.changes) return ctx.reply(`Не удалось удалить заметку #${noteId}.`);
-    return ctx.reply(`🗑 Заметка #${noteId} удалена.`);
+    if (!result.changes) return ctx.reply(ctx.t('notes.deleteError', { id: noteId }));
+    return ctx.reply(ctx.t('notes.deleted', { id: noteId }));
 });
 
 bot.command('mail_setup', async (ctx) => {
@@ -4172,12 +4273,12 @@ bot.command('mail_setup', async (ctx) => {
 
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к настройке почты.');
+        return ctx.reply(ctx.t('mail.noAccess'));
     }
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     if (parts.length < 3) {
-        return ctx.reply('Использование: /mail_setup <yandex|google> <email> <пароль_приложения>\nили: /mail_setup <email> <пароль_приложения> (провайдер определится по домену)');
+        return ctx.reply(ctx.t('mail.setupUsage'));
     }
 
     let providerInput = '';
@@ -4197,23 +4298,27 @@ bot.command('mail_setup', async (ctx) => {
     }
 
     if (!providerInput) {
-        return ctx.reply('Не удалось определить провайдер. Укажи явно: yandex или google.');
+        return ctx.reply(ctx.t('mail.providerUnknown'));
     }
 
     if (!email || !appPassword) {
-        return ctx.reply('Email и пароль приложения обязательны.');
+        return ctx.reply(ctx.t('mail.credentialsRequired'));
     }
 
     try {
         const result = await runBackendMailSetup(userId, providerInput, email, appPassword);
         const connected = result.accounts.map(a => `${a.provider}: ${a.imap_user}`).join('\n');
-        return ctx.reply(`✅ Почта привязана: ${email}\nПровайдер: ${providerInput} (активный)\n\nПодключенные ящики:\n${connected}\n\nПереключение: /mail_use <yandex|google>`);
+        return ctx.reply(ctx.t('mail.connected', {
+            email,
+            provider: providerInput,
+            accounts: connected
+        }));
     } catch (err: any) {
         if (axios.isAxiosError(err)) {
             const code = err.response?.data?.error;
-            if (code === 'bad_provider') return ctx.reply('Не удалось определить провайдер. Укажи явно: yandex или google.');
+            if (code === 'bad_provider') return ctx.reply(ctx.t('mail.providerUnknown'));
         }
-        return ctx.reply('Ошибка при настройке почты.');
+        return ctx.reply(ctx.t('mail.setupError'));
     }
 });
 
@@ -4224,17 +4329,20 @@ bot.command('mail_use', async (ctx) => {
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const provider = normalizeMailProvider(parts[1]);
     if (!provider) {
-        return ctx.reply('Использование: /mail_use <yandex|google>');
+        return ctx.reply(ctx.t('mail.useUsage'));
     }
 
     try {
         const result = await runBackendMailUse(userId, provider);
-        return ctx.reply(`✅ Активный почтовый ящик: ${result.provider} (${result.imap_user})`);
+        return ctx.reply(ctx.t('mail.activeAccount', {
+            provider: result.provider,
+            email: result.imap_user
+        }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'mail_account_not_found') {
-            return ctx.reply(`У тебя не привязан ${provider}. Сначала: /mail_setup ${provider} <email> <пароль_приложения>`);
+            return ctx.reply(ctx.t('mail.accountNotFound', { provider }));
         }
-        return ctx.reply('Ошибка при переключении почты.');
+        return ctx.reply(ctx.t('mail.useError'));
     }
 });
 
@@ -4243,26 +4351,28 @@ bot.command('mail_limit', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply('Нет доступа к настройке почты.');
+        return ctx.reply(ctx.t('mail.noAccess'));
     }
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const parsed = Number.parseInt(parts[1] || '', 10);
     if (!Number.isFinite(parsed) || parsed <= 0) {
         const current = user.mail_check_limit || DEFAULT_MAIL_CHECK_LIMIT;
-        const capText = user.role === 'admin' ? 'без лимита' : 'максимум 10';
-        return ctx.reply(`Текущий лимит check_emails: ${current}.\nУстановить: /mail_limit <число> (${capText}).`);
+        const capText = user.role === 'admin'
+            ? ctx.t('mail.unlimited')
+            : ctx.t('mail.maximumTen');
+        return ctx.reply(ctx.t('mail.limitCurrent', { current, cap: capText }));
     }
 
     if (user.role !== 'admin' && parsed > 10) {
-        return ctx.reply('Вам доступно максимум 10 писем за запрос.');
+        return ctx.reply(ctx.t('mail.limitTen'));
     }
 
     try {
         await runBackendMailLimit(userId, parsed);
-        return ctx.reply(`✅ Лимит check_emails обновлён: ${parsed}.`);
+        return ctx.reply(ctx.t('mail.limitUpdated', { limit: parsed }));
     } catch {
-        return ctx.reply('Ошибка при обновлении лимита.');
+        return ctx.reply(ctx.t('mail.limitError'));
     }
 });
 
@@ -4275,22 +4385,26 @@ bot.command('mail_forget', async (ctx) => {
     try {
         const result = await runBackendMailForget(userId, provider);
         if (result.deleted === 'all') {
-            return ctx.reply('🗑 Данные всех почтовых ящиков удалены.');
+            return ctx.reply(ctx.t('mail.allDeleted'));
         }
         if (result.new_active) {
-            return ctx.reply(`🗑 ${result.deleted} удалён. Активный ящик теперь: ${result.new_active.provider} (${result.new_active.imap_user})`);
+            return ctx.reply(ctx.t('mail.deletedWithActive', {
+                provider: result.deleted,
+                activeProvider: result.new_active.provider,
+                email: result.new_active.imap_user
+            }));
         }
-        return ctx.reply(`🗑 ${result.deleted} удалён. Больше привязанных ящиков нет.`);
+        return ctx.reply(ctx.t('mail.deletedLast', { provider: result.deleted }));
     } catch {
-        return ctx.reply('Ошибка при удалении почты.');
+        return ctx.reply(ctx.t('mail.deleteError'));
     }
 });
 
-bot.hears(TZ_BUTTON_SET_UTC, (ctx) => {
+bot.hears(TZ_BUTTON_SET_UTC_VALUES, (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     timezoneSetupFlows.set(userId, 'await_offset');
-    return ctx.reply('Окей, отправь смещение командой вида: /tz 7\nДопустимый диапазон: от -12 до +14.');
+    return ctx.reply(ctx.t('timezone.enterOffset'));
 });
 
 bot.on('location', async (ctx) => {
@@ -4311,7 +4425,7 @@ bot.on('location', async (ctx) => {
     updateUserTimezone(userId, offset);
     timezoneSetupFlows.delete(userId);
     const sign = offset >= 0 ? '+' : '';
-    return ctx.reply(`Геопозиция получена. Примерный часовой пояс установлен: UTC${sign}${offset}.`, buildMenuTriggerKeyboard(ctx.t));
+    return ctx.reply(ctx.t('timezone.locationSet', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
 });
 
 bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|help)$/, async (ctx) => {
@@ -4319,12 +4433,12 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     const action = MENU_ACTION_BY_ID[actionId];
 
     if (!action) {
-        await ctx.answerCbQuery('Неизвестное действие');
+        await ctx.answerCbQuery(ctx.t('common.unknownAction'));
         return;
     }
 
     if (action.adminOnly && ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Это только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4355,7 +4469,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
 
         const user = await getUser(userId);
         if (!user) {
-            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            await ctx.reply(ctx.t('common.userMissing'));
             return;
         }
 
@@ -4364,7 +4478,9 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
             return;
         }
 
-        await ctx.reply(`${formatPromptsList(user.selected_prompt_id, true)}\n\nЧтобы выбрать: /prompt_use <id>`);
+        await ctx.reply(ctx.t('prompt.adminChoose', {
+            list: formatPromptsList(user.selected_prompt_id, ctx.t, true)
+        }));
         return;
     }
 
@@ -4374,19 +4490,29 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
 
         const user = await getUser(userId);
         if (!user) {
-            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            await ctx.reply(ctx.t('common.userMissing'));
             return;
         }
 
         const activePrompt = resolvePromptForUser(user);
         if (activePrompt.id === CUSTOM_PROMPT_ID) {
-            const preview = getCustomPromptPreview(user.custom_prompt_content, 280);
-            await ctx.reply(`Текущий промпт: Кастомный\nЛимит: до ${MAX_CUSTOM_PROMPT_LENGTH} символов.\nТекст:\n${preview}`);
+            const preview = getCustomPromptPreview(user.custom_prompt_content, ctx.t, 280);
+            await ctx.reply(ctx.t('prompt.currentCustom', {
+                name: ctx.t('prompt.customName'),
+                limit: MAX_CUSTOM_PROMPT_LENGTH,
+                text: preview
+            }));
             return;
         }
 
-        const isDefault = activePrompt.is_default === 1 ? ' (default)' : '';
-        await ctx.reply(`Текущий промпт: ${activePrompt.name}${isDefault}\nID: ${activePrompt.id}`);
+        const defaultMark = activePrompt.is_default === 1
+            ? ctx.t('prompt.currentDefaultMark')
+            : '';
+        await ctx.reply(ctx.t('prompt.current', {
+            name: activePrompt.name,
+            defaultMark,
+            id: activePrompt.id
+        }));
         return;
     }
 
@@ -4400,16 +4526,17 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
         if (!userId) return;
         const user = await getUser(userId);
         if (!user) {
-            await ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ.');
+            await ctx.reply(ctx.t('common.userMissing'));
             return;
         }
         const currentTokens = resolveMaxContextTokens(user);
         const maxTokens = (user.max_context_tokens_limit ?? 0) > 0
             ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
-        await ctx.reply(
-            `🗂 Лимит контекста (токены)\nТекущий: ${(currentTokens / 1000).toFixed(0)}k\nМаксимум для тарифа: ${(maxTokens / 1000).toFixed(0)}k\nПлан: ${getPlanLabel(parsePlanFromDb(user.plan))}`,
-            buildContextSettingsKeyboard()
-        );
+        await ctx.reply(ctx.t('context.card', {
+            current: (currentTokens / 1000).toFixed(0),
+            max: (maxTokens / 1000).toFixed(0),
+            plan: getPlanLabel(parsePlanFromDb(user.plan))
+        }), buildContextSettingsKeyboard(ctx.t));
         return;
     }
 
@@ -4439,7 +4566,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (actionId === 'mail') {
-        await ctx.reply('📬 Управление почтой\nВыбери действие:', buildMailMenuKeyboard());
+        await ctx.reply(ctx.t('mail.menu'), buildMailMenuKeyboard(ctx.t));
         return;
     }
 
@@ -4463,17 +4590,19 @@ bot.action('context:change', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
 
     contextLimitFlows.set(userId, 'await_limit');
-    await ctx.answerCbQuery('Ожидаю число');
+    await ctx.answerCbQuery(ctx.t('context.awaitNumber'));
     const maxTokens = (user.max_context_tokens_limit ?? 0) > 0
         ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
-    await ctx.reply(
-        `Введите лимит контекста в токенах (например: 30000).\nСейчас: ${(resolveMaxContextTokens(user) / 1000).toFixed(0)}k\nМаксимум для тарифа: ${(maxTokens / 1000).toFixed(0)}k\nДля отмены: "отмена".`
-    );
+    await ctx.reply(ctx.t('context.enterLimit', {
+        current: (resolveMaxContextTokens(user) / 1000).toFixed(0),
+        max: (maxTokens / 1000).toFixed(0),
+        cancel: ctx.t('common.cancelWord')
+    }));
 });
 
 bot.action('context:back', async (ctx) => {
@@ -4485,7 +4614,7 @@ bot.action('context:back', async (ctx) => {
 
 bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4496,7 +4625,7 @@ bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
 
 bot.action('mail:setup_help', async (ctx) => {
     await ctx.answerCbQuery();
-    await ctx.reply('Команда: /mail_setup <yandex|google> <email> <пароль_приложения>\nили: /mail_setup <email> <пароль_приложения>\nПереключение активного: /mail_use <yandex|google>\nУдаление: /mail_forget [yandex|google]');
+    await ctx.reply(ctx.t('mail.setupHelp'));
 });
 
 bot.action('mail:settings', async (ctx) => {
@@ -4504,13 +4633,18 @@ bot.action('mail:settings', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
     await ctx.answerCbQuery();
     const current = user.mail_check_limit || DEFAULT_MAIL_CHECK_LIMIT;
-    const capText = user.role === 'admin' ? 'без ограничения' : 'до 10';
-    await ctx.reply(`⚙️ Почта: настройки\nТекущее ограничение check_emails: ${current}\nВам доступно: ${capText}`, buildMailSettingsKeyboard());
+    const capText = user.role === 'admin'
+        ? ctx.t('mail.noRestriction')
+        : ctx.t('mail.upToTen');
+    await ctx.reply(
+        ctx.t('mail.settings', { current, cap: capText }),
+        buildMailSettingsKeyboard(ctx.t)
+    );
 });
 
 bot.action('mail:limit:change', async (ctx) => {
@@ -4518,30 +4652,30 @@ bot.action('mail:limit:change', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
 
     mailLimitFlows.set(userId, 'await_limit');
-    await ctx.answerCbQuery('Ожидаю число');
-    await ctx.reply('Введите новое ограничение для check_emails одним числом.');
+    await ctx.answerCbQuery(ctx.t('mail.awaitNumber'));
+    await ctx.reply(ctx.t('mail.enterLimit'));
 });
 
 bot.action('mail:settings:back', async (ctx) => {
     const userId = ctx.from?.id;
     if (userId) mailLimitFlows.delete(userId);
     await ctx.answerCbQuery();
-    await ctx.reply('📬 Управление почтой\nВыбери действие:', buildMailMenuKeyboard());
+    await ctx.reply(ctx.t('mail.menu'), buildMailMenuKeyboard(ctx.t));
 });
 
 bot.action('mail:instr:yandex', async (ctx) => {
     await ctx.answerCbQuery();
-    await ctx.reply('Яндекс:\n1) Открой Yandex ID → Безопасность.\n2) Создай "Пароль приложения" для почты.\n3) Выполни: /mail_setup yandex <email> <пароль_приложения>.');
+    await ctx.reply(ctx.t('mail.yandexInstructions'));
 });
 
 bot.action('mail:instr:google', async (ctx) => {
     await ctx.answerCbQuery();
-    await ctx.reply('Google:\n1) Включи 2FA в аккаунте.\n2) Создай App Password для Mail.\n3) Выполни: /mail_setup google <email> <app_password>.');
+    await ctx.reply(ctx.t('mail.googleInstructions'));
 });
 
 bot.action('mail:forget', async (ctx) => {
@@ -4549,8 +4683,8 @@ bot.action('mail:forget', async (ctx) => {
     if (!userId) return;
     try { await runBackendMailForget(userId); } catch {}
     clearUserMailSettings(userId);
-    await ctx.answerCbQuery('Почта удалена');
-    await ctx.reply('🗑 Данные почты удалены.');
+    await ctx.answerCbQuery(ctx.t('mail.deletedShort'));
+    await ctx.reply(ctx.t('mail.dataDeleted'));
 });
 
 bot.action(/^notes:list:(\d+)$/, async (ctx) => {
@@ -4558,7 +4692,7 @@ bot.action(/^notes:list:(\d+)$/, async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
     const page = Number.parseInt((ctx as any).match[1], 10);
@@ -4571,14 +4705,14 @@ bot.action(/^notes:view:(\d+):(\d+)$/, async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
     const noteId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
     await ctx.answerCbQuery();
     if (Number.isNaN(noteId) || noteId <= 0) {
-        await ctx.reply('Некорректный ID заметки.');
+        await ctx.reply(ctx.t('notes.invalidId'));
         return;
     }
     await renderNoteView(ctx, userId, noteId, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4589,23 +4723,27 @@ bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
     const noteId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
     if (Number.isNaN(noteId) || noteId <= 0) {
-        await ctx.answerCbQuery('Некорректный ID');
+        await ctx.answerCbQuery(ctx.t('notes.invalidIdShort'));
         return;
     }
     const note = getNoteByUserAndId(userId, noteId);
     if (!note) {
-        await ctx.answerCbQuery('Заметка не найдена');
+        await ctx.answerCbQuery(ctx.t('notes.notFoundShort'));
         return;
     }
     noteEditFlows.set(userId, { noteId, page: Number.isNaN(page) ? 0 : page });
-    await ctx.answerCbQuery('Ожидаю текст');
-    await ctx.reply(`Введите новый текст для заметки #${noteId}.\nЛимит по вашему плану: ${getPlanNoteContentLimit(parsePlanFromDb(user.plan))} символов.\nДля отмены: "отмена".`);
+    await ctx.answerCbQuery(ctx.t('notes.awaitText'));
+    await ctx.reply(ctx.t('notes.enterEditText', {
+        id: noteId,
+        limit: getPlanNoteContentLimit(parsePlanFromDb(user.plan)),
+        cancel: ctx.t('common.cancelWord')
+    }));
 });
 
 bot.action(/^notes:delete:(\d+):(\d+)$/, async (ctx) => {
@@ -4613,31 +4751,31 @@ bot.action(/^notes:delete:(\d+):(\d+)$/, async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
     const noteId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
     const safePage = Number.isNaN(page) ? 0 : page;
     if (Number.isNaN(noteId) || noteId <= 0) {
-        await ctx.answerCbQuery('Некорректный ID');
+        await ctx.answerCbQuery(ctx.t('notes.invalidIdShort'));
         return;
     }
     const note = getNoteByUserAndId(userId, noteId);
     if (!note) {
-        await ctx.answerCbQuery('Уже удалена');
+        await ctx.answerCbQuery(ctx.t('notes.alreadyDeleted'));
         await renderNotesMenuList(ctx, userId, safePage, 'edit');
         return;
     }
     const deleted = deleteNoteByUserAndId(userId, noteId);
     if (!deleted.changes) {
-        await ctx.answerCbQuery('Не удалось удалить');
+        await ctx.answerCbQuery(ctx.t('notes.deleteErrorShort'));
         return;
     }
     const totalAfter = countNotes(userId);
     const maxPage = Math.max(0, Math.ceil(totalAfter / NOTES_MENU_PAGE_SIZE) - 1);
     const nextPage = Math.min(safePage, maxPage);
-    await ctx.answerCbQuery('Удалено');
+    await ctx.answerCbQuery(ctx.t('notes.deletedShort'));
     await renderNotesMenuList(ctx, userId, nextPage, 'edit');
 });
 
@@ -4650,7 +4788,7 @@ bot.action('notes:back:menu', async (ctx) => {
 
 bot.action(/^mod:pv:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4658,7 +4796,7 @@ bot.action(/^mod:pv:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(userId);
     if (!user || user.status !== 'none') {
-        await ctx.answerCbQuery('Заявка уже обработана');
+        await ctx.answerCbQuery(ctx.t('admin.requestProcessed'));
         await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
@@ -4669,7 +4807,7 @@ bot.action(/^mod:pv:(\d+):(\d+)$/, async (ctx) => {
 
 bot.action(/^mod:ok:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4677,23 +4815,24 @@ bot.action(/^mod:ok:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const ok = await approveUserAccess(targetUserId);
     if (!ok) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
 
     try {
-        await bot.telegram.sendMessage(targetUserId, '✅ Доступ подтверждён. Можешь писать боту.');
+        const target = await getUser(targetUserId);
+        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.approved'));
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
 
     await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
-    await ctx.answerCbQuery('Подтверждено');
+    await ctx.answerCbQuery(ctx.t('admin.approved'));
 });
 
 bot.action(/^mod:no:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4701,23 +4840,24 @@ bot.action(/^mod:no:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const ok = await disapproveUserAccess(targetUserId);
     if (!ok) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
 
     try {
-        await bot.telegram.sendMessage(targetUserId, '❌ Заявка отклонена администратором.');
+        const target = await getUser(targetUserId);
+        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.rejected'));
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
 
     await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
-    await ctx.answerCbQuery('Отклонено');
+    await ctx.answerCbQuery(ctx.t('admin.rejected'));
 });
 
 bot.action(/^mod:ban:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4726,25 +4866,26 @@ bot.action(/^mod:ban:(\d+):(\d+)$/, async (ctx) => {
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
 
-    const ok = await banUserAccess(targetUserId, adminId, 'Решение администратора');
+    const target = await getUser(targetUserId);
+    const ok = await banUserAccess(targetUserId, adminId, ctx.t('admin.defaultBanReason'));
     if (!ok) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
 
     try {
-        await bot.telegram.sendMessage(targetUserId, '🚫 Доступ заблокирован администратором.');
+        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.banned'));
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
 
     await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
-    await ctx.answerCbQuery('Пользователь забанен');
+    await ctx.answerCbQuery(ctx.t('admin.banned'));
 });
 
 bot.action(/^mod:bp:(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4755,7 +4896,7 @@ bot.action(/^mod:bp:(\d+)$/, async (ctx) => {
 
 bot.action(/^mod:bv:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4763,7 +4904,7 @@ bot.action(/^mod:bv:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(userId);
     if (!user || user.status !== 'banned') {
-        await ctx.answerCbQuery('Пользователь уже не в бане');
+        await ctx.answerCbQuery(ctx.t('admin.notBanned'));
         await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
@@ -4774,7 +4915,7 @@ bot.action(/^mod:bv:(\d+):(\d+)$/, async (ctx) => {
 
 bot.action(/^mod:unban:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4782,23 +4923,24 @@ bot.action(/^mod:unban:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const ok = await unbanUserAccess(targetUserId);
     if (!ok) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
 
     try {
-        await bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.');
+        const target = await getUser(targetUserId);
+        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.unbanned'));
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
 
     await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
-    await ctx.answerCbQuery('Разблокирован');
+    await ctx.answerCbQuery(ctx.t('admin.unbanned'));
 });
 
 bot.action(/^usr:list:(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4809,7 +4951,7 @@ bot.action(/^usr:list:(\d+)$/, async (ctx) => {
 
 bot.action(/^usr:view:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4817,7 +4959,7 @@ bot.action(/^usr:view:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
@@ -4828,7 +4970,7 @@ bot.action(/^usr:view:(\d+):(\d+)$/, async (ctx) => {
 
 bot.action(/^usr:plan:open:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4836,7 +4978,7 @@ bot.action(/^usr:plan:open:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
@@ -4847,7 +4989,7 @@ bot.action(/^usr:plan:open:(\d+):(\d+)$/, async (ctx) => {
 
 bot.action(/^usr:plan:pick:(\d+):(\d+):(free|standart|pro)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4856,7 +4998,7 @@ bot.action(/^usr:plan:pick:(\d+):(\d+):(free|standart|pro)$/, async (ctx) => {
     const plan = (ctx as any).match[3] as UserPlan;
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
@@ -4867,7 +5009,7 @@ bot.action(/^usr:plan:pick:(\d+):(\d+):(free|standart|pro)$/, async (ctx) => {
 
 bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|forever)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4879,7 +5021,7 @@ bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|f
     const duration = (ctx as any).match[4] as PlanDurationCode;
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
@@ -4889,17 +5031,17 @@ bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|f
     await trimUserHistory(userId);
     const refreshed = await getUser(userId);
     if (!refreshed) {
-        await ctx.answerCbQuery('Ошибка обновления');
+        await ctx.answerCbQuery(ctx.t('admin.updateError'));
         return;
     }
 
     await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
-    await ctx.answerCbQuery(`План ${getPlanLabel(plan)} на ${getDurationLabel(duration)}`);
+    await ctx.answerCbQuery(ctx.t('admin.planApplied', { plan: getPlanLabel(plan), duration: ctx.t(`admin.durations.${duration}`) }));
 });
 
 bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4909,22 +5051,20 @@ bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(targetUserId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
 
     adminUserContextLimitFlows.set(adminId, { targetUserId, page: Number.isNaN(page) ? 0 : page });
-    await ctx.answerCbQuery('Ожидаю число');
+    await ctx.answerCbQuery(ctx.t('admin.awaitNumber'));
     const maxTokens = (user.max_context_tokens_limit ?? 0) > 0
         ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
-    await ctx.reply(
-        `Введите лимит контекста в токенах для пользователя #${targetUserId}.\nСейчас: ${(resolveMaxContextTokens(user) / 1000).toFixed(0)}k\nМаксимум по тарифу: ${(maxTokens / 1000).toFixed(0)}k\nДля админа ограничений нет.\nДля отмены: "отмена".`
-    );
+    await ctx.reply(ctx.t('admin.enterContextLimit', { id: targetUserId, current: (resolveMaxContextTokens(user) / 1000).toFixed(0), max: (maxTokens / 1000).toFixed(0), cancel: ctx.t('common.cancelWord') }));
 });
 
 bot.action(/^usr:msg:ask:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4934,20 +5074,18 @@ bot.action(/^usr:msg:ask:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(targetUserId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
 
     adminUserMessageLimitFlows.set(adminId, { targetUserId, page: Number.isNaN(page) ? 0 : page });
-    await ctx.answerCbQuery('Ожидаю число');
-    await ctx.reply(
-        `Введите лимит сообщений в день для пользователя #${targetUserId}.\nТекущий: безлимит\nСегодня отправлено: ${user.daily_message_count ?? 0}\n0 = безлимит.\nДля отмены: "отмена".`
-    );
+    await ctx.answerCbQuery(ctx.t('admin.awaitNumber'));
+    await ctx.reply(ctx.t('admin.enterMessageLimit', { id: targetUserId, count: user.daily_message_count ?? 0, cancel: ctx.t('common.cancelWord') }));
 });
 
 bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
     const adminId = ctx.from?.id;
@@ -4957,25 +5095,25 @@ bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(targetUserId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
     if (user.role === 'admin') {
-        await ctx.answerCbQuery('Нельзя банить админа');
+        await ctx.answerCbQuery(ctx.t('admin.cannotBanAdmin'));
         return;
     }
 
-    await banUserAccess(targetUserId, adminId, 'Решение администратора');
+    await banUserAccess(targetUserId, adminId, ctx.t('admin.defaultBanReason'));
     const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
-    bot.telegram.sendMessage(targetUserId, '🚫 Доступ заблокирован администратором.').catch(() => undefined);
-    await ctx.answerCbQuery('Пользователь забанен');
+    bot.telegram.sendMessage(targetUserId, translateBot(user.language, 'admin.notifications.banned')).catch(() => undefined);
+    await ctx.answerCbQuery(ctx.t('admin.banned'));
 });
 
 bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -4983,11 +5121,11 @@ bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(targetUserId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь не найден');
+        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
     }
     if (user.status !== 'banned') {
-        await ctx.answerCbQuery('Он не в бане');
+        await ctx.answerCbQuery(ctx.t('admin.notBanned'));
         return;
     }
 
@@ -4995,13 +5133,13 @@ bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
     const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
-    bot.telegram.sendMessage(targetUserId, '✅ Блокировка снята. Заявка снова в ожидании подтверждения.').catch(() => undefined);
-    await ctx.answerCbQuery('Разбанен');
+    bot.telegram.sendMessage(targetUserId, translateBot(user.language, 'admin.notifications.unbanned')).catch(() => undefined);
+    await ctx.answerCbQuery(ctx.t('admin.unbanned'));
 });
 
 bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -5009,12 +5147,12 @@ bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
     const page = Number.parseInt((ctx as any).match[2], 10);
     const user = await getUser(targetUserId);
     if (!user) {
-        await ctx.answerCbQuery('Пользователь уже удален');
+        await ctx.answerCbQuery(ctx.t('admin.alreadyDeleted'));
         await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
         return;
     }
     if (user.role === 'admin') {
-        await ctx.answerCbQuery('Нельзя удалить админа');
+        await ctx.answerCbQuery(ctx.t('admin.cannotDeleteAdmin'));
         return;
     }
 
@@ -5022,12 +5160,12 @@ bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
     removeBan(targetUserId);
     clearUserHistory(targetUserId);
     await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
-    await ctx.answerCbQuery('Пользователь удален');
+    await ctx.answerCbQuery(ctx.t('admin.deleted'));
 });
 
 bot.action(/^ai_send:(\d+)$/, async (ctx) => {
     if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery('Только для админа');
+        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
 
@@ -5038,14 +5176,14 @@ bot.action(/^ai_send:(\d+)$/, async (ctx) => {
     const targetUser = await getUser(targetId);
     if (!targetUser) {
         await ctx.answerCbQuery();
-        await ctx.reply('Юзер не найден в базе.');
+        await ctx.reply(ctx.t('admin.userNotFound'));
         return;
     }
 
     adminAiMessageFlow.set(adminId, targetId);
-    await ctx.answerCbQuery('Ожидаю текст');
+    await ctx.answerCbQuery(ctx.t('admin.awaitText'));
     await ctx.reply(
-        `Что ИИ должен передать пользователю *${targetUser.name || targetUser.tg_username || targetId}*?\nНапиши суть сообщения, а нейросеть сама оформит его в своём стиле.`,
+        ctx.t('admin.aiMessagePrompt', { user: targetUser.name || targetUser.tg_username || targetId }),
         { parse_mode: 'Markdown' }
     );
 });
@@ -5056,12 +5194,12 @@ bot.action('prompt:list', async (ctx) => {
 
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.answerCbQuery('Для админа используйте /prompts');
+        await ctx.answerCbQuery(ctx.t('prompt.adminUsePrompts'));
         return;
     }
 
@@ -5075,12 +5213,12 @@ bot.action('prompt:custom:view', async (ctx) => {
 
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.answerCbQuery('Для админа используйте /prompt_set');
+        await ctx.answerCbQuery(ctx.t('prompt.adminUseSet'));
         return;
     }
 
@@ -5094,19 +5232,21 @@ bot.action('prompt:custom:use', async (ctx) => {
 
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
     if (ctx.state.role === 'admin') {
-        await ctx.answerCbQuery('Недоступно');
+        await ctx.answerCbQuery(ctx.t('common.unavailable'));
         return;
     }
 
     const customContent = (user.custom_prompt_content || '').trim();
     if (!customContent) {
         customPromptEditFlows.set(userId, 'await_content');
-        await ctx.answerCbQuery('Нужно создать текст');
-        await ctx.reply(`Введи текст кастомного промпта (до ${MAX_CUSTOM_PROMPT_LENGTH} символов).`);
+        await ctx.answerCbQuery(ctx.t('prompt.needCustomText'));
+        await ctx.reply(ctx.t('prompt.enterCustomText', {
+            limit: MAX_CUSTOM_PROMPT_LENGTH
+        }));
         return;
     }
 
@@ -5114,11 +5254,11 @@ bot.action('prompt:custom:use', async (ctx) => {
     await runBackendSelectUserPrompt(userId, -1);
     const refreshed = await getUser(userId);
     if (!refreshed) {
-        await ctx.answerCbQuery('Ошибка профиля');
+        await ctx.answerCbQuery(ctx.t('common.profileError'));
         return;
     }
     await renderCustomPromptCardInteractive(ctx, refreshed, 'edit');
-    await ctx.answerCbQuery('Кастомный промпт выбран');
+    await ctx.answerCbQuery(ctx.t('prompt.customSelected'));
 });
 
 bot.action('prompt:custom:edit', async (ctx) => {
@@ -5126,22 +5266,25 @@ bot.action('prompt:custom:edit', async (ctx) => {
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
     if (ctx.state.role === 'admin') {
-        await ctx.answerCbQuery('Недоступно');
+        await ctx.answerCbQuery(ctx.t('common.unavailable'));
         return;
     }
 
     customPromptEditFlows.set(userId, 'await_content');
-    await ctx.answerCbQuery('Ожидаю текст');
-    const currentText = getCustomPromptPreview(user.custom_prompt_content, 280);
-    await ctx.reply(`Текущий кастомный промпт:\n${currentText}\n\nОтправь новый текст (до ${MAX_CUSTOM_PROMPT_LENGTH} символов).`);
+    await ctx.answerCbQuery(ctx.t('prompt.awaitText'));
+    const currentText = getCustomPromptPreview(user.custom_prompt_content, ctx.t, 280);
+    await ctx.reply(ctx.t('prompt.editCustomText', {
+        current: currentText,
+        limit: MAX_CUSTOM_PROMPT_LENGTH
+    }));
 });
 
 bot.action('prompt:custom:keep', async (ctx) => {
-    await ctx.answerCbQuery('Оставляем текущий кастомный промпт');
+    await ctx.answerCbQuery(ctx.t('prompt.keepCurrent'));
 });
 
 bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
@@ -5150,12 +5293,12 @@ bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
 
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.answerCbQuery('Для админа используйте /prompt_show <id>');
+        await ctx.answerCbQuery(ctx.t('prompt.adminUseShow'));
         return;
     }
 
@@ -5165,7 +5308,7 @@ bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
         const data = await runBackendGetPrompt(promptId);
         prompt = data.prompt;
     } catch {
-        await ctx.answerCbQuery('Промпт не найден');
+        await ctx.answerCbQuery(ctx.t('prompt.notFound'));
         return;
     }
 
@@ -5179,12 +5322,12 @@ bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
 
     const user = await getUser(userId);
     if (!user) {
-        await ctx.answerCbQuery('Нет доступа');
+        await ctx.answerCbQuery(ctx.t('common.noAccess'));
         return;
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.answerCbQuery('Для админа используйте /prompt_default или /prompt_use');
+        await ctx.answerCbQuery(ctx.t('prompt.adminUseSelect'));
         return;
     }
 
@@ -5194,7 +5337,7 @@ bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
         const data = await runBackendGetPrompt(promptId);
         prompt = data.prompt;
     } catch {
-        await ctx.answerCbQuery('Промпт не найден');
+        await ctx.answerCbQuery(ctx.t('prompt.notFound'));
         return;
     }
 
@@ -5202,16 +5345,16 @@ bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
     await updateUserPrompt(userId, promptId);
     const refreshedUser = await getUser(userId);
     if (!refreshedUser) {
-        await ctx.answerCbQuery('Ошибка профиля');
+        await ctx.answerCbQuery(ctx.t('common.profileError'));
         return;
     }
 
     await renderPromptCardInteractive(ctx, refreshedUser, prompt);
-    await ctx.answerCbQuery('Промпт выбран');
+    await ctx.answerCbQuery(ctx.t('prompt.selected'));
 });
 
 bot.action(/^prompt:noop:(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery('Этот промпт уже выбран');
+    await ctx.answerCbQuery(ctx.t('prompt.alreadySelected'));
 });
 
 bot.action('prompt:cancel', async (ctx) => {
@@ -5219,7 +5362,7 @@ bot.action('prompt:cancel', async (ctx) => {
     if (userId) {
         customPromptEditFlows.delete(userId);
     }
-    await ctx.editMessageText('Выбор промпта отменён.');
+    await ctx.editMessageText(ctx.t('prompt.cancelled'));
     await ctx.answerCbQuery();
 });
 
@@ -5232,16 +5375,16 @@ bot.action(/^model:select:(.+)$/, async (ctx) => {
     const modelId = rawId === 'auto' ? null : rawId;
     try {
         await runBackendSetPreferredModel(userId, modelId);
-        const label = modelId || 'Авто';
-        await ctx.editMessageText(`🤖 Модель изменена на: ${label}`);
-        await ctx.answerCbQuery(`Модель: ${label}`);
+        const label = modelId || ctx.t('model.auto');
+        await ctx.editMessageText(ctx.t('model.changed', { model: label }));
+        await ctx.answerCbQuery(ctx.t('model.callbackChanged', { model: label }));
     } catch {
-        await ctx.answerCbQuery('Ошибка при смене модели');
+        await ctx.answerCbQuery(ctx.t('model.changeError'));
     }
 });
 
 bot.action('model:cancel', async (ctx) => {
-    await ctx.editMessageText('Выбор модели отменён.');
+    await ctx.editMessageText(ctx.t('model.cancelled'));
     await ctx.answerCbQuery();
 });
 
@@ -5264,12 +5407,12 @@ const requestRejectionComment = async (
 ) => {
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
     pendingRejectionComments.set(userId, { endpoint, confirmationId, label });
-    await ctx.answerCbQuery('Жду комментарий');
-    await ctx.reply(`Напиши комментарий для отклонения: ${label}\n\nНапример: "не тот файл" или "сначала покажи diff". Для отмены: /cancel`);
+    await ctx.answerCbQuery(ctx.t('confirmations.awaitComment'));
+    await ctx.reply(ctx.t('confirmations.commentPrompt', { label }));
 };
 
 const rejectWithOptionalComment = async (
@@ -5296,30 +5439,30 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
     const userId = ctx.from?.id;
 
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка: пользователь не определён.');
+        await ctx.answerCbQuery(ctx.t('confirmations.userUnknown'));
         return;
     }
 
     // Answer callback query immediately — Telegram requires it within ~15s
     if (action === 'reject') {
-        await ctx.answerCbQuery('Отклонено');
+        await ctx.answerCbQuery(ctx.t('confirmations.rejected'));
         try {
             await rejectWithOptionalComment('/internal/pc-commands/approve', confirmationId, userId);
-            await ctx.editMessageText('❌ Команда отклонена.');
+            await ctx.editMessageText(ctx.t('confirmations.commandRejected'));
         } catch {
-            await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+            await ctx.editMessageText(ctx.t('confirmations.rejectFailed')).catch(() => {});
         }
         return;
     }
 
     if (action === 'reject_comment') {
-        const cmd = pendingPcCommandTexts.get(confirmationId) || 'команды на ПК';
+        const cmd = pendingPcCommandTexts.get(confirmationId) || ctx.t('confirmations.labels.pcCommand');
         await requestRejectionComment(ctx, '/internal/pc-commands/approve', confirmationId, cmd.slice(0, 120));
         return;
     }
 
     if (action === 'allow') {
-        await ctx.answerCbQuery('Выполняю...');
+        await ctx.answerCbQuery(ctx.t('confirmations.executing'));
         // Run in background — don't block Telegraf
         (async () => {
             try {
@@ -5329,13 +5472,13 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
                     { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
                 );
                 const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
-                const preview = output.slice(0, 500) || '(нет вывода)';
-                await ctx.editMessageText(`✅ Команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-                    ctx.editMessageText(`✅ Команда выполнена.\n\n${preview}`).catch(() => {});
+                const preview = output.slice(0, 500) || ctx.t('confirmations.noOutput');
+                await ctx.editMessageText(ctx.t('confirmations.commandDoneMarkdown', { output: preview.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
+                    ctx.editMessageText(ctx.t('confirmations.commandDone', { output: preview })).catch(() => {});
                 });
             } catch (err: any) {
-                const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
-                await ctx.editMessageText(`⚠️ Ошибка выполнения: ${msg}`).catch(() => {});
+                const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
+                await ctx.editMessageText(ctx.t('confirmations.executionError', { error: msg })).catch(() => {});
             }
         })();
         return;
@@ -5345,34 +5488,34 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
         // Confirm: "Are you sure?"
         const keyboard = Markup.inlineKeyboard([
             [
-                Markup.button.callback('✅ Да, разрешить всегда', `pcconfirm:always_confirm:${confirmationId}`),
-                Markup.button.callback('⬅️ Назад', `pcconfirm:always_cancel:${confirmationId}`),
+                Markup.button.callback(ctx.t('confirmations.buttons.alwaysConfirm'), `pcconfirm:always_confirm:${confirmationId}`),
+                Markup.button.callback(ctx.t('confirmations.buttons.back'), `pcconfirm:always_cancel:${confirmationId}`),
             ]
         ]);
-        await ctx.editMessageText('⚠️ Создать постоянное правило для этой команды? Действие нельзя отменить.', keyboard);
+        await ctx.editMessageText(ctx.t('confirmations.createPermanentRule'), keyboard);
         await ctx.answerCbQuery();
         return;
     }
 
     if (action === 'review') {
-        await ctx.answerCbQuery('Отправляю на проверку...');
+        await ctx.answerCbQuery(ctx.t('confirmations.sendingForReview'));
         // Run in background
         (async () => {
             try {
-                const cmd = pendingPcCommandTexts.get(confirmationId) || '(неизвестная команда)';
+                const cmd = pendingPcCommandTexts.get(confirmationId) || ctx.t('confirmations.unknownCommand');
 
                 const liteResp = await axios.post(
                     `${BACKEND_API_BASE_URL}/internal/ai/lite`,
                     {
-                        text: `Оцени безопасность следующей команды для выполнения на ПК пользователя. Кратко объясни риски (1-2 предложения). Команда: ${cmd}`,
+                        text: ctx.t('confirmations.reviewPcPrompt', { command: cmd }),
                     },
                     { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
                 );
-                const verdict = liteResp.data?.reply_text || liteResp.data?.text || '(нет ответа)';
-                await ctx.reply(`🔍 Проверка AI:\n\n${verdict}\n\n⬆️ Кнопки подтверждения выше остаются активными.`);
+                const verdict = liteResp.data?.reply_text || liteResp.data?.text || ctx.t('confirmations.noResponse');
+                await ctx.reply(ctx.t('confirmations.reviewResult', { verdict }));
             } catch (err: any) {
-                const msg = err?.message || 'ошибка';
-                await ctx.reply(`Не удалось проверить команду: ${msg}\n\n⬆️ Кнопки подтверждения выше остаются активными.`).catch(() => {});
+                const msg = err?.message || ctx.t('confirmations.error');
+                await ctx.reply(ctx.t('confirmations.reviewFailed', { error: msg })).catch(() => {});
             }
         })();
         return;
@@ -5384,11 +5527,11 @@ bot.action(/^pcconfirm:always_confirm:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
 
-    await ctx.answerCbQuery('Выполняю...');
+    await ctx.answerCbQuery(ctx.t('confirmations.executing'));
 
     // Run in background — don't block Telegraf
     (async () => {
@@ -5413,14 +5556,14 @@ bot.action(/^pcconfirm:always_confirm:(.+)$/, async (ctx) => {
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
             );
             const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
-            const preview = output.slice(0, 500) || '(нет вывода)';
-            await ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n\`\`\`\n${preview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-                ctx.editMessageText(`🔓 Разрешено всегда + команда выполнена.\n\n${preview}`).catch(() => {});
+            const preview = output.slice(0, 500) || ctx.t('confirmations.noOutput');
+            await ctx.editMessageText(ctx.t('confirmations.commandAlwaysDoneMarkdown', { output: preview.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
+                ctx.editMessageText(ctx.t('confirmations.commandAlwaysDone', { output: preview })).catch(() => {});
             });
             // answerCbQuery already sent above
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || ' неизвестная ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+            const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
+            await ctx.editMessageText(ctx.t('confirmations.genericError', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5431,18 +5574,18 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
     const preview = cmd.slice(0, 200);
     const keyboard = Markup.inlineKeyboard([
         [
-            Markup.button.callback('✅ Разрешить', `pcconfirm:allow:${confirmationId}`),
-            Markup.button.callback('🔓 Разрешить всегда', `pcconfirm:always:${confirmationId}`),
+            Markup.button.callback(ctx.t('confirmations.buttons.allow'), `pcconfirm:allow:${confirmationId}`),
+            Markup.button.callback(ctx.t('confirmations.buttons.alwaysAllow'), `pcconfirm:always:${confirmationId}`),
         ],
         [
-            Markup.button.callback('❓ Проверить', `pcconfirm:review:${confirmationId}`),
-            Markup.button.callback('❌ Отклонить', `pcconfirm:reject:${confirmationId}`),
-            Markup.button.callback('💬 Отклонить с комментарием', `pcconfirm:reject_comment:${confirmationId}`),
+            Markup.button.callback(ctx.t('confirmations.buttons.review'), `pcconfirm:review:${confirmationId}`),
+            Markup.button.callback(ctx.t('confirmations.buttons.reject'), `pcconfirm:reject:${confirmationId}`),
+            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `pcconfirm:reject_comment:${confirmationId}`),
         ]
     ]);
     const escapedPreview = preview.replace(/`/g, '\\`');
-    await ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n\`${escapedPreview}\`\n\nРазрешить выполнение?`, { parse_mode: 'Markdown', ...keyboard }).catch(() => {
-        ctx.editMessageText(`🔐 Подтверждение команды на ПК\n\n${preview}\n\nРазрешить выполнение?`, keyboard).catch(() => {});
+    await ctx.editMessageText(ctx.t('confirmations.pcPromptMarkdown', { command: escapedPreview }), { parse_mode: 'Markdown', ...keyboard }).catch(() => {
+        ctx.editMessageText(ctx.t('confirmations.pcPrompt', { command: preview }), keyboard).catch(() => {});
     });
     await ctx.answerCbQuery();
 });
@@ -5455,28 +5598,28 @@ bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
     const userId = ctx.from?.id;
 
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка: пользователь не определён.');
+        await ctx.answerCbQuery(ctx.t('confirmations.userUnknown'));
         return;
     }
 
     if (action === 'reject') {
-        await ctx.answerCbQuery('Отклонено');
+        await ctx.answerCbQuery(ctx.t('confirmations.rejected'));
         try {
             await rejectWithOptionalComment('/internal/pc-commands/approve', confirmationId, userId);
-            await ctx.editMessageText('❌ Действие с файлом отклонено.');
+            await ctx.editMessageText(ctx.t('confirmations.fileRejected'));
         } catch {
-            await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+            await ctx.editMessageText(ctx.t('confirmations.rejectFailed')).catch(() => {});
         }
         return;
     }
 
     if (action === 'reject_comment') {
-        await requestRejectionComment(ctx, '/internal/pc-commands/approve', confirmationId, 'действия с файлом');
+        await requestRejectionComment(ctx, '/internal/pc-commands/approve', confirmationId, ctx.t('confirmations.labels.fileAction'));
         return;
     }
 
     // action === 'allow'
-    await ctx.answerCbQuery('Выполняю...');
+    await ctx.answerCbQuery(ctx.t('confirmations.executing'));
     (async () => {
         try {
             const resp = await axios.post(
@@ -5488,16 +5631,16 @@ bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
             // For read_file — show content preview; for write_file — show success
             if (result && typeof result === 'object' && result.content) {
                 const contentPreview = typeof result.content === 'string' ? result.content.slice(0, 3000) : '';
-                const linesInfo = result.total_lines ? `\nВсего строк: ${result.total_lines}` : '';
-                await ctx.editMessageText(`✅ Файл прочитан.${linesInfo}\n\n\`\`\`\n${contentPreview.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-                    ctx.editMessageText(`✅ Файл прочитан.${linesInfo}\n\n${contentPreview}`).catch(() => {});
+                const linesInfo = result.total_lines ? ctx.t('confirmations.totalLines', { count: result.total_lines }) : '';
+                await ctx.editMessageText(ctx.t('confirmations.fileReadMarkdown', { lines: linesInfo, content: contentPreview.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
+                    ctx.editMessageText(ctx.t('confirmations.fileRead', { lines: linesInfo, content: contentPreview })).catch(() => {});
                 });
             } else {
-                await ctx.editMessageText('✅ Файл записан.').catch(() => {});
+                await ctx.editMessageText(ctx.t('confirmations.fileWritten')).catch(() => {});
             }
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+            const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
+            await ctx.editMessageText(ctx.t('confirmations.genericError', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5510,27 +5653,27 @@ bot.action(/^vclick:(allow|reject):(.+)$/, async (ctx) => {
     const userId = ctx.from?.id;
 
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка: пользователь не определён.');
+        await ctx.answerCbQuery(ctx.t('confirmations.userUnknown'));
         return;
     }
 
     if (action === 'reject') {
-        await ctx.answerCbQuery('Отклонено');
+        await ctx.answerCbQuery(ctx.t('confirmations.rejected'));
         try {
             await axios.post(
                 `${BACKEND_API_BASE_URL}/internal/visual-click/approve`,
                 { confirmation_id: confirmationId, approved: false, user_id: userId },
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
             );
-            await ctx.editMessageText('❌ Клик отменён.');
+            await ctx.editMessageText(ctx.t('confirmations.clickCancelled'));
         } catch {
-            await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+            await ctx.editMessageText(ctx.t('confirmations.rejectFailed')).catch(() => {});
         }
         return;
     }
 
     // action === 'allow'
-    await ctx.answerCbQuery('Кликаю...');
+    await ctx.answerCbQuery(ctx.t('confirmations.clicking'));
     (async () => {
         try {
             const resp = await axios.post(
@@ -5540,13 +5683,13 @@ bot.action(/^vclick:(allow|reject):(.+)$/, async (ctx) => {
             );
             const data = resp.data?.result;
             if (data?.status === 'ok') {
-                await ctx.editMessageText(`✅ Клик выполнен (${data.x}, ${data.y})`).catch(() => {});
+                await ctx.editMessageText(ctx.t('confirmations.clickDoneAt', { x: data.x, y: data.y })).catch(() => {});
             } else {
-                await ctx.editMessageText('✅ Клик выполнен.').catch(() => {});
+                await ctx.editMessageText(ctx.t('confirmations.clickDone')).catch(() => {});
             }
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка клика: ${msg}`).catch(() => {});
+            const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
+            await ctx.editMessageText(ctx.t('confirmations.clickError', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5557,10 +5700,10 @@ bot.action(/^devops:allow:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Выполняю SSH...');
+    await ctx.answerCbQuery(ctx.t('confirmations.executingSsh'));
     (async () => {
         try {
             const resp = await axios.post(
@@ -5575,13 +5718,13 @@ bot.action(/^devops:allow:(.+)$/, async (ctx) => {
             let output = '';
             if (stdout) output += stdout.slice(0, 800);
             if (stderr) output += (output ? '\n' : '') + stderr.slice(0, 400);
-            if (!output) output = `(нет вывода, exit_code=${exitCode ?? '?'})`;
-            await ctx.editMessageText(`✅ SSH выполнен.\n\n\`\`\`\n${output.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-                ctx.editMessageText(`✅ SSH выполнен.\n\n${output}`).catch(() => {});
+            if (!output) output = ctx.t('confirmations.noOutputExit', { code: exitCode ?? '?' });
+            await ctx.editMessageText(ctx.t('confirmations.sshDoneMarkdown', { output: output.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
+                ctx.editMessageText(ctx.t('confirmations.sshDone', { output })).catch(() => {});
             });
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка SSH: ${msg}`).catch(() => {});
+            const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
+            await ctx.editMessageText(ctx.t('confirmations.sshError', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5590,21 +5733,21 @@ bot.action(/^devops:reject:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Отклонено');
+    await ctx.answerCbQuery(ctx.t('confirmations.rejected'));
     try {
         await rejectWithOptionalComment('/internal/devops/approve', confirmationId, userId);
-        await ctx.editMessageText('❌ SSH команда отклонена.');
+        await ctx.editMessageText(ctx.t('confirmations.sshRejected'));
     } catch {
-        await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+        await ctx.editMessageText(ctx.t('confirmations.rejectFailed')).catch(() => {});
     }
 });
 
 bot.action(/^devops:reject_comment:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || 'SSH команды';
+    const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || ctx.t('confirmations.labels.sshCommand');
     await requestRejectionComment(ctx, '/internal/devops/approve', confirmationId, cmd.slice(0, 120));
 });
 
@@ -5612,10 +5755,10 @@ bot.action(/^email:allow:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Отправляю...');
+    await ctx.answerCbQuery(ctx.t('confirmations.sending'));
     (async () => {
         try {
             const resp = await axios.post(
@@ -5624,10 +5767,10 @@ bot.action(/^email:allow:(.+)$/, async (ctx) => {
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 60000 }
             );
             const result = typeof resp.data?.result === 'string' ? resp.data.result : '';
-            await ctx.editMessageText(`✅ Письмо отправлено.\n${result ? `\n${result}` : ''}`).catch(() => {});
+            await ctx.editMessageText(ctx.t('confirmations.emailSent', { result: result ? `\n${result}` : '' })).catch(() => {});
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || 'неизвестная ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка отправки письма: ${msg}`).catch(() => {});
+            const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
+            await ctx.editMessageText(ctx.t('confirmations.emailError', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5636,38 +5779,38 @@ bot.action(/^email:reject:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Отклонено');
+    await ctx.answerCbQuery(ctx.t('confirmations.rejected'));
     try {
         await rejectWithOptionalComment('/internal/email/approve', confirmationId, userId);
-        await ctx.editMessageText('❌ Отправка письма отклонена.');
+        await ctx.editMessageText(ctx.t('confirmations.emailRejected'));
     } catch {
-        await ctx.editMessageText('⚠️ Не удалось отклонить (истёк таймаут?).').catch(() => {});
+        await ctx.editMessageText(ctx.t('confirmations.rejectFailed')).catch(() => {});
     }
 });
 
 bot.action(/^email:reject_comment:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    await requestRejectionComment(ctx, '/internal/email/approve', confirmationId, 'отправки письма');
+    await requestRejectionComment(ctx, '/internal/email/approve', confirmationId, ctx.t('confirmations.labels.emailSending'));
 });
 
 bot.action(/^devops:always:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
     // Confirm: "Are you sure?"
     const keyboard = Markup.inlineKeyboard([
         [
-            Markup.button.callback('✅ Да, разрешить всегда', `devops:always_confirm:${confirmationId}`),
-            Markup.button.callback('⬅️ Назад', `devops:always_cancel:${confirmationId}`),
+            Markup.button.callback(ctx.t('confirmations.buttons.alwaysConfirm'), `devops:always_confirm:${confirmationId}`),
+            Markup.button.callback(ctx.t('confirmations.buttons.back'), `devops:always_cancel:${confirmationId}`),
         ]
     ]);
-    await ctx.editMessageText('⚠️ Создать постоянное правило для этой SSH команды?', keyboard);
+    await ctx.editMessageText(ctx.t('confirmations.createPermanentSshRule'), keyboard);
     await ctx.answerCbQuery();
 });
 
@@ -5675,10 +5818,10 @@ bot.action(/^devops:always_confirm:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Выполняю...');
+    await ctx.answerCbQuery(ctx.t('confirmations.executing'));
     (async () => {
         try {
             const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || '';
@@ -5702,13 +5845,13 @@ bot.action(/^devops:always_confirm:(.+)$/, async (ctx) => {
             let output = '';
             if (stdout) output += stdout.slice(0, 800);
             if (stderr) output += (output ? '\n' : '') + stderr.slice(0, 400);
-            if (!output) output = '(нет вывода)';
-            await ctx.editMessageText(`🔓 Разрешено всегда + SSH выполнен.\n\n\`\`\`\n${output.replace(/```/g, "'''")}\n\`\`\``, { parse_mode: 'Markdown' }).catch(() => {
-                ctx.editMessageText(`🔓 Разрешено всегда + SSH выполнен.\n\n${output}`).catch(() => {});
+            if (!output) output = ctx.t('confirmations.noOutput');
+            await ctx.editMessageText(ctx.t('confirmations.sshAlwaysDoneMarkdown', { output: output.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
+                ctx.editMessageText(ctx.t('confirmations.sshAlwaysDone', { output })).catch(() => {});
             });
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || 'ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+            const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.error');
+            await ctx.editMessageText(ctx.t('confirmations.genericError', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5716,32 +5859,32 @@ bot.action(/^devops:always_confirm:(.+)$/, async (ctx) => {
 bot.action(/^devops:always_cancel:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     // Just go back — re-show would need original text, just leave as is
-    await ctx.editMessageText('↩️ Возвращены кнопки подтверждения.').catch(() => {});
+    await ctx.editMessageText(ctx.t('confirmations.buttonsRestored')).catch(() => {});
 });
 
 bot.action(/^devops:review:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Отправляю на проверку...');
+    await ctx.answerCbQuery(ctx.t('confirmations.sendingForReview'));
     (async () => {
         try {
-            const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || '(неизвестная команда)';
+            const cmd = pendingPcCommandTexts.get(`devops:${confirmationId}`) || ctx.t('confirmations.unknownCommand');
             const liteResp = await axios.post(
                 `${BACKEND_API_BASE_URL}/internal/ai/lite`,
                 {
-                    text: `Оцени безопасность следующей SSH команды для выполнения на сервере. Кратко объясни риски (1-2 предложения). Команда: ${cmd}`,
+                    text: ctx.t('confirmations.reviewSshPrompt', { command: cmd }),
                 },
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
             );
-            const verdict = liteResp.data?.reply_text || liteResp.data?.text || '(нет ответа)';
-            await ctx.reply(`🔍 Проверка AI:\n\n${verdict}\n\n⬆️ Кнопки подтверждения выше остаются активными.`);
+            const verdict = liteResp.data?.reply_text || liteResp.data?.text || ctx.t('confirmations.noResponse');
+            await ctx.reply(ctx.t('confirmations.reviewResult', { verdict }));
         } catch (err: any) {
-            const msg = err?.message || 'ошибка';
-            await ctx.reply(`Не удалось проверить команду: ${msg}\n\n⬆️ Кнопки подтверждения выше остаются активными.`).catch(() => {});
+            const msg = err?.message || ctx.t('confirmations.error');
+            await ctx.reply(ctx.t('confirmations.reviewFailed', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5750,10 +5893,10 @@ bot.action(/^devops:creds_apply:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Применяю...');
+    await ctx.answerCbQuery(ctx.t('confirmations.applying'));
     (async () => {
         try {
             const resp = await axios.post(
@@ -5762,11 +5905,11 @@ bot.action(/^devops:creds_apply:(.+)$/, async (ctx) => {
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
             );
             const result = resp.data?.result;
-            const output = typeof result === 'string' ? result.slice(0, 500) : '(выполнено)';
-            await ctx.editMessageText(`✅ Credentials обновлены.\n\n${output}`).catch(() => {});
+            const output = typeof result === 'string' ? result.slice(0, 500) : ctx.t('confirmations.done');
+            await ctx.editMessageText(ctx.t('confirmations.credentialsUpdated', { output })).catch(() => {});
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || 'ошибка';
-            await ctx.editMessageText(`⚠️ Ошибка: ${msg}`).catch(() => {});
+            const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.error');
+            await ctx.editMessageText(ctx.t('confirmations.genericError', { error: msg })).catch(() => {});
         }
     })();
 });
@@ -5775,21 +5918,21 @@ bot.action(/^devops:creds_reject:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
     const userId = ctx.from?.id;
     if (!userId) {
-        await ctx.answerCbQuery('Ошибка');
+        await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
     }
-    await ctx.answerCbQuery('Отклонено');
+    await ctx.answerCbQuery(ctx.t('confirmations.rejected'));
     try {
         await rejectWithOptionalComment('/internal/devops/approve', confirmationId, userId);
-        await ctx.editMessageText('❌ Обновление credentials отклонено.');
+        await ctx.editMessageText(ctx.t('confirmations.credentialsRejected'));
     } catch {
-        await ctx.editMessageText('⚠️ Не удалось отклонить.').catch(() => {});
+        await ctx.editMessageText(ctx.t('confirmations.rejectFailedShort')).catch(() => {});
     }
 });
 
 bot.action(/^devops:creds_reject_comment:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    await requestRejectionComment(ctx, '/internal/devops/approve', confirmationId, 'обновления credentials');
+    await requestRejectionComment(ctx, '/internal/devops/approve', confirmationId, ctx.t('confirmations.labels.credentialsUpdate'));
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -6834,7 +6977,7 @@ bot.on('text', async (ctx) => {
         const code = userText.replace(/\D/g, '');
         if (code.length !== 6) {
             linkCodeFlows.set(userId, 'await_code');
-            return ctx.reply('Нужно 6 цифр. Попробуй ещё раз или /cancellink для отмены.');
+            return ctx.reply(ctx.t('link.invalidCodeFormat'));
         }
         try {
             const response = await axios.post(
@@ -6844,48 +6987,48 @@ bot.on('text', async (ctx) => {
             );
             if (response.data?.ok) {
                 return ctx.reply(
-                    '✅ Аккаунт привязан! Теперь можешь пользоваться десктоп-приложением с данными твоего Telegram-аккаунта.',
+                    ctx.t('link.success'),
                     buildMenuTriggerKeyboard(ctx.t)
                 );
             }
-            return ctx.reply('Не удалось привязать. Возможно, код истёк. Попробуй получить новый код в приложении и снова /link.');
+            return ctx.reply(ctx.t('link.failed'));
         } catch (err: any) {
             const msg = err?.response?.data?.error;
             if (msg === 'invalid_or_expired_code') {
-                return ctx.reply('Код недействителен или истёк. Получи новый код в приложении и попробуй /link снова.');
+                return ctx.reply(ctx.t('link.expired'));
             }
             if (msg === 'telegram_user_not_approved') {
-                return ctx.reply('Сначала админ должен подтвердить доступ к боту, потом можно привязывать desktop-приложение.');
+                return ctx.reply(ctx.t('link.notApproved'));
             }
             if (msg === 'telegram_user_not_found') {
-                return ctx.reply('Не нашёл твой Telegram-аккаунт в базе. Напиши /start и дождись подтверждения админа.');
+                return ctx.reply(ctx.t('link.userNotFound'));
             }
             if (msg === 'too_many_link_attempts') {
                 const retryAfter = Math.max(1, Number(err?.response?.data?.retry_after) || 60);
-                return ctx.reply(`Слишком много неверных кодов. Попробуй снова через ${retryAfter} сек.`);
+                return ctx.reply(ctx.t('link.tooManyAttempts', { seconds: retryAfter }));
             }
             console.error('Link verify error:', formatSafeError(err));
-            return ctx.reply('Ошибка при привязке. Попробуй позже.');
+            return ctx.reply(ctx.t('link.error'));
         }
     }
 
     const adminContextFlow = adminUserContextLimitFlows.get(userId);
     if (adminContextFlow) {
         const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
+        if ([ctx.t('common.cancelWord').toLowerCase(), 'отмена', 'cancel', '/cancel'].includes(lowered)) {
             adminUserContextLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение контекста пользователя отменено.');
+            return ctx.reply(ctx.t('admin.contextCancelled'));
         }
 
         const parsed = Number.parseInt(userText, 10);
         if (!Number.isFinite(parsed) || parsed < 1000) {
-            return ctx.reply('Нужно ввести число от 1000. Например: 30000. Для отмены: "отмена".');
+            return ctx.reply(ctx.t('admin.invalidContext', { cancel: ctx.t('common.cancelWord') }));
         }
 
         const targetUser = await getUser(adminContextFlow.targetUserId);
         if (!targetUser) {
             adminUserContextLimitFlows.delete(userId);
-            return ctx.reply('Пользователь не найден.');
+            return ctx.reply(ctx.t('admin.userNotFound'));
         }
 
         const nextValue = Math.max(1000, Math.floor(parsed));
@@ -6897,30 +7040,30 @@ bot.on('text', async (ctx) => {
         if (refreshed) {
             const maxTokens = (refreshed.max_context_tokens_limit ?? 0) > 0
                 ? Math.floor(refreshed.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(refreshed.plan));
-            await ctx.reply(`✅ Лимит токенов пользователя #${adminContextFlow.targetUserId}: ${(resolveMaxContextTokens(refreshed) / 1000).toFixed(0)}k (макс: ${(maxTokens / 1000).toFixed(0)}k)`);
+            await ctx.reply(ctx.t('admin.contextUpdatedMax', { id: adminContextFlow.targetUserId, value: (resolveMaxContextTokens(refreshed) / 1000).toFixed(0), max: (maxTokens / 1000).toFixed(0) }));
             await renderAdminUserCard(ctx, refreshed, adminContextFlow.page, 'reply');
             return;
         }
-        return ctx.reply(`✅ Лимит токенов пользователя #${adminContextFlow.targetUserId}: ${nextValue}.`);
+        return ctx.reply(ctx.t('admin.contextUpdated', { id: adminContextFlow.targetUserId, value: nextValue }));
     }
 
     const adminMessageLimitFlow = adminUserMessageLimitFlows.get(userId);
     if (adminMessageLimitFlow) {
         const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
+        if ([ctx.t('common.cancelWord').toLowerCase(), 'отмена', 'cancel', '/cancel'].includes(lowered)) {
             adminUserMessageLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение лимита сообщений отменено.');
+            return ctx.reply(ctx.t('admin.messageLimitCancelled'));
         }
 
         const parsed = Number.parseInt(userText, 10);
         if (!Number.isFinite(parsed) || parsed < 0) {
-            return ctx.reply('Нужно ввести число 0 или больше. 0 = безлимит. Для отмены: "отмена".');
+            return ctx.reply(ctx.t('admin.invalidMessageLimit', { cancel: ctx.t('common.cancelWord') }));
         }
 
         const targetUser = await getUser(adminMessageLimitFlow.targetUserId);
         if (!targetUser) {
             adminUserMessageLimitFlows.delete(userId);
-            return ctx.reply('Пользователь не найден.');
+            return ctx.reply(ctx.t('admin.userNotFound'));
         }
 
         const nextLimit = normalizeDailyMessageLimit(parsed);
@@ -6928,11 +7071,11 @@ bot.on('text', async (ctx) => {
         adminUserMessageLimitFlows.delete(userId);
         const refreshed = await getUser(adminMessageLimitFlow.targetUserId);
         if (refreshed) {
-            await ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${normalizeDailyMessageLimit(refreshed.daily_message_limit)} (0 = безлимит).`);
+            await ctx.reply(ctx.t('admin.messageLimitUpdated', { id: adminMessageLimitFlow.targetUserId, value: normalizeDailyMessageLimit(refreshed.daily_message_limit) }));
             await renderAdminUserCard(ctx, refreshed, adminMessageLimitFlow.page, 'reply');
             return;
         }
-        return ctx.reply(`✅ Лимит сообщений пользователя #${adminMessageLimitFlow.targetUserId}: ${nextLimit}.`);
+        return ctx.reply(ctx.t('admin.messageLimitUpdatedShort', { id: adminMessageLimitFlow.targetUserId, value: nextLimit }));
     }
 
     const isAdmin = ctx.state.role === 'admin';
@@ -6946,14 +7089,14 @@ bot.on('text', async (ctx) => {
 
         const offset = Number.parseInt(offsetText, 10);
         if (Number.isNaN(offset) || offset < -12 || offset > 14) {
-            return ctx.reply('Не понял смещение. Отправь число от -12 до +14, например: 7');
+            return ctx.reply(ctx.t('timezone.invalidOffset'));
         }
 
         try { await runBackendSetTimezone(userId, offset); } catch {}
         updateUserTimezone(userId, offset);
         timezoneSetupFlows.delete(userId);
         const sign = offset >= 0 ? '+' : '';
-        return ctx.reply(`Готово, часовой пояс установлен: UTC${sign}${offset}. Теперь могу ставить таймеры.`, buildMenuTriggerKeyboard(ctx.t));
+        return ctx.reply(ctx.t('timezone.setForTimers', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
     }
 
     if (!isAdmin) {
@@ -6961,53 +7104,64 @@ bot.on('text', async (ctx) => {
 
         if (renameFlow === 'confirm') {
             const answer = userText.toLowerCase();
-            if (answer === 'да') {
+            const yes = ctx.t('common.yes').toLowerCase();
+            const no = ctx.t('common.no').toLowerCase();
+            if (answer === yes || answer === 'да' || answer === 'yes') {
                 renameFlows.set(userId, 'await_name');
-                return ctx.reply('Введите имя:');
+                return ctx.reply(ctx.t('profile.enterName'));
             }
 
-            if (answer === 'нет') {
+            if (answer === no || answer === 'нет' || answer === 'no') {
                 renameFlows.delete(userId);
-                return ctx.reply('Ок, отменил.', buildMenuTriggerKeyboard(ctx.t));
+                return ctx.reply(ctx.t('profile.renameCancelled'), buildMenuTriggerKeyboard(ctx.t));
             }
 
-            return ctx.reply('Ответь "Да" или "Нет".', Markup.keyboard([['Да', 'Нет']]).resize().oneTime());
+            return ctx.reply(
+                ctx.t('profile.answerYesNo', {
+                    yes: ctx.t('common.yes'),
+                    no: ctx.t('common.no')
+                }),
+                Markup.keyboard([[ctx.t('common.yes'), ctx.t('common.no')]]).resize().oneTime()
+            );
         }
 
         if (renameFlow === 'await_name') {
             if (!userText || userText.startsWith('/')) {
-                return ctx.reply('Имя не может быть пустым. Введи обычный текст без команды.');
+                return ctx.reply(ctx.t('profile.nameEmpty'));
             }
 
             if (userText.length > 64) {
-                return ctx.reply('Слишком длинное имя. До 64 символов.');
+                return ctx.reply(ctx.t('profile.nameTooLong'));
             }
 
             const userRecord = await getUser(userId);
             if (!userRecord) {
                 renameFlows.delete(userId);
-                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+                return ctx.reply(ctx.t('common.userMissingAgain'));
             }
 
             await updateUserName(userId, userText);
             ctx.state.userName = userText;
             renameFlows.delete(userId);
-            return ctx.reply('Имя принято.', buildMenuTriggerKeyboard(ctx.t));
+            return ctx.reply(ctx.t('profile.nameAccepted'), buildMenuTriggerKeyboard(ctx.t));
         }
 
         const customPromptFlow = customPromptEditFlows.get(userId);
         if (customPromptFlow === 'await_content') {
             if (!userText || userText.startsWith('/')) {
-                return ctx.reply('Текст промпта не должен быть пустым и не должен быть командой.');
+                return ctx.reply(ctx.t('prompt.input.empty'));
             }
             if (userText.length > MAX_CUSTOM_PROMPT_LENGTH) {
-                return ctx.reply(`Слишком длинно: ${userText.length} символов. Лимит: ${MAX_CUSTOM_PROMPT_LENGTH}.`);
+                return ctx.reply(ctx.t('prompt.input.tooLong', {
+                    length: userText.length,
+                    limit: MAX_CUSTOM_PROMPT_LENGTH
+                }));
             }
 
             const userRecord = await getUser(userId);
             if (!userRecord) {
                 customPromptEditFlows.delete(userId);
-                return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+                return ctx.reply(ctx.t('common.userMissingAgain'));
             }
 
             await updateUserCustomPrompt(userId, userText.trim());
@@ -7015,62 +7169,80 @@ bot.on('text', async (ctx) => {
             try { await runBackendSelectUserPrompt(userId, -1); } catch {}
             await selectUserCustomPrompt(userId);
             customPromptEditFlows.delete(userId);
-            return ctx.reply('Кастомный промпт сохранён и выбран.', buildMenuTriggerKeyboard(ctx.t));
+            return ctx.reply(ctx.t('prompt.input.saved'), buildMenuTriggerKeyboard(ctx.t));
         }
     }
 
     const mailLimitFlow = mailLimitFlows.get(userId);
     if (mailLimitFlow === 'await_limit') {
         const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
+        const localizedCancel = ctx.t('common.cancelWord').toLowerCase();
+        if (
+            lowered === localizedCancel
+            || lowered === 'отмена'
+            || lowered === 'cancel'
+            || lowered === '/cancel'
+        ) {
             mailLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение лимита отменено.');
+            return ctx.reply(ctx.t('mail.limitCancelled'));
         }
 
         const parsed = Number.parseInt(userText, 10);
         if (!Number.isFinite(parsed) || parsed <= 0) {
-            return ctx.reply('Нужно ввести положительное число. Например: 10. Для отмены: "отмена".');
+            return ctx.reply(ctx.t('mail.invalidLimit', {
+                cancel: ctx.t('common.cancelWord')
+            }));
         }
 
         const userRecord = await getUser(userId);
         if (!userRecord) {
             mailLimitFlows.delete(userId);
-            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+            return ctx.reply(ctx.t('common.userMissingAgain'));
         }
         if (userRecord.role !== 'admin' && parsed > 10) {
-            return ctx.reply('Для вас доступно максимум 10. Введи число от 1 до 10.');
+            return ctx.reply(ctx.t('mail.limitRange'));
         }
 
         try { await runBackendMailLimit(userId, parsed); } catch {}
         updateUserMailCheckLimit(userId, parsed);
         mailLimitFlows.delete(userId);
-        return ctx.reply(`✅ Новое ограничение check_emails: ${parsed}.`);
+        return ctx.reply(ctx.t('mail.newLimit', { limit: parsed }));
     }
 
     const contextLimitFlow = contextLimitFlows.get(userId);
     if (contextLimitFlow === 'await_limit') {
         const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
+        const localizedCancel = ctx.t('common.cancelWord').toLowerCase();
+        if (
+            lowered === localizedCancel
+            || lowered === 'отмена'
+            || lowered === 'cancel'
+            || lowered === '/cancel'
+        ) {
             contextLimitFlows.delete(userId);
-            return ctx.reply('Ок, изменение размера контекста отменено.');
+            return ctx.reply(ctx.t('context.cancelled'));
         }
 
         const parsed = Number.parseInt(userText, 10);
         if (!Number.isFinite(parsed) || parsed < 1000) {
-            return ctx.reply('Нужно ввести число от 1000. Например: 30000. Для отмены: "отмена".');
+            return ctx.reply(ctx.t('context.invalidNumber', {
+                cancel: ctx.t('common.cancelWord')
+            }));
         }
 
         const userRecord = await getUser(userId);
         if (!userRecord) {
             contextLimitFlows.delete(userId);
-            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+            return ctx.reply(ctx.t('common.userMissingAgain'));
         }
 
         const maxAllowed = (userRecord.max_context_tokens_limit ?? 0) > 0
             ? Math.floor(userRecord.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(userRecord.plan));
         const isUserAdmin = userRecord.role === 'admin';
         if (!isUserAdmin && parsed > maxAllowed) {
-            return ctx.reply(`Для тебя доступно максимум ${(maxAllowed / 1000).toFixed(0)}k токенов.`);
+            return ctx.reply(ctx.t('context.aboveMaximum', {
+                max: (maxAllowed / 1000).toFixed(0)
+            }));
         }
 
         const ctxValue = Math.max(1000, Math.floor(parsed));
@@ -7080,46 +7252,56 @@ bot.on('text', async (ctx) => {
         contextLimitFlows.delete(userId);
         const refreshed = await getUser(userId);
         if (refreshed) {
-            return ctx.reply(
-                `✅ Лимит контекста обновлён: ${(resolveMaxContextTokens(refreshed) / 1000).toFixed(0)}k из ${(maxAllowed / 1000).toFixed(0)}k токенов.`
-            );
+            return ctx.reply(ctx.t('context.updatedWithMaximum', {
+                current: (resolveMaxContextTokens(refreshed) / 1000).toFixed(0),
+                max: (maxAllowed / 1000).toFixed(0)
+            }));
         }
-        return ctx.reply(`✅ Лимит контекста обновлён: ${ctxValue} токенов.`);
+        return ctx.reply(ctx.t('context.updated', { value: ctxValue }));
     }
 
     const noteEditFlow = noteEditFlows.get(userId);
     if (noteEditFlow) {
         const lowered = userText.toLowerCase();
-        if (lowered === 'отмена' || lowered === '/cancel') {
+        const localizedCancel = ctx.t('common.cancelWord').toLowerCase();
+        if (
+            lowered === localizedCancel
+            || lowered === 'отмена'
+            || lowered === 'cancel'
+            || lowered === '/cancel'
+        ) {
             noteEditFlows.delete(userId);
-            return ctx.reply('Ок, редактирование заметки отменено.');
+            return ctx.reply(ctx.t('notes.editCancelled'));
         }
 
         const userRecord = await getUser(userId);
         if (!userRecord) {
             noteEditFlows.delete(userId);
-            return ctx.reply('Не нашёл тебя в базе. Попроси админа выдать доступ заново.');
+            return ctx.reply(ctx.t('common.userMissingAgain'));
         }
 
         const userPlan = parsePlanFromDb(userRecord.plan);
         const contentLimit = getPlanNoteContentLimit(userPlan);
         if (!userText || userText.length > contentLimit) {
-            return ctx.reply(`Текст заметки должен быть от 1 до ${contentLimit} символов. Для отмены: "отмена".`);
+            return ctx.reply(ctx.t('notes.invalidEditText', {
+                limit: contentLimit,
+                cancel: ctx.t('common.cancelWord')
+            }));
         }
 
         const note = getNoteByUserAndId(userId, noteEditFlow.noteId);
         if (!note) {
             noteEditFlows.delete(userId);
-            return ctx.reply(`Заметка #${noteEditFlow.noteId} не найдена.`);
+            return ctx.reply(ctx.t('notes.notFound', { id: noteEditFlow.noteId }));
         }
 
         const result = updateNoteByUserAndId(userId, noteEditFlow.noteId, userText.trim());
         noteEditFlows.delete(userId);
         if (!result.changes) {
-            return ctx.reply(`Не удалось обновить заметку #${noteEditFlow.noteId}.`);
+            return ctx.reply(ctx.t('notes.updateError', { id: noteEditFlow.noteId }));
         }
 
-        await ctx.reply(`✅ Заметка #${noteEditFlow.noteId} обновлена.`);
+        await ctx.reply(ctx.t('notes.updated', { id: noteEditFlow.noteId }));
         await renderNoteView(ctx, userId, noteEditFlow.noteId, noteEditFlow.page, 'reply');
         return;
     }
