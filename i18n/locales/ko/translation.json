@@ -134,7 +134,8 @@
       "empty": "프롬프트 텍스트는 비어 있거나 명령어일 수 없습니다.",
       "tooLong": "너무 깁니다: {{length}}자. 제한: {{limit}}자.",
       "saved": "사용자 정의 프롬프트가 저장되고 선택되었습니다."
-    }
+    },
+    "defaultDescription": "기본 Chatter 대화 스타일"
   },
   "model": {
     "auto": "자동",
@@ -691,5 +692,35 @@
     "voiceNotRecognized": "🗣 아무것도 알아들을 수 없었습니다.",
     "voiceRecognized": "🗣 인식됨:\n{{text}}",
     "transcriptionServerError": "❌ 변환 서버 연결 실패 또는 내부 오류."
+  },
+  "ai": {
+    "fallbackAnswer": "잠시 멈췄습니다. 다시 시도해 주세요.",
+    "documentsInstruction": "첨부된 문서를 분석하세요.",
+    "defaultUserName": "사용자"
+  },
+  "desktopActions": {
+    "editFile": {
+      "header": "✏️ 파일 편집\n\n{{filePath}}\n줄: {{startLine}}–{{endLine}}\n",
+      "removing": "\n❌ 제거 중:\n{{content}}\n",
+      "adding": "\n✅ 추가 중:\n{{content}}\n",
+      "linesWillBeDeleted": "\n(줄이 삭제됩니다)",
+      "applyQuestion": "\n\n변경 사항을 적용하시겠습니까?"
+    },
+    "webcam": {
+      "defaultPurpose": "카메라가 보는 것을 설명하세요"
+    },
+    "ssh": {
+      "confirmationMarkdown": "🖥 **SSH: {{serverName}}** ({{host}})\n\n`{{command}}`\n\n실행하시겠습니까?"
+    },
+    "email": {
+      "fromLine": "보낸 사람: {{address}}\n",
+      "confirmationMarkdown": "📧 **이메일 보내기**\n\n{{fromLine}}받는 사람: {{to}}\n제목: {{subject}}\n\n```\n{{body}}\n```\n\n보내시겠습니까?"
+    },
+    "visualClick": {
+      "defaultReason": "화면 클릭",
+      "rightButton": "오른쪽 마우스 버튼",
+      "leftButton": "왼쪽 마우스 버튼",
+      "caption": "🖱 화면 클릭\n\n{{reason}}\n좌표: {{x}}%, {{y}}% ({{button}})"
+    }
   }
 }

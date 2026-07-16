@@ -134,7 +134,8 @@
       "empty": "プロンプトテキストを空にしたり、コマンドにすることはできません。",
       "tooLong": "長すぎます: {{length}} 文字。制限: {{limit}}。",
       "saved": "カスタムプロンプトが保存され、選択されました。"
-    }
+    },
+    "defaultDescription": "デフォルトのチャッター会話スタイル"
   },
   "model": {
     "auto": "自動",
@@ -691,5 +692,35 @@
     "voiceNotRecognized": "🗣 聞き取れませんでした。",
     "voiceRecognized": "🗣 認識結果:\n{{text}}",
     "transcriptionServerError": "❌ 文字起こしサーバーへの接続失敗または内部エラー。"
+  },
+  "ai": {
+    "fallbackAnswer": "少し詰まってしまいました。もう一度お試しください。",
+    "documentsInstruction": "添付されたドキュメントを分析してください。",
+    "defaultUserName": "ユーザー"
+  },
+  "desktopActions": {
+    "editFile": {
+      "header": "✏️ ファイル編集\n\n{{filePath}}\n行: {{startLine}}–{{endLine}}\n",
+      "removing": "\n❌ 削除:\n{{content}}\n",
+      "adding": "\n✅ 追加:\n{{content}}\n",
+      "linesWillBeDeleted": "\n(行が削除されます)",
+      "applyQuestion": "\n\n変更を適用しますか？"
+    },
+    "webcam": {
+      "defaultPurpose": "カメラに映っているものを説明してください"
+    },
+    "ssh": {
+      "confirmationMarkdown": "🖥 **SSH: {{serverName}}** ({{host}})\n\n`{{command}}`\n\n実行を許可しますか？"
+    },
+    "email": {
+      "fromLine": "差出人: {{address}}\n",
+      "confirmationMarkdown": "📧 **メール送信**\n\n{{fromLine}}宛先: {{to}}\n件名: {{subject}}\n\n```\n{{body}}\n```\n\n送信しますか？"
+    },
+    "visualClick": {
+      "defaultReason": "画面をクリック",
+      "rightButton": "右マウスボタン",
+      "leftButton": "左マウスボタン",
+      "caption": "🖱 画面クリック\n\n{{reason}}\n座標: {{x}}%, {{y}}% ({{button}})"
+    }
   }
 }

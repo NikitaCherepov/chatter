@@ -134,7 +134,8 @@
       "empty": "Prompttext darf nicht leer sein oder ein Befehl sein.",
       "tooLong": "Zu lang: {{length}} Zeichen. Limit: {{limit}}.",
       "saved": "Benutzerdefinierter Prompt gespeichert und ausgewählt."
-    }
+    },
+    "defaultDescription": "Standard-Chatter-Gesprächsstil"
   },
   "model": {
     "auto": "Auto",
@@ -691,5 +692,35 @@
     "voiceNotRecognized": "🗣 Ich konnte nichts erkennen.",
     "voiceRecognized": "🗣 Erkannt:\n{{text}}",
     "transcriptionServerError": "❌ Verbindungsfehler zum Transkriptionsserver oder interner Fehler."
+  },
+  "ai": {
+    "fallbackAnswer": "Ich habe einen Moment lang keine Antwort. Bitte versuchen Sie es erneut.",
+    "documentsInstruction": "Analysieren Sie die angehängten Dokumente.",
+    "defaultUserName": "Benutzer"
+  },
+  "desktopActions": {
+    "editFile": {
+      "header": "✏️ Datei bearbeiten\n\n{{filePath}}\nZeilen: {{startLine}}–{{endLine}}\n",
+      "removing": "\n❌ Entfernen:\n{{content}}\n",
+      "adding": "\n✅ Hinzufügen:\n{{content}}\n",
+      "linesWillBeDeleted": "\n(Zeilen werden gelöscht)",
+      "applyQuestion": "\n\nÄnderungen übernehmen?"
+    },
+    "webcam": {
+      "defaultPurpose": "Beschreiben, was die Kamera sieht"
+    },
+    "ssh": {
+      "confirmationMarkdown": "🖥 **SSH: {{serverName}}** ({{host}})\n\n`{{command}}`\n\nAusführung erlauben?"
+    },
+    "email": {
+      "fromLine": "Von: {{address}}\n",
+      "confirmationMarkdown": "📧 **E-Mail senden**\n\n{{fromLine}}An: {{to}}\nBetreff: {{subject}}\n\n```\n{{body}}\n```\n\nSenden?"
+    },
+    "visualClick": {
+      "defaultReason": "Klick auf den Bildschirm",
+      "rightButton": "rechte Maustaste",
+      "leftButton": "linke Maustaste",
+      "caption": "🖱 Bildschirmklick\n\n{{reason}}\nKoordinaten: {{x}}%, {{y}}% ({{button}})"
+    }
   }
 }

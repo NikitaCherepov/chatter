@@ -81,6 +81,7 @@
     "plainList": "Prompt list:\n{{list}}",
     "noDescription": "No description.",
     "noDescriptionShort": "no description",
+    "defaultDescription": "Default Chatter conversation style",
     "customEmpty": "Not set yet.",
     "choose": "Choose a prompt using the buttons below:",
     "customName": "Custom",
@@ -515,6 +516,32 @@
     "buttonsRestored": "↩️ Confirmation buttons restored.", "credentialsUpdated": "✅ Credentials updated.\n\n{{output}}",
     "labels": { "pcCommand": "PC command", "fileAction": "file action", "sshCommand": "SSH command", "emailSending": "email sending", "credentialsUpdate": "credentials update" },
     "buttons": { "allow": "✅ Allow", "alwaysAllow": "🔓 Always allow", "alwaysConfirm": "✅ Yes, always allow", "back": "⬅️ Back", "review": "❓ Review", "reject": "❌ Reject", "rejectWithComment": "💬 Reject with comment" }
+  },
+  "ai": {
+    "fallbackAnswer": "I'm stuck for a moment. Please try again.",
+    "documentsInstruction": "Analyze the attached documents.",
+    "defaultUserName": "User"
+  },
+  "desktopActions": {
+    "editFile": {
+      "header": "✏️ Edit file\n\n{{filePath}}\nLines: {{startLine}}–{{endLine}}\n",
+      "removing": "\n❌ Removing:\n{{content}}\n",
+      "adding": "\n✅ Adding:\n{{content}}\n",
+      "linesWillBeDeleted": "\n(lines will be deleted)",
+      "applyQuestion": "\n\nApply changes?"
+    },
+    "webcam": { "defaultPurpose": "Describe what the camera sees" },
+    "ssh": { "confirmationMarkdown": "🖥 **SSH: {{serverName}}** ({{host}})\n\n`{{command}}`\n\nAllow execution?" },
+    "email": {
+      "fromLine": "From: {{address}}\n",
+      "confirmationMarkdown": "📧 **Send email**\n\n{{fromLine}}To: {{to}}\nSubject: {{subject}}\n\n```\n{{body}}\n```\n\nSend?"
+    },
+    "visualClick": {
+      "defaultReason": "Click on the screen",
+      "rightButton": "right mouse button",
+      "leftButton": "left mouse button",
+      "caption": "🖱 Screen click\n\n{{reason}}\nCoordinates: {{x}}%, {{y}}% ({{button}})"
+    }
   },
   "fileConfirmation": {
     "writeTitle": "Write file",

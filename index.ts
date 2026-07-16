@@ -173,7 +173,7 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS user_chats (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        title TEXT NOT NULL DEFAULT 'Основной',
+        title TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -193,7 +193,7 @@ db.exec(`
 
     CREATE TABLE IF NOT EXISTS bans (
         user_id INTEGER PRIMARY KEY,
-        reason TEXT NOT NULL DEFAULT 'Без причины',
+        reason TEXT NOT NULL,
         banned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         banned_by INTEGER
     );
@@ -334,23 +334,31 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS user_chats (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        title TEXT NOT NULL DEFAULT 'Основной',
+        title TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 `);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id ON user_chats(user_id, id DESC)`);
 
-db.exec(`
-    INSERT INTO user_chats (user_id, title)
-    SELECT u.id, 'Основной'
+const usersWithoutChats = db.prepare(`
+    SELECT u.id, u.language
     FROM users u
     WHERE NOT EXISTS (
         SELECT 1
         FROM user_chats uc
         WHERE uc.user_id = u.id
     )
+`).all() as Array<{ id: number; language: string | null }>;
+const insertInitialUserChat = db.prepare(`
+    INSERT INTO user_chats (user_id, title)
+    VALUES (?, ?)
 `);
+db.transaction((users: Array<{ id: number; language: string | null }>) => {
+    for (const user of users) {
+        insertInitialUserChat.run(user.id, translateBot(user.language, 'chats.defaultTitle'));
+    }
+})(usersWithoutChats);
 
 db.exec(`
     UPDATE users
@@ -524,7 +532,6 @@ const DEFAULT_PROMPT_CONTENT = `Ты — Chatter, дружелюбный ИИ с
 const AUTO_SYNC_PLAN_LIMITS_ON_BOOT = process.env.AUTO_SYNC_PLAN_LIMITS_ON_BOOT === '1';
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
-const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
 const CUSTOM_PROMPT_ID = -1;
 const MAX_CUSTOM_PROMPT_LENGTH = 800;
 const NOTES_WEBAPP_URL = (process.env.NOTES_WEBAPP_URL || '').trim();
@@ -1707,7 +1714,7 @@ const ensureDefaultPrompt = () => {
         return { ...firstPrompt, is_default: 1 };
     }
 
-    const created = createPrompt('Default', 'Стандартный стиль общения Chatter', DEFAULT_PROMPT_CONTENT, true);
+    const created = createPrompt('Default', 'Default Chatter conversation style', DEFAULT_PROMPT_CONTENT, true);
     return getPromptById(Number(created.lastInsertRowid));
 };
 
@@ -2148,7 +2155,7 @@ const processPhotoAlbum = async (albumKey: string) => {
 
         const answer = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
             ? backend.reply_text.trim()
-            : FALLBACK_ANSWER;
+            : ctx.t('ai.fallbackAnswer');
         const sentMessage = await safeReply(ctx, answer);
 
         const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
@@ -2252,7 +2259,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
 
         const answer = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
             ? backend.reply_text.trim()
-            : FALLBACK_ANSWER;
+            : ctx.t('ai.fallbackAnswer');
         const sentMessage = await safeReply(ctx, answer);
 
         const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))
@@ -2747,8 +2754,8 @@ const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_
         if (custom) {
             return {
                 id: CUSTOM_PROMPT_ID,
-                name: 'Кастомный',
-                description: 'Пользовательский промпт',
+                name: 'Custom',
+                description: 'User prompt',
                 content: custom,
                 is_default: 0
             } satisfies PromptRecord;
@@ -2992,7 +2999,7 @@ const formatPromptsList = (currentPromptId: number | null, t: BotTranslate, incl
         if (prompt.id === effectiveCurrentPromptId) markers.push(t('prompt.markers.selected'));
         const suffix = markers.length ? ` [${markers.join(', ')}]` : '';
         const description = includeDescription
-            ? ` — ${prompt.description || t('prompt.noDescriptionShort')}`
+            ? ` — ${getPromptDescriptionForDisplay(prompt, t)}`
             : '';
         return `- ${prompt.id}: ${prompt.name}${suffix}${description}`;
     }).join('\n');
@@ -3005,6 +3012,13 @@ const getPromptDescription = (description: string, t: BotTranslate) => {
     if (!normalized) return t('prompt.noDescription');
     return normalized.length > 220 ? `${normalized.slice(0, 220)}...` : normalized;
 };
+
+const getPromptDescriptionForDisplay = (
+    prompt: { name: string; description?: string | null; content: string },
+    t: BotTranslate
+) => prompt.name === 'Default' && prompt.content === DEFAULT_PROMPT_CONTENT
+    ? t('prompt.defaultDescription')
+    : getPromptDescription(prompt.description || '', t);
 
 const getCustomPromptPreview = (
     content: string | null | undefined,
@@ -3149,7 +3163,7 @@ const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id:
         name: prompt.name,
         defaultMark,
         selectedMark,
-        description: getPromptDescription(prompt.description, ctx.t)
+        description: getPromptDescriptionForDisplay(prompt, ctx.t)
     });
     return ctx.editMessageText(text, buildPromptCardKeyboard(prompt.id, selected, ctx.t));
 };
@@ -3187,12 +3201,6 @@ const getUserDisplayName = (user: { name: string | null; tg_username: string | n
     return `ID ${user.id}`;
 };
 
-const getStatusLabel = (status: UserStatus) => {
-    if (status === 'approved') return 'approved';
-    if (status === 'none') return 'none';
-    if (status === 'disapproved') return 'disapproved';
-    return 'banned';
-};
 const getPlanLabel = (plan: UserPlan) => PLAN_LABELS[plan] || PLAN_LABELS[DEFAULT_USER_PLAN];
 const getContextWindowText = (user: UserRecord) => {
     const effective = resolveMaxContextTokens(user);
@@ -3200,19 +3208,10 @@ const getContextWindowText = (user: UserRecord) => {
         ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
     return `${(effective / 1000).toFixed(0)}k/${(hardLimit / 1000).toFixed(0)}k`;
 };
-const getDailyMessageLimitText = (_user: UserRecord) => 'безлимит';
 const getDailyWebSearchLimitText = (user: UserRecord) => {
     const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
     return `${user.daily_web_search_count ?? 0}/${limit}`;
 };
-const getDurationLabel = (duration: PlanDurationCode) => {
-    if (duration === 'day') return '1 день';
-    if (duration === 'week') return '1 неделя';
-    if (duration === 'month') return '1 месяц';
-    if (duration === 'year') return '1 год';
-    return 'Бессрочно';
-};
-
 const maybeCapturePendingName = async (ctx: any, user: UserRecord, text: string) => {
     if (ctx.from?.username) return false;
     if (user.name && user.name.trim()) return false;
@@ -3536,7 +3535,7 @@ bot.command('prompts', async (ctx) => {
             const selected = user.selected_prompt_id === p.id
                 ? ctx.t('prompt.adminSelectedMark')
                 : '';
-            return `#${p.id} ${p.name}${marker}${selected}: ${normalizeTextPreview(p.description || p.content, 80)}`;
+            return `#${p.id} ${p.name}${marker}${selected}: ${normalizeTextPreview(getPromptDescriptionForDisplay(p, ctx.t), 80)}`;
         }).join('\n');
         return ctx.reply(ctx.t('prompt.adminList', {
             lines: lines || ctx.t('prompt.none')
@@ -3598,7 +3597,7 @@ bot.command('prompt_show', async (ctx) => {
         const data = await runBackendGetPrompt(promptId);
         const p = data.prompt;
         const defaultMark = p.is_default ? ctx.t('prompt.cardDefaultMark') : '';
-        const text = ctx.t('adminPrompt.show', { id: p.id, name: p.name, defaultMark, description: p.description || ctx.t('prompt.noDescriptionShort'), content: p.content });
+        const text = ctx.t('adminPrompt.show', { id: p.id, name: p.name, defaultMark, description: getPromptDescriptionForDisplay(p, ctx.t), content: p.content });
         return ctx.reply(text);
     } catch {
         return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
@@ -6490,11 +6489,11 @@ const processUserTextThroughAi = async (
     }
     // If no text but documents present — use a neutral placeholder so backend "empty_text" check passes.
     if (!userText && hasDocuments) {
-        userText = 'Проанализируй прикреплённые документы.';
+        userText = ctx.t('ai.documentsInstruction');
     }
     const userTextForHistory = options?.persistUserText?.trim() || userText;
 
-    const userName = (ctx.state.userName as string | undefined) || 'Пользователь';
+    const userName = (ctx.state.userName as string | undefined) || ctx.t('ai.defaultUserName');
     const userRecord = await getUser(userId);
     if (!userRecord) {
         if (!options?.suppressFinalReply) {
@@ -6661,17 +6660,17 @@ const processUserTextThroughAi = async (
                     const oldPreview = (action.value.old_content_preview || '').slice(0, 600);
                     const newPreview = (action.value.new_content_preview || '').slice(0, 600);
 
-                    let msgText = `✏️ Редактирование файла\n\n${filePath}\nСтроки: ${startLine}–${endLine}\n`;
+                    let msgText = ctx.t('desktopActions.editFile.header', { filePath, startLine, endLine });
                     if (oldPreview) {
-                        msgText += `\n❌ Удаляется:\n${oldPreview.replace(/```/g, "'''")}\n`;
+                        msgText += ctx.t('desktopActions.editFile.removing', { content: oldPreview.replace(/```/g, "'''") });
                     }
                     if (newPreview) {
-                        msgText += `\n✅ Добавляется:\n${newPreview.replace(/```/g, "'''")}\n`;
+                        msgText += ctx.t('desktopActions.editFile.adding', { content: newPreview.replace(/```/g, "'''") });
                     }
                     if (!newPreview && oldPreview) {
-                        msgText += `\n(строки будут удалены)`;
+                        msgText += ctx.t('desktopActions.editFile.linesWillBeDeleted');
                     }
-                    msgText += '\n\nПрименить изменения?';
+                    msgText += ctx.t('desktopActions.editFile.applyQuestion');
 
                     const keyboard = Markup.inlineKeyboard([
                         [
@@ -6702,7 +6701,7 @@ const processUserTextThroughAi = async (
                 }
                 if (action?.action === 'webcam_capture_confirmation' && action?.value?.confirmation_id) {
                     const confirmationId = action.value.confirmation_id;
-                    const purpose = action.value.purpose || 'Опиши что видит камера';
+                    const purpose = action.value.purpose || ctx.t('desktopActions.webcam.defaultPurpose');
                     const cameraName = action.value.camera_name || 'default';
 
                     const keyboard = Markup.inlineKeyboard([
@@ -6743,7 +6742,7 @@ const processUserTextThroughAi = async (
                     pendingPcCommandTexts.set(`devops_server:${confirmationId}`, String(serverId));
                     const preview = command.slice(0, 300);
                     const escapedCmd = preview.replace(/`/g, '\\`');
-                    let msgText = `🖥 **SSH: ${serverName}** (${host})\n\n\`${escapedCmd}\`\n\nРазрешить выполнение?`;
+                    let msgText = ctx.t('desktopActions.ssh.confirmationMarkdown', { serverName, host, command: escapedCmd });
                     const keyboard = Markup.inlineKeyboard([
                         [
                             Markup.button.callback(ctx.t('confirmations.buttons.allow'), `devops:allow:${confirmationId}`),
@@ -6808,8 +6807,13 @@ const processUserTextThroughAi = async (
                             Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `email:reject_comment:${confirmationId}`),
                         ]
                     ]);
-                    const fromLine = fromAddr ? `От: ${fromAddr}\n` : '';
-                    const msgText = `📧 **Отправка письма**\n\n${fromLine}Кому: ${toAddr}\nТема: ${subject}\n\n\`\`\`\n${bodyPreview.replace(/```/g, "'''")}\n\`\`\`\n\nОтправить?`;
+                    const fromLine = fromAddr ? ctx.t('desktopActions.email.fromLine', { address: fromAddr }) : '';
+                    const msgText = ctx.t('desktopActions.email.confirmationMarkdown', {
+                        fromLine,
+                        to: toAddr,
+                        subject,
+                        body: bodyPreview.replace(/```/g, "'''")
+                    });
                     try {
                         await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
                     } catch {
@@ -6822,8 +6826,10 @@ const processUserTextThroughAi = async (
                 }
                 if (action?.action === 'visual_click_confirmation' && action?.value?.confirmation_id) {
                     const confirmationId = action.value.confirmation_id;
-                    const reason = action.value.reason || 'Клик по экрану';
-                    const btn = action.value.button === 'right' ? 'правой' : 'левой';
+                    const reason = action.value.reason || ctx.t('desktopActions.visualClick.defaultReason');
+                    const btn = ctx.t(action.value.button === 'right'
+                        ? 'desktopActions.visualClick.rightButton'
+                        : 'desktopActions.visualClick.leftButton');
                     const xPct = Math.round((action.value.x || 0) * 100);
                     const yPct = Math.round((action.value.y || 0) * 100);
                     pendingPcCommandTexts.set(`visual:${confirmationId}`, JSON.stringify({
@@ -6838,7 +6844,7 @@ const processUserTextThroughAi = async (
                             Markup.button.callback(ctx.t('admin.buttons.reject'), `vclick:reject:${confirmationId}`),
                         ]
                     ]);
-                    const caption = `🖱 Клик по экрану\n\n${reason}\nКоординаты: ${xPct}%, ${yPct}% (${btn} кнопка)`;
+                    const caption = ctx.t('desktopActions.visualClick.caption', { reason, x: xPct, y: yPct, button: btn });
 
                     // If we have a preview image — send as photo with inline keyboard
                     let photoSent = false;
@@ -6868,7 +6874,7 @@ const processUserTextThroughAi = async (
 
         const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
             ? backend.reply_text.trim()
-            : FALLBACK_ANSWER;
+            : ctx.t('ai.fallbackAnswer');
         let sentMessage: any = null;
         if (!options?.suppressFinalReply) {
             // Сначала пытаемся финализировать rich-stream черновик → persisted sendRichMessage.
@@ -7387,7 +7393,7 @@ const processUserVoiceThroughAi = async (ctx: any) => {
 
         const assistantText = typeof backend?.reply_text === 'string' && backend.reply_text.trim()
             ? backend.reply_text.trim()
-            : FALLBACK_ANSWER;
+            : ctx.t('ai.fallbackAnswer');
         const sentTextMessage = await safeReply(ctx, assistantText);
 
         const backendAssistantMessageId = Number.isFinite(Number(backend?.message_id))

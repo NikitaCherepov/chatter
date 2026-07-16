@@ -134,7 +134,8 @@
       "empty": "提示文本不能为空或为命令。",
       "tooLong": "过长：{{length}} 个字符。限制：{{limit}}。",
       "saved": "自定义提示已保存并选中。"
-    }
+    },
+    "defaultDescription": "默认的Chatter对话风格"
   },
   "model": {
     "auto": "自动",
@@ -691,5 +692,35 @@
     "voiceNotRecognized": "🗣 我无法识别任何内容。",
     "voiceRecognized": "🗣 识别结果：\n{{text}}",
     "transcriptionServerError": "❌ 转录服务器连接失败或内部错误。"
+  },
+  "ai": {
+    "fallbackAnswer": "我暂时卡住了，请重试。",
+    "documentsInstruction": "分析附件中的文档。",
+    "defaultUserName": "用户"
+  },
+  "desktopActions": {
+    "editFile": {
+      "header": "✏️ 编辑文件\n\n{{filePath}}\n行：{{startLine}}–{{endLine}}\n",
+      "removing": "\n❌ 删除：\n{{content}}\n",
+      "adding": "\n✅ 添加：\n{{content}}\n",
+      "linesWillBeDeleted": "\n（行将被删除）",
+      "applyQuestion": "\n\n应用更改？"
+    },
+    "webcam": {
+      "defaultPurpose": "描述摄像头看到的画面"
+    },
+    "ssh": {
+      "confirmationMarkdown": "🖥 **SSH: {{serverName}}** ({{host}})\n\n`{{command}}`\n\n允许执行？"
+    },
+    "email": {
+      "fromLine": "发件人: {{address}}\n",
+      "confirmationMarkdown": "📧 **发送邮件**\n\n{{fromLine}}收件人: {{to}}\n主题: {{subject}}\n\n```\n{{body}}\n```\n\n发送？"
+    },
+    "visualClick": {
+      "defaultReason": "点击屏幕",
+      "rightButton": "鼠标右键",
+      "leftButton": "鼠标左键",
+      "caption": "🖱 屏幕点击\n\n{{reason}}\n坐标: {{x}}%, {{y}}% ({{button}})"
+    }
   }
 }

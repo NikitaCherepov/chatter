@@ -134,7 +134,8 @@
       "empty": "El texto del prompt no puede estar vacío ni ser un comando.",
       "tooLong": "Demasiado largo: {{length}} caracteres. Límite: {{limit}}.",
       "saved": "Prompt personalizado guardado y seleccionado."
-    }
+    },
+    "defaultDescription": "Estilo de conversación predeterminado de Chatter"
   },
   "model": {
     "auto": "Automático",
@@ -691,5 +692,35 @@
     "voiceNotRecognized": "🗣 No pude entender nada.",
     "voiceRecognized": "🗣 Reconocido:\n{{text}}",
     "transcriptionServerError": "❌ Error de conexión con el servidor de transcripción o error interno."
+  },
+  "ai": {
+    "fallbackAnswer": "Estoy atascado por un momento. Por favor, inténtalo de nuevo.",
+    "documentsInstruction": "Analiza los documentos adjuntos.",
+    "defaultUserName": "Usuario"
+  },
+  "desktopActions": {
+    "editFile": {
+      "header": "✏️ Editar archivo\n\n{{filePath}}\nLíneas: {{startLine}}–{{endLine}}\n",
+      "removing": "\n❌ Eliminando:\n{{content}}\n",
+      "adding": "\n✅ Añadiendo:\n{{content}}\n",
+      "linesWillBeDeleted": "\n(las líneas se eliminarán)",
+      "applyQuestion": "\n\n¿Aplicar cambios?"
+    },
+    "webcam": {
+      "defaultPurpose": "Describe lo que ve la cámara"
+    },
+    "ssh": {
+      "confirmationMarkdown": "🖥 **SSH: {{serverName}}** ({{host}})\n\n`{{command}}`\n\n¿Permitir ejecución?"
+    },
+    "email": {
+      "fromLine": "De: {{address}}\n",
+      "confirmationMarkdown": "📧 **Enviar correo**\n\n{{fromLine}}Para: {{to}}\nAsunto: {{subject}}\n\n```\n{{body}}\n```\n\n¿Enviar?"
+    },
+    "visualClick": {
+      "defaultReason": "Hacer clic en la pantalla",
+      "rightButton": "botón derecho del ratón",
+      "leftButton": "botón izquierdo del ratón",
+      "caption": "🖱 Clic en pantalla\n\n{{reason}}\nCoordenadas: {{x}}%, {{y}}% ({{button}})"
+    }
   }
 }
