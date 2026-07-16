@@ -2801,10 +2801,7 @@ export function ChatPage() {
                       })}
                 >
                   <span className={s.contextTokensValue}>
-                    {(contextTokens.latest_prompt_tokens > 0
-                      ? contextTokens.latest_prompt_tokens
-                      : contextTokens.messages_tokens + contextTokens.system_prompt_tokens
-                    ).toLocaleString(locale)}
+                    {contextTokens.current_context_tokens.toLocaleString(locale)}
                   </span>
                   <span className={s.contextTokensLabel}> tk</span>
                   {contextTokens.latest_total_tokens > 0 && (

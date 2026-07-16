@@ -184,6 +184,8 @@ export type MessageUsage = {
   latest: NormalizedTokenUsage;
   aggregate: NormalizedTokenUsage;
   calls: TokenUsageCall[];
+  context_estimate_tokens?: number;
+  context_local_tokens?: number;
 };
 
 export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };
@@ -407,6 +409,7 @@ export type ChatContextTokens = {
   latest_cache_miss_tokens: number;
   latest_reasoning_tokens: number;
   latest_model_name: string | null;
+  current_context_tokens: number;
 };
 
 export async function getChatContextTokens(chatId: number): Promise<ChatContextTokens> {

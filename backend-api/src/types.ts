@@ -93,6 +93,8 @@ export type MessageUsage = {
   latest: NormalizedTokenUsage;
   aggregate: NormalizedTokenUsage;
   calls: TokenUsageCall[];
+  context_estimate_tokens?: number;
+  context_local_tokens?: number;
 };
 
 export type MessageDto = {

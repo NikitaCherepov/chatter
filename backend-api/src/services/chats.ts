@@ -1043,29 +1043,58 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
  *
  * Reasoning в API не отправляется (односторонний вывод модели).
  */
-export const getHistoryForAi = (userId: number, chatId: number, limit?: number, attachmentMaxTokens = 0, supportsVision = false): any[] => {
+export const getHistoryForAi = (
+  userId: number,
+  chatId: number,
+  limit?: number,
+  attachmentMaxTokens = 0,
+  supportsVision = false,
+  attachmentBudgetState?: { remaining: number }
+): any[] => {
   // LIMIT больше не используется для ограничения контекста —
   // Epoch Trimming (trimUserHistoryByChat) контролирует размер через архивацию по токенам.
   // Параметр limit оставлен для обратной совместимости, но игнорируется.
   const rows = db.prepare(`
-    SELECT role, content, tool_calls_json, attachments, images
+    SELECT id, role, content, tool_calls_json, attachments, images
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ? AND archived = 0
     ORDER BY id DESC
-  `).all(userId, chatId).reverse() as Array<{ role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null }>;
+  `).all(userId, chatId).reverse() as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null }>;
 
   const messages: any[] = [];
+  const attachmentBudget = attachmentBudgetState ?? { remaining: attachmentMaxTokens };
+  const attachmentInjectionByMessage = new Map<number, string>();
+
+  // Newest documents have priority when the global document budget is tight.
+  if (attachmentMaxTokens > 0) {
+    for (let index = rows.length - 1; index >= 0 && attachmentBudget.remaining > 0; index -= 1) {
+      const row = rows[index];
+      if (row.role !== 'user' || !row.attachments) continue;
+      try {
+        const parsed = JSON.parse(row.attachments) as MessageAttachment[];
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        const injected = injectAttachments(parsed, attachmentBudget.remaining);
+        if (!injected) continue;
+        attachmentInjectionByMessage.set(row.id, injected);
+        attachmentBudget.remaining = Math.max(0, attachmentBudget.remaining - countTokens(injected));
+      } catch {
+        // Ignore malformed legacy attachment JSON.
+      }
+    }
+  }
 
   for (const row of rows) {
     if (row.role === 'user') {
       // Достаём attachments (если есть) и инъектируем в content.
-      let parsedAttachments: MessageAttachment[] | null = null;
-      if (row.attachments) {
-        try { parsedAttachments = JSON.parse(row.attachments); } catch { parsedAttachments = null; }
+      let injected = attachmentInjectionByMessage.get(row.id) || '';
+      if (attachmentMaxTokens <= 0 && row.attachments) {
+        try {
+          const parsedAttachments = JSON.parse(row.attachments) as MessageAttachment[];
+          injected = Array.isArray(parsedAttachments) ? injectAttachments(parsedAttachments, 0) : '';
+        } catch {
+          injected = '';
+        }
       }
-      const injected = parsedAttachments && parsedAttachments.length > 0
-        ? injectAttachments(parsedAttachments, attachmentMaxTokens)
-        : '';
 
       // Достаём images (если есть) — user_photo и generated обрабатываем одинаково.
       let parsedImages: MessageImage[] | null = null;
@@ -1151,6 +1180,96 @@ export const getHistoryForAi = (userId: number, chatId: number, limit?: number, 
  *
  * возвращает { archived_count, tokens_before, tokens_after } для логирования.
  */
+export const getProviderContextEstimate = (userId: number, chatId: number): number | null => {
+  const latestAssistant = db.prepare(`
+    SELECT id, created_at, usage_json
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(userId, chatId) as { id: number; created_at: string; usage_json: string | null } | undefined;
+
+  if (!latestAssistant?.usage_json) return null;
+
+  try {
+    const usage = JSON.parse(latestAssistant.usage_json) as MessageUsage;
+    const latest = usage?.latest;
+    if (!latest || latest.prompt_tokens <= 0) return null;
+
+    const activeLocal = db.prepare(`
+      SELECT COALESCE(SUM(token_count), 0) AS tokens
+      FROM chat_messages
+      WHERE user_id = ? AND chat_id = ? AND archived = 0
+    `).get(userId, chatId) as { tokens: number };
+
+    if (
+      Number.isFinite(usage.context_estimate_tokens)
+      && Number.isFinite(usage.context_local_tokens)
+    ) {
+      return Math.max(
+        0,
+        Number(usage.context_estimate_tokens)
+          + Number(activeLocal?.tokens || 0)
+          - Number(usage.context_local_tokens)
+      );
+    }
+
+    // Provider prompt already contains system prompt, tools, history and tool-loop.
+    // The visible final answer is added because it becomes part of the next request;
+    // hidden reasoning is not persisted into the AI context.
+    const visibleCompletionTokens = Math.max(0, latest.completion_tokens - latest.reasoning_tokens);
+    const providerContextAtResponse = latest.prompt_tokens + visibleCompletionTokens;
+
+    // Messages archived after this response are no longer in the current context.
+    const archivedAfter = db.prepare(`
+      SELECT COALESCE(SUM(token_count), 0) AS tokens
+      FROM chat_messages
+      WHERE user_id = ? AND chat_id = ? AND archived = 1
+        AND id <= ? AND archived_at >= ?
+    `).get(userId, chatId, latestAssistant.id, latestAssistant.created_at) as { tokens: number };
+
+    // Defensive support for persisted rows added after the latest assistant message.
+    const activeAfter = db.prepare(`
+      SELECT COALESCE(SUM(token_count), 0) AS tokens
+      FROM chat_messages
+      WHERE user_id = ? AND chat_id = ? AND archived = 0 AND id > ?
+    `).get(userId, chatId, latestAssistant.id) as { tokens: number };
+
+    return Math.max(
+      0,
+      providerContextAtResponse - Number(archivedAfter?.tokens || 0) + Number(activeAfter?.tokens || 0)
+    );
+  } catch {
+    return null;
+  }
+};
+
+const saveProviderContextAnchor = (
+  userId: number,
+  chatId: number,
+  contextEstimate: number,
+  localTokens: number
+) => {
+  const latestAssistant = db.prepare(`
+    SELECT id, usage_json
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(userId, chatId) as { id: number; usage_json: string | null } | undefined;
+
+  if (!latestAssistant?.usage_json) return;
+  try {
+    const usage = JSON.parse(latestAssistant.usage_json) as MessageUsage;
+    usage.context_estimate_tokens = Math.max(0, Math.floor(contextEstimate));
+    usage.context_local_tokens = Math.max(0, Math.floor(localTokens));
+    db.prepare('UPDATE chat_messages SET usage_json = ? WHERE id = ? AND user_id = ?')
+      .run(JSON.stringify(usage), latestAssistant.id, userId);
+  } catch {
+    // Ignore malformed legacy usage JSON.
+  }
+};
+
 export const trimUserHistoryByChat = (userId: number, chatId: number, maxContextTokens: number): { archived_count: number; tokens_before: number; tokens_after: number } => {
   const tokenLimit = Math.max(1000, Math.floor(maxContextTokens));
 
@@ -1164,10 +1283,15 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
 
   if (rows.length === 0) return { archived_count: 0, tokens_before: 0, tokens_after: 0 };
 
-  // 2. Считаем системный промпт (динамический).
+  // Provider usage is the source of truth for total context size. Local
+  // token_count remains only as a per-message weight for selecting old rows.
+  const providerContextEstimate = getProviderContextEstimate(userId, chatId);
+  const providerAnchored = providerContextEstimate !== null;
+
+  // Fallback for chats without provider usage yet.
   let systemPromptTokens = 0;
-  const user = getUserById(userId);
-  if (user) {
+  const user = providerAnchored ? null : getUserById(userId);
+  if (!providerAnchored && user) {
     const promptContent = resolvePromptForUser(user).content;
     const coreMemory = user.core_memory || '';
     const pinnedMacros = getEnabledMacros(userId).filter(m => m.pinned);
@@ -1179,8 +1303,8 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
   }
 
   // 3. Сумма токенов всех неархивных сообщений.
-  const totalMessageTokens = rows.reduce((sum, r) => sum + (r.token_count || 0), 0);
-  const totalContextTokens = totalMessageTokens + systemPromptTokens;
+  let totalMessageTokens = rows.reduce((sum, r) => sum + (r.token_count || 0), 0);
+  let totalContextTokens = providerContextEstimate ?? (totalMessageTokens + systemPromptTokens);
 
   // 3b. РАЗАРХИВАЦИЯ: если лимит позволяет, возвращаем свежие архивные сообщения.
   // Критически важно чтобы пользователь мог увеличить лимит и получить историю назад.
@@ -1217,6 +1341,8 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
                 archived_at = NULL
             WHERE id IN (${ph})
           `).run(...idsToUnarchive);
+          totalMessageTokens += unarchiveAccumulated;
+          totalContextTokens += unarchiveAccumulated;
         }
       }
     }
@@ -1224,13 +1350,18 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
 
   // 4. Если контекст в пределах лимита — ничего не делаем.
   if (totalContextTokens <= tokenLimit) {
+    if (providerAnchored) {
+      saveProviderContextAnchor(userId, chatId, totalContextTokens, totalMessageTokens);
+    }
     return { archived_count: 0, tokens_before: totalContextTokens, tokens_after: totalContextTokens };
   }
 
   // 5. Схлопываем до 50% лимита.
   const targetTokens = Math.floor(tokenLimit * 0.5);
   // Сколько токенов нужно срезать (минимум, чтобы оказаться в районе target).
-  const tokensToArchive = totalMessageTokens - Math.max(0, targetTokens - systemPromptTokens);
+  const tokensToArchive = providerAnchored
+    ? Math.max(0, totalContextTokens - targetTokens)
+    : totalMessageTokens - Math.max(0, targetTokens - systemPromptTokens);
 
   // 6. Идём от самых старых, собираем ID для архивации.
   const idsToArchive: number[] = [];
@@ -1247,6 +1378,9 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
   }
 
   if (idsToArchive.length === 0) {
+    if (providerAnchored) {
+      saveProviderContextAnchor(userId, chatId, totalContextTokens, totalMessageTokens);
+    }
     return { archived_count: 0, tokens_before: totalContextTokens, tokens_after: totalContextTokens };
   }
 
@@ -1260,6 +1394,14 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
   `).run(...idsToArchive);
 
   const tokensAfter = totalContextTokens - accumulated;
+  if (providerAnchored) {
+    saveProviderContextAnchor(
+      userId,
+      chatId,
+      Math.max(0, tokensAfter),
+      Math.max(0, totalMessageTokens - accumulated)
+    );
+  }
 
   return { archived_count: idsToArchive.length, tokens_before: totalContextTokens, tokens_after: Math.max(0, tokensAfter) };
 };
@@ -1707,6 +1849,7 @@ export type ChatContextTokens = {
   latest_cache_miss_tokens: number;
   latest_reasoning_tokens: number;
   latest_model_name: string | null;
+  current_context_tokens: number;
 };
 
 /**
@@ -1782,6 +1925,8 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     latest_cache_miss_tokens: latestUsage?.cache_miss_tokens ?? 0,
     latest_reasoning_tokens: latestUsage?.reasoning_tokens ?? 0,
     latest_model_name: latestAssistant?.model_name ?? null,
+    current_context_tokens: getProviderContextEstimate(userId, chatId)
+      ?? (row.messages_tokens + system_prompt_tokens),
   };
 };
 

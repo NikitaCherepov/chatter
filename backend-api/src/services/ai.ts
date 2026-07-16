@@ -16,6 +16,7 @@ import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.
 import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
+import { countTokens } from './tokenizer.js';
 import { listSubagentNames, buildSubagentListDescription } from './subagents/registry.js';
 
 dotenv.config();
@@ -5707,7 +5708,26 @@ export const sendMessageThroughAi = async (
   const contextWindow = resolveEffectiveContextWindow(user);
   const maxContextTokens = resolveMaxContextTokens(user);
   const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
-  let history = getHistoryForAi(userId, chatId, contextWindow, attachmentMaxTokens, currentModelSupportsVision);
+  // Apply the provider-anchored estimate before assembling the next request.
+  trimUserHistoryByChat(userId, chatId, maxContextTokens);
+  const attachmentBudgetState = { remaining: attachmentMaxTokens };
+  const pendingAttachmentText = options?.userAttachments?.length && attachmentBudgetState.remaining > 0
+    ? injectAttachments(options.userAttachments, attachmentBudgetState.remaining)
+    : '';
+  if (pendingAttachmentText) {
+    attachmentBudgetState.remaining = Math.max(
+      0,
+      attachmentBudgetState.remaining - countTokens(pendingAttachmentText)
+    );
+  }
+  let history = getHistoryForAi(
+    userId,
+    chatId,
+    contextWindow,
+    attachmentMaxTokens,
+    currentModelSupportsVision,
+    attachmentBudgetState
+  );
   let regenerateUserText: string | null = null;
   if (requestedRegenerateFromHistory) {
     history = [...history];
@@ -6030,7 +6050,7 @@ PRO
   // The same injection is replayed from history via getHistoryForAi, but for the
   // fresh message we add it here since it hasn't been saved yet.
   if (options?.userAttachments && options.userAttachments.length > 0) {
-    const attText = injectAttachments(options.userAttachments, attachmentMaxTokens);
+    const attText = pendingAttachmentText;
     if (attText) {
       if (typeof userMessageContent === 'string') {
         userMessageContent += '\n\n' + attText;
