@@ -636,8 +636,28 @@
   flex-shrink: 0;
   user-select: none;
   font-variant-numeric: tabular-nums;
-  margin-left: auto;
   cursor: help;
+}
+
+.messageUsageMeta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.modelBadge {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-hint);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-modal-hover);
+  flex-shrink: 1;
 }
 
 .regenHintOverlay {

@@ -69,6 +69,11 @@ ensureChatMessageColumn('archived_at', 'ALTER TABLE chat_messages ADD COLUMN arc
 // Token accounting (фаза 1: отображение). token_count не включает reasoning_content.
 ensureChatMessageColumn('token_count', 'ALTER TABLE chat_messages ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0');
 ensureChatMessageColumn('reasoning_tokens', 'ALTER TABLE chat_messages ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0');
+// Exact provider usage and response metadata (local token_count remains the context-trimming weight).
+ensureChatMessageColumn('usage_json', 'ALTER TABLE chat_messages ADD COLUMN usage_json TEXT');
+ensureChatMessageColumn('prompt_name', 'ALTER TABLE chat_messages ADD COLUMN prompt_name TEXT');
+ensureChatMessageColumn('model_name', 'ALTER TABLE chat_messages ADD COLUMN model_name TEXT');
+ensureChatMessageColumn('provider_name', 'ALTER TABLE chat_messages ADD COLUMN provider_name TEXT');
 // Attachments (documents) — text files injected into AI context
 ensureChatMessageColumn('attachments', 'ALTER TABLE chat_messages ADD COLUMN attachments TEXT');
 // Subagent traces — полные trace ad-hoc субагентов для UI-отображения (не уходит в AI-контекст)

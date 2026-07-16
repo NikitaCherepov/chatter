@@ -75,6 +75,26 @@ export type MessageAudio = {
   voice_id: string;
 };
 
+export type NormalizedTokenUsage = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cache_hit_tokens: number;
+  cache_miss_tokens: number;
+  reasoning_tokens: number;
+};
+
+export type TokenUsageCall = NormalizedTokenUsage & {
+  model: string;
+  provider: string;
+};
+
+export type MessageUsage = {
+  latest: NormalizedTokenUsage;
+  aggregate: NormalizedTokenUsage;
+  calls: TokenUsageCall[];
+};
+
 export type MessageDto = {
   id: number;
   chat_id: number;
@@ -91,6 +111,10 @@ export type MessageDto = {
   /** Локально посчитанные токены (без reasoning_content). См. MessageTokensDto. */
   token_count?: number;
   reasoning_tokens?: number;
+  prompt_name?: string | null;
+  model_name?: string | null;
+  provider_name?: string | null;
+  usage?: MessageUsage | null;
   attachments?: MessageAttachment[] | null;
   /** Полные trace ad-hoc субагентов (если были). */
   subagents?: Array<{
@@ -136,6 +160,12 @@ export type UsageDto = {
   tokens_used: number;
   used_model: string;
   used_provider: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cache_hit_tokens: number;
+  cache_miss_tokens: number;
+  reasoning_tokens: number;
+  calls: TokenUsageCall[];
 };
 
 /**
@@ -191,6 +221,10 @@ export type AiSendResult = {
   reasoning_tokens?: number;
   /** Токены user-сообщения (если было сохранено новое). См. MessageTokensDto. */
   user_token_count?: number;
+  prompt_name?: string | null;
+  model_name?: string | null;
+  provider_name?: string | null;
+  message_usage?: MessageUsage | null;
   /** Результат броска d20 (1..20) в режиме Dice Roll Mode, иначе отсутствует. */
   dice_roll?: number;
 };

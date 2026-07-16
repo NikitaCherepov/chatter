@@ -166,6 +166,26 @@ export type MessageAudio = {
   voice_id: string;
 };
 
+export type NormalizedTokenUsage = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cache_hit_tokens: number;
+  cache_miss_tokens: number;
+  reasoning_tokens: number;
+};
+
+export type TokenUsageCall = NormalizedTokenUsage & {
+  model: string;
+  provider: string;
+};
+
+export type MessageUsage = {
+  latest: NormalizedTokenUsage;
+  aggregate: NormalizedTokenUsage;
+  calls: TokenUsageCall[];
+};
+
 export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };
 
 /** Полный trace ad-hoc субагента — для UI-блока «Сабагенты». */
@@ -202,6 +222,10 @@ export type Message = {
   token_count?: number;
   /** Токены reasoning_content (только для assistant). */
   reasoning_tokens?: number;
+  prompt_name?: string | null;
+  model_name?: string | null;
+  provider_name?: string | null;
+  usage?: MessageUsage | null;
   attachments?: MessageAttachment[] | null;
   /** Полные trace ad-hoc субагентов (если были). */
   subagents?: SubagentTrace[] | null;
@@ -346,6 +370,21 @@ export type ChatSendResponse = {
   tool_calls?: ToolCall[];
   token_count?: number;
   reasoning_tokens?: number;
+  prompt_name?: string | null;
+  model_name?: string | null;
+  provider_name?: string | null;
+  message_usage?: MessageUsage | null;
+  usage?: {
+    tokens_used: number;
+    used_model: string;
+    used_provider: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+    cache_hit_tokens: number;
+    cache_miss_tokens: number;
+    reasoning_tokens: number;
+    calls: TokenUsageCall[];
+  };
   /** Токены user-сообщения (если было сохранено новое). */
   user_token_count?: number;
   /** Результат броска d20 (1..20) в режиме Dice Roll Mode, иначе отсутствует. */
@@ -361,6 +400,13 @@ export type ChatContextTokens = {
   active_messages: number;
   archived_messages: number;
   system_prompt_tokens: number;
+  latest_prompt_tokens: number;
+  latest_completion_tokens: number;
+  latest_total_tokens: number;
+  latest_cache_hit_tokens: number;
+  latest_cache_miss_tokens: number;
+  latest_reasoning_tokens: number;
+  latest_model_name: string | null;
 };
 
 export async function getChatContextTokens(chatId: number): Promise<ChatContextTokens> {

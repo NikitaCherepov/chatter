@@ -118,7 +118,8 @@
       "smartHome": "Smart Home",
       "restrictions": "Einschränkungen",
       "models": "Modelle",
-      "app": "App"
+      "app": "App",
+      "limits": "Grenzen"
     },
     "language": {
       "system": "System",
@@ -276,7 +277,8 @@
       "branchTitle": "Neuen Chat-Zweig mit einer Kopie des Verlaufs bis zu dieser Nachricht erstellen",
       "sendTelegram": "An Telegram senden",
       "createBranch": "Zweig erstellen",
-      "subagentNumber": "🧠 Unteragent {{number}}"
+      "subagentNumber": "🧠 Unteragent {{number}}",
+      "providerTokenUsage": "Vom Anbieter gemeldete genaue Token-Nutzung für die Vervollständigung"
     },
     "reasoning": {
       "auto": "Auto",
@@ -325,7 +327,9 @@
     "context": {
       "tooltip": "Nachrichten: {{active}} (Archiv: {{archived}})\nPrompt-Token: {{promptTokens}}{{reasoning}}",
       "reasoning": "Überlegung",
-      "prompt": "Prompt"
+      "prompt": "Prompt",
+      "providerTooltip": "Letzte Anbieteranfrage\nEingabe: {{input}} tk\nCache-Treffer: {{cacheHit}} tk\nCache-Fehler: {{cacheMiss}} tk\nAusgabe: {{output}} tk\nBegründung: {{reasoning}} tk\nModell: {{model}}",
+      "cached": "zwischengespeichert"
     },
     "macro": {
       "title": "Makro-Vorschlag",

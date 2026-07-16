@@ -118,7 +118,8 @@
       "smartHome": "智能家居",
       "restrictions": "限制",
       "models": "模型",
-      "app": "应用"
+      "app": "应用",
+      "limits": "限制"
     },
     "language": {
       "system": "系统",
@@ -276,7 +277,8 @@
       "branchTitle": "创建新的聊天分支，包含此消息之前的历史副本",
       "sendTelegram": "发送到 Telegram",
       "createBranch": "创建分支",
-      "subagentNumber": "🧠 子代理 {{number}}"
+      "subagentNumber": "🧠 子代理 {{number}}",
+      "providerTokenUsage": "提供商报告的精确完成令牌使用量"
     },
     "reasoning": {
       "auto": "自动",
@@ -325,7 +327,9 @@
     "context": {
       "tooltip": "消息数：{{active}}（存档：{{archived}}）\n提示令牌：{{promptTokens}}{{reasoning}}",
       "reasoning": "推理",
-      "prompt": "提示"
+      "prompt": "提示",
+      "providerTooltip": "最新提供商请求\n输入：{{input}} tk\n缓存命中：{{cacheHit}} tk\n缓存未命中：{{cacheMiss}} tk\n输出：{{output}} tk\n推理：{{reasoning}} tk\n模型：{{model}}",
+      "cached": "已缓存"
     },
     "macro": {
       "title": "宏建议",

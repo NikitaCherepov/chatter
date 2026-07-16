@@ -1,6 +1,6 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment } from '../types.js';
+import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
@@ -84,6 +84,7 @@ type ManualModelEntry = {
   client: OpenAI;
   baseURL: string;
   supportsVision: boolean;
+  adminOnly: boolean;
 };
 
 type CompletionMeta = {
@@ -215,8 +216,9 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
 const VISION_PROVIDERS = parseVisionProviders();
 
 // ── MODELS_MANUAL: ручной выбор модели пользователем ──────────────────────────
-// Формат env: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision;...
+// Формат env: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only;...
 // supports_vision: опционально, "1" или "0" (по умолчанию "0")
+// admin_only: опционально, "1" или "0" (по умолчанию "0")
 const parseManualModels = (): ManualModelEntry[] => {
   const raw = (process.env.MODELS_MANUAL || '').trim();
   if (!raw) return [];
@@ -224,7 +226,7 @@ const parseManualModels = (): ManualModelEntry[] => {
   const models: ManualModelEntry[] = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const parts = chunks[i].split('|').map(v => `${v || ''}`.trim());
-    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw] = parts;
+    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw, adminOnlyRaw] = parts;
     if (!baseURL || !apiKey || !apiModelName || !uniqueId) continue;
     models.push({
       id: uniqueId,
@@ -234,6 +236,7 @@ const parseManualModels = (): ManualModelEntry[] => {
       client: new OpenAI({ apiKey, baseURL }),
       baseURL,
       supportsVision: supportsVisionRaw === '1' || supportsVisionRaw.toLowerCase() === 'true',
+      adminOnly: adminOnlyRaw === '1' || adminOnlyRaw.toLowerCase() === 'true',
     });
   }
   return models;
@@ -242,7 +245,9 @@ const parseManualModels = (): ManualModelEntry[] => {
 const MANUAL_MODELS = parseManualModels();
 const MANUAL_MODELS_MAP = new Map(MANUAL_MODELS.map(m => [m.id, m]));
 
-export const getModelsCatalog = () => MANUAL_MODELS.map(m => ({
+export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
+  .filter(m => isAdmin || !m.adminOnly)
+  .map(m => ({
   id: m.id,
   name: m.name,
   description: m.description,
@@ -251,8 +256,11 @@ export const getModelsCatalog = () => MANUAL_MODELS.map(m => ({
   supports_vision: m.supportsVision,
 }));
 
-export const resolveManualModel = (modelId: string): ManualModelEntry | undefined =>
-  MANUAL_MODELS_MAP.get(modelId);
+export const resolveManualModel = (modelId: string, isAdmin = false): ManualModelEntry | undefined => {
+  const model = MANUAL_MODELS_MAP.get(modelId);
+  if (!model || (model.adminOnly && !isAdmin)) return undefined;
+  return model;
+};
 
 /** Vision-флаги для auto-роутинга (PRO / LITE). */
 export const getAutoVisionSupport = () => ({
@@ -309,7 +317,79 @@ const modelSupportsVision = (manualModel: ManualModelEntry | undefined, plan: st
   return plan === 'pro' ? PRO_MODEL_SUPPORTS_VISION : LITE_MODEL_SUPPORTS_VISION;
 };
 
-const extractTokens = (response: any) => Number(response?.usage?.total_tokens || 0);
+const toSafeTokenCount = (value: unknown): number => {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : 0;
+};
+
+const EMPTY_TOKEN_USAGE: NormalizedTokenUsage = {
+  prompt_tokens: 0,
+  completion_tokens: 0,
+  total_tokens: 0,
+  cache_hit_tokens: 0,
+  cache_miss_tokens: 0,
+  reasoning_tokens: 0,
+};
+
+const normalizeTokenUsage = (rawUsage: any): NormalizedTokenUsage => {
+  if (!rawUsage || typeof rawUsage !== 'object') return { ...EMPTY_TOKEN_USAGE };
+
+  const promptTokens = toSafeTokenCount(
+    rawUsage.prompt_tokens ?? rawUsage.input_tokens ?? rawUsage.promptTokens ?? rawUsage.inputTokens
+  );
+  const completionTokens = toSafeTokenCount(
+    rawUsage.completion_tokens ?? rawUsage.output_tokens ?? rawUsage.completionTokens ?? rawUsage.outputTokens
+  );
+  const cacheHitTokens = Math.min(promptTokens || Number.MAX_SAFE_INTEGER, toSafeTokenCount(
+    rawUsage.prompt_cache_hit_tokens
+      ?? rawUsage.cache_hit_tokens
+      ?? rawUsage.cached_tokens
+      ?? rawUsage.prompt_tokens_details?.cached_tokens
+      ?? rawUsage.input_tokens_details?.cached_tokens
+      ?? rawUsage.cache_read_input_tokens
+  ));
+  const explicitCacheMissTokens = toSafeTokenCount(
+    rawUsage.prompt_cache_miss_tokens
+      ?? rawUsage.cache_miss_tokens
+      ?? rawUsage.prompt_tokens_details?.cache_miss_tokens
+      ?? rawUsage.input_tokens_details?.cache_miss_tokens
+  );
+  const cacheMissTokens = explicitCacheMissTokens || Math.max(0, promptTokens - cacheHitTokens);
+  const reasoningTokens = toSafeTokenCount(
+    rawUsage.reasoning_tokens
+      ?? rawUsage.completion_tokens_details?.reasoning_tokens
+      ?? rawUsage.output_tokens_details?.reasoning_tokens
+  );
+  const totalTokens = toSafeTokenCount(rawUsage.total_tokens ?? rawUsage.totalTokens)
+    || promptTokens + completionTokens;
+
+  return {
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: totalTokens,
+    cache_hit_tokens: cacheHitTokens === Number.MAX_SAFE_INTEGER ? 0 : cacheHitTokens,
+    cache_miss_tokens: cacheMissTokens,
+    reasoning_tokens: reasoningTokens,
+  };
+};
+
+const sumTokenUsage = (calls: TokenUsageCall[]): NormalizedTokenUsage =>
+  calls.reduce<NormalizedTokenUsage>((sum, call) => ({
+    prompt_tokens: sum.prompt_tokens + call.prompt_tokens,
+    completion_tokens: sum.completion_tokens + call.completion_tokens,
+    total_tokens: sum.total_tokens + call.total_tokens,
+    cache_hit_tokens: sum.cache_hit_tokens + call.cache_hit_tokens,
+    cache_miss_tokens: sum.cache_miss_tokens + call.cache_miss_tokens,
+    reasoning_tokens: sum.reasoning_tokens + call.reasoning_tokens,
+  }), { ...EMPTY_TOKEN_USAGE });
+
+const tokenUsageWithoutCallMeta = (usage?: TokenUsageCall): NormalizedTokenUsage => {
+  if (!usage) return { ...EMPTY_TOKEN_USAGE };
+  const { model: _model, provider: _provider, ...normalized } = usage;
+  return normalized;
+};
+
+const extractTokens = (response: any) => normalizeTokenUsage(response?.usage).total_tokens;
 const createAbortError = () => new DOMException('The user aborted a request.', 'AbortError');
 
 const isAbortError = (err: any) =>
@@ -526,7 +606,7 @@ const streamAndAssemble = async (
   model: string,
   callbacks: StreamCallbacks | undefined,
   signal?: AbortSignal
-): Promise<{ choices: Array<{ message: any }> }> => {
+): Promise<{ choices: Array<{ message: any }>; usage?: any }> => {
   const wantCallbacks = !!(callbacks?.onToken || callbacks?.onReasoningToken);
 
   // ── Без колбеков — обычный стрим, только собираем сообщение ──
@@ -540,8 +620,14 @@ const streamAndAssemble = async (
     payloadKeys: Object.keys(payload),
   });
 
+  const streamPayload = {
+    ...payload,
+    model,
+    stream: true,
+    stream_options: { include_usage: true },
+  };
   const stream = await client.chat.completions.create(
-    { ...payload, model, stream: true } as any,
+    streamPayload as any,
     signal ? { signal } : {}
   );
 
@@ -584,6 +670,7 @@ const streamAndAssemble = async (
     reasoning_content: '',
     tool_calls: [] as any[],
   };
+  let finalUsage: any = undefined;
   // Временное хранилище для tool_calls по index
   const toolCallMap = new Map<number, { id?: string; type: 'function'; function: { name: string; arguments: string } }>();
 
@@ -594,6 +681,10 @@ const streamAndAssemble = async (
         const err = new Error('Aborted');
         err.name = 'AbortError';
         throw err;
+      }
+
+      if (chunk?.usage && typeof chunk.usage === 'object') {
+        finalUsage = chunk.usage;
       }
 
       const choice = chunk?.choices?.[0];
@@ -663,7 +754,10 @@ const streamAndAssemble = async (
     assembledMessage.content = null;
   }
 
-  return { choices: [{ message: assembledMessage }] };
+  return {
+    choices: [{ message: assembledMessage }],
+    ...(finalUsage ? { usage: finalUsage } : {}),
+  };
 };
 
 const createCompletionWithModelFallback = async (
@@ -2094,6 +2188,7 @@ const buildEditFileLinesTool = () => {
 
 Сценарии:
 - Заменить строки 10-15 на новый текст: start_line=10, end_line=15, new_content="новый текст"
+- Заменить одну строку 568: start_line=568, end_line=568, new_content="новая строка"
 - Вставить текст после строки 5 (без удаления): start_line=6, end_line=5, new_content="вставленный текст"
 - Удалить строки 20-30: start_line=20, end_line=30, new_content=""
 
@@ -4540,8 +4635,12 @@ Respond in the user's language. Be detailed and precise.`
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
     if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
 
-    const startLine = typeof parsed.start_line === 'number' ? Math.floor(parsed.start_line) : 0;
-    const endLine = typeof parsed.end_line === 'number' ? Math.floor(parsed.end_line) : 0;
+    const parseLineNumber = (value: unknown) => {
+      const parsedValue = typeof value === 'number' ? value : Number(`${value ?? ''}`.trim());
+      return Number.isFinite(parsedValue) ? Math.floor(parsedValue) : 0;
+    };
+    const startLine = parseLineNumber(parsed.start_line);
+    const endLine = parseLineNumber(parsed.end_line);
     const newContent: string = typeof parsed.new_content === 'string' ? parsed.new_content : '';
 
     if (startLine < 1) return JSON.stringify({ status: 'error', message: 'start_line должен быть >= 1' });
@@ -5458,14 +5557,16 @@ export const sendMessageThroughAi = async (
 
   // Резолв preferred model: из options (явный запрос) или из профиля юзера
   const preferredModelId = options?.preferredModel || user.preferred_model || null;
-  let manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
+  const isAdmin = user.is_admin === 1;
+  let manualModel = preferredModelId ? resolveManualModel(preferredModelId, isAdmin) : undefined;
+  const selectedManualModelName = manualModel?.name || null;
   if (preferredModelId && !manualModel) {
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
   // Проверяем, поддерживает ли текущая модель нативный vision
   const currentModelSupportsVision = modelSupportsVision(manualModel, user.plan || 'free');
   const subagentModelId = user.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null;
-  const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId) : undefined;
+  const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId, isAdmin) : undefined;
   if (subagentModelId && !subagentManualModel) {
     console.warn(`[ai] subagent_model "${subagentModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
@@ -5506,7 +5607,13 @@ export const sendMessageThroughAi = async (
         usage: {
           tokens_used: 0,
           used_model: 'system',
-          used_provider: 'local'
+          used_provider: 'local',
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          cache_hit_tokens: 0,
+          cache_miss_tokens: 0,
+          reasoning_tokens: 0,
+          calls: [],
         }
       };
     }
@@ -5544,7 +5651,20 @@ export const sendMessageThroughAi = async (
   let totalTokens = 0;
   let usedModel = '';
   let usedProvider = '';
+  let responsePromptName = 'Chatter';
   let diceRollValue: number | null = null;
+  const usageCalls: TokenUsageCall[] = [];
+  const recordCompletionUsage = (completion: Pick<CompletionMeta, 'response' | 'usedModel' | 'usedProvider'>) => {
+    const normalized = normalizeTokenUsage(completion.response?.usage);
+    if (normalized.total_tokens <= 0) return normalized;
+    usageCalls.push({
+      ...normalized,
+      model: completion.usedModel || 'unknown',
+      provider: completion.usedProvider || 'unknown',
+    });
+    totalTokens += normalized.total_tokens;
+    return normalized;
+  };
 
   // ── Soft-abort buffers: объявляем ВНЕ try, чтобы catch имел к ним доступ ──
   let answer = FALLBACK_ANSWER;
@@ -5715,7 +5835,9 @@ export const sendMessageThroughAi = async (
     console.log(`[feature-flags] user=${userId} disabled tools: ${[...disabledToolSet].join(', ')}`);
   }
   const isGuestMode = Boolean(flags?.disable_personal);
-  const promptContent = isGuestMode ? '' : resolvePromptForUser(promptUser).content;
+  const resolvedPrompt = isGuestMode ? null : resolvePromptForUser(promptUser);
+  const promptContent = resolvedPrompt?.content || '';
+  responsePromptName = resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
   const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
   const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
 
@@ -5825,7 +5947,7 @@ PRO
         thinking: { type: 'disabled' }
       }, undefined, abortController.signal, 'none');
 
-      totalTokens += extractTokens(routed.response);
+      recordCompletionUsage(routed);
 
       if (DEBUG_AI_RAW_LITE_RESPONSE) {
         try {
@@ -5991,7 +6113,7 @@ PRO
     usedModel = completion.usedModel;
     usedProvider = completion.usedProvider;
     const response = completion.response;
-    totalTokens += extractTokens(response);
+    recordCompletionUsage(completion);
     const message = response?.choices?.[0]?.message || {};
     const stepReasoning = extractReasoning(message, response);
     if (stepReasoning) reasoningParts.push(stepReasoning);
@@ -6334,7 +6456,7 @@ iterations.push(currentIteration);
       }
       usedModel = finalCompletion.usedModel;
       usedProvider = finalCompletion.usedProvider;
-      totalTokens += extractTokens(finalCompletion.response);
+      recordCompletionUsage(finalCompletion);
     } catch (err: any) {
       if (isAbortError(err)) throw err;
       console.error('[AI] Final answer after tool limit failed:', err?.message);
@@ -6368,11 +6490,28 @@ iterations.push(currentIteration);
   // Старый плоский формат (без `step`) поддерживается как fallback при чтении.
   const tcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
   const subagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
+  const aggregateUsage = sumTokenUsage(usageCalls);
+  const latestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
+  const messageUsage: MessageUsage | null = usageCalls.length > 0
+    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls }
+    : null;
+  const responseModelName = usedProvider === 'manual' && selectedManualModelName
+    ? selectedManualModelName
+    : (usedModel || null);
   const assistantMessageId = options?.skipHistory
     ? 0
-    : await appendChatMessage(userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null, assistantMessageImages, reasoningContent, tcJson, null, subagentsJson);
+    : await appendChatMessage(
+        userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null,
+        assistantMessageImages, reasoningContent, tcJson, null, subagentsJson,
+        {
+          usage: messageUsage,
+          promptName: responsePromptName,
+          modelName: responseModelName,
+          providerName: usedProvider || null,
+        }
+      );
 
-  const safeTokens = Math.max(0, Math.floor(totalTokens));
+  const safeTokens = Math.max(0, Math.floor(aggregateUsage.total_tokens || totalTokens));
   const costRub = toRubFromTokens(safeTokens);
   const countAsUserMessage = options?.countAsUserMessage !== false;
   if (countAsUserMessage) {
@@ -6429,10 +6568,20 @@ iterations.push(currentIteration);
     tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
     subagents: subagentTraces.length > 0 ? subagentTraces : undefined,
     usage: {
-      tokens_used: totalTokens,
+      tokens_used: safeTokens,
       used_model: usedModel,
-      used_provider: usedProvider
+      used_provider: usedProvider,
+      prompt_tokens: aggregateUsage.prompt_tokens,
+      completion_tokens: aggregateUsage.completion_tokens,
+      cache_hit_tokens: aggregateUsage.cache_hit_tokens,
+      cache_miss_tokens: aggregateUsage.cache_miss_tokens,
+      reasoning_tokens: aggregateUsage.reasoning_tokens,
+      calls: usageCalls,
     },
+    prompt_name: responsePromptName,
+    model_name: responseModelName,
+    provider_name: usedProvider || null,
+    message_usage: messageUsage,
     ...((assistantMessageId > 0) ? getMessageTokens(assistantMessageId) : {}),
     ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
     ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
@@ -6451,6 +6600,14 @@ iterations.push(currentIteration);
       const abortedReasoning = reasoningParts.length > 0 ? reasoningParts.join('\n\n').trim() : null;
       const abortedTcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
       const abortedSubagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
+      const abortedAggregateUsage = sumTokenUsage(usageCalls);
+      const abortedLatestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
+      const abortedMessageUsage: MessageUsage | null = usageCalls.length > 0
+        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls }
+        : null;
+      const abortedModelName = usedProvider === 'manual' && selectedManualModelName
+        ? selectedManualModelName
+        : (usedModel || null);
 
       let abortedMessageId = 0;
       if (!options?.skipHistory) {
@@ -6459,7 +6616,13 @@ iterations.push(currentIteration);
             userId, chatId, 'assistant',
             abortedDbText || '_Генерация остановлена_',
             assistantTelegramChatId, null, null,
-            abortedReasoning, abortedTcJson, null, abortedSubagentsJson
+            abortedReasoning, abortedTcJson, null, abortedSubagentsJson,
+            {
+              usage: abortedMessageUsage,
+              promptName: responsePromptName,
+              modelName: abortedModelName,
+              providerName: usedProvider || null,
+            }
           );
         } catch (saveErr) {
           console.warn(`[AI] soft-save failed:`, saveErr);
@@ -6474,7 +6637,21 @@ iterations.push(currentIteration);
         aborted: true,
         tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
         subagents: subagentTraces.length > 0 ? subagentTraces : undefined,
-        usage: { tokens_used: totalTokens, used_model: usedModel, used_provider: usedProvider },
+        usage: {
+          tokens_used: abortedAggregateUsage.total_tokens || totalTokens,
+          used_model: usedModel,
+          used_provider: usedProvider,
+          prompt_tokens: abortedAggregateUsage.prompt_tokens,
+          completion_tokens: abortedAggregateUsage.completion_tokens,
+          cache_hit_tokens: abortedAggregateUsage.cache_hit_tokens,
+          cache_miss_tokens: abortedAggregateUsage.cache_miss_tokens,
+          reasoning_tokens: abortedAggregateUsage.reasoning_tokens,
+          calls: usageCalls,
+        },
+        prompt_name: responsePromptName,
+        model_name: abortedModelName,
+        provider_name: usedProvider || null,
+        message_usage: abortedMessageUsage,
         ...((abortedMessageId > 0) ? getMessageTokens(abortedMessageId) : {}),
         ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
         ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})

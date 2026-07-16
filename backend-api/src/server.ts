@@ -347,8 +347,10 @@ app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
 
 // ── Internal: Models ─────────────────────────────────────────────────────────
 
-app.get('/internal/models', internalAuth, (_req, res) => {
-  const catalog = getModelsCatalog();
+app.get('/internal/models', internalAuth, (req, res) => {
+  const userId = Number(req.query?.user_id);
+  const user = Number.isFinite(userId) && userId > 0 ? getUserById(userId) : undefined;
+  const catalog = getModelsCatalog(user?.is_admin === 1);
   return res.json({ models: catalog });
 });
 
@@ -357,17 +359,19 @@ app.get('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  const catalog = getModelsCatalog();
+  const catalog = getModelsCatalog(user.is_admin === 1);
   return res.json({ models: catalog, preferred_model: user.preferred_model || null });
 });
 
 app.put('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
   const userId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
   const modelId = req.body?.model_id ?? null;
   if (modelId !== null && typeof modelId !== 'string') return res.status(400).json({ error: 'bad_model_id' });
   if (modelId !== null) {
-    const catalog = getModelsCatalog();
+    const catalog = getModelsCatalog(user.is_admin === 1);
     if (!catalog.some(m => m.id === modelId)) return res.status(400).json({ error: 'model_not_found' });
   }
   db.prepare('UPDATE users SET preferred_model = ? WHERE id = ?').run(modelId, userId);
@@ -1737,7 +1741,7 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
     const user = getUserById(userId);
     const requestedModelId = typeof req.body?.preferred_model === 'string' ? req.body.preferred_model.trim() : '';
     const preferredModelId = requestedModelId || user?.preferred_model || null;
-    const manualModel = preferredModelId ? resolveManualModel(preferredModelId) : undefined;
+    const manualModel = preferredModelId ? resolveManualModel(preferredModelId, user?.is_admin === 1) : undefined;
     console.log('[prompts/generate] model selection', {
       authUserId: req.authUserId,
       effectiveUserId: userId,
@@ -2652,9 +2656,9 @@ app.post('/admin/updates/upload', authMiddleware, adminMiddleware, (req: AuthedR
 // ─── Models catalog & preferred model ────────────────────────────────────────
 
 app.get('/api/v1/models', (req: AuthedRequest, res) => {
-  const catalog = getModelsCatalog();
   const userId = effectiveUserId(req);
   const user = getUserById(userId);
+  const catalog = getModelsCatalog(user?.is_admin === 1);
   return res.json({
     models: catalog,
     preferred_model: user?.preferred_model || null,
@@ -2671,7 +2675,8 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
   }
   // Валидация: если не null, модель должна быть в каталоге
   if (modelId !== null) {
-    const catalog = getModelsCatalog();
+    const user = getUserById(userId);
+    const catalog = getModelsCatalog(user?.is_admin === 1);
     if (!catalog.some(m => m.id === modelId)) {
       return res.status(400).json({ error: 'model_not_found' });
     }
@@ -2695,7 +2700,8 @@ app.put('/api/v1/user/subagent-model', (req: AuthedRequest, res: any) => {
     return res.status(400).json({ error: 'bad_model_id' });
   }
   if (modelId !== null) {
-    const catalog = getModelsCatalog();
+    const user = getUserById(userId);
+    const catalog = getModelsCatalog(user?.is_admin === 1);
     if (!catalog.some(m => m.id === modelId)) {
       return res.status(400).json({ error: 'model_not_found' });
     }

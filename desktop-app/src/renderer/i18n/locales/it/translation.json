@@ -333,7 +333,8 @@
       "smartHome": "Casa intelligente",
       "restrictions": "Restrizioni",
       "models": "Modelli",
-      "app": "App"
+      "app": "App",
+      "limits": "Limiti"
     },
     "language": {
       "system": "Sistema",
@@ -491,7 +492,8 @@
       "branchTitle": "Crea un nuovo ramo chat con una copia della cronologia fino a questo messaggio",
       "sendTelegram": "Invia in Telegram",
       "createBranch": "Crea ramo",
-      "subagentNumber": "🧠 Subagente {{number}}"
+      "subagentNumber": "🧠 Subagente {{number}}",
+      "providerTokenUsage": "Utilizzo esatto dei token di completamento riportato dal provider"
     },
     "reasoning": {
       "auto": "Auto",
@@ -540,7 +542,9 @@
     "context": {
       "tooltip": "Messaggi: {{active}} (archiviati: {{archived}})\nToken prompt: {{promptTokens}}{{reasoning}}",
       "reasoning": "Ragionamento",
-      "prompt": "prompt"
+      "prompt": "prompt",
+      "providerTooltip": "Ultima richiesta al provider\nInput: {{input}} tk\nCache hit: {{cacheHit}} tk\nCache miss: {{cacheMiss}} tk\nOutput: {{output}} tk\nRagionamento: {{reasoning}} tk\nModello: {{model}}",
+      "cached": "in cache"
     },
     "macro": {
       "title": "Proposta di macro",

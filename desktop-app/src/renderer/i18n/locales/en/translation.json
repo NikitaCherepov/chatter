@@ -118,6 +118,7 @@
       "smartHome": "Smart home",
       "restrictions": "Restrictions",
       "models": "Models",
+      "limits": "Limits",
       "app": "Application"
     },
     "language": {
@@ -261,6 +262,7 @@
       "regenerateHintPlaceholder": "Instruction for the assistant...",
       "regenerateWithHint": "Regenerate with instruction",
       "localTokenEstimate": "Local message token estimate (excluding reasoning)",
+      "providerTokenUsage": "Exact completion token usage reported by the provider",
       "interruptedSuffix": "· ⏹ interrupted",
       "arguments": "Arguments",
       "result": "Result",
@@ -324,8 +326,10 @@
     },
     "context": {
       "tooltip": "Messages: {{active}} (archived: {{archived}})\nPrompt tokens: {{promptTokens}}{{reasoning}}",
+      "providerTooltip": "Latest provider request\nInput: {{input}} tk\nCache hit: {{cacheHit}} tk\nCache miss: {{cacheMiss}} tk\nOutput: {{output}} tk\nReasoning: {{reasoning}} tk\nModel: {{model}}",
       "reasoning": "Reasoning",
-      "prompt": "prompt"
+      "prompt": "prompt",
+      "cached": "cached"
     },
     "macro": {
       "title": "Macro suggestion",

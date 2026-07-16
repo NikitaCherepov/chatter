@@ -34,7 +34,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Section = 'account' | 'prompt' | 'voice' | 'app' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'smart_home' | 'restrictions' | 'models';
+type Section = 'account' | 'prompt' | 'voice' | 'app' | 'limits' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'smart_home' | 'restrictions' | 'models';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -67,6 +67,7 @@ const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'smart_home', labelKey: 'settings.sections.smartHome' },
   { key: 'restrictions', labelKey: 'settings.sections.restrictions' },
   { key: 'models', labelKey: 'settings.sections.models' },
+  { key: 'limits', labelKey: 'settings.sections.limits' },
   { key: 'app', labelKey: 'settings.sections.app' },
 ];
 
@@ -263,6 +264,12 @@ export function SettingsModal({ onClose }: Props) {
       api.getSubagentReasoningLevel()
         .then((res) => setSubagentReasoningLevelState(res.reasoning_level))
         .catch(() => {});
+    }
+  }, [section]);
+
+  // Load context/document limits when the limits tab opens
+  useEffect(() => {
+    if (section === 'limits') {
       api.getContextTokenLimit()
         .then((res) => setContextTokenLimitState(res))
         .catch(() => {});
@@ -1524,6 +1531,24 @@ export function SettingsModal({ onClose }: Props) {
                 </div>
               </div>
 
+              <div className={s.fieldGroup}>
+                <Checkbox
+                  checked={Boolean(uiSettings.dice_roll_enabled)}
+                  onChange={handleToggleDiceRoll}
+                  label={t('settings.app.diceMode')}
+                  disabled={uiSettingsSaving}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  {t('settings.app.diceHelp')}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {section === 'limits' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('settings.sections.limits')}</div>
+
               {/* Context Token Limit */}
               {contextTokenLimit && (
                 <div className={s.fieldGroup}>
@@ -1568,7 +1593,6 @@ export function SettingsModal({ onClose }: Props) {
                   <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
                     {t('settings.app.contextLimitHelp', { max: (contextTokenLimit.max_context_tokens_limit / 1000).toFixed(0) })}
                   </div>
-                  {/* Quick presets */}
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                     {TOKEN_STEPS
                       .filter(step => step <= contextTokenLimit.max_context_tokens_limit)
@@ -1640,18 +1664,6 @@ export function SettingsModal({ onClose }: Props) {
                   </div>
                 </div>
               )}
-
-              <div className={s.fieldGroup}>
-                <Checkbox
-                  checked={Boolean(uiSettings.dice_roll_enabled)}
-                  onChange={handleToggleDiceRoll}
-                  label={t('settings.app.diceMode')}
-                  disabled={uiSettingsSaving}
-                />
-                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  {t('settings.app.diceHelp')}
-                </div>
-              </div>
             </div>
           )}
         </div>

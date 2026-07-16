@@ -1,5 +1,5 @@
 ﻿import { db, toUnix } from '../db.js';
-import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord } from '../types.js';
+import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord, MessageUsage } from '../types.js';
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
@@ -177,7 +177,7 @@ export const forkChat = (
     const rows = db.prepare(`
       SELECT id, role, content, images, audio, reasoning_content,
              tool_calls_json, token_count, reasoning_tokens,
-             attachments, subagents_json, archived
+             attachments, subagents_json, usage_json, prompt_name, model_name, provider_name, archived
       FROM chat_messages
       WHERE user_id = ? AND chat_id = ? AND id <= ?
       ORDER BY id ASC
@@ -193,6 +193,10 @@ export const forkChat = (
       reasoning_tokens: number;
       attachments: string | null;
       subagents_json: string | null;
+      usage_json: string | null;
+      prompt_name: string | null;
+      model_name: string | null;
+      provider_name: string | null;
       archived: number;
     }>;
 
@@ -201,9 +205,10 @@ export const forkChat = (
         user_id, role, content, chat_id,
         telegram_chat_id, telegram_message_id,
         images, audio, reasoning_content, tool_calls_json,
-        token_count, reasoning_tokens, attachments, subagents_json, archived
+        token_count, reasoning_tokens, attachments, subagents_json,
+        usage_json, prompt_name, model_name, provider_name, archived
       )
-      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const row of rows) {
@@ -243,6 +248,10 @@ export const forkChat = (
         row.reasoning_tokens,
         newAttachmentsJson,
         row.subagents_json,
+        row.usage_json,
+        row.prompt_name,
+        row.model_name,
+        row.provider_name,
         row.archived           // preserve archived state
       );
     }
@@ -505,12 +514,15 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio, telegram_chat_id, telegram_message_id, created_at, archived, token_count, reasoning_tokens, attachments, subagents_json
+    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio,
+           telegram_chat_id, telegram_message_id, created_at, archived, token_count,
+           reasoning_tokens, attachments, subagents_json, usage_json, prompt_name,
+           model_name, provider_name
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_name: string | null; model_name: string | null; provider_name: string | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -572,6 +584,18 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       archived: row.archived === 1,
       token_count: row.token_count ?? 0,
       reasoning_tokens: row.reasoning_tokens ?? 0,
+      prompt_name: row.prompt_name,
+      model_name: row.model_name,
+      provider_name: row.provider_name,
+      usage: (() => {
+        if (!row.usage_json) return null;
+        try {
+          const parsed = JSON.parse(row.usage_json);
+          return parsed && typeof parsed === 'object' ? parsed as MessageUsage : null;
+        } catch {
+          return null;
+        }
+      })(),
       subagents: (() => {
         if (!row.subagents_json) return null;
         try { const arr = JSON.parse(row.subagents_json); return Array.isArray(arr) ? arr : null; } catch { return null; }
@@ -673,13 +697,23 @@ export const appendChatMessage = async (
   reasoningContent: string | null = null,
   toolCallsJson: string | null = null,
   attachments: MessageAttachment[] | null = null,
-  subagentsJson: string | null = null
+  subagentsJson: string | null = null,
+  metadata?: {
+    usage?: MessageUsage | null;
+    promptName?: string | null;
+    modelName?: string | null;
+    providerName?: string | null;
+  }
 ) => {
   const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
   const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
   const reasoning = role === 'assistant' && reasoningContent?.trim() ? reasoningContent.trim() : null;
   const tcJson = role === 'assistant' && toolCallsJson?.trim() ? toolCallsJson.trim() : null;
   const saj = role === 'assistant' && subagentsJson?.trim() ? subagentsJson.trim() : null;
+  const usageJson = role === 'assistant' && metadata?.usage ? JSON.stringify(metadata.usage) : null;
+  const promptName = role === 'assistant' ? metadata?.promptName?.trim() || null : null;
+  const modelName = role === 'assistant' ? metadata?.modelName?.trim() || null : null;
+  const providerName = role === 'assistant' ? metadata?.providerName?.trim() || null : null;
 
   // ── Token accounting ────────────────────────────────────────────────────
   // token_count = вес сообщения в AI-контексте (не включает reasoning).
@@ -727,6 +761,10 @@ export const appendChatMessage = async (
     // Reasoning считается отдельно — он не уходит в контекст, но нужен для UI-бейджа.
     if (reasoning) {
       reasoningTokens = countTokens(reasoning);
+    }
+    const providerReasoningTokens = Math.max(0, Math.floor(Number(metadata?.usage?.aggregate?.reasoning_tokens || 0)));
+    if (providerReasoningTokens > 0) {
+      reasoningTokens = providerReasoningTokens;
     }
 
     // Assistant images (скриншоты, generate_image) не отправляются в AI-контекст,
@@ -782,9 +820,17 @@ export const appendChatMessage = async (
   }
 
   const inserted = db.prepare(`
-    INSERT INTO chat_messages (user_id, role, content, chat_id, telegram_chat_id, telegram_message_id, images, reasoning_content, tool_calls_json, token_count, reasoning_tokens, attachments, subagents_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, role, content, chatId, telegramChatId, telegramMessageId, imagesJson, reasoning, tcJson, tokenCount, reasoningTokens, attachmentsJson, saj);
+    INSERT INTO chat_messages (
+      user_id, role, content, chat_id, telegram_chat_id, telegram_message_id,
+      images, reasoning_content, tool_calls_json, token_count, reasoning_tokens,
+      attachments, subagents_json, usage_json, prompt_name, model_name, provider_name
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    userId, role, content, chatId, telegramChatId, telegramMessageId,
+    imagesJson, reasoning, tcJson, tokenCount, reasoningTokens,
+    attachmentsJson, saj, usageJson, promptName, modelName, providerName
+  );
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return Number(inserted.lastInsertRowid);
 };
@@ -1654,6 +1700,13 @@ export type ChatContextTokens = {
    * core_memory, pinned macros, timezone, выбранного промпта.
    */
   system_prompt_tokens: number;
+  latest_prompt_tokens: number;
+  latest_completion_tokens: number;
+  latest_total_tokens: number;
+  latest_cache_hit_tokens: number;
+  latest_cache_miss_tokens: number;
+  latest_reasoning_tokens: number;
+  latest_model_name: string | null;
 };
 
 /**
@@ -1679,7 +1732,28 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
       COALESCE(SUM(CASE WHEN archived = 1 THEN 1 ELSE 0 END), 0) AS archived_messages
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
-  `).get(userId, chatId) as Omit<ChatContextTokens, 'system_prompt_tokens'>;
+  `).get(userId, chatId) as Pick<
+    ChatContextTokens,
+    'messages_tokens' | 'reasoning_tokens' | 'archived_tokens' | 'active_messages' | 'archived_messages'
+  >;
+
+  const latestAssistant = db.prepare(`
+    SELECT usage_json, model_name
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(userId, chatId) as { usage_json: string | null; model_name: string | null } | undefined;
+
+  let latestUsage: MessageUsage['latest'] | null = null;
+  if (latestAssistant?.usage_json) {
+    try {
+      const parsed = JSON.parse(latestAssistant.usage_json) as MessageUsage;
+      if (parsed?.latest) latestUsage = parsed.latest;
+    } catch {
+      // Ignore old or malformed usage rows.
+    }
+  }
 
   // Считаем базовый системный промпт (динамический).
   // Надбавки за голос/аватар/изображения не включены — они появляются только
@@ -1698,7 +1772,17 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     system_prompt_tokens = countMessageTokens('system', systemPrompt);
   }
 
-  return { ...row, system_prompt_tokens };
+  return {
+    ...row,
+    system_prompt_tokens,
+    latest_prompt_tokens: latestUsage?.prompt_tokens ?? 0,
+    latest_completion_tokens: latestUsage?.completion_tokens ?? 0,
+    latest_total_tokens: latestUsage?.total_tokens ?? 0,
+    latest_cache_hit_tokens: latestUsage?.cache_hit_tokens ?? 0,
+    latest_cache_miss_tokens: latestUsage?.cache_miss_tokens ?? 0,
+    latest_reasoning_tokens: latestUsage?.reasoning_tokens ?? 0,
+    latest_model_name: latestAssistant?.model_name ?? null,
+  };
 };
 
 /**

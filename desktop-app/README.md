@@ -305,7 +305,7 @@ A right-panel tool for viewing and managing attached documents in a chat. A mirr
 
 ### Token Limit Settings
 
-"Application" tab in SettingsModal — "Document limit" slider:
+"Limits" tab in SettingsModal — chat context and document token limit sliders:
 - `0` = Auto (90% of `max_context_tokens`).
 - Manual input from 1000 to `max_context_tokens` tokens.
 - Saved via `PUT /api/v1/user/attachment-tokens-limit`.

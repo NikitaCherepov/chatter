@@ -141,11 +141,17 @@ const MessageItem = React.memo(function MessageItem({
   const hasSubagents = msg.role === 'assistant' && Boolean(msg.subagents?.length);
   const isStreamingReasoning = streamingState === 'reasoning';
   const isStreamingContent = streamingState === 'content';
+  const exactAssistantTokens = msg.role === 'assistant'
+    ? msg.usage?.aggregate.completion_tokens
+    : undefined;
+  const displayedTokenCount = exactAssistantTokens && exactAssistantTokens > 0
+    ? exactAssistantTokens
+    : msg.token_count;
 
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
       <div className={s.metaRow}>
-        <span>{msg.role === 'user' ? t('chat.message.you') : 'Chatter'} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
+        <span>{msg.role === 'user' ? t('chat.message.you') : (msg.prompt_name || 'Chatter')} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
         <button
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
           onClick={(e) => {
@@ -277,11 +283,23 @@ const MessageItem = React.memo(function MessageItem({
             )}
           </>
         )}
-        {showTokens && typeof msg.token_count === 'number' && msg.token_count > 0 && (
-          <span className={s.tokenBadge} title={t('chat.message.localTokenEstimate')}>
-            {msg.token_count} tk
+        {(msg.role === 'assistant' && msg.model_name) || (showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0) ? (
+          <span className={s.messageUsageMeta}>
+            {msg.role === 'assistant' && msg.model_name && (
+              <span className={s.modelBadge} title={msg.provider_name || undefined}>{msg.model_name}</span>
+            )}
+            {showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0 && (
+              <span
+                className={s.tokenBadge}
+                title={exactAssistantTokens && exactAssistantTokens > 0
+                  ? t('chat.message.providerTokenUsage')
+                  : t('chat.message.localTokenEstimate')}
+              >
+                {displayedTokenCount} tk
+              </span>
+            )}
           </span>
-        )}
+        ) : null}
       </div>
       <div className={s.bubbleWrap}>
         <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
@@ -1054,8 +1072,8 @@ export function ChatPage() {
           return [...prev, {
             confirmation_id: val.confirmation_id!,
             file_path: val.file_path!,
-            start_line: val.start_line || 0,
-            end_line: val.end_line || 0,
+            start_line: val.start_line ?? 0,
+            end_line: val.end_line ?? 0,
             old_content_preview: val.old_content_preview,
             new_content_preview: val.new_content_preview,
           }];
@@ -1318,6 +1336,10 @@ export function ChatPage() {
                       reasoning_content: res.reasoning_content ?? null,
                       tool_calls: res.tool_calls ?? null,
                       subagents: res.subagents ?? null,
+                      prompt_name: res.prompt_name ?? null,
+                      model_name: res.model_name ?? null,
+                      provider_name: res.provider_name ?? null,
+                      usage: res.message_usage ?? null,
                     };
                   }
                   if (res.user_message_id && m.id === tempUserMsg.id) {
@@ -1338,6 +1360,10 @@ export function ChatPage() {
                     reasoning_content: res.reasoning_content ?? null,
                     tool_calls: res.tool_calls ?? null,
                     subagents: res.subagents ?? null,
+                    prompt_name: res.prompt_name ?? null,
+                    model_name: res.model_name ?? null,
+                    provider_name: res.provider_name ?? null,
+                    usage: res.message_usage ?? null,
                   }];
                 });
               }
@@ -1382,6 +1408,10 @@ export function ChatPage() {
                   tool_calls: res.tool_calls ?? null,
                   ...(genImages ? { images: genImages } : {}),
                   subagents: res.subagents ?? null,
+                  prompt_name: res.prompt_name ?? null,
+                  model_name: res.model_name ?? null,
+                  provider_name: res.provider_name ?? null,
+                  usage: res.message_usage ?? null,
                   ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
                   ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
                 };
@@ -1412,6 +1442,10 @@ export function ChatPage() {
                 tool_calls: res.tool_calls ?? null,
                 images: genImages,
                 subagents: res.subagents ?? null,
+                prompt_name: res.prompt_name ?? null,
+                model_name: res.model_name ?? null,
+                provider_name: res.provider_name ?? null,
+                usage: res.message_usage ?? null,
                 ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
                 ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
               }];
@@ -2748,12 +2782,38 @@ export function ChatPage() {
                 )}
               </div>
               {showTokens && contextTokens && (
-                <div className={s.contextTokensCompact} title={t('chat.context.tooltip', { active: contextTokens.active_messages, archived: contextTokens.archived_messages, promptTokens: contextTokens.system_prompt_tokens.toLocaleString(locale), reasoning: contextTokens.reasoning_tokens > 0 ? `\n${t('chat.context.reasoning')}: ${contextTokens.reasoning_tokens.toLocaleString(locale)} tk` : '' })}>
-                  <span className={s.contextTokensValue}>{contextTokens.messages_tokens.toLocaleString(locale)}</span>
+                <div
+                  className={s.contextTokensCompact}
+                  title={contextTokens.latest_total_tokens > 0
+                    ? t('chat.context.providerTooltip', {
+                        input: contextTokens.latest_prompt_tokens.toLocaleString(locale),
+                        cacheHit: contextTokens.latest_cache_hit_tokens.toLocaleString(locale),
+                        cacheMiss: contextTokens.latest_cache_miss_tokens.toLocaleString(locale),
+                        output: contextTokens.latest_completion_tokens.toLocaleString(locale),
+                        reasoning: contextTokens.latest_reasoning_tokens.toLocaleString(locale),
+                        model: contextTokens.latest_model_name || t('chat.model.automatic'),
+                      })
+                    : t('chat.context.tooltip', {
+                        active: contextTokens.active_messages,
+                        archived: contextTokens.archived_messages,
+                        promptTokens: contextTokens.system_prompt_tokens.toLocaleString(locale),
+                        reasoning: contextTokens.reasoning_tokens > 0 ? `\n${t('chat.context.reasoning')}: ${contextTokens.reasoning_tokens.toLocaleString(locale)} tk` : '',
+                      })}
+                >
+                  <span className={s.contextTokensValue}>
+                    {(contextTokens.latest_prompt_tokens > 0
+                      ? contextTokens.latest_prompt_tokens
+                      : contextTokens.messages_tokens + contextTokens.system_prompt_tokens
+                    ).toLocaleString(locale)}
+                  </span>
                   <span className={s.contextTokensLabel}> tk</span>
-                  <span className={s.contextTokensSep}>·</span>
-                  <span className={s.contextTokensPromptValue}>{contextTokens.system_prompt_tokens.toLocaleString(locale)}</span>
-                  <span className={s.contextTokensLabel}> {t('chat.context.prompt')}</span>
+                  {contextTokens.latest_total_tokens > 0 && (
+                    <>
+                      <span className={s.contextTokensSep}>&bull;</span>
+                      <span className={s.contextTokensPromptValue}>{contextTokens.latest_cache_hit_tokens.toLocaleString(locale)}</span>
+                      <span className={s.contextTokensLabel}> {t('chat.context.cached')}</span>
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -118,7 +118,8 @@
       "smartHome": "Умный дом",
       "restrictions": "Ограничения",
       "models": "Модели",
-      "app": "Приложение"
+      "app": "Приложение",
+      "limits": "Лимиты"
     },
     "language": {
       "system": "Системный",
@@ -276,7 +277,8 @@
       "branchTitle": "Создать новый чат-ветку с копией истории до этого сообщения",
       "sendTelegram": "Отправить в Telegram",
       "createBranch": "Создать ветку",
-      "subagentNumber": "🧠 Сабагент {{number}}"
+      "subagentNumber": "🧠 Сабагент {{number}}",
+      "providerTokenUsage": "Точное использование токенов завершения, сообщенное провайдером"
     },
     "reasoning": {
       "auto": "Авто",
@@ -325,7 +327,9 @@
     "context": {
       "tooltip": "Сообщений: {{active}} (архив: {{archived}})\nТокены промпта: {{promptTokens}}{{reasoning}}",
       "reasoning": "Рассуждение",
-      "prompt": "промпт"
+      "prompt": "промпт",
+      "providerTooltip": "Последний запрос провайдера\nВвод: {{input}} тк\nПопадание в кэш: {{cacheHit}} тк\nПромах кэша: {{cacheMiss}} тк\nВывод: {{output}} тк\nРассуждение: {{reasoning}} тк\nМодель: {{model}}",
+      "cached": "в кэше"
     },
     "macro": {
       "title": "Предложение макроса",

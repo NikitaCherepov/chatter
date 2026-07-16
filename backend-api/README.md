@@ -109,11 +109,12 @@ POST /tts/generate { text, voice_id, message_id }
 
 Allows the user to choose a specific model instead of auto-routing. Independent of PRO/LITE providers.
 
-- `MODELS_MANUAL` — list of models for manual selection. Format: `base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision;...`
+- `MODELS_MANUAL` — list of models for manual selection. Format: `base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only;...`
   - Example: `https://api.timeweb.com|sk-xxx|gpt-4o|GPT-4o (Timeweb)|Reliable and fast|tw-gpt4o|1;https://api.deepseek.com|sk-yyy|deepseek-chat|DeepSeek|Cheap but slow|ds-chat|0`
   - `api_model_name` — the real model name for API requests
   - `unique_id` — unique identifier for the client (may differ from `api_model_name`)
   - `supports_vision` — optional, `1` or `0` (default `0`). If `1` — photos are sent directly to the model. If `0` — the `describe_image` tool is available (via a vision provider)
+  - `admin_only` — optional, `1`/`true` or `0`/`false` (default `0`). Admin-only models are hidden and rejected for non-admin users
   - If not set — the model selector is not displayed
 - `preferred_model` (in the `users` table) — `NULL` = auto, `"tw-gpt4o"` = specific model
 - If the selected model is unavailable — fallback to auto-routing + user notification

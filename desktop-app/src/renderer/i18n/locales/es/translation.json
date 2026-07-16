@@ -118,7 +118,8 @@
       "smartHome": "Hogar inteligente",
       "restrictions": "Restricciones",
       "models": "Modelos",
-      "app": "Aplicación"
+      "app": "Aplicación",
+      "limits": "Límites"
     },
     "language": {
       "system": "Sistema",
@@ -276,7 +277,8 @@
       "branchTitle": "Crear una nueva rama de chat con una copia del historial hasta este mensaje",
       "sendTelegram": "Enviar a Telegram",
       "createBranch": "Crear rama",
-      "subagentNumber": "🧠 Subagente {{number}}"
+      "subagentNumber": "🧠 Subagente {{number}}",
+      "providerTokenUsage": "Uso exacto de tokens de finalización informado por el proveedor"
     },
     "reasoning": {
       "auto": "Auto",
@@ -325,7 +327,9 @@
     "context": {
       "tooltip": "Mensajes: {{active}} (archivados: {{archived}})\nTokens de prompt: {{promptTokens}}{{reasoning}}",
       "reasoning": "Razonamiento",
-      "prompt": "prompt"
+      "prompt": "prompt",
+      "providerTooltip": "Última solicitud al proveedor\nEntrada: {{input}} tk\nAcierto de caché: {{cacheHit}} tk\nFallo de caché: {{cacheMiss}} tk\nSalida: {{output}} tk\nRazonamiento: {{reasoning}} tk\nModelo: {{model}}",
+      "cached": "en caché"
     },
     "macro": {
       "title": "Sugerencia de macro",

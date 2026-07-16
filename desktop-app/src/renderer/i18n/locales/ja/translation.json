@@ -118,7 +118,8 @@
       "smartHome": "スマートホーム",
       "restrictions": "制限",
       "models": "モデル",
-      "app": "アプリ"
+      "app": "アプリ",
+      "limits": "制限"
     },
     "language": {
       "system": "システム",
@@ -276,7 +277,8 @@
       "branchTitle": "このメッセージまでの履歴をコピーして新しいチャットブランチを作成",
       "sendTelegram": "Telegramに送信",
       "createBranch": "ブランチを作成",
-      "subagentNumber": "🧠 サブエージェント {{number}}"
+      "subagentNumber": "🧠 サブエージェント {{number}}",
+      "providerTokenUsage": "プロバイダーが報告した正確な完了トークン使用量"
     },
     "reasoning": {
       "auto": "自動",
@@ -325,7 +327,9 @@
     "context": {
       "tooltip": "メッセージ数: {{active}} (アーカイブ: {{archived}})\nプロンプトトークン: {{promptTokens}}{{reasoning}}",
       "reasoning": "推論",
-      "prompt": "プロンプト"
+      "prompt": "プロンプト",
+      "providerTooltip": "最新のプロバイダーリクエスト\n入力: {{input}} tk\nキャッシュヒット: {{cacheHit}} tk\nキャッシュミス: {{cacheMiss}} tk\n出力: {{output}} tk\n推論: {{reasoning}} tk\nモデル: {{model}}",
+      "cached": "キャッシュ済み"
     },
     "macro": {
       "title": "マクロの提案",

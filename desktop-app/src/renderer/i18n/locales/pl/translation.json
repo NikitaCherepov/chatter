@@ -333,7 +333,8 @@
       "smartHome": "Inteligentny dom",
       "restrictions": "Ograniczenia",
       "models": "Modele",
-      "app": "Aplikacja"
+      "app": "Aplikacja",
+      "limits": "Limity"
     },
     "language": {
       "system": "Systemowy",
@@ -491,7 +492,8 @@
       "branchTitle": "Utwórz nową gałąź czatu z kopią historii do tej wiadomości",
       "sendTelegram": "Wyślij do Telegrama",
       "createBranch": "Utwórz gałąź",
-      "subagentNumber": "🧠 Subagent {{number}}"
+      "subagentNumber": "🧠 Subagent {{number}}",
+      "providerTokenUsage": "Dokładne użycie tokenów uzupełnienia zgłoszone przez dostawcę"
     },
     "reasoning": {
       "auto": "Auto",
@@ -540,7 +542,9 @@
     "context": {
       "tooltip": "Wiadomości: {{active}} (archiwum: {{archived}})\nTokeny promptu: {{promptTokens}}{{reasoning}}",
       "reasoning": "Rozumowanie",
-      "prompt": "prompt"
+      "prompt": "prompt",
+      "providerTooltip": "Najnowsze żądanie dostawcy\nWejście: {{input}} tk\nTrafienie pamięci podręcznej: {{cacheHit}} tk\nPominięcie pamięci podręcznej: {{cacheMiss}} tk\nWyjście: {{output}} tk\nRozumowanie: {{reasoning}} tk\nModel: {{model}}",
+      "cached": "z pamięci podręcznej"
     },
     "macro": {
       "title": "Propozycja makra",

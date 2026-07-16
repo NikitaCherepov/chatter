@@ -333,7 +333,8 @@
       "smartHome": "스마트 홈",
       "restrictions": "제한",
       "models": "모델",
-      "app": "앱"
+      "app": "앱",
+      "limits": "제한"
     },
     "language": {
       "system": "시스템",
@@ -491,7 +492,8 @@
       "branchTitle": "이 메시지까지의 기록을 복사하여 새 채팅 분기 생성",
       "sendTelegram": "Telegram으로 보내기",
       "createBranch": "분기 생성",
-      "subagentNumber": "🧠 하위 에이전트 {{number}}"
+      "subagentNumber": "🧠 하위 에이전트 {{number}}",
+      "providerTokenUsage": "공급자가 보고한 정확한 완료 토큰 사용량"
     },
     "reasoning": {
       "auto": "자동",
@@ -540,7 +542,9 @@
     "context": {
       "tooltip": "메시지: {{active}} (보관: {{archived}})\n프롬프트 토큰: {{promptTokens}}{{reasoning}}",
       "reasoning": "추론",
-      "prompt": "프롬프트"
+      "prompt": "프롬프트",
+      "providerTooltip": "최근 공급자 요청\n입력: {{input}} tk\n캐시 적중: {{cacheHit}} tk\n캐시 미스: {{cacheMiss}} tk\n출력: {{output}} tk\n추론: {{reasoning}} tk\n모델: {{model}}",
+      "cached": "캐시됨"
     },
     "macro": {
       "title": "매크로 제안",
