@@ -1,0 +1,43 @@
+.titleBar {
+  position: relative;
+  z-index: 1000;
+  width: 100%;
+  height: var(--titlebar-height);
+  flex-shrink: 0;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.safeArea {
+  height: 100%;
+  margin-left: env(titlebar-area-x, 0);
+  width: env(titlebar-area-width, 100%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.logo {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.title {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

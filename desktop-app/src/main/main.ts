@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, net, screen, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, screen, shell } from 'electron';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -223,6 +223,24 @@ ipcMain.handle('i18n:get-system-languages', (event) => {
   return [...new Set(languages)];
 });
 
+ipcMain.handle('window:set-title-bar-overlay', (event, colors: { color?: unknown; symbolColor?: unknown }) => {
+  assertTrustedIpcSender(event);
+  if (process.platform === 'darwin' || !mainWindow) return;
+
+  const isHexColor = (value: unknown): value is string =>
+    typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(value);
+
+  if (!isHexColor(colors?.color) || !isHexColor(colors?.symbolColor)) {
+    throw new Error('invalid_title_bar_colors');
+  }
+
+  mainWindow.setTitleBarOverlay({
+    color: colors.color,
+    symbolColor: colors.symbolColor,
+    height: 40,
+  });
+});
+
 function createWindow() {
   const isDev = !app.isPackaged;
   const rendererEntryPath = getRendererEntryPath();
@@ -245,6 +263,13 @@ function createWindow() {
     minWidth: 600,
     minHeight: 500,
     title: 'Chatter',
+    titleBarStyle: 'hidden',
+    ...(process.platform !== 'darwin' ? {
+      titleBarOverlay: {
+        // Renderer synchronizes these system colors with global.scss after loading.
+        height: 40,
+      },
+    } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -1453,6 +1478,9 @@ function setupCustomUpdater() {
 // ── App lifecycle ─────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+  }
   createWindow();
   setupCustomUpdater();
 });

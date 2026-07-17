@@ -44,6 +44,9 @@
   --shadow-card: 0 1px 3px rgba(8, 15, 29, 0.1), 0 8px 24px rgba(8, 15, 29, 0.08);
   --shadow-fab: 0 2px 8px rgba(8, 15, 29, 0.3);
   --shadow-modal: 0 8px 32px rgba(8, 15, 29, 0.18);
+
+  // --- Window title bar ---
+  --titlebar-height: env(titlebar-area-height, 40px);
 }
 
 *,

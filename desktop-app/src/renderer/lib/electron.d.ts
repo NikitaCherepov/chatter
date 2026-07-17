@@ -7,6 +7,7 @@ declare global {
       apiBaseUrl: string;
       appVersion: string;
       getSystemLanguages: () => Promise<string[]>;
+      setTitleBarOverlay: (colors: { color: string; symbolColor: string }) => Promise<void>;
       onAvatarState: (callback: (payload: unknown) => void) => () => void;
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;

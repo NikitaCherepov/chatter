@@ -6,6 +6,7 @@ import { AuthPage } from './pages/AuthPage';
 import { ChatPage } from './pages/ChatPage';
 import { useAuth, AuthProvider } from './lib/auth';
 import { UpdateModal } from './components/UpdateModal';
+import { CustomTitleBar } from './components/CustomTitleBar';
 import s from './App.module.scss';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -33,28 +34,33 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 export function App() {
   return (
     <AuthProvider>
-      <HashRouter>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
-                <AuthPage />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/chat"
-            element={
-              <PrivateRoute>
-                <ChatPage />
-              </PrivateRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/chat" replace />} />
-        </Routes>
-      </HashRouter>
-      <Toaster position="top-right" richColors closeButton />
+      <div className={s.appShell}>
+        <CustomTitleBar />
+        <div className={s.appContent}>
+          <HashRouter>
+            <Routes>
+              <Route
+                path="/login"
+                element={
+                  <PublicRoute>
+                    <AuthPage />
+                  </PublicRoute>
+                }
+              />
+              <Route
+                path="/chat"
+                element={
+                  <PrivateRoute>
+                    <ChatPage />
+                  </PrivateRoute>
+                }
+              />
+              <Route path="*" element={<Navigate to="/chat" replace />} />
+            </Routes>
+          </HashRouter>
+        </div>
+      </div>
+      <Toaster position="top-right" richColors closeButton offset={52} />
       <UpdateListener />
     </AuthProvider>
   );

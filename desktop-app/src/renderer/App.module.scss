@@ -1,5 +1,19 @@
+.appShell {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-secondary);
+}
+
+.appContent {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
 .loading {
-  height: 100vh;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;

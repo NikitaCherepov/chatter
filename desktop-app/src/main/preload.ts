@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSystemLanguages: () =>
     ipcRenderer.invoke('i18n:get-system-languages'),
 
+  setTitleBarOverlay: (colors: { color: string; symbolColor: string }) =>
+    ipcRenderer.invoke('window:set-title-bar-overlay', colors),
+
   // PixelAvatar: listen for avatar state pushes from main process
   onAvatarState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
