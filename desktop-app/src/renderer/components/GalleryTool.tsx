@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import * as api from '../lib/api';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -67,11 +67,31 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, chatId]);
 
-  const handleLoadMore = () => {
+  const handleLoadMore = useCallback(() => {
     if (!loading && hasMore) {
       loadMedia(offset);
     }
-  };
+  }, [loading, hasMore, offset, loadMedia]);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            handleLoadMore();
+            break;
+          }
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, handleLoadMore]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -160,9 +180,9 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
         </div>
       )}
       {hasMore && (
-        <button className={s.loadMore} onClick={handleLoadMore} disabled={loading}>
-          {loading ? '...' : t('tools.gallery.loadMore')}
-        </button>
+        <div ref={sentinelRef} className={s.sentinel}>
+          {loading && <span className={s.loading}>{t('tools.gallery.loadMore')}</span>}
+        </div>
       )}
 
       <AnimatePresence>
