@@ -19,6 +19,47 @@
     "execute_pc_command": "Befehl auf PC wird ausgeführt...",
     "get_file_info": "Datei wird geprüft...",
     "read_file": "Datei wird gelesen...",
-    "search_file_keywords": "Datei wird durchsucht..."
+    "search_file_keywords": "Datei wird durchsucht...",
+    "write_file": "Datei wird geschrieben...",
+    "edit_file_lines": "Datei wird bearbeitet...",
+    "capture_screen": "Bildschirmfoto wird aufgenommen...",
+    "list_monitors": "Monitorliste wird abgerufen...",
+    "execute_visual_click": "Warte auf Klickbestätigung...",
+    "list_devops_runbooks": "Runbooks werden gesucht...",
+    "capture_webcam": "Webcam-Foto wird aufgenommen...",
+    "describe_image": "Bild wird analysiert...",
+    "read_devops_runbook": "Runbook wird gelesen...",
+    "suggest_devops_runbook": "Runbook wird vorgeschlagen...",
+    "install_ssh_public_key": "SSH-Schlüssel wird installiert...",
+    "create_server_user": "Serverbenutzer wird erstellt...",
+    "change_server_user_password": "Passwortänderung wird angefordert...",
+    "suggest_server_creds_update": "Aktualisierung der Anmeldedaten wird vorgeschlagen...",
+    "get_exchange_rates": "Wechselkurse werden abgerufen...",
+    "randomRollCoin": "Münze wird geworfen...",
+    "randomRollNotation": "{{notation}} wird gewürfelt...",
+    "randomRollDice": "Würfel werden geworfen...",
+    "invokingAgent": "Subagent wird aufgerufen...",
+    "invokingNamedAgent": "Subagent „{{agent}}“ wird aufgerufen...",
+    "startingAgent": "🧠 Starte Subagent...",
+    "startingAgentWithTask": "🧠 Starte Subagent: {{task}}...",
+    "desktopOpenNotebook": "Notizbuch öffnen...",
+    "desktopOpenTasks": "Aufgaben öffnen...",
+    "desktopOpenWidget": "Widget öffnen...",
+    "desktopCloseNotebook": "Notizbuch schließen...",
+    "desktopCloseTasks": "Aufgaben schließen...",
+    "desktopCloseWidget": "Widget schließen...",
+    "desktopPreparingDraft": "Entwurf vorbereiten...",
+    "desktopOpeningNote": "Notizbucheintrag öffnen...",
+    "desktopReadingWidgetState": "Widget-Status wird gelesen...",
+    "desktopOpeningToolsPanel": "Werkzeugpanel wird geöffnet...",
+    "desktopAction": "Aktion wird ausgeführt..."
+  },
+  "subagents": {
+    "toolStatus": {
+      "list_directory": "[{{agent}}] Verzeichnis wird gelesen...",
+      "convert_video": "[{{agent}}] Video wird konvertiert...",
+      "list_devops_servers": "[{{agent}}] Serverliste wird abgerufen...",
+      "runningTool": "[{{agent}}] {{tool}} wird ausgeführt..."
+    }
   }
 }
