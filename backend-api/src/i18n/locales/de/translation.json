@@ -1,0 +1,24 @@
+{
+  "toolStatus": {
+    "search_web": "Durchsuche das Web...",
+    "read_webpage": "Öffne Seite und extrahiere Text...",
+    "get_smart_devices": "🏠 Geräteliste wird abgerufen...",
+    "control_smart_home": "🏠 Führe Smart-Home-Befehl aus...",
+    "generate_image": "Bild wird generiert...",
+    "create_pixel_image": "Pixel-Art wird erstellt...",
+    "map_control": "Durchsuche die Karte...",
+    "get_map_pins": "Lese gespeicherte Pins...",
+    "find_transit_route": "Suche öffentliche Verkehrsverbindungen...",
+    "search_nearby": "Suche Orte in der Nähe...",
+    "list_my_macros": "Suche nach Ihren Makros...",
+    "execute_macro": "Makro wird ausgeführt...",
+    "explore_fs": "Verzeichnis wird gelesen...",
+    "suggest_macro": "Makro wird vorgeschlagen...",
+    "list_devops_servers": "Serverliste wird abgerufen...",
+    "execute_ssh_command": "Befehl auf Server wird ausgeführt...",
+    "execute_pc_command": "Befehl auf PC wird ausgeführt...",
+    "get_file_info": "Datei wird geprüft...",
+    "read_file": "Datei wird gelesen...",
+    "search_file_keywords": "Datei wird durchsucht..."
+  }
+}

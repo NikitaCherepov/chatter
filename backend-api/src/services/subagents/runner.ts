@@ -15,6 +15,7 @@
 import { SubagentContext, SubagentResult, SubagentIteration } from './types.js';
 import { setMaxListeners } from 'events';
 import { getSubagent, RegisteredSubagent } from './registry.js';
+import { hasBackendTranslation, translateForLanguage } from '../../i18n/index.js';
 
 // These will be set by initSubagentRunner() at startup to avoid circular imports.
 let _runCompletion: typeof import('../ai.js').runCompletion;
@@ -45,19 +46,16 @@ export function initSubagentRunner(deps: {
 }
 
 // ---------------------------------------------------------------------------
-// Human-readable tool names for status broadcasting
+// Localized tool status broadcasting
 // ---------------------------------------------------------------------------
 
-const TOOL_STATUS_MESSAGES: Record<string, string> = {
-  // Shared tools
-  list_directory: 'Reading directory...',
-  convert_video: 'Converting video...',
-  list_devops_servers: 'Получение списка серверов...',
-};
-
-function getToolStatusMessage(agentName: string, toolName: string): string {
-  const base = TOOL_STATUS_MESSAGES[toolName];
-  return base ? `[${agentName}] ${base}` : `[${agentName}] ${toolName}...`;
+function getToolStatusMessage(language: unknown, agentName: string, toolName: string): string {
+  const key = `subagents.toolStatus.${toolName}`;
+  return translateForLanguage(
+    language,
+    hasBackendTranslation(key) ? key : 'subagents.toolStatus.runningTool',
+    { agent: agentName, tool: toolName },
+  );
 }
 
 /** Local abort-error check (avoids circular import with ai.ts). */
@@ -263,7 +261,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       console.log(`[subagent:${resolvedAgentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
 
       // Broadcast tool status to client
-      const statusMsg = getToolStatusMessage(resolvedAgentName, toolName);
+      const statusMsg = getToolStatusMessage(ctx.user?.language, resolvedAgentName, toolName);
       if (ctx.onToolStatus) {
         try { await ctx.onToolStatus(statusMsg); } catch {}
       }

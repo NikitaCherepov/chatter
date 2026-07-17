@@ -19,6 +19,34 @@ npm run start:api
 npm run logs:api
 ```
 
+## Backend Localization
+
+Tool status messages are translated once in `backend-api` and sent to Desktop and Telegram as ready-to-display text. Clients do not translate tool status keys themselves.
+
+Translation resources live in `src/i18n/locales/<locale>/translation.json`. English is the source locale and the fallback for missing translations.
+
+Ordinary main-agent tool statuses use the tool's system name automatically:
+
+```text
+search_web -> toolStatus.search_web
+read_file  -> toolStatus.read_file
+```
+
+Subagent tool statuses follow the same convention in their own namespace:
+
+```text
+convert_video -> subagents.toolStatus.convert_video
+```
+
+Messages that require runtime values, such as a dice notation, subagent name, task, or desktop action, are handled explicitly in `services/ai.ts`. Subagent tool statuses fall back to `subagents.toolStatus.runningTool` when a specific key is missing.
+
+When adding an ordinary tool, add its English key to the backend catalog; no mapping in `services/ai.ts` or client-side localization is required. To update other locale catalogs, run from the repository root:
+
+```bash
+npm run i18n:translate:api
+npm run i18n:translate:api:all
+```
+
 ## ENV (minimum)
 
 - `TELEGRAM_TOKEN` — required for Telegram auth verification.

@@ -18,6 +18,7 @@ import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
 import { countTokens } from './tokenizer.js';
 import { listSubagentNames, buildSubagentListDescription } from './subagents/registry.js';
+import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 
 dotenv.config();
 
@@ -5403,92 +5404,80 @@ Respond in the user's language. Be detailed and precise.`
   return `Ошибка: неизвестный инструмент ${toolName}`;
 };
 
-const getToolUserMessage = (toolName: string, argsRaw: string) => {
-  if (toolName === 'search_web') return 'Ищу информацию в сети...';
-  if (toolName === 'read_webpage') return 'Открываю страницу и извлекаю текст...';
-  if (toolName === 'get_smart_devices') return '🏠 Получаю список устройств...';
-  if (toolName === 'control_smart_home') return '🏠 Выполняю команду умного дома...';
+const getToolUserMessage = (language: unknown, toolName: string, argsRaw: string) => {
   if (toolName === 'random_roll') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
-      const target = parsed.roll_type === 'coin'
-        ? 'монетку'
-        : parsed.dice_notation
-          ? `кубики ${parsed.dice_notation}`
-          : 'кубики';
-      return `Подкидываем ${target}...`;
+      if (parsed.roll_type === 'coin') {
+        return translateForLanguage(language, 'toolStatus.randomRollCoin');
+      }
+      const notation = String(parsed.dice_notation || '');
+      return notation
+        ? translateForLanguage(language, 'toolStatus.randomRollNotation', { notation })
+        : translateForLanguage(language, 'toolStatus.randomRollDice');
     } catch {
-      return 'Подкидываем кубики...';
+      return translateForLanguage(language, 'toolStatus.randomRollDice');
     }
   }
-  if (toolName === 'generate_image') return 'Генерирую изображение...';
-  if (toolName === 'create_pixel_image') return 'Создаю пиксель-арт...';
-  if (toolName === 'map_control') return 'Ищу на карте...';
-  if (toolName === 'get_map_pins') return 'Читаю сохранённые метки...';
-  if (toolName === 'find_transit_route') return 'Ищу маршруты общественного транспорта...';
-  if (toolName === 'search_nearby') return 'Ищу места поблизости...';
-  if (toolName === 'list_my_macros') return 'Ищу ваши макросы...';
-  if (toolName === 'execute_macro') return 'Запускаю макрос...';
-  if (toolName === 'explore_fs') return 'Читаю директорию...';
-  if (toolName === 'suggest_macro') return 'Предлагаю сохранить макрос...';
-  if (toolName === 'list_devops_servers') return 'Получаю список серверов...';
-  if (toolName === 'execute_ssh_command') return 'Выполняю команду на сервере...';
-  if (toolName === 'execute_pc_command') return 'Выполняю команду на ПК...';
-  if (toolName === 'get_file_info') return 'Проверяю файл...';
-  if (toolName === 'read_file') return 'Читаю файл...';
-  if (toolName === 'search_file_keywords') return 'Ищу в файле...';
-  if (toolName === 'write_file') return 'Записываю файл...';
-  if (toolName === 'edit_file_lines') return 'Редактирую файл...';
-  if (toolName === 'capture_screen') return 'Делаю скриншот экрана...';
-  if (toolName === 'list_monitors') return 'Получаю список мониторов...';
-  if (toolName === 'execute_visual_click') return 'Жду подтверждения клика...';
-  if (toolName === 'list_devops_runbooks') return 'Ищу инструкции...';
-  if (toolName === 'capture_webcam') return 'Фотографирую веб-камерой...';
-  if (toolName === 'describe_image') return 'Анализирую изображение...';
 
-  if (toolName === 'read_devops_runbook') return 'Читаю инструкцию...';
-  if (toolName === 'suggest_devops_runbook') return 'Предлагаю сохранить инструкцию...';
-  if (toolName === 'install_ssh_public_key') return 'Устанавливаю SSH-ключ...';
-  if (toolName === 'create_server_user') return 'Создаю пользователя на сервере...';
-  if (toolName === 'change_server_user_password') return 'Запрашиваю смену пароля пользователя...';
-  if (toolName === 'suggest_server_creds_update') return 'Предлагаю обновить учётные данные...';
-  if (toolName === 'get_exchange_rates') return 'Запрашиваю курсы валют...';
   if (toolName === 'invoke_subagent') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
-      const agent = parsed.agent || '';
-      return `Вызываю субагента "${agent}"...`;
-    } catch { return 'Вызываю субагента...'; }
+      const agent = String(parsed.agent || '');
+      return agent
+        ? translateForLanguage(language, 'toolStatus.invokingNamedAgent', { agent })
+        : translateForLanguage(language, 'toolStatus.invokingAgent');
+    } catch {
+      return translateForLanguage(language, 'toolStatus.invokingAgent');
+    }
   }
+
   if (toolName === 'spawn_subagent') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
       const task = String(parsed.task || '').slice(0, 60);
-      return task ? `🧠 Запускаю субагента: ${task}...` : '🧠 Запускаю субагента...';
-    } catch { return '🧠 Запускаю субагента...'; }
+      return task
+        ? translateForLanguage(language, 'toolStatus.startingAgentWithTask', { task })
+        : translateForLanguage(language, 'toolStatus.startingAgent');
+    } catch {
+      return translateForLanguage(language, 'toolStatus.startingAgent');
+    }
   }
+
   if (toolName === 'desktop_action') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
-      const a = parsed.action || '';
-      if (a === 'open_widget') {
-        const t = parsed.target;
-        const label = t === 'notebook' ? 'блокнот' : t === 'tasks' ? 'задачи' : 'виджет';
-        return `Открываю ${label}...`;
+      const action = String(parsed.action || '');
+      const target = String(parsed.target || '');
+
+      if (action === 'open_widget') {
+        const key = target === 'notebook'
+          ? 'toolStatus.desktopOpenNotebook'
+          : target === 'tasks'
+            ? 'toolStatus.desktopOpenTasks'
+            : 'toolStatus.desktopOpenWidget';
+        return translateForLanguage(language, key);
       }
-      if (a === 'close_widget') {
-        const t = parsed.target;
-        const label = t === 'notebook' ? 'блокнот' : t === 'tasks' ? 'задачи' : 'виджет';
-        return `Закрываю ${label}...`;
+      if (action === 'close_widget') {
+        const key = target === 'notebook'
+          ? 'toolStatus.desktopCloseNotebook'
+          : target === 'tasks'
+            ? 'toolStatus.desktopCloseTasks'
+            : 'toolStatus.desktopCloseWidget';
+        return translateForLanguage(language, key);
       }
-      if (a === 'set_widget_data') return `Готовлю черновик...`;
-      if (a === 'open_note') return `Открываю запись в блокноте...`;
-      if (a === 'read_widget_state') return `Читаю состояние виджета...`;
-      if (a === 'toggle_panel') return 'Открываю панель инструментов...';
-    } catch { /* */ }
-    return 'Выполняю действие...';
+      if (action === 'set_widget_data') return translateForLanguage(language, 'toolStatus.desktopPreparingDraft');
+      if (action === 'open_note') return translateForLanguage(language, 'toolStatus.desktopOpeningNote');
+      if (action === 'read_widget_state') return translateForLanguage(language, 'toolStatus.desktopReadingWidgetState');
+      if (action === 'toggle_panel') return translateForLanguage(language, 'toolStatus.desktopOpeningToolsPanel');
+    } catch {
+      // Fall through to the generic desktop action status.
+    }
+    return translateForLanguage(language, 'toolStatus.desktopAction');
   }
-  return null;
+
+  const key = `toolStatus.${toolName}`;
+  return hasBackendTranslation(key) ? translateForLanguage(language, key) : null;
 };
 export const sendMessageThroughAi = async (
   userId: number,
@@ -6228,7 +6217,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
 
   const toolName = `${toolCall.function?.name || ''}`;
 
-  const toolUserMessage = getToolUserMessage(toolName, toolCall.function?.arguments || '{}');
+  const toolUserMessage = getToolUserMessage(user.language, toolName, toolCall.function?.arguments || '{}');
   if (emitStatus && toolUserMessage) {
     toolUserMessages.push(toolUserMessage);
     if (options?.onToolStatus) await options.onToolStatus(toolUserMessage);
@@ -6331,7 +6320,7 @@ const applyExecutedToolCall = (executed: ExecutedToolCall) => {
 
 const runSpawnBatch = async (batch: any[]) => {
   for (const toolCall of batch) {
-    const toolUserMessage = getToolUserMessage('spawn_subagent', toolCall.function?.arguments || '{}');
+    const toolUserMessage = getToolUserMessage(user.language, 'spawn_subagent', toolCall.function?.arguments || '{}');
     if (toolUserMessage) {
       toolUserMessages.push(toolUserMessage);
       if (options?.onToolStatus) await options.onToolStatus(toolUserMessage);
