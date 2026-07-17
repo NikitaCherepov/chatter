@@ -18,7 +18,8 @@ transcriber/transcription_*
 
 
 desktop-app/release/
-desktop-app/build/
+desktop-app/build/*
+!desktop-app/build/icon.ico
 desktop-app/dist/
 desktop-app/models/
 desktop-app/.venv-wakeword/

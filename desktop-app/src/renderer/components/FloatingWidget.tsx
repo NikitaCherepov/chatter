@@ -68,7 +68,10 @@ export function FloatingWidget({
       : layoutMode === 'fullscreen'
         ? {
             position: 'fixed',
-            inset: 0,
+            top: window.electronAPI ? 'calc(var(--titlebar-height) + 1px)' : 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
             zIndex: 100,
           }
         : {}; // sidebar — no positioning

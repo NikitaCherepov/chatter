@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.7.8",
+  "version": "1.7.9",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
@@ -94,9 +94,14 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "zip"

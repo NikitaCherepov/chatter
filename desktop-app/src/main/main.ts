@@ -172,6 +172,12 @@ function getRendererEntryPath(): string {
   return path.join(__dirname, '../renderer/index.html');
 }
 
+function getAppIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.ico')
+    : path.join(__dirname, '..', '..', 'build', 'icon.ico');
+}
+
 function isTrustedRendererUrl(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl);
@@ -263,6 +269,7 @@ function createWindow() {
     minWidth: 600,
     minHeight: 500,
     title: 'Chatter',
+    icon: getAppIconPath(),
     titleBarStyle: 'hidden',
     ...(process.platform !== 'darwin' ? {
       titleBarOverlay: {
