@@ -11,6 +11,7 @@ Telegram bot for the `chatter` project.
 - The bot and API run as two separate processes.
 - For user lifecycle management, the bot uses the backend (`/internal/users/*`), so the backend must be running.
 - The main project database: `chatter.db`.
+- The bot resolves each incoming `ctx.from.id` through the Telegram identity endpoint once. All backend operations then use the canonical `account_id`; the Telegram ID is retained only for Telegram API delivery, command scope, linking, and unlinking.
 
 ## Quick Start
 

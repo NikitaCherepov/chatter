@@ -129,12 +129,12 @@ const internalAuth = (req: any, res: any, next: any) => {
   next();
 };
 
-// Internal routes are called by the Telegram bot and receive Telegram user IDs.
-// Identity lookup comes first; redirect lookup keeps old canonical IDs usable too.
-const resolveInternalAccountId = (rawUserId: unknown): number => {
-  const userId = Math.floor(Number(rawUserId));
-  if (!Number.isFinite(userId) || userId <= 0) return Number.NaN;
-  return getAccountIdByTelegramId(userId) ?? resolveAccountId(userId);
+// Internal API contracts use canonical account IDs exclusively. Telegram IDs
+// are resolved only by explicitly Telegram-scoped endpoints.
+const resolveInternalAccountId = (rawAccountId: unknown): number => {
+  const accountId = Math.floor(Number(rawAccountId));
+  if (!Number.isFinite(accountId) || accountId <= 0) return Number.NaN;
+  return resolveAccountId(accountId);
 };
 
 const internalAdminAuth = (req: any, res: any, next: any) => {
@@ -780,7 +780,7 @@ const toAuthUserDto = (user: UserRecord) => {
   return {
     id: accountId,
     name: effectiveUser.name,
-    username: telegramIdentity?.username || effectiveUser.tg_username,
+    username: telegramIdentity?.username ?? null,
     role: effectiveUser.role,
     is_admin: effectiveUser.is_admin,
     plan: effectiveUser.plan,
@@ -836,7 +836,8 @@ app.post('/api/v1/auth/telegram', (req, res) => {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
   upsertUserFromTelegram(user.id, user.username || null, fullName, user.language_code || null);
 
-  const accountId = getAccountIdByTelegramId(user.id) ?? user.id;
+  const accountId = getAccountIdByTelegramId(user.id);
+  if (!accountId) return res.status(500).json({ error: 'telegram_identity_create_failed' });
   const userRecord = getUserById(accountId);
   if (!userRecord) return res.status(500).json({ error: 'user_create_failed' });
   if (userRecord.status !== 'approved' && userRecord.is_admin !== 1) {
@@ -1228,7 +1229,7 @@ app.delete('/api/v1/chats/:chatId', (req: AuthedRequest, res) => {
   return res.json({ ok: true });
 });
 
-// ── Send message to linked Telegram account ──
+// ── Send message to the account's Telegram identity ──
 
 
 app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res) => {
@@ -1240,10 +1241,10 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
   if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
 
   const telegramIdentity = getTelegramIdentityForAccount(userId);
-  const linkedTgId = Number(telegramIdentity?.provider_subject);
-  if (!linkedTgId) return res.status(400).json({ error: 'telegram_not_linked' });
+  const telegramId = Number(telegramIdentity?.provider_subject);
+  if (!telegramId) return res.status(400).json({ error: 'telegram_not_linked' });
 
-  console.log(`[send-to-telegram] accountId=${userId}, linkedTgId=${linkedTgId}, messageId=${messageId}`);
+  console.log(`[send-to-telegram] accountId=${userId}, telegramId=${telegramId}, messageId=${messageId}`);
 
   // Fetch the message, verify ownership
   const row = db.prepare(`
@@ -1258,7 +1259,7 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
     try { images = JSON.parse(row.images); } catch { images = []; }
   }
 
-  console.log(`[send-to-telegram] message found, text_len=${text.length}, images_count=${images.length}, sending to tg_id=${linkedTgId}`);
+  console.log(`[send-to-telegram] message found, text_len=${text.length}, images_count=${images.length}, sending to telegram_id=${telegramId}`);
 
   const tgApiBase = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
   const assertTelegramFormOk = async (response: Response, method: string) => {
@@ -1286,7 +1287,7 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
         if (imageFiles.length === 1) {
           // Single photo with caption (caption limit 1024)
           const formData = new FormData();
-          formData.append('chat_id', String(linkedTgId));
+          formData.append('chat_id', String(telegramId));
           formData.append('photo', new Blob([new Uint8Array(imageFiles[0])]), 'photo.webp');
           if (text) formData.append('caption', text.slice(0, 1024));
 
@@ -1297,7 +1298,7 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
 
           // Send remaining text beyond the 1024 caption limit as separate messages
           if (text.length > 1024) {
-            await sendTelegramMessage(linkedTgId, text.slice(1024), { strict: true, preferRich: true });
+            await sendTelegramMessage(telegramId, text.slice(1024), { strict: true, preferRich: true });
           }
         } else {
           // Multiple photos via sendMediaGroup (caption limit 1024)
@@ -1308,7 +1309,7 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
           }));
 
           const formData = new FormData();
-          formData.append('chat_id', String(linkedTgId));
+          formData.append('chat_id', String(telegramId));
           formData.append('media', JSON.stringify(media));
           imageFiles.forEach((buf, i) => {
             formData.append(`photo_${i}`, new Blob([new Uint8Array(buf)]), `photo_${i}.webp`);
@@ -1321,18 +1322,18 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
 
           // Send remaining text beyond the 1024 caption limit as separate messages
           if (text.length > 1024) {
-            await sendTelegramMessage(linkedTgId, text.slice(1024), { strict: true, preferRich: true });
+            await sendTelegramMessage(telegramId, text.slice(1024), { strict: true, preferRich: true });
           }
         }
       } else {
         // Images existed but files not found on disk — send text only (chunked)
         const fallbackText = text || '(изображение недоступно)';
-        await sendTelegramMessage(linkedTgId, fallbackText, { strict: true, preferRich: true });
+        await sendTelegramMessage(telegramId, fallbackText, { strict: true, preferRich: true });
       }
     } else {
       // Text only — split into chunks (Telegram limit is 4096, use 4000 with margin)
       if (!text) return res.status(400).json({ error: 'empty_message' });
-      await sendTelegramMessage(linkedTgId, text, { strict: true, preferRich: true });
+      await sendTelegramMessage(telegramId, text, { strict: true, preferRich: true });
     }
 
     return res.json({ ok: true });
@@ -1788,7 +1789,7 @@ app.get('/api/v1/link/status', authMiddleware, (req: AuthedRequest, res) => {
     return res.json({
       linked: true,
       tg_id: Number(telegramIdentity.provider_subject),
-      tg_username: telegramIdentity.username || user.tg_username || user.name || null,
+      tg_username: telegramIdentity.username || null,
       can_unlink: hasPasswordIdentity,
     });
   }
@@ -2414,9 +2415,10 @@ app.post('/internal/users/upsert-telegram', internalAuth, (req, res) => {
   if (!name) return res.status(400).json({ error: 'name_required' });
 
   upsertTelegramUser(tgId, name, role, status, tgUsername, defaultPromptId, language);
-  const accountId = getAccountIdByTelegramId(tgId) ?? tgId;
+  const accountId = getAccountIdByTelegramId(tgId);
+  if (!accountId) return res.status(500).json({ error: 'telegram_identity_create_failed' });
   const user = getUserById(accountId);
-  return res.json({ ok: true, user: user ? withInternalAccountIdentities(user) : null });
+  return res.json({ ok: true, user: user ? withAccountIdentities(user) : null });
 });
 
 app.post('/internal/users/create-pending', internalAuth, (req, res) => {
@@ -2429,9 +2431,10 @@ app.post('/internal/users/create-pending', internalAuth, (req, res) => {
   if (!Number.isFinite(tgId) || tgId <= 0) return res.status(400).json({ error: 'bad_tg_id' });
 
   createPendingTelegramUser(tgId, name, tgUsername, defaultPromptId, language);
-  const accountId = getAccountIdByTelegramId(tgId) ?? tgId;
+  const accountId = getAccountIdByTelegramId(tgId);
+  if (!accountId) return res.status(500).json({ error: 'telegram_identity_create_failed' });
   const user = getUserById(accountId);
-  return res.json({ ok: true, user: user ? withInternalAccountIdentities(user) : null });
+  return res.json({ ok: true, user: user ? withAccountIdentities(user) : null });
 });
 
 const withAccountIdentities = <T extends { id: number }>(user: T) => {
@@ -2439,7 +2442,9 @@ const withAccountIdentities = <T extends { id: number }>(user: T) => {
   const telegramIdentity = identities.find(identity => identity.provider === 'telegram');
   return {
     ...user,
+    account_id: user.id,
     telegram_id: telegramIdentity ? Number(telegramIdentity.provider_subject) : null,
+    telegram_username: telegramIdentity?.username ?? null,
     identities: identities.map(identity => ({
       provider: identity.provider,
       provider_subject: identity.provider_subject,
@@ -2448,23 +2453,24 @@ const withAccountIdentities = <T extends { id: number }>(user: T) => {
   };
 };
 
-// Keep the existing Telegram bot contract (`id` is the Telegram ID), while
-// exposing the new canonical account ID explicitly.
-const withInternalAccountIdentities = <T extends { id: number }>(user: T) => {
-  const enriched = withAccountIdentities(user);
-  return {
-    ...enriched,
-    account_id: user.id,
-    id: enriched.telegram_id ?? user.id,
-  };
-};
+app.get('/internal/users/by-telegram/:telegramId', internalAuth, (req, res) => {
+  const telegramId = Math.floor(Number(req.params.telegramId));
+  if (!Number.isFinite(telegramId) || telegramId <= 0) {
+    return res.status(400).json({ error: 'bad_telegram_id' });
+  }
+  const accountId = getAccountIdByTelegramId(telegramId);
+  if (!accountId) return res.status(404).json({ error: 'telegram_identity_not_found' });
+  const user = getUserById(accountId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ user: withAccountIdentities(user) });
+});
 
 app.get('/internal/users/:id', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ user: withInternalAccountIdentities(user) });
+  return res.json({ user: withAccountIdentities(user) });
 });
 
 app.get('/internal/users/:id/prompt/resolved', internalAuth, (req, res) => {
@@ -2511,18 +2517,18 @@ app.get('/internal/users', internalAuth, (req, res) => {
   if (filter === 'pending') {
     const count = getPendingUsersCount();
     const users = getPendingUsersPage(limit, offset);
-    return res.json({ users: users.map(withInternalAccountIdentities), total: count, filter, limit, offset });
+    return res.json({ users: users.map(withAccountIdentities), total: count, filter, limit, offset });
   }
 
   if (filter === 'banned') {
     const count = getBannedUsersCount();
     const users = getBannedUsersPage(limit, offset);
-    return res.json({ users: users.map(withInternalAccountIdentities), total: count, filter, limit, offset });
+    return res.json({ users: users.map(withAccountIdentities), total: count, filter, limit, offset });
   }
 
   const count = getUsersCount();
   const users = getUsersPage(limit, offset);
-  return res.json({ users: users.map(withInternalAccountIdentities), total: count, filter: 'all', limit, offset });
+  return res.json({ users: users.map(withAccountIdentities), total: count, filter: 'all', limit, offset });
 });
 
 // ── Internal: User status/role/name management ────────────────────────────

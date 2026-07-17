@@ -82,26 +82,15 @@ export const verifyAndAuthorizeTelegramUser = (initData: string): TelegramAuthCo
   const auth = verifyAndExtractTelegramUser(initData);
   if (!auth) return null;
 
-  let user: { id: number; language: string | null } | undefined;
-  try {
-    user = db.prepare(`
-      SELECT users.id, users.language
-      FROM account_identities
-      JOIN users ON users.id = account_identities.account_id
-      WHERE account_identities.provider = 'telegram'
-        AND account_identities.provider_subject = ?
-        AND users.status = 'approved'
-      LIMIT 1
-    `).get(String(auth.telegramUserId)) as { id: number; language: string | null } | undefined;
-  } catch {
-    // Older databases may not have account_identities yet.
-  }
-
-  user ??= db.prepare(`
-    SELECT id, language
-    FROM users
-    WHERE id = ? AND status = 'approved'
-  `).get(auth.telegramUserId) as { id: number; language: string | null } | undefined;
+  const user = db.prepare(`
+    SELECT users.id, users.language
+    FROM account_identities
+    JOIN users ON users.id = account_identities.account_id
+    WHERE account_identities.provider = 'telegram'
+      AND account_identities.provider_subject = ?
+      AND users.status = 'approved'
+    LIMIT 1
+  `).get(String(auth.telegramUserId)) as { id: number; language: string | null } | undefined;
 
   return user ? {
     userId: user.id,

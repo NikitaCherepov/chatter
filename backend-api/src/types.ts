@@ -12,7 +12,6 @@ export type UserRecord = {
   is_admin: number;
   status: 'none' | 'approved' | 'disapproved' | 'banned';
   plan: UserPlan;
-  tg_username: string | null;
   language?: string | null;
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;

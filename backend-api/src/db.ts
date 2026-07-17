@@ -38,7 +38,6 @@ db.exec(`
     role TEXT NOT NULL DEFAULT 'user',
     status TEXT NOT NULL DEFAULT 'approved',
     plan TEXT NOT NULL DEFAULT 'free',
-    tg_username TEXT,
     language TEXT,
     selected_prompt_id INTEGER,
     custom_prompt_content TEXT,
@@ -206,7 +205,6 @@ ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGE
 ensureUserColumn('active_chat_id', 'ALTER TABLE users ADD COLUMN active_chat_id INTEGER');
 ensureUserColumn('status', "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'");
 ensureUserColumn('plan', "ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
-ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
 ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_message_limit', 'ALTER TABLE users ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT 0');

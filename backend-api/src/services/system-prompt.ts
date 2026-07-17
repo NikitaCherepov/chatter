@@ -45,6 +45,6 @@ export const buildBaseSystemPromptForUser = (
   isGuestMode: boolean
 ): string => {
   if (isGuestMode) return '';
-  const userName = user.name || user.tg_username || 'Пользователь';
+  const userName = user.name || 'Пользователь';
   return `${buildSystemPrompt(promptContent, userName, coreMemory || '')}${pinnedMacrosHint}`;
 };

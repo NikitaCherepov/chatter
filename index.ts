@@ -55,6 +55,8 @@ const DEFAULT_USER_PLAN: UserPlan = 'free';
 type BotContext = Context & {
     state: Context['state'] & {
         language: SupportedLanguage;
+        accountId: number;
+        telegramId: number;
         role?: 'admin' | 'user';
         userName?: string;
     };
@@ -167,11 +169,13 @@ type UserHistoryRow = {
 };
 type UserRecord = {
     id: number;
+    account_id: number;
+    telegram_id: number | null;
+    telegram_username: string | null;
     name: string | null;
     role: string;
     status: UserStatus;
     plan: UserPlan;
-    tg_username: string | null;
     language?: string | null;
     selected_prompt_id: number | null;
     custom_prompt_content: string | null;
@@ -350,20 +354,20 @@ const buildContextSettingsKeyboard = (t: BotTranslate) => Markup.inlineKeyboard(
 ]);
 
 const syncCommandScopeForUser = async (
-    userId: number,
+    telegramId: number,
     isAdmin: boolean,
     language: SupportedLanguage
 ) => {
     const nextRole: 'admin' | 'user' = isAdmin ? 'admin' : 'user';
     const cacheKey = `${nextRole}:${language}`;
-    if (commandScopeCache.get(userId) === cacheKey) return;
+    if (commandScopeCache.get(telegramId) === cacheKey) return;
 
     const commands = buildBotCommands(isAdmin, (key, options) => translateBot(language, key, options));
     await bot.telegram.setMyCommands(commands as any, {
-        scope: { type: 'chat', chat_id: userId }
+        scope: { type: 'chat', chat_id: telegramId }
     } as any);
 
-    commandScopeCache.set(userId, cacheKey);
+    commandScopeCache.set(telegramId, cacheKey);
 };
 type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
@@ -377,7 +381,7 @@ const adminUserMessageLimitFlows = new Map<number, { targetUserId: number; page:
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     renameFlows.set(userId, 'confirm');
     return ctx.reply(
@@ -459,7 +463,7 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
         return;
     }
 
-    const targetUserName = targetUser.name || targetUser.tg_username || ctx.t('adminDirect.friend');
+    const targetUserName = targetUser.name || targetUser.telegram_username || ctx.t('adminDirect.friend');
     await ctx.reply(ctx.t('adminDirect.generating'));
 
     try {
@@ -487,14 +491,17 @@ const handleAiDirectMessage = async (ctx: any, targetUserId: number, instruction
             return;
         }
 
-        await safeSendToUser(targetUserId, finalMessage);
+        if (!targetUser.telegram_id) {
+            throw new Error('У аккаунта нет привязанного Telegram.');
+        }
+        await safeSendToUser(targetUser.telegram_id, finalMessage);
 
         // Отправка сгенерированных изображений юзеру
         if (Array.isArray(response.data?.generated_images) && response.data.generated_images.length > 0) {
             for (const img of response.data.generated_images) {
                 try {
                     const imageBuffer = Buffer.from(img.image_base64, 'base64');
-                    await bot.telegram.sendPhoto(targetUserId, { source: imageBuffer });
+                    await bot.telegram.sendPhoto(targetUser.telegram_id, { source: imageBuffer });
                 } catch (imgErr) {
                     console.error('Ошибка отправки сгенерированного изображения юзеру:', formatSafeError(imgErr));
                 }
@@ -1112,6 +1119,17 @@ const runBackendGetUser = async (userId: number) => {
     }
 };
 
+const runBackendGetUserByTelegramId = async (telegramId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    try {
+        const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/by-telegram/${telegramId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+        return response.data as { user: UserRecord };
+    } catch (err: any) {
+        if (err?.response?.status === 404) return { user: undefined };
+        throw err;
+    }
+};
+
 const runBackendUpdateTgUsername = async (userId: number, tgUsername: string | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tg-username`, { user_id: userId, tg_username: tgUsername }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
@@ -1154,8 +1172,8 @@ const runBackendGetUsersList = async (filter: string, limit: number, offset: num
     return response.data as { users: UserRecord[]; total: number; filter: string; limit: number; offset: number };
 };
 
-const getDatabaseAdminIds = async () => {
-    const adminIds: number[] = [];
+const getDatabaseTelegramAdmins = async () => {
+    const admins: UserRecord[] = [];
     const pageSize = 500;
     let offset = 0;
     let total = 0;
@@ -1164,13 +1182,15 @@ const getDatabaseAdminIds = async () => {
         const page = await runBackendGetUsersList('all', pageSize, offset);
         total = Math.max(0, Number(page.total) || 0);
         for (const user of page.users) {
-            if (user.role === 'admin' && user.status === 'approved') adminIds.push(user.id);
+            if (user.role === 'admin' && user.status === 'approved' && user.telegram_id) {
+                admins.push(user);
+            }
         }
         offset += page.users.length;
         if (!page.users.length) break;
     } while (offset < total);
 
-    return adminIds;
+    return admins;
 };
 
 const runBackendUpdateUserPlan = async (userId: number, plan: string) => {
@@ -1395,7 +1415,7 @@ const withUserRequestLock = async <T>(
     action: () => Promise<T>,
     waitForTurn = false
 ): Promise<T | undefined> => {
-    const userId = Number(ctx.from?.id);
+    const userId = Number(ctx.state.accountId);
     if (!Number.isSafeInteger(userId) || userId <= 0) return undefined;
     while (activeUserRequests.has(userId)) {
         if (!waitForTurn) {
@@ -1463,7 +1483,7 @@ const processDocumentAlbum = async (albumKey: string) => {
 };
 
 const processUserDocumentThroughAi = async (ctx: any) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const doc = ctx.message?.document;
@@ -1547,7 +1567,7 @@ const processPhotoAlbum = async (albumKey: string) => {
     photoAlbumBuffer.delete(albumKey);
 
     const { images, caption, ctx } = album;
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId || !images.length) return;
 
     const userRecord = await getUser(userId);
@@ -1614,7 +1634,7 @@ const processPhotoAlbum = async (albumKey: string) => {
 };
 
 const processUserPhotoThroughAi = async (ctx: any) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const photos = ctx.message?.photo;
@@ -1721,9 +1741,14 @@ const getUser = async (id: number): Promise<UserRecord | undefined> => {
     const data = await runBackendGetUser(id);
     return data.user;
 };
+const getUserByTelegramId = async (telegramId: number): Promise<UserRecord | undefined> => {
+    const data = await runBackendGetUserByTelegramId(telegramId);
+    return data.user;
+};
 const addUser = async (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => {
     const defaultPrompt = await runBackendGetDefaultPrompt();
-    await runBackendUpsertTelegramUser(id, name, role, status, tgUsername, defaultPrompt?.id ?? null);
+    const result = await runBackendUpsertTelegramUser(id, name, role, status, tgUsername, defaultPrompt?.id ?? null);
+    return result.user;
 };
 
 const runBackendApplyUserPlan = async (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
@@ -1868,25 +1893,48 @@ const unlinkChoiceFlows = new Map<number, { expiresAt: number }>();
 
 // Middleware для авторизации
 bot.use(async (ctx, next) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
+    const telegramId = ctx.from?.id;
+    if (!telegramId) return;
+    ctx.state.telegramId = telegramId;
     await ensureBotI18nReady();
     const telegramLanguage = normalizeSupportedLanguage(ctx.from?.language_code);
     ctx.state.language = telegramLanguage ?? DEFAULT_LANGUAGE;
     ctx.t = createBotTranslator(() => ctx.state.language);
     const telegramUsername = ctx.from?.username?.trim() || null;
-    let userRecord = await getUser(userId);
+    let userRecord = await getUserByTelegramId(telegramId);
+
+    if (!userRecord) {
+        const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
+        userRecord = await createPendingUser(telegramId, initialName, telegramUsername, telegramLanguage);
+        if (!userRecord) userRecord = await getUserByTelegramId(telegramId);
+        if (!userRecord) {
+            console.error(`Backend did not return an account for Telegram identity ${telegramId}`);
+            return ctx.reply(ctx.t('common.serviceUnavailable'));
+        }
+
+        ctx.state.accountId = userRecord.id;
+        await syncCommandScopeForUser(telegramId, false, ctx.state.language);
+        await notifyAdminsNewRequest(userRecord);
+
+        if (!telegramUsername) {
+            return ctx.reply(ctx.t('access.requestSentNeedsName'));
+        }
+        return ctx.reply(ctx.t('access.requestSent'));
+    }
+
+    const accountId = userRecord.id;
+    ctx.state.accountId = accountId;
 
     const savedLanguage = normalizeSupportedLanguage(userRecord?.language);
     if (savedLanguage) {
         ctx.state.language = savedLanguage;
     } else if (userRecord && telegramLanguage) {
         try {
-            await updateUserLanguage(userId, telegramLanguage);
+            await updateUserLanguage(accountId, telegramLanguage);
             userRecord = { ...userRecord, language: telegramLanguage };
             ctx.state.language = telegramLanguage;
         } catch (error) {
-            console.warn(`Не удалось сохранить язык Telegram для пользователя ${userId}:`, formatSafeError(error));
+            console.warn(`Не удалось сохранить язык Telegram для аккаунта ${accountId}:`, formatSafeError(error));
         }
     }
 
@@ -1895,67 +1943,48 @@ bot.use(async (ctx, next) => {
     if (isAdminByDb && userRecord) {
         const fallbackName = userRecord?.name || ctx.from?.first_name || 'Admin';
         const defaultPrompt = await runBackendGetDefaultPrompt();
-        if (userRecord.tg_username !== telegramUsername) {
-            await updateUserTelegramUsername(userId, telegramUsername);
-            userRecord = (await getUser(userId)) || userRecord;
+        if (userRecord.telegram_username !== telegramUsername) {
+            await updateUserTelegramUsername(accountId, telegramUsername);
+            userRecord = (await getUser(accountId)) || userRecord;
         }
 
         if (userRecord && !userRecord.selected_prompt_id) {
-            if (defaultPrompt) await updateUserPrompt(userId, defaultPrompt.id);
+            if (defaultPrompt) await updateUserPrompt(accountId, defaultPrompt.id);
         }
         if (userRecord) {
             const normalizedPlan = parsePlanFromDb(userRecord.plan);
             if (userRecord.plan !== normalizedPlan) {
-                await updateUserPlan(userId, normalizedPlan);
-                userRecord = (await getUser(userId)) || userRecord;
+                await updateUserPlan(accountId, normalizedPlan);
+                userRecord = (await getUser(accountId)) || userRecord;
             }
         }
 
-        await syncCommandScopeForUser(userId, true, ctx.state.language);
+        await syncCommandScopeForUser(telegramId, true, ctx.state.language);
         ctx.state.role = 'admin';
         ctx.state.userName = fallbackName;
         return next();
     }
 
-    if (!userRecord) {
-        const initialName = telegramUsername ? (ctx.from?.first_name || null) : null;
-        const pendingUser = await createPendingUser(userId, initialName, telegramUsername, telegramLanguage);
-        await syncCommandScopeForUser(userId, false, ctx.state.language);
-
-        if (pendingUser) {
-            await notifyAdminsNewRequest(pendingUser);
-        } else {
-            const freshUser = await getUser(userId);
-            if (freshUser) await notifyAdminsNewRequest(freshUser);
-        }
-
-        if (!telegramUsername) {
-            return ctx.reply(ctx.t('access.requestSentNeedsName'));
-        }
-
-        return ctx.reply(ctx.t('access.requestSent'));
-    }
-
-    if (userRecord.tg_username !== telegramUsername) {
-        await updateUserTelegramUsername(userId, telegramUsername);
-        userRecord = (await getUser(userId)) || userRecord;
+    if (userRecord.telegram_username !== telegramUsername) {
+        await updateUserTelegramUsername(accountId, telegramUsername);
+        userRecord = (await getUser(accountId)) || userRecord;
     }
 
     if (userRecord.status === 'banned') {
-        const ban = (await runBackendGetBanRecord(userId)).ban;
+        const ban = (await runBackendGetBanRecord(accountId)).ban;
         const reason = ban?.reason ?? ctx.t('access.noReason');
         const date = ban?.banned_at ?? ctx.t('access.unknownDate');
-        await syncCommandScopeForUser(userId, false, ctx.state.language);
+        await syncCommandScopeForUser(telegramId, false, ctx.state.language);
         return ctx.reply(ctx.t('access.blocked', { reason, date }));
     }
 
     if (userRecord.status === 'none') {
         const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
-        if (text === '/link' || text === '/cancellink' || linkCodeFlows.has(userId)) {
+        if (text === '/link' || text === '/cancellink' || linkCodeFlows.has(accountId)) {
             return next();
         }
         const savedName = await maybeCapturePendingName(ctx, userRecord, text);
-        await syncCommandScopeForUser(userId, false, ctx.state.language);
+        await syncCommandScopeForUser(telegramId, false, ctx.state.language);
 
         if (savedName) {
             return ctx.reply(ctx.t('access.nameSaved'));
@@ -1969,27 +1998,27 @@ bot.use(async (ctx, next) => {
     }
 
     if (userRecord.status === 'disapproved') {
-        await syncCommandScopeForUser(userId, false, ctx.state.language);
+        await syncCommandScopeForUser(telegramId, false, ctx.state.language);
         return ctx.reply(ctx.t('access.rejected'));
     }
 
     if (userRecord.role !== 'user') {
-        await updateUserRole(userId, 'user');
-        userRecord = (await getUser(userId)) || userRecord;
+        await updateUserRole(accountId, 'user');
+        userRecord = (await getUser(accountId)) || userRecord;
     }
     if (!userRecord.selected_prompt_id) {
         const defaultPrompt = await runBackendGetDefaultPrompt();
-        if (defaultPrompt) await updateUserPrompt(userId, defaultPrompt.id);
+        if (defaultPrompt) await updateUserPrompt(accountId, defaultPrompt.id);
     }
     {
         const normalizedPlan = parsePlanFromDb(userRecord.plan);
         if (userRecord.plan !== normalizedPlan) {
-            await updateUserPlan(userId, normalizedPlan);
-            userRecord = (await getUser(userId)) || userRecord;
+            await updateUserPlan(accountId, normalizedPlan);
+            userRecord = (await getUser(accountId)) || userRecord;
         }
     }
 
-    await syncCommandScopeForUser(userId, false, ctx.state.language);
+    await syncCommandScopeForUser(telegramId, false, ctx.state.language);
     ctx.state.role = 'user';
     ctx.state.userName = userRecord.name || ctx.from?.first_name || ctx.t('roles.user');
     return next();
@@ -2001,7 +2030,7 @@ bot.telegram.setMyCommands(buildBotCommands(false, (key, options) => (
 
 const showMenu = async (ctx: any) => {
     const isAdmin = ctx.state.role === 'admin';
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     const userRecord = userId ? await getUser(userId) : undefined;
     const activePrompt = userRecord && userId
         ? await resolvePromptForUser(userId)
@@ -2072,7 +2101,7 @@ const showMenu = async (ctx: any) => {
 };
 
 const handleClear = async (ctx: any) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     renameFlows.delete(userId);
     customPromptEditFlows.delete(userId);
@@ -2350,7 +2379,7 @@ const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id:
 
     const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID
         ? CUSTOM_PROMPT_ID
-        : (await resolvePromptForUser(ctx.from.id)).id;
+        : (await resolvePromptForUser(ctx.state.accountId)).id;
     const text = ctx.t('prompt.choose');
     const keyboard = buildPromptListKeyboard(
         prompts,
@@ -2386,7 +2415,7 @@ const buildModelListKeyboard = (
 };
 
 const handleModelList = async (ctx: any) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     try {
         const data = await runBackendGetModels(userId);
@@ -2406,7 +2435,7 @@ const handleModelList = async (ctx: any) => {
 const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, prompt: PromptRecord) => {
     const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID
         ? CUSTOM_PROMPT_ID
-        : (await resolvePromptForUser(ctx.from.id)).id;
+        : (await resolvePromptForUser(ctx.state.accountId)).id;
     const selected = prompt.id === currentPromptId;
     const defaultMark = prompt.is_default ? ctx.t('prompt.cardDefaultMark') : '';
     const selectedMark = selected ? ctx.t('prompt.cardSelectedMark') : '';
@@ -2446,9 +2475,9 @@ const parsePipeParts = (text: string) => {
     return parts;
 };
 
-const getUserDisplayName = (user: { name: string | null; tg_username: string | null; id: number }) => {
+const getUserDisplayName = (user: { name: string | null; telegram_username: string | null; id: number }) => {
     if (user.name && user.name.trim()) return user.name.trim();
-    if (user.tg_username && user.tg_username.trim()) return `@${user.tg_username.trim()}`;
+    if (user.telegram_username && user.telegram_username.trim()) return `@${user.telegram_username.trim()}`;
     return `ID ${user.id}`;
 };
 
@@ -2588,7 +2617,7 @@ const renderAdminUsersList = async (ctx: any, page: number, mode: 'reply' | 'edi
     }
 
     const rows = data.users;
-    const noteStatsMap = await runBackendGetNoteStatsForUsers(ctx.from.id, rows.map(r => r.id));
+    const noteStatsMap = await runBackendGetNoteStatsForUsers(ctx.state.accountId, rows.map(r => r.id));
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const text = ctx.t('admin.usersList', { page: safePage + 1, pages, total });
     const keyboard = buildAdminUsersListKeyboard(rows, safePage, total, noteStatsMap, ctx.t);
@@ -2607,7 +2636,7 @@ const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mod
     const subscriptionEnds = subscription?.ends_at || ctx.t('admin.forever');
     const text = ctx.t('admin.userCard', {
         id: user.id, name: user.name ?? ctx.t('admin.notSpecified'),
-        username: user.tg_username ? `@${user.tg_username}` : ctx.t('admin.noneValue'),
+        username: user.telegram_username ? `@${user.telegram_username}` : ctx.t('admin.noneValue'),
         role: user.role === 'admin' ? ctx.t('roles.admin') : ctx.t('roles.user'),
         status: ctx.t(`admin.statuses.${user.status}`), plan: getPlanLabel(plan), subscriptionEnds,
         context: getContextWindowText(user), messagesLimit: ctx.t('common.unlimited'),
@@ -2657,7 +2686,7 @@ const renderPendingList = async (ctx: any, page: number, mode: 'reply' | 'edit' 
 };
 
 const renderPendingCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
-    const username = user.tg_username ? `@${user.tg_username}` : ctx.t('admin.noneValue');
+    const username = user.telegram_username ? `@${user.telegram_username}` : ctx.t('admin.noneValue');
     const text = ctx.t('admin.requestCard', { id: user.id, name: user.name ?? ctx.t('admin.notSpecified'), username, status: ctx.t(`admin.statuses.${user.status}`) });
     const keyboard = buildPendingCardKeyboard(user.id, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
@@ -2683,7 +2712,7 @@ const renderBannedList = async (ctx: any, page: number, mode: 'reply' | 'edit' =
 
 const renderBannedCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
     const ban = (await runBackendGetBanRecord(user.id)).ban;
-    const text = ctx.t('admin.banCard', { id: user.id, name: user.name ?? ctx.t('admin.notSpecified'), username: user.tg_username ? `@${user.tg_username}` : ctx.t('admin.noneValue'), reason: ban?.reason ?? ctx.t('access.noReason'), date: ban?.banned_at ?? ctx.t('common.unknown') });
+    const text = ctx.t('admin.banCard', { id: user.id, name: user.name ?? ctx.t('admin.notSpecified'), username: user.telegram_username ? `@${user.telegram_username}` : ctx.t('admin.noneValue'), reason: ban?.reason ?? ctx.t('access.noReason'), date: ban?.banned_at ?? ctx.t('common.unknown') });
     const keyboard = buildBannedCardKeyboard(user.id, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
@@ -2726,26 +2755,25 @@ const unbanUserAccess = async (targetUserId: number) => {
 };
 
 const notifyAdminsNewRequest = async (user: UserRecord) => {
-    let adminIds: number[] = [];
+    let admins: UserRecord[] = [];
     try {
-        adminIds = await getDatabaseAdminIds();
+        admins = await getDatabaseTelegramAdmins();
     } catch (err) {
         console.warn('Не удалось получить список администраторов из БД:', formatSafeError(err));
         return;
     }
 
-    if (!adminIds.length) {
+    if (!admins.length) {
         console.warn('В БД нет подтверждённых администраторов: заявка не была отправлена.');
     }
 
-    for (const adminId of adminIds) {
+    for (const admin of admins) {
         try {
-            const admin = await getUser(adminId);
-            const t = (key: string, options?: Record<string, unknown>) => translateBot(admin?.language, key, options);
-            const usernameText = user.tg_username ? `@${user.tg_username}` : t('admin.noneValue');
+            const t = (key: string, options?: Record<string, unknown>) => translateBot(admin.language, key, options);
+            const usernameText = user.telegram_username ? `@${user.telegram_username}` : t('admin.noneValue');
             const text = t('admin.newRequestNotification', {
                 id: user.id,
-                profile: `tg://user?id=${user.id}`,
+                profile: user.telegram_id ? `tg://user?id=${user.telegram_id}` : '',
                 name: user.name ?? t('admin.notSpecified'),
                 username: usernameText
             });
@@ -2756,9 +2784,9 @@ const notifyAdminsNewRequest = async (user: UserRecord) => {
                 ],
                 [Markup.button.callback(t('admin.buttons.ban'), `mod:ban:${user.id}:0`)]
             ]);
-            await bot.telegram.sendMessage(adminId, text, keyboard);
+            await bot.telegram.sendMessage(admin.telegram_id!, text, keyboard);
         } catch (err) {
-            console.warn(`Не удалось отправить заявку админу ${adminId}`);
+            console.warn(`Не удалось отправить заявку админу ${admin.id}`);
         }
     }
 };
@@ -2771,7 +2799,7 @@ bot.command('menu', async (ctx) => { await showMenu(ctx); });
 bot.hears(MAIN_MENU_TRIGGER_BUTTONS, async (ctx) => { await showMenu(ctx); });
 
 bot.command('prompts', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -2800,7 +2828,7 @@ bot.command('prompts', async (ctx) => {
 });
 
 bot.command('prompt_use', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -2830,7 +2858,7 @@ bot.command('prompt_add', async (ctx) => {
     if (!content) return ctx.reply(ctx.t('adminPrompt.contentEmpty'));
 
     try {
-        const result = await runBackendCreatePrompt(ctx.from.id, name, description, content);
+        const result = await runBackendCreatePrompt(ctx.state.accountId, name, description, content);
         return ctx.reply(ctx.t('adminPrompt.added', { name, id: result.prompt_id }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
@@ -2871,7 +2899,7 @@ bot.command('prompt_set', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendUpdatePromptContent(ctx.from.id, promptId, content);
+        await runBackendUpdatePromptContent(ctx.state.accountId, promptId, content);
         return ctx.reply(ctx.t('adminPrompt.contentUpdated', { name: data.prompt.name }));
     } catch {
         return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
@@ -2891,7 +2919,7 @@ bot.command('prompt_desc', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendUpdatePromptDescription(ctx.from.id, promptId, description);
+        await runBackendUpdatePromptDescription(ctx.state.accountId, promptId, description);
         return ctx.reply(ctx.t('adminPrompt.descriptionUpdated', { name: data.prompt.name }));
     } catch {
         return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
@@ -2910,7 +2938,7 @@ bot.command('prompt_rename', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendUpdatePromptName(ctx.from.id, promptId, newName);
+        await runBackendUpdatePromptName(ctx.state.accountId, promptId, newName);
         return ctx.reply(ctx.t('adminPrompt.renamed', { oldName: data.prompt.name, newName }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
@@ -2929,7 +2957,7 @@ bot.command('prompt_default', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendSetDefaultPrompt(ctx.from.id, promptId);
+        await runBackendSetDefaultPrompt(ctx.state.accountId, promptId);
         return ctx.reply(ctx.t('adminPrompt.defaultUpdated', { name: data.prompt.name }));
     } catch {
         return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
@@ -2946,7 +2974,7 @@ bot.command('prompt_delete', async (ctx) => {
     try {
         const data = await runBackendGetPrompt(promptId);
         const name = data.prompt.name;
-        await runBackendDeletePrompt(ctx.from.id, promptId);
+        await runBackendDeletePrompt(ctx.state.accountId, promptId);
         return ctx.reply(ctx.t('adminPrompt.deleted', { name }));
     } catch (err: any) {
         if (axios.isAxiosError(err)) {
@@ -2968,10 +2996,10 @@ bot.command('add', async (ctx) => {
 
     if (!newUserId || Number.isNaN(newUserId)) return ctx.reply(ctx.t('admin.addFormat'));
 
-    await addUser(newUserId, newUserName, 'user', 'approved', null);
-    await runBackendUnbanUser(newUserId);
-    await updateUserStatus(newUserId, 'approved');
-    ctx.reply(ctx.t('admin.userAdded', { name: newUserName, id: newUserId }));
+    const newUser = await addUser(newUserId, newUserName, 'user', 'approved', null);
+    await runBackendUnbanUser(newUser.id);
+    await updateUserStatus(newUser.id, 'approved');
+    ctx.reply(ctx.t('admin.userAdded', { name: newUserName, id: newUser.id }));
 });
 
 // Команда удаления пользователя (только для админов)
@@ -2992,7 +3020,7 @@ bot.command('remove', async (ctx) => {
 
 bot.command('ban', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
-    const adminId = ctx.from?.id;
+    const adminId = ctx.state.accountId;
     if (!adminId) return;
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -3006,7 +3034,9 @@ bot.command('ban', async (ctx) => {
     await banUserAccess(targetUserId, adminId, reason);
     ctx.reply(ctx.t('admin.userBanned', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 
-    bot.telegram.sendMessage(targetUserId, translateBot(targetUser.language, 'admin.notifications.bannedReason', { reason })).catch(() => undefined);
+    if (targetUser.telegram_id) {
+        bot.telegram.sendMessage(targetUser.telegram_id, translateBot(targetUser.language, 'admin.notifications.bannedReason', { reason })).catch(() => undefined);
+    }
 });
 
 bot.command('unban', async (ctx) => {
@@ -3023,12 +3053,14 @@ bot.command('unban', async (ctx) => {
     await unbanUserAccess(targetUserId);
     ctx.reply(ctx.t('admin.userUnbanned', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 
-    bot.telegram.sendMessage(targetUserId, translateBot(targetUser.language, 'admin.notifications.unbanned')).catch(() => undefined);
+    if (targetUser.telegram_id) {
+        bot.telegram.sendMessage(targetUser.telegram_id, translateBot(targetUser.language, 'admin.notifications.unbanned')).catch(() => undefined);
+    }
 });
 
 // Команда смены имени
 bot.command('rename', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -3107,7 +3139,7 @@ bot.command('history_user', async (ctx) => {
         ? Math.max(1, Math.min(20, rawLimit))
         : 10;
 
-    const { messages } = await runBackendGetUserHistory(ctx.from.id, targetUserId, limit);
+    const { messages } = await runBackendGetUserHistory(ctx.state.accountId, targetUserId, limit);
     return ctx.reply(formatRecentHistoryRows(targetUserId, messages, ctx.t));
 });
 
@@ -3126,7 +3158,7 @@ bot.command('history_delete', async (ctx) => {
 
     if (secondArg === 'user' || secondArg === 'assistant' || secondArg === 'all') {
         const role: ChatRole | 'all' = secondArg;
-        const result = await runBackendDeleteUserHistoryByRole(ctx.from.id, targetUserId, role);
+        const result = await runBackendDeleteUserHistoryByRole(ctx.state.accountId, targetUserId, role);
         if (!result.deleted) {
             return ctx.reply(ctx.t('adminHistory.nothingDeletedRole', { id: targetUserId, role }));
         }
@@ -3141,25 +3173,25 @@ bot.command('history_delete', async (ctx) => {
     const mode = (parts[3] || '').toLowerCase();
     let result: { deleted: number };
     if (mode === 'tg') {
-        result = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'tg');
+        result = await runBackendDeleteUserHistoryMessage(ctx.state.accountId, targetUserId, messageId, 'tg');
         if (!result.deleted) {
             return ctx.reply(ctx.t('adminHistory.notFoundTg', { id: targetUserId, messageId }));
         }
         return ctx.reply(ctx.t('adminHistory.deletedTg', { count: result.deleted, id: targetUserId, messageId }));
     }
     if (mode === 'db') {
-        result = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'db');
+        result = await runBackendDeleteUserHistoryMessage(ctx.state.accountId, targetUserId, messageId, 'db');
         if (!result.deleted) {
             return ctx.reply(ctx.t('adminHistory.notFoundDb', { id: targetUserId, messageId }));
         }
         return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.deleted, id: targetUserId, messageId }));
     }
 
-    result = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'db');
+    result = await runBackendDeleteUserHistoryMessage(ctx.state.accountId, targetUserId, messageId, 'db');
     if (result.deleted) {
         return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.deleted, id: targetUserId, messageId }));
     }
-    const tgResult = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'tg');
+    const tgResult = await runBackendDeleteUserHistoryMessage(ctx.state.accountId, targetUserId, messageId, 'tg');
     if (tgResult.deleted) {
         return ctx.reply(ctx.t('adminHistory.deletedTg', { count: tgResult.deleted, id: targetUserId, messageId }));
     }
@@ -3172,7 +3204,7 @@ bot.command('clear', (ctx) => {
 
 // ── /link — привязка к desktop-аккаунту ──
 bot.command('link', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const userRecord = await getUser(userId);
     if (!userRecord) return ctx.reply(ctx.t('link.askAdminFirst'));
@@ -3184,14 +3216,14 @@ bot.command('link', async (ctx) => {
 });
 
 bot.command('cancellink', (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     linkCodeFlows.delete(userId);
     return ctx.reply(ctx.t('link.cancelled'), buildMenuTriggerKeyboard(ctx.t));
 });
 
 bot.command('unlink', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     unlinkChoiceFlows.set(userId, { expiresAt: Date.now() + 10 * 60 * 1000 });
     return ctx.reply(
@@ -3206,10 +3238,10 @@ bot.command('unlink', async (ctx) => {
 
 bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
     const action = (ctx as any).match[1] as 'desktop' | 'telegram' | 'cancel';
-    const ownerTelegramId = Number.parseInt((ctx as any).match[2], 10);
-    const userId = ctx.from?.id;
+    const ownerAccountId = Number.parseInt((ctx as any).match[2], 10);
+    const userId = ctx.state.accountId;
 
-    if (!userId || userId !== ownerTelegramId) {
+    if (!userId || userId !== ownerAccountId) {
         await ctx.answerCbQuery(ctx.t('unlink.wrongUser'));
         return;
     }
@@ -3235,7 +3267,7 @@ bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
     try {
         const response = await axios.post(
             `${BACKEND_API_BASE_URL}/internal/link/unlink`,
-            { tg_id: userId, data_owner: action },
+            { tg_id: ctx.state.telegramId, data_owner: action },
             {
                 headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` },
                 timeout: 30000
@@ -3267,7 +3299,7 @@ bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
 });
 
 bot.command('tz', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const offset = Number.parseInt(ctx.message.text.split(' ')[1], 10);
@@ -3286,7 +3318,7 @@ bot.command('tz', async (ctx) => {
 });
 
 bot.command('tasks', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -3306,7 +3338,7 @@ bot.command('tasks', async (ctx) => {
 });
 
 bot.command('task_delete', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -3342,7 +3374,7 @@ bot.command('task_delete', async (ctx) => {
 });
 
 bot.command('chats', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3364,7 +3396,7 @@ bot.command('chats', async (ctx) => {
 });
 
 bot.command('chat_new', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3379,7 +3411,7 @@ bot.command('chat_new', async (ctx) => {
 });
 
 bot.command('chat_use', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3402,7 +3434,7 @@ bot.command('chat_use', async (ctx) => {
 });
 
 bot.command('note_add', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3434,7 +3466,7 @@ bot.command('note_add', async (ctx) => {
 });
 
 bot.command('notes', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3458,7 +3490,7 @@ bot.command('notes', async (ctx) => {
 });
 
 bot.command('note_find', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3488,7 +3520,7 @@ bot.command('note_find', async (ctx) => {
 });
 
 bot.command('note_delete', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3507,7 +3539,7 @@ bot.command('note_delete', async (ctx) => {
 });
 
 bot.command('mail_setup', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     // The command contains the app password. Remove it from Telegram immediately;
@@ -3570,7 +3602,7 @@ bot.command('mail_setup', async (ctx) => {
 });
 
 bot.command('mail_use', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -3594,7 +3626,7 @@ bot.command('mail_use', async (ctx) => {
 });
 
 bot.command('mail_limit', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3624,7 +3656,7 @@ bot.command('mail_limit', async (ctx) => {
 });
 
 bot.command('mail_forget', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const parts = ctx.message.text.split(' ').filter(Boolean);
     const provider = normalizeMailProvider(parts[1]);
@@ -3648,14 +3680,14 @@ bot.command('mail_forget', async (ctx) => {
 });
 
 bot.hears(TZ_BUTTON_SET_UTC_VALUES, (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     timezoneSetupFlows.set(userId, 'await_offset');
     return ctx.reply(ctx.t('timezone.enterOffset'));
 });
 
 bot.on('location', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -3712,7 +3744,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (actionId === 'prompts') {
-        const userId = ctx.from?.id;
+        const userId = ctx.state.accountId;
         if (!userId) return;
 
         const user = await getUser(userId);
@@ -3733,7 +3765,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (actionId === 'current_prompt') {
-        const userId = ctx.from?.id;
+        const userId = ctx.state.accountId;
         if (!userId) return;
 
         const user = await getUser(userId);
@@ -3770,7 +3802,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (actionId === 'context_size') {
-        const userId = ctx.from?.id;
+        const userId = ctx.state.accountId;
         if (!userId) return;
         const user = await getUser(userId);
         if (!user) {
@@ -3819,7 +3851,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (actionId === 'notes') {
-        const userId = ctx.from?.id;
+        const userId = ctx.state.accountId;
         if (!userId) return;
         await renderNotesMenuList(ctx, userId, 0, 'reply');
         return;
@@ -3841,7 +3873,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
 });
 
 bot.action(/^language:set:([a-zA-Z-]+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const language = normalizeSupportedLanguage((ctx as any).match[1]);
@@ -3853,7 +3885,7 @@ bot.action(/^language:set:([a-zA-Z-]+)$/, async (ctx) => {
     try {
         await updateUserLanguage(userId, language);
         ctx.state.language = language;
-        await syncCommandScopeForUser(userId, ctx.state.role === 'admin', language);
+        await syncCommandScopeForUser(ctx.state.telegramId, ctx.state.role === 'admin', language);
     } catch (error) {
         console.error(`Failed to update Telegram language for user ${userId}:`, formatSafeError(error));
         await ctx.answerCbQuery(ctx.t('common.serviceUnavailable'));
@@ -3872,7 +3904,7 @@ bot.action('language:back', async (ctx) => {
 });
 
 bot.action('context:change', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
@@ -3892,7 +3924,7 @@ bot.action('context:change', async (ctx) => {
 });
 
 bot.action('context:back', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (userId) contextLimitFlows.delete(userId);
     await ctx.answerCbQuery();
     await showMenu(ctx);
@@ -3915,7 +3947,7 @@ bot.action('mail:setup_help', async (ctx) => {
 });
 
 bot.action('mail:settings', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
@@ -3934,7 +3966,7 @@ bot.action('mail:settings', async (ctx) => {
 });
 
 bot.action('mail:limit:change', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
@@ -3948,7 +3980,7 @@ bot.action('mail:limit:change', async (ctx) => {
 });
 
 bot.action('mail:settings:back', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (userId) mailLimitFlows.delete(userId);
     await ctx.answerCbQuery();
     await ctx.reply(ctx.t('mail.menu'), buildMailMenuKeyboard(ctx.t));
@@ -3965,7 +3997,7 @@ bot.action('mail:instr:google', async (ctx) => {
 });
 
 bot.action('mail:forget', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     await runBackendMailForget(userId);
     await ctx.answerCbQuery(ctx.t('mail.deletedShort'));
@@ -3973,7 +4005,7 @@ bot.action('mail:forget', async (ctx) => {
 });
 
 bot.action(/^notes:list:(\d+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -3986,7 +4018,7 @@ bot.action(/^notes:list:(\d+)$/, async (ctx) => {
 });
 
 bot.action(/^notes:view:(\d+):(\d+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -4004,7 +4036,7 @@ bot.action(/^notes:view:(\d+):(\d+)$/, async (ctx) => {
 });
 
 bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -4032,7 +4064,7 @@ bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
 });
 
 bot.action(/^notes:delete:(\d+):(\d+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
@@ -4065,7 +4097,7 @@ bot.action(/^notes:delete:(\d+):(\d+)$/, async (ctx) => {
 });
 
 bot.action('notes:back:menu', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (userId) noteEditFlows.delete(userId);
     await ctx.answerCbQuery();
     await showMenu(ctx);
@@ -4106,7 +4138,9 @@ bot.action(/^mod:ok:(\d+):(\d+)$/, async (ctx) => {
 
     try {
         const target = await getUser(targetUserId);
-        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.approved'));
+        if (target?.telegram_id) {
+            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.approved'));
+        }
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
@@ -4131,7 +4165,9 @@ bot.action(/^mod:no:(\d+):(\d+)$/, async (ctx) => {
 
     try {
         const target = await getUser(targetUserId);
-        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.rejected'));
+        if (target?.telegram_id) {
+            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.rejected'));
+        }
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
@@ -4146,7 +4182,7 @@ bot.action(/^mod:ban:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    const adminId = ctx.from?.id;
+    const adminId = ctx.state.accountId;
     if (!adminId) return;
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
@@ -4159,7 +4195,9 @@ bot.action(/^mod:ban:(\d+):(\d+)$/, async (ctx) => {
     }
 
     try {
-        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.banned'));
+        if (target?.telegram_id) {
+            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.banned'));
+        }
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
@@ -4214,7 +4252,9 @@ bot.action(/^mod:unban:(\d+):(\d+)$/, async (ctx) => {
 
     try {
         const target = await getUser(targetUserId);
-        await bot.telegram.sendMessage(targetUserId, translateBot(target?.language, 'admin.notifications.unbanned'));
+        if (target?.telegram_id) {
+            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.unbanned'));
+        }
     } catch (err) {
         console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
@@ -4298,7 +4338,7 @@ bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|f
         return;
     }
 
-    const adminId = ctx.from?.id;
+    const adminId = ctx.state.accountId;
     if (!adminId) return;
     const userId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
@@ -4329,7 +4369,7 @@ bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    const adminId = ctx.from?.id;
+    const adminId = ctx.state.accountId;
     if (!adminId) return;
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
@@ -4352,7 +4392,7 @@ bot.action(/^usr:msg:ask:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    const adminId = ctx.from?.id;
+    const adminId = ctx.state.accountId;
     if (!adminId) return;
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
@@ -4372,7 +4412,7 @@ bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
         await ctx.answerCbQuery(ctx.t('common.adminOnly'));
         return;
     }
-    const adminId = ctx.from?.id;
+    const adminId = ctx.state.accountId;
     if (!adminId) return;
 
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
@@ -4391,7 +4431,9 @@ bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
     const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
-    bot.telegram.sendMessage(targetUserId, translateBot(user.language, 'admin.notifications.banned')).catch(() => undefined);
+    if (user.telegram_id) {
+        bot.telegram.sendMessage(user.telegram_id, translateBot(user.language, 'admin.notifications.banned')).catch(() => undefined);
+    }
     await ctx.answerCbQuery(ctx.t('admin.banned'));
 });
 
@@ -4417,7 +4459,9 @@ bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
     const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
-    bot.telegram.sendMessage(targetUserId, translateBot(user.language, 'admin.notifications.unbanned')).catch(() => undefined);
+    if (user.telegram_id) {
+        bot.telegram.sendMessage(user.telegram_id, translateBot(user.language, 'admin.notifications.unbanned')).catch(() => undefined);
+    }
     await ctx.answerCbQuery(ctx.t('admin.unbanned'));
 });
 
@@ -4451,7 +4495,7 @@ bot.action(/^ai_send:(\d+)$/, async (ctx) => {
         return;
     }
 
-    const adminId = ctx.from?.id;
+    const adminId = ctx.state.accountId;
     if (!adminId) return;
 
     const targetId = Number.parseInt((ctx as any).match[1], 10);
@@ -4465,13 +4509,13 @@ bot.action(/^ai_send:(\d+)$/, async (ctx) => {
     adminAiMessageFlow.set(adminId, targetId);
     await ctx.answerCbQuery(ctx.t('admin.awaitText'));
     await ctx.reply(
-        ctx.t('admin.aiMessagePrompt', { user: targetUser.name || targetUser.tg_username || targetId }),
+        ctx.t('admin.aiMessagePrompt', { user: targetUser.name || targetUser.telegram_username || targetId }),
         { parse_mode: 'Markdown' }
     );
 });
 
 bot.action('prompt:list', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -4490,7 +4534,7 @@ bot.action('prompt:list', async (ctx) => {
 });
 
 bot.action('prompt:custom:view', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -4509,7 +4553,7 @@ bot.action('prompt:custom:view', async (ctx) => {
 });
 
 bot.action('prompt:custom:use', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -4543,7 +4587,7 @@ bot.action('prompt:custom:use', async (ctx) => {
 });
 
 bot.action('prompt:custom:edit', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const user = await getUser(userId);
     if (!user) {
@@ -4569,7 +4613,7 @@ bot.action('prompt:custom:keep', async (ctx) => {
 });
 
 bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -4598,7 +4642,7 @@ bot.action(/^prompt:view:(\d+)$/, async (ctx) => {
 });
 
 bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const user = await getUser(userId);
@@ -4638,7 +4682,7 @@ bot.action(/^prompt:noop:(\d+)$/, async (ctx) => {
 });
 
 bot.action('prompt:cancel', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (userId) {
         customPromptEditFlows.delete(userId);
     }
@@ -4649,7 +4693,7 @@ bot.action('prompt:cancel', async (ctx) => {
 // ── Model selector callbacks ─────────────────────────────────────────────────
 
 bot.action(/^model:select:(.+)$/, async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
     const rawId = (ctx as any).match[1] as string;
     const modelId = rawId === 'auto' ? null : rawId;
@@ -4685,7 +4729,7 @@ const requestRejectionComment = async (
     confirmationId: string,
     label: string,
 ) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -4716,7 +4760,7 @@ const rejectWithOptionalComment = async (
 bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const confirmationId = ctx.match[2];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
 
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.userUnknown'));
@@ -4805,7 +4849,7 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
 // "Always" confirmation sub-flow
 bot.action(/^pcconfirm:always_confirm:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -4875,7 +4919,7 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
 bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const confirmationId = ctx.match[2];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
 
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.userUnknown'));
@@ -4930,7 +4974,7 @@ bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
 bot.action(/^vclick:(allow|reject):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const confirmationId = ctx.match[2];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
 
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.userUnknown'));
@@ -4978,7 +5022,7 @@ bot.action(/^vclick:(allow|reject):(.+)$/, async (ctx) => {
 
 bot.action(/^devops:allow:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5011,7 +5055,7 @@ bot.action(/^devops:allow:(.+)$/, async (ctx) => {
 
 bot.action(/^devops:reject:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5033,7 +5077,7 @@ bot.action(/^devops:reject_comment:(.+)$/, async (ctx) => {
 
 bot.action(/^email:allow:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5057,7 +5101,7 @@ bot.action(/^email:allow:(.+)$/, async (ctx) => {
 
 bot.action(/^email:reject:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5078,7 +5122,7 @@ bot.action(/^email:reject_comment:(.+)$/, async (ctx) => {
 
 bot.action(/^devops:always:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5096,7 +5140,7 @@ bot.action(/^devops:always:(.+)$/, async (ctx) => {
 
 bot.action(/^devops:always_confirm:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5144,7 +5188,7 @@ bot.action(/^devops:always_cancel:(.+)$/, async (ctx) => {
 
 bot.action(/^devops:review:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5171,7 +5215,7 @@ bot.action(/^devops:review:(.+)$/, async (ctx) => {
 
 bot.action(/^devops:creds_apply:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5196,7 +5240,7 @@ bot.action(/^devops:creds_apply:(.+)$/, async (ctx) => {
 
 bot.action(/^devops:creds_reject:(.+)$/, async (ctx) => {
     const confirmationId = ctx.match[1];
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) {
         await ctx.answerCbQuery(ctx.t('confirmations.error'));
         return;
@@ -5746,7 +5790,7 @@ const processUserTextThroughAi = async (
         documents?: Array<{ filename: string; base64: string }>;
     }
 ) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return null;
 
     let userText = rawText.trim();
@@ -6227,7 +6271,7 @@ const processUserTextThroughAi = async (
 };
 
 bot.on('text', async (ctx) => {
-    const userId = ctx.from?.id;
+    const userId = ctx.state.accountId;
     if (!userId) return;
 
     const userText = ctx.message.text.trim();
@@ -6274,7 +6318,7 @@ bot.on('text', async (ctx) => {
         try {
             const response = await axios.post(
                 `${BACKEND_API_BASE_URL}/internal/link/verify`,
-                { code, tg_id: userId, tg_username: ctx.from?.username || null },
+                { code, tg_id: ctx.state.telegramId, tg_username: ctx.from?.username || null },
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` } }
             );
             if (response.data?.ok) {
@@ -6634,7 +6678,7 @@ const processUserVoiceThroughAi = async (ctx: any) => {
             return;
         }
         const mimeType = voice.mime_type || 'audio/ogg';
-        const userId = Math.floor(Number(ctx.from.id));
+        const userId = Math.floor(Number(ctx.state.accountId));
         const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
         const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
 

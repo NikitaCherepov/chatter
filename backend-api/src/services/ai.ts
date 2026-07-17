@@ -5871,7 +5871,7 @@ export const sendMessageThroughAi = async (
     try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || user.tg_username || 'Пользователь', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${dicePromptHint}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || 'Пользователь', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${dicePromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.

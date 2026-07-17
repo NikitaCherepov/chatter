@@ -329,9 +329,10 @@ old/merged account ID
 ### ID resolution
 
 - Desktop/API JWTs resolve their token subject through `getAuthPrincipal()` and `resolveAccountId()`.
-- Telegram-facing internal requests may still send a Telegram user ID. `resolveInternalAccountId()` first looks up the `telegram` identity and then follows redirects.
-- New reads and writes must use the resolved canonical account ID.
-- Internal user DTOs keep `id = Telegram ID` when available for compatibility with the existing bot, and expose the canonical ID separately as `account_id`. They also include `telegram_id` and `identities`.
+- Every internal endpoint that accepts `user_id`, `actor_user_id`, `banned_by`, or an `:id` path parameter accepts a canonical account ID only. Redirects are followed, but Telegram IDs are never guessed from these values.
+- Telegram IDs are accepted only by explicitly Telegram-scoped boundaries such as `upsert-telegram`, `create-pending`, link/unlink verification, and `GET /internal/users/by-telegram/:telegramId`.
+- Internal user DTOs always expose the canonical ID in both `id` and `account_id`. Telegram identity data is separate: `telegram_id`, `telegram_username`, and `identities`.
+- Runtime code must never compare a Telegram ID with `users.id` or use one as a fallback for the other.
 
 ### Linking Desktop and Telegram
 
@@ -373,7 +374,7 @@ The caller chooses `data_owner: "desktop" | "telegram"`:
 1. converts legacy `api_accounts` rows into `password` identities;
 2. converts Telegram users and old `linked_tg_id`/merge records into `telegram` identities, canonical accounts, and redirects;
 3. moves all account-owned references and validates that no migrated source IDs remain in data tables;
-4. only after successful validation drops `api_accounts`, `account_merge_log`, `users.linked_tg_id`, and `users.merged_into_account_id`.
+4. only after successful validation removes the old account storage and duplicated Telegram username column from `users`; Telegram usernames then live only in `account_identities.username`.
 
 Pinecone migration runs separately. Until a namespace is copied successfully, vector-memory searches read both the canonical and legacy namespaces. A failed pass leaves the legacy namespace readable and can be retried on a later startup.
 
@@ -722,7 +723,8 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
 - User lifecycle/plan/ban:
   - `POST /internal/users/upsert-telegram` → `{ tg_id, name, role?, status?, tg_username?, default_prompt_id? }`
   - `POST /internal/users/create-pending` → `{ tg_id, name?, tg_username?, default_prompt_id? }`
-  - `GET /internal/users/:id`
+  - `GET /internal/users/by-telegram/:telegramId` — explicit Telegram identity lookup; returns a canonical account DTO
+  - `GET /internal/users/:id` — canonical account ID only
   - `PUT /internal/users/:id/tg-username` → `{ user_id?, tg_username }`
   - `GET /internal/users?filter=all|pending|banned&limit=&offset=`
   - `PUT /internal/users/:id/status|role|name`

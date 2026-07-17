@@ -545,7 +545,8 @@ export const linkAccountToTelegram = (
   if (!targetAccountId || !getRawAccountById(targetAccountId)) {
     throw new Error('telegram_user_not_found');
   }
-  ensureTelegramIdentity(targetAccountId, telegramId, username || getRawAccountById(targetAccountId)?.tg_username || null);
+  const existingTelegramIdentity = getTelegramIdentityForAccount(targetAccountId);
+  ensureTelegramIdentity(targetAccountId, telegramId, username || existingTelegramIdentity?.username || null);
   return mergeAccounts(sourceAccountId, targetAccountId, 'telegram_link');
 };
 
@@ -571,12 +572,11 @@ export const unlinkTelegramFromAccount = (
   const detachedAccountId = allocateAccountId();
   const detachedTelegram = dataOwner === 'desktop';
   db.prepare(`
-    INSERT INTO users (id, name, role, is_admin, status, plan, tg_username, language)
-    VALUES (?, ?, 'user', 0, 'approved', 'free', ?, ?)
+    INSERT INTO users (id, name, role, is_admin, status, plan, language)
+    VALUES (?, ?, 'user', 0, 'approved', 'free', ?)
   `).run(
     detachedAccountId,
     account.name,
-    detachedTelegram ? telegramIdentity.username : null,
     account.language ?? null,
   );
 
@@ -586,7 +586,6 @@ export const unlinkTelegramFromAccount = (
       SET account_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(detachedAccountId, telegramIdentity.id);
-    db.prepare('UPDATE users SET tg_username = NULL WHERE id = ?').run(dataAccountId);
   } else {
     db.prepare(`
       UPDATE account_identities
@@ -676,6 +675,7 @@ const dropLegacyAccountStorage = () => {
   if (tableExists('account_merge_log')) db.exec('DROP TABLE account_merge_log');
   if (tableHasColumn('users', 'linked_tg_id')) db.exec('ALTER TABLE users DROP COLUMN linked_tg_id');
   if (tableHasColumn('users', 'merged_into_account_id')) db.exec('ALTER TABLE users DROP COLUMN merged_into_account_id');
+  if (tableHasColumn('users', 'tg_username')) db.exec('ALTER TABLE users DROP COLUMN tg_username');
 };
 
 const validateFinalMigration = (
@@ -763,8 +763,11 @@ export const runAccountIdentityMigration = () => {
   const linkedSources = new Set(legacyLinks.map(link => Number(link.source_account_id)));
 
   db.transaction(() => {
-    const users = db.prepare('SELECT id, tg_username FROM users ORDER BY id ASC')
+    const users = db.prepare(tableHasColumn('users', 'tg_username')
+      ? 'SELECT id, tg_username FROM users ORDER BY id ASC'
+      : 'SELECT id, NULL AS tg_username FROM users ORDER BY id ASC')
       .all() as Array<{ id: number; tg_username: string | null }>;
+    const legacyTelegramUsernames = new Map(users.map(user => [user.id, user.tg_username]));
 
     for (const user of users) {
       const existingIdentities = getAccountIdentities(user.id);
@@ -815,7 +818,7 @@ export const runAccountIdentityMigration = () => {
       ensureTelegramIdentity(
         targetAccountId,
         Number(getTelegramIdentityForAccount(targetAccountId)?.provider_subject || targetAccountId),
-        target.tg_username || null,
+        legacyTelegramUsernames.get(targetAccountId) || null,
       );
       if (source) {
         if (link.already_merged) {
