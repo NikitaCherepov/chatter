@@ -79,6 +79,38 @@ export const deleteNote = (userId: number, noteId: number) => db
   .run(userId, noteId)
   .changes > 0;
 
+export const updateNoteContent = (userId: number, noteId: number, plan: UserPlan, content: string) => {
+  const normalizedContent = (content || '').trim();
+  if (!normalizedContent) return { ok: false as const, error: 'content_required' };
+  if (normalizedContent.length > PLAN_NOTE_CONTENT_LIMITS[plan]) return { ok: false as const, error: 'content_too_long' };
+  const result = db.prepare(`
+    UPDATE notes SET content = ?, updated_at = ? WHERE user_id = ? AND id = ?
+  `).run(normalizedContent, Math.floor(Date.now() / 1000), userId, noteId);
+  return result.changes > 0
+    ? { ok: true as const }
+    : { ok: false as const, error: 'note_not_found' };
+};
+
+export const getNoteStats = (userId: number) => db.prepare(`
+  SELECT ? AS user_id,
+         COUNT(*) AS notes_count,
+         COALESCE(SUM(LENGTH(COALESCE(title, '')) + LENGTH(COALESCE(content, ''))), 0) AS notes_chars
+  FROM notes WHERE user_id = ?
+`).get(userId, userId) as { user_id: number; notes_count: number; notes_chars: number };
+
+export const getNoteStatsForUsers = (userIds: number[]) => {
+  const unique = [...new Set(userIds.filter(id => Number.isFinite(id) && id > 0))];
+  if (!unique.length) return [] as Array<{ user_id: number; notes_count: number; notes_chars: number }>;
+  const placeholders = unique.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT user_id, COUNT(*) AS notes_count,
+           COALESCE(SUM(LENGTH(COALESCE(title, '')) + LENGTH(COALESCE(content, ''))), 0) AS notes_chars
+    FROM notes WHERE user_id IN (${placeholders}) GROUP BY user_id
+  `).all(...unique) as Array<{ user_id: number; notes_count: number; notes_chars: number }>;
+  const byUser = new Map(rows.map(row => [row.user_id, row]));
+  return unique.map(userId => byUser.get(userId) || { user_id: userId, notes_count: 0, notes_chars: 0 });
+};
+
 export const getNoteById = (userId: number, noteId: number): NoteDto | null => {
   const row = db.prepare(`
     SELECT id, title, content, created_at, updated_at

@@ -60,6 +60,23 @@ export const getPendingTaskCount = (userId: number) => (
   db.prepare('SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND status = \'pending\'').get(userId) as { count: number }
 ).count;
 
+export const getUserTaskById = (userId: number, taskId: number): TaskDto | null => {
+  const row = db.prepare(`
+    SELECT id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
+    FROM tasks WHERE user_id = ? AND id = ? LIMIT 1
+  `).get(userId, taskId) as any;
+  if (!row) return null;
+  return {
+    id: Number(row.id), execute_at: Number(row.execute_at), task_type: row.task_type,
+    payload: String(row.payload || ''), status: row.status,
+    recurrence_type: row.recurrence_type,
+    recurrence_weekday: row.recurrence_weekday == null ? null : Number(row.recurrence_weekday),
+    timezone_offset: row.timezone_offset == null ? null : Number(row.timezone_offset),
+    notify_mode: row.notify_mode,
+    notify_condition: row.notify_condition == null ? null : String(row.notify_condition),
+  };
+};
+
 export const getDueTasks = (unixNow: number): Array<TaskDto & { user_id: number }> => {
   const rows = db.prepare(`
     SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition

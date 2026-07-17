@@ -13,7 +13,24 @@ import {
   resolveAccountId,
   resolveTelegramAccountForUpsert,
 } from './accounts.js';
-import { normalizeSupportedLanguage } from '../i18n/languages.js';
+import { normalizeSupportedLanguage, type SupportedLanguage } from '../i18n/languages.js';
+
+const DEFAULT_CHAT_TITLES: Record<SupportedLanguage, string> = {
+  ru: 'Основной',
+  en: 'Main',
+  de: 'Hauptchat',
+  es: 'Principal',
+  fr: 'Principal',
+  it: 'Principale',
+  ja: 'メイン',
+  ko: '메인',
+  pl: 'Główny',
+  'pt-BR': 'Principal',
+  'zh-CN': '主聊天',
+};
+
+const getDefaultChatTitle = (language: unknown) =>
+  DEFAULT_CHAT_TITLES[normalizeSupportedLanguage(language) || 'en'];
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -79,8 +96,14 @@ export const createChat = (userId: number, title: string) => db.prepare(`
   VALUES (?, ?)
 `).run(userId, title);
 
+export const getUserChatById = (userId: number, chatId: number) => db.prepare(`
+  SELECT id, user_id, title, created_at, updated_at
+  FROM user_chats
+  WHERE user_id = ? AND id = ?
+`).get(userId, chatId) as { id: number; user_id: number; title: string; created_at: string; updated_at: string } | undefined;
+
 export const ensureActiveChat = (userId: number) => {
-  const user = db.prepare('SELECT active_chat_id FROM users WHERE id = ?').get(userId) as { active_chat_id: number | null } | undefined;
+  const user = db.prepare('SELECT active_chat_id, language FROM users WHERE id = ?').get(userId) as { active_chat_id: number | null; language: string | null } | undefined;
 
   if (user?.active_chat_id) {
     const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, user.active_chat_id) as { id: number } | undefined;
@@ -88,7 +111,7 @@ export const ensureActiveChat = (userId: number) => {
   }
 
   const firstChat = db.prepare('SELECT id FROM user_chats WHERE user_id = ? ORDER BY id ASC LIMIT 1').get(userId) as { id: number } | undefined;
-  const chatId = firstChat?.id ?? Number(createChat(userId, 'Основной').lastInsertRowid);
+  const chatId = firstChat?.id ?? Number(createChat(userId, getDefaultChatTitle(user?.language)).lastInsertRowid);
   db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(chatId, userId);
   return chatId;
 };
@@ -117,7 +140,8 @@ export const listUserChats = (userId: number, limit = 50, offset = 0): ChatDto[]
 };
 
 export const createUserChat = (userId: number, title: string) => {
-  const normalized = (title || '').trim() || `Чат ${Math.floor(Date.now() / 1000)}`;
+  const language = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
+  const normalized = (title || '').trim() || getDefaultChatTitle(language);
   const result = createChat(userId, normalized.slice(0, 120));
   const chatId = Number(result.lastInsertRowid);
   db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(chatId, userId);
@@ -321,6 +345,58 @@ export const deleteUserChat = (userId: number, chatId: number): boolean => {
     db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(firstChat?.id ?? null, userId);
   }
   return true;
+};
+
+export const clearUserChatMessages = (userId: number, chatId: number): boolean => {
+  if (!getUserChatById(userId, chatId)) return false;
+  cleanupMessageFiles(userId, chatId);
+  db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
+  db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
+  return true;
+};
+
+export const clearAllUserMessages = (userId: number) => {
+  const chats = db.prepare('SELECT id FROM user_chats WHERE user_id = ?').all(userId) as Array<{ id: number }>;
+  for (const chat of chats) cleanupMessageFiles(userId, chat.id);
+  return db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId).changes;
+};
+
+export const getRecentUserHistory = (userId: number, limit = 20) => {
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  return db.prepare(`
+    SELECT id, chat_id, role, content, telegram_message_id, created_at
+    FROM chat_messages
+    WHERE user_id = ?
+    ORDER BY id DESC
+    LIMIT ?
+  `).all(userId, safeLimit) as Array<{
+    id: number;
+    chat_id: number | null;
+    role: ChatRole;
+    content: string;
+    telegram_message_id: number | null;
+    created_at: string;
+  }>;
+};
+
+export const deleteUserHistoryByRole = (userId: number, role: ChatRole | 'all') => {
+  if (role === 'all') return clearAllUserMessages(userId);
+  const rows = db.prepare('SELECT id, chat_id FROM chat_messages WHERE user_id = ? AND role = ?')
+    .all(userId, role) as Array<{ id: number; chat_id: number | null }>;
+  for (const row of rows) {
+    if (row.chat_id) cleanupMessageFiles(userId, row.chat_id, row.id);
+  }
+  return db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND role = ?').run(userId, role).changes;
+};
+
+export const deleteUserHistoryMessage = (userId: number, messageId: number, mode: 'db' | 'tg') => {
+  const idColumn = mode === 'tg' ? 'telegram_message_id' : 'id';
+  const rows = db.prepare(`SELECT id, chat_id FROM chat_messages WHERE user_id = ? AND ${idColumn} = ?`)
+    .all(userId, messageId) as Array<{ id: number; chat_id: number | null }>;
+  for (const row of rows) {
+    if (row.chat_id) cleanupMessageFiles(userId, row.chat_id, row.id);
+  }
+  return db.prepare(`DELETE FROM chat_messages WHERE user_id = ? AND ${idColumn} = ?`).run(userId, messageId).changes;
 };
 
 export const deleteUserMessage = (userId: number, chatId: number, messageId: number): boolean => {

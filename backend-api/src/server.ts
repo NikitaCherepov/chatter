@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getUserById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
-import { createNote, countNotes, deleteNote, getNoteById, listNotes } from './services/notes.js';
-import { createTask, deletePendingTask, listTasks } from './services/tasks.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
+import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
+import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
@@ -28,7 +28,7 @@ import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
-import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
+import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, resolveImapProviderConfig, detectMailProviderByEmail, encryptSecret, runEmailSend } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
@@ -51,6 +51,22 @@ import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/language
 
 dotenv.config();
 runAccountIdentityMigration();
+ensureDefaultPrompt();
+db.transaction(() => {
+  for (const user of getAllUsers()) {
+    const activeChatId = ensureActiveChat(user.id);
+    db.prepare('UPDATE chat_messages SET chat_id = ? WHERE user_id = ? AND chat_id IS NULL')
+      .run(activeChatId, user.id);
+    const currentSubscription = db.prepare('SELECT id FROM user_plan_subscriptions WHERE user_id = ? AND is_current = 1 LIMIT 1')
+      .get(user.id) as { id: number } | undefined;
+    if (!currentSubscription) {
+      db.prepare(`
+        INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
+        VALUES (?, ?, CURRENT_TIMESTAMP, NULL, 1, NULL)
+      `).run(user.id, user.plan);
+    }
+  }
+})();
 
 const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
 
@@ -121,9 +137,189 @@ const resolveInternalAccountId = (rawUserId: unknown): number => {
   return getAccountIdByTelegramId(userId) ?? resolveAccountId(userId);
 };
 
+const internalAdminAuth = (req: any, res: any, next: any) => {
+  const actorId = resolveInternalAccountId(req.body?.actor_user_id ?? req.query?.actor_user_id);
+  if (!Number.isFinite(actorId) || actorId <= 0) return res.status(400).json({ error: 'actor_user_id_required' });
+  const actor = getUserById(actorId);
+  if (!actor || actor.status !== 'approved' || (actor.role !== 'admin' && actor.is_admin !== 1)) {
+    return res.status(403).json({ error: 'admin_required' });
+  }
+  req.internalActorId = actorId;
+  next();
+};
+
 const BACKEND_VOICE_API_ENABLED = `${process.env.BACKEND_VOICE_API_ENABLED || '0'}`.trim() === '1';
 const BACKEND_PHOTO_API_ENABLED = `${process.env.BACKEND_PHOTO_API_ENABLED || '0'}`.trim() === '1';
 const BACKEND_VECTOR_MEMORY_API_ENABLED = `${process.env.BACKEND_VECTOR_MEMORY_API_ENABLED || '0'}`.trim() === '1';
+
+// Telegram chat UI. The bot supplies Telegram IDs; backend-api resolves the
+// canonical account and remains the only process mutating chat tables.
+app.get('/internal/users/:id/chats', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+  const limit = Number(req.query.limit ?? 100);
+  const offset = Number(req.query.offset ?? 0);
+  return res.json({ chats: listUserChats(userId, limit, offset), active_chat_id: ensureActiveChat(userId) });
+});
+
+app.get('/internal/users/:id/chats/:chatId', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const chat = getUserChatById(userId, chatId);
+  if (!chat) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ chat, is_active: ensureActiveChat(userId) === chatId });
+});
+
+app.post('/internal/users/:id/chats', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const title = `${req.body?.title || ''}`.trim();
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+  if (!title) return res.status(400).json({ error: 'title_required' });
+  const chatId = createUserChat(userId, title);
+  const chat = getUserChatById(userId, chatId);
+  return res.status(201).json({ ok: true, chat });
+});
+
+app.post('/internal/users/:id/chats/:chatId/activate', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!activateUserChat(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ ok: true, chat: getUserChatById(userId, chatId) });
+});
+
+app.delete('/internal/users/:id/chats/:chatId/messages', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!clearUserChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ ok: true });
+});
+
+app.delete('/internal/users/:id/messages', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, deleted: clearAllUserMessages(userId) });
+});
+
+app.get('/internal/admin/users/:id/history', internalAuth, internalAdminAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const limit = Number(req.query.limit ?? 20);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ messages: getRecentUserHistory(userId, limit) });
+});
+
+app.delete('/internal/admin/users/:id/history', internalAuth, internalAdminAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+
+  const role = `${req.body?.role || ''}` as 'user' | 'assistant' | 'all' | '';
+  if (role === 'user' || role === 'assistant' || role === 'all') {
+    return res.json({ ok: true, deleted: deleteUserHistoryByRole(userId, role), matched_by: role });
+  }
+
+  const messageId = Math.floor(Number(req.body?.message_id));
+  const mode = req.body?.mode === 'tg' ? 'tg' : 'db';
+  if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
+  return res.json({ ok: true, deleted: deleteUserHistoryMessage(userId, messageId, mode), matched_by: mode });
+});
+
+app.get('/internal/users/:id/notes', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const limit = Number(req.query.limit ?? 20);
+  const offset = Number(req.query.offset ?? 0);
+  const query = `${req.query.query || ''}`;
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ notes: listNotes(userId, limit, offset, query), total: countNotes(userId, query) });
+});
+
+app.get('/internal/users/:id/notes/:noteId', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const noteId = Number.parseInt(req.params.noteId, 10);
+  if (!Number.isFinite(userId) || userId <= 0 || !Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_id' });
+  const note = getNoteById(userId, noteId);
+  if (!note) return res.status(404).json({ error: 'note_not_found' });
+  return res.json({ note });
+});
+
+app.post('/internal/users/:id/notes', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const result = createNote(userId, user.plan, `${req.body?.title || ''}`, `${req.body?.content || ''}`);
+  if (!result.ok) return res.status(422).json(result);
+  return res.status(201).json(result);
+});
+
+app.put('/internal/users/:id/notes/:noteId', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const noteId = Number.parseInt(req.params.noteId, 10);
+  if (!Number.isFinite(userId) || userId <= 0 || !Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const result = updateNoteContent(userId, noteId, user.plan, `${req.body?.content || ''}`);
+  if (!result.ok) return res.status(result.error === 'note_not_found' ? 404 : 422).json(result);
+  return res.json(result);
+});
+
+app.delete('/internal/users/:id/notes/:noteId', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const noteId = Number.parseInt(req.params.noteId, 10);
+  if (!Number.isFinite(userId) || userId <= 0 || !Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_id' });
+  const deleted = deleteNote(userId, noteId);
+  return deleted ? res.json({ ok: true }) : res.status(404).json({ error: 'note_not_found' });
+});
+
+app.get('/internal/users/:id/note-stats', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  return res.json({ stats: getNoteStats(userId) });
+});
+
+app.post('/internal/admin/notes/stats', internalAuth, internalAdminAuth, (req, res) => {
+  const userIds = Array.isArray(req.body?.user_ids) ? req.body.user_ids.map((value: unknown) => Number(value)) : [];
+  return res.json({ stats: getNoteStatsForUsers(userIds) });
+});
+
+app.get('/internal/users/:id/tasks', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const limit = Number(req.query.limit ?? 20);
+  const rawStatus = `${req.query.status || 'pending'}`;
+  const status = ['pending', 'done', 'error', 'all'].includes(rawStatus)
+    ? rawStatus as 'pending' | 'done' | 'error' | 'all'
+    : 'pending';
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ tasks: listTasks(userId, limit, status) });
+});
+
+app.get('/internal/users/:id/tasks/:taskId', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const taskId = Number.parseInt(req.params.taskId, 10);
+  if (!Number.isFinite(userId) || userId <= 0 || !Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_id' });
+  const task = getUserTaskById(userId, taskId);
+  return task ? res.json({ task }) : res.status(404).json({ error: 'task_not_found' });
+});
+
+app.delete('/internal/users/:id/tasks/:taskId', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const taskId = Number.parseInt(req.params.taskId, 10);
+  if (!Number.isFinite(userId) || userId <= 0 || !Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_id' });
+  return deletePendingTask(userId, taskId)
+    ? res.json({ ok: true })
+    : res.status(404).json({ error: 'pending_task_not_found' });
+});
 
 app.post('/internal/tools/read_url', internalAuth, async (req, res) => {
   const url = `${req.body?.url || ''}`.trim();
@@ -1935,7 +2131,7 @@ app.get('/internal/prompts/:id', internalAuth, (req, res) => {
   return res.json({ prompt });
 });
 
-app.post('/internal/prompts', internalAuth, (req, res) => {
+app.post('/internal/prompts', internalAuth, internalAdminAuth, (req, res) => {
   const name = `${req.body?.name || ''}`.trim();
   const description = `${req.body?.description || ''}`.trim();
   const content = `${req.body?.content || ''}`.trim();
@@ -1952,7 +2148,7 @@ app.post('/internal/prompts', internalAuth, (req, res) => {
   }
 });
 
-app.put('/internal/prompts/:id/name', internalAuth, (req, res) => {
+app.put('/internal/prompts/:id/name', internalAuth, internalAdminAuth, (req, res) => {
   const promptId = Number.parseInt(req.params.id, 10);
   const name = `${req.body?.name || ''}`.trim();
   if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
@@ -1969,7 +2165,7 @@ app.put('/internal/prompts/:id/name', internalAuth, (req, res) => {
   }
 });
 
-app.put('/internal/prompts/:id/description', internalAuth, (req, res) => {
+app.put('/internal/prompts/:id/description', internalAuth, internalAdminAuth, (req, res) => {
   const promptId = Number.parseInt(req.params.id, 10);
   const description = `${req.body?.description || ''}`.trim();
   if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
@@ -1981,7 +2177,7 @@ app.put('/internal/prompts/:id/description', internalAuth, (req, res) => {
   return res.json({ ok: true });
 });
 
-app.put('/internal/prompts/:id/content', internalAuth, (req, res) => {
+app.put('/internal/prompts/:id/content', internalAuth, internalAdminAuth, (req, res) => {
   const promptId = Number.parseInt(req.params.id, 10);
   const content = `${req.body?.content || ''}`.trim();
   if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
@@ -1994,7 +2190,7 @@ app.put('/internal/prompts/:id/content', internalAuth, (req, res) => {
   return res.json({ ok: true });
 });
 
-app.put('/internal/prompts/:id/default', internalAuth, (req, res) => {
+app.put('/internal/prompts/:id/default', internalAuth, internalAdminAuth, (req, res) => {
   const promptId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
 
@@ -2005,7 +2201,7 @@ app.put('/internal/prompts/:id/default', internalAuth, (req, res) => {
   return res.json({ ok: true });
 });
 
-app.delete('/internal/prompts/:id', internalAuth, (req, res) => {
+app.delete('/internal/prompts/:id', internalAuth, internalAdminAuth, (req, res) => {
   const promptId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
 
@@ -2272,6 +2468,14 @@ app.get('/internal/users/:id', internalAuth, (req, res) => {
   return res.json({ user: withInternalAccountIdentities(user) });
 });
 
+app.get('/internal/users/:id/prompt/resolved', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ prompt: resolveStoredPromptForUser(user) });
+});
+
 app.put('/internal/users/:id/language', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.body?.user_id || req.params.id);
   const language = normalizeSupportedLanguage(req.body?.language);
@@ -2387,8 +2591,47 @@ app.post('/internal/users/:id/plan', internalAuth, (req, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
-  updateUserPlan(userId, plan);
-  return res.json({ ok: true, plan });
+  const recordSubscription = req.body?.record_subscription === true;
+  const endsAtRaw = req.body?.ends_at;
+  const endsAt = typeof endsAtRaw === 'string' && endsAtRaw.trim() ? endsAtRaw.trim() : null;
+  const assignedByRaw = req.body?.assigned_by;
+  const assignedBy = Number.isFinite(Number(assignedByRaw))
+    ? resolveInternalAccountId(assignedByRaw)
+    : null;
+
+  db.transaction(() => {
+    updateUserPlan(userId, plan);
+    if (recordSubscription) {
+      db.prepare('UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ? AND is_current = 1').run(userId);
+      db.prepare(`
+        INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
+        VALUES (?, ?, CURRENT_TIMESTAMP, ?, 1, ?)
+      `).run(userId, plan, endsAt, assignedBy);
+    }
+  })();
+  return res.json({ ok: true, plan, ends_at: endsAt });
+});
+
+app.get('/internal/users/:id/subscription', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const subscription = db.prepare(`
+    SELECT id, user_id, plan, started_at, ends_at, is_current, assigned_by
+    FROM user_plan_subscriptions
+    WHERE user_id = ? AND is_current = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(userId) || null;
+  return res.json({ subscription });
+});
+
+app.put('/internal/admin/users/:id/message-limit', internalAuth, internalAdminAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  const limit = Math.max(0, Math.floor(Number(req.body?.limit)));
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!Number.isFinite(limit)) return res.status(400).json({ error: 'bad_limit' });
+  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
+  db.prepare('UPDATE users SET daily_message_limit = ? WHERE id = ?').run(limit, userId);
+  return res.json({ ok: true, limit });
 });
 
 app.post('/internal/sync-plan-limits', internalAuth, (_req, res) => {
@@ -2464,7 +2707,7 @@ app.put('/internal/users/:id/prompt/custom', internalAuth, (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/internal/prompts/reset-users', internalAuth, (req, res) => {
+app.post('/internal/prompts/reset-users', internalAuth, internalAdminAuth, (req, res) => {
   const promptId = Number(req.body?.prompt_id);
   if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
   resetUsersPromptIfDeleted(promptId);

@@ -13,6 +13,149 @@ const resolvedDbPath = path.resolve(
 
 export const db = new Database(resolvedDbPath);
 
+// backend-api owns the persistent schema. Other clients (Telegram/Electron)
+// must use the API instead of creating or migrating these tables themselves.
+const usersTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'").get() as { name: string } | undefined;
+if (usersTable) {
+  const columns = db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === 'id')) {
+    db.exec(`ALTER TABLE users RENAME TO users_legacy_${Date.now()}`);
+  }
+}
+
+const messagesTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'").get() as { name: string } | undefined;
+if (messagesTable) {
+  const columns = db.prepare('PRAGMA table_info(chat_messages)').all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === 'user_id')) {
+    db.exec(`ALTER TABLE chat_messages RENAME TO chat_messages_legacy_${Date.now()}`);
+  }
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    role TEXT NOT NULL DEFAULT 'user',
+    status TEXT NOT NULL DEFAULT 'approved',
+    plan TEXT NOT NULL DEFAULT 'free',
+    tg_username TEXT,
+    language TEXT,
+    selected_prompt_id INTEGER,
+    custom_prompt_content TEXT,
+    core_memory TEXT DEFAULT '',
+    imap_provider TEXT,
+    imap_user TEXT,
+    imap_pass TEXT,
+    imap_host TEXT,
+    imap_port INTEGER DEFAULT 993,
+    imap_secure INTEGER DEFAULT 1,
+    active_chat_id INTEGER,
+    daily_message_count INTEGER NOT NULL DEFAULT 0,
+    daily_message_limit INTEGER NOT NULL DEFAULT 0,
+    context_window INTEGER NOT NULL DEFAULT 20,
+    context_window_max INTEGER NOT NULL DEFAULT 20,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    chat_id INTEGER,
+    telegram_chat_id INTEGER,
+    telegram_message_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id_id
+  ON chat_messages(user_id, id);
+
+  CREATE TABLE IF NOT EXISTS user_chats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id
+  ON user_chats(user_id, id DESC);
+
+  CREATE TABLE IF NOT EXISTS prompts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS bans (
+    user_id INTEGER PRIMARY KEY,
+    reason TEXT NOT NULL,
+    banned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    banned_by INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    execute_at INTEGER NOT NULL,
+    task_type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    notify_mode TEXT NOT NULL DEFAULT 'always',
+    notify_condition TEXT,
+    recurrence_type TEXT NOT NULL DEFAULT 'once',
+    recurrence_weekday INTEGER,
+    timezone_offset INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending'
+  );
+
+  CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_notes_user_id_desc ON notes(user_id, id DESC);
+
+  CREATE TABLE IF NOT EXISTS mail_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    provider TEXT NOT NULL CHECK(provider IN ('yandex', 'google')),
+    imap_user TEXT NOT NULL,
+    imap_pass TEXT NOT NULL,
+    imap_host TEXT NOT NULL,
+    imap_port INTEGER NOT NULL DEFAULT 993,
+    imap_secure INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, provider)
+  );
+
+  CREATE TABLE IF NOT EXISTS user_plan_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    plan TEXT NOT NULL CHECK(plan IN ('free', 'standart', 'pro')),
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ends_at DATETIME,
+    is_current INTEGER NOT NULL DEFAULT 1 CHECK(is_current IN (0, 1)),
+    assigned_by INTEGER,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_user_id
+  ON user_plan_subscriptions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_current
+  ON user_plan_subscriptions(user_id, is_current, ends_at);
+`);
+
 const hasUserColumn = (columnName: string) => {
   const columns = db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
   return columns.some(c => c.name === columnName);
@@ -31,10 +174,44 @@ const ensureChatMessageColumn = (name: string, sql: string) => {
   if (!hasChatMessageColumn(name)) db.exec(sql);
 };
 
+const hasTaskColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+
+const ensureTaskColumn = (name: string, sql: string) => {
+  if (!hasTaskColumn(name)) db.exec(sql);
+};
+
+const hasPromptColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(prompts)').all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+
 if (!hasUserColumn('is_admin')) {
   db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
 }
 
+ensureUserColumn('name', 'ALTER TABLE users ADD COLUMN name TEXT');
+ensureUserColumn('role', "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
+ensureUserColumn('custom_prompt_content', 'ALTER TABLE users ADD COLUMN custom_prompt_content TEXT');
+ensureUserColumn('core_memory', "ALTER TABLE users ADD COLUMN core_memory TEXT DEFAULT ''");
+ensureUserColumn('imap_provider', 'ALTER TABLE users ADD COLUMN imap_provider TEXT');
+ensureUserColumn('imap_user', 'ALTER TABLE users ADD COLUMN imap_user TEXT');
+ensureUserColumn('imap_pass', 'ALTER TABLE users ADD COLUMN imap_pass TEXT');
+ensureUserColumn('imap_host', 'ALTER TABLE users ADD COLUMN imap_host TEXT');
+ensureUserColumn('imap_port', 'ALTER TABLE users ADD COLUMN imap_port INTEGER DEFAULT 993');
+ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGER DEFAULT 1');
+ensureUserColumn('active_chat_id', 'ALTER TABLE users ADD COLUMN active_chat_id INTEGER');
+ensureUserColumn('status', "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'");
+ensureUserColumn('plan', "ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
+ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
+ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
+ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_message_limit', 'ALTER TABLE users ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('context_window', 'ALTER TABLE users ADD COLUMN context_window INTEGER NOT NULL DEFAULT 20');
+ensureUserColumn('context_window_max', 'ALTER TABLE users ADD COLUMN context_window_max INTEGER NOT NULL DEFAULT 20');
 ensureUserColumn('daily_tokens_used', 'ALTER TABLE users ADD COLUMN daily_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
@@ -61,6 +238,7 @@ ensureUserColumn('auth_token_version', 'ALTER TABLE users ADD COLUMN auth_token_
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
+ensureChatMessageColumn('chat_id', 'ALTER TABLE chat_messages ADD COLUMN chat_id INTEGER');
 ensureChatMessageColumn('images', 'ALTER TABLE chat_messages ADD COLUMN images TEXT');
 ensureChatMessageColumn('audio', 'ALTER TABLE chat_messages ADD COLUMN audio TEXT');
 ensureChatMessageColumn('reasoning_content', 'ALTER TABLE chat_messages ADD COLUMN reasoning_content TEXT');
@@ -79,6 +257,60 @@ ensureChatMessageColumn('provider_name', 'ALTER TABLE chat_messages ADD COLUMN p
 ensureChatMessageColumn('attachments', 'ALTER TABLE chat_messages ADD COLUMN attachments TEXT');
 // Subagent traces — полные trace ad-hoc субагентов для UI-отображения (не уходит в AI-контекст)
 ensureChatMessageColumn('subagents_json', 'ALTER TABLE chat_messages ADD COLUMN subagents_json TEXT');
+
+ensureTaskColumn('recurrence_type', "ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'");
+ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
+ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');
+ensureTaskColumn('notify_mode', "ALTER TABLE tasks ADD COLUMN notify_mode TEXT NOT NULL DEFAULT 'always'");
+ensureTaskColumn('notify_condition', 'ALTER TABLE tasks ADD COLUMN notify_condition TEXT');
+if (!hasPromptColumn('description')) {
+  db.exec("ALTER TABLE prompts ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+}
+
+db.exec(`
+  UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;
+  UPDATE users SET status = 'approved' WHERE status IS NULL OR status = '';
+  UPDATE users SET plan = 'free' WHERE plan IS NULL OR plan = '' OR plan NOT IN ('free', 'standart', 'pro');
+  UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL;
+  UPDATE users SET daily_message_limit = 0 WHERE daily_message_limit IS NULL OR daily_message_limit < 0;
+  UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL;
+  UPDATE users SET daily_tokens_used = 0 WHERE daily_tokens_used IS NULL;
+  UPDATE users SET total_tokens_used = 0 WHERE total_tokens_used IS NULL;
+  UPDATE users SET daily_cost_rub = 0 WHERE daily_cost_rub IS NULL;
+  UPDATE users SET total_cost_rub = 0 WHERE total_cost_rub IS NULL;
+  UPDATE users SET daily_web_search_count = 0 WHERE daily_web_search_count IS NULL;
+  UPDATE users SET daily_web_search_limit = 10 WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0;
+  UPDATE users SET total_web_search_count = 0 WHERE total_web_search_count IS NULL;
+  UPDATE users SET core_memory = '' WHERE core_memory IS NULL;
+  UPDATE users SET imap_port = 993 WHERE imap_port IS NULL OR imap_port <= 0;
+  UPDATE users SET imap_secure = 1 WHERE imap_secure IS NULL;
+  UPDATE users SET mail_check_limit = 10 WHERE mail_check_limit IS NULL OR mail_check_limit <= 0;
+  UPDATE users SET context_window = 20 WHERE context_window IS NULL OR context_window <= 0;
+  UPDATE users SET context_window_max = 20 WHERE context_window_max IS NULL OR context_window_max <= 0;
+  CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+
+  INSERT INTO mail_accounts (user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure)
+  SELECT
+    id,
+    CASE
+      WHEN lower(COALESCE(imap_provider, '')) = 'google' OR lower(COALESCE(imap_host, '')) LIKE '%gmail%' THEN 'google'
+      ELSE 'yandex'
+    END,
+    imap_user,
+    imap_pass,
+    COALESCE(imap_host, 'imap.yandex.ru'),
+    COALESCE(imap_port, 993),
+    COALESCE(imap_secure, 1)
+  FROM users
+  WHERE imap_user IS NOT NULL AND imap_user <> '' AND imap_pass IS NOT NULL AND imap_pass <> ''
+  ON CONFLICT(user_id, provider) DO UPDATE SET
+    imap_user = excluded.imap_user,
+    imap_pass = excluded.imap_pass,
+    imap_host = excluded.imap_host,
+    imap_port = excluded.imap_port,
+    imap_secure = excluded.imap_secure,
+    updated_at = CURRENT_TIMESTAMP;
+`);
 
 // Index for efficient filtering: active (non-archived) messages per chat
 if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_chat_messages_active'").get()) {

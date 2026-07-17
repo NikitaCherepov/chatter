@@ -28,7 +28,6 @@
     "@pinecone-database/pinecone": "^7.2.0",
     "@tavily/core": "latest",
     "axios": "^1.15.0",
-    "better-sqlite3": "^11.0.0",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
     "form-data": "^4.0.5",
@@ -40,7 +39,6 @@
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "latest",
     "@types/mailparser": "^3.4.6",
     "@types/node": "^20.0.0",
     "tsx": "^4.7.0",

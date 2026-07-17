@@ -1,5 +1,4 @@
 import { Markup, Telegraf } from 'telegraf';
-import Database from 'better-sqlite3';
 import type { Context } from 'telegraf';
 import * as dotenv from 'dotenv';
 import crypto from 'crypto';
@@ -84,451 +83,7 @@ bot.catch(async (err, ctx) => {
         // ignore reply failures inside error handler
     }
 });
-// Инициализация базы данных
-const db = new Database('chatter.db');
 
-const usersTableInfo = db.prepare(`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table' AND name = 'users'
-`).get() as { name: string } | undefined;
-
-if (usersTableInfo) {
-    const columns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
-    const hasIdColumn = columns.some(c => c.name === 'id');
-    if (!hasIdColumn) {
-        const legacyUsersTable = `users_legacy_${Date.now()}`;
-        db.exec(`ALTER TABLE users RENAME TO ${legacyUsersTable}`);
-    }
-}
-
-const chatMessagesTableInfo = db.prepare(`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table' AND name = 'chat_messages'
-`).get() as { name: string } | undefined;
-
-if (chatMessagesTableInfo) {
-    const columns = db.prepare(`PRAGMA table_info(chat_messages)`).all() as { name: string }[];
-    const hasUserIdColumn = columns.some(c => c.name === 'user_id');
-    if (!hasUserIdColumn) {
-        const legacyMessagesTable = `chat_messages_legacy_${Date.now()}`;
-        db.exec(`ALTER TABLE chat_messages RENAME TO ${legacyMessagesTable}`);
-    }
-}
-
-db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        role TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('none', 'approved', 'disapproved', 'banned')),
-        plan TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free', 'standart', 'pro')),
-        tg_username TEXT,
-        language TEXT,
-        selected_prompt_id INTEGER,
-        custom_prompt_content TEXT,
-        core_memory TEXT DEFAULT '',
-        imap_provider TEXT,
-        imap_user TEXT,
-        imap_pass TEXT,
-        imap_host TEXT,
-        imap_port INTEGER DEFAULT 993,
-        imap_secure INTEGER DEFAULT 1,
-        mail_check_limit INTEGER NOT NULL DEFAULT 10,
-        active_chat_id INTEGER,
-        timezone_offset INTEGER DEFAULT 5,
-        timezone_confirmed INTEGER NOT NULL DEFAULT 0,
-        daily_message_count INTEGER NOT NULL DEFAULT 0,
-        total_message_length INTEGER NOT NULL DEFAULT 0,
-        daily_message_limit INTEGER NOT NULL DEFAULT 0,
-        daily_tokens_used INTEGER NOT NULL DEFAULT 0,
-        total_tokens_used INTEGER NOT NULL DEFAULT 0,
-        daily_cost_rub REAL NOT NULL DEFAULT 0,
-        total_cost_rub REAL NOT NULL DEFAULT 0,
-        daily_web_search_count INTEGER NOT NULL DEFAULT 0,
-        daily_web_search_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]},
-        total_web_search_count INTEGER NOT NULL DEFAULT 0,
-        context_window INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS},
-        context_window_max INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS},
-        max_context_tokens_limit INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]},
-        max_context_tokens INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]},
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS chat_messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
-        content TEXT NOT NULL,
-        chat_id INTEGER,
-        telegram_chat_id INTEGER,
-        telegram_message_id INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id_id
-    ON chat_messages(user_id, id);
-
-    CREATE TABLE IF NOT EXISTS user_chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id
-    ON user_chats(user_id, id DESC);
-
-    CREATE TABLE IF NOT EXISTS prompts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        description TEXT NOT NULL DEFAULT '',
-        content TEXT NOT NULL,
-        is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS bans (
-        user_id INTEGER PRIMARY KEY,
-        reason TEXT NOT NULL,
-        banned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        banned_by INTEGER
-    );
-
-    CREATE TABLE IF NOT EXISTS tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        execute_at INTEGER NOT NULL,
-        task_type TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        notify_mode TEXT NOT NULL DEFAULT 'always',
-        notify_condition TEXT,
-        status TEXT NOT NULL DEFAULT 'pending'
-    );
-
-    CREATE TABLE IF NOT EXISTS notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        title TEXT NOT NULL DEFAULT '',
-        content TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_notes_user_created
-    ON notes(user_id, created_at DESC);
-
-    CREATE INDEX IF NOT EXISTS idx_notes_user_id_desc
-    ON notes(user_id, id DESC);
-
-    CREATE TABLE IF NOT EXISTS mail_accounts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        provider TEXT NOT NULL CHECK(provider IN ('yandex', 'google')),
-        imap_user TEXT NOT NULL,
-        imap_pass TEXT NOT NULL,
-        imap_host TEXT NOT NULL,
-        imap_port INTEGER NOT NULL DEFAULT 993,
-        imap_secure INTEGER NOT NULL DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, provider)
-    );
-
-    CREATE TABLE IF NOT EXISTS user_plan_subscriptions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        plan TEXT NOT NULL CHECK(plan IN ('free', 'standart', 'pro')),
-        started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        ends_at DATETIME,
-        is_current INTEGER NOT NULL DEFAULT 1 CHECK(is_current IN (0, 1)),
-        assigned_by INTEGER,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_user_id
-    ON user_plan_subscriptions(user_id);
-
-    CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_current
-    ON user_plan_subscriptions(user_id, is_current, ends_at);
-`);
-
-const hasUserColumn = (columnName: string) => {
-    const columns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
-    return columns.some(c => c.name === columnName);
-};
-
-const ensureUserColumn = (columnName: string, alterSql: string) => {
-    if (hasUserColumn(columnName)) return;
-    db.exec(alterSql);
-};
-
-const hasTaskColumn = (columnName: string) => {
-    const columns = db.prepare(`PRAGMA table_info(tasks)`).all() as { name: string }[];
-    return columns.some(c => c.name === columnName);
-};
-
-const ensureTaskColumn = (columnName: string, alterSql: string) => {
-    if (hasTaskColumn(columnName)) return;
-    db.exec(alterSql);
-};
-
-const hasChatMessageColumn = (columnName: string) => {
-    const columns = db.prepare(`PRAGMA table_info(chat_messages)`).all() as { name: string }[];
-    return columns.some(c => c.name === columnName);
-};
-
-const ensureChatMessageColumn = (columnName: string, alterSql: string) => {
-    if (hasChatMessageColumn(columnName)) return;
-    db.exec(alterSql);
-};
-
-ensureUserColumn('selected_prompt_id', 'ALTER TABLE users ADD COLUMN selected_prompt_id INTEGER');
-ensureUserColumn('custom_prompt_content', 'ALTER TABLE users ADD COLUMN custom_prompt_content TEXT');
-ensureUserColumn('core_memory', `ALTER TABLE users ADD COLUMN core_memory TEXT DEFAULT ''`);
-ensureUserColumn('imap_provider', 'ALTER TABLE users ADD COLUMN imap_provider TEXT');
-ensureUserColumn('imap_user', 'ALTER TABLE users ADD COLUMN imap_user TEXT');
-ensureUserColumn('imap_pass', 'ALTER TABLE users ADD COLUMN imap_pass TEXT');
-ensureUserColumn('imap_host', 'ALTER TABLE users ADD COLUMN imap_host TEXT');
-ensureUserColumn('imap_port', 'ALTER TABLE users ADD COLUMN imap_port INTEGER DEFAULT 993');
-ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGER DEFAULT 1');
-ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
-ensureUserColumn('active_chat_id', 'ALTER TABLE users ADD COLUMN active_chat_id INTEGER');
-ensureUserColumn('status', `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`);
-ensureUserColumn('plan', `ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT '${DEFAULT_USER_PLAN}'`);
-ensureUserColumn('tg_username', 'ALTER TABLE users ADD COLUMN tg_username TEXT');
-ensureUserColumn('language', 'ALTER TABLE users ADD COLUMN language TEXT');
-ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
-ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER DEFAULT 5');
-ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_message_limit', `ALTER TABLE users ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT 0`);
-ensureUserColumn('daily_tokens_used', 'ALTER TABLE users ADD COLUMN daily_tokens_used INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens_used INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
-ensureUserColumn('total_cost_rub', 'ALTER TABLE users ADD COLUMN total_cost_rub REAL NOT NULL DEFAULT 0');
-ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_web_search_limit', `ALTER TABLE users ADD COLUMN daily_web_search_limit INTEGER NOT NULL DEFAULT ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}`);
-ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('context_window', `ALTER TABLE users ADD COLUMN context_window INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS}`);
-ensureUserColumn('context_window_max', `ALTER TABLE users ADD COLUMN context_window_max INTEGER NOT NULL DEFAULT ${MAX_HISTORY_ITEMS}`);
-ensureUserColumn('max_context_tokens_limit', `ALTER TABLE users ADD COLUMN max_context_tokens_limit INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]}`);
-ensureUserColumn('max_context_tokens', `ALTER TABLE users ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT ${PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN]}`);
-
-ensureTaskColumn('recurrence_type', `ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'`);
-ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
-ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');
-ensureTaskColumn('notify_mode', `ALTER TABLE tasks ADD COLUMN notify_mode TEXT NOT NULL DEFAULT 'always'`);
-ensureTaskColumn('notify_condition', 'ALTER TABLE tasks ADD COLUMN notify_condition TEXT');
-ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
-ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
-ensureChatMessageColumn('chat_id', 'ALTER TABLE chat_messages ADD COLUMN chat_id INTEGER');
-ensureChatMessageColumn('archived', 'ALTER TABLE chat_messages ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
-ensureChatMessageColumn('archived_at', 'ALTER TABLE chat_messages ADD COLUMN archived_at DATETIME');
-
-db.exec(`
-    CREATE TABLE IF NOT EXISTS user_chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-`);
-db.exec(`CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id ON user_chats(user_id, id DESC)`);
-
-const usersWithoutChats = db.prepare(`
-    SELECT u.id, u.language
-    FROM users u
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM user_chats uc
-        WHERE uc.user_id = u.id
-    )
-`).all() as Array<{ id: number; language: string | null }>;
-const insertInitialUserChat = db.prepare(`
-    INSERT INTO user_chats (user_id, title)
-    VALUES (?, ?)
-`);
-db.transaction((users: Array<{ id: number; language: string | null }>) => {
-    for (const user of users) {
-        insertInitialUserChat.run(user.id, translateBot(user.language, 'chats.defaultTitle'));
-    }
-})(usersWithoutChats);
-
-db.exec(`
-    UPDATE users
-    SET active_chat_id = (
-        SELECT uc.id
-        FROM user_chats uc
-        WHERE uc.user_id = users.id
-        ORDER BY uc.id ASC
-        LIMIT 1
-    )
-    WHERE active_chat_id IS NULL
-       OR NOT EXISTS (
-            SELECT 1
-            FROM user_chats uc2
-            WHERE uc2.user_id = users.id AND uc2.id = users.active_chat_id
-       )
-`);
-
-if (hasChatMessageColumn('chat_id')) {
-    db.exec(`
-        UPDATE chat_messages
-        SET chat_id = (
-            SELECT u.active_chat_id
-            FROM users u
-            WHERE u.id = chat_messages.user_id
-        )
-        WHERE chat_id IS NULL
-    `);
-}
-
-if (hasUserColumn('created_at')) {
-    db.exec(`UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`);
-}
-if (hasUserColumn('status')) {
-    db.exec(`UPDATE users SET status = 'approved' WHERE status IS NULL OR status = ''`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`);
-}
-if (hasUserColumn('plan')) {
-    db.exec(`UPDATE users SET plan = '${DEFAULT_USER_PLAN}' WHERE plan IS NULL OR plan = '' OR plan NOT IN ('free', 'standart', 'pro')`);
-}
-if (hasUserColumn('daily_message_count')) {
-    db.exec(`UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL`);
-}
-if (hasUserColumn('daily_message_limit')) {
-    db.exec(`UPDATE users SET daily_message_limit = 0 WHERE daily_message_limit IS NULL OR daily_message_limit < 0`);
-}
-if (hasUserColumn('total_message_length')) {
-    db.exec(`UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL`);
-}
-if (hasUserColumn('daily_tokens_used')) {
-    db.exec(`UPDATE users SET daily_tokens_used = 0 WHERE daily_tokens_used IS NULL`);
-}
-if (hasUserColumn('total_tokens_used')) {
-    db.exec(`UPDATE users SET total_tokens_used = 0 WHERE total_tokens_used IS NULL`);
-}
-if (hasUserColumn('daily_cost_rub')) {
-    db.exec(`UPDATE users SET daily_cost_rub = 0 WHERE daily_cost_rub IS NULL`);
-}
-if (hasUserColumn('total_cost_rub')) {
-    db.exec(`UPDATE users SET total_cost_rub = 0 WHERE total_cost_rub IS NULL`);
-}
-if (hasUserColumn('daily_web_search_count')) {
-    db.exec(`UPDATE users SET daily_web_search_count = 0 WHERE daily_web_search_count IS NULL`);
-}
-if (hasUserColumn('daily_web_search_limit')) {
-    db.exec(`UPDATE users SET daily_web_search_limit = ${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]} WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0`);
-}
-if (hasUserColumn('total_web_search_count')) {
-    db.exec(`UPDATE users SET total_web_search_count = 0 WHERE total_web_search_count IS NULL`);
-}
-if (hasUserColumn('core_memory')) {
-    db.exec(`UPDATE users SET core_memory = '' WHERE core_memory IS NULL`);
-}
-if (hasUserColumn('imap_port')) {
-    db.exec(`UPDATE users SET imap_port = 993 WHERE imap_port IS NULL OR imap_port <= 0`);
-}
-if (hasUserColumn('imap_secure')) {
-    db.exec(`UPDATE users SET imap_secure = 1 WHERE imap_secure IS NULL`);
-}
-if (hasUserColumn('mail_check_limit')) {
-    db.exec(`UPDATE users SET mail_check_limit = 10 WHERE mail_check_limit IS NULL OR mail_check_limit <= 0`);
-}
-if (hasUserColumn('context_window_max')) {
-    db.exec(`UPDATE users SET context_window_max = ${MAX_HISTORY_ITEMS} WHERE context_window_max IS NULL OR context_window_max <= 0`);
-}
-if (hasUserColumn('max_context_tokens_limit')) {
-    db.exec(`
-        UPDATE users
-        SET max_context_tokens_limit = CASE
-            WHEN plan = 'pro' THEN ${PLAN_MAX_CONTEXT_TOKENS.pro}
-            WHEN plan = 'standart' THEN ${PLAN_MAX_CONTEXT_TOKENS.standart}
-            ELSE ${PLAN_MAX_CONTEXT_TOKENS.free}
-        END
-        WHERE max_context_tokens_limit IS NULL OR max_context_tokens_limit <= 0
-    `);
-}
-if (hasUserColumn('max_context_tokens')) {
-    db.exec(`
-        UPDATE users
-        SET max_context_tokens = CASE
-            WHEN max_context_tokens IS NULL OR max_context_tokens <= 0 THEN max_context_tokens_limit
-            WHEN max_context_tokens > max_context_tokens_limit THEN max_context_tokens_limit
-            ELSE max_context_tokens
-        END
-    `);
-}
-if (hasUserColumn('plan') && hasUserColumn('daily_message_limit')) {
-    db.exec(`UPDATE users SET daily_message_limit = 0 WHERE daily_message_limit IS NULL OR daily_message_limit < 0`);
-}
-if (hasUserColumn('plan') && hasUserColumn('daily_web_search_limit')) {
-    db.exec(`
-        UPDATE users
-        SET daily_web_search_limit = CASE
-            WHEN plan = 'pro' THEN ${PLAN_DAILY_WEB_SEARCH_LIMITS.pro}
-            WHEN plan = 'standart' THEN ${PLAN_DAILY_WEB_SEARCH_LIMITS.standart}
-            ELSE ${PLAN_DAILY_WEB_SEARCH_LIMITS.free}
-        END
-        WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0
-    `);
-}
-if (hasUserColumn('context_window')) {
-    db.exec(`
-        UPDATE users
-        SET context_window = COALESCE(context_window_max, ${MAX_HISTORY_ITEMS})
-        WHERE context_window IS NULL OR context_window <= 0
-    `);
-    db.exec(`
-        UPDATE users
-        SET context_window = context_window_max
-        WHERE context_window > context_window_max AND context_window_max > 0
-    `);
-}
-
-db.exec(`
-    INSERT INTO mail_accounts (user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure)
-    SELECT
-        id,
-        CASE
-            WHEN LOWER(COALESCE(imap_provider, '')) = 'google' OR LOWER(COALESCE(imap_host, '')) LIKE '%gmail%' THEN 'google'
-            ELSE 'yandex'
-        END AS provider,
-        imap_user,
-        imap_pass,
-        COALESCE(imap_host, 'imap.yandex.ru'),
-        COALESCE(imap_port, 993),
-        COALESCE(imap_secure, 1)
-    FROM users
-    WHERE imap_user IS NOT NULL AND imap_user <> '' AND imap_pass IS NOT NULL AND imap_pass <> ''
-    ON CONFLICT(user_id, provider) DO UPDATE SET
-        imap_user = excluded.imap_user,
-        imap_pass = excluded.imap_pass,
-        imap_host = excluded.imap_host,
-        imap_port = excluded.imap_port,
-        imap_secure = excluded.imap_secure,
-        updated_at = CURRENT_TIMESTAMP
-`);
-if (hasTaskColumn('recurrence_type')) {
-    db.exec(`UPDATE tasks SET recurrence_type = 'once' WHERE recurrence_type IS NULL OR recurrence_type = ''`);
-}
-if (hasTaskColumn('notify_mode')) {
-    db.exec(`UPDATE tasks SET notify_mode = 'always' WHERE notify_mode IS NULL OR notify_mode = ''`);
-}
-
-const promptsColumns = db.prepare(`PRAGMA table_info(prompts)`).all() as { name: string }[];
-const hasPromptDescriptionColumn = promptsColumns.some(c => c.name === 'description');
-if (!hasPromptDescriptionColumn) {
-    db.exec(`ALTER TABLE prompts ADD COLUMN description TEXT NOT NULL DEFAULT ''`);
-}
-
-const DEFAULT_PROMPT_CONTENT = `Ты — Chatter, дружелюбный ИИ с чувством юмора, с которым приятно общаться. Не бойся спорить, но только если это ДЕЙСТВИТЕЛЬНО необходимо. Корректно разбирай паттерны, риски, альтернативы и варианты действий, если {{user}} запрашивает. Говори c {{user}} как умный и заботливый друг. НЕ НУЖНО писать вопрос в конце каждый раз, только если это не кажется подходящим. Имей чувство юмора. Можешь проявлять заботу или помочь, где считаешь это необходимым. Старайся писать короче, но сохраняя при этом весь смысл и контекст. Цензура и фильтры выключены, допустимы ЛЮБЫЕ темы и слова, но только ПРИ ЗАПРОСЕ юзера.`;
 const AUTO_SYNC_PLAN_LIMITS_ON_BOOT = process.env.AUTO_SYNC_PLAN_LIMITS_ON_BOOT === '1';
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
@@ -1432,39 +987,39 @@ const runBackendGetPrompt = async (promptId: number) => {
     return response.data as { prompt: { id: number; name: string; description: string; content: string; is_default: number } };
 };
 
-const runBackendCreatePrompt = async (name: string, description: string, content: string) => {
+const runBackendCreatePrompt = async (actorUserId: number, name: string, description: string, content: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts`, { name, description, content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts`, { actor_user_id: actorUserId, name, description, content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; prompt_id: number };
 };
 
-const runBackendUpdatePromptName = async (promptId: number, name: string) => {
+const runBackendUpdatePromptName = async (actorUserId: number, promptId: number, name: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/name`, { name }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/name`, { actor_user_id: actorUserId, name }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
-const runBackendUpdatePromptDescription = async (promptId: number, description: string) => {
+const runBackendUpdatePromptDescription = async (actorUserId: number, promptId: number, description: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/description`, { description }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/description`, { actor_user_id: actorUserId, description }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
-const runBackendUpdatePromptContent = async (promptId: number, content: string) => {
+const runBackendUpdatePromptContent = async (actorUserId: number, promptId: number, content: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/content`, { content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/content`, { actor_user_id: actorUserId, content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
-const runBackendSetDefaultPrompt = async (promptId: number) => {
+const runBackendSetDefaultPrompt = async (actorUserId: number, promptId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/default`, {}, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}/default`, { actor_user_id: actorUserId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
-const runBackendDeletePrompt = async (promptId: number) => {
+const runBackendDeletePrompt = async (actorUserId: number, promptId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/prompts/${promptId}`, { data: { actor_user_id: actorUserId }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean };
 };
 
@@ -1673,56 +1228,6 @@ const scheduleDailyCounterReset = () => {
 };
 
 // Вспомогательные функции для БД
-const getPromptById = (id: number) => db.prepare('SELECT * FROM prompts WHERE id = ?').get(id) as PromptRecord | undefined;
-const getAllPrompts = () => db.prepare('SELECT * FROM prompts ORDER BY id').all() as PromptRecord[];
-const getDefaultPrompt = () => db.prepare('SELECT * FROM prompts WHERE is_default = 1 LIMIT 1').get() as PromptRecord | undefined;
-const createPrompt = (name: string, description: string, content: string, isDefault = false) => {
-    if (isDefault) db.prepare('UPDATE prompts SET is_default = 0').run();
-    return db.prepare(`
-        INSERT INTO prompts (name, description, content, is_default)
-        VALUES (?, ?, ?, ?)
-    `).run(name, description, content, isDefault ? 1 : 0);
-};
-const updatePromptName = (id: number, name: string) => db.prepare(`
-    UPDATE prompts
-    SET name = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-`).run(name, id);
-const updatePromptDescription = (id: number, description: string) => db.prepare(`
-    UPDATE prompts
-    SET description = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-`).run(description, id);
-const updatePromptContent = (id: number, content: string) => db.prepare(`
-    UPDATE prompts
-    SET content = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-`).run(content, id);
-const setDefaultPrompt = (id: number) => {
-    db.prepare('UPDATE prompts SET is_default = 0').run();
-    return db.prepare('UPDATE prompts SET is_default = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
-};
-const deletePrompt = (id: number) => db.prepare('DELETE FROM prompts WHERE id = ?').run(id);
-
-const ensureDefaultPrompt = () => {
-    const defaultPrompt = getDefaultPrompt();
-    if (defaultPrompt) return defaultPrompt;
-
-    const firstPrompt = db.prepare('SELECT * FROM prompts ORDER BY id LIMIT 1').get() as PromptRecord | undefined;
-    if (firstPrompt) {
-        setDefaultPrompt(firstPrompt.id);
-        return { ...firstPrompt, is_default: 1 };
-    }
-
-    const created = createPrompt('Default', 'Default Chatter conversation style', DEFAULT_PROMPT_CONTENT, true);
-    return getPromptById(Number(created.lastInsertRowid));
-};
-
-const defaultPromptSeed = ensureDefaultPrompt();
-if (!defaultPromptSeed) {
-    throw new Error('Не удалось инициализировать дефолтный промпт.');
-}
-
 const normalizeTextPreview = (value: string, maxLen = 120) => {
     const compact = value.replace(/\s+/g, ' ').trim();
     if (!compact) return '';
@@ -1731,64 +1236,6 @@ const normalizeTextPreview = (value: string, maxLen = 120) => {
 const extractCommandPayload = (messageText: string, command: string) => {
     const pattern = new RegExp(`^\\/${command}(?:@\\w+)?\\s*`, 'i');
     return messageText.replace(pattern, '').trim();
-};
-const createNote = (userId: number, content: string, title = '') => {
-    const nowTs = Math.floor(Date.now() / 1000);
-    return db.prepare(`
-        INSERT INTO notes (user_id, title, content, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-    `).run(userId, title, content, nowTs, nowTs);
-};
-const deleteNoteByUserAndId = (userId: number, noteId: number) => db.prepare(`
-    DELETE FROM notes
-    WHERE user_id = ? AND id = ?
-`).run(userId, noteId);
-const updateNoteByUserAndId = (userId: number, noteId: number, content: string) => {
-    const nowTs = Math.floor(Date.now() / 1000);
-    return db.prepare(`
-        UPDATE notes
-        SET content = ?, updated_at = ?
-        WHERE user_id = ? AND id = ?
-    `).run(content, nowTs, userId, noteId);
-};
-const getNoteByUserAndId = (userId: number, noteId: number) => db.prepare(`
-    SELECT id, user_id, title, content, created_at, updated_at
-    FROM notes
-    WHERE user_id = ? AND id = ?
-`).get(userId, noteId) as NoteRecord | undefined;
-const getNotesPage = (userId: number, limit: number, offset: number, query = '') => {
-    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
-    const safeOffset = Math.max(0, Math.floor(offset));
-    const trimmed = query.trim();
-    if (!trimmed) {
-        return db.prepare(`
-            SELECT id, user_id, title, content, created_at, updated_at
-            FROM notes
-            WHERE user_id = ?
-            ORDER BY created_at DESC, id DESC
-            LIMIT ? OFFSET ?
-        `).all(userId, safeLimit, safeOffset) as NoteRecord[];
-    }
-    const like = `%${trimmed}%`;
-    return db.prepare(`
-        SELECT id, user_id, title, content, created_at, updated_at
-        FROM notes
-        WHERE user_id = ? AND (title LIKE ? OR content LIKE ?)
-        ORDER BY created_at DESC, id DESC
-        LIMIT ? OFFSET ?
-    `).all(userId, like, like, safeLimit, safeOffset) as NoteRecord[];
-};
-const countNotes = (userId: number, query = '') => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-        return (db.prepare(`SELECT COUNT(*) as c FROM notes WHERE user_id = ?`).get(userId) as { c: number }).c;
-    }
-    const like = `%${trimmed}%`;
-    return (db.prepare(`
-        SELECT COUNT(*) as c
-        FROM notes
-        WHERE user_id = ? AND (title LIKE ? OR content LIKE ?)
-    `).get(userId, like, like) as { c: number }).c;
 };
 const getPlanNotesLimit = (plan: UserPlan) => PLAN_NOTES_LIMITS[plan] ?? PLAN_NOTES_LIMITS[DEFAULT_USER_PLAN];
 const getPlanNoteContentLimit = (plan: UserPlan) => PLAN_NOTE_CONTENT_LIMITS[plan] ?? PLAN_NOTE_CONTENT_LIMITS[DEFAULT_USER_PLAN];
@@ -1860,7 +1307,8 @@ const buildNoteViewKeyboard = (noteId: number, page: number, t: BotTranslate) =>
 ]);
 const renderNotesMenuList = async (ctx: any, userId: number, page: number, mode: 'reply' | 'edit' = 'reply') => {
     const safePage = Math.max(0, page);
-    const total = countNotes(userId);
+    const offset = safePage * NOTES_MENU_PAGE_SIZE;
+    const { notes, total } = await runBackendGetNotes(userId, NOTES_MENU_PAGE_SIZE, offset);
     if (!total) {
         const text = ctx.t('notes.noneWithHint');
         const keyboard = Markup.inlineKeyboard([[
@@ -1870,8 +1318,6 @@ const renderNotesMenuList = async (ctx: any, userId: number, page: number, mode:
         return ctx.reply(text, keyboard);
     }
 
-    const offset = safePage * NOTES_MENU_PAGE_SIZE;
-    const notes = getNotesPage(userId, NOTES_MENU_PAGE_SIZE, offset);
     const pages = Math.max(1, Math.ceil(total / NOTES_MENU_PAGE_SIZE));
     const text = ctx.t('notes.menuList', {
         page: safePage + 1,
@@ -1883,7 +1329,7 @@ const renderNotesMenuList = async (ctx: any, userId: number, page: number, mode:
     return ctx.reply(text, keyboard);
 };
 const renderNoteView = async (ctx: any, userId: number, noteId: number, page: number, mode: 'reply' | 'edit' = 'edit') => {
-    const note = getNoteByUserAndId(userId, noteId);
+    const note = await runBackendGetNote(userId, noteId);
     if (!note) {
         const text = ctx.t('notes.notFound', { id: noteId });
         const keyboard = Markup.inlineKeyboard([
@@ -1905,43 +1351,6 @@ const renderNoteView = async (ctx: any, userId: number, noteId: number, page: nu
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
-const getNoteStatsForUser = (userId: number) => db.prepare(`
-    SELECT
-        ? as user_id,
-        COUNT(*) as notes_count,
-        COALESCE(SUM(LENGTH(COALESCE(title, '')) + LENGTH(COALESCE(content, ''))), 0) as notes_chars
-    FROM notes
-    WHERE user_id = ?
-`).get(userId, userId) as NoteStatsRecord;
-const getNoteStatsForUsers = (userIds: number[]) => {
-    const unique = [...new Set(userIds.filter(id => Number.isFinite(id) && id > 0))];
-    const statsMap = new Map<number, NoteStatsRecord>();
-    if (!unique.length) return statsMap;
-
-    const placeholders = unique.map(() => '?').join(',');
-    const rows = db.prepare(`
-        SELECT
-            user_id,
-            COUNT(*) as notes_count,
-            COALESCE(SUM(LENGTH(COALESCE(title, '')) + LENGTH(COALESCE(content, ''))), 0) as notes_chars
-        FROM notes
-        WHERE user_id IN (${placeholders})
-        GROUP BY user_id
-    `).all(...unique) as NoteStatsRecord[];
-
-    for (const id of unique) {
-        statsMap.set(id, { user_id: id, notes_count: 0, notes_chars: 0 });
-    }
-    for (const row of rows) {
-        statsMap.set(row.user_id, {
-            user_id: row.user_id,
-            notes_count: Number(row.notes_count || 0),
-            notes_chars: Number(row.notes_chars || 0)
-        });
-    }
-    return statsMap;
-};
-
 const detectImageMimeType = (url: string, fallback: string | null = null) => {
     const normalizedFallback = (fallback || '').trim().toLowerCase();
     if (normalizedFallback.startsWith('image/')) return normalizedFallback;
@@ -2291,12 +1700,42 @@ const getUser = async (id: number): Promise<UserRecord | undefined> => {
     return data.user;
 };
 const addUser = async (id: number, name: string, role: string, status: UserStatus = 'approved', tgUsername: string | null = null) => {
-    const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
-    await runBackendUpsertTelegramUser(id, name, role, status, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id);
+    const defaultPrompt = await runBackendGetDefaultPrompt();
+    await runBackendUpsertTelegramUser(id, name, role, status, tgUsername, defaultPrompt?.id ?? null);
+};
+
+const runBackendApplyUserPlan = async (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/plan`, {
+        plan, ends_at: endsAt, assigned_by: assignedBy, record_subscription: true
+    }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: boolean; plan: UserPlan; ends_at: string | null };
+};
+
+type UserPlanSubscriptionRecord = {
+    id: number;
+    user_id: number;
+    plan: UserPlan;
+    started_at: string;
+    ends_at: string | null;
+    is_current: number;
+    assigned_by?: number | null;
+};
+
+const runBackendGetUserSubscription = async (userId: number) => {
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/subscription`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return (response.data as { subscription: UserPlanSubscriptionRecord | null }).subscription;
+};
+
+const runBackendSetDailyMessageLimit = async (actorUserId: number, userId: number, limit: number) => {
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/admin/users/${userId}/message-limit`, {
+        actor_user_id: actorUserId,
+        limit
+    }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: boolean; limit: number };
 };
 const createPendingUser = async (id: number, name: string | null, tgUsername: string | null, language?: SupportedLanguage | null) => {
-    const defaultPromptId = db.prepare('SELECT id FROM prompts WHERE is_default = 1 LIMIT 1').get() as { id: number } | undefined;
-    const data = await runBackendCreatePendingUser(id, name, tgUsername, defaultPromptId?.id ?? defaultPromptSeed.id, language);
+    const defaultPrompt = await runBackendGetDefaultPrompt();
+    const data = await runBackendCreatePendingUser(id, name, tgUsername, defaultPrompt?.id ?? null, language);
     return data.user;
 };
 const updateUserName = async (id: number, name: string) => {
@@ -2320,61 +1759,6 @@ const updateUserPlan = async (id: number, plan: UserPlan) => {
 const syncAllUsersPlanLimits = async () => {
     await runBackendSyncPlanLimits();
 };
-const updateUserContextWindow = (id: number, contextWindow: number) => db.prepare(`
-    UPDATE users
-    SET context_window = ?
-    WHERE id = ?
-`).run(contextWindow, id);
-const updateUserDailyMessageLimit = (id: number, dailyMessageLimit: number) => db.prepare(`
-    UPDATE users
-    SET daily_message_limit = ?
-    WHERE id = ?
-`).run(Math.max(0, Math.floor(dailyMessageLimit)), id);
-const updateUserContextWindowMax = (id: number, contextWindowMax: number) => db.prepare(`
-    UPDATE users
-    SET context_window_max = ?,
-        context_window = CASE
-            WHEN COALESCE(context_window, 0) <= 0 THEN ?
-            WHEN context_window > ? THEN ?
-            ELSE context_window
-        END
-    WHERE id = ?
-`).run(contextWindowMax, contextWindowMax, contextWindowMax, contextWindowMax, id);
-const closeCurrentPlanSubscriptions = (userId: number) => db.prepare(`
-    UPDATE user_plan_subscriptions
-    SET is_current = 0
-    WHERE user_id = ? AND is_current = 1
-`).run(userId);
-const addPlanSubscription = (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => db.prepare(`
-    INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
-    VALUES (?, ?, CURRENT_TIMESTAMP, ?, 1, ?)
-`).run(userId, plan, endsAt, assignedBy);
-const getCurrentPlanSubscription = (userId: number) => db.prepare(`
-    SELECT id, user_id, plan, started_at, ends_at, is_current
-    FROM user_plan_subscriptions
-    WHERE user_id = ? AND is_current = 1
-    ORDER BY id DESC
-    LIMIT 1
-`).get(userId) as {
-    id: number;
-    user_id: number;
-    plan: UserPlan;
-    started_at: string;
-    ends_at: string | null;
-    is_current: number;
-} | undefined;
-const getExpiredCurrentSubscriptions = () => db.prepare(`
-    SELECT id, user_id, plan, started_at, ends_at
-    FROM user_plan_subscriptions
-    WHERE is_current = 1 AND ends_at IS NOT NULL AND datetime(ends_at) <= CURRENT_TIMESTAMP
-    ORDER BY user_id ASC, id ASC
-`).all() as Array<{
-    id: number;
-    user_id: number;
-    plan: UserPlan;
-    started_at: string;
-    ends_at: string | null;
-}>;
 const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
     if (raw === 'free' || raw === 'standart' || raw === 'pro') return raw;
     return DEFAULT_USER_PLAN;
@@ -2390,24 +1774,7 @@ const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
     return Math.max(0, Math.floor(value as number));
 };
 const applyUserPlan = async (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
-    closeCurrentPlanSubscriptions(userId);
-    await updateUserPlan(userId, plan);
-    addPlanSubscription(userId, plan, endsAt, assignedBy);
-};
-const ensureUserCurrentPlanSubscription = async (userId: number) => {
-    const current = getCurrentPlanSubscription(userId);
-    if (current) return;
-    const user = await getUser(userId);
-    if (!user) return;
-    const normalizedPlan = parsePlanFromDb(user.plan);
-    await updateUserPlan(userId, normalizedPlan);
-    addPlanSubscription(userId, normalizedPlan, null, null);
-};
-const ensureCurrentPlanSubscriptionsForAllUsers = async () => {
-    const users = getAllUsers();
-    for (const user of users) {
-        await ensureUserCurrentPlanSubscription(user.id);
-    }
+    await runBackendApplyUserPlan(userId, plan, endsAt, assignedBy);
 };
 const getEndsAtForDuration = (duration: PlanDurationCode) => {
     if (duration === 'forever') return null;
@@ -2418,61 +1785,6 @@ const getEndsAtForDuration = (duration: PlanDurationCode) => {
     if (duration === 'year') dt.setFullYear(dt.getFullYear() + 1);
     return dt.toISOString().slice(0, 19).replace('T', ' ');
 };
-const expireFinishedPlanSubscriptions = async () => {
-    const expiredRows = getExpiredCurrentSubscriptions();
-    const processedUsers = new Set<number>();
-    for (const row of expiredRows) {
-        if (processedUsers.has(row.user_id)) continue;
-        processedUsers.add(row.user_id);
-        await applyUserPlan(row.user_id, DEFAULT_USER_PLAN, null, null);
-    }
-};
-const updateUserTimezone = (id: number, timezoneOffset: number) => db.prepare(`
-    UPDATE users
-    SET timezone_offset = ?, timezone_confirmed = 1
-    WHERE id = ?
-`).run(timezoneOffset, id);
-const updateUserMailSettings = (id: number, provider: string, email: string, encryptedPassword: string, host: string, port = 993, secure = 1) => db.prepare(`
-    UPDATE users
-    SET imap_provider = ?, imap_user = ?, imap_pass = ?, imap_host = ?, imap_port = ?, imap_secure = ?
-    WHERE id = ?
-`).run(provider, email, encryptedPassword, host, port, secure, id);
-const upsertMailAccount = (userId: number, provider: MailProvider, email: string, encryptedPassword: string, host: string, port = 993, secure = 1) => db.prepare(`
-    INSERT INTO mail_accounts (user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(user_id, provider) DO UPDATE SET
-        imap_user = excluded.imap_user,
-        imap_pass = excluded.imap_pass,
-        imap_host = excluded.imap_host,
-        imap_port = excluded.imap_port,
-        imap_secure = excluded.imap_secure,
-        updated_at = CURRENT_TIMESTAMP
-`).run(userId, provider, email, encryptedPassword, host, port, secure);
-const setActiveMailProvider = (userId: number, provider: MailProvider) => db.prepare(`
-    UPDATE users SET imap_provider = ? WHERE id = ?
-`).run(provider, userId);
-const updateUserMailCheckLimit = (userId: number, limit: number) => db.prepare(`
-    UPDATE users SET mail_check_limit = ? WHERE id = ?
-`).run(limit, userId);
-const getMailAccountsForUser = (userId: number) => db.prepare(`
-    SELECT user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure
-    FROM mail_accounts
-    WHERE user_id = ?
-    ORDER BY provider ASC
-`).all(userId) as MailAccountRecord[];
-const getMailAccountForUser = (userId: number, provider: MailProvider) => db.prepare(`
-    SELECT user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure
-    FROM mail_accounts
-    WHERE user_id = ? AND provider = ?
-`).get(userId, provider) as MailAccountRecord | undefined;
-const deleteMailAccount = (userId: number, provider: MailProvider) => db
-    .prepare(`DELETE FROM mail_accounts WHERE user_id = ? AND provider = ?`)
-    .run(userId, provider);
-const clearUserMailSettings = (id: number) => db.prepare(`
-    UPDATE users
-    SET imap_provider = NULL, imap_user = NULL, imap_pass = NULL, imap_host = NULL, imap_port = 993, imap_secure = 1
-    WHERE id = ?
-`).run(id);
 const formatTokenCountShort = (tokens: number) => {
     const safe = Math.max(0, Math.floor(tokens || 0));
     if (safe >= 1_000_000) return `${(safe / 1_000_000).toFixed(2)}M`;
@@ -2495,93 +1807,6 @@ const resetUsersPromptIfDeleted = async (promptId: number) => {
 const removeUser = async (id: number) => {
     await runBackendRemoveUser(id);
 };
-const removeUserPlanSubscriptions = (id: number) => db.prepare('DELETE FROM user_plan_subscriptions WHERE user_id = ?').run(id);
-const getAllUsers = () => db.prepare('SELECT * FROM users ORDER BY id').all() as UserRecord[];
-const getUsersCount = () => (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
-const getUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, timezone_offset, timezone_confirmed, daily_message_count, daily_message_limit, total_message_length, daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub, daily_web_search_count, daily_web_search_limit, total_web_search_count, daily_image_gen_count, daily_image_gen_limit, total_image_gen_count, context_window, context_window_max, max_context_tokens_limit, max_context_tokens
-    FROM users
-    ORDER BY id ASC
-    LIMIT ? OFFSET ?
-`).all(limit, offset) as UserRecord[];
-const getPendingUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'none'`).get() as { count: number }).count;
-const getPendingUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT id, name, role, status, plan, tg_username, selected_prompt_id, custom_prompt_content, core_memory, imap_provider, imap_user, imap_pass, imap_host, imap_port, imap_secure, mail_check_limit, daily_message_limit, daily_web_search_limit, daily_image_gen_limit, context_window, context_window_max, max_context_tokens_limit, max_context_tokens, created_at
-    FROM users
-    WHERE status = 'none'
-    ORDER BY id ASC
-    LIMIT ? OFFSET ?
-`).all(limit, offset) as PendingUserRow[];
-const getBannedUsersCount = () => (db.prepare(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`).get() as { count: number }).count;
-const getBannedUsersPage = (limit: number, offset: number) => db.prepare(`
-    SELECT u.id, u.name, u.role, u.status, u.plan, u.tg_username, u.selected_prompt_id, u.custom_prompt_content, u.core_memory, u.imap_provider, u.imap_user, u.imap_pass, u.imap_host, u.imap_port, u.imap_secure, u.mail_check_limit, u.daily_message_limit, u.daily_web_search_limit, u.daily_image_gen_limit, u.context_window, u.context_window_max, u.max_context_tokens_limit, u.max_context_tokens, b.reason, b.banned_at
-    FROM users u
-    LEFT JOIN bans b ON b.user_id = u.id
-    WHERE u.status = 'banned'
-    ORDER BY b.banned_at DESC, u.id ASC
-    LIMIT ? OFFSET ?
-`).all(limit, offset) as BannedUserRow[];
-const getBanRecord = (id: number) => db.prepare(`
-    SELECT user_id, reason, banned_at, banned_by
-    FROM bans
-    WHERE user_id = ?
-`).get(id) as { user_id: number; reason: string; banned_at: string; banned_by: number | null } | undefined;
-const setBan = (id: number, reason: string, bannedBy: number) => db.prepare(`
-    INSERT INTO bans (user_id, reason, banned_by, banned_at)
-    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(user_id) DO UPDATE SET
-        reason = excluded.reason,
-        banned_by = excluded.banned_by,
-        banned_at = CURRENT_TIMESTAMP
-`).run(id, reason, bannedBy);
-const removeBan = (id: number) => db.prepare('DELETE FROM bans WHERE user_id = ?').run(id);
-const addTask = (
-    userId: number,
-    executeAt: number,
-    taskType: TaskType,
-    payload: string,
-    recurrenceType: TaskRecurrenceType,
-    recurrenceWeekday: number | null,
-    timezoneOffset: number | null,
-    notifyMode: TaskNotifyMode,
-    notifyCondition: string | null
-) => db
-    .prepare(`
-        INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    .run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, notifyMode, notifyCondition);
-const getPendingTaskCount = (userId: number) => (
-    db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND status = 'pending'`).get(userId) as { count: number }
-).count;
-const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
-    SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
-    FROM tasks
-    WHERE user_id = ? AND id = ?
-`).get(userId, taskId) as TaskRecord | undefined;
-const deletePendingTaskByUserAndId = (userId: number, taskId: number) => db
-    .prepare(`DELETE FROM tasks WHERE user_id = ? AND id = ? AND status = 'pending'`)
-    .run(userId, taskId);
-const getUserTasks = (userId: number, status: TaskStatus | 'all' = 'pending', limit = 20) => {
-    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
-    if (status === 'all') {
-        return db.prepare(`
-            SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
-            FROM tasks
-            WHERE user_id = ?
-            ORDER BY execute_at ASC, id ASC
-            LIMIT ?
-        `).all(userId, safeLimit) as TaskRecord[];
-    }
-
-    return db.prepare(`
-        SELECT id, user_id, execute_at, task_type, payload, status, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition
-        FROM tasks
-        WHERE user_id = ? AND status = ?
-        ORDER BY execute_at ASC, id ASC
-        LIMIT ?
-    `).all(userId, status, safeLimit) as TaskRecord[];
-};
 const isTimezoneConfigured = (user: UserRecord) => user.timezone_confirmed === 1;
 const resolveEffectiveContextWindow = (user: UserRecord | undefined) => {
     // Legacy — still used for message-count fallback, но context control теперь через токены.
@@ -2596,76 +1821,6 @@ const resolveMaxContextTokens = (user: UserRecord | undefined): number => {
     const hardLimit = Number.isFinite(mctl) && mctl > 0 ? Math.floor(mctl) : planLimit;
     const userChoice = Number.isFinite(mct) && mct > 0 ? Math.floor(mct) : hardLimit;
     return Math.max(1000, Math.min(userChoice, hardLimit));
-};
-const createUserChat = (userId: number, title: string) => {
-    const normalized = title.trim() || 'Chat';
-    return db.prepare(`
-        INSERT INTO user_chats (user_id, title)
-        VALUES (?, ?)
-    `).run(userId, normalized);
-};
-const getUserChatById = (userId: number, chatId: number) => db.prepare(`
-    SELECT id, user_id, title, created_at, updated_at
-    FROM user_chats
-    WHERE user_id = ? AND id = ?
-`).get(userId, chatId) as UserChatRecord | undefined;
-const getUserChats = (userId: number, limit = 100) => {
-    const safeLimit = Math.max(1, Math.min(200, Math.floor(limit)));
-    return db.prepare(`
-        SELECT id, user_id, title, created_at, updated_at
-        FROM user_chats
-        WHERE user_id = ?
-        ORDER BY id DESC
-        LIMIT ?
-    `).all(userId, safeLimit) as UserChatRecord[];
-};
-const setUserActiveChat = (userId: number, chatId: number) => db.prepare(`
-    UPDATE users
-    SET active_chat_id = ?
-    WHERE id = ?
-`).run(chatId, userId);
-const ensureActiveChatForUser = (userId: number) => {
-    const current = db.prepare(`
-        SELECT active_chat_id
-        FROM users
-        WHERE id = ?
-    `).get(userId) as { active_chat_id: number | null } | undefined;
-
-    if (current?.active_chat_id) {
-        const exists = getUserChatById(userId, current.active_chat_id);
-        if (exists) return exists.id;
-    }
-
-    const firstChat = db.prepare(`
-        SELECT id
-        FROM user_chats
-        WHERE user_id = ?
-        ORDER BY id ASC
-        LIMIT 1
-    `).get(userId) as { id: number } | undefined;
-
-    const storedLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as {
-        language: string | null;
-    } | undefined)?.language;
-    const chatId = firstChat?.id ?? Number(
-        createUserChat(userId, translateBot(storedLanguage, 'chats.defaultTitle')).lastInsertRowid
-    );
-    setUserActiveChat(userId, chatId);
-    return chatId;
-};
-const getActiveChatForUser = (userId: number) => {
-    const activeChatId = ensureActiveChatForUser(userId);
-    return getUserChatById(userId, activeChatId);
-};
-const getRecentHistoryRowsByUser = (userId: number, limit = 20) => {
-    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
-    return db.prepare(`
-        SELECT id, chat_id, role, content, telegram_message_id, created_at
-        FROM chat_messages
-        WHERE user_id = ?
-        ORDER BY id DESC
-        LIMIT ?
-    `).all(userId, safeLimit) as UserHistoryRow[];
 };
 const shortenHistoryContent = (text: string, maxLen = 10) => {
     const clean = text.replace(/\s+/g, ' ').trim();
@@ -2684,92 +1839,7 @@ const formatRecentHistoryRows = (userId: number, rows: UserHistoryRow[], t: BotT
     });
     return t('adminHistory.list', { id: userId, rows: lines.join('\n\n') });
 };
-const deleteHistoryByUserAndRole = (userId: number, role: ChatRole | 'all') => {
-    if (role === 'all') {
-        return db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
-    }
-    return db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND role = ?').run(userId, role);
-};
-const deleteHistoryMessageByUserAndMessageId = (userId: number, messageId: number) => db.prepare(`
-    DELETE FROM chat_messages
-    WHERE user_id = ? AND id = ?
-`).run(userId, messageId);
-const deleteHistoryMessageByUserAndTelegramMessageId = (userId: number, telegramMessageId: number) => db.prepare(`
-    DELETE FROM chat_messages
-    WHERE user_id = ? AND telegram_message_id = ?
-`).run(userId, telegramMessageId);
-const trimUserHistory = async (userId: number) => {
-    // Epoch Trimming — архивация по токенам.
-    // Контроль контекста делегирован на backend-api (trimUserHistoryByChat),
-    // но TG-бот тоже может архивировать при смене тарифа/лимита.
-    const chatId = ensureActiveChatForUser(userId);
-    const maxContextTokens = resolveMaxContextTokens(await getUser(userId));
-
-    const rows = db.prepare(`
-        SELECT id, token_count
-        FROM chat_messages
-        WHERE user_id = ? AND chat_id = ? AND archived = 0
-        ORDER BY id ASC
-    `).all(userId, chatId) as Array<{ id: number; token_count: number }>;
-
-    if (rows.length === 0) return;
-
-    const totalMessageTokens = rows.reduce((sum, r) => sum + (r.token_count || 0), 0);
-    if (totalMessageTokens <= maxContextTokens) return;
-
-    const targetTokens = Math.floor(maxContextTokens * 0.5);
-    const tokensToArchive = totalMessageTokens - targetTokens;
-
-    const idsToArchive: number[] = [];
-    let accumulated = 0;
-    for (const row of rows) {
-        if (accumulated >= tokensToArchive) break;
-        idsToArchive.push(row.id);
-        accumulated += row.token_count || 0;
-    }
-
-    if (idsToArchive.length >= rows.length) idsToArchive.pop();
-    if (idsToArchive.length === 0) return;
-
-    const placeholders = idsToArchive.map(() => '?').join(',');
-    db.prepare(`
-        UPDATE chat_messages
-        SET archived = 1, archived_at = CURRENT_TIMESTAMP
-        WHERE id IN (${placeholders})
-    `).run(...idsToArchive);
-};
-const clearActiveUserHistory = (userId: number) => db.prepare(`
-    DELETE FROM chat_messages
-    WHERE user_id = ? AND chat_id = ?
-`).run(userId, ensureActiveChatForUser(userId));
-const clearUserHistory = (userId: number) => db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
-
-ensureCurrentPlanSubscriptionsForAllUsers().catch((err) => {
-    console.error('Ошибка первичной инициализации подписок:', formatSafeError(err));
-});
-
-const resolvePromptForUser = (user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }) => {
-    if (user.selected_prompt_id === CUSTOM_PROMPT_ID) {
-        const custom = (user.custom_prompt_content || '').trim();
-        if (custom) {
-            return {
-                id: CUSTOM_PROMPT_ID,
-                name: 'Custom',
-                description: 'User prompt',
-                content: custom,
-                is_default: 0
-            } satisfies PromptRecord;
-        }
-    }
-
-    if (user.selected_prompt_id) {
-        const selected = getPromptById(user.selected_prompt_id);
-        if (selected) return selected;
-    }
-
-    const fallback = ensureDefaultPrompt();
-    return fallback!;
-};
+const resolvePromptForUser = async (userId: number) => (await runBackendGetResolvedPrompt(userId)).prompt;
 
 const linkCodeFlows = new Map<number, 'await_code'>();
 const unlinkChoiceFlows = new Map<number, { expiresAt: number }>();
@@ -2802,7 +1872,7 @@ bot.use(async (ctx, next) => {
 
     if (isAdminByDb && userRecord) {
         const fallbackName = userRecord?.name || ctx.from?.first_name || 'Admin';
-        const defaultPrompt = ensureDefaultPrompt();
+        const defaultPrompt = await runBackendGetDefaultPrompt();
         if (userRecord.tg_username !== telegramUsername) {
             await updateUserTelegramUsername(userId, telegramUsername);
             userRecord = (await getUser(userId)) || userRecord;
@@ -2817,7 +1887,6 @@ bot.use(async (ctx, next) => {
                 await updateUserPlan(userId, normalizedPlan);
                 userRecord = (await getUser(userId)) || userRecord;
             }
-            await ensureUserCurrentPlanSubscription(userId);
         }
 
         await syncCommandScopeForUser(userId, true, ctx.state.language);
@@ -2851,7 +1920,7 @@ bot.use(async (ctx, next) => {
     }
 
     if (userRecord.status === 'banned') {
-        const ban = getBanRecord(userId);
+        const ban = (await runBackendGetBanRecord(userId)).ban;
         const reason = ban?.reason ?? ctx.t('access.noReason');
         const date = ban?.banned_at ?? ctx.t('access.unknownDate');
         await syncCommandScopeForUser(userId, false, ctx.state.language);
@@ -2887,7 +1956,7 @@ bot.use(async (ctx, next) => {
         userRecord = (await getUser(userId)) || userRecord;
     }
     if (!userRecord.selected_prompt_id) {
-        const defaultPrompt = ensureDefaultPrompt();
+        const defaultPrompt = await runBackendGetDefaultPrompt();
         if (defaultPrompt) await updateUserPrompt(userId, defaultPrompt.id);
     }
     {
@@ -2896,7 +1965,6 @@ bot.use(async (ctx, next) => {
             await updateUserPlan(userId, normalizedPlan);
             userRecord = (await getUser(userId)) || userRecord;
         }
-        await ensureUserCurrentPlanSubscription(userId);
     }
 
     await syncCommandScopeForUser(userId, false, ctx.state.language);
@@ -2913,7 +1981,9 @@ const showMenu = async (ctx: any) => {
     const isAdmin = ctx.state.role === 'admin';
     const userId = ctx.from?.id;
     const userRecord = userId ? await getUser(userId) : undefined;
-    const activePrompt = userRecord ? resolvePromptForUser(userRecord) : ensureDefaultPrompt();
+    const activePrompt = userRecord && userId
+        ? await resolvePromptForUser(userId)
+        : await runBackendGetDefaultPrompt();
     const userName = (ctx.state.userName as string | undefined) || userRecord?.name || ctx.t('roles.user');
     const roleLabel = isAdmin ? ctx.t('roles.admin') : ctx.t('roles.user');
     const promptLine = activePrompt
@@ -2941,12 +2011,19 @@ const showMenu = async (ctx: any) => {
     const notesLine = NOTES_WEBAPP_URL
         ? ctx.t('menu.notesWebApp')
         : ctx.t('menu.notesCommands');
-    const activeChat = userId ? getActiveChatForUser(userId) : null;
+    const chatsData = userId ? await runBackendGetChats(userId, 100) : null;
+    const activeChat = chatsData?.chats.find(chat => chat.id === chatsData.active_chat_id) || null;
     const chatLine = activeChat
         ? ctx.t('menu.activeChat', { id: activeChat.id, title: activeChat.title })
         : ctx.t('menu.activeChatMissing');
-    const moderationLine = isAdmin
-        ? ctx.t('menu.moderation', { pending: getPendingUsersCount(), banned: getBannedUsersCount() })
+    const moderationCounts = isAdmin
+        ? await Promise.all([
+            runBackendGetUsersList('pending', 1, 0),
+            runBackendGetUsersList('banned', 1, 0)
+        ])
+        : null;
+    const moderationLine = moderationCounts
+        ? ctx.t('menu.moderation', { pending: moderationCounts[0].total, banned: moderationCounts[1].total })
         : '';
 
     const text = [
@@ -2972,7 +2049,7 @@ const showMenu = async (ctx: any) => {
     return ctx.reply(text, buildMainMenuInlineKeyboard(isAdmin, ctx.t));
 };
 
-const handleClear = (ctx: any) => {
+const handleClear = async (ctx: any) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     renameFlows.delete(userId);
@@ -2982,13 +2059,13 @@ const handleClear = (ctx: any) => {
     noteEditFlows.delete(userId);
     adminUserContextLimitFlows.delete(userId);
     adminUserMessageLimitFlows.delete(userId);
-    clearActiveUserHistory(userId);
+    await runBackendClearActiveChat(userId);
     return ctx.reply(ctx.t('menu.cleared'));
 };
 
-const formatPromptsList = (currentPromptId: number | null, t: BotTranslate, includeDescription = false) => {
-    const prompts = getAllPrompts();
-    const defaultPrompt = getDefaultPrompt();
+const formatPromptsList = async (currentPromptId: number | null, t: BotTranslate, includeDescription = false) => {
+    const { prompts } = await runBackendGetPrompts();
+    const defaultPrompt = prompts.find(prompt => prompt.is_default === 1) || prompts[0];
     const effectiveCurrentPromptId = currentPromptId ?? defaultPrompt?.id ?? null;
 
     if (!prompts.length) return t('prompt.none');
@@ -3013,10 +2090,158 @@ const getPromptDescription = (description: string, t: BotTranslate) => {
     return normalized.length > 220 ? `${normalized.slice(0, 220)}...` : normalized;
 };
 
+const runBackendGetDefaultPrompt = async () => {
+    const { prompts } = await runBackendGetPrompts();
+    return prompts.find(prompt => prompt.is_default === 1) || prompts[0];
+};
+
+const runBackendGetResolvedPrompt = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/prompt/resolved`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { prompt: PromptRecord };
+};
+
+const runBackendGetChats = async (userId: number, limit = 100) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/chats`, {
+        params: { limit }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
+    });
+    return response.data as { chats: Array<UserChatRecord & { is_active: boolean }>; active_chat_id: number };
+};
+
+const runBackendGetChat = async (userId: number, chatId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/chats/${chatId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { chat: UserChatRecord; is_active: boolean };
+};
+
+const runBackendCreateChat = async (userId: number, title: string) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/chats`, { title }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: boolean; chat: UserChatRecord };
+};
+
+const runBackendActivateChat = async (userId: number, chatId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/chats/${chatId}/activate`, {}, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: boolean; chat: UserChatRecord };
+};
+
+const runBackendClearActiveChat = async (userId: number) => {
+    const chats = await runBackendGetChats(userId, 1);
+    await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}/chats/${chats.active_chat_id}/messages`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+};
+
+const runBackendClearUserHistory = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}/messages`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+};
+
+const runBackendGetUserHistory = async (actorUserId: number, userId: number, limit: number) => {
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/admin/users/${userId}/history`, {
+        params: { actor_user_id: actorUserId, limit }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
+    });
+    return response.data as { messages: UserHistoryRow[] };
+};
+
+const runBackendDeleteUserHistoryByRole = async (actorUserId: number, userId: number, role: ChatRole | 'all') => {
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/admin/users/${userId}/history`, {
+        data: { actor_user_id: actorUserId, role }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
+    });
+    return response.data as { ok: boolean; deleted: number; matched_by: string };
+};
+
+const runBackendDeleteUserHistoryMessage = async (actorUserId: number, userId: number, messageId: number, mode: 'db' | 'tg') => {
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/admin/users/${userId}/history`, {
+        data: { actor_user_id: actorUserId, message_id: messageId, mode }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
+    });
+    return response.data as { ok: boolean; deleted: number; matched_by: string };
+};
+
+const withNoteOwner = (userId: number, note: Omit<NoteRecord, 'user_id'>): NoteRecord => ({ ...note, user_id: userId });
+
+const runBackendGetNotes = async (userId: number, limit: number, offset: number, query = '') => {
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/notes`, {
+        params: { limit, offset, query }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
+    });
+    const data = response.data as { notes: Array<Omit<NoteRecord, 'user_id'>>; total: number };
+    return { notes: data.notes.map(note => withNoteOwner(userId, note)), total: data.total };
+};
+
+const runBackendGetNote = async (userId: number, noteId: number) => {
+    try {
+        const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/notes/${noteId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+        return withNoteOwner(userId, (response.data as { note: Omit<NoteRecord, 'user_id'> }).note);
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) return undefined;
+        throw error;
+    }
+};
+
+const runBackendCreateNote = async (userId: number, content: string, title = '') => {
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/notes`, { title, content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: true; id: number };
+};
+
+const runBackendUpdateNote = async (userId: number, noteId: number, content: string) => {
+    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/users/${userId}/notes/${noteId}`, { content }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return response.data as { ok: true };
+};
+
+const runBackendDeleteNote = async (userId: number, noteId: number) => {
+    try {
+        await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}/notes/${noteId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+        return true;
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) return false;
+        throw error;
+    }
+};
+
+const runBackendGetNoteStats = async (userId: number) => {
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/note-stats`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    return (response.data as { stats: NoteStatsRecord }).stats;
+};
+
+const runBackendGetNoteStatsForUsers = async (actorUserId: number, userIds: number[]) => {
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/admin/notes/stats`, { actor_user_id: actorUserId, user_ids: userIds }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const rows = (response.data as { stats: NoteStatsRecord[] }).stats;
+    return new Map(rows.map(row => [row.user_id, row]));
+};
+
+const runBackendGetTasks = async (userId: number, status: TaskStatus | 'all' = 'pending', limit = 20) => {
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tasks`, {
+        params: { status, limit }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
+    });
+    const tasks = (response.data as { tasks: Array<Omit<TaskRecord, 'user_id'>> }).tasks;
+    return tasks.map(task => ({ ...task, user_id: userId }));
+};
+
+const runBackendGetTask = async (userId: number, taskId: number) => {
+    try {
+        const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tasks/${taskId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+        const task = (response.data as { task: Omit<TaskRecord, 'user_id'> }).task;
+        return { ...task, user_id: userId };
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) return undefined;
+        throw error;
+    }
+};
+
+const runBackendDeleteTask = async (userId: number, taskId: number) => {
+    try {
+        await axios.delete(`${BACKEND_API_BASE_URL}/internal/users/${userId}/tasks/${taskId}`, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+        return true;
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) return false;
+        throw error;
+    }
+};
+
 const getPromptDescriptionForDisplay = (
     prompt: { name: string; description?: string | null; content: string },
     t: BotTranslate
-) => prompt.name === 'Default' && prompt.content === DEFAULT_PROMPT_CONTENT
+) => prompt.name === 'Default'
     ? t('prompt.defaultDescription')
     : getPromptDescription(prompt.description || '', t);
 
@@ -3095,13 +2320,15 @@ const buildCustomPromptCardKeyboard = (
 };
 
 const renderPromptListInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, mode: 'reply' | 'edit') => {
-    const prompts = getAllPrompts();
+    const { prompts } = await runBackendGetPrompts();
     if (!prompts.length) {
         if (mode === 'edit') return ctx.editMessageText(ctx.t('prompt.none'));
         return ctx.reply(ctx.t('prompt.none'));
     }
 
-    const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID ? CUSTOM_PROMPT_ID : resolvePromptForUser(user).id;
+    const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID
+        ? CUSTOM_PROMPT_ID
+        : (await resolvePromptForUser(ctx.from.id)).id;
     const text = ctx.t('prompt.choose');
     const keyboard = buildPromptListKeyboard(
         prompts,
@@ -3155,7 +2382,9 @@ const handleModelList = async (ctx: any) => {
 };
 
 const renderPromptCardInteractive = async (ctx: any, user: { selected_prompt_id: number | null; custom_prompt_content?: string | null }, prompt: PromptRecord) => {
-    const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID ? CUSTOM_PROMPT_ID : resolvePromptForUser(user).id;
+    const currentPromptId = user.selected_prompt_id === CUSTOM_PROMPT_ID
+        ? CUSTOM_PROMPT_ID
+        : (await resolvePromptForUser(ctx.from.id)).id;
     const selected = prompt.id === currentPromptId;
     const defaultMark = prompt.is_default ? ctx.t('prompt.cardDefaultMark') : '';
     const selectedMark = selected ? ctx.t('prompt.cardSelectedMark') : '';
@@ -3329,14 +2558,15 @@ const buildBannedCardKeyboard = (userId: number, page: number, t: BotTranslate) 
 
 const renderAdminUsersList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
     const safePage = Math.max(0, page);
-    const total = getUsersCount();
+    const data = await runBackendGetUsersList('all', PAGE_SIZE, safePage * PAGE_SIZE);
+    const total = data.total;
     if (!total) {
         if (mode === 'edit') return ctx.editMessageText(ctx.t('admin.usersNone'));
         return ctx.reply(ctx.t('admin.usersNone'));
     }
 
-    const rows = getUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
-    const noteStatsMap = getNoteStatsForUsers(rows.map(r => r.id));
+    const rows = data.users;
+    const noteStatsMap = await runBackendGetNoteStatsForUsers(ctx.from.id, rows.map(r => r.id));
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const text = ctx.t('admin.usersList', { page: safePage + 1, pages, total });
     const keyboard = buildAdminUsersListKeyboard(rows, safePage, total, noteStatsMap, ctx.t);
@@ -3345,13 +2575,13 @@ const renderAdminUsersList = async (ctx: any, page: number, mode: 'reply' | 'edi
 };
 
 const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
-    const prompt = resolvePromptForUser(user);
-    const ban = user.status === 'banned' ? getBanRecord(user.id) : undefined;
+    const prompt = await resolvePromptForUser(user.id);
+    const ban = user.status === 'banned' ? (await runBackendGetBanRecord(user.id)).ban : undefined;
     const plan = parsePlanFromDb(user.plan);
-    const notesStats = getNoteStatsForUser(user.id);
+    const notesStats = await runBackendGetNoteStats(user.id);
     const notesLimit = getPlanNotesLimit(plan);
     const noteContentLimit = getPlanNoteContentLimit(plan);
-    const subscription = getCurrentPlanSubscription(user.id);
+    const subscription = await runBackendGetUserSubscription(user.id);
     const subscriptionEnds = subscription?.ends_at || ctx.t('admin.forever');
     const text = ctx.t('admin.userCard', {
         id: user.id, name: user.name ?? ctx.t('admin.notSpecified'),
@@ -3389,13 +2619,14 @@ const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: num
 
 const renderPendingList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
     const safePage = Math.max(0, page);
-    const total = getPendingUsersCount();
+    const data = await runBackendGetUsersList('pending', PAGE_SIZE, safePage * PAGE_SIZE);
+    const total = data.total;
     if (!total) {
         if (mode === 'edit') return ctx.editMessageText(ctx.t('admin.requestsNone'));
         return ctx.reply(ctx.t('admin.requestsNone'));
     }
 
-    const rows = getPendingUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
+    const rows = data.users as unknown as PendingUserRow[];
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const header = ctx.t('admin.requestsList', { page: safePage + 1, pages, total });
     const keyboard = buildPendingListKeyboard(rows, safePage, total, ctx.t);
@@ -3413,13 +2644,14 @@ const renderPendingCard = async (ctx: any, user: UserRecord, page: number, mode:
 
 const renderBannedList = async (ctx: any, page: number, mode: 'reply' | 'edit' = 'reply') => {
     const safePage = Math.max(0, page);
-    const total = getBannedUsersCount();
+    const data = await runBackendGetUsersList('banned', PAGE_SIZE, safePage * PAGE_SIZE);
+    const total = data.total;
     if (!total) {
         if (mode === 'edit') return ctx.editMessageText(ctx.t('admin.bansNone'));
         return ctx.reply(ctx.t('admin.bansNone'));
     }
 
-    const rows = getBannedUsersPage(PAGE_SIZE, safePage * PAGE_SIZE);
+    const rows = data.users as unknown as BannedUserRow[];
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const header = ctx.t('admin.bansList', { page: safePage + 1, pages, total });
     const keyboard = buildBannedListKeyboard(rows, safePage, total, ctx.t);
@@ -3428,7 +2660,7 @@ const renderBannedList = async (ctx: any, page: number, mode: 'reply' | 'edit' =
 };
 
 const renderBannedCard = async (ctx: any, user: UserRecord, page: number, mode: 'reply' | 'edit' = 'edit') => {
-    const ban = getBanRecord(user.id);
+    const ban = (await runBackendGetBanRecord(user.id)).ban;
     const text = ctx.t('admin.banCard', { id: user.id, name: user.name ?? ctx.t('admin.notSpecified'), username: user.tg_username ? `@${user.tg_username}` : ctx.t('admin.noneValue'), reason: ban?.reason ?? ctx.t('access.noReason'), date: ban?.banned_at ?? ctx.t('common.unknown') });
     const keyboard = buildBannedCardKeyboard(user.id, page, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
@@ -3440,10 +2672,11 @@ const approveUserAccess = async (targetUserId: number) => {
     if (!user) return false;
     await updateUserStatus(targetUserId, 'approved');
     if (!user.selected_prompt_id) {
-        const defaultPrompt = ensureDefaultPrompt();
+        const defaultPrompt = await runBackendGetDefaultPrompt();
         if (defaultPrompt) await updateUserPrompt(targetUserId, defaultPrompt.id);
     }
-    removeBan(targetUserId);
+    await runBackendUnbanUser(targetUserId);
+    await updateUserStatus(targetUserId, 'approved');
     return true;
 };
 
@@ -3451,23 +2684,22 @@ const disapproveUserAccess = async (targetUserId: number) => {
     const user = await getUser(targetUserId);
     if (!user) return false;
     await updateUserStatus(targetUserId, 'disapproved');
-    removeBan(targetUserId);
+    await runBackendUnbanUser(targetUserId);
+    await updateUserStatus(targetUserId, 'disapproved');
     return true;
 };
 
 const banUserAccess = async (targetUserId: number, bannedBy: number, reason: string) => {
     const user = await getUser(targetUserId);
     if (!user) return false;
-    await updateUserStatus(targetUserId, 'banned');
-    setBan(targetUserId, reason, bannedBy);
+    await runBackendBanUser(targetUserId, bannedBy, reason);
     return true;
 };
 
 const unbanUserAccess = async (targetUserId: number) => {
     const user = await getUser(targetUserId);
     if (!user) return false;
-    removeBan(targetUserId);
-    await updateUserStatus(targetUserId, 'none');
+    await runBackendUnbanUser(targetUserId);
     return true;
 };
 
@@ -3576,7 +2808,7 @@ bot.command('prompt_add', async (ctx) => {
     if (!content) return ctx.reply(ctx.t('adminPrompt.contentEmpty'));
 
     try {
-        const result = await runBackendCreatePrompt(name, description, content);
+        const result = await runBackendCreatePrompt(ctx.from.id, name, description, content);
         return ctx.reply(ctx.t('adminPrompt.added', { name, id: result.prompt_id }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
@@ -3617,7 +2849,7 @@ bot.command('prompt_set', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendUpdatePromptContent(promptId, content);
+        await runBackendUpdatePromptContent(ctx.from.id, promptId, content);
         return ctx.reply(ctx.t('adminPrompt.contentUpdated', { name: data.prompt.name }));
     } catch {
         return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
@@ -3637,7 +2869,7 @@ bot.command('prompt_desc', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendUpdatePromptDescription(promptId, description);
+        await runBackendUpdatePromptDescription(ctx.from.id, promptId, description);
         return ctx.reply(ctx.t('adminPrompt.descriptionUpdated', { name: data.prompt.name }));
     } catch {
         return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
@@ -3656,7 +2888,7 @@ bot.command('prompt_rename', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendUpdatePromptName(promptId, newName);
+        await runBackendUpdatePromptName(ctx.from.id, promptId, newName);
         return ctx.reply(ctx.t('adminPrompt.renamed', { oldName: data.prompt.name, newName }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'name_already_exists') {
@@ -3675,7 +2907,7 @@ bot.command('prompt_default', async (ctx) => {
 
     try {
         const data = await runBackendGetPrompt(promptId);
-        await runBackendSetDefaultPrompt(promptId);
+        await runBackendSetDefaultPrompt(ctx.from.id, promptId);
         return ctx.reply(ctx.t('adminPrompt.defaultUpdated', { name: data.prompt.name }));
     } catch {
         return ctx.reply(ctx.t('prompt.notFoundId', { id: promptId }));
@@ -3692,7 +2924,7 @@ bot.command('prompt_delete', async (ctx) => {
     try {
         const data = await runBackendGetPrompt(promptId);
         const name = data.prompt.name;
-        await runBackendDeletePrompt(promptId);
+        await runBackendDeletePrompt(ctx.from.id, promptId);
         return ctx.reply(ctx.t('adminPrompt.deleted', { name }));
     } catch (err: any) {
         if (axios.isAxiosError(err)) {
@@ -3715,7 +2947,8 @@ bot.command('add', async (ctx) => {
     if (!newUserId || Number.isNaN(newUserId)) return ctx.reply(ctx.t('admin.addFormat'));
 
     await addUser(newUserId, newUserName, 'user', 'approved', null);
-    removeBan(newUserId);
+    await runBackendUnbanUser(newUserId);
+    await updateUserStatus(newUserId, 'approved');
     ctx.reply(ctx.t('admin.userAdded', { name: newUserName, id: newUserId }));
 });
 
@@ -3732,9 +2965,6 @@ bot.command('remove', async (ctx) => {
     if (targetUser.role === 'admin') return ctx.reply(ctx.t('admin.cannotDeleteAdminDb'));
 
     await removeUser(targetUserId);
-    removeBan(targetUserId);
-    removeUserPlanSubscriptions(targetUserId);
-    clearUserHistory(targetUserId);
     ctx.reply(ctx.t('admin.userRemoved', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 });
 
@@ -3841,7 +3071,7 @@ bot.command('reset_counters', async (ctx) => {
     }
 });
 
-bot.command('history_user', (ctx) => {
+bot.command('history_user', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -3855,11 +3085,11 @@ bot.command('history_user', (ctx) => {
         ? Math.max(1, Math.min(20, rawLimit))
         : 10;
 
-    const rows = getRecentHistoryRowsByUser(targetUserId, limit);
-    return ctx.reply(formatRecentHistoryRows(targetUserId, rows, ctx.t));
+    const { messages } = await runBackendGetUserHistory(ctx.from.id, targetUserId, limit);
+    return ctx.reply(formatRecentHistoryRows(targetUserId, messages, ctx.t));
 });
 
-bot.command('history_delete', (ctx) => {
+bot.command('history_delete', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
@@ -3874,11 +3104,11 @@ bot.command('history_delete', (ctx) => {
 
     if (secondArg === 'user' || secondArg === 'assistant' || secondArg === 'all') {
         const role: ChatRole | 'all' = secondArg;
-        const result = deleteHistoryByUserAndRole(targetUserId, role);
-        if (!result.changes) {
+        const result = await runBackendDeleteUserHistoryByRole(ctx.from.id, targetUserId, role);
+        if (!result.deleted) {
             return ctx.reply(ctx.t('adminHistory.nothingDeletedRole', { id: targetUserId, role }));
         }
-        return ctx.reply(ctx.t('adminHistory.deletedRole', { count: result.changes, id: targetUserId, role }));
+        return ctx.reply(ctx.t('adminHistory.deletedRole', { count: result.deleted, id: targetUserId, role }));
     }
 
     const messageId = Number.parseInt(secondArg, 10);
@@ -3887,29 +3117,29 @@ bot.command('history_delete', (ctx) => {
     }
 
     const mode = (parts[3] || '').toLowerCase();
-    let result;
+    let result: { deleted: number };
     if (mode === 'tg') {
-        result = deleteHistoryMessageByUserAndTelegramMessageId(targetUserId, messageId);
-        if (!result.changes) {
+        result = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'tg');
+        if (!result.deleted) {
             return ctx.reply(ctx.t('adminHistory.notFoundTg', { id: targetUserId, messageId }));
         }
-        return ctx.reply(ctx.t('adminHistory.deletedTg', { count: result.changes, id: targetUserId, messageId }));
+        return ctx.reply(ctx.t('adminHistory.deletedTg', { count: result.deleted, id: targetUserId, messageId }));
     }
     if (mode === 'db') {
-        result = deleteHistoryMessageByUserAndMessageId(targetUserId, messageId);
-        if (!result.changes) {
+        result = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'db');
+        if (!result.deleted) {
             return ctx.reply(ctx.t('adminHistory.notFoundDb', { id: targetUserId, messageId }));
         }
-        return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.changes, id: targetUserId, messageId }));
+        return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.deleted, id: targetUserId, messageId }));
     }
 
-    result = deleteHistoryMessageByUserAndMessageId(targetUserId, messageId);
-    if (result.changes) {
-        return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.changes, id: targetUserId, messageId }));
+    result = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'db');
+    if (result.deleted) {
+        return ctx.reply(ctx.t('adminHistory.deletedDb', { count: result.deleted, id: targetUserId, messageId }));
     }
-    const tgResult = deleteHistoryMessageByUserAndTelegramMessageId(targetUserId, messageId);
-    if (tgResult.changes) {
-        return ctx.reply(ctx.t('adminHistory.deletedTg', { count: tgResult.changes, id: targetUserId, messageId }));
+    const tgResult = await runBackendDeleteUserHistoryMessage(ctx.from.id, targetUserId, messageId, 'tg');
+    if (tgResult.deleted) {
+        return ctx.reply(ctx.t('adminHistory.deletedTg', { count: tgResult.deleted, id: targetUserId, messageId }));
     }
     return ctx.reply(ctx.t('adminHistory.notFoundAny', { id: targetUserId, messageId }));
 });
@@ -4025,7 +3255,6 @@ bot.command('tz', async (ctx) => {
 
     try {
         await runBackendSetTimezone(userId, offset);
-        updateUserTimezone(userId, offset);
     } catch {
         return ctx.reply(ctx.t('timezone.error'));
     }
@@ -4043,7 +3272,7 @@ bot.command('tasks', async (ctx) => {
         return ctx.reply(ctx.t('tasks.noAccess'));
     }
 
-    const tasks = getUserTasks(userId, 'pending', 20);
+    const tasks = await runBackendGetTasks(userId, 'pending', 20);
     if (!tasks.length) return ctx.reply(ctx.t('tasks.noneActive'));
 
     const text = ctx.t('tasks.list', {
@@ -4068,7 +3297,7 @@ bot.command('task_delete', async (ctx) => {
         return ctx.reply(ctx.t('tasks.deleteFormat'));
     }
 
-    const task = getTaskByUserAndId(userId, taskId);
+    const task = await runBackendGetTask(userId, taskId);
     if (!task) return ctx.reply(ctx.t('tasks.notFoundId', { id: taskId }));
     if (task.status !== 'pending') {
         return ctx.reply(ctx.t('tasks.notActive', {
@@ -4077,10 +3306,10 @@ bot.command('task_delete', async (ctx) => {
         }));
     }
 
-    const result = deletePendingTaskByUserAndId(userId, taskId);
-    if (!result.changes) return ctx.reply(ctx.t('tasks.deleteError', { id: taskId }));
+    const deleted = await runBackendDeleteTask(userId, taskId);
+    if (!deleted) return ctx.reply(ctx.t('tasks.deleteError', { id: taskId }));
 
-    const updated = getUserTasks(userId, 'pending', 20);
+    const updated = await runBackendGetTasks(userId, 'pending', 20);
     const updatedText = await formatTasksList(updated, ctx.t, ctx.t('tasks.noneRemaining'));
     return ctx.reply(ctx.t('tasks.deleted', {
         id: taskId,
@@ -4098,11 +3327,12 @@ bot.command('chats', async (ctx) => {
         return ctx.reply(ctx.t('chats.noAccess'));
     }
 
-    const active = getActiveChatForUser(userId);
-    const chats = getUserChats(userId, 50);
+    const data = await runBackendGetChats(userId, 50);
+    const activeChatId = data.active_chat_id;
+    const chats = data.chats;
     if (!chats.length) return ctx.reply(ctx.t('chats.none'));
     const lines = chats.map(chat => {
-        const marker = active?.id === chat.id ? ctx.t('chats.activeMark') : '';
+        const marker = activeChatId === chat.id ? ctx.t('chats.activeMark') : '';
         return `#${chat.id}${marker} ${chat.title}`;
     });
     return ctx.reply(ctx.t('chats.list', {
@@ -4120,12 +3350,11 @@ bot.command('chat_new', async (ctx) => {
     }
 
     const titleRaw = extractCommandPayload(ctx.message.text, 'chat_new');
-    const existingCount = getUserChats(userId, 500).length;
+    const existingCount = (await runBackendGetChats(userId, 100)).chats.length;
     const autoTitle = ctx.t('chats.autoTitle', { number: existingCount + 1 });
     const title = (titleRaw || autoTitle).slice(0, 80).trim() || autoTitle;
-    const created = createUserChat(userId, title);
-    const chatId = Number(created.lastInsertRowid);
-    setUserActiveChat(userId, chatId);
+    const created = await runBackendCreateChat(userId, title);
+    const chatId = created.chat.id;
     return ctx.reply(ctx.t('chats.created', { id: chatId, title }));
 });
 
@@ -4142,11 +3371,13 @@ bot.command('chat_use', async (ctx) => {
         return ctx.reply(ctx.t('chats.useFormat'));
     }
 
-    const chat = getUserChatById(userId, chatId);
-    if (!chat) {
+    let chat: UserChatRecord;
+    try {
+        chat = (await runBackendGetChat(userId, chatId)).chat;
+    } catch {
         return ctx.reply(ctx.t('chats.notFound', { id: chatId }));
     }
-    setUserActiveChat(userId, chatId);
+    await runBackendActivateChat(userId, chatId);
     return ctx.reply(ctx.t('chats.switched', { id: chat.id, title: chat.title }));
 });
 
@@ -4169,17 +3400,16 @@ bot.command('note_add', async (ctx) => {
             limit: contentLimit
         }));
     }
-    const notesLimit = getPlanNotesLimit(userPlan);
-    const notesCount = countNotes(userId);
-    if (notesCount >= notesLimit) {
-        return ctx.reply(ctx.t('notes.limitReached', {
-            plan: getPlanLabel(userPlan),
-            limit: notesLimit
-        }));
+    let created: { id: number };
+    try {
+        created = await runBackendCreateNote(userId, content, '');
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response?.data?.error === 'notes_limit') {
+            return ctx.reply(ctx.t('notes.limitReached', { plan: getPlanLabel(userPlan), limit: getPlanNotesLimit(userPlan) }));
+        }
+        throw error;
     }
-
-    const created = createNote(userId, content, '');
-    const noteId = Number(created.lastInsertRowid);
+    const noteId = created.id;
     return ctx.reply(ctx.t('notes.saved', { id: noteId }));
 });
 
@@ -4196,8 +3426,7 @@ bot.command('notes', async (ctx) => {
     const page = Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1;
     const listLimit = getPlanNoteListLimit(parsePlanFromDb(user.plan));
     const offset = (page - 1) * listLimit;
-    const notes = getNotesPage(userId, listLimit, offset);
-    const total = countNotes(userId);
+    const { notes, total } = await runBackendGetNotes(userId, listLimit, offset);
     return ctx.reply(formatNotesPage(
         notes,
         page,
@@ -4226,8 +3455,7 @@ bot.command('note_find', async (ctx) => {
     }
 
     const listLimit = getPlanNoteListLimit(parsePlanFromDb(user.plan));
-    const notes = getNotesPage(userId, listLimit, 0, query);
-    const total = countNotes(userId, query);
+    const { notes, total } = await runBackendGetNotes(userId, listLimit, 0, query);
     return ctx.reply(formatNotesPage(
         notes,
         1,
@@ -4251,10 +3479,10 @@ bot.command('note_delete', async (ctx) => {
     if (!noteId || Number.isNaN(noteId)) {
         return ctx.reply(ctx.t('notes.deleteFormat'));
     }
-    const note = getNoteByUserAndId(userId, noteId);
+    const note = await runBackendGetNote(userId, noteId);
     if (!note) return ctx.reply(ctx.t('notes.notFound', { id: noteId }));
-    const result = deleteNoteByUserAndId(userId, noteId);
-    if (!result.changes) return ctx.reply(ctx.t('notes.deleteError', { id: noteId }));
+    const deleted = await runBackendDeleteNote(userId, noteId);
+    if (!deleted) return ctx.reply(ctx.t('notes.deleteError', { id: noteId }));
     return ctx.reply(ctx.t('notes.deleted', { id: noteId }));
 });
 
@@ -4420,8 +3648,9 @@ bot.on('location', async (ctx) => {
 
     try {
         await runBackendSetTimezone(userId, offset);
-    } catch {}
-    updateUserTimezone(userId, offset);
+    } catch {
+        return ctx.reply(ctx.t('timezone.error'));
+    }
     timezoneSetupFlows.delete(userId);
     const sign = offset >= 0 ? '+' : '';
     return ctx.reply(ctx.t('timezone.locationSet', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
@@ -4478,7 +3707,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
         }
 
         await ctx.reply(ctx.t('prompt.adminChoose', {
-            list: formatPromptsList(user.selected_prompt_id, ctx.t, true)
+            list: await formatPromptsList(user.selected_prompt_id, ctx.t, true)
         }));
         return;
     }
@@ -4493,7 +3722,7 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
             return;
         }
 
-        const activePrompt = resolvePromptForUser(user);
+        const activePrompt = await resolvePromptForUser(userId);
         if (activePrompt.id === CUSTOM_PROMPT_ID) {
             const preview = getCustomPromptPreview(user.custom_prompt_content, ctx.t, 280);
             await ctx.reply(ctx.t('prompt.currentCustom', {
@@ -4680,8 +3909,7 @@ bot.action('mail:instr:google', async (ctx) => {
 bot.action('mail:forget', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
-    try { await runBackendMailForget(userId); } catch {}
-    clearUserMailSettings(userId);
+    await runBackendMailForget(userId);
     await ctx.answerCbQuery(ctx.t('mail.deletedShort'));
     await ctx.reply(ctx.t('mail.dataDeleted'));
 });
@@ -4731,7 +3959,7 @@ bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
         await ctx.answerCbQuery(ctx.t('notes.invalidIdShort'));
         return;
     }
-    const note = getNoteByUserAndId(userId, noteId);
+    const note = await runBackendGetNote(userId, noteId);
     if (!note) {
         await ctx.answerCbQuery(ctx.t('notes.notFoundShort'));
         return;
@@ -4760,18 +3988,18 @@ bot.action(/^notes:delete:(\d+):(\d+)$/, async (ctx) => {
         await ctx.answerCbQuery(ctx.t('notes.invalidIdShort'));
         return;
     }
-    const note = getNoteByUserAndId(userId, noteId);
+    const note = await runBackendGetNote(userId, noteId);
     if (!note) {
         await ctx.answerCbQuery(ctx.t('notes.alreadyDeleted'));
         await renderNotesMenuList(ctx, userId, safePage, 'edit');
         return;
     }
-    const deleted = deleteNoteByUserAndId(userId, noteId);
-    if (!deleted.changes) {
+    const deleted = await runBackendDeleteNote(userId, noteId);
+    if (!deleted) {
         await ctx.answerCbQuery(ctx.t('notes.deleteErrorShort'));
         return;
     }
-    const totalAfter = countNotes(userId);
+    const totalAfter = (await runBackendGetNotes(userId, 1, 0)).total;
     const maxPage = Math.max(0, Math.ceil(totalAfter / NOTES_MENU_PAGE_SIZE) - 1);
     const nextPage = Math.min(safePage, maxPage);
     await ctx.answerCbQuery(ctx.t('notes.deletedShort'));
@@ -5027,7 +4255,6 @@ bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|f
 
     const endsAt = getEndsAtForDuration(duration);
     await applyUserPlan(userId, plan, endsAt, adminId);
-    await trimUserHistory(userId);
     const refreshed = await getUser(userId);
     if (!refreshed) {
         await ctx.answerCbQuery(ctx.t('admin.updateError'));
@@ -5156,8 +4383,6 @@ bot.action(/^usr:remove:(\d+):(\d+)$/, async (ctx) => {
     }
 
     await removeUser(targetUserId);
-    removeBan(targetUserId);
-    clearUserHistory(targetUserId);
     await renderAdminUsersList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
     await ctx.answerCbQuery(ctx.t('admin.deleted'));
 });
@@ -5250,7 +4475,6 @@ bot.action('prompt:custom:use', async (ctx) => {
     }
 
     await selectUserCustomPrompt(userId);
-    await runBackendSelectUserPrompt(userId, -1);
     const refreshed = await getUser(userId);
     if (!refreshed) {
         await ctx.answerCbQuery(ctx.t('common.profileError'));
@@ -5340,7 +4564,6 @@ bot.action(/^prompt:use:(\d+)$/, async (ctx) => {
         return;
     }
 
-    await runBackendSelectUserPrompt(userId, promptId);
     await updateUserPrompt(userId, promptId);
     const refreshedUser = await getUser(userId);
     if (!refreshedUser) {
@@ -7043,9 +6266,7 @@ bot.on('text', async (ctx) => {
         }
 
         const nextValue = Math.max(1000, Math.floor(parsed));
-        try { await runBackendSetContextTokens(adminContextFlow.targetUserId, nextValue); } catch {}
-        db.prepare('UPDATE users SET max_context_tokens = ? WHERE id = ?').run(nextValue, adminContextFlow.targetUserId);
-        await trimUserHistory(adminContextFlow.targetUserId);
+        await runBackendSetContextTokens(adminContextFlow.targetUserId, nextValue);
         adminUserContextLimitFlows.delete(userId);
         const refreshed = await getUser(adminContextFlow.targetUserId);
         if (refreshed) {
@@ -7078,7 +6299,7 @@ bot.on('text', async (ctx) => {
         }
 
         const nextLimit = normalizeDailyMessageLimit(parsed);
-        updateUserDailyMessageLimit(adminMessageLimitFlow.targetUserId, nextLimit);
+        await runBackendSetDailyMessageLimit(userId, adminMessageLimitFlow.targetUserId, nextLimit);
         adminUserMessageLimitFlows.delete(userId);
         const refreshed = await getUser(adminMessageLimitFlow.targetUserId);
         if (refreshed) {
@@ -7103,8 +6324,11 @@ bot.on('text', async (ctx) => {
             return ctx.reply(ctx.t('timezone.invalidOffset'));
         }
 
-        try { await runBackendSetTimezone(userId, offset); } catch {}
-        updateUserTimezone(userId, offset);
+        try {
+            await runBackendSetTimezone(userId, offset);
+        } catch {
+            return ctx.reply(ctx.t('timezone.error'));
+        }
         timezoneSetupFlows.delete(userId);
         const sign = offset >= 0 ? '+' : '';
         return ctx.reply(ctx.t('timezone.setForTimers', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
@@ -7177,7 +6401,6 @@ bot.on('text', async (ctx) => {
 
             await updateUserCustomPrompt(userId, userText.trim());
             try { await runBackendUpdateCustomPrompt(userId, userText.trim()); } catch {}
-            try { await runBackendSelectUserPrompt(userId, -1); } catch {}
             await selectUserCustomPrompt(userId);
             customPromptEditFlows.delete(userId);
             return ctx.reply(ctx.t('prompt.input.saved'), buildMenuTriggerKeyboard(ctx.t));
@@ -7214,8 +6437,7 @@ bot.on('text', async (ctx) => {
             return ctx.reply(ctx.t('mail.limitRange'));
         }
 
-        try { await runBackendMailLimit(userId, parsed); } catch {}
-        updateUserMailCheckLimit(userId, parsed);
+        await runBackendMailLimit(userId, parsed);
         mailLimitFlows.delete(userId);
         return ctx.reply(ctx.t('mail.newLimit', { limit: parsed }));
     }
@@ -7257,9 +6479,7 @@ bot.on('text', async (ctx) => {
         }
 
         const ctxValue = Math.max(1000, Math.floor(parsed));
-        try { await runBackendSetContextTokens(userId, ctxValue); } catch {}
-        db.prepare('UPDATE users SET max_context_tokens = ? WHERE id = ?').run(ctxValue, userId);
-        await trimUserHistory(userId);
+        await runBackendSetContextTokens(userId, ctxValue);
         contextLimitFlows.delete(userId);
         const refreshed = await getUser(userId);
         if (refreshed) {
@@ -7300,17 +6520,14 @@ bot.on('text', async (ctx) => {
             }));
         }
 
-        const note = getNoteByUserAndId(userId, noteEditFlow.noteId);
+        const note = await runBackendGetNote(userId, noteEditFlow.noteId);
         if (!note) {
             noteEditFlows.delete(userId);
             return ctx.reply(ctx.t('notes.notFound', { id: noteEditFlow.noteId }));
         }
 
-        const result = updateNoteByUserAndId(userId, noteEditFlow.noteId, userText.trim());
+        await runBackendUpdateNote(userId, noteEditFlow.noteId, userText.trim());
         noteEditFlows.delete(userId);
-        if (!result.changes) {
-            return ctx.reply(ctx.t('notes.updateError', { id: noteEditFlow.noteId }));
-        }
 
         await ctx.reply(ctx.t('notes.updated', { id: noteEditFlow.noteId }));
         await renderNoteView(ctx, userId, noteEditFlow.noteId, noteEditFlow.page, 'reply');
@@ -7446,24 +6663,6 @@ bot.on('photo', async (ctx) => {
     await withUserRequestLock(ctx, () => processUserPhotoThroughAi(ctx));
 });
 
-
-setInterval(() => {
-    void (async () => {
-        try {
-            await expireFinishedPlanSubscriptions();
-        } catch (err) {
-            console.error('Ошибка проверки истекших подписок:', formatSafeError(err));
-        }
-    })();
-}, 60 * 60 * 1000);
-
-void (async () => {
-    try {
-        await expireFinishedPlanSubscriptions();
-    } catch (err) {
-        console.error('Ошибка первичной проверки подписок:', formatSafeError(err));
-    }
-})();
 
 if (AUTO_SYNC_PLAN_LIMITS_ON_BOOT) {
     (async () => {
