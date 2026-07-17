@@ -1,6 +1,6 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, ToolStatusUpdate, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
+import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
@@ -2928,7 +2928,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (status: ToolStatusUpdate) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -5516,7 +5516,7 @@ export const sendMessageThroughAi = async (
     userAttachments?: MessageAttachment[] | null;
     onIntermediateMessage?: (text: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
-    onToolStatus?: (status: ToolStatusUpdate) => Promise<void> | void;
+    onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
     /** Стрим токенов контента в реальном времени (уже оттроттлено в streamAndAssemble). */

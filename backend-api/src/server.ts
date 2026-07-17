@@ -37,7 +37,7 @@ import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from
 import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
 import { resolveAudioFile, saveTtsAudio } from './services/audio-storage.js';
 import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './services/tts-cartesia.js';
-import type { ToolStatusUpdate, UserRecord } from './types.js';
+import type { UserRecord } from './types.js';
 import {
   getAccountIdByTelegramId,
   getAccountIdentities,
@@ -69,8 +69,6 @@ db.transaction(() => {
 })();
 
 const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
-const serializeToolStatus = (status: ToolStatusUpdate) =>
-  typeof status === 'string' ? { text: status } : status;
 
 const app = express();
 const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
@@ -504,8 +502,8 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       onIntermediateMessage: (stepText) => {
         res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
       },
-      onToolStatus: (status) => {
-        res.write(`event: tool_status\ndata: ${JSON.stringify(serializeToolStatus(status))}\n\n`);
+      onToolStatus: (statusText) => {
+        res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);
       },
       onDesktopAction: (action) => {
         // Forward ALL desktop_actions (including pc_command_confirmation) to TG via SSE
@@ -1506,8 +1504,8 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       onDesktopAction: (action) => {
         res.write(`event: desktop_action\ndata: ${JSON.stringify(action)}\n\n`);
       },
-      onToolStatus: (status) => {
-        res.write(`event: tool_status\ndata: ${JSON.stringify(serializeToolStatus(status))}\n\n`);
+      onToolStatus: (statusText) => {
+        res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);
       },
       onMapUpdate: (data) => {
         res.write(`event: map_update\ndata: ${JSON.stringify(data)}\n\n`);
@@ -4596,8 +4594,8 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       onDesktopAction: async (action) => {
         await sendWsJson({ type: 'desktop_action', ...action });
       },
-      onToolStatus: async (status) => {
-        await sendWsJson({ type: 'tool_status', ...serializeToolStatus(status) });
+      onToolStatus: async (statusText) => {
+        await sendWsJson({ type: 'tool_status', text: statusText });
       },
       onMapUpdate: async (data) => {
         await sendWsJson({ type: 'map_update', ...data });

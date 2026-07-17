@@ -1,5 +1,3 @@
-import i18n from '../i18n';
-
 const API_BASE: string = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3050';
 
 export { API_BASE };
@@ -508,16 +506,6 @@ type WsCallbacks = StreamCallbacks & {
 let wsCallbacks: WsCallbacks = {};
 let activeStreamCallbacks: StreamCallbacks = {};
 
-function localizeToolStatus(payload: { text?: unknown; i18n_key?: unknown; i18n_values?: unknown }): string {
-  if (typeof payload.i18n_key === 'string') {
-    const values = payload.i18n_values && typeof payload.i18n_values === 'object'
-      ? payload.i18n_values as Record<string, string | number>
-      : {};
-    return i18n.t(payload.i18n_key, values);
-  }
-  return typeof payload.text === 'string' ? payload.text : '';
-}
-
 /** Register a global handler for task_result events (scheduler push). */
 export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
   wsCallbacks.onTaskResult = cb;
@@ -561,7 +549,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           // Pass to React (e.g. UI toast "Macro launched")
           (activeStreamCallbacks.onDesktopAction ?? wsCallbacks.onDesktopAction)?.(msg);
           break;
-        case 'tool_status': (activeStreamCallbacks.onToolStatus ?? wsCallbacks.onToolStatus)?.(localizeToolStatus(msg)); break;
+        case 'tool_status': (activeStreamCallbacks.onToolStatus ?? wsCallbacks.onToolStatus)?.(msg.text); break;
         case 'map_update': (activeStreamCallbacks.onMapUpdate ?? wsCallbacks.onMapUpdate)?.(msg); break;
         case 'dice_roll': (activeStreamCallbacks.onDiceRoll ?? wsCallbacks.onDiceRoll)?.(Number(msg.roll)); break;
         case 'done': {
@@ -772,7 +760,7 @@ async function streamChatMessageSSE(
             else if (eventName === 'desktop_action' && callbacks?.onDesktopAction) callbacks.onDesktopAction(data);
             else if (eventName === 'map_update' && callbacks?.onMapUpdate) callbacks.onMapUpdate(data);
             else if (eventName === 'dice_roll' && callbacks?.onDiceRoll) callbacks.onDiceRoll(Number(data.roll));
-            else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(localizeToolStatus(data));
+            else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
             else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
             else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error);
           } catch {

@@ -15,7 +15,6 @@
 import { SubagentContext, SubagentResult, SubagentIteration } from './types.js';
 import { setMaxListeners } from 'events';
 import { getSubagent, RegisteredSubagent } from './registry.js';
-import type { ToolStatusUpdate } from '../../types.js';
 
 // These will be set by initSubagentRunner() at startup to avoid circular imports.
 let _runCompletion: typeof import('../ai.js').runCompletion;
@@ -49,24 +48,16 @@ export function initSubagentRunner(deps: {
 // Human-readable tool names for status broadcasting
 // ---------------------------------------------------------------------------
 
-const TOOL_STATUS_I18N_KEYS: Record<string, string> = {
-  list_directory: 'subagents.toolStatus.readingDirectory',
-  convert_video: 'subagents.toolStatus.convertingVideo',
-  list_devops_servers: 'subagents.toolStatus.gettingServerList',
+const TOOL_STATUS_MESSAGES: Record<string, string> = {
+  // Shared tools
+  list_directory: 'Reading directory...',
+  convert_video: 'Converting video...',
+  list_devops_servers: 'Получение списка серверов...',
 };
 
-function getToolStatusMessage(agentName: string, toolName: string): ToolStatusUpdate {
-  const i18nKey = TOOL_STATUS_I18N_KEYS[toolName];
-  if (i18nKey) {
-    return {
-      i18n_key: i18nKey,
-      i18n_values: { agent: agentName },
-    };
-  }
-  return {
-    i18n_key: 'subagents.toolStatus.runningTool',
-    i18n_values: { agent: agentName, tool: toolName },
-  };
+function getToolStatusMessage(agentName: string, toolName: string): string {
+  const base = TOOL_STATUS_MESSAGES[toolName];
+  return base ? `[${agentName}] ${base}` : `[${agentName}] ${toolName}...`;
 }
 
 /** Local abort-error check (avoids circular import with ai.ts). */
@@ -74,12 +65,12 @@ function _isAbortError(err: any): boolean {
   return err?.name === 'AbortError' || err?.code === 'ABORT_ERR' || `${err?.message || ''}` === 'AbortError';
 }
 
-/** Maximum full tool-result length stored in the trace (equivalent to TOOL_RESULT_FULL_MAX in ai.ts). */
+/** Лимит на сохраняемый полный результат инструмента в trace (аналог TOOL_RESULT_FULL_MAX в ai.ts). */
 const SUBAGENT_TOOL_RESULT_MAX = 40_000;
 
 function truncateToolResult(content: string): string {
   if (content.length > SUBAGENT_TOOL_RESULT_MAX) {
-    return content.slice(0, SUBAGENT_TOOL_RESULT_MAX) + `\n\n[...result truncated, ${content.length} total characters]`;
+    return content.slice(0, SUBAGENT_TOOL_RESULT_MAX) + `\n\n[...результат обрезан, всего ${content.length} символов]`;
   }
   return content;
 }
@@ -108,9 +99,9 @@ export interface RunSubagentParams {
  * 'manual' = use user's preferred_model (ctx.manualModel), still 'pro' API mode.
  */
 function resolveMode(ctx: SubagentContext): 'pro' {
-  // Both modes use the 'pro' API. The only difference is whether manualModel
-  // is passed to runCompletion. manualModel is already provided through ctx
-  // and is applied below.
+  // Оба режима используют 'pro' API — разница только в том,
+  // передаётся ли manualModel в runCompletion.
+  // manualModel уже прокинут через ctx и применяется автоматически ниже.
   return 'pro';
 }
 
@@ -161,9 +152,9 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   const ownToolsMap = new Map(ownTools.map(t => [t.definition.function.name, t]));
 
   // 3. Build messages
-  const userMessageParts = [`Task: ${task}`];
+  const userMessageParts = [`Задача: ${task}`];
   if (context) {
-    userMessageParts.push(`Context: ${JSON.stringify(context)}`);
+    userMessageParts.push(`Контекст: ${JSON.stringify(context)}`);
   }
 
   const messages: any[] = [
@@ -186,7 +177,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     if (loop === maxLoops - 2) {
       messages.push({
         role: 'system',
-        content: 'You have 2 iterations left. Finish the task and return the final result.',
+        content: 'У тебя осталось 2 итерации. Заверши задачу и верни итоговый результат.',
       });
     }
 
@@ -212,8 +203,8 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     if (!message) {
       console.warn(`[subagent:${resolvedAgentName}] empty response from model`);
       return {
-        answer: 'The subagent received no response from the model.',
-        summary: 'Empty model response.',
+        answer: 'Субагент не получил ответ от модели.',
+        summary: 'Пустой ответ модели.',
         toolCallsHistory,
         iterations,
       };
@@ -326,7 +317,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       } else {
         toolContent = JSON.stringify({
           status: 'error',
-          message: `Tool "${toolName}" is not available to this subagent.`,
+          message: `Инструмент "${toolName}" недоступен для этого субагента.`,
         });
       }
 
@@ -366,14 +357,14 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
 
   // If we exhausted all loops without a final answer
   return {
-    answer: 'The subagent exceeded its iteration limit. The task may be only partially complete.',
-    summary: 'Iteration limit exceeded.',
+    answer: 'Субагент превысил лимит итераций. Задача может быть выполнена частично.',
+    summary: 'Превышен лимит итераций.',
     toolCallsHistory,
     iterations,
   };
   } catch (err: any) {
-    // Soft abort: return a partial result instead of throwing so the main
-    // agent receives a tool result and can continue.
+    // Soft abort: возвращаем partial-результат вместо throw,
+    // чтобы основной агент получил tool_result и мог продолжить.
     if (_isAbortError(err)) {
       console.log(`[subagent:${resolvedAgentName}] aborted, returning partial result (${toolCallsHistory.length} tool calls performed)`);
       const partialAnswer = messages
@@ -381,8 +372,8 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         .map(m => m.content)
         .pop() as string | undefined;
       return {
-        answer: partialAnswer || 'Interrupted by the user',
-        summary: 'Interrupted by the user (partial).',
+        answer: partialAnswer || 'Прервано пользователем',
+        summary: 'Прервано пользователем (partial).',
         toolCallsHistory,
         iterations,
         aborted: true,

@@ -790,13 +790,5 @@
     "defaultVoice": "デフォルト",
     "cartesia": "Cartesia（クラウド）",
     "previewText": "こんにちは、私はチャッターです！"
-  },
-  "subagents": {
-    "toolStatus": {
-      "readingDirectory": "[{{agent}}] ディレクトリを読み取り中...",
-      "convertingVideo": "[{{agent}}] 動画を変換中...",
-      "gettingServerList": "[{{agent}}] サーバーリストを取得中...",
-      "runningTool": "[{{agent}}] {{tool}} を実行中..."
-    }
   }
 }
