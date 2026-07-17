@@ -72,9 +72,15 @@
       "banned": "⛔ 禁止ユーザー",
       "mail": "📬 メール",
       "notes": "📝 メモ",
+      "language": "🌐 言語",
       "help": "ℹ️ ヘルプ",
       "notesWebApp": "📝 メモ（Webアプリ）"
     }
+  },
+  "language": {
+    "card": "🌐 Telegramの言語\n\n現在: {{language}}\n言語を選択してください:",
+    "changed": "言語を変更しました: {{language}}",
+    "back": "⬅️ メニューへ"
   },
   "prompt": {
     "none": "まだプロンプトはありません。",

@@ -72,9 +72,15 @@
       "banned": "⛔ Banned users",
       "mail": "📬 Mail",
       "notes": "📝 Notes",
+      "language": "🌐 Language",
       "help": "ℹ️ Help",
       "notesWebApp": "📝 Notes (WebApp)"
     }
+  },
+  "language": {
+    "card": "🌐 Telegram language\n\nCurrent: {{language}}\nChoose a language:",
+    "changed": "Language changed: {{language}}",
+    "back": "⬅️ Back to menu"
   },
   "prompt": {
     "none": "There are no prompts yet.",

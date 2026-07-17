@@ -72,9 +72,15 @@
       "banned": "⛔ Gebannte Benutzer",
       "mail": "📬 Mail",
       "notes": "📝 Notizen",
+      "language": "🌐 Sprache",
       "help": "ℹ️ Hilfe",
       "notesWebApp": "📝 Notizen (WebApp)"
     }
+  },
+  "language": {
+    "card": "🌐 Telegram-Sprache\n\nAktuell: {{language}}\nWähle eine Sprache:",
+    "changed": "Sprache geändert: {{language}}",
+    "back": "⬅️ Zum Menü"
   },
   "prompt": {
     "none": "Es gibt noch keine Prompts.",

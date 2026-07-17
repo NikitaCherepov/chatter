@@ -254,7 +254,7 @@ type NoteStatsRecord = {
     notes_count: number;
     notes_chars: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'help';
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'language' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
     labelKey: string;
@@ -279,8 +279,9 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'pending', labelKey: 'menu.buttons.pending', adminOnly: true, row: 5 },
     { id: 'banned', labelKey: 'menu.buttons.banned', adminOnly: true, row: 5 },
     { id: 'mail', labelKey: 'menu.buttons.mail', adminOnly: false, row: 6 },
+    { id: 'language', labelKey: 'menu.buttons.language', adminOnly: false, row: 6 },
     { id: 'notes', labelKey: 'menu.buttons.notes', adminOnly: false, row: 7 },
-    { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 8 }
+    { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 7 }
 ];
 
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
@@ -308,6 +309,27 @@ const buildMainMenuInlineKeyboard = (isAdmin: boolean, t: BotTranslate) => {
         ]);
     }
 
+    return Markup.inlineKeyboard(rows);
+};
+
+const getNativeLanguageName = (language: SupportedLanguage) => {
+    try {
+        return new Intl.DisplayNames([language], { type: 'language' }).of(language) || language;
+    } catch {
+        return language;
+    }
+};
+
+const buildLanguageKeyboard = (currentLanguage: SupportedLanguage, t: BotTranslate) => {
+    const buttons = SUPPORTED_LANGUAGES.map(language => Markup.button.callback(
+        `${language === currentLanguage ? '✅ ' : ''}${getNativeLanguageName(language)}`,
+        `language:set:${language}`
+    ));
+    const rows = [] as ReturnType<typeof Markup.button.callback>[][];
+    for (let index = 0; index < buttons.length; index += 2) {
+        rows.push(buttons.slice(index, index + 2));
+    }
+    rows.push([Markup.button.callback(t('language.back'), 'language:back')]);
     return Markup.inlineKeyboard(rows);
 };
 
@@ -3654,7 +3676,7 @@ bot.on('location', async (ctx) => {
     return ctx.reply(ctx.t('timezone.locationSet', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|language|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -3803,12 +3825,50 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
         return;
     }
 
+    if (actionId === 'language') {
+        await ctx.reply(ctx.t('language.card', {
+            language: getNativeLanguageName(ctx.state.language)
+        }), buildLanguageKeyboard(ctx.state.language, ctx.t));
+        return;
+    }
+
     if (ctx.state.role === 'admin') {
         await ctx.reply(ctx.t('generated.allCommands'));
         return;
     }
 
     await ctx.reply(ctx.t('generated.userCommands'));
+});
+
+bot.action(/^language:set:([a-zA-Z-]+)$/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const language = normalizeSupportedLanguage((ctx as any).match[1]);
+    if (!language) {
+        await ctx.answerCbQuery(ctx.t('common.unknownAction'));
+        return;
+    }
+
+    try {
+        await updateUserLanguage(userId, language);
+        ctx.state.language = language;
+        await syncCommandScopeForUser(userId, ctx.state.role === 'admin', language);
+    } catch (error) {
+        console.error(`Failed to update Telegram language for user ${userId}:`, formatSafeError(error));
+        await ctx.answerCbQuery(ctx.t('common.serviceUnavailable'));
+        return;
+    }
+
+    const languageName = getNativeLanguageName(language);
+    await ctx.answerCbQuery(ctx.t('language.changed', { language: languageName }));
+    await ctx.editMessageText(ctx.t('language.card', { language: languageName }), buildLanguageKeyboard(language, ctx.t)).catch(() => undefined);
+    await ctx.reply(ctx.t('language.changed', { language: languageName }), buildMenuTriggerKeyboard(ctx.t));
+});
+
+bot.action('language:back', async (ctx) => {
+    await ctx.answerCbQuery();
+    await showMenu(ctx);
 });
 
 bot.action('context:change', async (ctx) => {

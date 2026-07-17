@@ -72,9 +72,15 @@
       "banned": "⛔ 封禁用户",
       "mail": "📬 邮件",
       "notes": "📝 笔记",
+      "language": "🌐 语言",
       "help": "ℹ️ 帮助",
       "notesWebApp": "📝 笔记（WebApp）"
     }
+  },
+  "language": {
+    "card": "🌐 Telegram 语言\n\n当前：{{language}}\n请选择语言：",
+    "changed": "语言已更改：{{language}}",
+    "back": "⬅️ 返回菜单"
   },
   "prompt": {
     "none": "暂无提示。",

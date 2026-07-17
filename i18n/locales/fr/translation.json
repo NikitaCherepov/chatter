@@ -72,9 +72,15 @@
       "banned": "⛔ Utilisateurs bannis",
       "mail": "📬 Courrier",
       "notes": "📝 Notes",
+      "language": "🌐 Langue",
       "help": "ℹ️ Aide",
       "notesWebApp": "📝 Notes (WebApp)"
     }
+  },
+  "language": {
+    "card": "🌐 Langue de Telegram\n\nActuelle : {{language}}\nChoisissez une langue :",
+    "changed": "Langue modifiée : {{language}}",
+    "back": "⬅️ Retour au menu"
   },
   "prompt": {
     "none": "Il n'y a encore aucune invite.",

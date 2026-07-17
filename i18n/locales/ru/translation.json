@@ -72,9 +72,15 @@
       "banned": "⛔ Забаненные",
       "mail": "📬 Почта",
       "notes": "📝 Заметки",
+      "language": "🌐 Язык",
       "help": "ℹ️ Подсказка",
       "notesWebApp": "📝 Заметки (WebApp)"
     }
+  },
+  "language": {
+    "card": "🌐 Язык Telegram\n\nТекущий: {{language}}\nВыбери язык:",
+    "changed": "Язык изменён: {{language}}",
+    "back": "⬅️ В меню"
   },
   "prompt": {
     "none": "Промптов пока нет.",

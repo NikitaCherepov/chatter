@@ -72,9 +72,15 @@
       "banned": "⛔ Usuarios baneados",
       "mail": "📬 Correo",
       "notes": "📝 Notas",
+      "language": "🌐 Idioma",
       "help": "ℹ️ Ayuda",
       "notesWebApp": "📝 Notas (WebApp)"
     }
+  },
+  "language": {
+    "card": "🌐 Idioma de Telegram\n\nActual: {{language}}\nElige un idioma:",
+    "changed": "Idioma cambiado: {{language}}",
+    "back": "⬅️ Volver al menú"
   },
   "prompt": {
     "none": "Aún no hay prompts.",
