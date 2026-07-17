@@ -5,6 +5,11 @@ export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 export type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
 
+export type ToolStatusUpdate = string | {
+  i18n_key: string;
+  i18n_values?: Record<string, string | number>;
+};
+
 export type UserRecord = {
   id: number;
   name: string | null;

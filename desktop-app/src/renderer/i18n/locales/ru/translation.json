@@ -790,5 +790,13 @@
     "defaultVoice": "По умолчанию",
     "cartesia": "Cartesia (облачная)",
     "previewText": "Привет, я Чаттер!"
+  },
+  "subagents": {
+    "toolStatus": {
+      "readingDirectory": "[{{agent}}] Чтение каталога...",
+      "convertingVideo": "[{{agent}}] Конвертация видео...",
+      "gettingServerList": "[{{agent}}] Получение списка серверов...",
+      "runningTool": "[{{agent}}] Запуск {{tool}}..."
+    }
   }
 }

@@ -790,5 +790,13 @@
     "defaultVoice": "默认",
     "cartesia": "Cartesia（云端）",
     "previewText": "你好，我是Chatter！"
+  },
+  "subagents": {
+    "toolStatus": {
+      "readingDirectory": "[{{agent}}] 正在读取目录...",
+      "convertingVideo": "[{{agent}}] 正在转换视频...",
+      "gettingServerList": "[{{agent}}] 正在获取服务器列表...",
+      "runningTool": "[{{agent}}] 正在运行 {{tool}}..."
+    }
   }
 }

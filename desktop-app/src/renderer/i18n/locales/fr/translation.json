@@ -790,5 +790,13 @@
     "defaultVoice": "Par défaut",
     "cartesia": "Cartesia (cloud)",
     "previewText": "Bonjour, je suis Chatter !"
+  },
+  "subagents": {
+    "toolStatus": {
+      "readingDirectory": "[{{agent}}] Lecture du répertoire...",
+      "convertingVideo": "[{{agent}}] Conversion de la vidéo...",
+      "gettingServerList": "[{{agent}}] Obtention de la liste des serveurs...",
+      "runningTool": "[{{agent}}] Exécution de {{tool}}..."
+    }
   }
 }
