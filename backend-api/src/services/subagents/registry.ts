@@ -56,7 +56,7 @@ export function clearPromptCache(): void {
 const REGISTRY: Record<string, SubagentConfig> = {
   file_converter: {
     name: 'file_converter',
-    description: 'Конвертирует локальные файлы через desktop-приложение. Сейчас поддерживает только видео; для аудио, документов и любых операций без собственного инструмента обязан отказать без выполнения действий.',
+    description: 'Converts local files through the desktop application. Currently supports video only and must refuse audio, document, or any other operation that has no dedicated tool without taking action.',
     promptFile: 'file-converter.md',
     ownTools: fileConverterTools,
     sharedTools: [],

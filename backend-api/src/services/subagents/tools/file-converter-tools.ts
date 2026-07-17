@@ -12,7 +12,7 @@ function error(message: string): string {
 
 function requireDesktop(ctx: SubagentContext): string | null {
   if (!ctx.isDesktop || !isDesktopOnline(ctx.userId)) {
-    return error('Десктоп-клиент не подключён. Конвертация выполняется локально на компьютере пользователя.');
+    return error('The desktop client is not connected. Conversion runs locally on the user\'s computer.');
   }
   return null;
 }
@@ -22,13 +22,13 @@ const listDirectory: SubagentTool = {
     type: 'function',
     function: {
       name: 'list_directory',
-      description: 'Прочитать содержимое директории на компьютере пользователя. Инструмент работает только на чтение.',
+      description: 'List the contents of a directory on the user\'s computer. This tool is read-only.',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: 'Абсолютный путь к директории.',
+            description: 'Absolute path to the directory.',
           },
         },
         required: ['path'],
@@ -40,11 +40,11 @@ const listDirectory: SubagentTool = {
     if (desktopError) return desktopError;
 
     const directoryPath = typeof args.path === 'string' ? args.path.trim() : '';
-    if (!directoryPath) return error('path обязателен');
+    if (!directoryPath) return error('path is required');
 
     const settings = getPcCommandsSettings(ctx.userId);
     if (!settings.fs_scan_enabled) {
-      return error('Чтение директорий отключено в настройках «Управление ПК».');
+      return error('Directory scanning is disabled in the PC Control settings.');
     }
 
     try {
@@ -67,27 +67,27 @@ const convertVideo: SubagentTool = {
     type: 'function',
     function: {
       name: 'convert_video',
-      description: 'Конвертировать локальный видеофайл через ffmpeg в desktop-приложении. Произвольные ffmpeg-аргументы и перезапись файлов не поддерживаются.',
+      description: 'Convert a local video with ffmpeg in the desktop application. Arbitrary ffmpeg arguments and overwriting existing files are not supported.',
       parameters: {
         type: 'object',
         properties: {
           source_path: {
             type: 'string',
-            description: 'Абсолютный путь к исходному видеофайлу.',
+            description: 'Absolute path to the source video file.',
           },
           output_format: {
             type: 'string',
             enum: [...VIDEO_FORMATS],
-            description: 'Формат результата.',
+            description: 'Output video format.',
           },
           output_path: {
             type: 'string',
-            description: 'Необязательный абсолютный путь результата: полный путь файла или существующая директория. По умолчанию результат создаётся рядом с исходным с суффиксом _converted.',
+            description: 'Optional absolute output path: either a complete file path or an existing directory. By default, the result is created next to the source with the _converted suffix.',
           },
           quality: {
             type: 'string',
             enum: [...VIDEO_QUALITIES],
-            description: 'Профиль качества: high, balanced (по умолчанию) или small.',
+            description: 'Quality profile: high, balanced (default), or small.',
           },
         },
         required: ['source_path', 'output_format'],
@@ -103,12 +103,12 @@ const convertVideo: SubagentTool = {
     const outputFormat = typeof args.output_format === 'string' ? args.output_format.toLowerCase() : '';
     const quality = typeof args.quality === 'string' ? args.quality.toLowerCase() : 'balanced';
 
-    if (!sourcePath) return error('source_path обязателен');
+    if (!sourcePath) return error('source_path is required');
     if (!(VIDEO_FORMATS as readonly string[]).includes(outputFormat)) {
-      return error(`Неподдерживаемый output_format. Доступно: ${VIDEO_FORMATS.join(', ')}`);
+      return error(`Unsupported output_format. Available values: ${VIDEO_FORMATS.join(', ')}`);
     }
     if (!(VIDEO_QUALITIES as readonly string[]).includes(quality)) {
-      return error(`Неподдерживаемый quality. Доступно: ${VIDEO_QUALITIES.join(', ')}`);
+      return error(`Unsupported quality. Available values: ${VIDEO_QUALITIES.join(', ')}`);
     }
 
     try {
