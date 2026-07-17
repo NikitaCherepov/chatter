@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "我的笔记",
+    "subtitle": "直接在WebApp中打开、编辑和保存笔记。"
+  },
+  "search": {
+    "placeholder": "搜索标题和文本",
+    "submit": "搜索",
+    "reset": "重置",
+    "new": "新建"
+  },
+  "list": {
+    "title": "笔记",
+    "total": "总计：{{count}}",
+    "empty": "暂无笔记",
+    "delete": "删除",
+    "previous": "返回",
+    "next": "下一页",
+    "page": "第 {{page}}/{{totalPages}} 页"
+  },
+  "editor": {
+    "editing": "编辑 #{{id}}",
+    "new": "新建笔记",
+    "close": "关闭",
+    "title": "标题",
+    "titlePlaceholder": "简短标题（可选）",
+    "content": "笔记内容",
+    "contentPlaceholder": "在此处写下您的笔记...",
+    "saveChanges": "保存更改",
+    "create": "创建笔记",
+    "cancel": "取消",
+    "delete": "删除"
+  },
+  "common": {
+    "empty": "空"
+  },
+  "confirm": {
+    "delete": "删除笔记 #{{id}}？"
+  },
+  "validation": {
+    "contentRequired": "笔记内容为必填项。",
+    "titleTooLong": "标题不得超过 {{max}} 个字符。",
+    "contentTooLong": "内容不得超过 {{max}} 个字符。"
+  },
+  "errors": {
+    "title": "错误：",
+    "requestFailed": "请求失败（HTTP {{status}}）。",
+    "initDataMissing": "未找到Telegram授权数据。请使用Telegram中的WebApp按钮打开此页面。",
+    "api": {
+      "unauthorized": "Telegram授权失败。请从机器人重新打开WebApp。",
+      "invalid_json_object": "请求格式无效。",
+      "invalid_title": "标题格式无效。",
+      "invalid_content": "笔记文本格式无效。",
+      "invalid_content_length": "笔记文本长度无效。",
+      "invalid_title_length": "标题长度无效。",
+      "invalid_id": "笔记ID无效。",
+      "note_not_found": "未找到笔记。",
+      "request_body_too_large": "请求过大。",
+      "invalid_json": "请求包含无效的JSON。",
+      "invalid_request_body": "请求体无效。"
+    }
+  }
+}

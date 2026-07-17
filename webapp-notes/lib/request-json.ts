@@ -12,12 +12,12 @@ export const readLimitedJson = async (
   if (contentLengthRaw) {
     const contentLength = Number(contentLengthRaw);
     if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-      return { ok: false, status: 413, error: 'Request body is too large' };
+      return { ok: false, status: 413, error: 'request_body_too_large' };
     }
   }
 
   if (!request.body) {
-    return { ok: false, status: 400, error: 'Invalid JSON' };
+    return { ok: false, status: 400, error: 'invalid_json' };
   }
 
   const reader = request.body.getReader();
@@ -33,12 +33,12 @@ export const readLimitedJson = async (
       totalBytes += value.byteLength;
       if (totalBytes > maxBytes) {
         await reader.cancel();
-        return { ok: false, status: 413, error: 'Request body is too large' };
+        return { ok: false, status: 413, error: 'request_body_too_large' };
       }
       chunks.push(value);
     }
   } catch {
-    return { ok: false, status: 400, error: 'Invalid request body' };
+    return { ok: false, status: 400, error: 'invalid_request_body' };
   }
 
   const body = new Uint8Array(totalBytes);
@@ -52,6 +52,6 @@ export const readLimitedJson = async (
     const text = new TextDecoder('utf-8', { fatal: true }).decode(body);
     return { ok: true, value: JSON.parse(text) as unknown };
   } catch {
-    return { ok: false, status: 400, error: 'Invalid JSON' };
+    return { ok: false, status: 400, error: 'invalid_json' };
   }
 };

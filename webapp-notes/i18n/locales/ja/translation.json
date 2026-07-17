@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "マイノート",
+    "subtitle": "WebAppで直接ノートを開き、編集、保存できます。"
+  },
+  "search": {
+    "placeholder": "タイトルとテキストを検索",
+    "submit": "検索",
+    "reset": "リセット",
+    "new": "新規"
+  },
+  "list": {
+    "title": "ノート",
+    "total": "合計: {{count}}",
+    "empty": "まだノートがありません",
+    "delete": "削除",
+    "previous": "戻る",
+    "next": "次へ",
+    "page": "{{page}}/{{totalPages}} ページ"
+  },
+  "editor": {
+    "editing": "#{{id}} を編集中",
+    "new": "新規ノート",
+    "close": "閉じる",
+    "title": "タイトル",
+    "titlePlaceholder": "短いタイトル（任意）",
+    "content": "ノート本文",
+    "contentPlaceholder": "ここにノートを書いてください...",
+    "saveChanges": "変更を保存",
+    "create": "ノートを作成",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  },
+  "common": {
+    "empty": "空"
+  },
+  "confirm": {
+    "delete": "ノート #{{id}} を削除しますか？"
+  },
+  "validation": {
+    "contentRequired": "ノートのテキストが必要です。",
+    "titleTooLong": "タイトルは{{max}}文字以内でなければなりません。",
+    "contentTooLong": "テキストは{{max}}文字以内でなければなりません。"
+  },
+  "errors": {
+    "title": "エラー:",
+    "requestFailed": "リクエストに失敗しました (HTTP {{status}})。",
+    "initDataMissing": "Telegram認証データが見つかりませんでした。TelegramのWebAppボタンからこのページを開いてください。",
+    "api": {
+      "unauthorized": "Telegram認証に失敗しました。ボットからWebAppを再度開いてください。",
+      "invalid_json_object": "リクエストの形式が無効です。",
+      "invalid_title": "タイトルの形式が無効です。",
+      "invalid_content": "ノートのテキスト形式が無効です。",
+      "invalid_content_length": "ノートのテキスト長が無効です。",
+      "invalid_title_length": "タイトルの長さが無効です。",
+      "invalid_id": "ノートIDが無効です。",
+      "note_not_found": "ノートが見つかりませんでした。",
+      "request_body_too_large": "リクエストが大きすぎます。",
+      "invalid_json": "リクエストに無効なJSONが含まれています。",
+      "invalid_request_body": "リクエストボディが無効です。"
+    }
+  }
+}

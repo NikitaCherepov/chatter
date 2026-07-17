@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "My notes",
+    "subtitle": "Open, edit, and save notes directly in the WebApp."
+  },
+  "search": {
+    "placeholder": "Search titles and text",
+    "submit": "Search",
+    "reset": "Reset",
+    "new": "New"
+  },
+  "list": {
+    "title": "Notes",
+    "total": "Total: {{count}}",
+    "empty": "No notes yet",
+    "delete": "Delete",
+    "previous": "Back",
+    "next": "Next",
+    "page": "Page {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Editing #{{id}}",
+    "new": "New note",
+    "close": "Close",
+    "title": "Title",
+    "titlePlaceholder": "Short title (optional)",
+    "content": "Note text",
+    "contentPlaceholder": "Write your note here...",
+    "saveChanges": "Save changes",
+    "create": "Create note",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "common": {
+    "empty": "Empty"
+  },
+  "confirm": {
+    "delete": "Delete note #{{id}}?"
+  },
+  "validation": {
+    "contentRequired": "Note text is required.",
+    "titleTooLong": "The title must not exceed {{max}} characters.",
+    "contentTooLong": "The text must not exceed {{max}} characters."
+  },
+  "errors": {
+    "title": "Error:",
+    "requestFailed": "Request failed (HTTP {{status}}).",
+    "initDataMissing": "Telegram authorization data was not found. Open this page using the WebApp button in Telegram.",
+    "api": {
+      "unauthorized": "Telegram authorization failed. Reopen the WebApp from the bot.",
+      "invalid_json_object": "The request has an invalid format.",
+      "invalid_title": "The title has an invalid format.",
+      "invalid_content": "The note text has an invalid format.",
+      "invalid_content_length": "The note text length is invalid.",
+      "invalid_title_length": "The title length is invalid.",
+      "invalid_id": "The note ID is invalid.",
+      "note_not_found": "The note was not found.",
+      "request_body_too_large": "The request is too large.",
+      "invalid_json": "The request contains invalid JSON.",
+      "invalid_request_body": "The request body is invalid."
+    }
+  }
+}

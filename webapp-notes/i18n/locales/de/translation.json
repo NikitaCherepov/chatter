@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Meine Notizen",
+    "subtitle": "Öffnen, bearbeiten und speichern Sie Notizen direkt in der WebApp."
+  },
+  "search": {
+    "placeholder": "Titel und Text durchsuchen",
+    "submit": "Suchen",
+    "reset": "Zurücksetzen",
+    "new": "Neu"
+  },
+  "list": {
+    "title": "Notizen",
+    "total": "Gesamt: {{count}}",
+    "empty": "Noch keine Notizen",
+    "delete": "Löschen",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "page": "Seite {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Bearbeiten #{{id}}",
+    "new": "Neue Notiz",
+    "close": "Schließen",
+    "title": "Titel",
+    "titlePlaceholder": "Kurzer Titel (optional)",
+    "content": "Notiztext",
+    "contentPlaceholder": "Schreiben Sie Ihre Notiz hier...",
+    "saveChanges": "Änderungen speichern",
+    "create": "Notiz erstellen",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  },
+  "common": {
+    "empty": "Leer"
+  },
+  "confirm": {
+    "delete": "Notiz #{{id}} löschen?"
+  },
+  "validation": {
+    "contentRequired": "Notiztext ist erforderlich.",
+    "titleTooLong": "Der Titel darf maximal {{max}} Zeichen lang sein.",
+    "contentTooLong": "Der Text darf maximal {{max}} Zeichen lang sein."
+  },
+  "errors": {
+    "title": "Fehler:",
+    "requestFailed": "Anfrage fehlgeschlagen (HTTP {{status}}).",
+    "initDataMissing": "Telegram-Autorisierungsdaten wurden nicht gefunden. Öffnen Sie diese Seite über die WebApp-Schaltfläche in Telegram.",
+    "api": {
+      "unauthorized": "Telegram-Autorisierung fehlgeschlagen. Öffnen Sie die WebApp erneut über den Bot.",
+      "invalid_json_object": "Die Anfrage hat ein ungültiges Format.",
+      "invalid_title": "Der Titel hat ein ungültiges Format.",
+      "invalid_content": "Der Notiztext hat ein ungültiges Format.",
+      "invalid_content_length": "Die Länge des Notiztextes ist ungültig.",
+      "invalid_title_length": "Die Länge des Titels ist ungültig.",
+      "invalid_id": "Die Notiz-ID ist ungültig.",
+      "note_not_found": "Die Notiz wurde nicht gefunden.",
+      "request_body_too_large": "Die Anfrage ist zu groß.",
+      "invalid_json": "Die Anfrage enthält ungültiges JSON.",
+      "invalid_request_body": "Der Anforderungstext ist ungültig."
+    }
+  }
+}

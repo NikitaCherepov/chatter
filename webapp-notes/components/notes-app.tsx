@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { setAppLanguage } from "../i18n";
 
 type NoteItem = {
   id: number;
@@ -16,6 +18,7 @@ type NotesResponse = {
   limit: number;
   offset: number;
   query: string;
+  language: string | null;
 };
 
 type SingleNoteResponse = {
@@ -27,6 +30,9 @@ declare global {
     Telegram?: {
       WebApp?: {
         initData?: string;
+        initDataUnsafe?: {
+          user?: { language_code?: string };
+        };
         ready?: () => void;
         expand?: () => void;
       };
@@ -38,19 +44,20 @@ const PAGE_SIZE = 20;
 const TITLE_MAX = 120;
 const CONTENT_MAX = 2000;
 
-const formatTs = (ts: number) => {
+const formatTs = (ts: number, language: string) => {
   if (!Number.isFinite(ts) || ts <= 0) return "-";
-  return new Date(ts * 1000).toLocaleString("ru-RU");
+  return new Date(ts * 1000).toLocaleString(language);
 };
 
-const preview = (value: string, max = 110) => {
+const preview = (value: string, emptyLabel: string, max = 110) => {
   const compact = value.replace(/\s+/g, " ").trim();
-  if (!compact) return "Пусто";
+  if (!compact) return emptyLabel;
   if (compact.length <= max) return compact;
   return `${compact.slice(0, max)}...`;
 };
 
 export function NotesApp() {
+  const { t, i18n } = useTranslation();
   const [initData, setInitData] = useState("");
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<NoteItem[]>([]);
@@ -72,6 +79,7 @@ export function NotesApp() {
     if (tg?.expand) tg.expand();
     const value = tg?.initData || "";
     setInitData(value || "");
+    void setAppLanguage(tg?.initDataUnsafe?.user?.language_code);
   }, []);
 
   const canPrev = offset > 0;
@@ -98,6 +106,21 @@ export function NotesApp() {
     setError("");
   };
 
+  const readApiError = async (response: Response) => {
+    let code = "";
+    try {
+      const payload = await response.json() as { error?: string };
+      code = payload.error || "";
+    } catch {
+      // Use the generic localized error below.
+    }
+    if (code) {
+      const translated = t(`errors.api.${code}`);
+      if (translated !== `errors.api.${code}`) return translated;
+    }
+    return t("errors.requestFailed", { status: response.status });
+  };
+
   const loadNotes = async (nextOffset = 0, nextQuery = query) => {
     setLoading(true);
     setError("");
@@ -113,8 +136,7 @@ export function NotesApp() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
+        throw new Error(await readApiError(res));
       }
 
       const data = (await res.json()) as NotesResponse;
@@ -123,6 +145,7 @@ export function NotesApp() {
       setItems(nextItems);
       setTotal(data.total || 0);
       setOffset(data.offset || 0);
+      if (data.language) await setAppLanguage(data.language);
 
       if (selectedId !== null) {
         const selected = nextItems.find((item) => item.id === selectedId);
@@ -153,8 +176,7 @@ export function NotesApp() {
         cache: "no-store",
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
+        throw new Error(await readApiError(res));
       }
 
       const data = (await res.json()) as SingleNoteResponse;
@@ -175,15 +197,15 @@ export function NotesApp() {
     const cleanContent = content.trim();
 
     if (!cleanContent) {
-      setError("Текст заметки обязателен.");
+      setError(t("validation.contentRequired"));
       return;
     }
     if (cleanTitle.length > TITLE_MAX) {
-      setError(`Заголовок должен быть не длиннее ${TITLE_MAX} символов.`);
+      setError(t("validation.titleTooLong", { max: TITLE_MAX }));
       return;
     }
     if (cleanContent.length > CONTENT_MAX) {
-      setError(`Текст должен быть не длиннее ${CONTENT_MAX} символов.`);
+      setError(t("validation.contentTooLong", { max: CONTENT_MAX }));
       return;
     }
 
@@ -202,8 +224,7 @@ export function NotesApp() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
+        throw new Error(await readApiError(res));
       }
 
       const payload = (await res.json()) as { note?: NoteItem };
@@ -222,7 +243,7 @@ export function NotesApp() {
   };
 
   const onDelete = async (id: number) => {
-    const ok = window.confirm(`Удалить заметку #${id}?`);
+    const ok = window.confirm(t("confirm.delete", { id }));
     if (!ok) return;
 
     setLoading(true);
@@ -234,8 +255,7 @@ export function NotesApp() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
+        throw new Error(await readApiError(res));
       }
 
       if (selectedId === id) {
@@ -254,21 +274,21 @@ export function NotesApp() {
   return (
     <main>
       <header className="page-header">
-        <h1>Мои заметки</h1>
-        <p className="muted">Открывай, редактируй и сохраняй заметки прямо в WebApp.</p>
+        <h1>{t("header.title")}</h1>
+        <p className="muted">{t("header.subtitle")}</p>
       </header>
 
       <section className="card toolbar">
         <div className="grid grid-2">
           <input
-            placeholder="Поиск по заголовку и тексту"
+            placeholder={t("search.placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={120}
           />
           <div className="inline-actions">
             <button className="secondary" disabled={loading || saving} onClick={() => loadNotes(0, query)} type="button">
-              Найти
+              {t("search.submit")}
             </button>
             <button
               className="secondary"
@@ -279,10 +299,10 @@ export function NotesApp() {
               }}
               type="button"
             >
-              Сбросить
+              {t("search.reset")}
             </button>
             <button className="secondary" disabled={loading || saving} onClick={resetDraftToCreate} type="button">
-              Новая
+              {t("search.new")}
             </button>
           </div>
         </div>
@@ -291,11 +311,11 @@ export function NotesApp() {
       <section className="layout">
         <section className="card notes-list">
           <div className="list-header">
-            <strong>Список заметок</strong>
-            <span className="muted">Всего: {total}</span>
+            <strong>{t("list.title")}</strong>
+            <span className="muted">{t("list.total", { count: total })}</span>
           </div>
           <div className="notes-scroll">
-            {items.length === 0 ? <div className="muted empty">Заметок пока нет</div> : null}
+            {items.length === 0 ? <div className="muted empty">{t("list.empty")}</div> : null}
             {items.map((item) => {
               const active = selectedId === item.id;
               return (
@@ -311,10 +331,10 @@ export function NotesApp() {
                 >
                   <div className="note-top">
                     <strong>#{item.id}</strong>
-                    <span className="muted">{formatTs(item.updated_at || item.created_at)}</span>
+                    <span className="muted">{formatTs(item.updated_at || item.created_at, i18n.resolvedLanguage || "en")}</span>
                   </div>
-                  {item.title?.trim() ? <div className="note-title">{preview(item.title, 60)}</div> : null}
-                  <div className="note-preview">{preview(item.content, 140)}</div>
+                  {item.title?.trim() ? <div className="note-title">{preview(item.title, t("common.empty"), 60)}</div> : null}
+                  <div className="note-preview">{preview(item.content, t("common.empty"), 140)}</div>
                   <div className="row-actions">
                     <button
                       className="danger ghost"
@@ -325,7 +345,7 @@ export function NotesApp() {
                         onDelete(item.id);
                       }}
                     >
-                      Удалить
+                      {t("list.delete")}
                     </button>
                   </div>
                 </article>
@@ -339,7 +359,7 @@ export function NotesApp() {
               onClick={() => loadNotes(Math.max(0, offset - PAGE_SIZE), query)}
               type="button"
             >
-              Назад
+              {t("list.previous")}
             </button>
             <button
               className="secondary"
@@ -347,26 +367,26 @@ export function NotesApp() {
               onClick={() => loadNotes(offset + PAGE_SIZE, query)}
               type="button"
             >
-              Далее
+              {t("list.next")}
             </button>
           </div>
-          <div className="muted">Страница {page}/{totalPages}</div>
+          <div className="muted">{t("list.page", { page, totalPages })}</div>
         </section>
 
         <section className="card editor">
           <div className="editor-head">
-            <strong>{isEditMode ? `Редактирование #${selectedId}` : "Новая заметка"}</strong>
+            <strong>{isEditMode ? t("editor.editing", { id: selectedId }) : t("editor.new")}</strong>
             {isEditMode ? (
               <button className="secondary ghost" type="button" onClick={resetDraftToCreate} disabled={loading || saving}>
-                Закрыть
+                {t("editor.close")}
               </button>
             ) : null}
           </div>
           <form className="grid" onSubmit={onSave}>
             <label className="field">
-              <span>Заголовок</span>
+              <span>{t("editor.title")}</span>
               <input
-                placeholder="Короткий заголовок (необязательно)"
+                placeholder={t("editor.titlePlaceholder")}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={TITLE_MAX}
@@ -375,9 +395,9 @@ export function NotesApp() {
             </label>
 
             <label className="field">
-              <span>Текст заметки</span>
+              <span>{t("editor.content")}</span>
               <textarea
-                placeholder="Пиши заметку здесь..."
+                placeholder={t("editor.contentPlaceholder")}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 maxLength={CONTENT_MAX}
@@ -388,7 +408,7 @@ export function NotesApp() {
 
             <div className="inline-actions">
               <button type="submit" disabled={loading || saving || !content.trim() || (isEditMode && !isDirty)}>
-                {isEditMode ? "Сохранить изменения" : "Создать заметку"}
+                {isEditMode ? t("editor.saveChanges") : t("editor.create")}
               </button>
               <button
                 className="secondary"
@@ -404,11 +424,11 @@ export function NotesApp() {
                   setContent("");
                 }}
               >
-                Отменить
+                {t("editor.cancel")}
               </button>
               {isEditMode ? (
                 <button className="danger" type="button" disabled={loading || saving} onClick={() => onDelete(selectedId)}>
-                  Удалить
+                  {t("editor.delete")}
                 </button>
               ) : null}
             </div>
@@ -418,12 +438,12 @@ export function NotesApp() {
 
       {error ? (
         <section className="card error-card">
-          <strong>Ошибка:</strong> {error}
+          <strong>{t("errors.title")}</strong> {error}
         </section>
       ) : null}
       {!initData ? (
         <section className="card">
-          <span className="muted">initData не найден. Откройте страницу через кнопку `web_app` в Telegram.</span>
+          <span className="muted">{t("errors.initDataMissing")}</span>
         </section>
       ) : null}
     </main>

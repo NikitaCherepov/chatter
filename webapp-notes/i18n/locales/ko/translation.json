@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "내 노트",
+    "subtitle": "WebApp에서 직접 노트를 열고, 편집하고, 저장하세요."
+  },
+  "search": {
+    "placeholder": "제목 및 텍스트 검색",
+    "submit": "검색",
+    "reset": "초기화",
+    "new": "새로 만들기"
+  },
+  "list": {
+    "title": "노트",
+    "total": "총 {{count}}개",
+    "empty": "아직 노트가 없습니다",
+    "delete": "삭제",
+    "previous": "뒤로",
+    "next": "다음",
+    "page": "페이지 {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "#{{id}} 편집 중",
+    "new": "새 노트",
+    "close": "닫기",
+    "title": "제목",
+    "titlePlaceholder": "짧은 제목 (선택 사항)",
+    "content": "노트 내용",
+    "contentPlaceholder": "여기에 노트를 작성하세요...",
+    "saveChanges": "변경사항 저장",
+    "create": "노트 작성",
+    "cancel": "취소",
+    "delete": "삭제"
+  },
+  "common": {
+    "empty": "비어 있음"
+  },
+  "confirm": {
+    "delete": "노트 #{{id}}을(를) 삭제하시겠습니까?"
+  },
+  "validation": {
+    "contentRequired": "노트 텍스트를 입력하세요.",
+    "titleTooLong": "제목은 {{max}}자를 초과할 수 없습니다.",
+    "contentTooLong": "텍스트는 {{max}}자를 초과할 수 없습니다."
+  },
+  "errors": {
+    "title": "오류:",
+    "requestFailed": "요청 실패 (HTTP {{status}}).",
+    "initDataMissing": "Telegram 인증 데이터를 찾을 수 없습니다. Telegram의 WebApp 버튼을 사용하여 이 페이지를 여세요.",
+    "api": {
+      "unauthorized": "Telegram 인증에 실패했습니다. 봇에서 WebApp을 다시 여세요.",
+      "invalid_json_object": "요청 형식이 잘못되었습니다.",
+      "invalid_title": "제목 형식이 잘못되었습니다.",
+      "invalid_content": "노트 텍스트 형식이 잘못되었습니다.",
+      "invalid_content_length": "노트 텍스트 길이가 잘못되었습니다.",
+      "invalid_title_length": "제목 길이가 잘못되었습니다.",
+      "invalid_id": "노트 ID가 잘못되었습니다.",
+      "note_not_found": "노트를 찾을 수 없습니다.",
+      "request_body_too_large": "요청이 너무 큽니다.",
+      "invalid_json": "요청에 잘못된 JSON이 포함되어 있습니다.",
+      "invalid_request_body": "요청 본문이 유효하지 않습니다."
+    }
+  }
+}

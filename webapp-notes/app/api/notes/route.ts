@@ -10,7 +10,7 @@ const TITLE_MAX = 120;
 const CONTENT_MAX = 2000;
 const JSON_BODY_MAX_BYTES = 16 * 1024;
 
-const unauthorized = () => NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+const unauthorized = () => NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
 const getAuth = (request: NextRequest) => {
   const initData = request.headers.get('x-telegram-init-data') || '';
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
 
   const { items, total } = listNotes(auth.userId, query, limit, offset);
-  return NextResponse.json({ items, total, limit, offset, query });
+  return NextResponse.json({ items, total, limit, offset, query, language: auth.language });
 }
 
 export async function POST(request: NextRequest) {
@@ -44,25 +44,25 @@ export async function POST(request: NextRequest) {
   }
 
   if (!json.value || typeof json.value !== 'object' || Array.isArray(json.value)) {
-    return NextResponse.json({ error: 'JSON body must be an object' }, { status: 400 });
+    return NextResponse.json({ error: 'invalid_json_object' }, { status: 400 });
   }
 
   const payload = json.value as Record<string, unknown>;
   if (payload.title !== undefined && typeof payload.title !== 'string') {
-    return NextResponse.json({ error: 'title должен быть строкой' }, { status: 400 });
+    return NextResponse.json({ error: 'invalid_title' }, { status: 400 });
   }
   if (typeof payload.content !== 'string') {
-    return NextResponse.json({ error: 'content должен быть строкой' }, { status: 400 });
+    return NextResponse.json({ error: 'invalid_content' }, { status: 400 });
   }
 
   const title = typeof payload.title === 'string' ? payload.title.trim() : '';
   const content = payload.content.trim();
 
   if (!content || content.length > CONTENT_MAX) {
-    return NextResponse.json({ error: `content должен быть 1..${CONTENT_MAX} символов` }, { status: 400 });
+    return NextResponse.json({ error: 'invalid_content_length' }, { status: 400 });
   }
   if (title.length > TITLE_MAX) {
-    return NextResponse.json({ error: `title должен быть 0..${TITLE_MAX} символов` }, { status: 400 });
+    return NextResponse.json({ error: 'invalid_title_length' }, { status: 400 });
   }
 
   const note = createNote(auth.userId, title, content);

@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Mis notas",
+    "subtitle": "Abre, edita y guarda notas directamente en la WebApp."
+  },
+  "search": {
+    "placeholder": "Buscar títulos y texto",
+    "submit": "Buscar",
+    "reset": "Restablecer",
+    "new": "Nueva"
+  },
+  "list": {
+    "title": "Notas",
+    "total": "Total: {{count}}",
+    "empty": "Aún no hay notas",
+    "delete": "Eliminar",
+    "previous": "Atrás",
+    "next": "Siguiente",
+    "page": "Página {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Editando #{{id}}",
+    "new": "Nueva nota",
+    "close": "Cerrar",
+    "title": "Título",
+    "titlePlaceholder": "Título corto (opcional)",
+    "content": "Texto de la nota",
+    "contentPlaceholder": "Escribe tu nota aquí...",
+    "saveChanges": "Guardar cambios",
+    "create": "Crear nota",
+    "cancel": "Cancelar",
+    "delete": "Eliminar"
+  },
+  "common": {
+    "empty": "Vacío"
+  },
+  "confirm": {
+    "delete": "¿Eliminar nota #{{id}}?"
+  },
+  "validation": {
+    "contentRequired": "El texto de la nota es obligatorio.",
+    "titleTooLong": "El título no debe exceder los {{max}} caracteres.",
+    "contentTooLong": "El texto no debe exceder los {{max}} caracteres."
+  },
+  "errors": {
+    "title": "Error:",
+    "requestFailed": "Solicitud fallida (HTTP {{status}}).",
+    "initDataMissing": "No se encontraron datos de autorización de Telegram. Abra esta página usando el botón WebApp en Telegram.",
+    "api": {
+      "unauthorized": "Falló la autorización de Telegram. Vuelva a abrir la WebApp desde el bot.",
+      "invalid_json_object": "La solicitud tiene un formato no válido.",
+      "invalid_title": "El título tiene un formato no válido.",
+      "invalid_content": "El texto de la nota tiene un formato no válido.",
+      "invalid_content_length": "La longitud del texto de la nota no es válida.",
+      "invalid_title_length": "La longitud del título no es válida.",
+      "invalid_id": "El ID de la nota no es válido.",
+      "note_not_found": "No se encontró la nota.",
+      "request_body_too_large": "La solicitud es demasiado grande.",
+      "invalid_json": "La solicitud contiene JSON no válido.",
+      "invalid_request_body": "El cuerpo de la solicitud no es válido."
+    }
+  }
+}

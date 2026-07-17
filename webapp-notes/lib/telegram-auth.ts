@@ -3,6 +3,7 @@ import { db } from './db';
 
 export type TelegramAuthContext = {
   userId: number;
+  language: string | null;
 };
 
 const DEFAULT_AUTH_MAX_AGE_SECONDS = 60 * 60;
@@ -30,7 +31,12 @@ const toDataCheckString = (initData: string) => {
   return pairs.join('\n');
 };
 
-export const verifyAndExtractTelegramUser = (initData: string): TelegramAuthContext | null => {
+type TelegramIdentityContext = {
+  telegramUserId: number;
+  telegramLanguage: string | null;
+};
+
+export const verifyAndExtractTelegramUser = (initData: string): TelegramIdentityContext | null => {
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!botToken || !initData) return null;
 
@@ -61,9 +67,12 @@ export const verifyAndExtractTelegramUser = (initData: string): TelegramAuthCont
   if (!userRaw) return null;
 
   try {
-    const user = JSON.parse(userRaw) as { id?: number };
+    const user = JSON.parse(userRaw) as { id?: number; language_code?: string };
     if (!Number.isFinite(user.id) || !user.id || user.id <= 0) return null;
-    return { userId: Math.floor(user.id) };
+    return {
+      telegramUserId: Math.floor(user.id),
+      telegramLanguage: typeof user.language_code === 'string' ? user.language_code : null,
+    };
   } catch {
     return null;
   }
@@ -73,11 +82,29 @@ export const verifyAndAuthorizeTelegramUser = (initData: string): TelegramAuthCo
   const auth = verifyAndExtractTelegramUser(initData);
   if (!auth) return null;
 
-  const user = db.prepare(`
-    SELECT id
+  let user: { id: number; language: string | null } | undefined;
+  try {
+    user = db.prepare(`
+      SELECT users.id, users.language
+      FROM account_identities
+      JOIN users ON users.id = account_identities.account_id
+      WHERE account_identities.provider = 'telegram'
+        AND account_identities.provider_subject = ?
+        AND users.status = 'approved'
+      LIMIT 1
+    `).get(String(auth.telegramUserId)) as { id: number; language: string | null } | undefined;
+  } catch {
+    // Older databases may not have account_identities yet.
+  }
+
+  user ??= db.prepare(`
+    SELECT id, language
     FROM users
     WHERE id = ? AND status = 'approved'
-  `).get(auth.userId) as { id: number } | undefined;
+  `).get(auth.telegramUserId) as { id: number; language: string | null } | undefined;
 
-  return user ? auth : null;
+  return user ? {
+    userId: user.id,
+    language: user.language || auth.telegramLanguage,
+  } : null;
 };

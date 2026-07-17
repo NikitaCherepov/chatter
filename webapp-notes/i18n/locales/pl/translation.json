@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Moje notatki",
+    "subtitle": "Otwieraj, edytuj i zapisuj notatki bezpośrednio w WebApp."
+  },
+  "search": {
+    "placeholder": "Szukaj w tytułach i tekście",
+    "submit": "Szukaj",
+    "reset": "Resetuj",
+    "new": "Nowa"
+  },
+  "list": {
+    "title": "Notatki",
+    "total": "Razem: {{count}}",
+    "empty": "Brak notatek",
+    "delete": "Usuń",
+    "previous": "Wstecz",
+    "next": "Dalej",
+    "page": "Strona {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Edycja #{{id}}",
+    "new": "Nowa notatka",
+    "close": "Zamknij",
+    "title": "Tytuł",
+    "titlePlaceholder": "Krótki tytuł (opcjonalnie)",
+    "content": "Treść notatki",
+    "contentPlaceholder": "Napisz swoją notatkę tutaj...",
+    "saveChanges": "Zapisz zmiany",
+    "create": "Utwórz notatkę",
+    "cancel": "Anuluj",
+    "delete": "Usuń"
+  },
+  "common": {
+    "empty": "Puste"
+  },
+  "confirm": {
+    "delete": "Usunąć notatkę #{{id}}?"
+  },
+  "validation": {
+    "contentRequired": "Treść notatki jest wymagana.",
+    "titleTooLong": "Tytuł nie może przekraczać {{max}} znaków.",
+    "contentTooLong": "Treść nie może przekraczać {{max}} znaków."
+  },
+  "errors": {
+    "title": "Błąd:",
+    "requestFailed": "Żądanie nie powiodło się (HTTP {{status}}).",
+    "initDataMissing": "Nie znaleziono danych autoryzacji Telegramu. Otwórz tę stronę za pomocą przycisku WebApp w Telegramie.",
+    "api": {
+      "unauthorized": "Autoryzacja Telegramu nie powiodła się. Otwórz ponownie WebApp z bota.",
+      "invalid_json_object": "Żądanie ma nieprawidłowy format.",
+      "invalid_title": "Tytuł ma nieprawidłowy format.",
+      "invalid_content": "Tekst notatki ma nieprawidłowy format.",
+      "invalid_content_length": "Długość tekstu notatki jest nieprawidłowa.",
+      "invalid_title_length": "Długość tytułu jest nieprawidłowa.",
+      "invalid_id": "Identyfikator notatki jest nieprawidłowy.",
+      "note_not_found": "Notatka nie została znaleziona.",
+      "request_body_too_large": "Żądanie jest zbyt duże.",
+      "invalid_json": "Żądanie zawiera nieprawidłowy JSON.",
+      "invalid_request_body": "Treść żądania jest nieprawidłowa."
+    }
+  }
+}

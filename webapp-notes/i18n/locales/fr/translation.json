@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Mes notes",
+    "subtitle": "Ouvrez, modifiez et enregistrez des notes directement dans l'application Web."
+  },
+  "search": {
+    "placeholder": "Rechercher titres et texte",
+    "submit": "Rechercher",
+    "reset": "Réinitialiser",
+    "new": "Nouveau"
+  },
+  "list": {
+    "title": "Notes",
+    "total": "Total : {{count}}",
+    "empty": "Pas encore de notes",
+    "delete": "Supprimer",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "page": "Page {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Modification #{{id}}",
+    "new": "Nouvelle note",
+    "close": "Fermer",
+    "title": "Titre",
+    "titlePlaceholder": "Titre court (facultatif)",
+    "content": "Texte de la note",
+    "contentPlaceholder": "Écrivez votre note ici...",
+    "saveChanges": "Enregistrer les modifications",
+    "create": "Créer une note",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
+  },
+  "common": {
+    "empty": "Vide"
+  },
+  "confirm": {
+    "delete": "Supprimer la note #{{id}} ?"
+  },
+  "validation": {
+    "contentRequired": "Le texte de la note est requis.",
+    "titleTooLong": "Le titre ne doit pas dépasser {{max}} caractères.",
+    "contentTooLong": "Le texte ne doit pas dépasser {{max}} caractères."
+  },
+  "errors": {
+    "title": "Erreur :",
+    "requestFailed": "Échec de la requête (HTTP {{status}}).",
+    "initDataMissing": "Les données d'autorisation Telegram sont introuvables. Ouvrez cette page à l'aide du bouton WebApp dans Telegram.",
+    "api": {
+      "unauthorized": "L'autorisation Telegram a échoué. Rouvrez la WebApp depuis le bot.",
+      "invalid_json_object": "Le format de la requête est invalide.",
+      "invalid_title": "Le format du titre est invalide.",
+      "invalid_content": "Le format du texte de la note est invalide.",
+      "invalid_content_length": "La longueur du texte de la note est invalide.",
+      "invalid_title_length": "La longueur du titre est invalide.",
+      "invalid_id": "L'ID de la note est invalide.",
+      "note_not_found": "La note est introuvable.",
+      "request_body_too_large": "La requête est trop volumineuse.",
+      "invalid_json": "La requête contient du JSON invalide.",
+      "invalid_request_body": "Le corps de la requête est invalide."
+    }
+  }
+}

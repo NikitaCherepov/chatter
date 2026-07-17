@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Minhas notas",
+    "subtitle": "Abra, edite e salve notas diretamente no WebApp."
+  },
+  "search": {
+    "placeholder": "Pesquisar títulos e texto",
+    "submit": "Pesquisar",
+    "reset": "Redefinir",
+    "new": "Nova"
+  },
+  "list": {
+    "title": "Notas",
+    "total": "Total: {{count}}",
+    "empty": "Nenhuma nota ainda",
+    "delete": "Excluir",
+    "previous": "Voltar",
+    "next": "Próximo",
+    "page": "Página {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Editando #{{id}}",
+    "new": "Nova nota",
+    "close": "Fechar",
+    "title": "Título",
+    "titlePlaceholder": "Título curto (opcional)",
+    "content": "Texto da nota",
+    "contentPlaceholder": "Escreva sua nota aqui...",
+    "saveChanges": "Salvar alterações",
+    "create": "Criar nota",
+    "cancel": "Cancelar",
+    "delete": "Excluir"
+  },
+  "common": {
+    "empty": "Vazio"
+  },
+  "confirm": {
+    "delete": "Excluir nota #{{id}}?"
+  },
+  "validation": {
+    "contentRequired": "O texto da nota é obrigatório.",
+    "titleTooLong": "O título não deve exceder {{max}} caracteres.",
+    "contentTooLong": "O texto não deve exceder {{max}} caracteres."
+  },
+  "errors": {
+    "title": "Erro:",
+    "requestFailed": "Falha na solicitação (HTTP {{status}}).",
+    "initDataMissing": "Dados de autorização do Telegram não encontrados. Abra esta página usando o botão WebApp no Telegram.",
+    "api": {
+      "unauthorized": "Falha na autorização do Telegram. Reabra o WebApp a partir do bot.",
+      "invalid_json_object": "A solicitação tem um formato inválido.",
+      "invalid_title": "O título tem um formato inválido.",
+      "invalid_content": "O texto da nota tem um formato inválido.",
+      "invalid_content_length": "O comprimento do texto da nota é inválido.",
+      "invalid_title_length": "O comprimento do título é inválido.",
+      "invalid_id": "O ID da nota é inválido.",
+      "note_not_found": "A nota não foi encontrada.",
+      "request_body_too_large": "A solicitação é muito grande.",
+      "invalid_json": "A solicitação contém JSON inválido.",
+      "invalid_request_body": "O corpo da solicitação é inválido."
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Мои заметки",
+    "subtitle": "Открывайте, редактируйте и сохраняйте заметки прямо в WebApp."
+  },
+  "search": {
+    "placeholder": "Поиск по заголовкам и тексту",
+    "submit": "Поиск",
+    "reset": "Сброс",
+    "new": "Создать"
+  },
+  "list": {
+    "title": "Заметки",
+    "total": "Всего: {{count}}",
+    "empty": "Пока нет заметок",
+    "delete": "Удалить",
+    "previous": "Назад",
+    "next": "Далее",
+    "page": "Страница {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Редактирование #{{id}}",
+    "new": "Новая заметка",
+    "close": "Закрыть",
+    "title": "Заголовок",
+    "titlePlaceholder": "Краткий заголовок (необязательно)",
+    "content": "Текст заметки",
+    "contentPlaceholder": "Напишите заметку здесь...",
+    "saveChanges": "Сохранить изменения",
+    "create": "Создать заметку",
+    "cancel": "Отмена",
+    "delete": "Удалить"
+  },
+  "common": {
+    "empty": "Пусто"
+  },
+  "confirm": {
+    "delete": "Удалить заметку #{{id}}?"
+  },
+  "validation": {
+    "contentRequired": "Текст заметки обязателен.",
+    "titleTooLong": "Заголовок не должен превышать {{max}} символов.",
+    "contentTooLong": "Текст не должен превышать {{max}} символов."
+  },
+  "errors": {
+    "title": "Ошибка:",
+    "requestFailed": "Запрос не выполнен (HTTP {{status}}).",
+    "initDataMissing": "Данные авторизации Telegram не найдены. Откройте эту страницу с помощью кнопки WebApp в Telegram.",
+    "api": {
+      "unauthorized": "Авторизация Telegram не удалась. Откройте WebApp заново из бота.",
+      "invalid_json_object": "Запрос имеет неверный формат.",
+      "invalid_title": "Заголовок имеет неверный формат.",
+      "invalid_content": "Текст заметки имеет неверный формат.",
+      "invalid_content_length": "Длина текста заметки неверна.",
+      "invalid_title_length": "Длина заголовка неверна.",
+      "invalid_id": "ID заметки неверен.",
+      "note_not_found": "Заметка не найдена.",
+      "request_body_too_large": "Запрос слишком большой.",
+      "invalid_json": "Запрос содержит неверный JSON.",
+      "invalid_request_body": "Тело запроса недействительно."
+    }
+  }
+}
