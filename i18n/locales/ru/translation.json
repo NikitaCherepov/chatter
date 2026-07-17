@@ -217,8 +217,6 @@
     "none": "Чатов пока нет.",
     "activeMark": " [активный]",
     "list": "Твои чаты ({{count}}):\n\n{{chats}}\n\nКоманды:\n/chat_new <название>\n/chat_use <id>",
-    "defaultTitle": "Основной",
-    "autoTitle": "Чат {{number}}",
     "created": "Создал и активировал чат #{{id}}: {{title}}",
     "useFormat": "Формат: /chat_use <id>",
     "notFound": "Чат #{{id}} не найден.",

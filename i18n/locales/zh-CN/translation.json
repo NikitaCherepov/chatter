@@ -217,8 +217,6 @@
     "none": "暂无聊天。",
     "activeMark": " [活跃]",
     "list": "您的聊天（{{count}}）：\n\n{{chats}}\n\n命令：\n/chat_new <名称>\n/chat_use <ID>",
-    "defaultTitle": "主聊天",
-    "autoTitle": "聊天 {{number}}",
     "created": "已创建并激活聊天 #{{id}}：{{title}}",
     "useFormat": "格式：/chat_use <ID>",
     "notFound": "未找到聊天 #{{id}}。",

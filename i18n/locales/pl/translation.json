@@ -217,8 +217,6 @@
     "none": "Nie ma jeszcze żadnych czatów.",
     "activeMark": " [aktywny]",
     "list": "Twoje czaty ({{count}}):\n\n{{chats}}\n\nPolecenia:\n/chat_new <nazwa>\n/chat_use <id>",
-    "defaultTitle": "Główny",
-    "autoTitle": "Czat {{number}}",
     "created": "Utworzono i aktywowano czat #{{id}}: {{title}}",
     "useFormat": "Format: /chat_use <id>",
     "notFound": "Czat #{{id}} nie został znaleziony.",

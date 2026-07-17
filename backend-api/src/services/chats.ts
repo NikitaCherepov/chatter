@@ -13,24 +13,7 @@ import {
   resolveAccountId,
   resolveTelegramAccountForUpsert,
 } from './accounts.js';
-import { normalizeSupportedLanguage, type SupportedLanguage } from '../i18n/languages.js';
-
-const DEFAULT_CHAT_TITLES: Record<SupportedLanguage, string> = {
-  ru: 'Основной',
-  en: 'Main',
-  de: 'Hauptchat',
-  es: 'Principal',
-  fr: 'Principal',
-  it: 'Principale',
-  ja: 'メイン',
-  ko: '메인',
-  pl: 'Główny',
-  'pt-BR': 'Principal',
-  'zh-CN': '主聊天',
-};
-
-const getDefaultChatTitle = (language: unknown) =>
-  DEFAULT_CHAT_TITLES[normalizeSupportedLanguage(language) || 'en'];
+import { formatAutomaticChatTitle, normalizeSupportedLanguage } from '../i18n/languages.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -111,7 +94,7 @@ export const ensureActiveChat = (userId: number) => {
   }
 
   const firstChat = db.prepare('SELECT id FROM user_chats WHERE user_id = ? ORDER BY id ASC LIMIT 1').get(userId) as { id: number } | undefined;
-  const chatId = firstChat?.id ?? Number(createChat(userId, getDefaultChatTitle(user?.language)).lastInsertRowid);
+  const chatId = firstChat?.id ?? createUserChat(userId, '');
   db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(chatId, userId);
   return chatId;
 };
@@ -141,7 +124,8 @@ export const listUserChats = (userId: number, limit = 50, offset = 0): ChatDto[]
 
 export const createUserChat = (userId: number, title: string) => {
   const language = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
-  const normalized = (title || '').trim() || getDefaultChatTitle(language);
+  const chatCount = (db.prepare('SELECT COUNT(*) AS count FROM user_chats WHERE user_id = ?').get(userId) as { count: number }).count;
+  const normalized = (title || '').trim() || formatAutomaticChatTitle(language, chatCount + 1);
   const result = createChat(userId, normalized.slice(0, 120));
   const chatId = Number(result.lastInsertRowid);
   db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(chatId, userId);

@@ -1,18 +1,20 @@
-export const SUPPORTED_LANGUAGES = [
-  'ru',
-  'en',
-  'de',
-  'es',
-  'fr',
-  'it',
-  'ja',
-  'ko',
-  'pl',
-  'pt-BR',
-  'zh-CN',
-] as const;
+const LANGUAGE_CONFIG = {
+  ru: { automaticChatTitle: (number: number) => `Чат ${number}` },
+  en: { automaticChatTitle: (number: number) => `Chat ${number}` },
+  de: { automaticChatTitle: (number: number) => `Chat ${number}` },
+  es: { automaticChatTitle: (number: number) => `Chat ${number}` },
+  fr: { automaticChatTitle: (number: number) => `Chat ${number}` },
+  it: { automaticChatTitle: (number: number) => `Chat ${number}` },
+  ja: { automaticChatTitle: (number: number) => `チャット ${number}` },
+  ko: { automaticChatTitle: (number: number) => `채팅 ${number}` },
+  pl: { automaticChatTitle: (number: number) => `Czat ${number}` },
+  'pt-BR': { automaticChatTitle: (number: number) => `Chat ${number}` },
+  'zh-CN': { automaticChatTitle: (number: number) => `聊天 ${number}` },
+} as const;
 
-export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
+export type SupportedLanguage = keyof typeof LANGUAGE_CONFIG;
+
+export const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_CONFIG) as SupportedLanguage[];
 
 const LANGUAGE_BY_NORMALIZED_CODE = new Map<string, SupportedLanguage>(
   SUPPORTED_LANGUAGES.map(language => [language.toLowerCase(), language]),
@@ -42,4 +44,9 @@ export const normalizeSupportedLanguage = (value: unknown): SupportedLanguage | 
   }
 
   return null;
+};
+
+export const formatAutomaticChatTitle = (language: unknown, number: number) => {
+  const supportedLanguage = normalizeSupportedLanguage(language) || 'en';
+  return LANGUAGE_CONFIG[supportedLanguage].automaticChatTitle(Math.max(1, Math.floor(number)));
 };

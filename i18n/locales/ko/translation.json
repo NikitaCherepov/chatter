@@ -217,8 +217,6 @@
     "none": "아직 채팅이 없습니다.",
     "activeMark": " [활성]",
     "list": "채팅 목록 ({{count}}개):\n\n{{chats}}\n\n명령어:\n/chat_new <이름>\n/chat_use <id>",
-    "defaultTitle": "메인",
-    "autoTitle": "채팅 {{number}}",
     "created": "채팅 #{{id}}: {{title}}이(가) 생성되고 활성화되었습니다.",
     "useFormat": "형식: /chat_use <id>",
     "notFound": "채팅 #{{id}}을(를) 찾을 수 없습니다.",

@@ -2115,7 +2115,7 @@ const runBackendGetChat = async (userId: number, chatId: number) => {
     return response.data as { chat: UserChatRecord; is_active: boolean };
 };
 
-const runBackendCreateChat = async (userId: number, title: string) => {
+const runBackendCreateChat = async (userId: number, title?: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/chats`, { title }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; chat: UserChatRecord };
@@ -3350,12 +3350,10 @@ bot.command('chat_new', async (ctx) => {
     }
 
     const titleRaw = extractCommandPayload(ctx.message.text, 'chat_new');
-    const existingCount = (await runBackendGetChats(userId, 100)).chats.length;
-    const autoTitle = ctx.t('chats.autoTitle', { number: existingCount + 1 });
-    const title = (titleRaw || autoTitle).slice(0, 80).trim() || autoTitle;
-    const created = await runBackendCreateChat(userId, title);
+    const title = titleRaw.slice(0, 80).trim();
+    const created = await runBackendCreateChat(userId, title || undefined);
     const chatId = created.chat.id;
-    return ctx.reply(ctx.t('chats.created', { id: chatId, title }));
+    return ctx.reply(ctx.t('chats.created', { id: chatId, title: created.chat.title }));
 });
 
 bot.command('chat_use', async (ctx) => {

@@ -178,7 +178,6 @@ app.post('/internal/users/:id/chats', internalAuth, (req, res) => {
   const title = `${req.body?.title || ''}`.trim();
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
-  if (!title) return res.status(400).json({ error: 'title_required' });
   const chatId = createUserChat(userId, title);
   const chat = getUserChatById(userId, chatId);
   return res.status(201).json({ ok: true, chat });

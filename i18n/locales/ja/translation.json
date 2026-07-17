@@ -217,8 +217,6 @@
     "none": "まだチャットはありません。",
     "activeMark": " [アクティブ]",
     "list": "あなたのチャット ({{count}}):\n\n{{chats}}\n\nコマンド:\n/chat_new <名前>\n/chat_use <ID>",
-    "defaultTitle": "メイン",
-    "autoTitle": "チャット {{number}}",
     "created": "チャット #{{id}}: {{title}} を作成し、アクティブにしました",
     "useFormat": "形式: /chat_use <ID>",
     "notFound": "チャット #{{id}} が見つかりませんでした。",

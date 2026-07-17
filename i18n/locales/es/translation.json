@@ -217,8 +217,6 @@
     "none": "Aún no hay chats.",
     "activeMark": " [activo]",
     "list": "Tus chats ({{count}}):\n\n{{chats}}\n\nComandos:\n/chat_new <nombre>\n/chat_use <id>",
-    "defaultTitle": "Principal",
-    "autoTitle": "Chat {{number}}",
     "created": "Chat #{{id}} creado y activado: {{title}}",
     "useFormat": "Formato: /chat_use <id>",
     "notFound": "Chat #{{id}} no encontrado.",
