@@ -22,6 +22,8 @@ declare global {
       readSoundFile: (fileName: string) => Promise<ArrayBuffer | Uint8Array | null>;
       executeCommands: (commands: string[], options?: { background?: boolean }) => Promise<string>;
       readDirectory: (targetPath: string) => Promise<{ name: string; isDirectory: boolean; size?: number }[]>;
+      convertVideo: (payload: { request_id: string; source_path: string; output_path?: string; output_format: 'mp4' | 'webm' | 'mkv' | 'mov'; quality?: 'high' | 'balanced' | 'small' }) => Promise<{ source_path: string; output_path: string; output_format: string; quality: string; size_bytes: number }>;
+      cancelVideoConversion: (requestId: string) => Promise<{ cancelled: boolean }>;
       getFileInfo: (payload: { file_path: string; include_line_count?: boolean }) => Promise<any>;
       readFile: (payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => Promise<any>;
       searchFileKeywords: (payload: { file_path: string; query: string; max_matches?: number }) => Promise<any>;

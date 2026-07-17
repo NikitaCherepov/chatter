@@ -11,6 +11,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { SubagentConfig } from './types.js';
+import { fileConverterTools } from './tools/file-converter-tools.js';
 
 // ---------------------------------------------------------------------------
 // Prompt loader
@@ -53,6 +54,14 @@ export function clearPromptCache(): void {
 // ---------------------------------------------------------------------------
 
 const REGISTRY: Record<string, SubagentConfig> = {
+  file_converter: {
+    name: 'file_converter',
+    description: 'Конвертирует локальные файлы через desktop-приложение. Сейчас поддерживает только видео; для аудио, документов и любых операций без собственного инструмента обязан отказать без выполнения действий.',
+    promptFile: 'file-converter.md',
+    ownTools: fileConverterTools,
+    sharedTools: [],
+    maxLoops: 8,
+  },
 };
 
 // ---------------------------------------------------------------------------

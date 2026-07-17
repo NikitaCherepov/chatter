@@ -45,6 +45,14 @@ try {
   console.error('[ffmpeg] failed to resolve binary:', error);
 }
 
+type VideoConversionJob = { cancel: () => void };
+const activeVideoConversions = new Map<string, VideoConversionJob>();
+const activeVideoOutputPaths = new Set<string>();
+
+function outputPathKey(filePath: string): string {
+  return process.platform === 'win32' ? filePath.toLowerCase() : filePath;
+}
+
 // ── Wakeword (openWakeWord ONNX pipeline in Electron main) ────────────────
 
 const getWakewordModelsDir = () => {
@@ -668,6 +676,174 @@ function createWindow() {
         };
       }
     });
+  });
+
+  // ── File converter: constrained video conversion via bundled ffmpeg ──
+
+  ipcMain.handle('convert-video', async (event, payload: {
+    request_id: string;
+    source_path: string;
+    output_path?: string;
+    output_format: 'mp4' | 'webm' | 'mkv' | 'mov';
+    quality?: 'high' | 'balanced' | 'small';
+  }) => {
+    assertTrustedIpcSender(event);
+
+    const formats = new Set(['mp4', 'webm', 'mkv', 'mov']);
+    const qualities = new Set(['high', 'balanced', 'small']);
+    const videoExtensions = new Set([
+      '.mp4', '.webm', '.mkv', '.mov', '.avi', '.m4v', '.mpg', '.mpeg',
+      '.wmv', '.flv', '.ts', '.mts', '.m2ts',
+    ]);
+    const requestId = typeof payload?.request_id === 'string' ? payload.request_id.trim() : '';
+    const sourcePath = typeof payload?.source_path === 'string' ? payload.source_path.trim() : '';
+    const outputFormat = typeof payload?.output_format === 'string' ? payload.output_format.toLowerCase() : '';
+    const quality = typeof payload?.quality === 'string' ? payload.quality.toLowerCase() : 'balanced';
+
+    if (!requestId || requestId.length > 128) throw new Error('invalid_request_id');
+    if (activeVideoConversions.has(requestId)) throw new Error('conversion_request_already_running');
+    if (!sourcePath) throw new Error('source_path_required');
+    if (!path.isAbsolute(sourcePath)) throw new Error('source_path_must_be_absolute');
+    if (!formats.has(outputFormat)) throw new Error('unsupported_output_format');
+    if (!qualities.has(quality)) throw new Error('unsupported_quality');
+
+    const resolvedSource = path.resolve(sourcePath);
+    if (!fs.existsSync(resolvedSource)) throw new Error('source_file_not_found');
+    if (!fs.statSync(resolvedSource).isFile()) throw new Error('source_path_is_not_a_file');
+    if (!videoExtensions.has(path.extname(resolvedSource).toLowerCase())) {
+      throw new Error('unsupported_source_video_extension');
+    }
+
+    const parsedSource = path.parse(resolvedSource);
+    const requestedOutput = typeof payload?.output_path === 'string' ? payload.output_path.trim() : '';
+    if (requestedOutput && !path.isAbsolute(requestedOutput)) {
+      throw new Error('output_path_must_be_absolute');
+    }
+
+    let resolvedOutput: string;
+    if (!requestedOutput) {
+      resolvedOutput = path.join(parsedSource.dir, `${parsedSource.name}_converted.${outputFormat}`);
+    } else {
+      const resolvedRequestedOutput = path.resolve(requestedOutput);
+      resolvedOutput = fs.existsSync(resolvedRequestedOutput) && fs.statSync(resolvedRequestedOutput).isDirectory()
+        ? path.join(resolvedRequestedOutput, `${parsedSource.name}_converted.${outputFormat}`)
+        : resolvedRequestedOutput;
+    }
+
+    if (path.extname(resolvedOutput).toLowerCase() !== `.${outputFormat}`) {
+      throw new Error('output_extension_must_match_format');
+    }
+    if (outputPathKey(resolvedOutput) === outputPathKey(resolvedSource)) {
+      throw new Error('output_path_must_differ_from_source');
+    }
+    if (!fs.existsSync(path.dirname(resolvedOutput))) {
+      throw new Error('output_directory_not_found');
+    }
+    if (fs.existsSync(resolvedOutput)) {
+      throw new Error('output_file_already_exists');
+    }
+
+    const outputKey = outputPathKey(resolvedOutput);
+    if (activeVideoOutputPaths.has(outputKey)) {
+      throw new Error('output_file_conversion_already_running');
+    }
+    activeVideoOutputPaths.add(outputKey);
+
+    const profiles: Record<string, { crf: string; preset: string; audioBitrate: string }> = {
+      high: { crf: '18', preset: 'slow', audioBitrate: '192k' },
+      balanced: { crf: '23', preset: 'medium', audioBitrate: '160k' },
+      small: { crf: '28', preset: 'fast', audioBitrate: '128k' },
+    };
+    const profile = profiles[quality];
+    const ffmpegArgs = ['-n', '-i', resolvedSource];
+
+    if (outputFormat === 'webm') {
+      ffmpegArgs.push(
+        '-c:v', 'libvpx-vp9', '-crf', profile.crf, '-b:v', '0',
+        '-c:a', 'libopus', '-b:a', profile.audioBitrate,
+      );
+    } else {
+      ffmpegArgs.push(
+        '-c:v', 'libx264', '-preset', profile.preset, '-crf', profile.crf,
+        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', profile.audioBitrate,
+      );
+      if (outputFormat === 'mp4' || outputFormat === 'mov') {
+        ffmpegArgs.push('-movflags', '+faststart');
+      }
+    }
+    ffmpegArgs.push(resolvedOutput);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(getFfmpegPath(), ffmpegArgs, {
+          windowsHide: true,
+          stdio: ['ignore', 'ignore', 'pipe'],
+        });
+        let stderrTail = '';
+        let cancelled = false;
+        let timedOut = false;
+        let settled = false;
+
+        const timeout = setTimeout(() => {
+          timedOut = true;
+          child.kill();
+        }, 30 * 60_000);
+
+        const settle = (err?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          activeVideoConversions.delete(requestId);
+          if (err) reject(err);
+          else resolve();
+        };
+
+        activeVideoConversions.set(requestId, {
+          cancel: () => {
+            if (settled || cancelled) return;
+            cancelled = true;
+            child.kill();
+            setTimeout(() => {
+              if (!settled) child.kill('SIGKILL');
+            }, 2_000).unref();
+          },
+        });
+
+        child.stderr?.on('data', (chunk: Buffer) => {
+          stderrTail = (stderrTail + chunk.toString('utf8')).slice(-8_000);
+        });
+        child.once('error', (err) => settle(err));
+        child.once('close', (code) => {
+          if (cancelled) settle(new Error('ffmpeg_cancelled'));
+          else if (timedOut) settle(new Error('ffmpeg_timeout'));
+          else if (code === 0) settle();
+          else settle(new Error(`ffmpeg_failed_${code}: ${stderrTail.slice(-2_000)}`));
+        });
+      });
+
+      const outputStat = fs.statSync(resolvedOutput);
+      return {
+        source_path: resolvedSource,
+        output_path: resolvedOutput,
+        output_format: outputFormat,
+        quality,
+        size_bytes: outputStat.size,
+      };
+    } catch (err) {
+      await fs.promises.unlink(resolvedOutput).catch(() => {});
+      throw err;
+    } finally {
+      activeVideoConversions.delete(requestId);
+      activeVideoOutputPaths.delete(outputKey);
+    }
+  });
+
+  ipcMain.handle('cancel-video-conversion', (event, requestId: string) => {
+    assertTrustedIpcSender(event);
+    const job = activeVideoConversions.get(typeof requestId === 'string' ? requestId : '');
+    if (!job) return { cancelled: false };
+    job.cancel();
+    return { cancelled: true };
   });
 
   // ── File Action: read file natively (UTF-8, paginated, .docx supported, line numbers) ──
@@ -1494,6 +1670,12 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  for (const job of activeVideoConversions.values()) {
+    job.cancel();
+  }
 });
 
 app.on('activate', () => {

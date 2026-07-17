@@ -67,6 +67,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (targetPath: string) =>
     ipcRenderer.invoke('read-directory', targetPath),
 
+  // File converter: constrained ffmpeg conversion and cancellation
+  convertVideo: (payload: { request_id: string; source_path: string; output_path?: string; output_format: 'mp4' | 'webm' | 'mkv' | 'mov'; quality?: 'high' | 'balanced' | 'small' }) =>
+    ipcRenderer.invoke('convert-video', payload),
+  cancelVideoConversion: (requestId: string) =>
+    ipcRenderer.invoke('cancel-video-conversion', requestId),
+
   // File metadata: stat a file or directory without reading content
   getFileInfo: (payload: { file_path: string; include_line_count?: boolean }) =>
     ipcRenderer.invoke('get-file-info', payload),

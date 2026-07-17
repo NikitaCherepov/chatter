@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { AttributionControl, MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { subscribeMapData, getMapData, type MapData, type NearbyPlace } from '../lib/tools';
@@ -58,6 +58,8 @@ const poiIcon = L.divIcon({
 
 const DEFAULT_CENTER: [number, number] = [56.4977, 84.9744];
 const DEFAULT_ZOOM = 12;
+const LEAFLET_ATTRIBUTION_PREFIX =
+  '<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">Leaflet</a>';
 
 const TILE_LAYERS: Record<string, { url: string; attribution: string }> = {
   light: {
@@ -271,11 +273,13 @@ export function MapTool() {
         zoom={DEFAULT_ZOOM}
         className={s.map}
         zoomControl={true}
-        scrollWheelZoom={true}
-        doubleClickZoom={true}
-        dragging={true}
-      >
-        <TileSync tileKey={tileKey} />
+      scrollWheelZoom={true}
+      doubleClickZoom={true}
+      dragging={true}
+      attributionControl={false}
+    >
+      <AttributionControl prefix={LEAFLET_ATTRIBUTION_PREFIX} />
+      <TileSync tileKey={tileKey} />
         <ClickHandler placingPin={placingPin} onMapClick={handleMapClick} />
         <ResizeHandler />
 

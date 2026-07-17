@@ -59,8 +59,26 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
 
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
+    const cancelDesktopIpc = (reason: 'abort' | 'timeout') => {
+      if (client.ws.readyState !== WebSocket.OPEN) return;
+      try {
+        client.ws.send(JSON.stringify({
+          type: 'cancel_ipc',
+          request_id: requestId,
+          ipc_type: ipcType,
+          reason,
+        }));
+      } catch (err: any) {
+        console.warn('[ipc] failed to send cancellation to desktop', {
+          userId, requestId, ipcType, reason, error: err?.message || String(err),
+        });
+      }
+    };
+
     const timer = setTimeout(() => {
       client.pendingIpc.delete(requestId);
+      signal?.removeEventListener('abort', onAbort);
+      cancelDesktopIpc('timeout');
       console.warn('[ipc] timeout waiting for desktop result', {
         userId,
         requestId,
@@ -74,6 +92,7 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
     // Если сигнал отмены прийдёт пока ждём — чистим pending и режектим
     const onAbort = () => {
       client.pendingIpc.delete(requestId);
+      cancelDesktopIpc('abort');
       clearTimeout(timer);
       console.warn('[ipc] aborted before desktop result', { userId, requestId, ipcType });
       reject(new DOMException('The user aborted a request.', 'AbortError'));

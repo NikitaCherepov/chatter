@@ -50,6 +50,8 @@ export function initSubagentRunner(deps: {
 
 const TOOL_STATUS_MESSAGES: Record<string, string> = {
   // Shared tools
+  list_directory: 'Читаю директорию...',
+  convert_video: 'Конвертирую видео...',
   list_devops_servers: 'Получение списка серверов...',
 };
 

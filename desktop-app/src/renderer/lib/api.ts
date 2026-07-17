@@ -571,6 +571,16 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           });
           handleExecuteIpc(msg);
           break;
+        case 'cancel_ipc':
+          console.log('[ws] cancel_ipc received', {
+            requestId: msg.request_id,
+            ipcType: msg.ipc_type,
+            reason: msg.reason,
+          });
+          if (msg.ipc_type === 'convert_video') {
+            (window as any).electronAPI?.cancelVideoConversion(msg.request_id).catch(console.error);
+          }
+          break;
         case 'ping':
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: 'pong', t: msg.t || Date.now() }));
@@ -795,6 +805,15 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         targetPath: payload.target_path,
       });
       result = await (window as any).electronAPI?.readDirectory(payload.target_path);
+    } else if (ipc_type === 'convert_video') {
+      console.log('[ipc] renderer invoke convertVideo', {
+        requestId: request_id,
+        sourcePath: payload?.source_path,
+        outputPath: payload?.output_path,
+        outputFormat: payload?.output_format,
+        quality: payload?.quality,
+      });
+      result = await (window as any).electronAPI?.convertVideo({ ...payload, request_id });
     } else if (ipc_type === 'get_file_info') {
       console.log('[ipc] renderer invoke getFileInfo', {
         requestId: request_id,
