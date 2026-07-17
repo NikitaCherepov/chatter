@@ -44,13 +44,11 @@ import {
   getTelegramIdentityForAccount,
   linkAccountToTelegram,
   resolveAccountId,
-  runAccountIdentityMigration,
   unlinkTelegramFromAccount,
 } from './services/accounts.js';
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 
 dotenv.config();
-runAccountIdentityMigration();
 ensureDefaultPrompt();
 db.transaction(() => {
   for (const user of getAllUsers()) {

@@ -367,18 +367,11 @@ The caller chooses `data_owner: "desktop" | "telegram"`:
 - old JWTs for the canonical account and redirect-backed legacy subjects are revoked;
 - the public Desktop endpoint returns fresh Desktop access/refresh tokens and the resulting user.
 
-### Startup migration from the legacy schema
+### Account architecture after the completed migration
 
-`runAccountIdentityMigration()` runs during backend startup and is idempotent:
+The legacy account schema has been retired. The backend no longer discovers or converts `api_accounts`, `linked_tg_id`, merge-log rows, or duplicated Telegram usernames during startup. Every supported database must already use the canonical account schema described above.
 
-1. converts legacy `api_accounts` rows into `password` identities;
-2. converts Telegram users and old `linked_tg_id`/merge records into `telegram` identities, canonical accounts, and redirects;
-3. moves all account-owned references and validates that no migrated source IDs remain in data tables;
-4. only after successful validation removes the old account storage and duplicated Telegram username column from `users`; Telegram usernames then live only in `account_identities.username`.
-
-Pinecone migration runs separately. Until a namespace is copied successfully, vector-memory searches read both the canonical and legacy namespaces. A failed pass leaves the legacy namespace readable and can be retried on a later startup.
-
-On an already migrated database, the startup migration is a no-op. Keep the legacy conversion code until every deployed database has completed at least one successful startup on the new version. After that, only the legacy discovery/conversion branches may be removed; `account_identities`, `account_redirects`, canonical ID resolution, unlink splitting, and namespace migration handling are runtime architecture and must remain.
+`account_identities`, `account_redirects`, canonical ID resolution, unlink splitting, and namespace migration handling are permanent runtime architecture. Pinecone namespace migrations are also used by future account merges: until a namespace is copied successfully, vector-memory searches read both the canonical and source namespaces, and failed passes remain retryable.
 
 ## Quick Check (input/output)
 

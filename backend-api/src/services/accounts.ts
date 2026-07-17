@@ -36,21 +36,6 @@ export type TelegramUnlinkResult = {
   telegram_username: string | null;
 };
 
-type LegacyApiAccount = {
-  id: number;
-  user_id: number;
-  login: string;
-  password_salt: string;
-  password_hash: string;
-};
-
-type LegacyLink = {
-  source_account_id: number;
-  target_account_id: number;
-  reason: string;
-  already_merged: boolean;
-};
-
 const tableExists = (table: string) => Boolean(db
   .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
   .get(table));
@@ -322,7 +307,6 @@ const moveSingletonWithTargetPriority = (
 const mergeUserScalarData = (
   sourceAccountId: number,
   targetAccountId: number,
-  includeAdditiveCounters = true,
 ) => {
   const source = getRawAccountById(sourceAccountId) as Record<string, unknown> | undefined;
   const target = getRawAccountById(targetAccountId) as Record<string, unknown> | undefined;
@@ -332,11 +316,9 @@ const mergeUserScalarData = (
   const available = new Set(columns.map(column => column.name));
   const updates: Record<string, unknown> = {};
 
-  if (includeAdditiveCounters) {
-    for (const column of additiveUserColumns) {
-      if (!available.has(column)) continue;
-      updates[column] = Number(target[column] || 0) + Number(source[column] || 0);
-    }
+  for (const column of additiveUserColumns) {
+    if (!available.has(column)) continue;
+    updates[column] = Number(target[column] || 0) + Number(source[column] || 0);
   }
 
   // The desktop account is the source during linking. Its explicit personal
@@ -508,34 +490,6 @@ export const mergeAccounts = (
   return targetAccountId;
 })();
 
-const finalizePreviouslyMergedAccount = (
-  sourceAccountId: number,
-  targetAccountIdRaw: number,
-  reason: string,
-) => db.transaction(() => {
-  const targetAccountId = resolveAccountId(targetAccountIdRaw);
-  const source = getRawAccountById(sourceAccountId);
-  const target = getRawAccountById(targetAccountId);
-  if (!source || !target) throw new Error('account_merge_user_not_found');
-
-  // The transition migration already added counters and moved normal rows.
-  // Re-apply only personal settings and any rows that may have been added later.
-  mergeUserScalarData(sourceAccountId, targetAccountId, false);
-  moveSimpleOwnership(sourceAccountId, targetAccountId);
-  moveRowsWithSourcePriority('mail_accounts', ['provider'], sourceAccountId, targetAccountId);
-  moveRowsWithSourcePriority('smart_home_settings', ['provider'], sourceAccountId, targetAccountId);
-  moveRowsWithSourcePriority('smart_devices', ['id'], sourceAccountId, targetAccountId);
-  moveSingletonWithSourcePriority('pc_commands_settings', sourceAccountId, targetAccountId);
-  moveSingletonWithTargetPriority('bans', sourceAccountId, targetAccountId);
-  moveSecondaryOwnership(sourceAccountId, targetAccountId);
-  moveIdentities(sourceAccountId, targetAccountId);
-  createAccountRedirect(source, targetAccountId, `${reason}_finalized`);
-  queueNamespaceMigration(sourceAccountId, targetAccountId);
-  db.prepare('DELETE FROM users WHERE id = ?').run(sourceAccountId);
-  rebuildMessageSearchIndex();
-  return targetAccountId;
-})();
-
 export const linkAccountToTelegram = (
   sourceAccountId: number,
   telegramId: number,
@@ -620,240 +574,3 @@ export const unlinkTelegramFromAccount = (
     telegram_username: telegramIdentity.username,
   };
 })();
-
-const collectLegacyLinks = (): LegacyLink[] => {
-  const links = new Map<number, LegacyLink>();
-
-  if (tableHasColumn('users', 'linked_tg_id')) {
-    const rows = db.prepare(`
-      SELECT id, linked_tg_id
-      FROM users
-      WHERE linked_tg_id IS NOT NULL AND linked_tg_id > 0
-      ORDER BY id ASC
-    `).all() as Array<{ id: number; linked_tg_id: number }>;
-    for (const row of rows) {
-      links.set(row.id, {
-        source_account_id: row.id,
-        target_account_id: Number(row.linked_tg_id),
-        reason: 'legacy_linked_tg_id',
-        already_merged: false,
-      });
-    }
-  }
-
-  if (tableHasColumn('users', 'merged_into_account_id')) {
-    const rows = db.prepare(`
-      SELECT id, merged_into_account_id
-      FROM users
-      WHERE merged_into_account_id IS NOT NULL AND merged_into_account_id > 0
-      ORDER BY id ASC
-    `).all() as Array<{ id: number; merged_into_account_id: number }>;
-    for (const row of rows) {
-      links.set(row.id, {
-        source_account_id: row.id,
-        target_account_id: Number(row.merged_into_account_id),
-        reason: 'intermediate_merged_account',
-        already_merged: true,
-      });
-    }
-  }
-
-  if (tableExists('account_merge_log')) {
-    const rows = db.prepare(`
-      SELECT source_account_id, target_account_id, reason
-      FROM account_merge_log
-      ORDER BY source_account_id ASC
-    `).all() as Array<Omit<LegacyLink, 'already_merged'>>;
-    for (const row of rows) links.set(row.source_account_id, { ...row, already_merged: true });
-  }
-
-  return [...links.values()].filter(link => link.source_account_id !== link.target_account_id);
-};
-
-const dropLegacyAccountStorage = () => {
-  if (tableExists('api_accounts')) db.exec('DROP TABLE api_accounts');
-  if (tableExists('account_merge_log')) db.exec('DROP TABLE account_merge_log');
-  if (tableHasColumn('users', 'linked_tg_id')) db.exec('ALTER TABLE users DROP COLUMN linked_tg_id');
-  if (tableHasColumn('users', 'merged_into_account_id')) db.exec('ALTER TABLE users DROP COLUMN merged_into_account_id');
-  if (tableHasColumn('users', 'tg_username')) db.exec('ALTER TABLE users DROP COLUMN tg_username');
-};
-
-const validateFinalMigration = (
-  legacyAccounts: LegacyApiAccount[],
-  legacyLinks: LegacyLink[],
-) => {
-  for (const account of legacyAccounts) {
-    const identity = getPasswordIdentityByLogin(account.login);
-    if (!identity || !getRawAccountById(resolveAccountId(identity.account_id))) {
-      throw new Error(`password_identity_migration_incomplete:${account.login}`);
-    }
-  }
-
-  const sourceIds = [...new Set(legacyLinks.map(link => Math.floor(link.source_account_id)))];
-  for (const sourceAccountId of sourceIds) {
-    if (getRawAccountById(sourceAccountId)) {
-      throw new Error(`merged_source_account_still_exists:${sourceAccountId}`);
-    }
-    const redirect = db.prepare('SELECT target_account_id FROM account_redirects WHERE source_account_id = ?')
-      .get(sourceAccountId) as { target_account_id: number } | undefined;
-    if (!redirect || !getRawAccountById(resolveAccountId(redirect.target_account_id))) {
-      throw new Error(`account_redirect_migration_incomplete:${sourceAccountId}`);
-    }
-  }
-
-  if (sourceIds.length === 0) return;
-  const placeholders = sourceIds.map(() => '?').join(', ');
-  const tables = db.prepare(`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-  `).all() as Array<{ name: string }>;
-  const legacyTablesToDrop = new Set(['api_accounts', 'account_merge_log']);
-  for (const { name } of tables) {
-    if (legacyTablesToDrop.has(name)) continue;
-    if (!tableHasColumn(name, 'user_id')) continue;
-    const row = db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM ${quoteIdentifier(name)}
-      WHERE user_id IN (${placeholders})
-    `).get(...sourceIds) as { count: number };
-    if (Number(row?.count || 0) > 0) {
-      throw new Error(`account_references_not_migrated:${name}:${row.count}`);
-    }
-  }
-
-  const identityRow = db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM account_identities
-    WHERE account_id IN (${placeholders})
-  `).get(...sourceIds) as { count: number };
-  if (Number(identityRow?.count || 0) > 0) {
-    throw new Error(`account_identity_references_not_migrated:${identityRow.count}`);
-  }
-
-  const secondaryReferences = [
-    ['devops_runbooks_public', 'author_user_id'],
-    ['user_plan_subscriptions', 'assigned_by'],
-    ['bans', 'banned_by'],
-  ] as const;
-  for (const [table, column] of secondaryReferences) {
-    if (!tableHasColumn(table, column)) continue;
-    const row = db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM ${quoteIdentifier(table)}
-      WHERE ${quoteIdentifier(column)} IN (${placeholders})
-    `).get(...sourceIds) as { count: number };
-    if (Number(row?.count || 0) > 0) {
-      throw new Error(`secondary_account_references_not_migrated:${table}.${column}:${row.count}`);
-    }
-  }
-};
-
-export const runAccountIdentityMigration = () => {
-  const legacyAccounts = tableExists('api_accounts')
-    ? db.prepare(`
-        SELECT id, user_id, login, password_salt, password_hash
-        FROM api_accounts
-        ORDER BY id ASC
-      `).all() as LegacyApiAccount[]
-    : [];
-  const legacyLinks = collectLegacyLinks();
-  const legacyApiUserIds = new Set(legacyAccounts.map(account => account.user_id));
-  const linkedTargets = new Set(legacyLinks.map(link => Number(link.target_account_id)));
-  const linkedSources = new Set(legacyLinks.map(link => Number(link.source_account_id)));
-
-  db.transaction(() => {
-    const users = db.prepare(tableHasColumn('users', 'tg_username')
-      ? 'SELECT id, tg_username FROM users ORDER BY id ASC'
-      : 'SELECT id, NULL AS tg_username FROM users ORDER BY id ASC')
-      .all() as Array<{ id: number; tg_username: string | null }>;
-    const legacyTelegramUsernames = new Map(users.map(user => [user.id, user.tg_username]));
-
-    for (const user of users) {
-      const existingIdentities = getAccountIdentities(user.id);
-      const hasTelegramIdentity = existingIdentities.some(identity => identity.provider === 'telegram');
-      const hasPasswordIdentity = existingIdentities.some(identity => identity.provider === 'password');
-      const looksLikeTelegramAccount =
-        linkedTargets.has(user.id)
-        || Boolean(user.tg_username)
-        || hasTelegramIdentity
-        || (!linkedSources.has(user.id) && !legacyApiUserIds.has(user.id) && !hasPasswordIdentity);
-      if (looksLikeTelegramAccount) {
-        ensureTelegramIdentity(user.id, user.id, user.tg_username);
-      }
-    }
-
-    for (const account of legacyAccounts) {
-      const link = legacyLinks.find(row => row.source_account_id === account.user_id);
-      const targetAccountId = link && getRawAccountById(link.target_account_id)
-        ? link.target_account_id
-        : resolveAccountId(account.user_id);
-      db.prepare(`
-        INSERT INTO account_identities (
-          account_id, provider, provider_subject, username, password_salt, password_hash
-        )
-        VALUES (?, 'password', ?, ?, ?, ?)
-        ON CONFLICT(provider, provider_subject) DO UPDATE SET
-          account_id = excluded.account_id,
-          username = excluded.username,
-          password_salt = excluded.password_salt,
-          password_hash = excluded.password_hash,
-          updated_at = CURRENT_TIMESTAMP
-      `).run(
-        targetAccountId,
-        account.login,
-        account.login,
-        account.password_salt,
-        account.password_hash,
-      );
-    }
-
-    for (const link of legacyLinks) {
-      const targetAccountId = resolveAccountId(link.target_account_id);
-      const source = getRawAccountById(link.source_account_id);
-      const target = getRawAccountById(targetAccountId);
-      if (!target) {
-        throw new Error(`legacy_account_target_missing:${link.source_account_id}->${targetAccountId}`);
-      }
-      ensureTelegramIdentity(
-        targetAccountId,
-        Number(getTelegramIdentityForAccount(targetAccountId)?.provider_subject || targetAccountId),
-        legacyTelegramUsernames.get(targetAccountId) || null,
-      );
-      if (source) {
-        if (link.already_merged) {
-          finalizePreviouslyMergedAccount(link.source_account_id, targetAccountId, link.reason);
-        } else {
-          mergeAccounts(link.source_account_id, targetAccountId, link.reason);
-        }
-      } else if (link.source_account_id !== targetAccountId && resolveAccountId(link.source_account_id) === link.source_account_id) {
-        db.prepare(`
-          INSERT INTO account_redirects (
-            source_account_id, target_account_id, source_status, source_is_admin, reason
-          )
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(source_account_id) DO UPDATE SET
-            target_account_id = excluded.target_account_id,
-            reason = excluded.reason,
-            updated_at = CURRENT_TIMESTAMP
-        `).run(
-          link.source_account_id,
-          targetAccountId,
-          target.status,
-          target.is_admin,
-          `${link.reason}_recovered`,
-        );
-        queueNamespaceMigration(link.source_account_id, targetAccountId);
-      }
-    }
-
-    validateFinalMigration(legacyAccounts, legacyLinks);
-    dropLegacyAccountStorage();
-  })();
-
-  if (legacyAccounts.length > 0 || legacyLinks.length > 0) {
-    console.log(
-      `[accounts] final identity migration complete: ${legacyAccounts.length} password identities, ${legacyLinks.length} merged account(s)`,
-    );
-  }
-};
