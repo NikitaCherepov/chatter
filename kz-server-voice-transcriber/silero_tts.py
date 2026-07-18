@@ -5,8 +5,26 @@ import soundfile as sf
 
 SAMPLE_RATE = 48000
 LANGUAGE = os.getenv('SILERO_LANGUAGE', 'ru').strip() or 'ru'
-MODEL_ID = os.getenv('SILERO_MODEL_ID', 'v4_ru').strip() or 'v4_ru'
+MODEL_ID = os.getenv('SILERO_MODEL_ID', 'v5_5_ru').strip() or 'v5_5_ru'
 SPEAKER = os.getenv('SILERO_SPEAKER', 'eugene').strip() or 'eugene'
+FORCE_RELOAD = os.getenv('SILERO_FORCE_RELOAD', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def load_model():
+    load_options = {
+        'repo_or_dir': 'snakers4/silero-models',
+        'model': 'silero_tts',
+        'language': LANGUAGE,
+        'speaker': MODEL_ID,
+        'trust_repo': True,
+    }
+    try:
+        return torch.hub.load(**load_options, force_reload=FORCE_RELOAD)
+    except Exception:
+        if FORCE_RELOAD:
+            raise
+        print('[silero] Cached model metadata failed; refreshing torch hub cache once.', file=sys.stderr)
+        return torch.hub.load(**load_options, force_reload=True)
 
 
 def main():
@@ -19,14 +37,7 @@ def main():
         raise SystemExit('Text must not be empty')
 
     torch.set_num_threads(2)
-    model, _ = torch.hub.load(
-        repo_or_dir='snakers4/silero-models',
-        model='silero_tts',
-        language=LANGUAGE,
-        speaker=MODEL_ID,
-        trust_repo=True,
-        force_reload=False
-    )
+    model, _ = load_model()
     model.to(torch.device('cpu'))
 
     audio = model.apply_tts(text=text, speaker=SPEAKER, sample_rate=SAMPLE_RATE)

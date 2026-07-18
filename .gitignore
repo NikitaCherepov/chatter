@@ -13,6 +13,7 @@ dist/
 backend-api/dist/
 settings.local.json
 kz-server-voice-transcriber/tmp/
+kz-server-voice-transcriber/models/
 transcriber/temp_audio_*
 transcriber/transcription_*
 
