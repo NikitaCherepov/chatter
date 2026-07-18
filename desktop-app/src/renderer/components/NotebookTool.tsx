@@ -159,8 +159,7 @@ export function NotebookTool({ contentMax }: Props) {
         await api.deleteNote(editId);
         const res = await api.createNote(cleanTitle, cleanContent);
         if (res?.error) {
-          if (res.error === 'notes_limit') toast.error(t('tools.notebook.limitReached'));
-          else if (res.error === 'content_too_long') toast.error(t('tools.notebook.tooLong'));
+          if (res.error === 'content_too_long') toast.error(t('tools.notebook.tooLong'));
           else toast.error(t('tools.notebook.saveFailed'));
           return;
         }
@@ -168,8 +167,7 @@ export function NotebookTool({ contentMax }: Props) {
       } else {
         const res = await api.createNote(cleanTitle, cleanContent);
         if (res?.error) {
-          if (res.error === 'notes_limit') toast.error(t('tools.notebook.limitReached'));
-          else if (res.error === 'content_too_long') toast.error(t('tools.notebook.tooLong'));
+          if (res.error === 'content_too_long') toast.error(t('tools.notebook.tooLong'));
           else toast.error(t('tools.notebook.createFailed'));
           return;
         }

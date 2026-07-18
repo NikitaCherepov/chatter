@@ -821,7 +821,6 @@
     },
     "notebook": {
       "textRequired": "메모 텍스트가 필요합니다",
-      "limitReached": "메모 한도에 도달했습니다",
       "tooLong": "텍스트가 너무 깁니다",
       "saveFailed": "저장하지 못했습니다",
       "saved": "메모가 저장되었습니다",

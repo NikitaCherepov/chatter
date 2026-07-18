@@ -50,9 +50,6 @@ db.exec(`
     imap_secure INTEGER DEFAULT 1,
     active_chat_id INTEGER,
     daily_message_count INTEGER NOT NULL DEFAULT 0,
-    daily_message_limit INTEGER NOT NULL DEFAULT 0,
-    context_window INTEGER NOT NULL DEFAULT 20,
-    context_window_max INTEGER NOT NULL DEFAULT 20,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -212,9 +209,6 @@ ensureUserColumn('status', "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DE
 ensureUserColumn('plan', "ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
 ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_message_limit', 'ALTER TABLE users ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('context_window', 'ALTER TABLE users ADD COLUMN context_window INTEGER NOT NULL DEFAULT 20');
-ensureUserColumn('context_window_max', 'ALTER TABLE users ADD COLUMN context_window_max INTEGER NOT NULL DEFAULT 20');
 ensureUserColumn('daily_tokens_used', 'ALTER TABLE users ADD COLUMN daily_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens_used INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
@@ -306,7 +300,6 @@ db.exec(`
   UPDATE users SET status = 'approved' WHERE status IS NULL OR status = '';
   UPDATE users SET plan = 'free' WHERE plan IS NULL OR plan = '' OR plan NOT IN ('free', 'standart', 'pro');
   UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL;
-  UPDATE users SET daily_message_limit = 0 WHERE daily_message_limit IS NULL OR daily_message_limit < 0;
   UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL;
   UPDATE users SET daily_tokens_used = 0 WHERE daily_tokens_used IS NULL;
   UPDATE users SET total_tokens_used = 0 WHERE total_tokens_used IS NULL;
@@ -319,8 +312,6 @@ db.exec(`
   UPDATE users SET imap_port = 993 WHERE imap_port IS NULL OR imap_port <= 0;
   UPDATE users SET imap_secure = 1 WHERE imap_secure IS NULL;
   UPDATE users SET mail_check_limit = 10 WHERE mail_check_limit IS NULL OR mail_check_limit <= 0;
-  UPDATE users SET context_window = 20 WHERE context_window IS NULL OR context_window <= 0;
-  UPDATE users SET context_window_max = 20 WHERE context_window_max IS NULL OR context_window_max <= 0;
   CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 `);
@@ -394,7 +385,7 @@ db.exec(`
 // Cleanup expired codes on startup
 db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
 
-// Token-based context limit (replaces message-count-based context_window_max)
+// Token-based context limits.
 ensureUserColumn('max_context_tokens_limit', 'ALTER TABLE users ADD COLUMN max_context_tokens_limit INTEGER NOT NULL DEFAULT 30000');
 ensureUserColumn('max_context_tokens', 'ALTER TABLE users ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT 30000');
 // Attachment token limit (0 = auto: 90% of max_context_tokens)

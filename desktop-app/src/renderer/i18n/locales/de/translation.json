@@ -541,7 +541,6 @@
     },
     "notebook": {
       "textRequired": "Notiztext ist erforderlich",
-      "limitReached": "Notizlimit erreicht",
       "tooLong": "Text zu lang",
       "saveFailed": "Speichern fehlgeschlagen",
       "saved": "Notiz gespeichert",

@@ -18,10 +18,7 @@ export type UserRecord = {
   core_memory: string | null;
   timezone_offset?: number | null;
   timezone_confirmed?: number;
-  context_window: number;
-  context_window_max: number;
   daily_message_count: number;
-  daily_message_limit: number;
   daily_tokens_used?: number;
   total_tokens_used?: number;
   daily_cost_rub?: number;

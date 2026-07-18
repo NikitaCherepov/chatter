@@ -14,6 +14,7 @@ import {
   resolveTelegramAccountForUpsert,
 } from './accounts.js';
 import { formatAutomaticChatTitle, normalizeSupportedLanguage } from '../i18n/languages.js';
+import { DEFAULT_USER_PLAN, getPlanLimits, PLAN_LIMITS } from './plan-limits.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -1132,14 +1133,10 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
 export const getHistoryForAi = (
   userId: number,
   chatId: number,
-  limit?: number,
   attachmentMaxTokens = 0,
   supportsVision = false,
   attachmentBudgetState?: { remaining: number }
 ): any[] => {
-  // LIMIT больше не используется для ограничения контекста —
-  // Epoch Trimming (trimUserHistoryByChat) контролирует размер через архивацию по токенам.
-  // Параметр limit оставлен для обратной совместимости, но игнорируется.
   const rows = db.prepare(`
     SELECT id, role, content, tool_calls_json, attachments, images
     FROM chat_messages
@@ -1492,29 +1489,6 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
   return { archived_count: idsToArchive.length, tokens_before: totalContextTokens, tokens_after: Math.max(0, tokensAfter) };
 };
 
-export const updateUserContextWindow = (userId: number, contextWindow: number) => {
-  const safeValue = Math.max(1, Math.floor(contextWindow));
-  return db.prepare(`
-    UPDATE users
-    SET context_window = ?
-    WHERE id = ?
-  `).run(safeValue, userId);
-};
-
-export const updateUserContextWindowMax = (userId: number, contextWindowMax: number) => {
-  const safeValue = Math.max(1, Math.floor(contextWindowMax));
-  return db.prepare(`
-    UPDATE users
-    SET context_window_max = ?,
-        context_window = CASE
-            WHEN COALESCE(context_window, 0) <= 0 THEN ?
-            WHEN context_window > ? THEN ?
-            ELSE context_window
-        END
-    WHERE id = ?
-  `).run(safeValue, safeValue, safeValue, safeValue, userId);
-};
-
 export const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
   SET daily_message_count = 0,
@@ -1540,19 +1514,13 @@ export const resetUsersPromptIfDeleted = (promptId: number) => db
   .prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?')
   .run(promptId);
 
-export const resolveEffectiveContextWindow = (user: UserRecord) => {
-  const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0 ? Math.floor(user.context_window_max) : 9999;
-  const current = Number.isFinite(user.context_window) && user.context_window > 0 ? Math.floor(user.context_window) : maxWindow;
-  return Math.max(1, Math.min(current, maxWindow));
-};
-
 /**
  * Резолвит эффективный лимит контекста в токенах для пользователя.
  * Берёт min(max_context_tokens, max_context_tokens_limit).
- * Fallback на константу из PLAN_LIMITS для плана пользователя.
+ * Fallback на единый конфиг тарифов.
  */
 export const resolveMaxContextTokens = (user: UserRecord): number => {
-  const planLimit = PLAN_LIMITS[user.plan]?.max_context_tokens ?? PLAN_LIMITS['free'].max_context_tokens;
+  const planLimit = getPlanLimits(user.plan).max_context_tokens;
   const hardLimit = Number.isFinite(user.max_context_tokens_limit) && user.max_context_tokens_limit! > 0
     ? Math.floor(user.max_context_tokens_limit!) : planLimit;
   const userChoice = Number.isFinite(user.max_context_tokens) && user.max_context_tokens! > 0
@@ -1608,14 +1576,8 @@ export const getPromptForUser = (user: UserRecord) => {
 export type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 export type UserPlan = 'free' | 'standart' | 'pro';
 
-const PLAN_LIMITS: Record<string, { context_window_max: number; daily_message_limit: number; daily_web_search_limit: number; daily_image_gen_limit: number; max_images_per_request: number; max_context_tokens: number }> = {
-  free:     { context_window_max: 9999, daily_message_limit: 0, daily_web_search_limit: 0,  daily_image_gen_limit: 0, max_images_per_request: 0,  max_context_tokens: 30_000 },
-  standart: { context_window_max: 9999, daily_message_limit: 0, daily_web_search_limit: 5,  daily_image_gen_limit: 2, max_images_per_request: 5,  max_context_tokens: 60_000 },
-  pro:      { context_window_max: 9999, daily_message_limit: 0, daily_web_search_limit: 20, daily_image_gen_limit: 5, max_images_per_request: 10, max_context_tokens: 1_000_000 }
-};
-
 export const getMaxImagesForPlan = (plan: string): number => {
-  return PLAN_LIMITS[plan]?.max_images_per_request ?? 0;
+  return getPlanLimits(plan).max_images_per_request;
 };
 
 export const upsertTelegramUser = (
@@ -1631,13 +1593,12 @@ export const upsertTelegramUser = (
   const normalizedLanguage = normalizeSupportedLanguage(language);
   const effectiveRole = role === 'admin' ? 'admin' : 'user';
   const effectiveIsAdmin = effectiveRole === 'admin' ? 1 : 0;
-  const limits = PLAN_LIMITS['free'];
+  const limits = PLAN_LIMITS[DEFAULT_USER_PLAN];
 
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit,
-      max_context_tokens_limit, max_context_tokens)
-    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?)
+      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       role = excluded.role,
@@ -1646,8 +1607,7 @@ export const upsertTelegramUser = (
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, effectiveRole, effectiveIsAdmin, status, normalizedLanguage, defaultPromptId,
-    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
-    limits.max_context_tokens, limits.max_context_tokens);
+    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
   ensureActiveChat(accountId);
@@ -1663,19 +1623,17 @@ export const createPendingTelegramUser = (
 ) => db.transaction(() => {
   const accountId = resolveTelegramAccountForUpsert(tgId);
   const normalizedLanguage = normalizeSupportedLanguage(language);
-  const limits = PLAN_LIMITS['free'];
+  const limits = PLAN_LIMITS[DEFAULT_USER_PLAN];
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      context_window_max, daily_message_limit, daily_web_search_limit, daily_image_gen_limit,
-      max_context_tokens_limit, max_context_tokens)
-    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?)
+      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(excluded.name, users.name),
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, normalizedLanguage, defaultPromptId,
-    limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
-    limits.max_context_tokens, limits.max_context_tokens);
+    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
   ensureActiveChat(accountId);
@@ -1785,12 +1743,10 @@ export const getBannedUsersPage = (limit: number, offset: number) => {
 
 export const updateUserPlan = (userId: number, plan: UserPlan) => {
   userId = resolveAccountId(userId);
-  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['free'];
+  const limits = getPlanLimits(plan);
   return db.prepare(`
     UPDATE users
     SET plan = ?,
-        context_window_max = ?,
-        daily_message_limit = ?,
         daily_web_search_limit = ?,
         daily_image_gen_limit = ?,
         max_context_tokens_limit = ?,
@@ -1800,7 +1756,7 @@ export const updateUserPlan = (userId: number, plan: UserPlan) => {
           ELSE max_context_tokens
         END
     WHERE id = ?
-  `).run(plan, limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
+  `).run(plan, limits.daily_web_search_limit, limits.daily_image_gen_limit,
     limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, userId);
 };
 
@@ -1808,9 +1764,7 @@ export const syncAllUsersPlanLimits = () => {
   for (const [plan, limits] of Object.entries(PLAN_LIMITS)) {
     db.prepare(`
       UPDATE users
-      SET context_window_max = ?,
-          daily_message_limit = ?,
-          daily_web_search_limit = ?,
+      SET daily_web_search_limit = ?,
           daily_image_gen_limit = ?,
           max_context_tokens_limit = ?,
           max_context_tokens = CASE
@@ -1819,7 +1773,7 @@ export const syncAllUsersPlanLimits = () => {
             ELSE max_context_tokens
           END
       WHERE plan = ?
-    `).run(limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit, limits.daily_image_gen_limit,
+    `).run(limits.daily_web_search_limit, limits.daily_image_gen_limit,
       limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, plan);
   }
 };

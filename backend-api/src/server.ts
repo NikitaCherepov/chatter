@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserContextWindow, updateUserContextWindowMax, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, backfillMessageTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -255,7 +255,7 @@ app.post('/internal/users/:id/notes', internalAuth, (req, res) => {
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  const result = createNote(userId, user.plan, `${req.body?.title || ''}`, `${req.body?.content || ''}`);
+  const result = createNote(userId, `${req.body?.title || ''}`, `${req.body?.content || ''}`);
   if (!result.ok) return res.status(422).json(result);
   return res.status(201).json(result);
 });
@@ -266,7 +266,7 @@ app.put('/internal/users/:id/notes/:noteId', internalAuth, (req, res) => {
   if (!Number.isFinite(userId) || userId <= 0 || !Number.isFinite(noteId) || noteId <= 0) return res.status(400).json({ error: 'bad_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  const result = updateNoteContent(userId, noteId, user.plan, `${req.body?.content || ''}`);
+  const result = updateNoteContent(userId, noteId, `${req.body?.content || ''}`);
   if (!result.ok) return res.status(result.error === 'note_not_found' ? 404 : 422).json(result);
   return res.json(result);
 });
@@ -338,7 +338,6 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
   const optionsRaw = req.body?.options || {};
   const options = {
     forcePro: Boolean(optionsRaw.forcePro),
-    ignoreDailyLimit: Boolean(optionsRaw.ignoreDailyLimit),
     countAsUserMessage: optionsRaw.countAsUserMessage === false ? false : true,
     skipHistory: Boolean(optionsRaw.skipHistory),
     persistUserText: typeof optionsRaw.persistUserText === 'string' ? optionsRaw.persistUserText : undefined,
@@ -415,7 +414,6 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
   } catch (err: any) {
     const code = `${err?.message || 'ai_send_failed'}`;
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
-    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_text') return res.status(400).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
     return res.status(500).json({ error: code });
@@ -432,7 +430,6 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
   const optionsRaw = req.body?.options || {};
   const options = {
     forcePro: Boolean(optionsRaw.forcePro),
-    ignoreDailyLimit: Boolean(optionsRaw.ignoreDailyLimit),
     countAsUserMessage: optionsRaw.countAsUserMessage === false ? false : true,
     skipHistory: Boolean(optionsRaw.skipHistory),
     persistUserText: typeof optionsRaw.persistUserText === 'string' ? optionsRaw.persistUserText : undefined,
@@ -669,7 +666,6 @@ app.post('/internal/voice/turn', internalAuth, async (req, res) => {
   } catch (err: any) {
     const code = `${err?.message || 'voice_turn_failed'}`;
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
-    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_audio') return res.status(400).json({ error: code });
     if (code === 'audio_too_large') return res.status(413).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
@@ -718,7 +714,6 @@ app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
   } catch (err: any) {
     const code = `${err?.message || 'photo_analyze_failed'}`;
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
-    if (code === 'daily_message_limit_reached') return res.status(429).json({ error: code });
     if (code === 'empty_image') return res.status(400).json({ error: code });
     if (code === 'image_too_large') return res.status(413).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
@@ -1678,10 +1673,10 @@ app.post('/api/v1/notes', (req: AuthedRequest, res) => {
   const title = `${req.body?.title || ''}`;
   const content = `${req.body?.content || ''}`;
 
-  const created = createNote(userId, user.plan, title, content);
+  const created = createNote(userId, title, content);
   if (!created.ok) {
     if (created.error === 'content_required') return res.status(400).json({ error: created.error });
-    if (created.error === 'title_too_long' || created.error === 'content_too_long' || created.error === 'notes_limit') return res.status(422).json({ error: created.error });
+    if (created.error === 'title_too_long' || created.error === 'content_too_long') return res.status(422).json({ error: created.error });
     return res.status(400).json({ error: created.error });
   }
   return res.status(201).json({ note_id: created.id });
@@ -2281,31 +2276,6 @@ app.post('/internal/user/timezone', internalAuth, (req, res) => {
   return res.json({ ok: true });
 });
 
-// ── Internal: Context Window ──────────────────────────────────────────────
-
-app.post('/internal/user/context-window', internalAuth, (req, res) => {
-  const userId = resolveInternalAccountId(req.body?.user_id);
-  const contextWindow = Number(req.body?.context_window);
-  const isAdmin = Boolean(req.body?.is_admin);
-  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
-  if (!Number.isFinite(contextWindow) || contextWindow <= 0) return res.status(400).json({ error: 'bad_context_window' });
-
-  const user = getUserById(userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
-
-  if (!isAdmin) {
-    const maxWindow = Number.isFinite(user.context_window_max) && user.context_window_max > 0
-      ? Math.floor(user.context_window_max) : 10;
-    if (contextWindow > maxWindow) return res.status(422).json({ error: 'exceeds_max_context_window', max: maxWindow });
-  } else if (contextWindow > (user.context_window_max || 10)) {
-    // Admin can exceed the limit — bump context_window_max too
-    updateUserContextWindowMax(userId, Math.floor(contextWindow));
-  }
-
-  updateUserContextWindow(userId, Math.floor(contextWindow));
-  return res.json({ ok: true });
-});
-
 // ── Internal: Context Token Limit (for TG bot) ─────────────────────────────
 
 app.get('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
@@ -2710,16 +2680,6 @@ app.get('/internal/users/:id/subscription', internalAuth, (req, res) => {
     ORDER BY id DESC LIMIT 1
   `).get(userId) || null;
   return res.json({ subscription });
-});
-
-app.put('/internal/admin/users/:id/message-limit', internalAuth, internalAdminAuth, (req, res) => {
-  const userId = resolveInternalAccountId(req.params.id);
-  const limit = Math.max(0, Math.floor(Number(req.body?.limit)));
-  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
-  if (!Number.isFinite(limit)) return res.status(400).json({ error: 'bad_limit' });
-  if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
-  db.prepare('UPDATE users SET daily_message_limit = ? WHERE id = ?').run(limit, userId);
-  return res.json({ ok: true, limit });
 });
 
 app.post('/internal/sync-plan-limits', internalAuth, (_req, res) => {

@@ -541,7 +541,6 @@
     },
     "notebook": {
       "textRequired": "メモのテキストが必要です",
-      "limitReached": "メモの上限に達しました",
       "tooLong": "テキストが長すぎます",
       "saveFailed": "保存に失敗しました",
       "saved": "メモを保存しました",

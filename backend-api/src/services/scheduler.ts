@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import type { TaskRecurrenceType } from '../types.js';
-import { getUserById, ensureActiveChat, createChat, appendChatMessage } from './chats.js';
+import { getUserById, ensureActiveChat, createChat, appendChatMessage, updateUserPlan } from './chats.js';
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
 import { getDueTasks, updateTaskNextExecution, updateTaskStatus } from './tasks.js';
 import { sendMessageThroughAi } from './ai.js';
@@ -167,7 +167,6 @@ const runScheduledAiInstructionTask = async (task: { user_id: number; payload: s
 
   const result = await sendMessageThroughAi(task.user_id, `!!! ${instruction}`, chatId, {
     forcePro: true,
-    ignoreDailyLimit: true,
     countAsUserMessage: false,
     persistUserText: `[AI-инструкция по расписанию] ${instruction}`,
     autoRejectHitl: true,
@@ -271,10 +270,6 @@ let running = false;
 
 // ── Daily reset + plan expiry ──────────────────────────────────────────────
 
-const PLAN_CONTEXT_LIMITS: Record<string, number> = { free: 10, standart: 20, pro: 50 };
-const PLAN_DAILY_MESSAGE_LIMITS: Record<string, number> = { free: 10, standart: 20, pro: 50 };
-const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<string, number> = { free: 0, standart: 5, pro: 20 };
-
 const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
   SET daily_message_count = 0,
@@ -298,11 +293,6 @@ const expireFinishedPlanSubscriptions = () => {
     processedUsers.add(row.user_id);
 
     const plan = 'free';
-    const limits = {
-      context_window_max: PLAN_CONTEXT_LIMITS[plan],
-      daily_message_limit: PLAN_DAILY_MESSAGE_LIMITS[plan],
-      daily_web_search_limit: PLAN_DAILY_WEB_SEARCH_LIMITS[plan]
-    };
 
     db.prepare(`
       UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ? AND is_current = 1
@@ -313,20 +303,7 @@ const expireFinishedPlanSubscriptions = () => {
       VALUES (?, ?, CURRENT_TIMESTAMP, NULL, 1, NULL)
     `).run(row.user_id, plan);
 
-    db.prepare(`
-      UPDATE users
-      SET plan = ?,
-          context_window_max = ?,
-          daily_message_limit = ?,
-          daily_web_search_limit = ?,
-          context_window = CASE
-            WHEN COALESCE(context_window, 0) <= 0 THEN ?
-            WHEN context_window > ? THEN ?
-            ELSE context_window
-          END
-      WHERE id = ?
-    `).run(plan, limits.context_window_max, limits.daily_message_limit, limits.daily_web_search_limit,
-           limits.context_window_max, limits.context_window_max, limits.context_window_max, row.user_id);
+    updateUserPlan(row.user_id, plan);
   }
 
   if (processedUsers.size > 0) {

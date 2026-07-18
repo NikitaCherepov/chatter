@@ -541,7 +541,6 @@
     },
     "notebook": {
       "textRequired": "笔记文本为必填项",
-      "limitReached": "笔记数量已达上限",
       "tooLong": "文本过长",
       "saveFailed": "保存失败",
       "saved": "笔记已保存",

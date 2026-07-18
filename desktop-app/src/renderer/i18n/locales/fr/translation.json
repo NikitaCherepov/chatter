@@ -541,7 +541,6 @@
     },
     "notebook": {
       "textRequired": "Le texte de la note est requis",
-      "limitReached": "Limite de notes atteinte",
       "tooLong": "Texte trop long",
       "saveFailed": "Échec de la sauvegarde",
       "saved": "Note sauvegardée",

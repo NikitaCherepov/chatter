@@ -541,7 +541,6 @@
     },
     "notebook": {
       "textRequired": "El texto de la nota es obligatorio",
-      "limitReached": "Límite de notas alcanzado",
       "tooLong": "El texto es demasiado largo",
       "saveFailed": "No se pudo guardar",
       "saved": "Nota guardada",

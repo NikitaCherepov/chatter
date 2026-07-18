@@ -331,8 +331,6 @@ const mergeUserScalarData = (
     'active_chat_id',
     'timezone_offset',
     'timezone_confirmed',
-    'context_window',
-    'context_window_max',
     'imap_provider',
     'imap_user',
     'imap_pass',

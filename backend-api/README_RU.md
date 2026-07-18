@@ -689,7 +689,6 @@ services/subagents/
   - `POST /internal/user/prompt/select` -> `{ user_id, prompt_id }`
   - `PUT /internal/user/prompt/custom` -> `{ user_id, content }`
   - `POST /internal/user/timezone` -> `{ user_id, timezone_offset }`
-  - `POST /internal/user/context-window` -> `{ user_id, context_window, is_admin? }`
   - `POST /internal/mail/setup|use`, `PUT /internal/mail/limit`, `DELETE /internal/mail/account`
 - User lifecycle/plan/ban:
   - `POST /internal/users/upsert-telegram` -> `{ tg_id, name, role?, status?, tg_username?, default_prompt_id? }`
@@ -724,17 +723,16 @@ services/subagents/
 
 ## Лимиты по планам
 
-Задаются в `PLAN_LIMITS` в `services/chats.ts`, применяются при создании пользователя, смене плана и `/sync_plan_limits`.
+Задаются в `PLAN_LIMITS` в `services/plan-limits.ts`, применяются при создании пользователя, смене плана и `/sync-plan-limits`.
 
 | Параметр | free | standart | pro |
 |---|---|---|---|
-| `context_window_max` | 10 | 20 | 50 |
-| `daily_message_limit` | 10 | 20 | 50 |
 | `daily_web_search_limit` | 0 | 5 | 20 |
-| `daily_image_gen_limit` | 0 | 3 | 10 |
+| `daily_image_gen_limit` | 0 | 2 | 5 |
 | `max_images_per_request` | 0 | 5 | 10 |
+| `max_context_tokens` | 30 000 | 60 000 | 1 000 000 |
 
-Админы (`is_admin = 1`) обходят дневные лимиты.
+Количество сообщений и заметок не ограничивается тарифом. Админы (`is_admin = 1`) обходят оставшиеся дневные лимиты на веб-поиск и генерацию изображений.
 
 ### Хранение изображений
 
@@ -825,10 +823,10 @@ services/subagents/
 
 ### Архивация сообщений (soft delete)
 
-Когда количество активных сообщений в чате превышает `context_window_max`, старые сообщения **не удаляются**, а помечаются как архивные:
+Когда активный контекст чата превышает `max_context_tokens`, старые сообщения **не удаляются**, а помечаются как архивные:
 
 - Колонки `chat_messages.archived` (INTEGER, 0/1) и `chat_messages.archived_at` (DATETIME).
-- `trimUserHistoryByChat()` выполняет `UPDATE ... SET archived = 1` вместо `DELETE` для сообщений, выходящих за пределы context window.
+- `trimUserHistoryByChat()` выполняет `UPDATE ... SET archived = 1` вместо `DELETE` для сообщений, выходящих за пределы токенного бюджета.
 - `getHistoryForAi()` выбирает только `archived = 0` — архив не отправляется в AI-контекст. Развёрнутый trace tool_calls из неархивных assistant-сообщений попадает в контекст (см. [Tool calls trace](#tool-calls-trace-и-контекст-для-ai)).
 - `getChatMessages()` возвращает **все** сообщения (включая архивные) с полем `archived: boolean` — десктоп показывает полную историю.
 - FTS-поиск продолжает работать по архивным сообщениям (триггер `AFTER DELETE` не срабатывает при UPDATE, поэтому записи остаются в `messages_fts`).
@@ -838,7 +836,7 @@ services/subagents/
 
 ### Подсчёт токенов (token accounting)
 
-Локальная оценка размера сообщений и контекста через `gpt-tokenizer` (BPE `o200k_base`, чистый JS — без WASM-зависимостей). Используется для отображения, **не влияет на архивацию** (пока что).
+Локальная оценка размера сообщений и контекста через `gpt-tokenizer` (BPE `o200k_base`, чистый JS — без WASM-зависимостей). Provider usage задаёт опорную оценку общего контекста; локальные токены используются как fallback и как вес отдельных сообщений при выборе старых записей для архивации.
 
 **БД:**
 
@@ -1365,8 +1363,8 @@ AI: execute_ssh_command(server_id, command)
 - `403` - доступ запрещен (`access_not_approved`, `forbidden_admin_only`).
 - `404` - сущность не найдена (`user_not_found`, `note_not_found` и т.д.).
 - `409` - конфликт (`name_already_exists`, `login_already_exists`).
-- `422` - бизнес-ограничение (`notes_limit`, `cannot_delete_default_prompt`, `cannot_ban_admin`).
-- `429` - лимиты (`daily_message_limit_reached`).
+- `422` - бизнес-ограничение (`cannot_delete_default_prompt`, `cannot_ban_admin`).
+- `429` - лимиты частоты.
 - `500` - внутренняя ошибка (`internal_error`/`*_failed`).
 
 ## Полнотекстовый поиск (FTS5)
@@ -1484,7 +1482,7 @@ Scheduler выполняет отложенные задачи. Живёт в `s
 
 **Изоляция от обычного чата:**
 - Флаг `isBackgroundTask: true` — scheduler-задача не регистрируется в `activeGenerations`, и обычное сообщение юзера её не отменяет.
-- `forcePro: true`, `ignoreDailyLimit: true` — использует PRO-модель, не упирается в дневные лимиты.
+- `forcePro: true` — использует PRO-модель. Запуски по расписанию не считаются сообщениями пользователя.
 
 **Общая утилита отправки в Telegram:** `services/telegram-send.ts` — `sendTelegramMessage()`, `markdownToTelegramRichHtml()`, `splitTextForTelegram()`, `formatForTelegram()`. Используется scheduler'ом и endpoint'ом `send-to-telegram`.
 

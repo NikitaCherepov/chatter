@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveEffectiveContextWindow, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -1311,10 +1311,9 @@ const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: nu
 };
 
 const runSaveNoteTool = (user: UserRecord, contentRaw: string, titleRaw = '') => {
-  const created = createNote(user.id, user.plan, `${titleRaw || ''}`, `${contentRaw || ''}`);
+  const created = createNote(user.id, `${titleRaw || ''}`, `${contentRaw || ''}`);
   if (!created.ok) {
-    if (created.error === 'notes_limit') return 'Ошибка: достигнут лимит заметок по плану.';
-    if (created.error === 'content_too_long') return 'Ошибка: текст заметки слишком длинный для текущего плана.';
+    if (created.error === 'content_too_long') return 'Ошибка: текст заметки превышает технический лимит.';
     if (created.error === 'title_too_long') return 'Ошибка: заголовок слишком длинный (макс 120 символов).';
     return `Ошибка: ${created.error}`;
   }
@@ -5519,7 +5518,6 @@ export const sendMessageThroughAi = async (
   targetChatId?: number,
   options?: {
     forcePro?: boolean;
-    ignoreDailyLimit?: boolean;
     countAsUserMessage?: boolean;
     skipHistory?: boolean;
     skipUserHistory?: boolean;
@@ -5622,7 +5620,6 @@ export const sendMessageThroughAi = async (
     }
   }
 
-  // Daily message limit removed — switched to token-based context limits.
   // Token counting remains for statistics only.
 
   const previousController = activeGenerations.get(userId);
@@ -5728,7 +5725,6 @@ export const sendMessageThroughAi = async (
 
   try {
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
-  const contextWindow = resolveEffectiveContextWindow(user);
   const maxContextTokens = resolveMaxContextTokens(user);
   const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
   // Apply the provider-anchored estimate before assembling the next request.
@@ -5746,7 +5742,6 @@ export const sendMessageThroughAi = async (
   let history = getHistoryForAi(
     userId,
     chatId,
-    contextWindow,
     attachmentMaxTokens,
     currentModelSupportsVision,
     attachmentBudgetState
@@ -6753,7 +6748,6 @@ export const generateAdminOutreach = async (targetUserId: number, adminInstructi
 
   const result = await sendMessageThroughAi(targetUserId, aiTask, undefined, {
     forcePro: true,
-    ignoreDailyLimit: true,
     skipHistory: true,
     countAsUserMessage: false
   });

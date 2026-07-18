@@ -17,7 +17,6 @@ import {
 
 dotenv.config();
 
-const MAX_HISTORY_ITEMS = 9999;
 const USER_PLANS = ['free', 'standart', 'pro'] as const;
 type UserPlan = typeof USER_PLANS[number];
 const PLAN_LABELS: Record<UserPlan, string> = {
@@ -33,21 +32,6 @@ const PLAN_MAX_CONTEXT_TOKENS: Record<UserPlan, number> = {
 const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<UserPlan, number> = {
     free: 0,
     standart: 5,
-    pro: 20
-};
-const PLAN_NOTES_LIMITS: Record<UserPlan, number> = {
-    free: 10,
-    standart: 50,
-    pro: 250
-};
-const PLAN_NOTE_CONTENT_LIMITS: Record<UserPlan, number> = {
-    free: 400,
-    standart: 800,
-    pro: 3000
-};
-const PLAN_NOTE_LIST_LIMITS: Record<UserPlan, number> = {
-    free: 5,
-    standart: 10,
     pro: 20
 };
 const DEFAULT_USER_PLAN: UserPlan = 'free';
@@ -191,7 +175,6 @@ type UserRecord = {
     timezone_offset: number | null;
     timezone_confirmed: number;
     daily_message_count: number;
-    daily_message_limit: number;
     total_message_length: number;
     daily_tokens_used: number;
     total_tokens_used: number;
@@ -203,8 +186,6 @@ type UserRecord = {
     daily_image_gen_count: number;
     daily_image_gen_limit: number;
     total_image_gen_count: number;
-    context_window: number;
-    context_window_max: number;
     max_context_tokens_limit?: number;
     max_context_tokens?: number;
     preferred_model?: string | null;
@@ -410,7 +391,6 @@ type MailSetupFlow =
     | { step: 'await_password'; provider: 'google' | 'yandex'; email: string };
 const mailSetupFlows = new Map<number, MailSetupFlow>();
 const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page: number }>();
-const adminUserMessageLimitFlows = new Map<number, { targetUserId: number; page: number }>();
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
@@ -696,7 +676,6 @@ const runBackendAiSend = async (
     options?: {
         forcePro?: boolean;
         persistUserText?: string;
-        ignoreDailyLimit?: boolean;
         countAsUserMessage?: boolean;
         skipHistory?: boolean;
         userTelegramChatId?: number | null;
@@ -716,7 +695,6 @@ const runBackendAiSend = async (
             text,
             options: {
                 forcePro: Boolean(options?.forcePro),
-                ignoreDailyLimit: Boolean(options?.ignoreDailyLimit),
                 countAsUserMessage: options?.countAsUserMessage === false ? false : true,
                 skipHistory: Boolean(options?.skipHistory),
                 persistUserText: typeof options?.persistUserText === 'string' ? options.persistUserText : undefined,
@@ -763,7 +741,6 @@ const runBackendAiStream = async (
     options?: {
         forcePro?: boolean;
         persistUserText?: string;
-        ignoreDailyLimit?: boolean;
         countAsUserMessage?: boolean;
         skipHistory?: boolean;
         userTelegramChatId?: number | null;
@@ -796,7 +773,6 @@ const runBackendAiStream = async (
             text,
             options: {
                 forcePro: Boolean(options?.forcePro),
-                ignoreDailyLimit: Boolean(options?.ignoreDailyLimit),
                 countAsUserMessage: options?.countAsUserMessage === false ? false : true,
                 skipHistory: Boolean(options?.skipHistory),
                 persistUserText: typeof options?.persistUserText === 'string' ? options.persistUserText : undefined,
@@ -1091,12 +1067,6 @@ const runBackendSetTimezone = async (userId: number, offset: number) => {
     return response.data as { ok: boolean };
 };
 
-const runBackendSetContextWindow = async (userId: number, contextWindow: number, isAdmin: boolean) => {
-    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/context-window`, { user_id: userId, context_window: contextWindow, is_admin: isAdmin }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
-    return response.data as { ok: boolean };
-};
-
 const runBackendSetContextTokens = async (userId: number, maxContextTokens: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/user/context-tokens-limit`, { user_id: userId, max_context_tokens: maxContextTokens }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
@@ -1316,9 +1286,6 @@ const extractCommandPayload = (messageText: string, command: string) => {
     const pattern = new RegExp(`^\\/${command}(?:@\\w+)?\\s*`, 'i');
     return messageText.replace(pattern, '').trim();
 };
-const getPlanNotesLimit = (plan: UserPlan) => PLAN_NOTES_LIMITS[plan] ?? PLAN_NOTES_LIMITS[DEFAULT_USER_PLAN];
-const getPlanNoteContentLimit = (plan: UserPlan) => PLAN_NOTE_CONTENT_LIMITS[plan] ?? PLAN_NOTE_CONTENT_LIMITS[DEFAULT_USER_PLAN];
-const getPlanNoteListLimit = (plan: UserPlan) => PLAN_NOTE_LIST_LIMITS[plan] ?? PLAN_NOTE_LIST_LIMITS[DEFAULT_USER_PLAN];
 const formatNoteDate = (unixTs: number, language: SupportedLanguage, t: BotTranslate) => {
     if (!Number.isFinite(unixTs) || unixTs <= 0) return t('notes.unknownDate');
     return new Date(unixTs * 1000).toLocaleString(language);
@@ -1667,7 +1634,6 @@ const processPhotoAlbum = async (albumKey: string) => {
         return;
     }
 
-    // Daily message limit removed — switched to token-based context limits.
 
     try {
         await ctx.sendChatAction('typing');
@@ -1772,15 +1738,6 @@ const processUserPhotoThroughAi = async (ctx: any) => {
             return;
         }
 
-        if (ctx.state.role !== 'admin') {
-            const dailyLimit = normalizeDailyMessageLimit(userRecord.daily_message_limit);
-            const dailyCount = Math.max(0, Math.floor(userRecord.daily_message_count || 0));
-            if (dailyLimit > 0 && dailyCount >= dailyLimit) {
-                await ctx.reply(ctx.t('common.dailyLimitReached', { count: dailyCount, limit: dailyLimit }));
-                return;
-            }
-        }
-
         await ctx.sendChatAction('typing');
 
         const backend = await runBackendPhotoAnalyze(
@@ -1864,13 +1821,6 @@ const runBackendGetUserSubscription = async (userId: number) => {
     return (response.data as { subscription: UserPlanSubscriptionRecord | null }).subscription;
 };
 
-const runBackendSetDailyMessageLimit = async (actorUserId: number, userId: number, limit: number) => {
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/admin/users/${userId}/message-limit`, {
-        actor_user_id: actorUserId,
-        limit
-    }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
-    return response.data as { ok: boolean; limit: number };
-};
 const createPendingUser = async (id: number, name: string | null, tgUsername: string | null, language?: SupportedLanguage | null) => {
     const defaultPrompt = await runBackendGetDefaultPrompt();
     const data = await runBackendCreatePendingUser(id, name, tgUsername, defaultPrompt?.id ?? null, language);
@@ -1903,10 +1853,6 @@ const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
 };
 const getPlanMaxContextTokens = (plan: UserPlan) => PLAN_MAX_CONTEXT_TOKENS[plan] || PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN];
 const getPlanDailyWebSearchLimit = (plan: UserPlan) => PLAN_DAILY_WEB_SEARCH_LIMITS[plan] ?? PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN];
-const normalizeDailyMessageLimit = (value: number | null | undefined) => {
-    if (!Number.isFinite(value)) return 0;
-    return Math.max(0, Math.floor(value as number));
-};
 const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
     if (!Number.isFinite(value)) return getPlanDailyWebSearchLimit(DEFAULT_USER_PLAN);
     return Math.max(0, Math.floor(value as number));
@@ -1946,11 +1892,6 @@ const removeUser = async (id: number) => {
     await runBackendRemoveUser(id);
 };
 const isTimezoneConfigured = (user: UserRecord) => user.timezone_confirmed === 1;
-const resolveEffectiveContextWindow = (user: UserRecord | undefined) => {
-    // Legacy — still used for message-count fallback, но context control теперь через токены.
-    if (!user) return MAX_HISTORY_ITEMS;
-    return MAX_HISTORY_ITEMS;
-};
 const resolveMaxContextTokens = (user: UserRecord | undefined): number => {
     if (!user) return PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN];
     const planLimit = getPlanMaxContextTokens(parsePlanFromDb(user.plan));
@@ -2138,9 +2079,6 @@ const showMenu = async (ctx: any) => {
     const contextLine = userRecord
         ? ctx.t('menu.context', { value: getContextWindowText(userRecord) })
         : ctx.t('menu.contextDefault', { value: `${(PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN] / 1000).toFixed(0)}k` });
-    const messageLimitLine = userRecord
-        ? ctx.t('menu.messagesToday', { value: ctx.t('common.unlimited') })
-        : ctx.t('menu.messages', { value: ctx.t('common.unlimited') });
     const webLimitLine = userRecord
         ? ctx.t('menu.webToday', { value: getDailyWebSearchLimitText(userRecord) })
         : ctx.t('menu.webToday', { value: `0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}` });
@@ -2176,7 +2114,6 @@ const showMenu = async (ctx: any) => {
         ctx.t('menu.role', { role: roleLabel }),
         planLine,
         contextLine,
-        messageLimitLine,
         webLimitLine,
         imageGenLine,
         modelLine,
@@ -2199,7 +2136,6 @@ const handleClear = async (ctx: any) => {
     contextLimitFlows.delete(userId);
     noteEditFlows.delete(userId);
     adminUserContextLimitFlows.delete(userId);
-    adminUserMessageLimitFlows.delete(userId);
     await runBackendClearActiveChat(userId);
     return ctx.reply(ctx.t('menu.cleared'));
 };
@@ -2643,7 +2579,6 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number, t: BotTransl
         [Markup.button.callback(t('admin.buttons.message'), `ai_send:${user.id}`)],
         [Markup.button.callback(t('admin.buttons.changePlan'), `usr:plan:open:${user.id}:${page}`)],
         [Markup.button.callback(t('admin.buttons.changeContext'), `usr:ctx:ask:${user.id}:${page}`)],
-        [Markup.button.callback(t('admin.buttons.messageLimit'), `usr:msg:ask:${user.id}:${page}`)],
         [moderationButton],
         [Markup.button.callback(t('admin.buttons.delete'), `usr:remove:${user.id}:${page}`)],
         [Markup.button.callback(t('admin.buttons.toList'), `usr:list:${page}`)]
@@ -2720,8 +2655,6 @@ const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mod
     const ban = user.status === 'banned' ? (await runBackendGetBanRecord(user.id)).ban : undefined;
     const plan = parsePlanFromDb(user.plan);
     const notesStats = await runBackendGetNoteStats(user.id);
-    const notesLimit = getPlanNotesLimit(plan);
-    const noteContentLimit = getPlanNoteContentLimit(plan);
     const subscription = await runBackendGetUserSubscription(user.id);
     const subscriptionEnds = subscription?.ends_at || ctx.t('admin.forever');
     const text = ctx.t('admin.userCard', {
@@ -2729,15 +2662,15 @@ const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mod
         username: user.telegram_username ? `@${user.telegram_username}` : ctx.t('admin.noneValue'),
         role: user.role === 'admin' ? ctx.t('roles.admin') : ctx.t('roles.user'),
         status: ctx.t(`admin.statuses.${user.status}`), plan: getPlanLabel(plan), subscriptionEnds,
-        context: getContextWindowText(user), messagesLimit: ctx.t('common.unlimited'),
+        context: getContextWindowText(user),
         webLimit: getDailyWebSearchLimitText(user), imagesDaily: `${user.daily_image_gen_count ?? 0}/${user.daily_image_gen_limit ?? 0}`,
         prompt: `#${prompt.id} ${prompt.id === CUSTOM_PROMPT_ID ? ctx.t('prompt.customName') : prompt.name}${prompt.is_default ? ctx.t('prompt.currentDefaultMark') : ''}`,
         messagesToday: user.daily_message_count ?? 0, tokensToday: user.daily_tokens_used ?? 0,
         costToday: formatRub(user.daily_cost_rub ?? 0), webToday: user.daily_web_search_count ?? 0,
         tokensTotal: user.total_tokens_used ?? 0, costTotal: formatRub(user.total_cost_rub ?? 0),
         webTotal: user.total_web_search_count ?? 0, imagesTotal: user.total_image_gen_count ?? 0,
-        notes: `${notesStats.notes_count}/${notesLimit}`, noteChars: notesStats.notes_chars,
-        noteLimit: noteContentLimit, totalChars: user.total_message_length ?? 0,
+        notes: notesStats.notes_count, noteChars: notesStats.notes_chars,
+        totalChars: user.total_message_length ?? 0,
         banLine: ban ? ctx.t('admin.banLine', { reason: ban.reason }) : ''
     }).trim();
     const keyboard = buildAdminUserCardKeyboard(user, page, ctx.t);
@@ -2752,7 +2685,7 @@ const renderAdminPlanChoiceCard = async (ctx: any, user: UserRecord, page: numbe
     return ctx.reply(text, keyboard);
 };
 const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: number, plan: UserPlan, mode: 'reply' | 'edit' = 'edit') => {
-    const text = ctx.t('admin.planDuration', { id: user.id, plan: getPlanLabel(plan), context: PLAN_MAX_CONTEXT_TOKENS[plan] / 1000, web: PLAN_DAILY_WEB_SEARCH_LIMITS[plan], notes: getPlanNotesLimit(plan), noteLimit: getPlanNoteContentLimit(plan) });
+    const text = ctx.t('admin.planDuration', { id: user.id, plan: getPlanLabel(plan), context: PLAN_MAX_CONTEXT_TOKENS[plan] / 1000, web: PLAN_DAILY_WEB_SEARCH_LIMITS[plan] });
     const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
@@ -3522,24 +3455,7 @@ bot.command('note_add', async (ctx) => {
 
     const content = extractCommandPayload(ctx.message.text, 'note_add');
     if (!content) return ctx.reply(ctx.t('notes.addFormat'));
-    const userPlan = parsePlanFromDb(user.plan);
-    const contentLimit = getPlanNoteContentLimit(userPlan);
-    if (content.length > contentLimit) {
-        return ctx.reply(ctx.t('notes.tooLong', {
-            length: content.length,
-            plan: getPlanLabel(userPlan),
-            limit: contentLimit
-        }));
-    }
-    let created: { id: number };
-    try {
-        created = await runBackendCreateNote(userId, content, '');
-    } catch (error: any) {
-        if (axios.isAxiosError(error) && error.response?.data?.error === 'notes_limit') {
-            return ctx.reply(ctx.t('notes.limitReached', { plan: getPlanLabel(userPlan), limit: getPlanNotesLimit(userPlan) }));
-        }
-        throw error;
-    }
+    const created = await runBackendCreateNote(userId, content, '');
     const noteId = created.id;
     return ctx.reply(ctx.t('notes.saved', { id: noteId }));
 });
@@ -3555,7 +3471,7 @@ bot.command('notes', async (ctx) => {
     const pageRaw = ctx.message.text.split(' ').filter(Boolean)[1];
     const pageParsed = Number.parseInt(pageRaw || '1', 10);
     const page = Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1;
-    const listLimit = getPlanNoteListLimit(parsePlanFromDb(user.plan));
+    const listLimit = NOTES_PAGE_SIZE_DEFAULT;
     const offset = (page - 1) * listLimit;
     const { notes, total } = await runBackendGetNotes(userId, listLimit, offset);
     return ctx.reply(formatNotesPage(
@@ -3585,7 +3501,7 @@ bot.command('note_find', async (ctx) => {
         }));
     }
 
-    const listLimit = getPlanNoteListLimit(parsePlanFromDb(user.plan));
+    const listLimit = NOTES_PAGE_SIZE_DEFAULT;
     const { notes, total } = await runBackendGetNotes(userId, listLimit, 0, query);
     return ctx.reply(formatNotesPage(
         notes,
@@ -4220,7 +4136,6 @@ bot.action(/^notes:edit:(\d+):(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery(ctx.t('notes.awaitText'));
     await ctx.reply(ctx.t('notes.enterEditText', {
         id: noteId,
-        limit: getPlanNoteContentLimit(parsePlanFromDb(user.plan)),
         cancel: ctx.t('common.cancelWord')
     }));
 });
@@ -4546,27 +4461,6 @@ bot.action(/^usr:ctx:ask:(\d+):(\d+)$/, async (ctx) => {
     const maxTokens = (user.max_context_tokens_limit ?? 0) > 0
         ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
     await ctx.reply(ctx.t('admin.enterContextLimit', { id: targetUserId, current: (resolveMaxContextTokens(user) / 1000).toFixed(0), max: (maxTokens / 1000).toFixed(0), cancel: ctx.t('common.cancelWord') }));
-});
-
-bot.action(/^usr:msg:ask:(\d+):(\d+)$/, async (ctx) => {
-    if (ctx.state.role !== 'admin') {
-        await ctx.answerCbQuery(ctx.t('common.adminOnly'));
-        return;
-    }
-
-    const adminId = ctx.state.accountId;
-    if (!adminId) return;
-    const targetUserId = Number.parseInt((ctx as any).match[1], 10);
-    const page = Number.parseInt((ctx as any).match[2], 10);
-    const user = await getUser(targetUserId);
-    if (!user) {
-        await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
-        return;
-    }
-
-    adminUserMessageLimitFlows.set(adminId, { targetUserId, page: Number.isNaN(page) ? 0 : page });
-    await ctx.answerCbQuery(ctx.t('admin.awaitNumber'));
-    await ctx.reply(ctx.t('admin.enterMessageLimit', { id: targetUserId, count: user.daily_message_count ?? 0, cancel: ctx.t('common.cancelWord') }));
 });
 
 bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
@@ -5946,7 +5840,6 @@ const processUserTextThroughAi = async (
         persistUserText?: string;
         onAssistantReply?: (assistantText: string) => Promise<void> | void;
         suppressFinalReply?: boolean;
-        ignoreDailyLimit?: boolean;
         countAsUserMessage?: boolean;
         skipHistory?: boolean;
         documents?: Array<{ filename: string; base64: string }>;
@@ -5988,7 +5881,6 @@ const processUserTextThroughAi = async (
         }
         return null;
     }
-    // Daily message limit removed — switched to token-based context limits.
 
     try {
         await ctx.sendChatAction('typing');
@@ -6007,7 +5899,6 @@ const processUserTextThroughAi = async (
         const backend = await runBackendAiStream(userId, userText, {
             forcePro: forceProRoute,
             persistUserText: userTextForHistory,
-            ignoreDailyLimit: options?.ignoreDailyLimit,
             countAsUserMessage: options?.countAsUserMessage,
             skipHistory: options?.skipHistory,
             userTelegramChatId: userChatId,
@@ -6600,37 +6491,6 @@ bot.on('text', async (ctx) => {
         return ctx.reply(ctx.t('admin.contextUpdated', { id: adminContextFlow.targetUserId, value: nextValue }));
     }
 
-    const adminMessageLimitFlow = adminUserMessageLimitFlows.get(userId);
-    if (adminMessageLimitFlow) {
-        const lowered = userText.toLowerCase();
-        if ([ctx.t('common.cancelWord').toLowerCase(), 'отмена', 'cancel', '/cancel'].includes(lowered)) {
-            adminUserMessageLimitFlows.delete(userId);
-            return ctx.reply(ctx.t('admin.messageLimitCancelled'));
-        }
-
-        const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-            return ctx.reply(ctx.t('admin.invalidMessageLimit', { cancel: ctx.t('common.cancelWord') }));
-        }
-
-        const targetUser = await getUser(adminMessageLimitFlow.targetUserId);
-        if (!targetUser) {
-            adminUserMessageLimitFlows.delete(userId);
-            return ctx.reply(ctx.t('admin.userNotFound'));
-        }
-
-        const nextLimit = normalizeDailyMessageLimit(parsed);
-        await runBackendSetDailyMessageLimit(userId, adminMessageLimitFlow.targetUserId, nextLimit);
-        adminUserMessageLimitFlows.delete(userId);
-        const refreshed = await getUser(adminMessageLimitFlow.targetUserId);
-        if (refreshed) {
-            await ctx.reply(ctx.t('admin.messageLimitUpdated', { id: adminMessageLimitFlow.targetUserId, value: normalizeDailyMessageLimit(refreshed.daily_message_limit) }));
-            await renderAdminUserCard(ctx, refreshed, adminMessageLimitFlow.page, 'reply');
-            return;
-        }
-        return ctx.reply(ctx.t('admin.messageLimitUpdatedShort', { id: adminMessageLimitFlow.targetUserId, value: nextLimit }));
-    }
-
     const isAdmin = ctx.state.role === 'admin';
     const timezoneFlow = timezoneSetupFlows.get(userId);
 
@@ -6797,11 +6657,9 @@ bot.on('text', async (ctx) => {
             return ctx.reply(ctx.t('common.userMissingAgain'));
         }
 
-        const userPlan = parsePlanFromDb(userRecord.plan);
-        const contentLimit = getPlanNoteContentLimit(userPlan);
-        if (!userText || userText.length > contentLimit) {
-            return ctx.reply(ctx.t('notes.invalidEditText', {
-                limit: contentLimit,
+        if (!userText) {
+            return ctx.reply(ctx.t('notes.enterEditText', {
+                id: noteEditFlow.noteId,
                 cancel: ctx.t('common.cancelWord')
             }));
         }

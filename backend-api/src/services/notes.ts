@@ -1,17 +1,8 @@
 ﻿import { db } from '../db.js';
-import type { NoteDto, UserPlan } from '../types.js';
+import type { NoteDto } from '../types.js';
 
-const PLAN_NOTES_LIMITS: Record<UserPlan, number> = {
-  free: 10,
-  standart: 50,
-  pro: 250
-};
-
-const PLAN_NOTE_CONTENT_LIMITS: Record<UserPlan, number> = {
-  free: 400,
-  standart: 800,
-  pro: 3000
-};
+// Technical safety cap only. Notes are not restricted by subscription plan.
+export const NOTE_CONTENT_MAX_LENGTH = 100_000;
 
 export const listNotes = (userId: number, limit = 20, offset = 0, query = ''): NoteDto[] => {
   const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
@@ -56,14 +47,12 @@ export const countNotes = (userId: number, query = '') => {
   return (db.prepare('SELECT COUNT(*) as c FROM notes WHERE user_id = ? AND (title LIKE ? OR content LIKE ?)').get(userId, like, like) as { c: number }).c;
 };
 
-export const createNote = (userId: number, plan: UserPlan, title: string, content: string) => {
+export const createNote = (userId: number, title: string, content: string) => {
   const normalizedContent = (content || '').trim();
   const normalizedTitle = (title || '').trim();
   if (!normalizedContent) return { ok: false as const, error: 'content_required' };
   if (normalizedTitle.length > 120) return { ok: false as const, error: 'title_too_long' };
-  if (normalizedContent.length > PLAN_NOTE_CONTENT_LIMITS[plan]) return { ok: false as const, error: 'content_too_long' };
-  const currentCount = countNotes(userId);
-  if (currentCount >= PLAN_NOTES_LIMITS[plan]) return { ok: false as const, error: 'notes_limit' };
+  if (normalizedContent.length > NOTE_CONTENT_MAX_LENGTH) return { ok: false as const, error: 'content_too_long' };
 
   const now = Math.floor(Date.now() / 1000);
   const result = db.prepare(`
@@ -79,10 +68,10 @@ export const deleteNote = (userId: number, noteId: number) => db
   .run(userId, noteId)
   .changes > 0;
 
-export const updateNoteContent = (userId: number, noteId: number, plan: UserPlan, content: string) => {
+export const updateNoteContent = (userId: number, noteId: number, content: string) => {
   const normalizedContent = (content || '').trim();
   if (!normalizedContent) return { ok: false as const, error: 'content_required' };
-  if (normalizedContent.length > PLAN_NOTE_CONTENT_LIMITS[plan]) return { ok: false as const, error: 'content_too_long' };
+  if (normalizedContent.length > NOTE_CONTENT_MAX_LENGTH) return { ok: false as const, error: 'content_too_long' };
   const result = db.prepare(`
     UPDATE notes SET content = ?, updated_at = ? WHERE user_id = ? AND id = ?
   `).run(normalizedContent, Math.floor(Date.now() / 1000), userId, noteId);

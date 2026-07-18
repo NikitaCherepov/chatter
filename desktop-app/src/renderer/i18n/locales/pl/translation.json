@@ -821,7 +821,6 @@
     },
     "notebook": {
       "textRequired": "Tekst notatki jest wymagany",
-      "limitReached": "Limit notatek został wyczerpany",
       "tooLong": "Tekst jest zbyt długi",
       "saveFailed": "Nie udało się zapisać",
       "saved": "Notatka zapisana",

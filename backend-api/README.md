@@ -711,7 +711,6 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
   - `POST /internal/user/prompt/select` → `{ user_id, prompt_id }`
   - `PUT /internal/user/prompt/custom` → `{ user_id, content }`
   - `POST /internal/user/timezone` → `{ user_id, timezone_offset }`
-  - `POST /internal/user/context-window` → `{ user_id, context_window, is_admin? }`
   - `POST /internal/mail/setup|use`, `PUT /internal/mail/limit`, `DELETE /internal/mail/account`
 - User lifecycle/plan/ban:
   - `POST /internal/users/upsert-telegram` → `{ tg_id, name, role?, status?, tg_username?, default_prompt_id? }`
@@ -747,17 +746,16 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
 
 ## Plan Limits
 
-Defined in `PLAN_LIMITS` in `services/chats.ts`, applied on user creation, plan change, and `/sync_plan_limits`.
+Defined in `PLAN_LIMITS` in `services/plan-limits.ts`, applied on user creation, plan change, and `/sync-plan-limits`.
 
 | Parameter | free | standart | pro |
 |---|---|---|---|
-| `context_window_max` | 10 | 20 | 50 |
-| `daily_message_limit` | 10 | 20 | 50 |
 | `daily_web_search_limit` | 0 | 5 | 20 |
-| `daily_image_gen_limit` | 0 | 3 | 10 |
+| `daily_image_gen_limit` | 0 | 2 | 5 |
 | `max_images_per_request` | 0 | 5 | 10 |
+| `max_context_tokens` | 30,000 | 60,000 | 1,000,000 |
 
-Admins (`is_admin = 1`) bypass daily limits.
+Message count and notes are not restricted by subscription plan. Admins (`is_admin = 1`) bypass the remaining daily web-search and image-generation limits.
 
 ### Image Storage
 
@@ -848,10 +846,10 @@ Users can attach text documents to messages. Unlike photos, documents are **inje
 
 ### Message Archiving (soft delete)
 
-When the number of active messages in a chat exceeds `context_window_max`, older messages are **not deleted** but marked as archived:
+When the active chat context exceeds `max_context_tokens`, older messages are **not deleted** but marked as archived:
 
 - Columns `chat_messages.archived` (INTEGER, 0/1) and `chat_messages.archived_at` (DATETIME).
-- `trimUserHistoryByChat()` performs `UPDATE ... SET archived = 1` instead of `DELETE` for messages that fall outside the context window.
+- `trimUserHistoryByChat()` performs `UPDATE ... SET archived = 1` instead of `DELETE` for messages that fall outside the token budget.
 - `getHistoryForAi()` selects only `archived = 0` — archived messages are not sent to the AI context. The expanded tool_calls trace from non-archived assistant messages is included in the context (see [Tool calls trace](#tool-calls-trace-and-ai-context)).
 - `getChatMessages()` returns **all** messages (including archived) with an `archived: boolean` field — desktop shows the full history.
 - FTS search continues to work on archived messages (the `AFTER DELETE` trigger doesn't fire on UPDATE, so records remain in `messages_fts`).
@@ -861,7 +859,7 @@ When the number of active messages in a chat exceeds `context_window_max`, older
 
 ### Token Accounting
 
-Local estimation of message and context size via `gpt-tokenizer` (BPE `o200k_base`, pure JS — no WASM dependencies). Used for display, **does not affect archiving** (for now).
+Local estimation of message and context size via `gpt-tokenizer` (BPE `o200k_base`, pure JS — no WASM dependencies). Provider usage anchors the total context estimate; local token counts are the fallback and the per-message weights used to choose old rows for archiving.
 
 **DB:**
 
@@ -1388,8 +1386,8 @@ Macros are user-defined sets of console commands that the AI can run on the desk
 - `403` — access denied (`access_not_approved`, `forbidden_admin_only`).
 - `404` — entity not found (`user_not_found`, `note_not_found`, etc.).
 - `409` — conflict (`name_already_exists`, `login_already_exists`).
-- `422` — business restriction (`notes_limit`, `cannot_delete_default_prompt`, `cannot_ban_admin`).
-- `429` — rate limits (`daily_message_limit_reached`).
+- `422` — business restriction (`cannot_delete_default_prompt`, `cannot_ban_admin`).
+- `429` — rate limits.
 - `500` — internal error (`internal_error`/`*_failed`).
 
 ## Full-Text Search (FTS5)
@@ -1507,7 +1505,7 @@ Tasks run in auto mode — confirmations (HitL) are automatically rejected if th
 
 **Isolation from regular chat:**
 - The `isBackgroundTask: true` flag — a scheduler task is not registered in `activeGenerations`, and a regular user message doesn't cancel it.
-- `forcePro: true`, `ignoreDailyLimit: true` — uses the PRO model, doesn't count against daily limits.
+- `forcePro: true` — uses the PRO model. Scheduled runs are not counted as user messages.
 
 **General Telegram send utility:** `services/telegram-send.ts` — `sendTelegramMessage()`, `markdownToTelegramRichHtml()`, `splitTextForTelegram()`, `formatForTelegram()`. Used by the scheduler and the `send-to-telegram` endpoint.
 
