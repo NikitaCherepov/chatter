@@ -237,13 +237,11 @@ type PromptRecord = {
 type PendingUserRow = UserRecord & { created_at: string | null };
 type BannedUserRow = UserRecord & { reason: string; banned_at: string };
 type MailAccountRecord = {
-    user_id: number;
+    id: number;
     provider: MailProvider;
-    imap_user: string;
-    imap_pass: string;
-    imap_host: string;
-    imap_port: number;
-    imap_secure: number;
+    label: string | null;
+    email: string;
+    is_active: boolean;
 };
 type NoteRecord = {
     id: number;
@@ -338,12 +336,41 @@ const buildLanguageKeyboard = (currentLanguage: SupportedLanguage, t: BotTransla
     return Markup.inlineKeyboard(rows);
 };
 
-const buildMailMenuKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
-    [Markup.button.callback(t('mail.buttons.setup'), 'mail:setup_help')],
-    [Markup.button.callback(t('mail.buttons.yandexInstructions'), 'mail:instr:yandex')],
-    [Markup.button.callback(t('mail.buttons.googleInstructions'), 'mail:instr:google')],
-    [Markup.button.callback(t('mail.buttons.forget'), 'mail:forget')]
-]);
+const getMailMenuAccountLabel = (account: MailAccountRecord) => normalizeTextPreview(
+    account.label?.trim() || account.email,
+    34
+);
+const buildMailMenuKeyboard = (accounts: MailAccountRecord[], t: BotTranslate) => {
+    const rows = accounts.map(account => [
+        Markup.button.callback(
+            `${account.is_active ? '✅ ' : '📧 '}${getMailMenuAccountLabel(account)}`,
+            account.is_active ? `mail:noop:${account.id}` : `mail:use:${account.id}`
+        ),
+        Markup.button.callback('🗑', `mail:delete:${account.id}`)
+    ]);
+    rows.push([Markup.button.callback(t('mail.buttons.setup'), 'mail:setup_help')]);
+    rows.push([
+        Markup.button.callback(t('mail.buttons.yandexInstructions'), 'mail:instr:yandex'),
+        Markup.button.callback(t('mail.buttons.googleInstructions'), 'mail:instr:google')
+    ]);
+    rows.push([Markup.button.callback(t('mail.buttons.back'), 'mail:back:menu')]);
+    return Markup.inlineKeyboard(rows);
+};
+const renderMailMenu = async (ctx: any, userId: number, mode: 'reply' | 'edit' = 'reply') => {
+    const data = await runBackendGetMailAccounts(userId);
+    const text = data.accounts.length
+        ? ctx.t('mail.menuList', { count: data.accounts.length })
+        : ctx.t('mail.noAccounts');
+    const keyboard = buildMailMenuKeyboard(data.accounts, ctx.t);
+    if (mode === 'edit') {
+        return ctx.editMessageText(text, keyboard).catch((error: any) => {
+            const message = `${error?.description || error?.message || ''}`;
+            if (message.includes('message is not modified')) return;
+            throw error;
+        });
+    }
+    return ctx.reply(text, keyboard);
+};
 const buildContextSettingsKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
     [Markup.button.callback(t('context.buttons.change'), 'context:change')],
     [Markup.button.callback(t('context.buttons.back'), 'context:back')]
@@ -1069,6 +1096,16 @@ const runBackendMailSetup = async (userId: number, provider: string, email: stri
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/setup`, { user_id: userId, provider, email, app_password: appPassword }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; accounts: Array<{ provider: string; imap_user: string }> };
+};
+
+const runBackendGetMailAccounts = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
+    const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/mail/accounts`, {
+        params: { user_id: userId },
+        headers: backendHeaders(),
+        timeout: BACKEND_TIMEOUT_DEFAULT_MS
+    });
+    return response.data as { accounts: MailAccountRecord[]; active_account_id: number | null };
 };
 
 const runBackendMailUse = async (userId: number, reference: string) => {
@@ -3847,7 +3884,9 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (actionId === 'mail') {
-        await ctx.reply(ctx.t('mail.menu'), buildMailMenuKeyboard(ctx.t));
+        const userId = ctx.state.accountId;
+        if (!userId) return;
+        await renderMailMenu(ctx, userId, 'reply');
         return;
     }
 
@@ -3964,12 +4003,68 @@ bot.action('mail:instr:google', async (ctx) => {
     await ctx.reply(ctx.t('mail.googleInstructions'));
 });
 
-bot.action('mail:forget', async (ctx) => {
+bot.action(/^mail:noop:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery(ctx.t('mail.alreadyActive'));
+});
+
+bot.action(/^mail:use:(\d+)$/, async (ctx) => {
     const userId = ctx.state.accountId;
     if (!userId) return;
-    await runBackendMailForget(userId);
-    await ctx.answerCbQuery(ctx.t('mail.deletedShort'));
-    await ctx.reply(ctx.t('mail.dataDeleted'));
+    const accountId = Number.parseInt((ctx as any).match[1], 10);
+    try {
+        const account = await runBackendMailUse(userId, String(accountId));
+        await ctx.answerCbQuery(ctx.t('mail.activeAccountShort', { email: account.imap_user }));
+        await renderMailMenu(ctx, userId, 'edit');
+    } catch {
+        await ctx.answerCbQuery(ctx.t('mail.useError'));
+    }
+});
+
+bot.action(/^mail:delete:(\d+)$/, async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const accountId = Number.parseInt((ctx as any).match[1], 10);
+    const data = await runBackendGetMailAccounts(userId);
+    const account = data.accounts.find(item => item.id === accountId);
+    if (!account) {
+        await ctx.answerCbQuery(ctx.t('mail.accountMissing'));
+        return renderMailMenu(ctx, userId, 'edit');
+    }
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(
+        ctx.t('mail.deleteConfirm', { account: account.label || account.email }),
+        Markup.inlineKeyboard([
+            [
+                Markup.button.callback(ctx.t('mail.buttons.confirmDelete'), `mail:delete_confirm:${accountId}`),
+                Markup.button.callback(ctx.t('mail.buttons.cancel'), 'mail:list')
+            ]
+        ])
+    );
+});
+
+bot.action(/^mail:delete_confirm:(\d+)$/, async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const accountId = Number.parseInt((ctx as any).match[1], 10);
+    try {
+        await runBackendMailForget(userId, String(accountId));
+        await ctx.answerCbQuery(ctx.t('mail.deletedShort'));
+        await renderMailMenu(ctx, userId, 'edit');
+    } catch {
+        await ctx.answerCbQuery(ctx.t('mail.deleteError'));
+    }
+});
+
+bot.action('mail:list', async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    await ctx.answerCbQuery();
+    await renderMailMenu(ctx, userId, 'edit');
+});
+
+bot.action('mail:back:menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await showMenu(ctx);
 });
 
 bot.action(/^chats:list:(\d+)$/, async (ctx) => {

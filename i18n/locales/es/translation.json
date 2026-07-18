@@ -323,10 +323,18 @@
       "googleInstructions": "🔵 Instrucciones de Google",
       "forget": "🗑 Eliminar conexión",
       "changeLimit": "✏️ Cambiar límite",
-      "back": "⬅️ Atrás"
+      "back": "⬅️ Atrás",
+      "confirmDelete": "🗑 Eliminar",
+      "cancel": "❌ Cancelar"
     },
     "maximum": "máximo {{limit}}",
-    "limitExceeded": "Puede solicitar un máximo de {{limit}} correos electrónicos a la vez."
+    "limitExceeded": "Puede solicitar un máximo de {{limit}} correos electrónicos a la vez.",
+    "menuList": "📬 Cuentas de correo: {{count}}\n\nToca una cuenta para hacerla predeterminada. La cuenta activa tiene una marca de verificación.",
+    "noAccounts": "📬 Aún no hay cuentas de correo conectadas.\n\nGoogle y Yandex se pueden conectar usando las instrucciones a continuación. Agrega otros proveedores a través de la aplicación de escritorio.",
+    "alreadyActive": "Esta cuenta ya está activa",
+    "activeAccountShort": "Cuenta activa: {{email}}",
+    "accountMissing": "Cuenta de correo no encontrada",
+    "deleteConfirm": "¿Eliminar “{{account}}” de Chatter? Esto no elimina la bandeja de entrada en sí."
   },
   "profile": {
     "renameConfirm": "¿Quieres cambiar tu nombre?",

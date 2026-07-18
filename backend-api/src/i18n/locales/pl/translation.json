@@ -52,7 +52,11 @@
     "desktopOpeningNote": "Otwieranie wpisu w notatniku...",
     "desktopReadingWidgetState": "Odczyt stanu widżetu...",
     "desktopOpeningToolsPanel": "Otwieranie panelu narzędzi...",
-    "desktopAction": "Wykonywanie akcji..."
+    "desktopAction": "Wykonywanie akcji...",
+    "list_mail_accounts": "📧 Sprawdzanie połączonych kont e-mail...",
+    "check_emails": "📧 Sprawdzanie poczty e-mail...",
+    "read_email_content": "📧 Odczytywanie treści e-maila...",
+    "send_email": "📧 Przygotowywanie e-maila do potwierdzenia..."
   },
   "subagents": {
     "toolStatus": {

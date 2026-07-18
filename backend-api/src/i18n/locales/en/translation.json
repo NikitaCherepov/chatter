@@ -1,6 +1,10 @@
 {
   "toolStatus": {
     "search_web": "Searching the web...",
+    "list_mail_accounts": "📧 Checking connected email accounts...",
+    "check_emails": "📧 Checking email...",
+    "read_email_content": "📧 Reading email...",
+    "send_email": "📧 Preparing an email for confirmation...",
     "read_webpage": "Opening page and extracting text...",
     "get_smart_devices": "🏠 Getting device list...",
     "control_smart_home": "🏠 Running smart home command...",

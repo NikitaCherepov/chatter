@@ -52,7 +52,11 @@
     "desktopOpeningNote": "正在打开笔记本条目...",
     "desktopReadingWidgetState": "正在读取小部件状态...",
     "desktopOpeningToolsPanel": "正在打开工具面板...",
-    "desktopAction": "正在执行操作..."
+    "desktopAction": "正在执行操作...",
+    "list_mail_accounts": "📧 正在检查已连接的电子邮件账户...",
+    "check_emails": "📧 正在检查电子邮件...",
+    "read_email_content": "📧 正在阅读电子邮件...",
+    "send_email": "📧 正在准备确认邮件..."
   },
   "subagents": {
     "toolStatus": {

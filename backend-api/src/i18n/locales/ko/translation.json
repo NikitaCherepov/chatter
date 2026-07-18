@@ -52,7 +52,11 @@
     "desktopOpeningNote": "노트북 항목 열기 중...",
     "desktopReadingWidgetState": "위젯 상태 읽는 중...",
     "desktopOpeningToolsPanel": "도구 패널 여는 중...",
-    "desktopAction": "작업 수행 중..."
+    "desktopAction": "작업 수행 중...",
+    "list_mail_accounts": "📧 연결된 이메일 계정 확인 중...",
+    "check_emails": "📧 이메일 확인 중...",
+    "read_email_content": "📧 이메일 읽는 중...",
+    "send_email": "📧 확인 이메일 준비 중..."
   },
   "subagents": {
     "toolStatus": {

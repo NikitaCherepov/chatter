@@ -283,6 +283,12 @@
   "mail": {
     "noAccess": "No access to mail settings.",
     "menu": "📬 Mail management\nChoose an action:",
+    "menuList": "📬 Email accounts: {{count}}\n\nTap an account to make it the default. The active account has a check mark.",
+    "noAccounts": "📬 No email accounts are connected yet.\n\nGoogle and Yandex can be connected using the instructions below. Add other providers through the desktop app.",
+    "alreadyActive": "This account is already active",
+    "activeAccountShort": "Active account: {{email}}",
+    "accountMissing": "Email account not found",
+    "deleteConfirm": "Remove “{{account}}” from Chatter? This does not delete the mailbox itself.",
     "setupUsage": "Usage: /mail_setup <yandex|google> <email> <app_password>\nor: /mail_setup <email> <app_password> (the provider will be detected from the domain)",
     "providerUnknown": "Could not detect the provider. Specify yandex or google explicitly.",
     "credentialsRequired": "Email and app password are required.",
@@ -324,6 +330,8 @@
       "yandexInstructions": "🟡 Yandex instructions",
       "googleInstructions": "🔵 Google instructions",
       "forget": "🗑 Remove connection",
+      "confirmDelete": "🗑 Remove",
+      "cancel": "❌ Cancel",
       "changeLimit": "✏️ Change limit",
       "back": "⬅️ Back"
     }

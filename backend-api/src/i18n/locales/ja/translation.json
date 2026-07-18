@@ -52,7 +52,11 @@
     "desktopOpeningNote": "ノートブックのエントリを開いています...",
     "desktopReadingWidgetState": "ウィジェット状態を読み取り中...",
     "desktopOpeningToolsPanel": "ツールパネルを開いています...",
-    "desktopAction": "アクションを実行中..."
+    "desktopAction": "アクションを実行中...",
+    "list_mail_accounts": "📧 接続されたメールアカウントを確認中...",
+    "check_emails": "📧 メールを確認中...",
+    "read_email_content": "📧 メールを読込中...",
+    "send_email": "📧 確認用メールを準備中..."
   },
   "subagents": {
     "toolStatus": {

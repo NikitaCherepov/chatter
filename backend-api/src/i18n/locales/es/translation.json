@@ -52,7 +52,11 @@
     "desktopOpeningNote": "Abriendo entrada del cuaderno...",
     "desktopReadingWidgetState": "Leyendo estado del widget...",
     "desktopOpeningToolsPanel": "Abriendo panel de herramientas...",
-    "desktopAction": "Realizando acción..."
+    "desktopAction": "Realizando acción...",
+    "list_mail_accounts": "📧 Verificando cuentas de correo conectadas...",
+    "check_emails": "📧 Revisando correo...",
+    "read_email_content": "📧 Leyendo correo...",
+    "send_email": "📧 Preparando un correo para confirmación..."
   },
   "subagents": {
     "toolStatus": {

@@ -2402,6 +2402,14 @@ const removeMailAccount = (userId: number, accountId: number) => {
   return getMailAccountsPayload(userId);
 };
 
+app.get('/internal/mail/accounts', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.query?.user_id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json(getMailAccountsPayload(userId));
+});
+
 app.post('/internal/mail/setup', internalAuth, async (req, res) => {
   const userId = resolveInternalAccountId(req.body?.user_id);
   const provider = normalizeMailProvider(req.body?.provider);

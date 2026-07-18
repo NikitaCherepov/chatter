@@ -323,10 +323,18 @@
       "googleInstructions": "🔵 Google 说明",
       "forget": "🗑 移除连接",
       "changeLimit": "✏️ 更改限制",
-      "back": "⬅️ 返回"
+      "back": "⬅️ 返回",
+      "confirmDelete": "🗑 移除",
+      "cancel": "❌ 取消"
     },
     "maximum": "最大 {{limit}}",
-    "limitExceeded": "您一次最多可以请求 {{limit}} 封邮件。"
+    "limitExceeded": "您一次最多可以请求 {{limit}} 封邮件。",
+    "menuList": "📬 电子邮件账户：{{count}}\n\n点击账户将其设为默认。活动账户带有勾选标记。",
+    "noAccounts": "📬 尚未连接任何电子邮件账户。\n\n可按照以下说明连接 Google 和 Yandex。其他提供商请通过桌面应用添加。",
+    "alreadyActive": "此账户已处于活动状态",
+    "activeAccountShort": "活动账户：{{email}}",
+    "accountMissing": "未找到电子邮件账户",
+    "deleteConfirm": "从 Chatter 中移除“{{account}}”？这不会删除邮箱本身。"
   },
   "profile": {
     "renameConfirm": "您想更改姓名吗？",

@@ -52,7 +52,11 @@
     "desktopOpeningNote": "Ouverture de l'entrée du carnet...",
     "desktopReadingWidgetState": "Lecture de l'état du widget...",
     "desktopOpeningToolsPanel": "Ouverture du panneau d'outils...",
-    "desktopAction": "Exécution de l'action..."
+    "desktopAction": "Exécution de l'action...",
+    "list_mail_accounts": "📧 Vérification des comptes email connectés...",
+    "check_emails": "📧 Vérification des emails...",
+    "read_email_content": "📧 Lecture de l'email...",
+    "send_email": "📧 Préparation d'un email de confirmation..."
   },
   "subagents": {
     "toolStatus": {

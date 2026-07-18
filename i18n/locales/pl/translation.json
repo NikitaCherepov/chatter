@@ -323,10 +323,18 @@
       "googleInstructions": "🔵 Instrukcje Google",
       "forget": "🗑 Usuń połączenie",
       "changeLimit": "✏️ Zmień limit",
-      "back": "⬅️ Wstecz"
+      "back": "⬅️ Wstecz",
+      "confirmDelete": "🗑 Usuń",
+      "cancel": "❌ Anuluj"
     },
     "maximum": "maksymalnie {{limit}}",
-    "limitExceeded": "Możesz zażądać maksymalnie {{limit}} e-maili na raz."
+    "limitExceeded": "Możesz zażądać maksymalnie {{limit}} e-maili na raz.",
+    "menuList": "📬 Konta e-mail: {{count}}\n\nDotknij konta, aby ustawić je jako domyślne. Aktywne konto ma znacznik wyboru.",
+    "noAccounts": "📬 Nie połączono jeszcze żadnych kont e-mail.\n\nGoogle i Yandex można połączyć, korzystając z poniższych instrukcji. Dodaj innych dostawców przez aplikację desktopową.",
+    "alreadyActive": "To konto jest już aktywne",
+    "activeAccountShort": "Aktywne konto: {{email}}",
+    "accountMissing": "Nie znaleziono konta e-mail",
+    "deleteConfirm": "Usunąć „{{account}}” z Chatter? Nie spowoduje to usunięcia samej skrzynki pocztowej."
   },
   "profile": {
     "renameConfirm": "Czy chcesz zmienić swoją nazwę?",

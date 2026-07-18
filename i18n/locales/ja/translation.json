@@ -323,10 +323,18 @@
       "googleInstructions": "🔵 Googleの手順",
       "forget": "🗑 接続を削除",
       "changeLimit": "✏️ 制限を変更",
-      "back": "⬅️ 戻る"
+      "back": "⬅️ 戻る",
+      "confirmDelete": "🗑 削除",
+      "cancel": "❌ キャンセル"
     },
     "maximum": "最大{{limit}}",
-    "limitExceeded": "一度にリクエストできるメールは最大{{limit}}件です。"
+    "limitExceeded": "一度にリクエストできるメールは最大{{limit}}件です。",
+    "menuList": "📬 メールアカウント: {{count}}\n\nタップしてデフォルトに設定します。アクティブなアカウントにはチェックマークが付きます。",
+    "noAccounts": "📬 まだメールアカウントが接続されていません。\n\nGoogleとYandexは以下の手順で接続できます。その他のプロバイダーはデスクトップアプリから追加してください。",
+    "alreadyActive": "このアカウントは既にアクティブです",
+    "activeAccountShort": "アクティブアカウント: {{email}}",
+    "accountMissing": "メールアカウントが見つかりません",
+    "deleteConfirm": "Chatterから「{{account}}」を削除しますか？メールボックス自体は削除されません。"
   },
   "profile": {
     "renameConfirm": "名前を変更しますか？",

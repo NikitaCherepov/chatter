@@ -52,7 +52,11 @@
     "desktopOpeningNote": "Notizbucheintrag öffnen...",
     "desktopReadingWidgetState": "Widget-Status wird gelesen...",
     "desktopOpeningToolsPanel": "Werkzeugpanel wird geöffnet...",
-    "desktopAction": "Aktion wird ausgeführt..."
+    "desktopAction": "Aktion wird ausgeführt...",
+    "list_mail_accounts": "📧 Überprüfe verbundene E-Mail-Konten...",
+    "check_emails": "📧 Überprüfe E-Mails...",
+    "read_email_content": "📧 Lese E-Mail-Inhalt...",
+    "send_email": "📧 Bereite eine E-Mail zur Bestätigung vor..."
   },
   "subagents": {
     "toolStatus": {

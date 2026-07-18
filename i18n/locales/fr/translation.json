@@ -323,10 +323,18 @@
       "googleInstructions": "🔵 Instructions Google",
       "forget": "🗑 Supprimer la connexion",
       "changeLimit": "✏️ Modifier la limite",
-      "back": "⬅️ Retour"
+      "back": "⬅️ Retour",
+      "confirmDelete": "🗑 Supprimer",
+      "cancel": "❌ Annuler"
     },
     "maximum": "maximum {{limit}}",
-    "limitExceeded": "Vous pouvez demander un maximum de {{limit}} e-mails à la fois."
+    "limitExceeded": "Vous pouvez demander un maximum de {{limit}} e-mails à la fois.",
+    "menuList": "📬 Comptes e-mail : {{count}}\n\nAppuyez sur un compte pour le définir par défaut. Le compte actif est marqué d'une coche.",
+    "noAccounts": "📬 Aucun compte e-mail n'est encore connecté.\n\nGoogle et Yandex peuvent être connectés en suivant les instructions ci-dessous. Ajoutez d'autres fournisseurs via l'application de bureau.",
+    "alreadyActive": "Ce compte est déjà actif",
+    "activeAccountShort": "Compte actif : {{email}}",
+    "accountMissing": "Compte e-mail introuvable",
+    "deleteConfirm": "Supprimer « {{account}} » de Chatter ? Cela ne supprime pas la boîte aux lettres elle-même."
   },
   "profile": {
     "renameConfirm": "Voulez-vous changer votre nom ?",

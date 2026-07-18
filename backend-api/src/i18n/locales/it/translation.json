@@ -52,7 +52,11 @@
     "desktopOpeningNote": "Apertura della voce del notebook...",
     "desktopReadingWidgetState": "Lettura stato widget...",
     "desktopOpeningToolsPanel": "Apertura pannello strumenti...",
-    "desktopAction": "Esecuzione azione..."
+    "desktopAction": "Esecuzione azione...",
+    "list_mail_accounts": "📧 Controllo degli account email collegati...",
+    "check_emails": "📧 Controllo della posta elettronica...",
+    "read_email_content": "📧 Lettura del contenuto dell'email...",
+    "send_email": "📧 Preparazione di un'email per la conferma..."
   },
   "subagents": {
     "toolStatus": {
