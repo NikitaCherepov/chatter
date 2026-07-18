@@ -269,30 +269,6 @@ if (!mailAccountColumns.some(column => column.name === 'smtp_host')) {
   })();
 }
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_accounts_user_email ON mail_accounts(user_id, lower(email))`);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS schema_migrations (
-    name TEXT PRIMARY KEY,
-    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-const mailAccountsV2ResetMigration = 'mail_accounts_v2_reset_20260719';
-if (!db.prepare('SELECT 1 FROM schema_migrations WHERE name = ?').get(mailAccountsV2ResetMigration)) {
-  db.transaction(() => {
-    db.prepare('DELETE FROM mail_accounts').run();
-    db.prepare(`
-      UPDATE users
-      SET active_mail_account_id = NULL,
-          imap_provider = NULL,
-          imap_user = NULL,
-          imap_pass = NULL,
-          imap_host = NULL,
-          imap_port = 993,
-          imap_secure = 1
-    `).run();
-    db.prepare('INSERT INTO schema_migrations (name) VALUES (?)').run(mailAccountsV2ResetMigration);
-  })();
-}
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
