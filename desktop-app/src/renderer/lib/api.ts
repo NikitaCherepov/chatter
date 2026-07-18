@@ -1332,9 +1332,9 @@ export async function deleteMessageImage(messageId: number, imageUrl: string): P
   });
 }
 
-// ---------- TTS (Cartesia cloud) ----------
+// ---------- TTS ----------
 
-export type CartesiaVoice = {
+export type RemoteTtsVoice = {
   id: string;
   name: string;
   description?: string;
@@ -1342,8 +1342,14 @@ export type CartesiaVoice = {
   gender?: string;
 };
 
-export async function fetchTtsVoices(): Promise<{ voices: CartesiaVoice[] }> {
-  return apiFetch('/api/v1/tts/voices');
+export type RemoteTtsProvider = {
+  id: string;
+  name: string;
+  voices: RemoteTtsVoice[];
+};
+
+export async function fetchTtsProviders(): Promise<{ providers: RemoteTtsProvider[] }> {
+  return apiFetch('/api/v1/tts/providers');
 }
 
 export async function fetchTtsVoicePreview(

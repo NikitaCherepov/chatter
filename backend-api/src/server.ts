@@ -1544,24 +1544,39 @@ app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
 
 // ── TTS (Cartesia cloud) ────────────────────────────────────────────────
 
-app.get('/api/v1/tts/voices', async (req: AuthedRequest, res) => {
-  if (!isCartesiaConfigured()) {
-    return res.status(503).json({ error: 'tts_not_configured' });
+app.get('/api/v1/tts/providers', async (_req: AuthedRequest, res) => {
+  const providers: Array<{
+    id: string;
+    name: string;
+    voices: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      language?: string;
+      gender?: string;
+    }>;
+  }> = [];
+
+  if (isCartesiaConfigured()) {
+    try {
+      const allVoices = await fetchCartesiaVoices();
+      const supportedLanguageBases = new Set(
+        SUPPORTED_LANGUAGES.map(language => language.toLowerCase().split('-')[0]),
+      );
+      const voices = allVoices.filter(voice => {
+        const languageBase = `${voice.language || ''}`.trim().toLowerCase().replace(/_/g, '-').split('-')[0];
+        return supportedLanguageBases.has(languageBase);
+      });
+
+      if (voices.length > 0) {
+        providers.push({ id: 'cartesia', name: 'Cartesia', voices });
+      }
+    } catch (err: any) {
+      console.error('[tts/providers] failed to load Cartesia:', err.message);
+    }
   }
-  try {
-    const allVoices = await fetchCartesiaVoices();
-    const supportedLanguageBases = new Set(
-      SUPPORTED_LANGUAGES.map(language => language.toLowerCase().split('-')[0]),
-    );
-    const voices = allVoices.filter(voice => {
-      const languageBase = `${voice.language || ''}`.trim().toLowerCase().replace(/_/g, '-').split('-')[0];
-      return supportedLanguageBases.has(languageBase);
-    });
-    return res.json({ voices });
-  } catch (err: any) {
-    console.error('[tts/voices] error:', err.message);
-    return res.status(500).json({ error: 'tts_voices_error', message: err.message });
-  }
+
+  return res.json({ providers });
 });
 
 // Generate TTS audio and bind to message

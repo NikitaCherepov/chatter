@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { PromptSelector } from './PromptSelector';
-import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchCartesiaVoiceList, fetchPiperVoiceList } from '../lib/tts';
+import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchRemoteTtsProviders, fetchPiperVoiceList } from '../lib/tts';
 import type { TtsSettings } from '../lib/tts';
 import { getSpeechRecognitionLanguage, setSpeechRecognitionLanguage, type SpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { Select } from './Select';
@@ -136,7 +136,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
   const [ttsModels, setTtsModels] = useState(() => getTtsModels());
   const [ttsSettings, setTtsSettingsState] = useState<TtsSettings>(() => getTtsSettings());
   const [previewPlaying, setPreviewPlaying] = useState(false);
-  const [cartesiaLoading, setCartesiaLoading] = useState(false);
+  const [remoteProvidersLoading, setRemoteProvidersLoading] = useState(false);
   const [piperLoading, setPiperLoading] = useState(false);
   const [recognitionLanguage, setRecognitionLanguage] = useState<SpeechRecognitionLanguage>(
     () => getSpeechRecognitionLanguage(),
@@ -147,35 +147,55 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
     ...SUPPORTED_LANGUAGE_OPTIONS,
   ], [i18n.language, t]);
 
-  // Refresh TTS models when voice section opens
-  // If cartesia voices are empty (not cached), fetch from server
+  // Refresh local voices and backend-provided cloud TTS options when voice settings open.
   useEffect(() => {
-    if (section === 'voice') {
+    if (section !== 'voice') return;
+
+    let cancelled = false;
+    setTtsModels(getTtsModels());
+    setPiperLoading(true);
+    setRemoteProvidersLoading(true);
+
+    Promise.all([
+      fetchPiperVoiceList(),
+      fetchRemoteTtsProviders(true),
+    ]).then(() => {
+      if (cancelled) return;
+
       const models = getTtsModels();
       setTtsModels(models);
+      setTtsSettingsState(current => {
+        const selectedModel = models.find(model => model.id === current.modelId);
+        const selectedVoiceExists = selectedModel?.voices.some(voice => voice.id === current.voiceId) ?? false;
+        if (selectedVoiceExists) return current;
 
-      setPiperLoading(true);
-      fetchPiperVoiceList().then((voices) => {
-        setTtsModels(getTtsModels());
-        if (ttsSettings.modelId === 'piper' && voices.length > 0 && !voices.some((voice) => voice.id === ttsSettings.voiceId)) {
-          const fallbackVoice = voices.find((voice) => voice.id === 'ruslan') || voices[0];
-          const newSettings = { ...ttsSettings, voiceId: fallbackVoice.id };
-          setTtsSettingsState(newSettings);
-          setTtsSettings(newSettings);
-        }
-      }).finally(() => setPiperLoading(false));
+        const fallbackModel = selectedModel && selectedModel.voices.length > 0
+          ? selectedModel
+          : models.find(model => model.id === 'piper' && model.voices.length > 0)
+            || models.find(model => model.id === 'builtin' && model.voices.length > 0);
+        if (!fallbackModel) return current;
 
-      const cartesiaModel = models.find(m => m.id === 'cartesia');
-      if (ttsSettings.modelId === 'cartesia' && (!cartesiaModel || cartesiaModel.voices.length === 0)) {
-        setCartesiaLoading(true);
-        fetchCartesiaVoiceList().then(() => {
-          setTtsModels(getTtsModels());
-          setCartesiaLoading(false);
-        }).catch(() => setCartesiaLoading(false));
-      } else {
-        setTtsModels(models);
+        const fallbackVoice = fallbackModel.id === 'piper'
+          ? fallbackModel.voices.find(voice => voice.id === 'ruslan') || fallbackModel.voices[0]
+          : fallbackModel.voices[0];
+        const nextSettings = {
+          ...current,
+          modelId: fallbackModel.id,
+          voiceId: fallbackVoice.id,
+        };
+        setTtsSettings(nextSettings);
+        return nextSettings;
+      });
+    }).finally(() => {
+      if (!cancelled) {
+        setPiperLoading(false);
+        setRemoteProvidersLoading(false);
       }
-    }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [section]);
 
   const [coreMemory, setCoreMemory] = useState('');
@@ -822,30 +842,11 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
     }));
   }, [ttsModels]);
 
-  const handleModelChange = (modelId: string) => {
-    if (modelId === 'cartesia') {
-      // Load voices from server
-      setCartesiaLoading(true);
-      fetchCartesiaVoiceList().then(() => {
-        setTtsModels(getTtsModels()); // refresh models with updated cartesia voices
-        const voices = getVoicesForModel('cartesia');
-        const newSettings: TtsSettings = {
-          modelId,
-          voiceId: voices.length > 0 ? voices[0].id : '',
-          volume: ttsSettings.volume,
-          sfxVolume: ttsSettings.sfxVolume,
-        };
-        setTtsSettingsState(newSettings);
-        setTtsSettings(newSettings);
-        setCartesiaLoading(false);
-      }).catch(() => {
-        setCartesiaLoading(false);
-        toast.error(t('settings.toasts.cartesiaVoicesFailed'));
-      });
-      setPreviewPlaying(false);
-      return;
-    }
+  const selectedVoiceListLoading = ttsSettings.modelId === 'piper'
+    ? piperLoading
+    : !['piper', 'builtin'].includes(ttsSettings.modelId) && remoteProvidersLoading;
 
+  const handleModelChange = (modelId: string) => {
     const voices = getVoicesForModel(modelId);
     const newSettings: TtsSettings = {
       modelId,
@@ -1287,7 +1288,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
                 <label className={s.fieldLabel}>{t('settings.sections.voice')}</label>
                 <div className={s.voiceRow}>
                   <div className={s.voiceSelect}>
-                    {cartesiaLoading || piperLoading ? (
+                    {selectedVoiceListLoading ? (
                       <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>{t('settings.voice.loadingVoices')}</div>
                     ) : (
                       <Select

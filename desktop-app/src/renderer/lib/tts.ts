@@ -98,50 +98,48 @@ export async function fetchPiperVoiceList(): Promise<TtsVoice[]> {
   return piperFetchPromise;
 }
 
-// ── Cartesia cloud voices (fetched dynamically) ─────────────────────────
+// ── Remote TTS providers (fetched dynamically from backend) ─────────────
 
-let cachedCartesiaVoices: TtsVoice[] | null = null;
-let cartesiaFetchPromise: Promise<TtsVoice[]> | null = null;
+let cachedRemoteTtsModels: TtsModel[] | null = null;
+let remoteProvidersFetchPromise: Promise<TtsModel[]> | null = null;
 
-/**
- * Fetch Cartesia voices from backend.
- * Caches result — call again to refresh.
- */
-export async function fetchCartesiaVoiceList(): Promise<TtsVoice[]> {
-  if (cachedCartesiaVoices) return cachedCartesiaVoices;
+export async function fetchRemoteTtsProviders(forceRefresh = false): Promise<TtsModel[]> {
+  if (forceRefresh) cachedRemoteTtsModels = null;
+  if (cachedRemoteTtsModels) return cachedRemoteTtsModels;
+  if (remoteProvidersFetchPromise) return remoteProvidersFetchPromise;
 
-  // Deduplicate concurrent calls
-  if (cartesiaFetchPromise) return cartesiaFetchPromise;
-
-  cartesiaFetchPromise = (async () => {
+  remoteProvidersFetchPromise = (async () => {
     try {
-      const { fetchTtsVoices } = await import('./api');
-      const { voices } = await fetchTtsVoices();
-      cachedCartesiaVoices = voices.map(v => ({
-        id: v.id,
-        name: v.name,
-        lang: v.language || 'ru',
-      }));
-      return cachedCartesiaVoices;
+      const { fetchTtsProviders } = await import('./api');
+      const { providers } = await fetchTtsProviders();
+      cachedRemoteTtsModels = providers
+        .filter(provider => provider.id && provider.name && !['piper', 'builtin'].includes(provider.id))
+        .map(provider => ({
+          id: provider.id,
+          name: provider.name,
+          voices: provider.voices.map(voice => ({
+            id: voice.id,
+            name: voice.name,
+            lang: voice.language || 'en',
+          })),
+        }))
+        .filter(provider => provider.voices.length > 0);
+      return cachedRemoteTtsModels;
     } catch (err) {
-      console.error('[TTS:cartesia] failed to fetch voices:', err);
-      return [];
+      console.error('[TTS] failed to fetch remote providers:', err);
+      cachedRemoteTtsModels = [];
+      return cachedRemoteTtsModels;
     } finally {
-      cartesiaFetchPromise = null;
+      remoteProvidersFetchPromise = null;
     }
   })();
 
-  return cartesiaFetchPromise;
-}
-
-/** Invalidate Cartesia voice cache (e.g. on language change) */
-export function invalidateCartesiaVoices(): void {
-  cachedCartesiaVoices = null;
+  return remoteProvidersFetchPromise;
 }
 
 export function getTtsModels(): TtsModel[] {
   const builtinVoices = getBuiltinVoices();
-  return [
+  const localModels: TtsModel[] = [
     {
       id: 'piper',
       name: i18n.t('tts.piper'),
@@ -154,12 +152,8 @@ export function getTtsModels(): TtsModel[] {
         ? builtinVoices
         : [{ id: '__default', name: i18n.t('tts.defaultVoice'), lang: 'ru-RU' }],
     },
-    {
-      id: 'cartesia',
-      name: i18n.t('tts.cartesia'),
-      voices: cachedCartesiaVoices || [],
-    },
   ];
+  return [...localModels, ...(cachedRemoteTtsModels || [])];
 }
 
 export function getVoicesForModel(modelId: string): TtsVoice[] {
