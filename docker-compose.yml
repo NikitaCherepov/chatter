@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: ./backend-api
+      dockerfile: Dockerfile
+    image: chatter-backend:local
+    restart: unless-stopped
+    env_file:
+      - ./backend-api/.env
+    environment:
+      NODE_ENV: production
+      BACKEND_API_PORT: 3050
+      API_DB_PATH: /data/chatter.db
+      UPLOADS_DIR: /data/uploads
+    ports:
+      - "${BACKEND_PORT:-3050}:3050"
+    volumes:
+      - chatter_backend_data:/data
+      - chatter_backend_updates:/app/updates
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3050/health').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+volumes:
+  chatter_backend_data:
+  chatter_backend_updates:
