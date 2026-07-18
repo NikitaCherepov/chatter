@@ -166,6 +166,11 @@
       "preview": "Visualizar alterações"
     },
     "voice": {
+      "recognitionTitle": "Reconhecimento de voz",
+      "recognitionLanguage": "Idioma de reconhecimento",
+      "recognitionAuto": "Detecção automática",
+      "recognitionHint": "A detecção automática é prática. Escolha um idioma específico para reconhecer frases curtas com mais rapidez e confiabilidade.",
+      "synthesisTitle": "Síntese de voz",
       "model": "Modelo de voz",
       "modelPlaceholder": "Selecione o modelo...",
       "loadingVoices": "Carregando vozes...",

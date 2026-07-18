@@ -161,9 +161,11 @@ function resolvePiperModel(voicesDir: string, voiceId?: string) {
     const selected = findPiperModelInFolder(path.join(voicesDir, voiceId));
     if (selected) return selected;
 
-    console.error('[tts:piper] selected voice is unavailable or invalid:', voiceId);
-    return null;
+    console.warn('[tts:piper] selected voice is unavailable; falling back:', voiceId);
   }
+
+  const defaultModel = findPiperModelInFolder(path.join(voicesDir, 'ruslan'));
+  if (defaultModel) return defaultModel;
 
   const voiceFolders = fs.readdirSync(voicesDir).sort();
   for (const folder of voiceFolders) {
@@ -172,6 +174,49 @@ function resolvePiperModel(voicesDir: string, voiceId?: string) {
   }
 
   return null;
+}
+
+function listPiperVoices() {
+  const voicesDir = getPiperVoicesDir();
+  if (!fs.existsSync(voicesDir)) return [];
+
+  return fs.readdirSync(voicesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^[a-z0-9_-]+$/i.test(entry.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((entry) => {
+      const modelFile = findPiperModelInFolder(path.join(voicesDir, entry.name));
+      if (!modelFile) return [];
+
+      try {
+        const config = JSON.parse(fs.readFileSync(`${modelFile}.json`, 'utf8')) as {
+          dataset?: string;
+          language?: { code?: string; name_english?: string };
+        };
+        const dataset = `${config.dataset || entry.name}`.trim();
+        const name = dataset
+          .split(/[_-]+/)
+          .filter(Boolean)
+          .map((part) => part.toLowerCase() === 'hfc'
+            ? 'HFC'
+            : part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ') || entry.name;
+        return [{
+          id: entry.name,
+          name,
+          lang: `${config.language?.code || 'und'}`.replace(/_/g, '-'),
+        }];
+      } catch (error) {
+        console.error('[tts:piper] failed to read voice config:', modelFile, error);
+        return [];
+      }
+    });
+}
+
+function normalizeWhisperLanguage(value: unknown) {
+  const normalized = `${value || 'auto'}`.trim().toLowerCase().replace(/_/g, '-');
+  if (normalized === 'auto') return 'auto';
+  const baseLanguage = normalized.split('-')[0];
+  return /^[a-z]{2,3}$/.test(baseLanguage) ? baseLanguage : 'auto';
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -353,7 +398,7 @@ function createWindow() {
   });
 
   // ── IPC: transcribe-audio (voice → wav → whisper.exe → text) ──────────
-  ipcMain.handle('transcribe-audio', async (event, arrayBuffer: ArrayBuffer) => {
+  ipcMain.handle('transcribe-audio', async (event, arrayBuffer: ArrayBuffer, language: string = 'auto') => {
     assertTrustedIpcSender(event);
     const tempDir = os.tmpdir();
     const inputPath = path.join(tempDir, `voice_input_${Date.now()}.webm`);
@@ -381,13 +426,14 @@ function createWindow() {
       // 3. Run whisper.exe directly
       const whisperExe = getWhisperExePath();
       const modelPath = getModelPath();
+      const whisperLanguage = normalizeWhisperLanguage(language);
 
-      console.log('[transcribe] 3. Running whisper.exe:', whisperExe);
+      console.log('[transcribe] 3. Running whisper.exe:', whisperExe, `(language: ${whisperLanguage})`);
 
       await execFileAsync(whisperExe, [
         '-m', modelPath,
         '-f', outputPath,
-        '-l', 'ru',
+        '-l', whisperLanguage,
         '-otxt',
       ], {
         cwd: path.dirname(whisperExe),
@@ -442,6 +488,11 @@ function createWindow() {
   });
 
   // ── IPC: tts:generate (text → piper.exe → WAV buffer) ──────────────────
+  ipcMain.handle('tts:list-piper-voices', (event) => {
+    assertTrustedIpcSender(event);
+    return listPiperVoices();
+  });
+
   ipcMain.handle('tts:generate', async (event, text: string, voiceId?: string) => {
     assertTrustedIpcSender(event);
     const piperDir = getPiperDir();

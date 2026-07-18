@@ -27,6 +27,7 @@ npm run build
   - `whisper.exe`
   - `ggml-small.bin`
   - нужные whisper/ggml DLL
+- В разделе «Голос» можно выбрать `auto` (по умолчанию) или конкретный язык распознавания. Фиксированный язык не тратит время на автоопределение и рекомендуется для коротких фраз.
 - `ffmpeg-static` должен быть распакован из `app.asar`; в `package.json` для этого используется `asarUnpack` на `node_modules/ffmpeg-static/**/*`.
 
 ### Wake word
@@ -68,6 +69,8 @@ Main process повторяет openWakeWord pipeline:
 
 `onnxruntime-node` должен быть распакован из `app.asar`; это настроено через `asarUnpack` в `package.json`.
 
+Старые файлы Vosk не используются для wake word и явно исключены из packaged-сборки. Ключевые слова работают через ONNX-ресурсы из `wakeword/models/`.
+
 ## TTS (Text-to-Speech)
 
 Озвучка сообщений бота — три модели, единый стейт, плавные переходы.
@@ -76,9 +79,9 @@ Main process повторяет openWakeWord pipeline:
 
 | Модель | Движок | Голоса |
 |---|---|---|
-| **Piper** (по умолчанию) | Локальный `piper.exe` через IPC → WAV → Web Audio API | `ruslan` (ru), расширяемо |
+| **Piper** (по умолчанию) | Локальный `piper.exe` через IPC → WAV → Web Audio API | Автоматически читаются из `.onnx.json`; в стандартной сборке — Ruslan и Irina (ru), HFC Male и HFC Female (en-US) |
 | **Встроенный (Chromium)** | `window.speechSynthesis` — системные голоса Windows | Все голоса ОС |
-| **Cartesia (облачная)** | Backend-прокси → Cartesia.ai API → MP3 → Web Audio API | Голоса en/ru/de/fr, подгружаются с сервера |
+| **Cartesia (облачная)** | Backend-прокси → Cartesia.ai API → MP3 → Web Audio API | Голоса для поддерживаемых backend языков интерфейса, подгружаются с сервера |
 
 ### Архитектура
 
@@ -108,7 +111,7 @@ AudioManager (Web Audio API)
 - `lib/tts.ts` — единый TTS-сервис: модели, голоса, подписки на стейт, `generationTicket` для отмены
 - `lib/audioManager.ts` — Web Audio API плеер: `playBuffer()` с fade-in 40ms / fade-out 15ms до конца буфера, `stopWithFade()` 150ms
 - `ChatPage.tsx` — play/stop кнопка в metaRow каждого сообщения
-- `SettingsModal.tsx` — вкладка "Голос": модель, голос, громкость, прослушивание
+- `SettingsModal.tsx` — вкладка «Голос»: язык распознавания, модель озвучки, голос, громкость, прослушивание
 
 ### Управление воспроизведением
 
@@ -120,6 +123,14 @@ AudioManager (Web Audio API)
 
 Dev: `models/piper/piper.exe` + `models/piper-voices/<voice>/*.onnx`
 Packaged: `resources/models/piper/` + `resources/models/piper-voices/`
+
+Перед сборкой установите стандартные русскую и английскую модели:
+
+```powershell
+npm run voices:download
+```
+
+Piper-голоса определяются динамически по метаданным `.onnx.json`. В стандартную packaged-сборку входят Ruslan и Irina для русского языка, HFC Male и HFC Female для английского; устаревшие Denis и Dmitri исключены для уменьшения размера.
 
 ## Архитектура
 

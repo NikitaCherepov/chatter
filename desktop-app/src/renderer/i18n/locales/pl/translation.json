@@ -381,6 +381,11 @@
       "preview": "Podgląd zmian"
     },
     "voice": {
+      "recognitionTitle": "Rozpoznawanie mowy",
+      "recognitionLanguage": "Język rozpoznawania",
+      "recognitionAuto": "Wykrywanie automatyczne",
+      "recognitionHint": "Automatyczne wykrywanie jest wygodne. Wybierz konkretny język, aby krótkie wypowiedzi były rozpoznawane szybciej i pewniej.",
+      "synthesisTitle": "Synteza mowy",
       "model": "Model dźwięku",
       "modelPlaceholder": "Wybierz model...",
       "loadingVoices": "Ładowanie głosów...",

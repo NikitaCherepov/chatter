@@ -166,6 +166,11 @@
       "preview": "预览更改"
     },
     "voice": {
+      "recognitionTitle": "语音识别",
+      "recognitionLanguage": "识别语言",
+      "recognitionAuto": "自动检测",
+      "recognitionHint": "自动检测很方便。选择特定语言可以更快、更稳定地识别短句。",
+      "synthesisTitle": "语音合成",
       "model": "语音模型",
       "modelPlaceholder": "选择模型...",
       "loadingVoices": "加载声音中...",

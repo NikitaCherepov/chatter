@@ -166,6 +166,11 @@
       "preview": "変更のプレビュー"
     },
     "voice": {
+      "recognitionTitle": "音声認識",
+      "recognitionLanguage": "認識言語",
+      "recognitionAuto": "自動検出",
+      "recognitionHint": "自動検出は便利です。短いフレーズをより速く安定して認識するには、特定の言語を選択してください。",
+      "synthesisTitle": "音声合成",
       "model": "音声モデル",
       "modelPlaceholder": "モデルを選択...",
       "loadingVoices": "音声を読み込み中...",

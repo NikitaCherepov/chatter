@@ -166,6 +166,11 @@
       "preview": "Vorschau der Änderungen"
     },
     "voice": {
+      "recognitionTitle": "Spracherkennung",
+      "recognitionLanguage": "Erkennungssprache",
+      "recognitionAuto": "Automatisch erkennen",
+      "recognitionHint": "Die automatische Erkennung ist bequem. Wähle eine feste Sprache, um kurze Sätze schneller und zuverlässiger zu erkennen.",
+      "synthesisTitle": "Sprachausgabe",
       "model": "Sprachmodell",
       "modelPlaceholder": "Modell auswählen...",
       "loadingVoices": "Lade Stimmen...",

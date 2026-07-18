@@ -521,6 +521,26 @@
 
 // ====== VOICE PANEL ======
 
+.voiceSectionTitle {
+  margin: 2px 0 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.voiceHint {
+  margin-top: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.voiceDivider {
+  height: 1px;
+  margin: 2px 0 16px;
+  background: var(--border-light);
+}
+
 .voiceRow {
   display: flex;
   align-items: flex-start;

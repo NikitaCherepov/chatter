@@ -22,6 +22,7 @@ import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro } from
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
+import { getSpeechRecognitionLanguage } from '../lib/speechRecognition';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -1508,7 +1509,7 @@ export function ChatPage() {
 
         setIsTranscribing(true);
         try {
-          const text = await window.electronAPI.transcribeAudio(arrayBuffer);
+          const text = await window.electronAPI.transcribeAudio(arrayBuffer, getSpeechRecognitionLanguage());
           if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
         } catch (err) {
           console.error('[voice] Transcription failed:', err);
@@ -2258,7 +2259,7 @@ export function ChatPage() {
           setIsTranscribing(true);
           try {
             const arrayBuffer = await audioBlob.arrayBuffer();
-            const text = await window.electronAPI.transcribeAudio(arrayBuffer);
+            const text = await window.electronAPI.transcribeAudio(arrayBuffer, getSpeechRecognitionLanguage());
             if (!text) return;
 
             // Send immediately if bot is idle, otherwise fall back to textarea

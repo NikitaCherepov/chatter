@@ -6,8 +6,9 @@ import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
 import { PromptSelector } from './PromptSelector';
-import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchCartesiaVoiceList } from '../lib/tts';
+import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchCartesiaVoiceList, fetchPiperVoiceList } from '../lib/tts';
 import type { TtsSettings } from '../lib/tts';
+import { getSpeechRecognitionLanguage, setSpeechRecognitionLanguage, type SpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
 import {
@@ -136,12 +137,34 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
   const [ttsSettings, setTtsSettingsState] = useState<TtsSettings>(() => getTtsSettings());
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [cartesiaLoading, setCartesiaLoading] = useState(false);
+  const [piperLoading, setPiperLoading] = useState(false);
+  const [recognitionLanguage, setRecognitionLanguage] = useState<SpeechRecognitionLanguage>(
+    () => getSpeechRecognitionLanguage(),
+  );
+
+  const recognitionLanguageOptions = useMemo<SelectOption[]>(() => [
+    { value: 'auto', label: t('settings.voice.recognitionAuto') },
+    ...SUPPORTED_LANGUAGE_OPTIONS,
+  ], [i18n.language, t]);
 
   // Refresh TTS models when voice section opens
   // If cartesia voices are empty (not cached), fetch from server
   useEffect(() => {
     if (section === 'voice') {
       const models = getTtsModels();
+      setTtsModels(models);
+
+      setPiperLoading(true);
+      fetchPiperVoiceList().then((voices) => {
+        setTtsModels(getTtsModels());
+        if (ttsSettings.modelId === 'piper' && voices.length > 0 && !voices.some((voice) => voice.id === ttsSettings.voiceId)) {
+          const fallbackVoice = voices.find((voice) => voice.id === 'ruslan') || voices[0];
+          const newSettings = { ...ttsSettings, voiceId: fallbackVoice.id };
+          setTtsSettingsState(newSettings);
+          setTtsSettings(newSettings);
+        }
+      }).finally(() => setPiperLoading(false));
+
       const cartesiaModel = models.find(m => m.id === 'cartesia');
       if (ttsSettings.modelId === 'cartesia' && (!cartesiaModel || cartesiaModel.voices.length === 0)) {
         setCartesiaLoading(true);
@@ -790,7 +813,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
       label: v.name,
       hint: v.lang,
     }));
-  }, [ttsSettings.modelId]);
+  }, [ttsSettings.modelId, ttsModels]);
 
   const modelOptions: SelectOption[] = useMemo(() => {
     return ttsModels.map((m) => ({
@@ -840,6 +863,12 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
     setTtsSettingsState(newSettings);
     setTtsSettings(newSettings);
     setPreviewPlaying(false);
+  };
+
+  const handleRecognitionLanguageChange = (language: string) => {
+    const nextLanguage = language as SpeechRecognitionLanguage;
+    setRecognitionLanguage(nextLanguage);
+    setSpeechRecognitionLanguage(nextLanguage);
   };
 
   const handleVolumeChange = (volume: number) => {
@@ -1227,6 +1256,23 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
             <div className={s.panel}>
               <div className={s.panelTitle}>{t('settings.sections.voice')}</div>
 
+              <div className={s.voiceSectionTitle}>{t('settings.voice.recognitionTitle')}</div>
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.voice.recognitionLanguage')}</label>
+                <Select
+                  options={recognitionLanguageOptions}
+                  value={recognitionLanguage}
+                  onChange={handleRecognitionLanguageChange}
+                  placeholder={t('settings.voice.recognitionAuto')}
+                  searchable
+                  maxVisibleItems={6}
+                />
+                <div className={s.voiceHint}>{t('settings.voice.recognitionHint')}</div>
+              </div>
+
+              <div className={s.voiceDivider} />
+              <div className={s.voiceSectionTitle}>{t('settings.voice.synthesisTitle')}</div>
+
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('settings.voice.model')}</label>
                 <Select
@@ -1241,7 +1287,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
                 <label className={s.fieldLabel}>{t('settings.sections.voice')}</label>
                 <div className={s.voiceRow}>
                   <div className={s.voiceSelect}>
-                    {cartesiaLoading ? (
+                    {cartesiaLoading || piperLoading ? (
                       <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>{t('settings.voice.loadingVoices')}</div>
                     ) : (
                       <Select

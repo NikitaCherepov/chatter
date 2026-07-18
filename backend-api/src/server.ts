@@ -1544,18 +1544,18 @@ app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
 
 // ── TTS (Cartesia cloud) ────────────────────────────────────────────────
 
-// List available Cartesia voices for the selector
-const CARTESIA_ALLOWED_LANGUAGES = ['en', 'ru', 'de', 'fr'];
-
 app.get('/api/v1/tts/voices', async (req: AuthedRequest, res) => {
   if (!isCartesiaConfigured()) {
     return res.status(503).json({ error: 'tts_not_configured' });
   }
   try {
     const allVoices = await fetchCartesiaVoices();
-    const voices = allVoices.filter(v => {
-      const lang = (v.language || '').split('-')[0].toLowerCase();
-      return CARTESIA_ALLOWED_LANGUAGES.includes(lang);
+    const supportedLanguageBases = new Set(
+      SUPPORTED_LANGUAGES.map(language => language.toLowerCase().split('-')[0]),
+    );
+    const voices = allVoices.filter(voice => {
+      const languageBase = `${voice.language || ''}`.trim().toLowerCase().replace(/_/g, '-').split('-')[0];
+      return supportedLanguageBases.has(languageBase);
     });
     return res.json({ voices });
   } catch (err: any) {
@@ -1619,9 +1619,11 @@ app.get('/api/v1/tts/preview', async (req: AuthedRequest, res) => {
 
   const voiceId = `${req.query.voice_id || ''}`.trim();
   const language = `${req.query.language || 'ru'}`.trim();
-  const PREVIEW_TEXT = 'Привет, я Чаттер!';
+  const previewText = `${req.query.text || 'Chatter'}`.trim();
 
   if (!voiceId) return res.status(400).json({ error: 'voice_id_required' });
+  if (!previewText) return res.status(400).json({ error: 'text_required' });
+  if (previewText.length > 200) return res.status(400).json({ error: 'text_too_long' });
 
   // Check cache
   const cached = db.prepare('SELECT audio_url FROM tts_voice_previews WHERE voice_id = ?').get(voiceId) as { audio_url: string } | undefined;
@@ -1631,7 +1633,7 @@ app.get('/api/v1/tts/preview', async (req: AuthedRequest, res) => {
 
   // Generate and cache
   try {
-    const result = await generateTtsAudio(PREVIEW_TEXT, voiceId, language);
+    const result = await generateTtsAudio(previewText, voiceId, language);
     const saved = await saveTtsAudio(result.audioBuffer, '.mp3');
     const now = Math.floor(Date.now() / 1000);
     db.prepare('INSERT INTO tts_voice_previews (voice_id, audio_url, language, created_at) VALUES (?, ?, ?, ?)').run(voiceId, saved.url, language, now);

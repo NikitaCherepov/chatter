@@ -11,6 +11,7 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
+    "voices:download": "powershell -ExecutionPolicy Bypass -File scripts/download-default-piper-voices.ps1",
     "i18n:translate": "node ../scripts/translate-i18n.mjs --locales desktop-app/src/renderer/i18n/locales --env .env.i18n",
     "i18n:translate:all": "node ../scripts/translate-i18n.mjs --locales desktop-app/src/renderer/i18n/locales --env .env.i18n --all"
   },
@@ -78,7 +79,11 @@
         "from": "models",
         "to": "models",
         "filter": [
-          "**/*"
+          "**/*",
+          "!vosk.tar.gz",
+          "!vosk-model-small-ru/**/*",
+          "!piper-voices/denis/**/*",
+          "!piper-voices/dmitri/**/*"
         ]
       },
       {

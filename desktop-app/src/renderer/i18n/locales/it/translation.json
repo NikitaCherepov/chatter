@@ -381,6 +381,11 @@
       "preview": "Anteprima modifiche"
     },
     "voice": {
+      "recognitionTitle": "Riconoscimento vocale",
+      "recognitionLanguage": "Lingua di riconoscimento",
+      "recognitionAuto": "Rilevamento automatico",
+      "recognitionHint": "Il rilevamento automatico è comodo. Scegli una lingua specifica per riconoscere le frasi brevi più velocemente e con maggiore affidabilità.",
+      "synthesisTitle": "Sintesi vocale",
       "model": "Modello vocale",
       "modelPlaceholder": "Seleziona un modello...",
       "loadingVoices": "Caricamento voci...",

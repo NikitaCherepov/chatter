@@ -189,6 +189,11 @@
       "preview": "Preview changes"
     },
     "voice": {
+      "recognitionTitle": "Voice recognition",
+      "recognitionLanguage": "Recognition language",
+      "recognitionAuto": "Automatic detection",
+      "recognitionHint": "Automatic detection is convenient. Choose a specific language for faster and more reliable recognition of short phrases.",
+      "synthesisTitle": "Speech synthesis",
       "model": "Speech model",
       "modelPlaceholder": "Select a model...",
       "loadingVoices": "Loading voices...",

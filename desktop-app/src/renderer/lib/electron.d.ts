@@ -12,11 +12,12 @@ declare global {
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;
       getZoomLevel: () => Promise<number>;
-      transcribeAudio: (arrayBuffer: ArrayBuffer) => Promise<string>;
+      transcribeAudio: (arrayBuffer: ArrayBuffer, language?: string) => Promise<string>;
       startWakeWord: () => Promise<{ ok: boolean; alreadyRunning?: boolean; error?: string }>;
       stopWakeWord: () => Promise<{ ok: boolean; alreadyStopped?: boolean }>;
       sendWakeWordAudioChunk: (buffer: ArrayBuffer) => void;
       onWakeWordDetected: (callback: (payload: unknown) => void) => () => void;
+      listPiperVoices: () => Promise<Array<{ id: string; name: string; lang: string }>>;
       ttsGenerate: (text: string, voiceId?: string) => Promise<ArrayBuffer | null>;
       getSoundsPath: () => Promise<string>;
       readSoundFile: (fileName: string) => Promise<ArrayBuffer | Uint8Array | null>;

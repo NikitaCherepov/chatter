@@ -28,8 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-zoom-level'),
 
   // Voice transcription: send audio buffer → get text back
-  transcribeAudio: (arrayBuffer: ArrayBuffer) =>
-    ipcRenderer.invoke('transcribe-audio', arrayBuffer),
+  transcribeAudio: (arrayBuffer: ArrayBuffer, language: string = 'auto') =>
+    ipcRenderer.invoke('transcribe-audio', arrayBuffer, language),
 
   // Wakeword: start/stop ONNX openWakeWord pipeline and stream PCM chunks
   startWakeWord: () =>
@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // TTS: generate audio via Piper (local TTS engine)
+  listPiperVoices: () =>
+    ipcRenderer.invoke('tts:list-piper-voices'),
+
   ttsGenerate: (text: string, voiceId?: string) =>
     ipcRenderer.invoke('tts:generate', text, voiceId),
 

@@ -75,13 +75,28 @@ function getBuiltinVoices(): TtsVoice[] {
   return cachedBuiltinVoices!;
 }
 
-// Currently available Piper voices
-const PIPER_VOICES: TtsVoice[] = [
-  { id: 'ruslan', name: 'Ruslan', lang: 'ru-RU' },
-  { id: 'denis', name: 'Denis', lang: 'ru-RU' },
-  { id: 'dmitri', name: 'Dmitri', lang: 'ru-RU' },
-  { id: 'irina', name: 'Irina', lang: 'ru-RU' },
-];
+let cachedPiperVoices: TtsVoice[] | null = null;
+let piperFetchPromise: Promise<TtsVoice[]> | null = null;
+
+export async function fetchPiperVoiceList(): Promise<TtsVoice[]> {
+  if (cachedPiperVoices) return cachedPiperVoices;
+  if (piperFetchPromise) return piperFetchPromise;
+
+  piperFetchPromise = window.electronAPI.listPiperVoices()
+    .then((voices) => {
+      cachedPiperVoices = Array.isArray(voices) ? voices : [];
+      return cachedPiperVoices;
+    })
+    .catch((error) => {
+      console.error('[TTS:piper] failed to list voices:', error);
+      return [];
+    })
+    .finally(() => {
+      piperFetchPromise = null;
+    });
+
+  return piperFetchPromise;
+}
 
 // ── Cartesia cloud voices (fetched dynamically) ─────────────────────────
 
@@ -92,7 +107,7 @@ let cartesiaFetchPromise: Promise<TtsVoice[]> | null = null;
  * Fetch Cartesia voices from backend.
  * Caches result — call again to refresh.
  */
-export async function fetchCartesiaVoiceList(language?: string): Promise<TtsVoice[]> {
+export async function fetchCartesiaVoiceList(): Promise<TtsVoice[]> {
   if (cachedCartesiaVoices) return cachedCartesiaVoices;
 
   // Deduplicate concurrent calls
@@ -101,7 +116,7 @@ export async function fetchCartesiaVoiceList(language?: string): Promise<TtsVoic
   cartesiaFetchPromise = (async () => {
     try {
       const { fetchTtsVoices } = await import('./api');
-      const { voices } = await fetchTtsVoices(language);
+      const { voices } = await fetchTtsVoices();
       cachedCartesiaVoices = voices.map(v => ({
         id: v.id,
         name: v.name,
@@ -130,7 +145,7 @@ export function getTtsModels(): TtsModel[] {
     {
       id: 'piper',
       name: i18n.t('tts.piper'),
-      voices: PIPER_VOICES,
+      voices: cachedPiperVoices || [],
     },
     {
       id: 'builtin',
@@ -185,6 +200,29 @@ function cleanText(raw: string): string {
   t = t.replace(/^#{1,6}\s+/gm, '');
   t = t.replace(/\n{2,}/g, '. ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
   return t;
+}
+
+function normalizeVoiceLanguage(language: string | undefined): string {
+  return `${language || ''}`.trim().replace(/_/g, '-') || 'en';
+}
+
+function getVoiceLanguage(modelId: string, voiceId: string): string {
+  const voice = getVoicesForModel(modelId).find((item) => item.id === voiceId);
+  return normalizeVoiceLanguage(voice?.lang);
+}
+
+function getPreviewText(language: string): string {
+  const normalizedLanguage = normalizeVoiceLanguage(language).toLowerCase();
+  const baseLanguage = normalizedLanguage.split('-')[0];
+  const locale = baseLanguage === 'pt'
+    ? 'pt-BR'
+    : baseLanguage === 'zh'
+      ? 'zh-CN'
+      : baseLanguage;
+  const fallbackText = i18n.getFixedT('en')('tts.previewText', {
+    defaultValue: 'Hello, I am Chatter!',
+  });
+  return i18n.getFixedT(locale)('tts.previewText', { defaultValue: fallbackText });
 }
 
 // ── Stop all playback ──────────────────────────────────────────────────
@@ -268,7 +306,8 @@ async function cartesiaSpeak(
       audioBuffer = await fetchAudioBuffer(existingAudio.url);
     } else {
       // Generate new audio via backend
-      const result = await generateTts(text, settings.voiceId, 'ru', messageId);
+      const language = getVoiceLanguage('cartesia', settings.voiceId);
+      const result = await generateTts(text, settings.voiceId, language, messageId);
       if (ticket !== generationTicket) return;
 
       generatedAudio = { url: result.audio_url, tts_type: result.tts_type, voice_id: result.voice_id };
@@ -329,12 +368,16 @@ export function ttsSpeak(
   speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'ru-RU';
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
 
   const voice = pickBuiltinVoice(settings.voiceId);
-  if (voice) utterance.voice = voice;
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+  } else {
+    utterance.lang = i18n.resolvedLanguage || i18n.language || 'en';
+  }
 
   utterance.onend = () => {
     if (playingId === messageId) { playingId = null; notify(); }
@@ -357,8 +400,11 @@ function pickBuiltinVoice(voiceId: string): SpeechSynthesisVoice | null {
     const found = sv.find((v) => v.voiceURI === voiceId);
     if (found) return found;
   }
-  const ru = sv.find((v) => v.lang.startsWith('ru'));
-  return ru ?? null;
+  const interfaceLanguage = `${i18n.resolvedLanguage || i18n.language || 'en'}`.toLowerCase().split('-')[0];
+  return sv.find((voice) => voice.lang.toLowerCase().startsWith(interfaceLanguage))
+    ?? sv.find((voice) => voice.default)
+    ?? sv[0]
+    ?? null;
 }
 
 // ── Preview (for settings) ─────────────────────────────────────────────
@@ -379,7 +425,7 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
 
   if (modelId === 'piper') {
     try {
-      const text = i18n.t('tts.previewText');
+      const text = getPreviewText(getVoiceLanguage(modelId, voiceId));
       const buffer = await window.electronAPI.ttsGenerate(text, voiceId);
       if (!buffer) { previewPlaying = false; return; }
 
@@ -400,7 +446,9 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
   if (modelId === 'cartesia') {
     try {
       const { fetchTtsVoicePreview } = await import('./api');
-      const result = await fetchTtsVoicePreview(voiceId, 'ru');
+      const language = getVoiceLanguage(modelId, voiceId);
+      const text = getPreviewText(language);
+      const result = await fetchTtsVoicePreview(voiceId, language, text);
       const audioBuffer = await fetchAudioBuffer(result.audio_url);
       await audioManager.playBuffer(audioBuffer, volume);
       previewPlaying = false;
@@ -413,11 +461,11 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
 
   // Builtin
   const voice = pickBuiltinVoice(voiceId);
-  const isRu = voice?.lang?.startsWith('ru') ?? true;
-  const text = isRu ? 'Привет, я Чаттер!' : 'Hello, I am Chatter!';
+  const language = normalizeVoiceLanguage(voice?.lang || i18n.resolvedLanguage || i18n.language);
+  const text = getPreviewText(language);
 
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = isRu ? 'ru-RU' : 'en-US';
+  utterance.lang = voice?.lang || language;
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
   if (voice) utterance.voice = voice;

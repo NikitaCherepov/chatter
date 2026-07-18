@@ -27,6 +27,7 @@ The voice scenario in the desktop app mainly lives in the Electron main process 
   - `whisper.exe`
   - `ggml-small.bin`
   - required whisper/ggml DLLs
+- The "Voice" settings page lets the user select `auto` (default) or a specific recognition language. A fixed language avoids auto-detection overhead and is recommended for short phrases.
 - `ffmpeg-static` must be unpacked from `app.asar`; `package.json` uses `asarUnpack` for this on `node_modules/ffmpeg-static/**/*`.
 
 ### Wake Word
@@ -68,6 +69,8 @@ After that, the renderer starts `createSpeechRecorder()`, records the user's phr
 
 `onnxruntime-node` must be unpacked from `app.asar`; this is configured via `asarUnpack` in `package.json`.
 
+Legacy Vosk files are not used by wake-word detection and are explicitly excluded from packaged builds. Wake words use the ONNX resources from `wakeword/models/`.
+
 ## TTS (Text-to-Speech)
 
 Bot message voiceover — three models, unified state, smooth transitions.
@@ -76,9 +79,9 @@ Bot message voiceover — three models, unified state, smooth transitions.
 
 | Model | Engine | Voices |
 |---|---|---|
-| **Piper** (default) | Local `piper.exe` via IPC → WAV → Web Audio API | `ruslan` (ru), extensible |
+| **Piper** (default) | Local `piper.exe` via IPC → WAV → Web Audio API | Discovered from installed `.onnx.json` files; the default build uses Ruslan and Irina (ru), HFC Male and HFC Female (en-US) |
 | **Built-in (Chromium)** | `window.speechSynthesis` — Windows system voices | All OS voices |
-| **Cartesia (cloud)** | Backend proxy → Cartesia.ai API → MP3 → Web Audio API | en/ru/de/fr voices, loaded from server |
+| **Cartesia (cloud)** | Backend proxy → Cartesia.ai API → MP3 → Web Audio API | Voices matching the backend's supported interface languages, loaded from the server |
 
 ### Architecture
 
@@ -108,7 +111,7 @@ AudioManager (Web Audio API)
 - `lib/tts.ts` — unified TTS service: models, voices, state subscriptions, `generationTicket` for cancellation
 - `lib/audioManager.ts` — Web Audio API player: `playBuffer()` with 40ms fade-in / 15ms fade-out before end of buffer, `stopWithFade()` 150ms
 - `ChatPage.tsx` — play/stop button in each message's metaRow
-- `SettingsModal.tsx` — "Voice" tab: model, voice, volume, preview
+- `SettingsModal.tsx` — "Voice" tab: recognition language, synthesis model, voice, volume, preview
 
 ### Playback Control
 
@@ -120,6 +123,14 @@ AudioManager (Web Audio API)
 
 Dev: `models/piper/piper.exe` + `models/piper-voices/<voice>/*.onnx`
 Packaged: `resources/models/piper/` + `resources/models/piper-voices/`
+
+Install the default Russian and English voice models before building:
+
+```powershell
+npm run voices:download
+```
+
+Piper voices are discovered dynamically from their `.onnx.json` metadata. The default packaged build includes Ruslan and Irina for Russian plus HFC Male and HFC Female for English; the legacy Denis and Dmitri models are excluded to keep its size down.
 
 ## Architecture
 
