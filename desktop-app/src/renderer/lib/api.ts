@@ -1533,6 +1533,53 @@ export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
+// ---------- Mail accounts ----------
+
+export type MailProvider = 'google' | 'yandex';
+
+export type MailAccountDto = {
+  provider: MailProvider;
+  email: string;
+  is_active: boolean;
+};
+
+export type MailAccountsResponse = {
+  accounts: MailAccountDto[];
+  active_provider: MailProvider | null;
+  mail_check_limit: number;
+  max_mail_check_limit: number | null;
+};
+
+export async function getMailAccounts(): Promise<MailAccountsResponse> {
+  return apiFetch('/api/v1/mail/accounts');
+}
+
+export async function setupMailAccount(
+  provider: MailProvider,
+  email: string,
+  appPassword: string,
+): Promise<MailAccountsResponse> {
+  return apiFetch('/api/v1/mail/accounts', {
+    method: 'POST',
+    body: JSON.stringify({ provider, email, app_password: appPassword }),
+  });
+}
+
+export async function activateMailAccount(provider: MailProvider): Promise<MailAccountsResponse> {
+  return apiFetch(`/api/v1/mail/accounts/${provider}/activate`, { method: 'POST' });
+}
+
+export async function deleteMailAccount(provider: MailProvider): Promise<MailAccountsResponse> {
+  return apiFetch(`/api/v1/mail/accounts/${provider}`, { method: 'DELETE' });
+}
+
+export async function updateMailSettings(mailCheckLimit: number): Promise<MailAccountsResponse> {
+  return apiFetch('/api/v1/mail/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ mail_check_limit: mailCheckLimit }),
+  });
+}
+
 // ---------- Smart Home ----------
 
 export type SmartDeviceDto = {

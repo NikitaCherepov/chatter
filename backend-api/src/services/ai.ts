@@ -1538,7 +1538,7 @@ export const toolDefinitions = [
           search_query: { type: 'string', description: 'Поисковая строка (имя, домен, тема, ключевое слово).' },
           date_from: { type: 'string', description: 'Начальная дата (включительно) в формате YYYY-MM-DD.' },
           date_to: { type: 'string', description: 'Конечная дата (включительно) в формате YYYY-MM-DD.' },
-          limit: { type: 'number', description: 'Количество результатов. Если не указано, берётся пользовательский лимит из настроек почты.' },
+          limit: { type: 'number', description: 'Количество результатов (1–50). Если не указано, берётся пользовательский лимит из настроек почты.' },
           offset: { type: 'number', description: 'Сдвиг для пагинации. Пример: сначала offset=0, потом offset=10 для следующих 10 писем.' }
         }
       }
@@ -1548,14 +1548,14 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_email_content',
-      description: 'Читает содержимое конкретного письма по части темы. Обычно используй после check_emails, когда нужно открыть найденное письмо.',
+      description: 'Читает содержимое конкретного письма. После check_emails передавай точный message_uid из результата; subject_part используй только как запасной вариант.',
       parameters: {
         type: 'object',
         properties: {
           provider: { type: 'string', enum: ['yandex', 'google'], description: 'Какой ящик использовать.' },
-          subject_part: { type: 'string', description: 'Часть темы письма для поиска.' }
-        },
-        required: ['subject_part']
+          message_uid: { type: 'number', description: 'Точный uid письма из результата check_emails. Предпочтительный способ.' },
+          subject_part: { type: 'string', description: 'Часть темы письма для запасного поиска, если uid недоступен.' }
+        }
       }
     }
   },
@@ -3049,11 +3049,16 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   }
 
   if (toolName === 'check_emails') {
-    const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 5;
+    const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 0;
     return runEmailCheck(user.id, typeof parsed.search_query === 'string' ? parsed.search_query : '', limit, typeof parsed.provider === 'string' ? parsed.provider : '', Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0, typeof parsed.date_from === 'string' ? parsed.date_from : '', typeof parsed.date_to === 'string' ? parsed.date_to : '');
   }
 
-  if (toolName === 'read_email_content') return runEmailRead(user.id, typeof parsed.subject_part === 'string' ? parsed.subject_part : '', typeof parsed.provider === 'string' ? parsed.provider : '');
+  if (toolName === 'read_email_content') return runEmailRead(
+    user.id,
+    typeof parsed.subject_part === 'string' ? parsed.subject_part : '',
+    typeof parsed.provider === 'string' ? parsed.provider : '',
+    Number.isFinite(Number(parsed.message_uid)) ? Number(parsed.message_uid) : undefined
+  );
   if (toolName === 'send_email') {
     const to: string = typeof parsed.to === 'string' ? parsed.to.trim() : '';
     const subject: string = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';

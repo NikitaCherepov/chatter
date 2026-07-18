@@ -121,7 +121,8 @@
       "models": "Modèles",
       "app": "Application",
       "limits": "Limites",
-      "connections": "Comptes liés"
+      "connections": "Comptes liés",
+      "mail": "Email"
     },
     "language": {
       "system": "Système",
@@ -787,6 +788,57 @@
       "devicesCount": "Appareils ({{count}})",
       "group": "groupe",
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+    },
+    "mail": {
+      "title": "Comptes email",
+      "description": "Connectez Gmail et Yandex Mail pour que Chatter puisse trouver, lire et envoyer des messages à votre demande.",
+      "connectedAccounts": "Comptes connectés",
+      "noAccounts": "Aucun compte email connecté pour le moment.",
+      "active": "actif",
+      "makeActive": "Utiliser par défaut",
+      "activeHelp": "Le compte actif est utilisé lorsque vous ne nommez pas de fournisseur. Vous pouvez toujours demander à Chatter d'utiliser explicitement Google ou Yandex.",
+      "provider": "Fournisseur",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Yandex Mail"
+      },
+      "email": "Adresse e-mail",
+      "appPassword": "Mot de passe d'application",
+      "appPasswordPlaceholder": "Collez un mot de passe d'application, pas votre mot de passe principal",
+      "replaceWarning": "Un compte connecté pour ce fournisseur existe déjà. L'enregistrement le remplacera.",
+      "passwordSecurity": "Le backend vérifie d'abord la connexion IMAP et stocke le mot de passe d'application chiffré. Le mot de passe n'est jamais renvoyé à l'application de bureau.",
+      "checking": "Vérification de la connexion...",
+      "connect": "Vérifier et connecter",
+      "instructionsTitle": "Comment connecter {{provider}}",
+      "googleGuide": {
+        "enable2fa": "Activez la validation en deux étapes dans votre compte Google.",
+        "create": "Créez un mot de passe d'application nommé Chatter. Google ne l'affiche qu'une seule fois.",
+        "paste": "Saisissez votre adresse Gmail et collez le mot de passe d'application de 16 caractères ci-dessus. Les espaces sont acceptés."
+      },
+      "yandexGuide": {
+        "create": "Créez un mot de passe d'application de type Mail et nommez-le Chatter.",
+        "enableImap": "Dans les paramètres de Yandex Mail, autorisez les clients de messagerie à accéder à la boîte aux lettres via IMAP en utilisant des mots de passe d'application.",
+        "paste": "Saisissez votre adresse e-mail Yandex et collez le mot de passe généré ci-dessus."
+      },
+      "resultLimit": "Nombre par défaut de résultats de recherche",
+      "resultLimitHelp": "Utilisé lorsqu'aucune limite n'est spécifiée dans la requête. Maximum pour votre compte : {{max}}.",
+      "loadFailed": "Impossible de charger les paramètres de messagerie",
+      "enterEmail": "Saisissez une adresse e-mail",
+      "enterAppPassword": "Saisissez un mot de passe d'application",
+      "connected": "Compte email connecté et vérifié",
+      "authFailed": "Échec de connexion. Vérifiez l'adresse email et le mot de passe d'application.",
+      "connectionFailed": "Le serveur n'a pas pu se connecter au fournisseur de messagerie. Réessayez plus tard.",
+      "runtimeUnavailable": "Le support email n'est pas installé sur le serveur backend.",
+      "invalidEmail": "Adresse email invalide",
+      "setupFailed": "Impossible de connecter le compte email",
+      "activeChanged": "Compte email par défaut modifié",
+      "activeChangeFailed": "Impossible de modifier le compte par défaut",
+      "deleted": "Compte email supprimé",
+      "deleteFailed": "Impossible de supprimer le compte email",
+      "deleteTitle": "Supprimer le compte de messagerie ?",
+      "deleteMessage": "Supprimer le compte {{provider}} connecté de Chatter ? Cela ne supprime pas la boîte aux lettres elle-même.",
+      "limitSaved": "Limite de recherche d'e-mails enregistrée",
+      "limitSaveFailed": "Impossible d'enregistrer la limite de recherche d'e-mails"
     }
   },
   "tts": {

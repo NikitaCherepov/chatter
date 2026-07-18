@@ -324,7 +324,9 @@
       "forget": "🗑 移除连接",
       "changeLimit": "✏️ 更改限制",
       "back": "⬅️ 返回"
-    }
+    },
+    "maximum": "最大 {{limit}}",
+    "limitExceeded": "您一次最多可以请求 {{limit}} 封邮件。"
   },
   "profile": {
     "renameConfirm": "您想更改姓名吗？",

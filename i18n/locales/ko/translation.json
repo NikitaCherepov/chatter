@@ -324,7 +324,9 @@
       "forget": "🗑 연결 제거",
       "changeLimit": "✏️ 제한 변경",
       "back": "⬅️ 뒤로"
-    }
+    },
+    "maximum": "최대 {{limit}}",
+    "limitExceeded": "한 번에 최대 {{limit}}개의 이메일을 요청할 수 있습니다."
   },
   "profile": {
     "renameConfirm": "이름을 변경하시겠습니까?",

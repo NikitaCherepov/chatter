@@ -121,7 +121,8 @@
       "models": "模型",
       "app": "应用",
       "limits": "限制",
-      "connections": "已关联账户"
+      "connections": "已关联账户",
+      "mail": "电子邮件"
     },
     "language": {
       "system": "系统",
@@ -787,6 +788,57 @@
       "devicesCount": "设备（{{count}}）",
       "group": "组",
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+    },
+    "mail": {
+      "title": "电子邮件账户",
+      "description": "连接 Gmail 和 Yandex Mail，以便 Chatter 可以根据您的请求查找、阅读和发送消息。",
+      "connectedAccounts": "已连接的账户",
+      "noAccounts": "尚未连接任何电子邮件账户。",
+      "active": "活跃",
+      "makeActive": "设为默认",
+      "activeHelp": "当您未指定提供商时，将使用活跃账户。您仍然可以明确要求 Chatter 使用 Google 或 Yandex。",
+      "provider": "提供商",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Yandex 邮件"
+      },
+      "email": "电子邮件地址",
+      "appPassword": "应用密码",
+      "appPasswordPlaceholder": "粘贴应用密码，而非主密码",
+      "replaceWarning": "此提供商已存在关联账户。保存将替换该账户。",
+      "passwordSecurity": "后端首先检查 IMAP 登录，并加密存储应用密码。密码不会返回给桌面应用。",
+      "checking": "正在检查连接...",
+      "connect": "检查并连接",
+      "instructionsTitle": "如何连接 {{provider}}",
+      "googleGuide": {
+        "enable2fa": "在您的 Google 账户中启用两步验证。",
+        "create": "创建一个名为 Chatter 的应用密码。Google 仅显示一次。",
+        "paste": "输入您的 Gmail 地址，并粘贴上面 16 位的应用密码。接受空格。"
+      },
+      "yandexGuide": {
+        "create": "创建一个邮件类型的应用密码，并命名为 Chatter。",
+        "enableImap": "在 Yandex 邮件设置中，允许邮件客户端通过 IMAP 使用应用密码访问邮箱。",
+        "paste": "输入您的 Yandex 电子邮件地址，并粘贴上面生成的密码。"
+      },
+      "resultLimit": "默认搜索结果数量",
+      "resultLimitHelp": "当请求中未指定限制时使用。您的账户最大值为：{{max}}。",
+      "loadFailed": "无法加载电子邮件设置",
+      "enterEmail": "输入电子邮件地址",
+      "enterAppPassword": "输入应用密码",
+      "connected": "电子邮件账户已连接并验证",
+      "authFailed": "登录失败。请检查电子邮件地址和应用密码。",
+      "connectionFailed": "服务器无法连接到邮件提供商。请稍后重试。",
+      "runtimeUnavailable": "后端服务器未安装电子邮件支持。",
+      "invalidEmail": "无效的电子邮件地址",
+      "setupFailed": "无法连接电子邮件账户",
+      "activeChanged": "默认电子邮件账户已更改",
+      "activeChangeFailed": "无法更改默认账户",
+      "deleted": "电子邮件账户已删除",
+      "deleteFailed": "无法删除电子邮件账户",
+      "deleteTitle": "删除电子邮件账户？",
+      "deleteMessage": "从Chatter中删除已连接的{{provider}}账户？这不会删除邮箱本身。",
+      "limitSaved": "电子邮件搜索限制已保存",
+      "limitSaveFailed": "无法保存电子邮件搜索限制"
     }
   },
   "tts": {

@@ -212,6 +212,57 @@
       "commandCount_many": "{{count}} comandi",
       "commandCount_other": "{{count}} comandi",
       "commandCount": "{{count}} comandi"
+    },
+    "mail": {
+      "title": "Account email",
+      "description": "Collega Gmail e Yandex Mail in modo che Chatter possa trovare, leggere e inviare messaggi su tua richiesta.",
+      "connectedAccounts": "Account collegati",
+      "noAccounts": "Nessun account email collegato ancora.",
+      "active": "attivo",
+      "makeActive": "Usa per impostazione predefinita",
+      "activeHelp": "L'account attivo viene utilizzato quando non si specifica un provider. Puoi comunque chiedere a Chatter di usare esplicitamente Google o Yandex.",
+      "provider": "Provider",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Yandex Mail"
+      },
+      "email": "Indirizzo email",
+      "appPassword": "Password dell'app",
+      "appPasswordPlaceholder": "Incolla una password dell'app, non la tua password principale",
+      "replaceWarning": "Esiste già un account connesso per questo provider. Il salvataggio lo sostituirà.",
+      "passwordSecurity": "Il backend controlla prima l'accesso IMAP e memorizza la password dell'app crittografata. La password non viene mai restituita all'app desktop.",
+      "checking": "Verifica connessione...",
+      "connect": "Verifica e connetti",
+      "instructionsTitle": "Come connettere {{provider}}",
+      "googleGuide": {
+        "enable2fa": "Abilita la verifica in due passaggi nel tuo account Google.",
+        "create": "Crea una password per l'app chiamata Chatter. Google la mostra solo una volta.",
+        "paste": "Inserisci il tuo indirizzo Gmail e incolla la password per l'app di 16 caratteri sopra. Gli spazi sono accettati."
+      },
+      "yandexGuide": {
+        "create": "Crea una password per l'app di tipo Posta e chiamala Chatter.",
+        "enableImap": "Nelle impostazioni di Yandex Mail, consenti ai client di posta di accedere alla casella tramite IMAP utilizzando le password per le app.",
+        "paste": "Inserisci il tuo indirizzo email Yandex e incolla la password generata sopra."
+      },
+      "resultLimit": "Numero predefinito di risultati di ricerca",
+      "resultLimitHelp": "Utilizzato quando nessun limite è specificato nella richiesta. Massimo per il tuo account: {{max}}.",
+      "loadFailed": "Impossibile caricare le impostazioni email",
+      "enterEmail": "Inserisci un indirizzo email",
+      "enterAppPassword": "Inserisci una password per l'app",
+      "connected": "Account email connesso e verificato",
+      "authFailed": "Accesso fallito. Controlla l'indirizzo email e la password dell'app.",
+      "connectionFailed": "Il server non è riuscito a connettersi al provider di posta. Riprova più tardi.",
+      "runtimeUnavailable": "Il supporto email non è installato sul server backend.",
+      "invalidEmail": "Indirizzo email non valido",
+      "setupFailed": "Impossibile connettere l'account email",
+      "activeChanged": "Account email predefinito modificato",
+      "activeChangeFailed": "Impossibile modificare l'account predefinito",
+      "deleted": "Account email eliminato",
+      "deleteFailed": "Impossibile eliminare l'account email",
+      "deleteTitle": "Eliminare l'account email?",
+      "deleteMessage": "Eliminare l'account {{provider}} collegato da Chatter? Questa operazione non elimina la casella di posta stessa.",
+      "limitSaved": "Limite di ricerca email salvato",
+      "limitSaveFailed": "Impossibile salvare il limite di ricerca email"
     }
   },
   "common": {
@@ -336,7 +387,8 @@
       "models": "Modelli",
       "app": "App",
       "limits": "Limiti",
-      "connections": "Account collegati"
+      "connections": "Account collegati",
+      "mail": "Email"
     },
     "language": {
       "system": "Sistema",

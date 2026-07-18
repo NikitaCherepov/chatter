@@ -212,6 +212,57 @@
       "commandCount_many": "{{count}}개 명령",
       "commandCount_other": "{{count}}개 명령",
       "commandCount": "{{count}}개 명령"
+    },
+    "mail": {
+      "title": "이메일 계정",
+      "description": "Chatter가 요청 시 이메일을 찾고, 읽고, 보낼 수 있도록 Gmail 및 Yandex Mail을 연결하세요.",
+      "connectedAccounts": "연결된 계정",
+      "noAccounts": "아직 연결된 이메일 계정이 없습니다.",
+      "active": "활성",
+      "makeActive": "기본으로 사용",
+      "activeHelp": "활성 계정은 제공자를 지정하지 않을 때 사용됩니다. Google 또는 Yandex를 명시적으로 사용하도록 Chatter에 요청할 수도 있습니다.",
+      "provider": "제공자",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Yandex 메일"
+      },
+      "email": "이메일 주소",
+      "appPassword": "앱 비밀번호",
+      "appPasswordPlaceholder": "기본 비밀번호가 아닌 앱 비밀번호를 붙여넣으세요",
+      "replaceWarning": "이 제공업체에 연결된 계정이 이미 있습니다. 저장하면 대체됩니다.",
+      "passwordSecurity": "백엔드가 먼저 IMAP 로그인을 확인하고 앱 비밀번호를 암호화하여 저장합니다. 비밀번호는 데스크톱 앱에 반환되지 않습니다.",
+      "checking": "연결 확인 중...",
+      "connect": "확인 및 연결",
+      "instructionsTitle": "{{provider}} 연결 방법",
+      "googleGuide": {
+        "enable2fa": "Google 계정에서 2단계 인증을 사용 설정하세요.",
+        "create": "Chatter라는 앱 비밀번호를 생성하세요. Google은 한 번만 표시합니다.",
+        "paste": "Gmail 주소를 입력하고 위의 16자 앱 비밀번호를 붙여넣으세요. 공백도 허용됩니다."
+      },
+      "yandexGuide": {
+        "create": "Mail 유형의 앱 비밀번호를 생성하고 이름을 Chatter로 지정하세요.",
+        "enableImap": "Yandex Mail 설정에서 앱 비밀번호를 사용한 IMAP을 통한 이메일 클라이언트 접근을 허용하세요.",
+        "paste": "Yandex 이메일 주소를 입력하고 위에서 생성된 비밀번호를 붙여넣으세요."
+      },
+      "resultLimit": "기본 검색 결과 수",
+      "resultLimitHelp": "요청에 제한이 지정되지 않은 경우 사용됩니다. 계정 최대값: {{max}}.",
+      "loadFailed": "이메일 설정을 불러올 수 없습니다",
+      "enterEmail": "이메일 주소 입력",
+      "enterAppPassword": "앱 비밀번호 입력",
+      "connected": "이메일 계정이 연결 및 확인되었습니다",
+      "authFailed": "로그인 실패. 이메일 주소와 앱 비밀번호를 확인하세요.",
+      "connectionFailed": "서버가 메일 제공업체에 연결할 수 없습니다. 나중에 다시 시도하세요.",
+      "runtimeUnavailable": "백엔드 서버에 이메일 지원이 설치되지 않았습니다.",
+      "invalidEmail": "유효하지 않은 이메일 주소",
+      "setupFailed": "이메일 계정을 연결할 수 없습니다",
+      "activeChanged": "기본 이메일 계정이 변경되었습니다",
+      "activeChangeFailed": "기본 계정을 변경할 수 없습니다",
+      "deleted": "이메일 계정이 삭제되었습니다",
+      "deleteFailed": "이메일 계정을 삭제할 수 없습니다",
+      "deleteTitle": "이메일 계정을 삭제하시겠습니까?",
+      "deleteMessage": "Chatter에서 연결된 {{provider}} 계정을 삭제하시겠습니까? 사서함 자체는 삭제되지 않습니다.",
+      "limitSaved": "이메일 검색 제한이 저장되었습니다",
+      "limitSaveFailed": "이메일 검색 제한을 저장할 수 없습니다"
     }
   },
   "common": {
@@ -336,7 +387,8 @@
       "models": "모델",
       "app": "앱",
       "limits": "제한",
-      "connections": "연결된 계정"
+      "connections": "연결된 계정",
+      "mail": "이메일"
     },
     "language": {
       "system": "시스템",

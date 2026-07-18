@@ -121,7 +121,8 @@
       "models": "Modelle",
       "app": "App",
       "limits": "Grenzen",
-      "connections": "Verknüpfte Konten"
+      "connections": "Verknüpfte Konten",
+      "mail": "E-Mail"
     },
     "language": {
       "system": "System",
@@ -787,6 +788,57 @@
       "devicesCount": "Geräte ({{count}})",
       "group": "Gruppe",
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+    },
+    "mail": {
+      "title": "E-Mail-Konten",
+      "description": "Verbinden Sie Gmail und Yandex Mail, damit Chatter auf Ihre Anfrage hin Nachrichten finden, lesen und senden kann.",
+      "connectedAccounts": "Verbundene Konten",
+      "noAccounts": "Noch keine E-Mail-Konten verbunden.",
+      "active": "aktiv",
+      "makeActive": "Standardmäßig verwenden",
+      "activeHelp": "Das aktive Konto wird verwendet, wenn Sie keinen Anbieter nennen. Sie können Chatter trotzdem bitten, explizit Google oder Yandex zu verwenden.",
+      "provider": "Anbieter",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Yandex Mail"
+      },
+      "email": "E-Mail-Adresse",
+      "appPassword": "App-Passwort",
+      "appPasswordPlaceholder": "Fügen Sie ein App-Passwort ein, nicht Ihr Hauptpasswort",
+      "replaceWarning": "Für diesen Anbieter existiert bereits ein verbundenes Konto. Das Speichern wird es ersetzen.",
+      "passwordSecurity": "Das Backend prüft zuerst den IMAP-Login und speichert das App-Passwort verschlüsselt. Das Passwort wird nie an die Desktop-App zurückgegeben.",
+      "checking": "Verbindung wird geprüft...",
+      "connect": "Prüfen und verbinden",
+      "instructionsTitle": "So verbinden Sie {{provider}}",
+      "googleGuide": {
+        "enable2fa": "Aktivieren Sie die Bestätigung in zwei Schritten in Ihrem Google-Konto.",
+        "create": "Erstellen Sie ein App-Passwort mit dem Namen Chatter. Google zeigt es nur einmal an.",
+        "paste": "Geben Sie Ihre Gmail-Adresse ein und fügen Sie das 16-stellige App-Passwort oben ein. Leerzeichen werden akzeptiert."
+      },
+      "yandexGuide": {
+        "create": "Erstellen Sie ein App-Passwort vom Typ Mail und nennen Sie es Chatter.",
+        "enableImap": "Erlauben Sie in den Yandex Mail-Einstellungen den Zugriff auf das Postfach über IMAP mit App-Passwörtern.",
+        "paste": "Geben Sie Ihre Yandex-E-Mail-Adresse ein und fügen Sie das generierte Passwort oben ein."
+      },
+      "resultLimit": "Standardanzahl der Suchergebnisse",
+      "resultLimitHelp": "Wird verwendet, wenn in der Anfrage kein Limit angegeben ist. Maximum für Ihr Konto: {{max}}.",
+      "loadFailed": "E-Mail-Einstellungen konnten nicht geladen werden",
+      "enterEmail": "Geben Sie eine E-Mail-Adresse ein",
+      "enterAppPassword": "Geben Sie ein App-Passwort ein",
+      "connected": "E-Mail-Konto verbunden und verifiziert",
+      "authFailed": "Anmeldung fehlgeschlagen. Überprüfen Sie die E-Mail-Adresse und das App-Passwort.",
+      "connectionFailed": "Der Server konnte keine Verbindung zum E-Mail-Anbieter herstellen. Versuchen Sie es später erneut.",
+      "runtimeUnavailable": "E-Mail-Support ist auf dem Backend-Server nicht installiert.",
+      "invalidEmail": "Ungültige E-Mail-Adresse",
+      "setupFailed": "E-Mail-Konto konnte nicht verbunden werden",
+      "activeChanged": "Standard-E-Mail-Konto geändert",
+      "activeChangeFailed": "Standardkonto konnte nicht geändert werden",
+      "deleted": "E-Mail-Konto gelöscht",
+      "deleteFailed": "E-Mail-Konto konnte nicht gelöscht werden",
+      "deleteTitle": "E-Mail-Konto löschen?",
+      "deleteMessage": "Das verbundene {{provider}}-Konto aus Chatter löschen? Das Postfach selbst wird nicht gelöscht.",
+      "limitSaved": "E-Mail-Suchlimit gespeichert",
+      "limitSaveFailed": "Das E-Mail-Suchlimit konnte nicht gespeichert werden"
     }
   },
   "tts": {

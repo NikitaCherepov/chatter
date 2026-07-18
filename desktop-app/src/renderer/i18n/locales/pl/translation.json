@@ -212,6 +212,57 @@
       "commandCount_many": "{{count}} poleceń",
       "commandCount_other": "{{count}} polecenia",
       "commandCount": "{{count}} poleceń"
+    },
+    "mail": {
+      "title": "Konta pocztowe",
+      "description": "Połącz Gmail i Yandex Mail, aby Chatter mógł znajdować, czytać i wysyłać wiadomości na Twoje żądanie.",
+      "connectedAccounts": "Połączone konta",
+      "noAccounts": "Nie połączono jeszcze żadnych kont pocztowych.",
+      "active": "aktywne",
+      "makeActive": "Użyj domyślnie",
+      "activeHelp": "Aktywne konto jest używane, gdy nie podasz dostawcy. Nadal możesz poprosić Chatter o jawne użycie Google lub Yandex.",
+      "provider": "Dostawca",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Poczta Yandex"
+      },
+      "email": "Adres e-mail",
+      "appPassword": "Hasło aplikacji",
+      "appPasswordPlaceholder": "Wklej hasło aplikacji, a nie swoje główne hasło",
+      "replaceWarning": "Połączone konto dla tego dostawcy już istnieje. Zapisanie spowoduje jego zastąpienie.",
+      "passwordSecurity": "Backend najpierw sprawdza logowanie IMAP, a następnie przechowuje hasło aplikacji w formie zaszyfrowanej. Hasło nigdy nie jest zwracane do aplikacji desktopowej.",
+      "checking": "Sprawdzanie połączenia...",
+      "connect": "Sprawdź i połącz",
+      "instructionsTitle": "Jak połączyć {{provider}}",
+      "googleGuide": {
+        "enable2fa": "Włącz weryfikację dwuetapową na swoim koncie Google.",
+        "create": "Utwórz hasło aplikacji o nazwie Chatter. Google wyświetla je tylko raz.",
+        "paste": "Wpisz swój adres Gmail i wklej powyżej 16-znakowe hasło aplikacji. Spacje są akceptowane."
+      },
+      "yandexGuide": {
+        "create": "Utwórz hasło aplikacji typu Poczta i nazwij je Chatter.",
+        "enableImap": "W ustawieniach Yandex Mail zezwól klientom poczty na dostęp do skrzynki przez IMAP przy użyciu haseł aplikacji.",
+        "paste": "Wpisz swój adres e-mail Yandex i wklej powyżej wygenerowane hasło."
+      },
+      "resultLimit": "Domyślna liczba wyników wyszukiwania",
+      "resultLimitHelp": "Używane, gdy w żądaniu nie określono limitu. Maksimum dla Twojego konta: {{max}}.",
+      "loadFailed": "Nie można załadować ustawień poczty",
+      "enterEmail": "Wpisz adres e-mail",
+      "enterAppPassword": "Wpisz hasło aplikacji",
+      "connected": "Konto e-mail połączone i zweryfikowane",
+      "authFailed": "Logowanie nie powiodło się. Sprawdź adres e-mail i hasło aplikacji.",
+      "connectionFailed": "Serwer nie może połączyć się z dostawcą poczty. Spróbuj ponownie później.",
+      "runtimeUnavailable": "Obsługa poczty e-mail nie jest zainstalowana na serwerze zaplecza.",
+      "invalidEmail": "Nieprawidłowy adres e-mail",
+      "setupFailed": "Nie można połączyć konta e-mail",
+      "activeChanged": "Domyślne konto e-mail zostało zmienione",
+      "activeChangeFailed": "Nie można zmienić domyślnego konta",
+      "deleted": "Konto e-mail usunięte",
+      "deleteFailed": "Nie można usunąć konta e-mail",
+      "deleteTitle": "Usunąć konto e-mail?",
+      "deleteMessage": "Usunąć połączone konto {{provider}} z Chatter? Nie spowoduje to usunięcia samej skrzynki pocztowej.",
+      "limitSaved": "Zapisano limit wyszukiwania e-maili",
+      "limitSaveFailed": "Nie udało się zapisać limitu wyszukiwania e-maili"
     }
   },
   "common": {
@@ -336,7 +387,8 @@
       "models": "Modele",
       "app": "Aplikacja",
       "limits": "Limity",
-      "connections": "Połączone konta"
+      "connections": "Połączone konta",
+      "mail": "Poczta"
     },
     "language": {
       "system": "Systemowy",

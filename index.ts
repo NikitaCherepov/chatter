@@ -96,7 +96,6 @@ const NOTE_QUERY_MAX_LENGTH = 120;
 const NOTES_PAGE_SIZE_DEFAULT = 10;
 const NOTES_MENU_PAGE_SIZE = 10;
 const CHATS_MENU_PAGE_SIZE = 8;
-const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const BACKEND_TIMEOUT_AI_MS = Math.max(10000, Number.parseInt(process.env.BACKEND_TIMEOUT_AI_MS || '120000', 10));
 const BACKEND_TIMEOUT_MEDIA_MS = Math.max(10000, Number.parseInt(process.env.BACKEND_TIMEOUT_MEDIA_MS || '180000', 10));
 const BACKEND_TIMEOUT_DEFAULT_MS = Math.max(5000, Number.parseInt(process.env.BACKEND_TIMEOUT_DEFAULT_MS || '15000', 10));
@@ -113,7 +112,7 @@ const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE)
 const ENCRYPTION_IV_LENGTH = 16;
 const BASE_COMMANDS = [
     'start', 'menu', 'clear', 'tz', 'tasks', 'task_delete', 'note_add', 'notes',
-    'note_find', 'note_delete', 'mail_setup', 'mail_use', 'mail_limit', 'mail_forget',
+    'note_find', 'note_delete', 'mail_setup', 'mail_use', 'mail_forget',
     'chats', 'chat_new', 'chat_use', 'link', 'unlink', 'rename', 'prompts', 'prompt_use'
 ] as const;
 const ADMIN_EXTRA_COMMANDS = [
@@ -341,14 +340,9 @@ const buildLanguageKeyboard = (currentLanguage: SupportedLanguage, t: BotTransla
 
 const buildMailMenuKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
     [Markup.button.callback(t('mail.buttons.setup'), 'mail:setup_help')],
-    [Markup.button.callback(t('mail.buttons.settings'), 'mail:settings')],
     [Markup.button.callback(t('mail.buttons.yandexInstructions'), 'mail:instr:yandex')],
     [Markup.button.callback(t('mail.buttons.googleInstructions'), 'mail:instr:google')],
     [Markup.button.callback(t('mail.buttons.forget'), 'mail:forget')]
-]);
-const buildMailSettingsKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
-    [Markup.button.callback(t('mail.buttons.changeLimit'), 'mail:limit:change')],
-    [Markup.button.callback(t('mail.buttons.back'), 'mail:settings:back')]
 ]);
 const buildContextSettingsKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
     [Markup.button.callback(t('context.buttons.change'), 'context:change')],
@@ -375,7 +369,6 @@ type RenameFlowState = 'confirm' | 'await_name';
 const renameFlows = new Map<number, RenameFlowState>();
 const timezoneSetupFlows = new Map<number, 'await_offset'>();
 const customPromptEditFlows = new Map<number, 'await_content'>();
-const mailLimitFlows = new Map<number, 'await_limit'>();
 const contextLimitFlows = new Map<number, 'await_limit'>();
 const noteEditFlows = new Map<number, { noteId: number; page: number }>();
 const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page: number }>();
@@ -1082,12 +1075,6 @@ const runBackendMailUse = async (userId: number, provider: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/use`, { user_id: userId, provider }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; provider: string; imap_user: string };
-};
-
-const runBackendMailLimit = async (userId: number, limit: number) => {
-    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.put(`${BACKEND_API_BASE_URL}/internal/mail/limit`, { user_id: userId, limit }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
-    return response.data as { ok: boolean; limit: number };
 };
 
 const runBackendMailForget = async (userId: number, provider?: string | null) => {
@@ -2161,7 +2148,6 @@ const handleClear = async (ctx: any) => {
     if (!userId) return;
     renameFlows.delete(userId);
     customPromptEditFlows.delete(userId);
-    mailLimitFlows.delete(userId);
     contextLimitFlows.delete(userId);
     noteEditFlows.delete(userId);
     adminUserContextLimitFlows.delete(userId);
@@ -3670,36 +3656,6 @@ bot.command('mail_use', async (ctx) => {
     }
 });
 
-bot.command('mail_limit', async (ctx) => {
-    const userId = ctx.state.accountId;
-    if (!userId) return;
-    const user = await getUser(userId);
-    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
-        return ctx.reply(ctx.t('mail.noAccess'));
-    }
-
-    const parts = ctx.message.text.split(' ').filter(Boolean);
-    const parsed = Number.parseInt(parts[1] || '', 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-        const current = user.mail_check_limit || DEFAULT_MAIL_CHECK_LIMIT;
-        const capText = user.role === 'admin'
-            ? ctx.t('mail.unlimited')
-            : ctx.t('mail.maximumTen');
-        return ctx.reply(ctx.t('mail.limitCurrent', { current, cap: capText }));
-    }
-
-    if (user.role !== 'admin' && parsed > 10) {
-        return ctx.reply(ctx.t('mail.limitTen'));
-    }
-
-    try {
-        await runBackendMailLimit(userId, parsed);
-        return ctx.reply(ctx.t('mail.limitUpdated', { limit: parsed }));
-    } catch {
-        return ctx.reply(ctx.t('mail.limitError'));
-    }
-});
-
 bot.command('mail_forget', async (ctx) => {
     const userId = ctx.state.accountId;
     if (!userId) return;
@@ -3917,11 +3873,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
     }
 
     if (ctx.state.role === 'admin') {
-        await ctx.reply(ctx.t('generated.allCommands'));
+        await ctx.reply(ctx.t('generated.allCommands').replace(/,\s*\/mail_limit\b/g, ''));
         return;
     }
 
-    await ctx.reply(ctx.t('generated.userCommands'));
+    await ctx.reply(ctx.t('generated.userCommands').replace(/,\s*\/mail_limit\b/g, ''));
 });
 
 bot.action(/^language:set:([a-zA-Z-]+)$/, async (ctx) => {
@@ -3996,46 +3952,6 @@ bot.action(/^mod:pp:(\d+)$/, async (ctx) => {
 bot.action('mail:setup_help', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply(ctx.t('mail.setupHelp'));
-});
-
-bot.action('mail:settings', async (ctx) => {
-    const userId = ctx.state.accountId;
-    if (!userId) return;
-    const user = await getUser(userId);
-    if (!user) {
-        await ctx.answerCbQuery(ctx.t('common.noAccess'));
-        return;
-    }
-    await ctx.answerCbQuery();
-    const current = user.mail_check_limit || DEFAULT_MAIL_CHECK_LIMIT;
-    const capText = user.role === 'admin'
-        ? ctx.t('mail.noRestriction')
-        : ctx.t('mail.upToTen');
-    await ctx.reply(
-        ctx.t('mail.settings', { current, cap: capText }),
-        buildMailSettingsKeyboard(ctx.t)
-    );
-});
-
-bot.action('mail:limit:change', async (ctx) => {
-    const userId = ctx.state.accountId;
-    if (!userId) return;
-    const user = await getUser(userId);
-    if (!user) {
-        await ctx.answerCbQuery(ctx.t('common.noAccess'));
-        return;
-    }
-
-    mailLimitFlows.set(userId, 'await_limit');
-    await ctx.answerCbQuery(ctx.t('mail.awaitNumber'));
-    await ctx.reply(ctx.t('mail.enterLimit'));
-});
-
-bot.action('mail:settings:back', async (ctx) => {
-    const userId = ctx.state.accountId;
-    if (userId) mailLimitFlows.delete(userId);
-    await ctx.answerCbQuery();
-    await ctx.reply(ctx.t('mail.menu'), buildMailMenuKeyboard(ctx.t));
 });
 
 bot.action('mail:instr:yandex', async (ctx) => {
@@ -6622,41 +6538,6 @@ bot.on('text', async (ctx) => {
             customPromptEditFlows.delete(userId);
             return ctx.reply(ctx.t('prompt.input.saved'), buildMenuTriggerKeyboard(ctx.t));
         }
-    }
-
-    const mailLimitFlow = mailLimitFlows.get(userId);
-    if (mailLimitFlow === 'await_limit') {
-        const lowered = userText.toLowerCase();
-        const localizedCancel = ctx.t('common.cancelWord').toLowerCase();
-        if (
-            lowered === localizedCancel
-            || lowered === 'отмена'
-            || lowered === 'cancel'
-            || lowered === '/cancel'
-        ) {
-            mailLimitFlows.delete(userId);
-            return ctx.reply(ctx.t('mail.limitCancelled'));
-        }
-
-        const parsed = Number.parseInt(userText, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            return ctx.reply(ctx.t('mail.invalidLimit', {
-                cancel: ctx.t('common.cancelWord')
-            }));
-        }
-
-        const userRecord = await getUser(userId);
-        if (!userRecord) {
-            mailLimitFlows.delete(userId);
-            return ctx.reply(ctx.t('common.userMissingAgain'));
-        }
-        if (userRecord.role !== 'admin' && parsed > 10) {
-            return ctx.reply(ctx.t('mail.limitRange'));
-        }
-
-        await runBackendMailLimit(userId, parsed);
-        mailLimitFlows.delete(userId);
-        return ctx.reply(ctx.t('mail.newLimit', { limit: parsed }));
     }
 
     const contextLimitFlow = contextLimitFlows.get(userId);

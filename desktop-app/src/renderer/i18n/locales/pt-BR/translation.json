@@ -121,7 +121,8 @@
       "models": "Modelos",
       "app": "Aplicativo",
       "limits": "Limites",
-      "connections": "Contas vinculadas"
+      "connections": "Contas vinculadas",
+      "mail": "Email"
     },
     "language": {
       "system": "Sistema",
@@ -787,6 +788,57 @@
       "lastSyncWithDate": "Última sincronização: {{date}}",
       "devicesCount": "Dispositivos ({{count}})",
       "group": "grupo"
+    },
+    "mail": {
+      "title": "Contas de email",
+      "description": "Conecte Gmail e Yandex Mail para que o Chatter possa encontrar, ler e enviar mensagens a seu pedido.",
+      "connectedAccounts": "Contas conectadas",
+      "noAccounts": "Nenhuma conta de email conectada ainda.",
+      "active": "ativo",
+      "makeActive": "Usar por padrão",
+      "activeHelp": "A conta ativa é usada quando você não nomeia um provedor. Você ainda pode pedir ao Chatter para usar Google ou Yandex explicitamente.",
+      "provider": "Provedor",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Yandex Mail"
+      },
+      "email": "Endereço de e-mail",
+      "appPassword": "Senha do aplicativo",
+      "appPasswordPlaceholder": "Cole uma senha de aplicativo, não sua senha principal",
+      "replaceWarning": "Já existe uma conta conectada para este provedor. Salvar irá substituí-la.",
+      "passwordSecurity": "O backend verifica primeiro o login IMAP e armazena a senha do aplicativo criptografada. A senha nunca é retornada ao aplicativo desktop.",
+      "checking": "Verificando conexão...",
+      "connect": "Verificar e conectar",
+      "instructionsTitle": "Como conectar {{provider}}",
+      "googleGuide": {
+        "enable2fa": "Ative a Verificação em Duas Etapas na sua Conta do Google.",
+        "create": "Crie uma senha de aplicativo chamada Chatter. O Google a exibe apenas uma vez.",
+        "paste": "Insira seu endereço do Gmail e cole a senha de aplicativo de 16 caracteres acima. Espaços são aceitos."
+      },
+      "yandexGuide": {
+        "create": "Crie uma senha de aplicativo do tipo Mail e nomeie-a como Chatter.",
+        "enableImap": "Nas configurações do Yandex Mail, permita que clientes de e-mail acessem a caixa de entrada via IMAP usando senhas de aplicativo.",
+        "paste": "Insira seu endereço de e-mail do Yandex e cole a senha gerada acima."
+      },
+      "resultLimit": "Número padrão de resultados de pesquisa",
+      "resultLimitHelp": "Usado quando nenhum limite é especificado na solicitação. Máximo para sua conta: {{max}}.",
+      "loadFailed": "Não foi possível carregar as configurações de e-mail",
+      "enterEmail": "Insira um endereço de e-mail",
+      "enterAppPassword": "Insira uma senha de aplicativo",
+      "connected": "Conta de e-mail conectada e verificada",
+      "authFailed": "Falha no login. Verifique o endereço de e-mail e a senha do aplicativo.",
+      "connectionFailed": "O servidor não conseguiu conectar ao provedor de e-mail. Tente novamente mais tarde.",
+      "runtimeUnavailable": "O suporte a e-mail não está instalado no servidor de back-end.",
+      "invalidEmail": "Endereço de e-mail inválido",
+      "setupFailed": "Não foi possível conectar a conta de e-mail",
+      "activeChanged": "Conta de e-mail padrão alterada",
+      "activeChangeFailed": "Não foi possível alterar a conta padrão",
+      "deleted": "Conta de e-mail excluída",
+      "deleteFailed": "Não foi possível excluir a conta de e-mail",
+      "deleteTitle": "Excluir conta de e-mail?",
+      "deleteMessage": "Excluir a conta {{provider}} conectada do Chatter? Isso não exclui a caixa de correio em si.",
+      "limitSaved": "Limite de pesquisa de e-mail salvo",
+      "limitSaveFailed": "Não foi possível salvar o limite de pesquisa de e-mail"
     }
   },
   "tts": {

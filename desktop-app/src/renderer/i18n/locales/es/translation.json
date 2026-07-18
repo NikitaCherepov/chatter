@@ -121,7 +121,8 @@
       "models": "Modelos",
       "app": "Aplicación",
       "limits": "Límites",
-      "connections": "Cuentas vinculadas"
+      "connections": "Cuentas vinculadas",
+      "mail": "Correo electrónico"
     },
     "language": {
       "system": "Sistema",
@@ -787,6 +788,57 @@
       "devicesCount": "Dispositivos ({{count}})",
       "group": "grupo",
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+    },
+    "mail": {
+      "title": "Cuentas de correo",
+      "description": "Conecta Gmail y Yandex Mail para que Chatter pueda buscar, leer y enviar mensajes a tu solicitud.",
+      "connectedAccounts": "Cuentas conectadas",
+      "noAccounts": "Aún no hay cuentas de correo conectadas.",
+      "active": "activa",
+      "makeActive": "Usar por defecto",
+      "activeHelp": "La cuenta activa se usa cuando no mencionas un proveedor. Aún puedes pedirle a Chatter que use Google o Yandex explícitamente.",
+      "provider": "Proveedor",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Correo Yandex"
+      },
+      "email": "Dirección de correo electrónico",
+      "appPassword": "Contraseña de aplicación",
+      "appPasswordPlaceholder": "Pega una contraseña de aplicación, no tu contraseña principal",
+      "replaceWarning": "Ya existe una cuenta conectada para este proveedor. Guardar la reemplazará.",
+      "passwordSecurity": "El backend verifica primero el inicio de sesión IMAP y almacena la contraseña de aplicación cifrada. La contraseña nunca se devuelve a la aplicación de escritorio.",
+      "checking": "Verificando conexión...",
+      "connect": "Verificar y conectar",
+      "instructionsTitle": "Cómo conectar {{provider}}",
+      "googleGuide": {
+        "enable2fa": "Habilita la verificación en dos pasos en tu cuenta de Google.",
+        "create": "Crea una contraseña de aplicación llamada Chatter. Google la muestra solo una vez.",
+        "paste": "Ingresa tu dirección de Gmail y pega la contraseña de aplicación de 16 caracteres arriba. Se aceptan espacios."
+      },
+      "yandexGuide": {
+        "create": "Crea una contraseña de aplicación del tipo Correo y asígnale el nombre Chatter.",
+        "enableImap": "En la configuración de Yandex Mail, permite que los clientes de correo accedan al buzón a través de IMAP usando contraseñas de aplicación.",
+        "paste": "Ingresa tu dirección de correo de Yandex y pega la contraseña generada arriba."
+      },
+      "resultLimit": "Número predeterminado de resultados de búsqueda",
+      "resultLimitHelp": "Se usa cuando no se especifica un límite en la solicitud. Máximo para tu cuenta: {{max}}.",
+      "loadFailed": "No se pudieron cargar los ajustes de correo",
+      "enterEmail": "Ingresa una dirección de correo electrónico",
+      "enterAppPassword": "Ingresa una contraseña de aplicación",
+      "connected": "Cuenta de correo conectada y verificada",
+      "authFailed": "Inicio de sesión fallido. Verifica la dirección de correo y la contraseña de aplicación.",
+      "connectionFailed": "El servidor no pudo conectarse al proveedor de correo. Inténtalo de nuevo más tarde.",
+      "runtimeUnavailable": "El soporte de correo electrónico no está instalado en el servidor backend.",
+      "invalidEmail": "Dirección de correo electrónico no válida",
+      "setupFailed": "No se pudo conectar la cuenta de correo",
+      "activeChanged": "Cuenta de correo predeterminada cambiada",
+      "activeChangeFailed": "No se pudo cambiar la cuenta predeterminada",
+      "deleted": "Cuenta de correo eliminada",
+      "deleteFailed": "No se pudo eliminar la cuenta de correo",
+      "deleteTitle": "¿Eliminar cuenta de correo?",
+      "deleteMessage": "¿Eliminar la cuenta de {{provider}} conectada de Chatter? Esto no elimina el buzón en sí.",
+      "limitSaved": "Límite de búsqueda de correo guardado",
+      "limitSaveFailed": "No se pudo guardar el límite de búsqueda de correo"
     }
   },
   "tts": {

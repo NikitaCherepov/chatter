@@ -324,7 +324,9 @@
       "forget": "🗑 Supprimer la connexion",
       "changeLimit": "✏️ Modifier la limite",
       "back": "⬅️ Retour"
-    }
+    },
+    "maximum": "maximum {{limit}}",
+    "limitExceeded": "Vous pouvez demander un maximum de {{limit}} e-mails à la fois."
   },
   "profile": {
     "renameConfirm": "Voulez-vous changer votre nom ?",

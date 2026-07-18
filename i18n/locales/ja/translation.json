@@ -324,7 +324,9 @@
       "forget": "🗑 接続を削除",
       "changeLimit": "✏️ 制限を変更",
       "back": "⬅️ 戻る"
-    }
+    },
+    "maximum": "最大{{limit}}",
+    "limitExceeded": "一度にリクエストできるメールは最大{{limit}}件です。"
   },
   "profile": {
     "renameConfirm": "名前を変更しますか？",

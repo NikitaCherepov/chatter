@@ -27,6 +27,7 @@ import { ServerSettings } from './ServerSettings';
 import { RunbookSettings } from './RunbookSettings';
 import { SshKeySettings } from './SshKeySettings';
 import { SmartHomeSettings } from './SmartHomeSettings';
+import { MailSettings } from './MailSettings';
 import { PCSettings } from './PCSettings';
 import { LinkTelegramModal } from './LinkTelegramModal';
 import telegramIcon from '../assets/integrations/telegram.webp';
@@ -38,7 +39,7 @@ type Props = {
   onAccountChanged?: () => void | Promise<void>;
 };
 
-type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'smart_home' | 'restrictions' | 'models';
+type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -69,6 +70,7 @@ const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'servers', labelKey: 'settings.sections.servers' },
   { key: 'runbooks', labelKey: 'settings.sections.runbooks' },
   { key: 'sshkeys', labelKey: 'settings.sections.sshkeys' },
+  { key: 'mail', labelKey: 'settings.sections.mail' },
   { key: 'smart_home', labelKey: 'settings.sections.smartHome' },
   { key: 'restrictions', labelKey: 'settings.sections.restrictions' },
   { key: 'models', labelKey: 'settings.sections.models' },
@@ -1372,6 +1374,10 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
 
           {section === 'smart_home' && (
             <SmartHomeSettings />
+          )}
+
+          {section === 'mail' && (
+            <MailSettings />
           )}
 
           {section === 'restrictions' && (

@@ -121,7 +121,8 @@
       "models": "モデル",
       "app": "アプリ",
       "limits": "制限",
-      "connections": "リンクされたアカウント"
+      "connections": "リンクされたアカウント",
+      "mail": "メール"
     },
     "language": {
       "system": "システム",
@@ -787,6 +788,57 @@
       "devicesCount": "デバイス ({{count}})",
       "group": "グループ",
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+    },
+    "mail": {
+      "title": "メールアカウント",
+      "description": "GmailとYandex Mailを接続して、Chatterがリクエストに応じてメッセージを検索、読み取り、送信できるようにします。",
+      "connectedAccounts": "接続済みアカウント",
+      "noAccounts": "まだメールアカウントが接続されていません。",
+      "active": "アクティブ",
+      "makeActive": "デフォルトで使用",
+      "activeHelp": "アクティブなアカウントは、プロバイダーを指定しない場合に使用されます。Chatterに明示的にGoogleまたはYandexを使用するよう依頼することもできます。",
+      "provider": "プロバイダー",
+      "providers": {
+        "google": "Google / Gmail",
+        "yandex": "Yandexメール"
+      },
+      "email": "メールアドレス",
+      "appPassword": "アプリパスワード",
+      "appPasswordPlaceholder": "メインパスワードではなく、アプリパスワードを貼り付けてください",
+      "replaceWarning": "このプロバイダーの接続済みアカウントが既に存在します。保存すると置き換えられます。",
+      "passwordSecurity": "バックエンドはまずIMAPログインを確認し、アプリパスワードを暗号化して保存します。パスワードがデスクトップアプリに返されることはありません。",
+      "checking": "接続を確認中...",
+      "connect": "確認して接続",
+      "instructionsTitle": "{{provider}}の接続方法",
+      "googleGuide": {
+        "enable2fa": "Googleアカウントで2段階認証プロセスを有効にします。",
+        "create": "Chatterという名前のアプリパスワードを作成します。Googleは一度だけ表示します。",
+        "paste": "Gmailアドレスを入力し、上記の16文字のアプリパスワードを貼り付けます。スペースは許容されます。"
+      },
+      "yandexGuide": {
+        "create": "メールタイプのアプリパスワードを作成し、Chatterという名前を付けます。",
+        "enableImap": "Yandexメールの設定で、アプリパスワードを使用したIMAP経由のメールクライアントによるメールボックスへのアクセスを許可します。",
+        "paste": "Yandexメールアドレスを入力し、上記で生成されたパスワードを貼り付けます。"
+      },
+      "resultLimit": "デフォルトの検索結果数",
+      "resultLimitHelp": "リクエストで制限が指定されていない場合に使用されます。アカウントの最大値：{{max}}。",
+      "loadFailed": "メール設定を読み込めませんでした",
+      "enterEmail": "メールアドレスを入力してください",
+      "enterAppPassword": "アプリパスワードを入力してください",
+      "connected": "メールアカウントが接続され、確認されました",
+      "authFailed": "ログインに失敗しました。メールアドレスとアプリパスワードを確認してください。",
+      "connectionFailed": "サーバーがメールプロバイダーに接続できませんでした。後でもう一度お試しください。",
+      "runtimeUnavailable": "バックエンドサーバーにメールサポートがインストールされていません。",
+      "invalidEmail": "無効なメールアドレス",
+      "setupFailed": "メールアカウントを接続できませんでした",
+      "activeChanged": "デフォルトのメールアカウントが変更されました",
+      "activeChangeFailed": "デフォルトアカウントを変更できませんでした",
+      "deleted": "メールアカウントが削除されました",
+      "deleteFailed": "メールアカウントを削除できませんでした",
+      "deleteTitle": "メールアカウントを削除しますか？",
+      "deleteMessage": "Chatterから接続された{{provider}}アカウントを削除しますか？メールボックス自体は削除されません。",
+      "limitSaved": "メール検索制限を保存しました",
+      "limitSaveFailed": "メール検索制限を保存できませんでした"
     }
   },
   "tts": {
