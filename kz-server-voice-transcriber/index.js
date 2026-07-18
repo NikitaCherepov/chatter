@@ -37,6 +37,16 @@ const parseWhisperLanguage = (value) => {
     throw new Error('[config] VOICE_TRANSCRIBE_LANGUAGE must be auto or a 2-3 letter language code');
 };
 
+const resolveWhisperRequestLanguage = (req) => {
+    const requestedLanguage = req.body?.language ?? req.query?.language;
+    if (requestedLanguage == null || `${requestedLanguage}`.trim() === '') return WHISPER_LANGUAGE;
+    try {
+        return parseWhisperLanguage(requestedLanguage);
+    } catch {
+        return null;
+    }
+};
+
 const parseTtsLanguage = (name, value, fallback) => {
     const language = `${value || fallback}`.trim().toLowerCase();
     if (language === 'ru' || language === 'en') return language;
@@ -212,7 +222,7 @@ const processQueue = async () => {
     void cleanupStaleTempFiles();
 
     const item = queue.shift();
-    const { res, inputPath, isStream } = item;
+    const { res, inputPath, isStream, language } = item;
     const wavPath = `${inputPath}.wav`;
     let hasComputeSlot = false;
     let cleanupCompleted = false;
@@ -236,7 +246,7 @@ const processQueue = async () => {
             return;
         }
 
-        console.log(`[${new Date().toISOString()}] Processing file: ${inputPath}`);
+        console.log(`[${new Date().toISOString()}] Processing file: ${inputPath} (language: ${language})`);
         sseSend({ status: 'progress', percent: 0, stage: 'converting' });
 
         await convertToWav(inputPath, wavPath);
@@ -248,7 +258,7 @@ const processQueue = async () => {
             '-m', WHISPER_MODEL,
             '-f', wavPath,
             '-nt',
-            '-l', WHISPER_LANGUAGE,
+            '-l', language,
             '-pp'
         ]);
 
@@ -293,9 +303,10 @@ const processQueue = async () => {
 
             if (isSuccess && text.length > 0) {
                 if (isStream) {
-                    sseSend({ status: 'done', text });
+                    sseSend({ status: 'done', text, language });
                     sseEnd();
                 } else {
+                    res.setHeader('X-Whisper-Language', language);
                     res.json({ text });
                 }
             } else {
@@ -661,9 +672,9 @@ const handleTtsRequest = (req, res, forcedProvider = '') => {
     return res.status(429).json({ error: 'tts_queue_full', max_queue_size: MAX_TTS_QUEUE_SIZE });
 };
 
-const tryEnqueue = (res, inputPath, isStream) => {
+const tryEnqueue = (res, inputPath, isStream, language) => {
     if (queue.length >= MAX_QUEUE_SIZE) return null;
-    const item = { res, inputPath, isStream };
+    const item = { res, inputPath, isStream, language };
     queue.push(item);
     res.once('close', () => {
         const index = queue.indexOf(item);
@@ -695,7 +706,13 @@ app.post('/api/voice', requireBearerAuth, uploadAudio, (req, res) => {
         return res.status(400).json({ error: 'Файл не получен' });
     }
 
-    if (!tryEnqueue(res, req.file.path, false)) return rejectQueueFull(res, req.file.path);
+    const language = resolveWhisperRequestLanguage(req);
+    if (!language) {
+        removeTempFile(req.file.path);
+        return res.status(400).json({ error: 'language_must_be_auto_or_2_3_letter_code' });
+    }
+
+    if (!tryEnqueue(res, req.file.path, false, language)) return rejectQueueFull(res, req.file.path);
     console.log(`[JSON] Добавлено в очередь. Позиция: ${queue.length}`);
     processQueue();
 });
@@ -707,6 +724,12 @@ app.post('/api/voice/stream', requireBearerAuth, uploadAudio, (req, res) => {
         return res.status(400).json({ error: 'Файл не получен' });
     }
 
+    const language = resolveWhisperRequestLanguage(req);
+    if (!language) {
+        removeTempFile(req.file.path);
+        return res.status(400).json({ error: 'language_must_be_auto_or_2_3_letter_code' });
+    }
+
     if (queue.length >= MAX_QUEUE_SIZE) return rejectQueueFull(res, req.file.path);
 
     // SSE-заголовки
@@ -714,12 +737,13 @@ app.post('/api/voice/stream', requireBearerAuth, uploadAudio, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('X-Whisper-Language', language);
     res.flushHeaders?.();
 
     const queuePos = queue.length + (isProcessing ? 1 : 0);
-    res.write(`data: ${JSON.stringify({ status: 'queued', position: queuePos })}\n\n`);
+    res.write(`data: ${JSON.stringify({ status: 'queued', position: queuePos, language })}\n\n`);
 
-    tryEnqueue(res, req.file.path, true);
+    tryEnqueue(res, req.file.path, true, language);
     console.log(`[SSE] Добавлено в очередь. Позиция: ${queuePos}`);
     processQueue();
 });

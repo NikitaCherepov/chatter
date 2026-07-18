@@ -4,7 +4,7 @@ Authenticated local speech-to-text and text-to-speech service. It is designed fo
 
 ## Default speech engines
 
-- Speech recognition: multilingual `whisper.cpp`, language detection set to `auto`.
+- Speech recognition: multilingual `whisper.cpp`, language detection set to `auto` by default.
 - Russian TTS: Silero `v5_5_ru`, speaker `eugene`.
 - English TTS: Piper with a locally installed medium voice.
 - Edge TTS: optional endpoint/fallback; it is not required by the local default.
@@ -55,6 +55,19 @@ npm start
 ```
 
 Piper is started lazily on the first English synthesis request and keeps its model in memory. TTS has a bounded FIFO queue, and a shared compute lock prevents it from competing with Whisper on a weak server.
+
+## Speech transcription request
+
+Both `/api/voice` and `/api/voice/stream` accept an optional Whisper language in the multipart field `language`. Supported values are `auto` or a 2-3 letter Whisper language code such as `ru`, `en`, `de`, or `ja`. It can also be supplied as the `?language=en` query parameter.
+
+```bash
+curl -X POST http://127.0.0.1:3030/api/voice \
+  -H "Authorization: Bearer $VOICE_TRANSCRIBE_TOKEN" \
+  -F "audio=@voice.ogg" \
+  -F "language=en"
+```
+
+If the request does not contain a language, `VOICE_TRANSCRIBE_LANGUAGE` is used (`auto` by default). Prefer a fixed language when it is known: this skips automatic language detection and is usually faster and more reliable for short recordings.
 
 ## TTS request
 

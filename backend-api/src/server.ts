@@ -645,6 +645,7 @@ app.post('/internal/voice/turn', internalAuth, async (req, res) => {
   const mimeType = `${req.body?.mime_type || 'audio/ogg'}`;
   const chatIdRaw = req.body?.chat_id;
   const chatId = Number.isFinite(Number(chatIdRaw)) ? Math.floor(Number(chatIdRaw)) : undefined;
+  const transcriptionLanguage = `${req.body?.language || ''}`.trim() || null;
   const optionsRaw = req.body?.options || {};
 
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -659,7 +660,8 @@ app.post('/internal/voice/turn', internalAuth, async (req, res) => {
       {
         userTelegramChatId: Number.isFinite(Number(optionsRaw.userTelegramChatId)) ? Math.floor(Number(optionsRaw.userTelegramChatId)) : null,
         userTelegramMessageId: Number.isFinite(Number(optionsRaw.userTelegramMessageId)) ? Math.floor(Number(optionsRaw.userTelegramMessageId)) : null,
-        assistantTelegramChatId: Number.isFinite(Number(optionsRaw.assistantTelegramChatId)) ? Math.floor(Number(optionsRaw.assistantTelegramChatId)) : null
+        assistantTelegramChatId: Number.isFinite(Number(optionsRaw.assistantTelegramChatId)) ? Math.floor(Number(optionsRaw.assistantTelegramChatId)) : null,
+        transcriptionLanguage
       }
     );
     return res.json(result);

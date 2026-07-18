@@ -4,6 +4,7 @@ type VoiceTurnOptions = {
   userTelegramChatId?: number | null;
   userTelegramMessageId?: number | null;
   assistantTelegramChatId?: number | null;
+  transcriptionLanguage?: string | null;
 };
 
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
@@ -12,6 +13,14 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
 };
 
 const getMaxAudioBytes = () => parsePositiveInteger(process.env.VOICE_MAX_AUDIO_MB, 10) * 1024 * 1024;
+
+const normalizeWhisperLanguage = (value: unknown) => {
+  const normalized = `${value || ''}`.trim().toLowerCase().replace(/_/g, '-');
+  if (!normalized) return null;
+  if (normalized === 'auto') return 'auto';
+  const baseLanguage = normalized.split('-')[0];
+  return /^[a-z]{2,3}$/.test(baseLanguage) ? baseLanguage : null;
+};
 
 const resolveDefaultVoiceEndpoint = (transcribeUrl: string, targetPath: '/api/tts' | '/api/silero') => {
   try {
@@ -51,10 +60,12 @@ const getVoiceConfig = () => {
   };
 };
 
-const transcribeAudio = async (audioBuffer: Buffer, mimeType: string) => {
+const transcribeAudio = async (audioBuffer: Buffer, mimeType: string, language?: string | null) => {
   const config = getVoiceConfig();
   const formData = new FormData();
   formData.append('audio', new Blob([new Uint8Array(audioBuffer)], { type: mimeType || 'audio/ogg' }), 'voice.ogg');
+  const whisperLanguage = normalizeWhisperLanguage(language);
+  if (whisperLanguage) formData.append('language', whisperLanguage);
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${config.token}`
@@ -121,7 +132,11 @@ export const runVoiceTurn = async (
   if (!audioBuffer.length) throw new Error('empty_audio');
   if (audioBuffer.length > getMaxAudioBytes()) throw new Error('audio_too_large');
 
-  const transcribedText = await transcribeAudio(audioBuffer, mimeType || 'audio/ogg');
+  const transcribedText = await transcribeAudio(
+    audioBuffer,
+    mimeType || 'audio/ogg',
+    options?.transcriptionLanguage
+  );
   if (!transcribedText) {
     return {
       recognized_text: '',
