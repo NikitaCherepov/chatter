@@ -1,0 +1,9 @@
+**
+!package.json
+!package-lock.json
+!tsconfig.json
+!index.ts
+!i18n/
+!i18n/**
+!Dockerfile.bot
+!.dockerignore

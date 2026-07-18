@@ -60,7 +60,10 @@ const formatSafeError = (error: unknown) => {
     return String(error);
 };
 
-const bot = new Telegraf<BotContext>(process.env.TELEGRAM_TOKEN!);
+const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
+if (!TELEGRAM_TOKEN) throw new Error('telegram_token_not_configured');
+
+const bot = new Telegraf<BotContext>(TELEGRAM_TOKEN);
 bot.catch(async (err, ctx) => {
     console.error('Telegraf update error:', formatSafeError(err));
     try {

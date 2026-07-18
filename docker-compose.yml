@@ -28,6 +28,23 @@ services:
       start_period: 10s
       retries: 5
 
+  telegram-bot:
+    profiles:
+      - telegram
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    image: chatter-telegram-bot:local
+    restart: unless-stopped
+    env_file:
+      - "${TELEGRAM_ENV_FILE:-./.env}"
+    environment:
+      NODE_ENV: production
+      BACKEND_API_BASE_URL: http://backend:3050
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   chatter_backend_data:
   chatter_backend_updates:
