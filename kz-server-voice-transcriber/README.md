@@ -24,14 +24,23 @@ pip install -r requirements.txt
 
 The host also needs `ffmpeg`, a built `whisper-cli`, and a multilingual Whisper model at the paths currently configured in `index.js`.
 
-Download an English Piper voice into the ignored model directory:
+Download the default female English voice and an optional male voice into the ignored model directory:
 
 ```bash
 mkdir -p models/piper
 cd models/piper
 python3 -m piper.download_voices en_US-lessac-medium
+python3 -m piper.download_voices en_US-hfc_male-medium
 cd ../..
 ```
+
+The service uses `en_US-lessac-medium` by default. To use the male voice instead, set:
+
+```env
+PIPER_MODEL_PATH=./models/piper/en_US-hfc_male-medium.onnx
+```
+
+Only the selected model is loaded into memory. Restart the service after changing it.
 
 Create the runtime configuration and set a long random bearer token:
 
