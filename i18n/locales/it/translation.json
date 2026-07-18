@@ -325,7 +325,9 @@
       "changeLimit": "✏️ Cambia limite",
       "back": "⬅️ Indietro",
       "confirmDelete": "🗑 Rimuovi",
-      "cancel": "❌ Annulla"
+      "cancel": "❌ Annulla",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex"
     },
     "maximum": "massimo {{limit}}",
     "limitExceeded": "Puoi richiedere un massimo di {{limit}} email alla volta.",
@@ -334,7 +336,20 @@
     "alreadyActive": "Questo account è già attivo",
     "activeAccountShort": "Account attivo: {{email}}",
     "accountMissing": "Account email non trovato",
-    "deleteConfirm": "Rimuovere “{{account}}” da Chatter? Questo non elimina la casella di posta stessa."
+    "deleteConfirm": "Rimuovere “{{account}}” da Chatter? Questo non elimina la casella di posta stessa.",
+    "chooseProvider": "📧 Quale provider di posta vuoi collegare?\n\nUsa le impostazioni dell'app desktop per altri provider.",
+    "enterEmailInteractive": "Invia l'indirizzo email {{provider}} in un messaggio.",
+    "invalidEmailInteractive": "Non sembra un indirizzo email. Riprova o tocca Annulla.",
+    "enterPasswordInteractive": "Ora invia la password dell'app per {{email}}.\n\nIl messaggio contenente la password verrà eliminato immediatamente. Usa una password per l'app, non la password principale dell'account.",
+    "checkingConnection": "📧 Verifica IMAP e SMTP...",
+    "connectedInteractive": "✅ {{email}} è collegato e selezionato come account predefinito.",
+    "authFailedInteractive": "Accesso fallito. Controlla l'indirizzo e la password dell'app, poi invia di nuovo la password o tocca Annulla.",
+    "connectionFailedInteractive": "Impossibile connettersi al server di posta. Riprova più tardi o tocca Annulla.",
+    "setupCancelled": "Configurazione email annullata",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Yandex Mail"
+    }
   },
   "profile": {
     "renameConfirm": "Vuoi cambiare il tuo nome?",

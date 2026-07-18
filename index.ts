@@ -348,7 +348,7 @@ const buildMailMenuKeyboard = (accounts: MailAccountRecord[], t: BotTranslate) =
         ),
         Markup.button.callback('🗑', `mail:delete:${account.id}`)
     ]);
-    rows.push([Markup.button.callback(t('mail.buttons.setup'), 'mail:setup_help')]);
+    rows.push([Markup.button.callback(t('mail.buttons.setup'), 'mail:add')]);
     rows.push([
         Markup.button.callback(t('mail.buttons.yandexInstructions'), 'mail:instr:yandex'),
         Markup.button.callback(t('mail.buttons.googleInstructions'), 'mail:instr:google')
@@ -356,6 +356,13 @@ const buildMailMenuKeyboard = (accounts: MailAccountRecord[], t: BotTranslate) =
     rows.push([Markup.button.callback(t('mail.buttons.back'), 'mail:back:menu')]);
     return Markup.inlineKeyboard(rows);
 };
+const buildMailProviderKeyboard = (t: BotTranslate) => Markup.inlineKeyboard([
+    [
+        Markup.button.callback(t('mail.buttons.google'), 'mail:add:google'),
+        Markup.button.callback(t('mail.buttons.yandex'), 'mail:add:yandex')
+    ],
+    [Markup.button.callback(t('mail.buttons.cancel'), 'mail:list')]
+]);
 const renderMailMenu = async (ctx: any, userId: number, mode: 'reply' | 'edit' = 'reply') => {
     const data = await runBackendGetMailAccounts(userId);
     const text = data.accounts.length
@@ -398,6 +405,10 @@ const timezoneSetupFlows = new Map<number, 'await_offset'>();
 const customPromptEditFlows = new Map<number, 'await_content'>();
 const contextLimitFlows = new Map<number, 'await_limit'>();
 const noteEditFlows = new Map<number, { noteId: number; page: number }>();
+type MailSetupFlow =
+    | { step: 'await_email'; provider: 'google' | 'yandex' }
+    | { step: 'await_password'; provider: 'google' | 'yandex'; email: string };
+const mailSetupFlows = new Map<number, MailSetupFlow>();
 const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page: number }>();
 const adminUserMessageLimitFlows = new Map<number, { targetUserId: number; page: number }>();
 const adminAiMessageFlow = new Map<number, number>();
@@ -3993,6 +4004,31 @@ bot.action('mail:setup_help', async (ctx) => {
     await ctx.reply(ctx.t('mail.setupHelp'));
 });
 
+bot.action('mail:add', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(ctx.t('mail.chooseProvider'), buildMailProviderKeyboard(ctx.t));
+});
+
+bot.action(/^mail:add:(google|yandex)$/, async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const provider = (ctx as any).match[1] as 'google' | 'yandex';
+    mailSetupFlows.set(userId, { step: 'await_email', provider });
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(
+        ctx.t('mail.enterEmailInteractive', { provider: ctx.t(`mail.providers.${provider}`) }),
+        Markup.inlineKeyboard([[Markup.button.callback(ctx.t('mail.buttons.cancel'), 'mail:setup_cancel')]])
+    );
+});
+
+bot.action('mail:setup_cancel', async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    mailSetupFlows.delete(userId);
+    await ctx.answerCbQuery(ctx.t('mail.setupCancelled'));
+    await renderMailMenu(ctx, userId, 'edit');
+});
+
 bot.action('mail:instr:yandex', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply(ctx.t('mail.yandexInstructions'));
@@ -6407,6 +6443,63 @@ bot.on('text', async (ctx) => {
             adminAiMessageFlow.delete(userId);
             await handleAiDirectMessage(ctx, directMessageTargetId, userText);
         });
+        return;
+    }
+
+    const mailSetupFlow = mailSetupFlows.get(userId);
+    if (mailSetupFlow) {
+        const lowered = userText.toLowerCase();
+        if ([ctx.t('common.cancelWord').toLowerCase(), 'отмена', 'cancel', '/cancel'].includes(lowered)) {
+            mailSetupFlows.delete(userId);
+            await ctx.reply(ctx.t('mail.setupCancelled'));
+            await renderMailMenu(ctx, userId, 'reply');
+            return;
+        }
+
+        if (mailSetupFlow.step === 'await_email') {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userText)) {
+                return ctx.reply(ctx.t('mail.invalidEmailInteractive'));
+            }
+            mailSetupFlows.set(userId, {
+                step: 'await_password',
+                provider: mailSetupFlow.provider,
+                email: userText
+            });
+            return ctx.reply(
+                ctx.t('mail.enterPasswordInteractive', { email: userText }),
+                Markup.inlineKeyboard([[Markup.button.callback(ctx.t('mail.buttons.cancel'), 'mail:setup_cancel')]])
+            );
+        }
+
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id);
+        } catch (error) {
+            console.warn('Не удалось удалить сообщение с mail credentials:', formatSafeError(error));
+        }
+
+        await ctx.reply(ctx.t('mail.checkingConnection'));
+        try {
+            await runBackendMailSetup(
+                userId,
+                mailSetupFlow.provider,
+                mailSetupFlow.email,
+                userText
+            );
+            mailSetupFlows.delete(userId);
+            await ctx.reply(ctx.t('mail.connectedInteractive', { email: mailSetupFlow.email }));
+            await renderMailMenu(ctx, userId, 'reply');
+        } catch (error: any) {
+            const code = axios.isAxiosError(error) ? error.response?.data?.error : '';
+            const key = ['mail_auth_failed', 'mail_smtp_auth_failed'].includes(code)
+                ? 'mail.authFailedInteractive'
+                : ['mail_connection_failed', 'mail_smtp_connection_failed'].includes(code)
+                    ? 'mail.connectionFailedInteractive'
+                    : 'mail.setupError';
+            await ctx.reply(
+                ctx.t(key),
+                Markup.inlineKeyboard([[Markup.button.callback(ctx.t('mail.buttons.cancel'), 'mail:setup_cancel')]])
+            );
+        }
         return;
     }
 

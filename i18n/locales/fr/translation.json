@@ -325,7 +325,9 @@
       "changeLimit": "✏️ Modifier la limite",
       "back": "⬅️ Retour",
       "confirmDelete": "🗑 Supprimer",
-      "cancel": "❌ Annuler"
+      "cancel": "❌ Annuler",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex"
     },
     "maximum": "maximum {{limit}}",
     "limitExceeded": "Vous pouvez demander un maximum de {{limit}} e-mails à la fois.",
@@ -334,7 +336,20 @@
     "alreadyActive": "Ce compte est déjà actif",
     "activeAccountShort": "Compte actif : {{email}}",
     "accountMissing": "Compte e-mail introuvable",
-    "deleteConfirm": "Supprimer « {{account}} » de Chatter ? Cela ne supprime pas la boîte aux lettres elle-même."
+    "deleteConfirm": "Supprimer « {{account}} » de Chatter ? Cela ne supprime pas la boîte aux lettres elle-même.",
+    "chooseProvider": "📧 Quel fournisseur de messagerie souhaitez-vous connecter ?\n\nUtilisez les paramètres de l'application de bureau pour les autres fournisseurs.",
+    "enterEmailInteractive": "Envoyez l'adresse e-mail {{provider}} en un seul message.",
+    "invalidEmailInteractive": "Cela ne ressemble pas à une adresse e-mail. Réessayez ou appuyez sur Annuler.",
+    "enterPasswordInteractive": "Envoyez maintenant le mot de passe d'application pour {{email}}.\n\nLe message contenant le mot de passe sera supprimé immédiatement. Utilisez un mot de passe d'application, pas le mot de passe principal du compte.",
+    "checkingConnection": "📧 Vérification IMAP et SMTP...",
+    "connectedInteractive": "✅ {{email}} est connecté et sélectionné comme compte par défaut.",
+    "authFailedInteractive": "Échec de la connexion. Vérifiez l'adresse et le mot de passe d'application, puis renvoyez le mot de passe ou appuyez sur Annuler.",
+    "connectionFailedInteractive": "Impossible de se connecter au serveur de messagerie. Réessayez plus tard ou appuyez sur Annuler.",
+    "setupCancelled": "Configuration de la messagerie annulée",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Yandex Mail"
+    }
   },
   "profile": {
     "renameConfirm": "Voulez-vous changer votre nom ?",

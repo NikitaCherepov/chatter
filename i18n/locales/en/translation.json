@@ -289,6 +289,19 @@
     "activeAccountShort": "Active account: {{email}}",
     "accountMissing": "Email account not found",
     "deleteConfirm": "Remove “{{account}}” from Chatter? This does not delete the mailbox itself.",
+    "chooseProvider": "📧 Which email provider do you want to connect?\n\nUse the desktop app settings for other providers.",
+    "enterEmailInteractive": "Send the {{provider}} email address in one message.",
+    "invalidEmailInteractive": "That does not look like an email address. Try again or tap Cancel.",
+    "enterPasswordInteractive": "Now send the app password for {{email}}.\n\nThe message containing the password will be deleted immediately. Use an app password, not the account's main password.",
+    "checkingConnection": "📧 Checking IMAP and SMTP...",
+    "connectedInteractive": "✅ {{email}} is connected and selected as the default account.",
+    "authFailedInteractive": "Login failed. Check the address and app password, then send the password again or tap Cancel.",
+    "connectionFailedInteractive": "Could not connect to the mail server. Try again later or tap Cancel.",
+    "setupCancelled": "Email setup cancelled",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Yandex Mail"
+    },
     "setupUsage": "Usage: /mail_setup <yandex|google> <email> <app_password>\nor: /mail_setup <email> <app_password> (the provider will be detected from the domain)",
     "providerUnknown": "Could not detect the provider. Specify yandex or google explicitly.",
     "credentialsRequired": "Email and app password are required.",
@@ -326,6 +339,8 @@
     "newLimit": "✅ New check_emails limit: {{limit}}.",
     "buttons": {
       "setup": "➕ Add or update",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex",
       "settings": "⚙️ Mail settings",
       "yandexInstructions": "🟡 Yandex instructions",
       "googleInstructions": "🔵 Google instructions",

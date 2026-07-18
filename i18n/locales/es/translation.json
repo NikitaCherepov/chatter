@@ -325,7 +325,9 @@
       "changeLimit": "✏️ Cambiar límite",
       "back": "⬅️ Atrás",
       "confirmDelete": "🗑 Eliminar",
-      "cancel": "❌ Cancelar"
+      "cancel": "❌ Cancelar",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex"
     },
     "maximum": "máximo {{limit}}",
     "limitExceeded": "Puede solicitar un máximo de {{limit}} correos electrónicos a la vez.",
@@ -334,7 +336,20 @@
     "alreadyActive": "Esta cuenta ya está activa",
     "activeAccountShort": "Cuenta activa: {{email}}",
     "accountMissing": "Cuenta de correo no encontrada",
-    "deleteConfirm": "¿Eliminar “{{account}}” de Chatter? Esto no elimina la bandeja de entrada en sí."
+    "deleteConfirm": "¿Eliminar “{{account}}” de Chatter? Esto no elimina la bandeja de entrada en sí.",
+    "chooseProvider": "📧 ¿Qué proveedor de correo electrónico deseas conectar?\n\nUsa la configuración de la aplicación de escritorio para otros proveedores.",
+    "enterEmailInteractive": "Envía la dirección de correo electrónico de {{provider}} en un mensaje.",
+    "invalidEmailInteractive": "Eso no parece una dirección de correo electrónico. Intenta de nuevo o toca Cancelar.",
+    "enterPasswordInteractive": "Ahora envía la contraseña de aplicación para {{email}}.\n\nEl mensaje que contiene la contraseña se eliminará inmediatamente. Usa una contraseña de aplicación, no la contraseña principal de la cuenta.",
+    "checkingConnection": "📧 Verificando IMAP y SMTP...",
+    "connectedInteractive": "✅ {{email}} está conectada y seleccionada como cuenta predeterminada.",
+    "authFailedInteractive": "Inicio de sesión fallido. Verifica la dirección y la contraseña de aplicación, luego envía la contraseña nuevamente o toca Cancelar.",
+    "connectionFailedInteractive": "No se pudo conectar al servidor de correo. Intenta de nuevo más tarde o toca Cancelar.",
+    "setupCancelled": "Configuración de correo cancelada",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Correo Yandex"
+    }
   },
   "profile": {
     "renameConfirm": "¿Quieres cambiar tu nombre?",

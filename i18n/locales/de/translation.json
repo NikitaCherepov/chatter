@@ -325,7 +325,9 @@
       "changeLimit": "✏️ Limit ändern",
       "back": "⬅️ Zurück",
       "confirmDelete": "🗑 Entfernen",
-      "cancel": "❌ Abbrechen"
+      "cancel": "❌ Abbrechen",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex"
     },
     "maximum": "maximal {{limit}}",
     "limitExceeded": "Sie können maximal {{limit}} E-Mails auf einmal anfordern.",
@@ -334,7 +336,20 @@
     "alreadyActive": "Dieses Konto ist bereits aktiv",
     "activeAccountShort": "Aktives Konto: {{email}}",
     "accountMissing": "E-Mail-Konto nicht gefunden",
-    "deleteConfirm": "„{{account}}“ von Chatter entfernen? Das löscht nicht das Postfach selbst."
+    "deleteConfirm": "„{{account}}“ von Chatter entfernen? Das löscht nicht das Postfach selbst.",
+    "chooseProvider": "📧 Welchen E-Mail-Anbieter möchtest du verbinden?\n\nNutze die Desktop-App-Einstellungen für andere Anbieter.",
+    "enterEmailInteractive": "Sende die {{provider}}-E-Mail-Adresse in einer Nachricht.",
+    "invalidEmailInteractive": "Das sieht nicht wie eine E-Mail-Adresse aus. Versuche es erneut oder tippe auf Abbrechen.",
+    "enterPasswordInteractive": "Sende jetzt das App-Passwort für {{email}}.\n\nDie Nachricht mit dem Passwort wird sofort gelöscht. Verwende ein App-Passwort, nicht das Hauptpasswort des Kontos.",
+    "checkingConnection": "📧 Überprüfe IMAP und SMTP...",
+    "connectedInteractive": "✅ {{email}} ist verbunden und als Standardkonto ausgewählt.",
+    "authFailedInteractive": "Anmeldung fehlgeschlagen. Überprüfe die Adresse und das App-Passwort, sende das Passwort erneut oder tippe auf Abbrechen.",
+    "connectionFailedInteractive": "Verbindung zum Mail-Server fehlgeschlagen. Versuche es später erneut oder tippe auf Abbrechen.",
+    "setupCancelled": "E-Mail-Einrichtung abgebrochen",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Yandex Mail"
+    }
   },
   "profile": {
     "renameConfirm": "Möchten Sie Ihren Namen ändern?",

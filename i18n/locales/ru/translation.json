@@ -289,6 +289,19 @@
     "activeAccountShort": "Активный ящик: {{email}}",
     "accountMissing": "Почтовый аккаунт не найден",
     "deleteConfirm": "Удалить почтовый аккаунт «{{account}}» из Chatter? Сам почтовый ящик удалён не будет.",
+    "chooseProvider": "📧 Какую почту подключаем?\n\nДля другого провайдера используй настройки в desktop-app.",
+    "enterEmailInteractive": "Введи адрес почты {{provider}} одним сообщением.",
+    "invalidEmailInteractive": "Это не похоже на адрес почты. Попробуй ещё раз или нажми «Отмена».",
+    "enterPasswordInteractive": "Теперь отправь пароль приложения для {{email}}.\n\nСообщение с паролем будет сразу удалено. Нужен именно пароль приложения, не основной пароль аккаунта.",
+    "checkingConnection": "📧 Проверяю IMAP и SMTP...",
+    "connectedInteractive": "✅ Почта {{email}} подключена и выбрана по умолчанию.",
+    "authFailedInteractive": "Не удалось войти. Проверь адрес и пароль приложения, затем отправь пароль ещё раз или нажми «Отмена».",
+    "connectionFailedInteractive": "Не удалось подключиться к почтовому серверу. Попробуй ещё раз позже или нажми «Отмена».",
+    "setupCancelled": "Подключение почты отменено",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Яндекс Почта"
+    },
     "setupUsage": "Использование: /mail_setup <yandex|google> <email> <пароль_приложения>\nили: /mail_setup <email> <пароль_приложения> (провайдер определится по домену)",
     "providerUnknown": "Не удалось определить провайдер. Укажи явно: yandex или google.",
     "credentialsRequired": "Email и пароль приложения обязательны.",
@@ -326,6 +339,8 @@
     "newLimit": "✅ Новое ограничение check_emails: {{limit}}.",
     "buttons": {
       "setup": "➕ Добавить/обновить",
+      "google": "🔵 Google",
+      "yandex": "🟡 Яндекс",
       "settings": "⚙️ Почта: настройки",
       "yandexInstructions": "🟡 Инструкция Yandex",
       "googleInstructions": "🔵 Инструкция Google",

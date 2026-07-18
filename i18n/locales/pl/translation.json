@@ -325,7 +325,9 @@
       "changeLimit": "✏️ Zmień limit",
       "back": "⬅️ Wstecz",
       "confirmDelete": "🗑 Usuń",
-      "cancel": "❌ Anuluj"
+      "cancel": "❌ Anuluj",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex"
     },
     "maximum": "maksymalnie {{limit}}",
     "limitExceeded": "Możesz zażądać maksymalnie {{limit}} e-maili na raz.",
@@ -334,7 +336,20 @@
     "alreadyActive": "To konto jest już aktywne",
     "activeAccountShort": "Aktywne konto: {{email}}",
     "accountMissing": "Nie znaleziono konta e-mail",
-    "deleteConfirm": "Usunąć „{{account}}” z Chatter? Nie spowoduje to usunięcia samej skrzynki pocztowej."
+    "deleteConfirm": "Usunąć „{{account}}” z Chatter? Nie spowoduje to usunięcia samej skrzynki pocztowej.",
+    "chooseProvider": "📧 Który dostawca poczty chcesz podłączyć?\n\nUżyj ustawień aplikacji desktopowej dla innych dostawców.",
+    "enterEmailInteractive": "Wyślij adres email {{provider}} w jednej wiadomości.",
+    "invalidEmailInteractive": "To nie wygląda jak adres email. Spróbuj ponownie lub dotknij Anuluj.",
+    "enterPasswordInteractive": "Teraz wyślij hasło aplikacji dla {{email}}.\n\nWiadomość zawierająca hasło zostanie natychmiast usunięta. Użyj hasła aplikacji, a nie głównego hasła konta.",
+    "checkingConnection": "📧 Sprawdzanie IMAP i SMTP...",
+    "connectedInteractive": "✅ {{email}} jest podłączone i ustawione jako konto domyślne.",
+    "authFailedInteractive": "Logowanie nie powiodło się. Sprawdź adres i hasło aplikacji, a następnie wyślij hasło ponownie lub dotknij Anuluj.",
+    "connectionFailedInteractive": "Nie można połączyć się z serwerem poczty. Spróbuj ponownie później lub dotknij Anuluj.",
+    "setupCancelled": "Konfiguracja poczty anulowana",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Poczta Yandex"
+    }
   },
   "profile": {
     "renameConfirm": "Czy chcesz zmienić swoją nazwę?",

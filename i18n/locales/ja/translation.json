@@ -325,7 +325,9 @@
       "changeLimit": "✏️ 制限を変更",
       "back": "⬅️ 戻る",
       "confirmDelete": "🗑 削除",
-      "cancel": "❌ キャンセル"
+      "cancel": "❌ キャンセル",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex"
     },
     "maximum": "最大{{limit}}",
     "limitExceeded": "一度にリクエストできるメールは最大{{limit}}件です。",
@@ -334,7 +336,20 @@
     "alreadyActive": "このアカウントは既にアクティブです",
     "activeAccountShort": "アクティブアカウント: {{email}}",
     "accountMissing": "メールアカウントが見つかりません",
-    "deleteConfirm": "Chatterから「{{account}}」を削除しますか？メールボックス自体は削除されません。"
+    "deleteConfirm": "Chatterから「{{account}}」を削除しますか？メールボックス自体は削除されません。",
+    "chooseProvider": "📧 どのメールプロバイダーに接続しますか？\n\nその他のプロバイダーはデスクトップアプリの設定を使用してください。",
+    "enterEmailInteractive": "{{provider}}のメールアドレスを1つのメッセージで送信してください。",
+    "invalidEmailInteractive": "メールアドレスの形式ではありません。もう一度試すか、キャンセルをタップしてください。",
+    "enterPasswordInteractive": "次に、{{email}}のアプリパスワードを送信してください。\n\nパスワードを含むメッセージはすぐに削除されます。アカウントのメインパスワードではなく、アプリパスワードを使用してください。",
+    "checkingConnection": "📧 IMAPとSMTPを確認中...",
+    "connectedInteractive": "✅ {{email}}が接続され、デフォルトアカウントとして選択されました。",
+    "authFailedInteractive": "ログインに失敗しました。アドレスとアプリパスワードを確認し、パスワードを再送信するか、キャンセルをタップしてください。",
+    "connectionFailedInteractive": "メールサーバーに接続できませんでした。後でもう一度試すか、キャンセルをタップしてください。",
+    "setupCancelled": "メール設定がキャンセルされました",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Yandexメール"
+    }
   },
   "profile": {
     "renameConfirm": "名前を変更しますか？",

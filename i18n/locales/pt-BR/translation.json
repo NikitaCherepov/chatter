@@ -325,7 +325,9 @@
       "changeLimit": "✏️ Alterar limite",
       "back": "⬅️ Voltar",
       "confirmDelete": "🗑 Remover",
-      "cancel": "❌ Cancelar"
+      "cancel": "❌ Cancelar",
+      "google": "🔵 Google",
+      "yandex": "🟡 Yandex"
     },
     "maximum": "máximo {{limit}}",
     "limitExceeded": "Você pode solicitar no máximo {{limit}} e-mails por vez.",
@@ -334,7 +336,20 @@
     "alreadyActive": "Esta conta já está ativa",
     "activeAccountShort": "Conta ativa: {{email}}",
     "accountMissing": "Conta de e-mail não encontrada",
-    "deleteConfirm": "Remover “{{account}}” do Chatter? Isso não exclui a caixa de correio em si."
+    "deleteConfirm": "Remover “{{account}}” do Chatter? Isso não exclui a caixa de correio em si.",
+    "chooseProvider": "📧 Qual provedor de e-mail você deseja conectar?\n\nUse as configurações do aplicativo para desktop para outros provedores.",
+    "enterEmailInteractive": "Envie o endereço de e-mail do {{provider}} em uma mensagem.",
+    "invalidEmailInteractive": "Isso não parece um endereço de e-mail. Tente novamente ou toque em Cancelar.",
+    "enterPasswordInteractive": "Agora envie a senha de aplicativo para {{email}}.\n\nA mensagem contendo a senha será excluída imediatamente. Use uma senha de aplicativo, não a senha principal da conta.",
+    "checkingConnection": "📧 Verificando IMAP e SMTP...",
+    "connectedInteractive": "✅ {{email}} está conectado e selecionado como conta padrão.",
+    "authFailedInteractive": "Falha no login. Verifique o endereço e a senha de aplicativo, depois envie a senha novamente ou toque em Cancelar.",
+    "connectionFailedInteractive": "Não foi possível conectar ao servidor de e-mail. Tente novamente mais tarde ou toque em Cancelar.",
+    "setupCancelled": "Configuração de e-mail cancelada",
+    "providers": {
+      "google": "Google / Gmail",
+      "yandex": "Yandex Mail"
+    }
   },
   "profile": {
     "renameConfirm": "Deseja alterar seu nome?",
