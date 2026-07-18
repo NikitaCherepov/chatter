@@ -1653,7 +1653,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'search_cold_memory',
-      description: 'Поиск по векторному архиву. Обязателен при любых вопросах о прошлом.',
+      description: 'Поиск по векторному архиву. Обязателен при любых вопросах о прошлом. Каждый результат содержит точный chunk_id, который можно дословно передать в delete_from_cold_memory.',
       parameters: {
         type: 'object',
         properties: {
@@ -1683,11 +1683,11 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'delete_from_cold_memory',
-      description: 'Удаление записи по ID. Требует предварительного поиска ID.',
+      description: 'Удаление всей архивной записи по точному chunk_id. Сначала обязательно выполни search_cold_memory, затем дословно скопируй полный chunk_id из результата: не сокращай и не конструируй его самостоятельно.',
       parameters: {
         type: 'object',
         properties: {
-          chunk_id: { type: 'string', description: 'Точный ID из результатов поиска (например: fact_123_chunk_0).' }
+          chunk_id: { type: 'string', description: 'Полный точный chunk_id из результатов search_cold_memory (например: fact_123_ab12cd_chunk_0).' }
         },
         required: ['chunk_id']
       }
@@ -3137,7 +3137,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const topK = Number.isFinite(Number(parsed.top_k)) ? Number(parsed.top_k) : 5;
     const result = await VectorMemoryService.search(user.id, query, topK);
     if (!result.matches.length) return `По запросу "${query}" в памяти ничего не найдено.`;
-    return `Найдено в архиве:\n${result.text}`;
+    const matchesWithIds = result.matches
+      .map(match => `[chunk_id: ${match.chunk_id}]\n[Источник: ${match.source || 'unknown'}]\n${match.text}`)
+      .join('\n\n---\n\n');
+    return `Найдено в архиве:\n${matchesWithIds}`;
   }
   if (toolName === 'save_to_cold_memory') {
     const textToSave = typeof parsed.text === 'string' ? parsed.text : '';
@@ -3147,8 +3150,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   }
   if (toolName === 'delete_from_cold_memory') {
     const chunkId = typeof parsed.chunk_id === 'string' ? parsed.chunk_id : '';
-    await VectorMemoryService.deleteChunk(user.id, chunkId);
-    return `Фрагмент [${chunkId}] успешно удален из памяти.`;
+    const result = await VectorMemoryService.deleteChunk(user.id, chunkId);
+    return `Запись [${result.record_id}] успешно удалена из памяти (${result.chunks_deleted} фрагментов).`;
   }
   if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
 

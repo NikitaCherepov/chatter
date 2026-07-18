@@ -212,6 +212,8 @@ export class VectorMemoryService {
       const result = {
         ok: true,
         id: baseId,
+        record_id: baseId,
+        chunk_ids: records.map(record => record.id),
         namespace,
         source: safeSource,
         size: safeText.length,
@@ -279,13 +281,17 @@ export class VectorMemoryService {
       const items = [...matchesById.values()]
         .sort((left, right) => Number(right?.score || 0) - Number(left?.score || 0))
         .slice(0, safeTopK)
-        .map((match: any) => ({
-        id: `${match?.id || ''}`,
-        score: Number(match?.score || 0),
-        text: `${match?.metadata?.text || ''}`,
-        source: `${match?.metadata?.source || ''}`,
-        timestamp: Number(match?.metadata?.timestamp || 0)
-      }));
+        .map((match: any) => {
+          const chunkId = `${match?.id || ''}`;
+          return {
+            id: chunkId,
+            chunk_id: chunkId,
+            score: Number(match?.score || 0),
+            text: `${match?.metadata?.text || ''}`,
+            source: `${match?.metadata?.source || ''}`,
+            timestamp: Number(match?.metadata?.timestamp || 0)
+          };
+        });
 
       const joinedText = items
         .map(item => `[Источник: ${item.source || 'unknown'}]\n${item.text}`)
@@ -323,21 +329,58 @@ export class VectorMemoryService {
       const namespace = canonicalNamespace(userId);
       const readableNamespaces = getReadableNamespaces(userId);
       const index = getPineconeIndex();
-      await Promise.all(readableNamespaces.map(readableNamespace =>
-        deletePineconeResource(() =>
-          index.namespace(readableNamespace).deleteOne(safeChunkId)
-        )
-      ));
+
+      const fetchedRecords = await Promise.all(readableNamespaces.map(async readableNamespace => {
+        const result = await index.namespace(readableNamespace).fetch([safeChunkId]);
+        return {
+          namespace: readableNamespace,
+          record: result.records?.[safeChunkId] || null
+        };
+      }));
+      const existingRecords = fetchedRecords.filter(item => item.record);
+      if (!existingRecords.length) throw new Error('chunk_not_found');
+
+      const deletedIds = new Set<string>();
+      const deletedNamespaces: string[] = [];
+      await Promise.all(existingRecords.map(async ({ namespace: readableNamespace, record }) => {
+        const ids = new Set<string>([safeChunkId]);
+        const chunkIdMatch = safeChunkId.match(/^(.*)_chunk_(\d+)$/);
+        const metadata = record?.metadata as Record<string, unknown> | undefined;
+        const totalChunks = Number(metadata?.total_chunks);
+
+        if (chunkIdMatch && Number.isSafeInteger(totalChunks) && totalChunks > 0 && totalChunks <= 10_000) {
+          const recordId = chunkIdMatch[1];
+          for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+            ids.add(`${recordId}_chunk_${chunkIndex}`);
+          }
+        }
+
+        const idsToDelete = [...ids];
+        await deletePineconeResource(() =>
+          index.namespace(readableNamespace).deleteMany(idsToDelete)
+        );
+        idsToDelete.forEach(id => deletedIds.add(id));
+        deletedNamespaces.push(readableNamespace);
+      }));
+
+      const recordIdMatch = safeChunkId.match(/^(.*)_chunk_\d+$/);
 
       const out = {
         ok: true,
         namespace,
-        id: safeChunkId
+        id: safeChunkId,
+        chunk_id: safeChunkId,
+        record_id: recordIdMatch?.[1] || safeChunkId,
+        deleted_ids: [...deletedIds],
+        chunks_deleted: deletedIds.size,
+        namespaces_deleted: deletedNamespaces
       };
       logSuccess('deleteChunk ok', {
         user_id: Math.floor(userId),
         namespace,
-        id: safeChunkId
+        id: safeChunkId,
+        chunks_deleted: out.chunks_deleted,
+        namespaces_deleted: deletedNamespaces
       });
       return out;
     } catch (error: any) {

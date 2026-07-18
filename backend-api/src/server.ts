@@ -1075,6 +1075,7 @@ app.delete('/api/v1/vector-memory/chunks/:id', async (req: AuthedRequest, res) =
   } catch (err: any) {
     const code = `${err?.message || 'vector_memory_delete_failed'}`;
     if (code === 'chunk_id_required') return res.status(400).json({ error: code });
+    if (code === 'chunk_not_found') return res.status(404).json({ error: code });
     return res.status(500).json({ error: code });
   }
 });
