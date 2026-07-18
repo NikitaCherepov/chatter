@@ -800,7 +800,8 @@
       "provider": "Provedor",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Yandex Mail"
+        "yandex": "Yandex Mail",
+        "custom": "Outro"
       },
       "email": "Endereço de e-mail",
       "appPassword": "Senha do aplicativo",
@@ -838,7 +839,20 @@
       "deleteTitle": "Excluir conta de e-mail?",
       "deleteMessage": "Excluir a conta {{provider}} conectada do Chatter? Isso não exclui a caixa de correio em si.",
       "limitSaved": "Limite de pesquisa de e-mail salvo",
-      "limitSaveFailed": "Não foi possível salvar o limite de pesquisa de e-mail"
+      "limitSaveFailed": "Não foi possível salvar o limite de pesquisa de e-mail",
+      "addAccount": "Adicionar conta de e-mail",
+      "label": "Rótulo da conta (opcional)",
+      "labelPlaceholder": "Por exemplo: Trabalho ou Pessoal",
+      "login": "Login",
+      "loginPlaceholder": "Geralmente o endereço de e-mail completo",
+      "imapHost": "Servidor IMAP",
+      "smtpHost": "Servidor SMTP",
+      "port": "Porta",
+      "secureConnection": "Usar uma conexão TLS segura",
+      "customGuide": "Encontre as configurações IMAP e SMTP na documentação do seu provedor de e-mail. Use uma senha de aplicativo se o provedor suportar.",
+      "enterServers": "Insira os endereços dos servidores IMAP e SMTP",
+      "invalidHost": "Endereço de servidor de e-mail inválido",
+      "privateHostForbidden": "Servidores de e-mail locais e de rede privada não podem ser adicionados aqui"
     }
   },
   "tts": {

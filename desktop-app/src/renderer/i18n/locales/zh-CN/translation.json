@@ -800,7 +800,8 @@
       "provider": "提供商",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Yandex 邮件"
+        "yandex": "Yandex 邮件",
+        "custom": "其他"
       },
       "email": "电子邮件地址",
       "appPassword": "应用密码",
@@ -838,7 +839,20 @@
       "deleteTitle": "删除电子邮件账户？",
       "deleteMessage": "从Chatter中删除已连接的{{provider}}账户？这不会删除邮箱本身。",
       "limitSaved": "电子邮件搜索限制已保存",
-      "limitSaveFailed": "无法保存电子邮件搜索限制"
+      "limitSaveFailed": "无法保存电子邮件搜索限制",
+      "addAccount": "添加电子邮件账户",
+      "label": "账户标签（可选）",
+      "labelPlaceholder": "例如：工作或个人",
+      "login": "登录",
+      "loginPlaceholder": "通常是完整的电子邮件地址",
+      "imapHost": "IMAP服务器",
+      "smtpHost": "SMTP服务器",
+      "port": "端口",
+      "secureConnection": "使用安全的TLS连接",
+      "customGuide": "在邮件提供商的文档中查找 IMAP 和 SMTP 设置。如果提供商支持，请使用应用密码。",
+      "enterServers": "输入 IMAP 和 SMTP 服务器地址",
+      "invalidHost": "无效的邮件服务器地址",
+      "privateHostForbidden": "无法在此处添加本地和私有网络的邮件服务器"
     }
   },
   "tts": {

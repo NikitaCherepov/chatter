@@ -1535,49 +1535,59 @@ export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
 
 // ---------- Mail accounts ----------
 
-export type MailProvider = 'google' | 'yandex';
+export type MailProvider = 'google' | 'yandex' | 'custom';
 
 export type MailAccountDto = {
+  id: number;
   provider: MailProvider;
+  label: string | null;
   email: string;
+  login: string;
+  imap_host: string;
+  imap_port: number;
+  imap_secure: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_secure: boolean;
   is_active: boolean;
 };
 
 export type MailAccountsResponse = {
   accounts: MailAccountDto[];
-  active_provider: MailProvider | null;
-  mail_check_limit: number;
-  max_mail_check_limit: number | null;
+  active_account_id: number | null;
+};
+
+export type MailAccountSetup = {
+  provider: MailProvider;
+  label?: string;
+  email: string;
+  app_password: string;
+  login?: string;
+  imap_host?: string;
+  imap_port?: number;
+  imap_secure?: boolean;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_secure?: boolean;
 };
 
 export async function getMailAccounts(): Promise<MailAccountsResponse> {
   return apiFetch('/api/v1/mail/accounts');
 }
 
-export async function setupMailAccount(
-  provider: MailProvider,
-  email: string,
-  appPassword: string,
-): Promise<MailAccountsResponse> {
+export async function setupMailAccount(input: MailAccountSetup): Promise<MailAccountsResponse> {
   return apiFetch('/api/v1/mail/accounts', {
     method: 'POST',
-    body: JSON.stringify({ provider, email, app_password: appPassword }),
+    body: JSON.stringify(input),
   });
 }
 
-export async function activateMailAccount(provider: MailProvider): Promise<MailAccountsResponse> {
-  return apiFetch(`/api/v1/mail/accounts/${provider}/activate`, { method: 'POST' });
+export async function activateMailAccount(accountId: number): Promise<MailAccountsResponse> {
+  return apiFetch(`/api/v1/mail/accounts/${accountId}/activate`, { method: 'POST' });
 }
 
-export async function deleteMailAccount(provider: MailProvider): Promise<MailAccountsResponse> {
-  return apiFetch(`/api/v1/mail/accounts/${provider}`, { method: 'DELETE' });
-}
-
-export async function updateMailSettings(mailCheckLimit: number): Promise<MailAccountsResponse> {
-  return apiFetch('/api/v1/mail/settings', {
-    method: 'PUT',
-    body: JSON.stringify({ mail_check_limit: mailCheckLimit }),
-  });
+export async function deleteMailAccount(accountId: number): Promise<MailAccountsResponse> {
+  return apiFetch(`/api/v1/mail/accounts/${accountId}`, { method: 'DELETE' });
 }
 
 // ---------- Smart Home ----------

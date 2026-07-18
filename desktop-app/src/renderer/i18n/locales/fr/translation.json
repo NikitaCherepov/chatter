@@ -800,7 +800,8 @@
       "provider": "Fournisseur",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Yandex Mail"
+        "yandex": "Yandex Mail",
+        "custom": "Autre"
       },
       "email": "Adresse e-mail",
       "appPassword": "Mot de passe d'application",
@@ -838,7 +839,20 @@
       "deleteTitle": "Supprimer le compte de messagerie ?",
       "deleteMessage": "Supprimer le compte {{provider}} connecté de Chatter ? Cela ne supprime pas la boîte aux lettres elle-même.",
       "limitSaved": "Limite de recherche d'e-mails enregistrée",
-      "limitSaveFailed": "Impossible d'enregistrer la limite de recherche d'e-mails"
+      "limitSaveFailed": "Impossible d'enregistrer la limite de recherche d'e-mails",
+      "addAccount": "Ajouter un compte e-mail",
+      "label": "Libellé du compte (facultatif)",
+      "labelPlaceholder": "Par exemple : Travail ou Personnel",
+      "login": "Identifiant",
+      "loginPlaceholder": "Généralement l'adresse e-mail complète",
+      "imapHost": "Serveur IMAP",
+      "smtpHost": "Serveur SMTP",
+      "port": "Port",
+      "secureConnection": "Utiliser une connexion TLS sécurisée",
+      "customGuide": "Consultez la documentation de votre fournisseur de messagerie pour trouver les paramètres IMAP et SMTP. Utilisez un mot de passe d'application si le fournisseur le prend en charge.",
+      "enterServers": "Saisissez les adresses des serveurs IMAP et SMTP",
+      "invalidHost": "Adresse de serveur de messagerie invalide",
+      "privateHostForbidden": "Les serveurs de messagerie locaux et de réseau privé ne peuvent pas être ajoutés ici"
     }
   },
   "tts": {

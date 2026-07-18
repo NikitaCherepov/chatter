@@ -9,6 +9,7 @@ export type PendingEmailConfirmation = {
   subject: string;
   body: string;
   provider?: string;
+  mailAccountId?: number;
   resolve: (result: any) => void;
   reject: (err: Error) => void;
   createdAt: number;

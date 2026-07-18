@@ -800,7 +800,8 @@
       "provider": "Anbieter",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Yandex Mail"
+        "yandex": "Yandex Mail",
+        "custom": "Andere"
       },
       "email": "E-Mail-Adresse",
       "appPassword": "App-Passwort",
@@ -838,7 +839,20 @@
       "deleteTitle": "E-Mail-Konto löschen?",
       "deleteMessage": "Das verbundene {{provider}}-Konto aus Chatter löschen? Das Postfach selbst wird nicht gelöscht.",
       "limitSaved": "E-Mail-Suchlimit gespeichert",
-      "limitSaveFailed": "Das E-Mail-Suchlimit konnte nicht gespeichert werden"
+      "limitSaveFailed": "Das E-Mail-Suchlimit konnte nicht gespeichert werden",
+      "addAccount": "E-Mail-Konto hinzufügen",
+      "label": "Kontobezeichnung (optional)",
+      "labelPlaceholder": "Zum Beispiel: Arbeit oder Privat",
+      "login": "Anmeldename",
+      "loginPlaceholder": "Normalerweise die vollständige E-Mail-Adresse",
+      "imapHost": "IMAP-Server",
+      "smtpHost": "SMTP-Server",
+      "port": "Port",
+      "secureConnection": "Sichere TLS-Verbindung verwenden",
+      "customGuide": "Finden Sie die IMAP- und SMTP-Einstellungen in der Dokumentation Ihres E-Mail-Anbieters. Verwenden Sie ein App-Passwort, falls der Anbieter dies unterstützt.",
+      "enterServers": "Geben Sie sowohl die IMAP- als auch die SMTP-Serveradresse ein",
+      "invalidHost": "Ungültige E-Mail-Serveradresse",
+      "privateHostForbidden": "Lokale und private Netzwerk-Mail-Server können hier nicht hinzugefügt werden"
     }
   },
   "tts": {

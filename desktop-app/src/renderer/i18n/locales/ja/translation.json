@@ -800,7 +800,8 @@
       "provider": "プロバイダー",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Yandexメール"
+        "yandex": "Yandexメール",
+        "custom": "その他"
       },
       "email": "メールアドレス",
       "appPassword": "アプリパスワード",
@@ -838,7 +839,20 @@
       "deleteTitle": "メールアカウントを削除しますか？",
       "deleteMessage": "Chatterから接続された{{provider}}アカウントを削除しますか？メールボックス自体は削除されません。",
       "limitSaved": "メール検索制限を保存しました",
-      "limitSaveFailed": "メール検索制限を保存できませんでした"
+      "limitSaveFailed": "メール検索制限を保存できませんでした",
+      "addAccount": "メールアカウントを追加",
+      "label": "アカウントラベル（オプション）",
+      "labelPlaceholder": "例：仕事用または個人用",
+      "login": "ログイン",
+      "loginPlaceholder": "通常はメールアドレス全体",
+      "imapHost": "IMAPサーバー",
+      "smtpHost": "SMTPサーバー",
+      "port": "ポート",
+      "secureConnection": "安全なTLS接続を使用",
+      "customGuide": "メールプロバイダのドキュメントでIMAPとSMTPの設定を確認してください。プロバイダが対応している場合はアプリパスワードを使用してください。",
+      "enterServers": "IMAPとSMTPの両方のサーバーアドレスを入力してください",
+      "invalidHost": "無効なメールサーバーアドレス",
+      "privateHostForbidden": "ローカルおよびプライベートネットワークのメールサーバーはここに追加できません"
     }
   },
   "tts": {

@@ -800,7 +800,8 @@
       "provider": "Proveedor",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Correo Yandex"
+        "yandex": "Correo Yandex",
+        "custom": "Otro"
       },
       "email": "Dirección de correo electrónico",
       "appPassword": "Contraseña de aplicación",
@@ -838,7 +839,20 @@
       "deleteTitle": "¿Eliminar cuenta de correo?",
       "deleteMessage": "¿Eliminar la cuenta de {{provider}} conectada de Chatter? Esto no elimina el buzón en sí.",
       "limitSaved": "Límite de búsqueda de correo guardado",
-      "limitSaveFailed": "No se pudo guardar el límite de búsqueda de correo"
+      "limitSaveFailed": "No se pudo guardar el límite de búsqueda de correo",
+      "addAccount": "Agregar cuenta de correo",
+      "label": "Etiqueta de cuenta (opcional)",
+      "labelPlaceholder": "Por ejemplo: Trabajo o Personal",
+      "login": "Inicio de sesión",
+      "loginPlaceholder": "Generalmente la dirección de correo completa",
+      "imapHost": "Servidor IMAP",
+      "smtpHost": "Servidor SMTP",
+      "port": "Puerto",
+      "secureConnection": "Usar una conexión TLS segura",
+      "customGuide": "Encuentra la configuración IMAP y SMTP en la documentación de tu proveedor de correo. Usa una contraseña de aplicación si el proveedor lo admite.",
+      "enterServers": "Ingresa las direcciones de los servidores IMAP y SMTP",
+      "invalidHost": "Dirección de servidor de correo no válida",
+      "privateHostForbidden": "No se pueden agregar servidores de correo locales o de red privada aquí"
     }
   },
   "tts": {

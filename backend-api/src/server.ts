@@ -29,7 +29,7 @@ import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
-import { upsertMailAccount, setActiveMailProvider, updateUserMailSettings, updateUserMailCheckLimit, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountForUser, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection, MAIL_RESULTS_HARD_LIMIT } from './services/mail.js';
+import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
@@ -2336,43 +2336,58 @@ app.post('/internal/user/context-tokens-limit', internalAuth, (req, res) => {
 // ── Internal: Mail Accounts Management ────────────────────────────────────
 
 const getMailAccountsPayload = (userId: number) => {
-  const user = getUserById(userId);
-  const activeProvider = normalizeMailProvider(user?.imap_provider);
+  const user = db.prepare('SELECT active_mail_account_id FROM users WHERE id = ?').get(userId) as { active_mail_account_id?: number | null } | undefined;
+  const activeAccountId = Number(user?.active_mail_account_id) || null;
   const accounts = getMailAccountsForUser(userId).map(account => ({
+    id: account.id,
     provider: account.provider,
-    email: account.imap_user,
-    is_active: account.provider === activeProvider
+    label: account.label,
+    email: account.email,
+    login: account.imap_user,
+    imap_host: account.imap_host,
+    imap_port: account.imap_port,
+    imap_secure: account.imap_secure === 1,
+    smtp_host: account.smtp_host,
+    smtp_port: account.smtp_port,
+    smtp_secure: account.smtp_secure === 1,
+    is_active: account.id === activeAccountId
   }));
-  const limit = Number.isFinite(Number(user?.mail_check_limit)) && Number(user?.mail_check_limit) > 0
-    ? Math.min(MAIL_RESULTS_HARD_LIMIT, Math.floor(Number(user?.mail_check_limit)))
-    : 10;
 
-  return {
-    accounts,
-    active_provider: activeProvider,
-    mail_check_limit: limit,
-    max_mail_check_limit: MAIL_RESULTS_HARD_LIMIT
-  };
+  return { accounts, active_account_id: activeAccountId };
 };
 
-const setupMailAccount = async (userId: number, provider: MailProvider, email: string, appPassword: string) => {
-  const verified = await verifyMailAccountConnection(provider, email, appPassword);
+const setupMailAccount = async (userId: number, provider: MailProvider, email: string, appPassword: string, body: any = {}) => {
+  const accountId = Number.isInteger(Number(body.mail_account_id)) && Number(body.mail_account_id) > 0
+    ? Number(body.mail_account_id) : null;
+  const verified = await verifyMailAccountConnection(provider, email, appPassword, {
+    login: body.login,
+    imapHost: body.imap_host,
+    imapPort: body.imap_port,
+    imapSecure: body.imap_secure === false || body.imap_secure === 0 ? 0 : 1,
+    smtpHost: body.smtp_host,
+    smtpPort: body.smtp_port,
+    smtpSecure: body.smtp_secure === false || body.smtp_secure === 0 ? 0 : 1
+  });
   const encryptedPass = encryptSecret(verified.appPassword);
-  const { config } = verified;
-
-  upsertMailAccount(userId, provider, verified.email, encryptedPass, config.host, config.port, config.secure);
-  setActiveMailProvider(userId, provider);
-  updateUserMailSettings(userId, provider, verified.email, encryptedPass, config.host, config.port, config.secure);
+  const account = upsertMailAccount({
+    userId,
+    accountId,
+    provider,
+    label: body.label,
+    email: verified.email,
+    encryptedPassword: encryptedPass,
+    config: verified.config
+  });
+  setActiveMailAccount(userId, account);
   return getMailAccountsPayload(userId);
 };
 
-const removeMailAccount = (userId: number, provider: MailProvider) => {
-  const account = getMailAccountForUser(userId, provider);
+const removeMailAccount = (userId: number, accountId: number) => {
+  const account = getMailAccountById(userId, accountId);
   if (!account) throw new Error('mail_account_not_found');
 
-  const currentUser = getUserById(userId);
-  const currentActiveProvider = normalizeMailProvider(currentUser?.imap_provider);
-  deleteMailAccount(userId, provider);
+  const currentUser = db.prepare('SELECT active_mail_account_id FROM users WHERE id = ?').get(userId) as { active_mail_account_id?: number | null } | undefined;
+  deleteMailAccount(userId, accountId);
   const remaining = getMailAccountsForUser(userId);
 
   if (!remaining.length) {
@@ -2380,11 +2395,10 @@ const removeMailAccount = (userId: number, provider: MailProvider) => {
     return getMailAccountsPayload(userId);
   }
 
-  const nextActive = currentActiveProvider && currentActiveProvider !== provider
-    ? remaining.find(item => item.provider === currentActiveProvider) || remaining[0]
+  const nextActive = Number(currentUser?.active_mail_account_id) !== accountId
+    ? remaining.find(item => item.id === Number(currentUser?.active_mail_account_id)) || remaining[0]
     : remaining[0];
-  setActiveMailProvider(userId, nextActive.provider);
-  updateUserMailSettings(userId, nextActive.provider, nextActive.imap_user, nextActive.imap_pass, nextActive.imap_host, nextActive.imap_port, nextActive.imap_secure);
+  setActiveMailAccount(userId, nextActive);
   return getMailAccountsPayload(userId);
 };
 
@@ -2403,57 +2417,55 @@ app.post('/internal/mail/setup', internalAuth, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
   try {
-    const payload = await setupMailAccount(userId, provider, email, appPassword);
+    const payload = await setupMailAccount(userId, provider, email, appPassword, req.body);
     return res.json({
       ok: true,
-      accounts: payload.accounts.map(account => ({ provider: account.provider, imap_user: account.email }))
+      accounts: payload.accounts.map(account => ({ id: account.id, provider: account.provider, label: account.label, imap_user: account.email }))
     });
   } catch (err: any) {
     const code = `${err?.message || 'mail_setup_failed'}`;
-    if (['bad_email', 'app_password_required', 'bad_provider'].includes(code)) return res.status(400).json({ error: code });
-    if (code === 'mail_auth_failed') return res.status(401).json({ error: code });
+    if (['bad_email', 'app_password_required', 'bad_provider', 'bad_mail_host', 'private_mail_host_forbidden', 'mail_login_required'].includes(code)) return res.status(400).json({ error: code });
+    if (['mail_auth_failed', 'mail_smtp_auth_failed'].includes(code)) return res.status(401).json({ error: code });
     if (code === 'mail_runtime_unavailable') return res.status(503).json({ error: code });
-    if (code === 'mail_connection_failed') return res.status(502).json({ error: code });
+    if (['mail_connection_failed', 'mail_smtp_connection_failed'].includes(code)) return res.status(502).json({ error: code });
     return res.status(500).json({ error: 'mail_setup_failed' });
   }
 });
 
 app.post('/internal/mail/use', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.body?.user_id);
-  const provider = normalizeMailProvider(req.body?.provider);
+  const reference = `${req.body?.reference || req.body?.provider || ''}`.trim();
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
-  if (!provider) return res.status(400).json({ error: 'bad_provider' });
+  if (!reference) return res.status(400).json({ error: 'mail_account_required' });
 
-  const account = getMailAccountForUser(userId, provider);
+  const account = resolveMailAccountReference(userId, reference);
   if (!account) return res.status(404).json({ error: 'mail_account_not_found' });
 
-  setActiveMailProvider(userId, provider);
-  updateUserMailSettings(userId, provider, account.imap_user, account.imap_pass, account.imap_host, account.imap_port, account.imap_secure);
-  return res.json({ ok: true, provider, imap_user: account.imap_user });
+  setActiveMailAccount(userId, account);
+  return res.json({ ok: true, id: account.id, provider: account.provider, imap_user: account.email });
 });
 
 app.delete('/internal/mail/account', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.body?.user_id);
-  const provider = normalizeMailProvider(req.body?.provider);
+  const reference = `${req.body?.reference || req.body?.provider || ''}`.trim();
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
-  if (!provider) {
+  if (!reference) {
     clearUserMailSettings(userId);
     deleteAllMailAccounts(userId);
     return res.json({ ok: true, deleted: 'all' });
   }
 
-  deleteMailAccount(userId, provider);
-  const remaining = getMailAccountsForUser(userId);
-  if (!remaining.length) {
-    clearUserMailSettings(userId);
-    return res.json({ ok: true, deleted: provider, remaining: [] });
-  }
-
-  const nextActive = remaining[0];
-  setActiveMailProvider(userId, nextActive.provider);
-  updateUserMailSettings(userId, nextActive.provider, nextActive.imap_user, nextActive.imap_pass, nextActive.imap_host, nextActive.imap_port, nextActive.imap_secure);
-  return res.json({ ok: true, deleted: provider, new_active: { provider: nextActive.provider, imap_user: nextActive.imap_user } });
+  const account = resolveMailAccountReference(userId, reference);
+  if (!account) return res.status(404).json({ error: 'mail_account_not_found' });
+  const payload = removeMailAccount(userId, account.id);
+  const nextActive = payload.accounts.find(item => item.is_active);
+  return res.json({
+    ok: true,
+    deleted: account.email,
+    remaining: payload.accounts.map(item => ({ provider: item.provider, imap_user: item.email })),
+    new_active: nextActive ? { provider: nextActive.provider, imap_user: nextActive.email } : undefined
+  });
 });
 
 // ── Internal: Daily Reset ─────────────────────────────────────────────────
@@ -3929,53 +3941,41 @@ app.post('/api/v1/mail/accounts', async (req: AuthedRequest, res: any) => {
   if (!appPassword) return res.status(400).json({ error: 'app_password_required' });
 
   try {
-    const payload = await setupMailAccount(userId, provider, email, appPassword);
+    const payload = await setupMailAccount(userId, provider, email, appPassword, req.body);
     return res.status(201).json(payload);
   } catch (err: any) {
     const code = `${err?.message || 'mail_setup_failed'}`;
-    if (['bad_email', 'app_password_required', 'bad_provider'].includes(code)) return res.status(400).json({ error: code });
-    if (code === 'mail_auth_failed') return res.status(401).json({ error: code });
+    if (['bad_email', 'app_password_required', 'bad_provider', 'bad_mail_host', 'private_mail_host_forbidden', 'mail_login_required'].includes(code)) return res.status(400).json({ error: code });
+    if (['mail_auth_failed', 'mail_smtp_auth_failed'].includes(code)) return res.status(401).json({ error: code });
     if (code === 'mail_runtime_unavailable') return res.status(503).json({ error: code });
-    if (code === 'mail_connection_failed') return res.status(502).json({ error: code });
+    if (['mail_connection_failed', 'mail_smtp_connection_failed'].includes(code)) return res.status(502).json({ error: code });
     return res.status(500).json({ error: 'mail_setup_failed' });
   }
 });
 
-app.post('/api/v1/mail/accounts/:provider/activate', (req: AuthedRequest, res: any) => {
+app.post('/api/v1/mail/accounts/:id/activate', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
-  const provider = normalizeMailProvider(req.params.provider);
-  if (!provider) return res.status(400).json({ error: 'bad_provider' });
+  const accountId = Math.floor(Number(req.params.id));
+  if (!Number.isFinite(accountId) || accountId <= 0) return res.status(400).json({ error: 'bad_mail_account_id' });
 
-  const account = getMailAccountForUser(userId, provider);
+  const account = getMailAccountById(userId, accountId);
   if (!account) return res.status(404).json({ error: 'mail_account_not_found' });
 
-  setActiveMailProvider(userId, provider);
-  updateUserMailSettings(userId, provider, account.imap_user, account.imap_pass, account.imap_host, account.imap_port, account.imap_secure);
+  setActiveMailAccount(userId, account);
   return res.json(getMailAccountsPayload(userId));
 });
 
-app.delete('/api/v1/mail/accounts/:provider', (req: AuthedRequest, res: any) => {
+app.delete('/api/v1/mail/accounts/:id', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
-  const provider = normalizeMailProvider(req.params.provider);
-  if (!provider) return res.status(400).json({ error: 'bad_provider' });
+  const accountId = Math.floor(Number(req.params.id));
+  if (!Number.isFinite(accountId) || accountId <= 0) return res.status(400).json({ error: 'bad_mail_account_id' });
 
   try {
-    return res.json(removeMailAccount(userId, provider));
+    return res.json(removeMailAccount(userId, accountId));
   } catch (err: any) {
     if (err?.message === 'mail_account_not_found') return res.status(404).json({ error: err.message });
     return res.status(500).json({ error: 'mail_account_delete_failed' });
   }
-});
-
-app.put('/api/v1/mail/settings', (req: AuthedRequest, res: any) => {
-  const userId = accountIdFromRequest(req);
-  const user = getUserById(userId);
-  const requestedLimit = Math.floor(Number(req.body?.mail_check_limit));
-  if (!Number.isFinite(requestedLimit) || requestedLimit <= 0) return res.status(400).json({ error: 'bad_limit' });
-
-  const limit = Math.min(requestedLimit, MAIL_RESULTS_HARD_LIMIT);
-  updateUserMailCheckLimit(userId, limit);
-  return res.json(getMailAccountsPayload(userId));
 });
 
 app.get('/api/v1/smart-home/settings', (req: AuthedRequest, res: any) => {
@@ -4093,7 +4093,7 @@ app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
   // Send the approved email
   try {
     deletePendingEmailConfirmation(confirmationId);
-    const result = await runEmailSend(userId, pending.to, pending.subject, pending.body, pending.provider);
+    const result = await runEmailSend(userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId);
     pending.resolve(result);
     return res.json({ ok: true, status: 'sent', result });
   } catch (err: any) {
@@ -4379,7 +4379,7 @@ app.post('/internal/email/approve', internalAuth, async (req, res) => {
 
   try {
     deletePendingEmailConfirmation(confirmationId);
-    const result = await runEmailSend(pending.userId, pending.to, pending.subject, pending.body, pending.provider);
+    const result = await runEmailSend(pending.userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId);
     pending.resolve(result);
     return res.json({ ok: true, status: 'sent', result });
   } catch (err: any) {

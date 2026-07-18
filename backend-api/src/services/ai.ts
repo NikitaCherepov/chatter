@@ -7,7 +7,7 @@ import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
 import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from './smart-home.js';
-import { runEmailCheck, runEmailRead } from './mail.js';
+import { getMailAccountsForUser, runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl } from './web-reader.js';
@@ -1529,16 +1529,25 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'list_mail_accounts',
+      description: 'Показывает подключённые почтовые аккаунты пользователя, их ID, названия и адреса. Используй для выбора конкретного ящика.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'check_emails',
       description: 'Ищет письма в почте пользователя: последние входящие, поиск по отправителю/теме/ключевому слову, фильтр по датам, пагинация. Если пользователь явно указывает yandex/google — передавай provider.',
       parameters: {
         type: 'object',
         properties: {
-          provider: { type: 'string', enum: ['yandex', 'google'], description: 'Какой ящик использовать.' },
+          mail_account_id: { type: 'number', description: 'ID конкретного почтового аккаунта.' },
+          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Провайдер. При нескольких ящиках одного провайдера используй mail_account_id.' },
           search_query: { type: 'string', description: 'Поисковая строка (имя, домен, тема, ключевое слово).' },
           date_from: { type: 'string', description: 'Начальная дата (включительно) в формате YYYY-MM-DD.' },
           date_to: { type: 'string', description: 'Конечная дата (включительно) в формате YYYY-MM-DD.' },
-          limit: { type: 'number', description: 'Количество результатов (1–50). Если не указано, берётся пользовательский лимит из настроек почты.' },
+          limit: { type: 'number', description: 'Количество результатов (1–50). Если не указано, backend использует 10.' },
           offset: { type: 'number', description: 'Сдвиг для пагинации. Пример: сначала offset=0, потом offset=10 для следующих 10 писем.' }
         }
       }
@@ -1552,7 +1561,8 @@ export const toolDefinitions = [
       parameters: {
         type: 'object',
         properties: {
-          provider: { type: 'string', enum: ['yandex', 'google'], description: 'Какой ящик использовать.' },
+          mail_account_id: { type: 'number', description: 'ID конкретного почтового аккаунта.' },
+          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Запасной выбор по провайдеру.' },
           message_uid: { type: 'number', description: 'Точный uid письма из результата check_emails. Предпочтительный способ.' },
           subject_part: { type: 'string', description: 'Часть темы письма для запасного поиска, если uid недоступен.' }
         }
@@ -1567,7 +1577,8 @@ export const toolDefinitions = [
       parameters: {
         type: 'object',
         properties: {
-          provider: { type: 'string', enum: ['yandex', 'google'], description: 'Какой ящик использовать.' },
+          mail_account_id: { type: 'number', description: 'ID конкретного почтового аккаунта.' },
+          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Запасной выбор по провайдеру.' },
           to: { type: 'string', description: 'Email получателя.' },
           subject: { type: 'string', description: 'Тема письма.' },
           body: { type: 'string', description: 'Текст письма. Можно передавать HTML-разметку (<b>, <h1>, <ul>, <a> и т.д.) для красивого письма.' }
@@ -3048,22 +3059,35 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     return `Задача #${normalizedTaskId} удалена.\n\nОбновлённый список активных задач (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n${formatTasksList(updated, timezoneOffset, 'Активных задач больше нет.')}`;
   }
 
+  if (toolName === 'list_mail_accounts') {
+    const active = db.prepare('SELECT active_mail_account_id FROM users WHERE id = ?').get(user.id) as { active_mail_account_id?: number | null } | undefined;
+    return JSON.stringify(getMailAccountsForUser(user.id).map(account => ({
+      mail_account_id: account.id,
+      label: account.label,
+      email: account.email,
+      provider: account.provider,
+      is_active: account.id === Number(active?.active_mail_account_id)
+    })), null, 2);
+  }
+
   if (toolName === 'check_emails') {
     const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 0;
-    return runEmailCheck(user.id, typeof parsed.search_query === 'string' ? parsed.search_query : '', limit, typeof parsed.provider === 'string' ? parsed.provider : '', Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0, typeof parsed.date_from === 'string' ? parsed.date_from : '', typeof parsed.date_to === 'string' ? parsed.date_to : '');
+    return runEmailCheck(user.id, typeof parsed.search_query === 'string' ? parsed.search_query : '', limit, typeof parsed.provider === 'string' ? parsed.provider : '', Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0, typeof parsed.date_from === 'string' ? parsed.date_from : '', typeof parsed.date_to === 'string' ? parsed.date_to : '', Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined);
   }
 
   if (toolName === 'read_email_content') return runEmailRead(
     user.id,
     typeof parsed.subject_part === 'string' ? parsed.subject_part : '',
     typeof parsed.provider === 'string' ? parsed.provider : '',
-    Number.isFinite(Number(parsed.message_uid)) ? Number(parsed.message_uid) : undefined
+    Number.isFinite(Number(parsed.message_uid)) ? Number(parsed.message_uid) : undefined,
+    Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined
   );
   if (toolName === 'send_email') {
     const to: string = typeof parsed.to === 'string' ? parsed.to.trim() : '';
     const subject: string = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';
     const body: string = typeof parsed.body === 'string' ? parsed.body : '';
     const provider: string = typeof parsed.provider === 'string' ? parsed.provider : '';
+    const mailAccountId = Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined;
 
     // Basic validation before asking user
     if (!to || !subject || !body) return JSON.stringify({ status: 'error', message: 'Нужны to, subject и body.' });
@@ -3072,8 +3096,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     let fromAddress = '';
     try {
       const { resolveUserMailAccount } = await import('./mail.js');
-      const acct = resolveUserMailAccount(user.id, provider);
-      fromAddress = acct?.imap_user || '';
+      const acct = resolveUserMailAccount(user.id, provider, mailAccountId);
+      fromAddress = acct?.email || '';
     } catch { /* ignore — non-critical preview */ }
 
     // HitL confirmation: push via SSE callback (TG) and/or WS (desktop)
@@ -3090,7 +3114,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         to,
         subject,
         body,
-        provider
+        provider,
+        mail_account_id: mailAccountId
       }
     };
 
@@ -3121,6 +3146,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           subject,
           body,
           provider,
+          mailAccountId,
           resolve,
           reject,
           createdAt: Date.now()
@@ -5834,6 +5860,7 @@ export const sendMessageThroughAi = async (
     // Плюс read-only десктоп
     disabledToolSet.add('control_smart_home');
     disabledToolSet.add('get_smart_devices');
+    disabledToolSet.add('list_mail_accounts');
     disabledToolSet.add('check_emails');
     disabledToolSet.add('read_email_content');
     disabledToolSet.add('get_my_tasks');

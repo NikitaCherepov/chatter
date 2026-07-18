@@ -224,7 +224,8 @@
       "provider": "Provider",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Yandex Mail"
+        "yandex": "Yandex Mail",
+        "custom": "Altro"
       },
       "email": "Indirizzo email",
       "appPassword": "Password dell'app",
@@ -262,7 +263,20 @@
       "deleteTitle": "Eliminare l'account email?",
       "deleteMessage": "Eliminare l'account {{provider}} collegato da Chatter? Questa operazione non elimina la casella di posta stessa.",
       "limitSaved": "Limite di ricerca email salvato",
-      "limitSaveFailed": "Impossibile salvare il limite di ricerca email"
+      "limitSaveFailed": "Impossibile salvare il limite di ricerca email",
+      "addAccount": "Aggiungi account email",
+      "label": "Etichetta account (opzionale)",
+      "labelPlaceholder": "Ad esempio: Lavoro o Personale",
+      "login": "Login",
+      "loginPlaceholder": "Di solito l'indirizzo email completo",
+      "imapHost": "Server IMAP",
+      "smtpHost": "Server SMTP",
+      "port": "Porta",
+      "secureConnection": "Usa una connessione TLS sicura",
+      "customGuide": "Trova le impostazioni IMAP e SMTP nella documentazione del tuo provider di posta. Utilizza una password per app se il provider la supporta.",
+      "enterServers": "Inserisci gli indirizzi dei server IMAP e SMTP",
+      "invalidHost": "Indirizzo del server di posta non valido",
+      "privateHostForbidden": "I server di posta locali e di rete privata non possono essere aggiunti qui"
     }
   },
   "common": {

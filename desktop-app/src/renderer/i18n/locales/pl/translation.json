@@ -224,7 +224,8 @@
       "provider": "Dostawca",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Poczta Yandex"
+        "yandex": "Poczta Yandex",
+        "custom": "Inne"
       },
       "email": "Adres e-mail",
       "appPassword": "Hasło aplikacji",
@@ -262,7 +263,20 @@
       "deleteTitle": "Usunąć konto e-mail?",
       "deleteMessage": "Usunąć połączone konto {{provider}} z Chatter? Nie spowoduje to usunięcia samej skrzynki pocztowej.",
       "limitSaved": "Zapisano limit wyszukiwania e-maili",
-      "limitSaveFailed": "Nie udało się zapisać limitu wyszukiwania e-maili"
+      "limitSaveFailed": "Nie udało się zapisać limitu wyszukiwania e-maili",
+      "addAccount": "Dodaj konto e-mail",
+      "label": "Etykieta konta (opcjonalnie)",
+      "labelPlaceholder": "Na przykład: Służbowe lub Prywatne",
+      "login": "Login",
+      "loginPlaceholder": "Zazwyczaj pełny adres e-mail",
+      "imapHost": "Serwer IMAP",
+      "smtpHost": "Serwer SMTP",
+      "port": "Port",
+      "secureConnection": "Użyj bezpiecznego połączenia TLS",
+      "customGuide": "Znajdź ustawienia IMAP i SMTP w dokumentacji swojego dostawcy poczty. Użyj hasła aplikacji, jeśli dostawca je obsługuje.",
+      "enterServers": "Wprowadź adresy serwerów IMAP i SMTP",
+      "invalidHost": "Nieprawidłowy adres serwera poczty",
+      "privateHostForbidden": "Lokalne i prywatne serwery poczty nie mogą być tutaj dodane"
     }
   },
   "common": {

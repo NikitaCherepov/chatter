@@ -224,7 +224,8 @@
       "provider": "제공자",
       "providers": {
         "google": "Google / Gmail",
-        "yandex": "Yandex 메일"
+        "yandex": "Yandex 메일",
+        "custom": "기타"
       },
       "email": "이메일 주소",
       "appPassword": "앱 비밀번호",
@@ -262,7 +263,20 @@
       "deleteTitle": "이메일 계정을 삭제하시겠습니까?",
       "deleteMessage": "Chatter에서 연결된 {{provider}} 계정을 삭제하시겠습니까? 사서함 자체는 삭제되지 않습니다.",
       "limitSaved": "이메일 검색 제한이 저장되었습니다",
-      "limitSaveFailed": "이메일 검색 제한을 저장할 수 없습니다"
+      "limitSaveFailed": "이메일 검색 제한을 저장할 수 없습니다",
+      "addAccount": "이메일 계정 추가",
+      "label": "계정 레이블(선택 사항)",
+      "labelPlaceholder": "예: 업무 또는 개인",
+      "login": "로그인",
+      "loginPlaceholder": "일반적으로 전체 이메일 주소",
+      "imapHost": "IMAP 서버",
+      "smtpHost": "SMTP 서버",
+      "port": "포트",
+      "secureConnection": "보안 TLS 연결 사용",
+      "customGuide": "메일 제공업체의 문서에서 IMAP 및 SMTP 설정을 찾으세요. 제공업체에서 지원하는 경우 앱 비밀번호를 사용하세요.",
+      "enterServers": "IMAP 및 SMTP 서버 주소를 모두 입력하세요",
+      "invalidHost": "잘못된 메일 서버 주소",
+      "privateHostForbidden": "로컬 및 사설 네트워크 메일 서버는 여기에 추가할 수 없습니다"
     }
   },
   "common": {

@@ -1071,15 +1071,15 @@ const runBackendMailSetup = async (userId: number, provider: string, email: stri
     return response.data as { ok: boolean; accounts: Array<{ provider: string; imap_user: string }> };
 };
 
-const runBackendMailUse = async (userId: number, provider: string) => {
+const runBackendMailUse = async (userId: number, reference: string) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/use`, { user_id: userId, provider }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/mail/use`, { user_id: userId, reference }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; provider: string; imap_user: string };
 };
 
-const runBackendMailForget = async (userId: number, provider?: string | null) => {
+const runBackendMailForget = async (userId: number, reference?: string | null) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/mail/account`, { data: { user_id: userId, provider: provider || undefined }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
+    const response = await axios.delete(`${BACKEND_API_BASE_URL}/internal/mail/account`, { data: { user_id: userId, reference: reference || undefined }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; deleted: string; remaining?: Array<{ provider: string; imap_user: string }>; new_active?: { provider: string; imap_user: string } };
 };
 
@@ -3637,20 +3637,20 @@ bot.command('mail_use', async (ctx) => {
     if (!userId) return;
 
     const parts = ctx.message.text.split(' ').filter(Boolean);
-    const provider = normalizeMailProvider(parts[1]);
-    if (!provider) {
+    const reference = parts.slice(1).join(' ').trim();
+    if (!reference) {
         return ctx.reply(ctx.t('mail.useUsage'));
     }
 
     try {
-        const result = await runBackendMailUse(userId, provider);
+        const result = await runBackendMailUse(userId, reference);
         return ctx.reply(ctx.t('mail.activeAccount', {
             provider: result.provider,
             email: result.imap_user
         }));
     } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.data?.error === 'mail_account_not_found') {
-            return ctx.reply(ctx.t('mail.accountNotFound', { provider }));
+            return ctx.reply(ctx.t('mail.accountNotFound', { provider: reference }));
         }
         return ctx.reply(ctx.t('mail.useError'));
     }
@@ -3660,10 +3660,10 @@ bot.command('mail_forget', async (ctx) => {
     const userId = ctx.state.accountId;
     if (!userId) return;
     const parts = ctx.message.text.split(' ').filter(Boolean);
-    const provider = normalizeMailProvider(parts[1]);
+    const reference = parts.slice(1).join(' ').trim() || null;
 
     try {
-        const result = await runBackendMailForget(userId, provider);
+        const result = await runBackendMailForget(userId, reference);
         if (result.deleted === 'all') {
             return ctx.reply(ctx.t('mail.allDeleted'));
         }

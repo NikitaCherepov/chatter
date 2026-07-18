@@ -127,15 +127,19 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS mail_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    provider TEXT NOT NULL CHECK(provider IN ('yandex', 'google')),
+    provider TEXT NOT NULL,
+    label TEXT,
+    email TEXT NOT NULL,
     imap_user TEXT NOT NULL,
     imap_pass TEXT NOT NULL,
     imap_host TEXT NOT NULL,
     imap_port INTEGER NOT NULL DEFAULT 993,
     imap_secure INTEGER NOT NULL DEFAULT 1,
+    smtp_host TEXT NOT NULL,
+    smtp_port INTEGER NOT NULL DEFAULT 465,
+    smtp_secure INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, provider)
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS user_plan_subscriptions (
@@ -202,6 +206,7 @@ ensureUserColumn('imap_pass', 'ALTER TABLE users ADD COLUMN imap_pass TEXT');
 ensureUserColumn('imap_host', 'ALTER TABLE users ADD COLUMN imap_host TEXT');
 ensureUserColumn('imap_port', 'ALTER TABLE users ADD COLUMN imap_port INTEGER DEFAULT 993');
 ensureUserColumn('imap_secure', 'ALTER TABLE users ADD COLUMN imap_secure INTEGER DEFAULT 1');
+ensureUserColumn('active_mail_account_id', 'ALTER TABLE users ADD COLUMN active_mail_account_id INTEGER');
 ensureUserColumn('active_chat_id', 'ALTER TABLE users ADD COLUMN active_chat_id INTEGER');
 ensureUserColumn('status', "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'");
 ensureUserColumn('plan', "ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
@@ -233,6 +238,53 @@ ensureUserColumn('language', 'ALTER TABLE users ADD COLUMN language TEXT');
 ensureUserColumn('subagent_mode', "ALTER TABLE users ADD COLUMN subagent_mode TEXT NOT NULL DEFAULT 'auto'");
 ensureUserColumn('subagent_reasoning_level', 'ALTER TABLE users ADD COLUMN subagent_reasoning_level TEXT');
 ensureUserColumn('auth_token_version', 'ALTER TABLE users ADD COLUMN auth_token_version INTEGER NOT NULL DEFAULT 0');
+
+const mailAccountColumns = db.prepare('PRAGMA table_info(mail_accounts)').all() as Array<{ name: string }>;
+if (!mailAccountColumns.some(column => column.name === 'smtp_host')) {
+  db.transaction(() => {
+    db.exec(`
+      DROP INDEX IF EXISTS idx_mail_accounts_user_email;
+      CREATE TABLE mail_accounts_next (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        label TEXT,
+        email TEXT NOT NULL,
+        imap_user TEXT NOT NULL,
+        imap_pass TEXT NOT NULL,
+        imap_host TEXT NOT NULL,
+        imap_port INTEGER NOT NULL DEFAULT 993,
+        imap_secure INTEGER NOT NULL DEFAULT 1,
+        smtp_host TEXT NOT NULL,
+        smtp_port INTEGER NOT NULL DEFAULT 465,
+        smtp_secure INTEGER NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO mail_accounts_next (
+        id, user_id, provider, label, email, imap_user, imap_pass, imap_host, imap_port, imap_secure,
+        smtp_host, smtp_port, smtp_secure, created_at, updated_at
+      )
+      SELECT
+        id, user_id, provider, NULL, imap_user, imap_user, imap_pass, imap_host, imap_port, imap_secure,
+        CASE
+          WHEN lower(provider) = 'google' THEN 'smtp.gmail.com'
+          WHEN lower(provider) = 'yandex' THEN 'smtp.yandex.com'
+          ELSE replace(imap_host, 'imap', 'smtp')
+        END,
+        465,
+        1,
+        created_at,
+        updated_at
+      FROM mail_accounts;
+      DROP TABLE mail_accounts;
+      ALTER TABLE mail_accounts_next RENAME TO mail_accounts;
+      CREATE UNIQUE INDEX idx_mail_accounts_user_email
+      ON mail_accounts(user_id, lower(email));
+    `);
+  })();
+}
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_accounts_user_email ON mail_accounts(user_id, lower(email))`);
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
@@ -287,7 +339,10 @@ db.exec(`
   UPDATE users SET context_window_max = 20 WHERE context_window_max IS NULL OR context_window_max <= 0;
   CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
-  INSERT INTO mail_accounts (user_id, provider, imap_user, imap_pass, imap_host, imap_port, imap_secure)
+  INSERT INTO mail_accounts (
+    user_id, provider, email, imap_user, imap_pass, imap_host, imap_port, imap_secure,
+    smtp_host, smtp_port, smtp_secure
+  )
   SELECT
     id,
     CASE
@@ -295,19 +350,37 @@ db.exec(`
       ELSE 'yandex'
     END,
     imap_user,
+    imap_user,
     imap_pass,
     COALESCE(imap_host, 'imap.yandex.ru'),
     COALESCE(imap_port, 993),
-    COALESCE(imap_secure, 1)
+    COALESCE(imap_secure, 1),
+    CASE
+      WHEN lower(COALESCE(imap_provider, '')) = 'google' OR lower(COALESCE(imap_host, '')) LIKE '%gmail%' THEN 'smtp.gmail.com'
+      ELSE 'smtp.yandex.com'
+    END,
+    465,
+    1
   FROM users
   WHERE imap_user IS NOT NULL AND imap_user <> '' AND imap_pass IS NOT NULL AND imap_pass <> ''
-  ON CONFLICT(user_id, provider) DO UPDATE SET
-    imap_user = excluded.imap_user,
-    imap_pass = excluded.imap_pass,
-    imap_host = excluded.imap_host,
-    imap_port = excluded.imap_port,
-    imap_secure = excluded.imap_secure,
-    updated_at = CURRENT_TIMESTAMP;
+    AND NOT EXISTS (
+      SELECT 1 FROM mail_accounts existing
+      WHERE existing.user_id = users.id AND lower(existing.email) = lower(users.imap_user)
+    );
+
+  UPDATE users
+  SET active_mail_account_id = COALESCE(
+    active_mail_account_id,
+    (
+      SELECT account.id
+      FROM mail_accounts account
+      WHERE account.user_id = users.id
+      ORDER BY
+        CASE WHEN lower(account.provider) = lower(COALESCE(users.imap_provider, '')) THEN 0 ELSE 1 END,
+        account.id ASC
+      LIMIT 1
+    )
+  );
 `);
 
 // Index for efficient filtering: active (non-archived) messages per chat
