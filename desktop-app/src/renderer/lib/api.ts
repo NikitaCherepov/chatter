@@ -511,6 +511,16 @@ export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
   wsCallbacks.onTaskResult = cb;
 }
 
+/** Register a persistent handler for desktop actions that may arrive after a chat request has finished. */
+export function onDesktopAction(cb: StreamCallbacks['onDesktopAction']) {
+  wsCallbacks.onDesktopAction = cb;
+  return () => {
+    if (wsCallbacks.onDesktopAction === cb) {
+      wsCallbacks.onDesktopAction = undefined;
+    }
+  };
+}
+
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = { ...wsCallbacks, ...callbacks };
 

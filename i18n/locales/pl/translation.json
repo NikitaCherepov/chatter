@@ -74,7 +74,8 @@
       "notes": "📝 Notatki",
       "language": "🌐 Język",
       "help": "ℹ️ Pomoc",
-      "notesWebApp": "📝 Notatki (WebApp)"
+      "notesWebApp": "📝 Notatki (WebApp)",
+      "chats": "💬 Czaty"
     }
   },
   "language": {
@@ -226,7 +227,14 @@
     "created": "Utworzono i aktywowano czat #{{id}}: {{title}}",
     "useFormat": "Format: /chat_use <id>",
     "notFound": "Czat #{{id}} nie został znaleziony.",
-    "switched": "Aktywny czat zmieniony na #{{id}}: {{title}}"
+    "switched": "Aktywny czat zmieniony na #{{id}}: {{title}}",
+    "menuList": "💬 Czaty\nStrona: {{page}}\n\nWybierz czat:",
+    "buttons": {
+      "previous": "⬅️ Poprzednia",
+      "next": "Następna ➡️",
+      "new": "➕ Nowy czat",
+      "menu": "⬅️ Menu"
+    }
   },
   "notes": {
     "noAccess": "Brak dostępu do notatek.",

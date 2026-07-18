@@ -74,7 +74,8 @@
       "notes": "📝 Note",
       "language": "🌐 Lingua",
       "help": "ℹ️ Aiuto",
-      "notesWebApp": "📝 Note (WebApp)"
+      "notesWebApp": "📝 Note (WebApp)",
+      "chats": "💬 Chat"
     }
   },
   "language": {
@@ -226,7 +227,14 @@
     "created": "Chat #{{id}} creata e attivata: {{title}}",
     "useFormat": "Formato: /chat_use <id>",
     "notFound": "Chat #{{id}} non trovata.",
-    "switched": "Chat attiva cambiata in #{{id}}: {{title}}"
+    "switched": "Chat attiva cambiata in #{{id}}: {{title}}",
+    "menuList": "💬 Chat\nPagina: {{page}}\n\nScegli una chat:",
+    "buttons": {
+      "previous": "⬅️ Precedente",
+      "next": "Successivo ➡️",
+      "new": "➕ Nuova chat",
+      "menu": "⬅️ Menu"
+    }
   },
   "notes": {
     "noAccess": "Nessun accesso alle note.",

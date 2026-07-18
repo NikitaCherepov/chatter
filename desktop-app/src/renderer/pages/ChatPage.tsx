@@ -1112,6 +1112,8 @@ export function ChatPage() {
     handleDesktopAction(action);
   }, []);
 
+  useEffect(() => api.onDesktopAction(handleIncomingDesktopAction), [handleIncomingDesktopAction]);
+
   // ── Dice Roll: переключение режима кубика по клику (normal → always_one → always_twenty → normal) ──
   const cycleDiceMode = useCallback(() => {
     if (diceAnimTimer.current) { clearTimeout(diceAnimTimer.current); diceAnimTimer.current = null; }

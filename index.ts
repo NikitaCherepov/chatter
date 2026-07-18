@@ -95,6 +95,7 @@ const NOTES_WEBAPP_URL = (process.env.NOTES_WEBAPP_URL || '').trim();
 const NOTE_QUERY_MAX_LENGTH = 120;
 const NOTES_PAGE_SIZE_DEFAULT = 10;
 const NOTES_MENU_PAGE_SIZE = 10;
+const CHATS_MENU_PAGE_SIZE = 8;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const BACKEND_TIMEOUT_AI_MS = Math.max(10000, Number.parseInt(process.env.BACKEND_TIMEOUT_AI_MS || '120000', 10));
 const BACKEND_TIMEOUT_MEDIA_MS = Math.max(10000, Number.parseInt(process.env.BACKEND_TIMEOUT_MEDIA_MS || '180000', 10));
@@ -258,7 +259,7 @@ type NoteStatsRecord = {
     notes_count: number;
     notes_chars: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'language' | 'help';
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'chats' | 'language' | 'help';
 type MenuActionButton = {
     id: MenuActionId;
     labelKey: string;
@@ -285,7 +286,8 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'mail', labelKey: 'menu.buttons.mail', adminOnly: false, row: 6 },
     { id: 'language', labelKey: 'menu.buttons.language', adminOnly: false, row: 6 },
     { id: 'notes', labelKey: 'menu.buttons.notes', adminOnly: false, row: 7 },
-    { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 7 }
+    { id: 'chats', labelKey: 'menu.buttons.chats', adminOnly: false, row: 7 },
+    { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 8 }
 ];
 
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
@@ -1370,6 +1372,60 @@ const renderNotesMenuList = async (ctx: any, userId: number, page: number, mode:
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
 };
+
+const getChatMenuTitle = (chat: UserChatRecord) => normalizeTextPreview(chat.title || `#${chat.id}`, 42);
+const buildChatsMenuKeyboard = (
+    chats: UserChatRecord[],
+    activeChatId: number,
+    page: number,
+    hasNextPage: boolean,
+    t: BotTranslate
+) => {
+    const rows = chats.map(chat => [
+        Markup.button.callback(
+            `${chat.id === activeChatId ? '✅ ' : ''}${getChatMenuTitle(chat)}`,
+            `chats:use:${chat.id}:${page}`
+        )
+    ]);
+
+    const navigation = [];
+    if (page > 0) {
+        navigation.push(Markup.button.callback(t('chats.buttons.previous'), `chats:list:${page - 1}`));
+    }
+    if (hasNextPage) {
+        navigation.push(Markup.button.callback(t('chats.buttons.next'), `chats:list:${page + 1}`));
+    }
+    if (navigation.length) rows.push(navigation);
+
+    rows.push([Markup.button.callback(t('chats.buttons.new'), 'chats:new')]);
+    rows.push([Markup.button.callback(t('chats.buttons.menu'), 'chats:back:menu')]);
+    return Markup.inlineKeyboard(rows);
+};
+
+const renderChatsMenuList = async (ctx: any, userId: number, page: number, mode: 'reply' | 'edit' = 'reply') => {
+    const safePage = Math.max(0, page);
+    const data = await runBackendGetChats(
+        userId,
+        CHATS_MENU_PAGE_SIZE + 1,
+        safePage * CHATS_MENU_PAGE_SIZE
+    );
+    const chats = data.chats.slice(0, CHATS_MENU_PAGE_SIZE);
+    const hasNextPage = data.chats.length > CHATS_MENU_PAGE_SIZE;
+    const text = chats.length
+        ? ctx.t('chats.menuList', { page: safePage + 1 })
+        : ctx.t('chats.none');
+    const keyboard = buildChatsMenuKeyboard(chats, data.active_chat_id, safePage, hasNextPage, ctx.t);
+
+    if (mode === 'edit') {
+        return ctx.editMessageText(text, keyboard).catch((err: any) => {
+            const message = `${err?.description || err?.message || ''}`;
+            if (message.includes('message is not modified')) return;
+            throw err;
+        });
+    }
+    return ctx.reply(text, keyboard);
+};
+
 const renderNoteView = async (ctx: any, userId: number, noteId: number, page: number, mode: 'reply' | 'edit' = 'edit') => {
     const note = await runBackendGetNote(userId, noteId);
     if (!note) {
@@ -2152,10 +2208,10 @@ const runBackendGetResolvedPrompt = async (userId: number) => {
     return response.data as { prompt: PromptRecord };
 };
 
-const runBackendGetChats = async (userId: number, limit = 100) => {
+const runBackendGetChats = async (userId: number, limit = 100, offset = 0) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
     const response = await axios.get(`${BACKEND_API_BASE_URL}/internal/users/${userId}/chats`, {
-        params: { limit }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
+        params: { limit, offset }, headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS
     });
     return response.data as { chats: Array<UserChatRecord & { is_active: boolean }>; active_chat_id: number };
 };
@@ -3381,18 +3437,7 @@ bot.command('chats', async (ctx) => {
         return ctx.reply(ctx.t('chats.noAccess'));
     }
 
-    const data = await runBackendGetChats(userId, 50);
-    const activeChatId = data.active_chat_id;
-    const chats = data.chats;
-    if (!chats.length) return ctx.reply(ctx.t('chats.none'));
-    const lines = chats.map(chat => {
-        const marker = activeChatId === chat.id ? ctx.t('chats.activeMark') : '';
-        return `#${chat.id}${marker} ${chat.title}`;
-    });
-    return ctx.reply(ctx.t('chats.list', {
-        count: chats.length,
-        chats: lines.join('\n')
-    }));
+    return renderChatsMenuList(ctx, userId, 0, 'reply');
 });
 
 bot.command('chat_new', async (ctx) => {
@@ -3708,7 +3753,7 @@ bot.on('location', async (ctx) => {
     return ctx.reply(ctx.t('timezone.locationSet', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|language|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|chats|language|help)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -3857,6 +3902,13 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
         return;
     }
 
+    if (actionId === 'chats') {
+        const userId = ctx.state.accountId;
+        if (!userId) return;
+        await renderChatsMenuList(ctx, userId, 0, 'reply');
+        return;
+    }
+
     if (actionId === 'language') {
         await ctx.reply(ctx.t('language.card', {
             language: getNativeLanguageName(ctx.state.language)
@@ -4002,6 +4054,69 @@ bot.action('mail:forget', async (ctx) => {
     await runBackendMailForget(userId);
     await ctx.answerCbQuery(ctx.t('mail.deletedShort'));
     await ctx.reply(ctx.t('mail.dataDeleted'));
+});
+
+bot.action(/^chats:list:(\d+)$/, async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const user = await getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        await ctx.answerCbQuery(ctx.t('chats.noAccess'));
+        return;
+    }
+    const page = Number.parseInt((ctx as any).match[1], 10);
+    await ctx.answerCbQuery();
+    await renderChatsMenuList(ctx, userId, Number.isNaN(page) ? 0 : page, 'edit');
+});
+
+bot.action(/^chats:use:(\d+):(\d+)$/, async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const user = await getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        await ctx.answerCbQuery(ctx.t('chats.noAccess'));
+        return;
+    }
+
+    const chatId = Number.parseInt((ctx as any).match[1], 10);
+    const page = Number.parseInt((ctx as any).match[2], 10);
+    if (Number.isNaN(chatId) || chatId <= 0) {
+        await ctx.answerCbQuery(ctx.t('chats.notFound', { id: chatId }));
+        return;
+    }
+
+    try {
+        const activated = await runBackendActivateChat(userId, chatId);
+        await ctx.answerCbQuery(ctx.t('chats.switched', {
+            id: activated.chat.id,
+            title: activated.chat.title
+        }));
+        await renderChatsMenuList(ctx, userId, Number.isNaN(page) ? 0 : page, 'edit');
+    } catch {
+        await ctx.answerCbQuery(ctx.t('chats.notFound', { id: chatId }));
+    }
+});
+
+bot.action('chats:new', async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const user = await getUser(userId);
+    if (!user || (user.status !== 'approved' && user.role !== 'admin')) {
+        await ctx.answerCbQuery(ctx.t('chats.noAccess'));
+        return;
+    }
+
+    const created = await runBackendCreateChat(userId);
+    await ctx.answerCbQuery(ctx.t('chats.created', {
+        id: created.chat.id,
+        title: created.chat.title
+    }));
+    await renderChatsMenuList(ctx, userId, 0, 'edit');
+});
+
+bot.action('chats:back:menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await showMenu(ctx);
 });
 
 bot.action(/^notes:list:(\d+)$/, async (ctx) => {

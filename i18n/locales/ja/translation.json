@@ -74,7 +74,8 @@
       "notes": "📝 メモ",
       "language": "🌐 言語",
       "help": "ℹ️ ヘルプ",
-      "notesWebApp": "📝 メモ（Webアプリ）"
+      "notesWebApp": "📝 メモ（Webアプリ）",
+      "chats": "💬 チャット"
     }
   },
   "language": {
@@ -226,7 +227,14 @@
     "created": "チャット #{{id}}: {{title}} を作成し、アクティブにしました",
     "useFormat": "形式: /chat_use <ID>",
     "notFound": "チャット #{{id}} が見つかりませんでした。",
-    "switched": "アクティブチャットを #{{id}}: {{title}} に切り替えました"
+    "switched": "アクティブチャットを #{{id}}: {{title}} に切り替えました",
+    "menuList": "💬 チャット\nページ: {{page}}\n\nチャットを選択:",
+    "buttons": {
+      "previous": "⬅️ 前へ",
+      "next": "次へ ➡️",
+      "new": "➕ 新規チャット",
+      "menu": "⬅️ メニュー"
+    }
   },
   "notes": {
     "noAccess": "ノートにアクセスできません。",

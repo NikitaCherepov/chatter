@@ -74,7 +74,8 @@
       "notes": "📝 笔记",
       "language": "🌐 语言",
       "help": "ℹ️ 帮助",
-      "notesWebApp": "📝 笔记（WebApp）"
+      "notesWebApp": "📝 笔记（WebApp）",
+      "chats": "💬 聊天"
     }
   },
   "language": {
@@ -226,7 +227,14 @@
     "created": "已创建并激活聊天 #{{id}}：{{title}}",
     "useFormat": "格式：/chat_use <ID>",
     "notFound": "未找到聊天 #{{id}}。",
-    "switched": "已切换到活跃聊天 #{{id}}：{{title}}"
+    "switched": "已切换到活跃聊天 #{{id}}：{{title}}",
+    "menuList": "💬 聊天\n页码：{{page}}\n\n选择一个聊天：",
+    "buttons": {
+      "previous": "⬅️ 上一页",
+      "next": "下一页 ➡️",
+      "new": "➕ 新建聊天",
+      "menu": "⬅️ 菜单"
+    }
   },
   "notes": {
     "noAccess": "无法访问笔记。",

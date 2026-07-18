@@ -74,7 +74,8 @@
       "notes": "📝 메모",
       "language": "🌐 언어",
       "help": "ℹ️ 도움말",
-      "notesWebApp": "📝 메모 (웹앱)"
+      "notesWebApp": "📝 메모 (웹앱)",
+      "chats": "💬 채팅"
     }
   },
   "language": {
@@ -226,7 +227,14 @@
     "created": "채팅 #{{id}}: {{title}}이(가) 생성되고 활성화되었습니다.",
     "useFormat": "형식: /chat_use <id>",
     "notFound": "채팅 #{{id}}을(를) 찾을 수 없습니다.",
-    "switched": "활성 채팅이 #{{id}}: {{title}}(으)로 전환되었습니다."
+    "switched": "활성 채팅이 #{{id}}: {{title}}(으)로 전환되었습니다.",
+    "menuList": "💬 채팅\n페이지: {{page}}\n\n채팅 선택:",
+    "buttons": {
+      "previous": "⬅️ 이전",
+      "next": "다음 ➡️",
+      "new": "➕ 새 채팅",
+      "menu": "⬅️ 메뉴"
+    }
   },
   "notes": {
     "noAccess": "노트에 접근할 수 없습니다.",

@@ -158,7 +158,8 @@ app.get('/internal/users/:id/chats', internalAuth, (req, res) => {
   if (!getUserById(userId)) return res.status(404).json({ error: 'user_not_found' });
   const limit = Number(req.query.limit ?? 100);
   const offset = Number(req.query.offset ?? 0);
-  return res.json({ chats: listUserChats(userId, limit, offset), active_chat_id: ensureActiveChat(userId) });
+  const activeChatId = ensureActiveChat(userId);
+  return res.json({ chats: listUserChats(userId, limit, offset), active_chat_id: activeChatId });
 });
 
 app.get('/internal/users/:id/chats/:chatId', internalAuth, (req, res) => {

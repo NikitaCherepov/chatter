@@ -5548,6 +5548,7 @@ export const sendMessageThroughAi = async (
     text = text.replace(/^!{3,}/, '').trim();
     if (!text) throw new Error('empty_text');
   }
+  const userTextForHistory = options?.persistUserText?.trim() || text;
 
   // Резолв preferred model: из options (явный запрос) или из профиля юзера
   const preferredModelId = options?.preferredModel || user.preferred_model || null;
@@ -5716,6 +5717,28 @@ export const sendMessageThroughAi = async (
     currentModelSupportsVision,
     attachmentBudgetState
   );
+  const automaticChatTitlePromise = (
+    !requestedRegenerateFromHistory
+    && !options?.skipHistory
+    && !options?.skipUserHistory
+    && history.length === 0
+    && userTextForHistory.trim()
+  )
+    ? callLiteAi(
+        `Create a concise chat title of no more than five words based on the user's first message. `
+        + `Write it in the user's language (${user.language || 'en'}). `
+        + 'Return only the title without quotes, explanations, or markdown.',
+        userTextForHistory.trim().slice(0, 500)
+      ).then(raw => raw
+        .split(/\r?\n/, 1)[0]
+        .replace(/^["'«»]+|["'«»]+$/g, '')
+        .trim()
+        .slice(0, 120)
+      ).catch((err: any) => {
+        console.warn('[chat-title] generation failed:', err?.message || String(err));
+        return null;
+      })
+    : null;
   let regenerateUserText: string | null = null;
   if (requestedRegenerateFromHistory) {
     history = [...history];
@@ -6476,7 +6499,6 @@ iterations.push(currentIteration);
     }
   }
 
-  const userTextForHistory = options?.persistUserText?.trim() || text;
   if (!options?.skipHistory && !options?.skipUserHistory) {
     const userTelegramChatId = Number.isFinite(Number(options?.userTelegramChatId))
       ? Math.floor(Number(options?.userTelegramChatId))
@@ -6551,20 +6573,23 @@ iterations.push(currentIteration);
 
   trimUserHistoryByChat(userId, chatId, maxContextTokens);
 
-  // Auto-title: if chat was empty, generate title via LITE AI (fire-and-forget)
-  if (history.length === 0 && userTextForHistory.trim()) {
-    const textForTitle = userTextForHistory.trim().slice(0, 200);
-    const sendAction = options?.onDesktopAction;
-    callLiteAi(
-      'Придумай короткое название для чата (до 5 слов) на основе первого сообщения пользователя. Ответь ТОЛЬКО названием, без кавычек, без пояснений, без markdown. На русском языке.',
-      textForTitle
-    ).then(raw => {
-      const title = raw.replace(/^["«]|["»]$/g, '').trim().slice(0, 120);
-      if (title) {
-        renameUserChat(userId, chatId, title);
-        if (sendAction) sendAction({ action: 'chat_title_update', value: { chat_id: chatId, title } });
+  // Title generation starts in parallel with the main answer, but is applied
+  // before the request completes so every client observes the same backend state.
+  if (automaticChatTitlePromise) {
+    const title = await automaticChatTitlePromise;
+    if (title) {
+      renameUserChat(userId, chatId, title);
+      const action: DesktopActionPayload = {
+        action: 'chat_title_update',
+        value: { chat_id: chatId, title }
+      };
+      const deliveredViaWs = sendToDesktop(userId, { type: 'desktop_action', ...action });
+      if (!deliveredViaWs && options?.onDesktopAction) {
+        await Promise.resolve(options.onDesktopAction(action)).catch((err: any) => {
+          console.warn('[chat-title] client notification failed:', err?.message || String(err));
+        });
       }
-    }).catch(() => { /* silent */ });
+    }
   }
 
   return {

@@ -72,6 +72,7 @@
       "banned": "⛔ Banned users",
       "mail": "📬 Mail",
       "notes": "📝 Notes",
+      "chats": "💬 Chats",
       "language": "🌐 Language",
       "help": "ℹ️ Help",
       "notesWebApp": "📝 Notes (WebApp)"
@@ -226,7 +227,14 @@
     "created": "Created and activated chat #{{id}}: {{title}}",
     "useFormat": "Format: /chat_use <id>",
     "notFound": "Chat #{{id}} was not found.",
-    "switched": "Active chat switched to #{{id}}: {{title}}"
+    "switched": "Active chat switched to #{{id}}: {{title}}",
+    "menuList": "💬 Chats\nPage: {{page}}\n\nChoose a chat:",
+    "buttons": {
+      "previous": "⬅️ Previous",
+      "next": "Next ➡️",
+      "new": "➕ New chat",
+      "menu": "⬅️ Menu"
+    }
   },
   "notes": {
     "noAccess": "No access to notes.",
