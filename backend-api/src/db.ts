@@ -261,22 +261,6 @@ if (!mailAccountColumns.some(column => column.name === 'smtp_host')) {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
-      INSERT INTO mail_accounts_next (
-        id, user_id, provider, label, email, imap_user, imap_pass, imap_host, imap_port, imap_secure,
-        smtp_host, smtp_port, smtp_secure, created_at, updated_at
-      )
-      SELECT
-        id, user_id, provider, NULL, imap_user, imap_user, imap_pass, imap_host, imap_port, imap_secure,
-        CASE
-          WHEN lower(provider) = 'google' THEN 'smtp.gmail.com'
-          WHEN lower(provider) = 'yandex' THEN 'smtp.yandex.com'
-          ELSE replace(imap_host, 'imap', 'smtp')
-        END,
-        465,
-        1,
-        created_at,
-        updated_at
-      FROM mail_accounts;
       DROP TABLE mail_accounts;
       ALTER TABLE mail_accounts_next RENAME TO mail_accounts;
       CREATE UNIQUE INDEX idx_mail_accounts_user_email
@@ -285,6 +269,30 @@ if (!mailAccountColumns.some(column => column.name === 'smtp_host')) {
   })();
 }
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_accounts_user_email ON mail_accounts(user_id, lower(email))`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+const mailAccountsV2ResetMigration = 'mail_accounts_v2_reset_20260719';
+if (!db.prepare('SELECT 1 FROM schema_migrations WHERE name = ?').get(mailAccountsV2ResetMigration)) {
+  db.transaction(() => {
+    db.prepare('DELETE FROM mail_accounts').run();
+    db.prepare(`
+      UPDATE users
+      SET active_mail_account_id = NULL,
+          imap_provider = NULL,
+          imap_user = NULL,
+          imap_pass = NULL,
+          imap_host = NULL,
+          imap_port = 993,
+          imap_secure = 1
+    `).run();
+    db.prepare('INSERT INTO schema_migrations (name) VALUES (?)').run(mailAccountsV2ResetMigration);
+  })();
+}
 
 ensureChatMessageColumn('telegram_chat_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_chat_id INTEGER');
 ensureChatMessageColumn('telegram_message_id', 'ALTER TABLE chat_messages ADD COLUMN telegram_message_id INTEGER');
@@ -339,48 +347,6 @@ db.exec(`
   UPDATE users SET context_window_max = 20 WHERE context_window_max IS NULL OR context_window_max <= 0;
   CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
-  INSERT INTO mail_accounts (
-    user_id, provider, email, imap_user, imap_pass, imap_host, imap_port, imap_secure,
-    smtp_host, smtp_port, smtp_secure
-  )
-  SELECT
-    id,
-    CASE
-      WHEN lower(COALESCE(imap_provider, '')) = 'google' OR lower(COALESCE(imap_host, '')) LIKE '%gmail%' THEN 'google'
-      ELSE 'yandex'
-    END,
-    imap_user,
-    imap_user,
-    imap_pass,
-    COALESCE(imap_host, 'imap.yandex.ru'),
-    COALESCE(imap_port, 993),
-    COALESCE(imap_secure, 1),
-    CASE
-      WHEN lower(COALESCE(imap_provider, '')) = 'google' OR lower(COALESCE(imap_host, '')) LIKE '%gmail%' THEN 'smtp.gmail.com'
-      ELSE 'smtp.yandex.com'
-    END,
-    465,
-    1
-  FROM users
-  WHERE imap_user IS NOT NULL AND imap_user <> '' AND imap_pass IS NOT NULL AND imap_pass <> ''
-    AND NOT EXISTS (
-      SELECT 1 FROM mail_accounts existing
-      WHERE existing.user_id = users.id AND lower(existing.email) = lower(users.imap_user)
-    );
-
-  UPDATE users
-  SET active_mail_account_id = COALESCE(
-    active_mail_account_id,
-    (
-      SELECT account.id
-      FROM mail_accounts account
-      WHERE account.user_id = users.id
-      ORDER BY
-        CASE WHEN lower(account.provider) = lower(COALESCE(users.imap_provider, '')) THEN 0 ELSE 1 END,
-        account.id ASC
-      LIMIT 1
-    )
-  );
 `);
 
 // Index for efficient filtering: active (non-archived) messages per chat
