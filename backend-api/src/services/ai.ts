@@ -106,10 +106,13 @@ type SetTimezoneArgs = {
 };
 
 const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
-const PRO_CLIENT = new OpenAI({
-  apiKey: process.env.TIMEWEB_API_KEY,
-  baseURL: process.env.TIMEWEB_BASE_URL
-});
+const PRO_API_KEY = `${process.env.TIMEWEB_API_KEY || ''}`.trim();
+const PRO_CLIENT = PRO_API_KEY
+  ? new OpenAI({
+      apiKey: PRO_API_KEY,
+      baseURL: process.env.TIMEWEB_BASE_URL
+    })
+  : null;
 
 const parseProProviders = (): LiteProvider[] => {
   const defaultBase = (process.env.TIMEWEB_BASE_URL || '').trim();
@@ -122,7 +125,7 @@ const parseProProviders = (): LiteProvider[] => {
     return [{
       name: 'pro-1',
       baseURL: defaultBase,
-      client: PRO_CLIENT,
+      client: PRO_CLIENT!,
       modelChain: defaultModels
     }];
   }
@@ -2907,6 +2910,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
         failedProviders: res.failedProviders
       };
     }
+    if (!PRO_CLIENT) throw new Error('timeweb_api_key_not_configured');
     const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload, 'pro-main', '', signal, reasoningLevel, modelSettings, streamCallbacks);
     return {
       response: res.response,

@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.db
+*.db-journal
+updates
+npm-debug.log*
+README.md
+README_RU.md
+test.js

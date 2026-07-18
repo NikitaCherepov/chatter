@@ -14,15 +14,19 @@ const PRO_MODEL_CHAIN = (process.env.TIMEWEB_MODEL || 'gemini/gemini-3.1-flash-l
   .split(',')
   .map(v => v.trim())
   .filter(Boolean);
-const PRO_CLIENT = new OpenAI({
-  apiKey: process.env.TIMEWEB_API_KEY,
-  baseURL: process.env.TIMEWEB_BASE_URL
-});
+const PRO_API_KEY = `${process.env.TIMEWEB_API_KEY || ''}`.trim();
+const PRO_CLIENT = PRO_API_KEY
+  ? new OpenAI({
+      apiKey: PRO_API_KEY,
+      baseURL: process.env.TIMEWEB_BASE_URL
+    })
+  : null;
 const SCHEDULER_INTERVAL_MS = Math.max(5_000, Number.parseInt(process.env.BACKEND_SCHEDULER_INTERVAL_MS || '30000', 10) || 30_000);
 
 const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * (102 / 500_000);
 
 const createCompletionWithFallback = async (requestBody: Record<string, unknown>) => {
+  if (!PRO_CLIENT) throw new Error('timeweb_api_key_not_configured');
   let lastErr: unknown = null;
   for (const model of PRO_MODEL_CHAIN) {
     try {
