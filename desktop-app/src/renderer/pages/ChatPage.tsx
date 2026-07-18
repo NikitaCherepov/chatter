@@ -33,10 +33,6 @@ const ALLOWED_FORMATS: string[] = (() => {
   return raw.split(',').map((f: string) => f.trim()).filter(Boolean);
 })();
 
-const MAX_IMAGES_FREE = 0;
-const MAX_IMAGES_STANDART = 5;
-const MAX_IMAGES_PRO = 10;
-const MAX_IMAGES_ADMIN = 20;
 const MESSAGE_PAGE_SIZE = 50;
 const CHAT_PAGE_SIZE = 25;
 /**
@@ -502,15 +498,6 @@ const MessageItem = React.memo(function MessageItem({
   );
 });
 
-function getMaxImagesForPlan(plan: string, isAdmin: number): number {
-  if (isAdmin === 1) return MAX_IMAGES_ADMIN;
-  switch (plan) {
-    case 'pro': return MAX_IMAGES_PRO;
-    case 'standart': return MAX_IMAGES_STANDART;
-    default: return MAX_IMAGES_FREE;
-  }
-}
-
 export function ChatPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage || i18n.language;
@@ -773,7 +760,9 @@ export function ChatPage() {
     'null': t('chat.reasoning.auto'), 'none': t('chat.reasoning.off'), 'minimal': t('chat.reasoning.minimalShort'), 'low': t('chat.reasoning.lowShort'), 'medium': t('chat.reasoning.mediumShort'), 'high': t('chat.reasoning.highShort'), 'xhigh': t('chat.reasoning.maxShort'),
   };
 
-  const maxImages = user ? getMaxImagesForPlan(user.plan, user.is_admin) : 0;
+  const maxImages = user?.image_attachments_allowed
+    ? Math.max(0, Math.floor(user.max_images_per_request || 0))
+    : 0;
 
   const loadChats = async () => {
     setLoadingChats(true);

@@ -32,6 +32,7 @@ import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePro
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
+import { areImageAttachmentsAllowedForPlan, MAX_IMAGES_PER_REQUEST } from './services/plan-limits.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
@@ -780,6 +781,8 @@ const toAuthUserDto = (user: UserRecord) => {
     role: effectiveUser.role,
     is_admin: effectiveUser.is_admin,
     plan: effectiveUser.plan,
+    image_attachments_allowed: areImageAttachmentsAllowedForPlan(effectiveUser.plan, effectiveUser.is_admin === 1),
+    max_images_per_request: MAX_IMAGES_PER_REQUEST,
     selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
     core_memory: effectiveUser.core_memory ?? null,
@@ -1387,6 +1390,10 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
   // Parse optional images array
   const imagesRaw: Array<any> = Array.isArray(req.body?.images) ? req.body.images : [];
+  const imageUser = getUserById(userId);
+  if (imagesRaw.length > 0 && imageUser && !areImageAttachmentsAllowedForPlan(imageUser.plan, imageUser.is_admin === 1)) {
+    return res.status(403).json({ error: 'images_not_allowed_for_plan' });
+  }
   const MAX_IMAGE_BYTES_API = 20 * 1024 * 1024;
   const images = imagesRaw
     .map((img: any) => {
@@ -1396,6 +1403,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     })
     .filter(img => img.base64.length > 0);
 
+  if (images.length > MAX_IMAGES_PER_REQUEST) {
+    return res.status(400).json({ error: `too_many_images_max_${MAX_IMAGES_PER_REQUEST}` });
+  }
   // Validate image sizes — обычные HTTP-ошибки до переключения на SSE
   for (const img of images) {
     const buf = Buffer.from(img.base64, 'base64');
@@ -4604,6 +4614,11 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   // Parse & validate images
   const MAX_IMAGE_BYTES_API = 20 * 1024 * 1024;
   const imagesRaw: Array<any> = Array.isArray(images) ? images : [];
+  const imageUser = getUserById(userId);
+  if (imagesRaw.length > 0 && imageUser && !areImageAttachmentsAllowedForPlan(imageUser.plan, imageUser.is_admin === 1)) {
+    client.ws.send(JSON.stringify({ type: 'error', error: 'images_not_allowed_for_plan' }));
+    return;
+  }
   const parsedImages = imagesRaw
     .map((img: any) => ({
       base64: `${img?.base64 || ''}`.trim(),
@@ -4611,6 +4626,10 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     }))
     .filter(img => img.base64.length > 0);
 
+  if (parsedImages.length > MAX_IMAGES_PER_REQUEST) {
+    client.ws.send(JSON.stringify({ type: 'error', error: `too_many_images_max_${MAX_IMAGES_PER_REQUEST}` }));
+    return;
+  }
   for (const img of parsedImages) {
     const buf = Buffer.from(img.base64, 'base64');
     if (!buf.length) continue;

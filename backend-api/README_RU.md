@@ -673,10 +673,10 @@ services/subagents/
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
   - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) -> `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` -> `{ reply_text, message_id, chat_id, usage, ... }`
-    - `extra_images` - массив дополнительных изображений (до лимита плана): `[{ base64, mime_type? }]`
+    - `extra_images` - массив дополнительных изображений (до общего технического лимита): `[{ base64, mime_type? }]`
     - Первое изображение (обязательное) передаётся в `image_base64`, остальные через `extra_images`
-    - Лимит зависит от плана пользователя (см. таблицу ниже)
-    - Ошибки: `images_not_allowed_for_plan` (free), `too_many_images_max_N`
+    - Тариф определяет только доступность прикрепления изображений; документы доступны на всех тарифах
+    - Ошибки: `images_not_allowed_for_plan`, `too_many_images_max_N`
 - URL tool:
   - `POST /internal/tools/read_url` -> `{ url }` -> `{ ok, url, text }`
 - Prompts:
@@ -729,7 +729,7 @@ services/subagents/
 |---|---|---|---|
 | `daily_web_search_limit` | 0 | 5 | 20 |
 | `daily_image_gen_limit` | 0 | 2 | 5 |
-| `max_images_per_request` | 0 | 5 | 10 |
+| `image_attachments_allowed` | false | true | true |
 | `max_context_tokens` | 30 000 | 60 000 | 1 000 000 |
 
 Количество сообщений и заметок не ограничивается тарифом. Админы (`is_admin = 1`) обходят оставшиеся дневные лимиты на веб-поиск и генерацию изображений.

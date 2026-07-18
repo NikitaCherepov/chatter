@@ -695,10 +695,10 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
   - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) → `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` → `{ reply_text, message_id, chat_id, usage, ... }`
-    - `extra_images` — array of additional images (up to the plan limit): `[{ base64, mime_type? }]`
+    - `extra_images` — array of additional images (up to the global technical limit): `[{ base64, mime_type? }]`
     - The first image (required) is passed in `image_base64`, the rest via `extra_images`
-    - The limit depends on the user's plan (see the table below)
-    - Errors: `images_not_allowed_for_plan` (free), `too_many_images_max_N`
+    - The plan controls whether image attachments are allowed; documents are available on every plan
+    - Errors: `images_not_allowed_for_plan`, `too_many_images_max_N`
 - URL tool:
   - `POST /internal/tools/read_url` → `{ url }` → `{ ok, url, text }`
 - Prompts:
@@ -752,7 +752,7 @@ Defined in `PLAN_LIMITS` in `services/plan-limits.ts`, applied on user creation,
 |---|---|---|---|
 | `daily_web_search_limit` | 0 | 5 | 20 |
 | `daily_image_gen_limit` | 0 | 2 | 5 |
-| `max_images_per_request` | 0 | 5 | 10 |
+| `image_attachments_allowed` | false | true | true |
 | `max_context_tokens` | 30,000 | 60,000 | 1,000,000 |
 
 Message count and notes are not restricted by subscription plan. Admins (`is_admin = 1`) bypass the remaining daily web-search and image-generation limits.

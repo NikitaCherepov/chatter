@@ -21,6 +21,8 @@ type User = {
   role: string;
   is_admin: number;
   plan: string;
+  image_attachments_allowed: boolean;
+  max_images_per_request: number;
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
   core_memory: string | null;

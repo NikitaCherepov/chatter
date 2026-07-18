@@ -1576,10 +1576,6 @@ export const getPromptForUser = (user: UserRecord) => {
 export type UserStatus = 'none' | 'approved' | 'disapproved' | 'banned';
 export type UserPlan = 'free' | 'standart' | 'pro';
 
-export const getMaxImagesForPlan = (plan: string): number => {
-  return getPlanLimits(plan).max_images_per_request;
-};
-
 export const upsertTelegramUser = (
   tgId: number,
   name: string,
