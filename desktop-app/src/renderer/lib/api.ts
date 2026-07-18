@@ -494,8 +494,11 @@ export type StreamCallbacks = {
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let wsTokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let wsAuthRefreshAckTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 1000;
 const MAX_RECONNECT_DELAY = 30000;
+let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
@@ -505,6 +508,92 @@ type WsCallbacks = StreamCallbacks & {
 
 let wsCallbacks: WsCallbacks = {};
 let activeStreamCallbacks: StreamCallbacks = {};
+
+const refreshWebSocketAccessToken = (): Promise<boolean> => {
+  if (wsTokenRefreshPromise) return wsTokenRefreshPromise;
+
+  wsTokenRefreshPromise = (async () => {
+    const tokens = loadTokens();
+    if (!tokens?.refresh_token) return false;
+    const refreshTokenUsed = tokens.refresh_token;
+
+    const refreshed = await refreshToken(refreshTokenUsed);
+    if (!refreshed) return false;
+
+    // The user may have logged out or another request may already have rotated
+    // the stored token while this refresh was in flight.
+    if (loadTokens()?.refresh_token !== refreshTokenUsed) return false;
+
+    saveTokens(refreshed);
+    return true;
+  })().finally(() => {
+    wsTokenRefreshPromise = null;
+  });
+
+  return wsTokenRefreshPromise;
+};
+
+const getAccessTokenTiming = (token: string): { issuedAtMs: number; expiresAtMs: number } | null => {
+  try {
+    const encoded = token.split('.')[1];
+    if (!encoded) return null;
+    const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(padded)) as { iat?: number; exp?: number };
+    if (!Number.isFinite(payload.iat) || !Number.isFinite(payload.exp)) return null;
+    return {
+      issuedAtMs: Number(payload.iat) * 1000,
+      expiresAtMs: Number(payload.exp) * 1000,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const scheduleWebSocketTokenRefresh = (socket: WebSocket) => {
+  if (wsTokenRefreshTimer) clearTimeout(wsTokenRefreshTimer);
+  wsTokenRefreshTimer = null;
+
+  const accessToken = loadTokens()?.access_token;
+  const timing = accessToken ? getAccessTokenTiming(accessToken) : null;
+  if (!timing) return;
+
+  const tokenLifetimeMs = Math.max(0, timing.expiresAtMs - timing.issuedAtMs);
+  const refreshAheadMs = Math.min(60_000, Math.max(5_000, tokenLifetimeMs * 0.1));
+  const delayMs = Math.max(1_000, timing.expiresAtMs - Date.now() - refreshAheadMs);
+
+  wsTokenRefreshTimer = setTimeout(() => {
+    wsTokenRefreshTimer = null;
+    void refreshWebSocketAccessToken().then((refreshed) => {
+      if (ws !== socket) return;
+      if (refreshed) {
+        const accessToken = loadTokens()?.access_token;
+        if (!accessToken || socket.readyState !== WebSocket.OPEN) {
+          reconnectWebSocket();
+          return;
+        }
+
+        try {
+          socket.send(JSON.stringify({ type: 'auth_refresh', token: accessToken }));
+          if (wsAuthRefreshAckTimer) clearTimeout(wsAuthRefreshAckTimer);
+          wsAuthRefreshAckTimer = setTimeout(() => {
+            wsAuthRefreshAckTimer = null;
+            if (ws === socket) reconnectWebSocket();
+          }, 10_000);
+        } catch {
+          reconnectWebSocket();
+        }
+        return;
+      }
+
+      // A temporary refresh failure should not immediately kill a still-valid socket.
+      wsTokenRefreshTimer = setTimeout(() => {
+        wsTokenRefreshTimer = null;
+        if (ws === socket) scheduleWebSocketTokenRefresh(socket);
+      }, 10_000);
+    });
+  }, delayMs);
+};
 
 /** Register a global handler for task_result events (scheduler push). */
 export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
@@ -539,6 +628,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
   socket.onopen = () => {
     reconnectDelay = 1000;
     console.log('[ws] connected');
+    scheduleWebSocketTokenRefresh(socket);
     wsCallbacks.onConnect?.();
   };
 
@@ -573,6 +663,11 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           break;
         }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
+        case 'auth_refreshed':
+          if (wsAuthRefreshAckTimer) clearTimeout(wsAuthRefreshAckTimer);
+          wsAuthRefreshAckTimer = null;
+          scheduleWebSocketTokenRefresh(socket);
+          break;
         case 'execute_ipc':
           console.log('[ws] execute_ipc received', {
             requestId: msg.request_id,
@@ -605,11 +700,39 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     console.warn('[ws] closed', { code: ev.code, reason: ev.reason });
     const wasCurrentSocket = ws === socket;
     if (wasCurrentSocket) ws = null;
+    if (wasCurrentSocket && wsTokenRefreshTimer) {
+      clearTimeout(wsTokenRefreshTimer);
+      wsTokenRefreshTimer = null;
+    }
+    if (wasCurrentSocket && wsAuthRefreshAckTimer) {
+      clearTimeout(wsAuthRefreshAckTimer);
+      wsAuthRefreshAckTimer = null;
+    }
     if (wasCurrentSocket) wsCallbacks.onDisconnect?.();
+
+    // 4001 means that the access token is no longer valid (usually expired).
+    // Refresh it before reconnecting, otherwise every retry would reuse the same token.
+    if (wasCurrentSocket && ev.code === 4001) {
+      const delay = reconnectDelay;
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void refreshWebSocketAccessToken().then((refreshed) => {
+          if (!refreshed) {
+            console.warn('[ws] token refresh failed; waiting for the next authenticated HTTP request');
+            return;
+          }
+          reconnectDelay = 1000;
+          initWebSocket();
+        });
+      }, delay);
+      return;
+    }
 
     // Auto-reconnect if not intentional close and not replaced by a newer connection
     if (wasCurrentSocket && ev.code !== 1000 && ev.code !== 4002) {
       reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
         reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
         initWebSocket();
       }, reconnectDelay);
@@ -623,6 +746,11 @@ export function initWebSocket(callbacks?: WsCallbacks) {
 
 export function closeWebSocket() {
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (wsTokenRefreshTimer) clearTimeout(wsTokenRefreshTimer);
+  if (wsAuthRefreshAckTimer) clearTimeout(wsAuthRefreshAckTimer);
+  reconnectTimer = null;
+  wsTokenRefreshTimer = null;
+  wsAuthRefreshAckTimer = null;
   ws?.close(1000);
   ws = null;
 }

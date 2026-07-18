@@ -4413,12 +4413,30 @@ wss.on('connection', (ws, req) => {
   // 4. Handle incoming messages
   ws.on('message', async (raw) => {
     try {
+      const msg = JSON.parse(raw.toString());
+      client.lastMessageAt = Date.now();
+
+      // Allow an authenticated desktop to rotate the access token without
+      // dropping an in-progress stream. The new token must resolve to the
+      // same canonical account as the existing connection.
+      if (msg.type === 'auth_refresh') {
+        const nextToken = typeof msg.token === 'string' ? msg.token.trim() : '';
+        const nextPayload = nextToken ? verifyToken(nextToken, 'access') : null;
+        if (!nextPayload || nextPayload.sub !== client.accountId) {
+          ws.close(4001, 'invalid_refresh_token');
+          return;
+        }
+        client.accessToken = nextToken;
+        client.lastPongAt = Date.now();
+        client.missedPongs = 0;
+        ws.send(JSON.stringify({ type: 'auth_refreshed' }));
+        return;
+      }
+
       if (!verifyToken(client.accessToken, 'access')) {
         ws.close(4001, 'token_revoked');
         return;
       }
-      const msg = JSON.parse(raw.toString());
-      client.lastMessageAt = Date.now();
 
       if (msg.type === 'chat_send') {
         await handleWsChatSend(client, msg);
