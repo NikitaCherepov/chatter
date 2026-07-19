@@ -6,8 +6,6 @@ import { LogConsole } from './LogConsole';
 import { LogToolbar, type LogService } from './LogToolbar';
 import styles from './LogsPage.module.css';
 
-const MAX_BUFFERED_LINES = 3000;
-
 export function LogsPage() {
   const [service, setService] = useState<LogService>('all');
   const [tail, setTail] = useState(200);
@@ -25,7 +23,8 @@ export function LogsPage() {
     source.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as { line?: string };
-        if (data.line) setLines((current) => [...current, data.line as string].slice(-MAX_BUFFERED_LINES));
+        const maxBufferedLines = service === 'all' ? Math.max(3000, tail * 6 + 1000) : 3000;
+        if (data.line) setLines((current) => [...current, data.line as string].slice(-maxBufferedLines));
       } catch { /* Ignore malformed log events. */ }
     };
     source.addEventListener('stream-error', (event) => {

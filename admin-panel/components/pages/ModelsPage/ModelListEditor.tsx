@@ -95,9 +95,11 @@ export function ModelListEditor({
 export function ProviderModelFields({
   model,
   onChange,
+  required = true,
 }: {
   model: ProviderModelConfig;
   onChange: (patch: Partial<ProviderModelConfig>) => void;
+  required?: boolean;
 }) {
   return (
     <div className={styles.fields}>
@@ -108,7 +110,7 @@ export function ProviderModelFields({
             value={model.baseUrl}
             onChange={(event) => onChange({ baseUrl: event.target.value })}
             placeholder="https://openrouter.ai/api/v1"
-            required
+            required={required}
           />
         </FormField>
         <FormField label="Название модели">
@@ -116,7 +118,7 @@ export function ProviderModelFields({
             value={model.model}
             onChange={(event) => onChange({ model: event.target.value })}
             placeholder="provider/model-name"
-            required
+            required={required}
           />
         </FormField>
       </div>
@@ -131,7 +133,7 @@ export function ProviderModelFields({
           onChange={(event) => onChange({ apiKey: event.target.value })}
           autoComplete="off"
           placeholder={model.hasApiKey ? 'Оставь пустым, чтобы не менять' : 'Вставь API-ключ'}
-          required={!model.hasApiKey}
+          required={required && !model.hasApiKey}
         />
       </FormField>
     </div>

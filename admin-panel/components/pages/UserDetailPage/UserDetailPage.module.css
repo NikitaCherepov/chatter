@@ -1,0 +1,34 @@
+.stack { display: flex; max-width: 1120px; flex-direction: column; gap: 14px; }
+.toolbar { display: flex; min-height: 36px; align-items: center; justify-content: space-between; }
+.loading { padding: 30px; color: var(--text-muted); font-size: 11px; }
+.online, .offline { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 8px; border-radius: 4px; background: var(--bg-secondary); font-size: 9px; font-weight: 600; }
+.online { color: var(--color-success); }
+.offline { color: var(--text-hint); }
+.accountGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.accountGrid > div, .accountGrid > label { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.accountGrid span { color: var(--text-hint); font-size: 9px; }
+.accountGrid strong { overflow: hidden; color: var(--text-secondary); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.accountGrid select { max-width: 220px; }
+.accountGrid small { min-height: 13px; color: var(--text-muted); font-size: 8px; }
+.banBar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, 300px) auto; align-items: center; gap: 10px; margin-top: 17px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+.banBar > div { display: flex; flex-direction: column; gap: 2px; }
+.banBar strong { color: var(--text-secondary); font-size: 10px; }
+.banBar span { color: var(--text-hint); font-size: 9px; }
+.dangerButton { background: var(--color-error); }
+.actionState { min-height: 14px; margin: 8px 0 0; color: var(--text-muted); font-size: 9px; }
+.connectionTable { overflow: hidden; border: 1px solid var(--border-light); border-radius: 7px; }
+.connectionHeader, .connectionRow { display: grid; grid-template-columns: .7fr 1.4fr 1fr .8fr; align-items: center; gap: 12px; padding: 10px 12px; }
+.connectionHeader { background: var(--bg-secondary); color: var(--text-hint); font-size: 9px; text-transform: uppercase; }
+.connectionRow { min-height: 47px; border-top: 1px solid var(--border-light); color: var(--text-muted); font-size: 10px; }
+.connectionRow strong { color: var(--text-primary); font-size: 10px; }
+.connectionRow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connectionState { display: flex; align-items: center; gap: 7px; }
+.dotOnline, .dotOffline, .dotLinked { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.dotOnline { background: var(--color-success); }
+.dotOffline { background: var(--color-error); opacity: .7; }
+.dotLinked { background: var(--color-info); }
+.statsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.statsGrid > div { display: flex; min-width: 0; min-height: 68px; justify-content: center; flex-direction: column; padding: 11px 13px; border: 1px solid var(--border-light); border-radius: 7px; background: var(--bg-secondary); }
+.statsGrid span { color: var(--text-hint); font-size: 9px; }
+.statsGrid strong { overflow: hidden; margin-top: 5px; color: var(--text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1000px) { .accountGrid, .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .banBar { grid-template-columns: 1fr 1fr; } .banBar > div { grid-column: 1 / -1; } .connectionHeader { display: none; } .connectionRow { grid-template-columns: 1fr 1.5fr; } }

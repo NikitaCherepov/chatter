@@ -255,15 +255,22 @@ function getProviderModels(backendEnv) {
     backendEnv.TIMEWEB_LITE_API_KEY || backendEnv.TIMEWEB_API_KEY,
     splitModelChain(backendEnv.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite'])
   );
-  const visionModel = {
-    id: 'vision',
-    baseUrl: backendEnv.TIMEWEB_VISION_BASE_URL || proModels[0]?.baseUrl || backendEnv.TIMEWEB_BASE_URL || '',
-    apiKey: backendEnv.TIMEWEB_VISION_API_KEY || proModels[0]?.apiKey || backendEnv.TIMEWEB_API_KEY || '',
-    model: splitModelChain(
-      backendEnv.TIMEWEB_VISION_MODEL,
-      proModels[0]?.model ? [proModels[0].model] : []
-    )[0] || ''
-  };
+  const hasExplicitVision = Boolean(
+    backendEnv.TIMEWEB_VISION_BASE_URL
+    || backendEnv.TIMEWEB_VISION_API_KEY
+    || backendEnv.TIMEWEB_VISION_MODEL
+  );
+  const visionModel = hasExplicitVision
+    ? {
+        id: 'vision',
+        baseUrl: backendEnv.TIMEWEB_VISION_BASE_URL || proModels[0]?.baseUrl || backendEnv.TIMEWEB_BASE_URL || '',
+        apiKey: backendEnv.TIMEWEB_VISION_API_KEY || proModels[0]?.apiKey || backendEnv.TIMEWEB_API_KEY || '',
+        model: splitModelChain(
+          backendEnv.TIMEWEB_VISION_MODEL,
+          proModels[0]?.model ? [proModels[0].model] : []
+        )[0] || ''
+      }
+    : { id: 'vision', baseUrl: '', apiKey: '', model: '' };
   return { proModels, liteModels, visionModel };
 }
 
@@ -314,8 +321,11 @@ function mergeProviderModels(input, existing, label, { required = false } = {}) 
   });
 }
 
-function mergeProviderModel(input, existing, label) {
+function mergeProviderModel(input, existing, label, { required = true } = {}) {
   if (!input || typeof input !== 'object') return existing;
+  const baseUrlInput = `${input.baseUrl || ''}`.trim();
+  const modelInput = `${input.model || ''}`.trim();
+  if (!required && !baseUrlInput && !modelInput && !input.apiKey) return null;
   const apiKey = `${input.apiKey || ''}`.trim() || existing.apiKey || '';
   if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error(`${label} API key is required`);
   return {
@@ -374,7 +384,12 @@ function saveSettings(input) {
     'LITE',
     { required: true }
   );
-  const visionModel = mergeProviderModel(input.visionModel, existingProviderModels.visionModel, 'Vision');
+  const visionModel = mergeProviderModel(
+    input.visionModel,
+    existingProviderModels.visionModel,
+    'Vision',
+    { required: false }
+  );
   const manualModels = mergeManualModels(input.manualModels, existingManualModels);
   const pineconeInput = input.pinecone && typeof input.pinecone === 'object' ? input.pinecone : {};
   const webSearchInput = input.webSearch && typeof input.webSearch === 'object' ? input.webSearch : {};
@@ -429,9 +444,15 @@ function saveSettings(input) {
     delete backendEnv.TIMEWEB_LITE_ENDPOINTS;
   }
   backendEnv.TIMEWEB_LITE_ROUTER_ENABLED = '1';
-  backendEnv.TIMEWEB_VISION_BASE_URL = visionModel.baseUrl;
-  backendEnv.TIMEWEB_VISION_API_KEY = visionModel.apiKey;
-  backendEnv.TIMEWEB_VISION_MODEL = visionModel.model;
+  if (visionModel) {
+    backendEnv.TIMEWEB_VISION_BASE_URL = visionModel.baseUrl;
+    backendEnv.TIMEWEB_VISION_API_KEY = visionModel.apiKey;
+    backendEnv.TIMEWEB_VISION_MODEL = visionModel.model;
+  } else {
+    delete backendEnv.TIMEWEB_VISION_BASE_URL;
+    delete backendEnv.TIMEWEB_VISION_API_KEY;
+    delete backendEnv.TIMEWEB_VISION_MODEL;
+  }
   // These variables were briefly introduced for a Vision cascade, but the
   // backend uses a single Vision PRO model.
   delete backendEnv.TIMEWEB_VISION_ENDPOINTS;
@@ -498,7 +519,12 @@ function saveSettings(input) {
       .join(',') || 'none'
     : backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS || 'resolution,input_references';
 
-  Object.assign(telegramEnv, { TELEGRAM_TOKEN: telegramToken, BACKEND_INTERNAL_TOKEN: internalToken, NOTES_WEBAPP_URL: notesUrl });
+  Object.assign(telegramEnv, {
+    TELEGRAM_TOKEN: telegramToken,
+    BACKEND_INTERNAL_TOKEN: internalToken,
+    NOTES_WEBAPP_URL: notesUrl,
+    TG_USE_RICH_STREAMING: telegramEnv.TG_USE_RICH_STREAMING || '1'
+  });
   Object.assign(voiceEnv, {
     VOICE_TRANSCRIBE_TOKEN: voiceToken,
     VOICE_API_PORT: voiceEnv.VOICE_API_PORT || '3030',
@@ -973,6 +999,35 @@ const LOG_SERVICES = {
   admin: ['admin-panel']
 };
 
+const CONTROLLED_SERVICES = {
+  backend: { profile: null },
+  'telegram-bot': { profile: 'telegram' },
+  'webapp-notes': { profile: 'notes' },
+  voice: { profile: 'voice' }
+};
+
+async function controlService(service, action) {
+  const config = CONTROLLED_SERVICES[service];
+  if (!config) throw new Error('unknown_service');
+  if (!['start', 'stop', 'restart'].includes(action)) throw new Error('unknown_service_action');
+  const profileArgs = config.profile ? ['--profile', config.profile] : [];
+  if (action === 'start') {
+    await runDocker(composeArgs(...profileArgs, 'up', '-d', '--no-build', service), 5 * 60 * 1000);
+  } else {
+    await runDocker(composeArgs(...profileArgs, action, service), 5 * 60 * 1000);
+  }
+  if (action !== 'restart') {
+    const running = action === 'start';
+    const settings = loadSettings();
+    if (service === 'telegram-bot') settings.telegramEnabled = running;
+    if (service === 'webapp-notes') settings.notesEnabled = running;
+    if (service === 'voice') settings.voiceMode = running ? 'local' : 'off';
+    settings.updatedAt = new Date().toISOString();
+    atomicWrite(SETTINGS_FILE, `${JSON.stringify(settings, null, 2)}\n`);
+  }
+  return { ok: true, service, action };
+}
+
 function redactLogLine(line) {
   return `${line}`
     .replace(/\b\d{6,12}:[A-Za-z0-9_-]{30,}\b/g, '[REDACTED_TELEGRAM_TOKEN]')
@@ -984,7 +1039,7 @@ function redactLogLine(line) {
 
 function streamDockerLogs(req, res, service, tail) {
   if (activeLogStreams >= 3) return sendJson(res, 429, { error: 'too_many_log_streams' });
-  const selectedServices = service === 'all' ? [] : LOG_SERVICES[service];
+  const selectedServices = service === 'all' ? Object.values(LOG_SERVICES).flat() : LOG_SERVICES[service];
   if (!selectedServices) return sendJson(res, 400, { error: 'unknown_log_service' });
   activeLogStreams += 1;
   securityHeaders(res);
@@ -1138,12 +1193,17 @@ function requireSession(req, res) {
   return false;
 }
 
-async function getBackendUsersOverview() {
+async function backendInternalRequest(pathname, options = {}) {
   const internalToken = parseEnv(BACKEND_ENV_FILE).BACKEND_INTERNAL_TOKEN || '';
   if (!internalToken) throw new Error('backend_internal_token_not_configured');
 
-  const response = await fetch(new URL('/internal/admin/users-overview', BACKEND_INTERNAL_URL), {
-    headers: { Authorization: `Bearer ${internalToken}` },
+  const response = await fetch(new URL(pathname, BACKEND_INTERNAL_URL), {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${internalToken}`,
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
     signal: AbortSignal.timeout(5000),
   });
   const body = await response.json().catch(() => ({}));
@@ -1233,7 +1293,60 @@ async function handleRequest(req, res) {
   }
   if (req.method === 'GET' && pathname === '/api/settings') return sendJson(res, 200, publicSettings());
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
-  if (req.method === 'GET' && pathname === '/api/users') return sendJson(res, 200, await getBackendUsersOverview());
+  const serviceActionMatch = pathname.match(/^\/api\/services\/([^/]+)\/(start|stop|restart)$/);
+  if (req.method === 'POST' && serviceActionMatch) {
+    try {
+      return sendJson(res, 200, await controlService(serviceActionMatch[1], serviceActionMatch[2]));
+    } catch (error) {
+      const status = ['unknown_service', 'unknown_service_action'].includes(error.message) ? 400 : 500;
+      return sendJson(res, status, { error: error.message || 'service_action_failed' });
+    }
+  }
+  if (req.method === 'GET' && pathname === '/api/users') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/users-overview'));
+  }
+  const userDetailMatch = pathname.match(/^\/api\/users\/(\d+)$/);
+  if (req.method === 'GET' && userDetailMatch) {
+    return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users-overview/${userDetailMatch[1]}`));
+  }
+  const userRoleMatch = pathname.match(/^\/api\/users\/(\d+)\/role$/);
+  if (req.method === 'PUT' && userRoleMatch) {
+    const body = await readJson(req);
+    if (!['user', 'admin'].includes(body.role)) return sendJson(res, 400, { error: 'invalid_role' });
+    return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userRoleMatch[1]}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role: body.role }),
+    }));
+  }
+  const userStatusMatch = pathname.match(/^\/api\/users\/(\d+)\/status$/);
+  if (req.method === 'PUT' && userStatusMatch) {
+    const body = await readJson(req);
+    if (!['none', 'approved', 'disapproved'].includes(body.status)) return sendJson(res, 400, { error: 'invalid_status' });
+    return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userStatusMatch[1]}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: body.status }),
+    }));
+  }
+  const userPlanMatch = pathname.match(/^\/api\/users\/(\d+)\/plan$/);
+  if (req.method === 'PUT' && userPlanMatch) {
+    const body = await readJson(req);
+    if (!['free', 'standart', 'pro'].includes(body.plan)) return sendJson(res, 400, { error: 'invalid_plan' });
+    return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userPlanMatch[1]}/plan`, {
+      method: 'POST',
+      body: JSON.stringify({ plan: body.plan }),
+    }));
+  }
+  const userBanMatch = pathname.match(/^\/api\/users\/(\d+)\/ban$/);
+  if (req.method === 'POST' && userBanMatch) {
+    const body = await readJson(req);
+    return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userBanMatch[1]}/ban`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: `${body.reason || ''}`.trim() }),
+    }));
+  }
+  if (req.method === 'DELETE' && userBanMatch) {
+    return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userBanMatch[1]}/ban`, { method: 'DELETE' }));
+  }
   if (req.method === 'GET' && pathname === '/api/system') return sendJson(res, 200, await getSystemInfo());
   if (req.method === 'GET' && pathname === '/api/backups') return sendJson(res, 200, { creating: Boolean(backupPromise), restoring: Boolean(restorePromise), backups: await listBackups() });
   if (req.method === 'GET' && pathname === '/api/backups/schedule') return sendJson(res, 200, getBackupSchedule());

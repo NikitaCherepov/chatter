@@ -39,11 +39,57 @@
   gap: 10px;
 }
 .statusCard {
+  position: relative;
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--border-light);
   border-radius: 8px;
   background: var(--bg-primary);
+}
+.cardControls {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.statusActions {
+  display: flex;
+  width: 0;
+  overflow: hidden;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  opacity: 0;
+  transition: width .15s, opacity .15s;
+}
+.statusCard:hover .statusActions,
+.statusCard:focus-within .statusActions {
+  width: 56px;
+  opacity: 1;
+}
+.statusCard:hover .dot,
+.statusCard:focus-within .dot {
+  display: none;
+}
+.statusActions button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border-input);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.actionError {
+  padding: 9px 11px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-error) 9%, var(--bg-primary));
+  color: var(--color-error);
+  font-size: 10px;
 }
 .statusHeading {
   display: flex;

@@ -2526,6 +2526,7 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
       u.is_admin,
       u.status,
       u.plan,
+      u.total_tokens_used,
       u.language,
       u.created_at,
       COUNT(cm.id) AS message_count,
@@ -2542,6 +2543,7 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
     is_admin: number;
     status: string;
     plan: string;
+    total_tokens_used: number;
     language: string | null;
     created_at: string | null;
     message_count: number;
@@ -2602,6 +2604,71 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
     }),
     total,
     limited: total > users.length,
+  });
+});
+
+app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = db.prepare(`
+    SELECT
+      id, name, role, is_admin, status, plan, language, created_at,
+      daily_message_count, daily_tokens_used, total_tokens_used,
+      daily_web_search_count, daily_web_search_limit, total_web_search_count,
+      daily_image_gen_count, daily_image_gen_limit, total_image_gen_count,
+      total_message_length, preferred_model, reasoning_level,
+      max_context_tokens_limit, max_context_tokens, attachment_max_tokens
+    FROM users
+    WHERE id = ?
+  `).get(userId) as Record<string, unknown> | undefined;
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  const messageStats = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS user_messages,
+      SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END) AS assistant_messages,
+      MAX(created_at) AS last_message_at
+    FROM chat_messages
+    WHERE user_id = ?
+  `).get(userId) as {
+    total: number;
+    user_messages: number;
+    assistant_messages: number;
+    last_message_at: string | null;
+  };
+  const chatCount = Number((db.prepare('SELECT COUNT(*) AS count FROM user_chats WHERE user_id = ?').get(userId) as { count: number }).count) || 0;
+  const identities = db.prepare(`
+    SELECT provider, provider_subject, username, created_at, updated_at
+    FROM account_identities
+    WHERE account_id = ?
+    ORDER BY id ASC
+  `).all(userId);
+  const client = wsClients.get(userId);
+  const desktopOnline = !!client
+    && client.ws.readyState === WebSocket.OPEN
+    && Date.now() - client.lastPongAt <= WS_HEARTBEAT_GRACE_MS;
+
+  return res.json({
+    user: {
+      ...user,
+      is_admin: user.is_admin === 1 || user.role === 'admin',
+      identities,
+      messages: {
+        total: Number(messageStats.total) || 0,
+        user: Number(messageStats.user_messages) || 0,
+        assistant: Number(messageStats.assistant_messages) || 0,
+        last_message_at: messageStats.last_message_at,
+      },
+      chats_count: chatCount,
+      ban: getBanRecord(userId) || null,
+      desktop: {
+        online: desktopOnline,
+        connected_at: client?.connectedAt ?? null,
+        last_activity_at: client?.lastMessageAt ?? null,
+      },
+    },
   });
 });
 

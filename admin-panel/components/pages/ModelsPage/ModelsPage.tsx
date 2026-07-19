@@ -23,7 +23,7 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
   };
 
   return (
-    <form className={grid.stack} onSubmit={onSave}>
+    <form className={grid.stack} onSubmit={onSave} noValidate>
       <details className={styles.section} open>
         <summary>
           <span>
@@ -59,16 +59,16 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
         <summary>
           <span>
             <strong>Vision</strong>
-            <small>Одна отдельная PRO-модель для анализа изображений</small>
+            <small>Необязательная отдельная модель; без неё используется первая PRO-модель</small>
           </span>
         </summary>
         <div className={styles.sectionBody}>
           <div className={styles.singleModel}>
             <div className={styles.modelTitle}>
-              <strong>{settings.visionModel.model || 'Vision PRO'}</strong>
-              <span>{settings.visionModel.baseUrl || 'Провайдер не указан'}</span>
+              <strong>{settings.visionModel.model || 'Используется PRO-модель'}</strong>
+              <span>{settings.visionModel.baseUrl || 'Отдельный Vision-провайдер не настроен'}</span>
             </div>
-            <ProviderModelFields model={settings.visionModel} onChange={updateVision} />
+            <ProviderModelFields model={settings.visionModel} onChange={updateVision} required={false} />
           </div>
         </div>
       </details>

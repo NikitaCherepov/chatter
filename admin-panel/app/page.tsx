@@ -11,6 +11,7 @@ import { PlaceholderPage } from '../components/pages/PlaceholderPage/Placeholder
 import { SecurityPage } from '../components/pages/SecurityPage/SecurityPage';
 import { ServicesPage } from '../components/pages/ServicesPage/ServicesPage';
 import { SystemPage } from '../components/pages/SystemPage/SystemPage';
+import { UserDetailPage } from '../components/pages/UserDetailPage/UserDetailPage';
 import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { api } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
@@ -30,6 +31,19 @@ export default function Home() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [accountState, setAccountState] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const syncUserRoute = () => {
+      const match = window.location.pathname.match(/^\/users\/(\d+)\/?$/);
+      const userId = match ? Number.parseInt(match[1], 10) : null;
+      setSelectedUserId(userId && userId > 0 ? userId : null);
+      if (userId) setSection('users');
+    };
+    syncUserRoute();
+    window.addEventListener('popstate', syncUserRoute);
+    return () => window.removeEventListener('popstate', syncUserRoute);
+  }, []);
 
   const loadData = useCallback(async () => {
     const [loadedSettings, status, session] = await Promise.all([
@@ -37,8 +51,16 @@ export default function Home() {
       api<{ services: Service[] }>('/api/status'),
       api<{ username: string }>('/api/session'),
     ]);
-    setSettings({ ...emptySettings, ...loadedSettings });
-    setServices(status.services || []);
+    const loadedServices = status.services || [];
+    const isRunning = (serviceName: string) =>
+      loadedServices.some((service) => service.service === serviceName && service.state === 'running');
+    setSettings({
+      ...emptySettings,
+      ...loadedSettings,
+      telegramEnabled: isRunning('telegram-bot'),
+      notesEnabled: isRunning('webapp-notes'),
+    });
+    setServices(loadedServices);
     setUsername(session.username);
   }, []);
 
@@ -136,12 +158,32 @@ export default function Home() {
 
   const sharedSettingsProps = { settings, setSettings, saving, saveState, onSave: save };
 
+  function navigateSection(nextSection: AdminSection) {
+    if (selectedUserId || window.location.pathname.startsWith('/users/')) {
+      window.history.pushState({}, '', '/');
+      setSelectedUserId(null);
+    }
+    setSection(nextSection);
+  }
+
+  function openUser(userId: number) {
+    window.history.pushState({}, '', `/users/${userId}`);
+    setSelectedUserId(userId);
+    setSection('users');
+  }
+
+  function closeUser() {
+    window.history.pushState({}, '', '/');
+    setSelectedUserId(null);
+    setSection('users');
+  }
+
   return (
     <AdminShell
       section={section}
       username={username}
       services={services}
-      onSectionChange={setSection}
+      onSectionChange={navigateSection}
       onLogout={logout}
     >
       {section === 'overview' && (
@@ -149,12 +191,12 @@ export default function Home() {
           services={services}
           settings={settings}
           onRefresh={loadData}
-          onNavigate={setSection}
+          onNavigate={navigateSection}
         />
       )}
       {section === 'models' && <ModelsPage {...sharedSettingsProps} />}
       {section === 'integrations' && (
-        <IntegrationsPage {...sharedSettingsProps} onNavigate={setSection} />
+        <IntegrationsPage {...sharedSettingsProps} onNavigate={navigateSection} />
       )}
       {section === 'services' && (
         <ServicesPage
@@ -166,7 +208,8 @@ export default function Home() {
           onVoiceTokenChange={setVoiceToken}
         />
       )}
-      {section === 'users' && <UsersPage />}
+      {section === 'users' && selectedUserId && <UserDetailPage userId={selectedUserId} onBack={closeUser} />}
+      {section === 'users' && !selectedUserId && <UsersPage onSelectUser={openUser} />}
       {section === 'limits' && (
         <PlaceholderPage
           title="Тарифы и лимиты"

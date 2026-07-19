@@ -13,6 +13,7 @@ type UserOverview = {
   is_admin: boolean;
   status: string;
   plan: string;
+  total_tokens_used: number;
   language: string | null;
   created_at: string | null;
   message_count: number;
@@ -48,7 +49,11 @@ function identityLabel(identity: Identity) {
   return identity.provider_subject;
 }
 
-export function UsersPage() {
+function formatTokens(value: number) {
+  return new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+}
+
+export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => void }) {
   const [users, setUsers] = useState<UserOverview[]>([]);
   const [total, setTotal] = useState(0);
   const [limited, setLimited] = useState(false);
@@ -129,19 +134,20 @@ export function UsersPage() {
 
         <div className={styles.tableWrap}>
           <table className={styles.table}>
-            <thead><tr><th>Пользователь</th><th>Статус</th><th>Тариф</th><th>Сообщений</th><th>Последнее сообщение</th><th>Создан</th></tr></thead>
+            <thead><tr><th>Пользователь</th><th>Статус</th><th>Тариф</th><th>Токенов всего</th><th>Сообщений</th><th>Последнее сообщение</th><th>Создан</th></tr></thead>
             <tbody>
               {filteredUsers.map(user => (
                 <tr key={user.id}>
                   <td><div className={styles.userCell}>
                     <i className={user.desktop.online ? styles.onlineDot : styles.offlineDot} title={user.desktop.online ? 'Desktop подключён' : 'Desktop не подключён'} />
-                    <div><strong>{user.name || `Пользователь ${user.id}`}</strong><span>#{user.id}{user.identities[0] ? ` · ${identityLabel(user.identities[0])}` : ''}</span></div>
+                    <div><button className={styles.userLink} type="button" onClick={() => onSelectUser(user.id)}>{user.name || `Пользователь ${user.id}`}</button><span>#{user.id}{user.identities[0] ? ` · ${identityLabel(user.identities[0])}` : ''}</span></div>
                   </div></td>
                   <td><div className={styles.badges}>
                     <span className={`${styles.badge} ${styles[`status_${user.status}`] || ''}`}>{statusLabels[user.status] || user.status}</span>
                     {user.is_admin && <span className={styles.adminBadge}>Админ</span>}
                   </div></td>
                   <td><span className={styles.plan}>{planLabels[user.plan] || user.plan}</span></td>
+                  <td className={styles.number} title={`${user.total_tokens_used || 0} токенов`}>{formatTokens(user.total_tokens_used)}</td>
                   <td className={styles.number}>{user.message_count.toLocaleString('ru')}</td>
                   <td>{formatDate(user.last_message_at)}</td>
                   <td>{formatDate(user.created_at)}</td>

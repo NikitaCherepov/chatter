@@ -54,12 +54,13 @@
   width: 17%;
 }
 .table th:nth-child(3),
-.table th:nth-child(4) {
-  width: 10%;
+.table th:nth-child(4),
+.table th:nth-child(5) {
+  width: 9%;
 }
-.table th:nth-child(5),
-.table th:nth-child(6) {
-  width: 17.5%;
+.table th:nth-child(6),
+.table th:nth-child(7) {
+  width: 14%;
 }
 .table td {
   height: 54px;
@@ -85,15 +86,25 @@
   gap: 2px;
 }
 .userCell strong,
-.userCell span {
+.userCell span,
+.userLink {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.userCell strong {
+.userLink {
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-primary);
   font-size: 11px;
   font-weight: 600;
+  text-align: left;
+}
+.userLink:hover {
+  color: var(--accent-focus);
+  opacity: 1;
 }
 .userCell span {
   color: var(--text-hint);
