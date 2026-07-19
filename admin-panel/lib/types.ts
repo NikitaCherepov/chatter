@@ -21,5 +21,5 @@ export const emptySettings: Settings = {
   voiceExternalUrl: '',
   hasTelegramToken: false,
   hasAiApiKey: false,
-  hasVoiceToken: false
+  hasVoiceToken: false,
 };

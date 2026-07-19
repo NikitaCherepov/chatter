@@ -1,15 +1,15 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { AdminShell, type AdminSection } from '../components/AdminShell';
-import { LoginScreen } from '../components/LoginScreen';
-import { IntegrationsPage } from '../components/pages/IntegrationsPage';
-import { LogsPage } from '../components/pages/LogsPage';
-import { ModelsPage } from '../components/pages/ModelsPage';
-import { OverviewPage } from '../components/pages/OverviewPage';
-import { PlaceholderPage } from '../components/pages/PlaceholderPage';
-import { SecurityPage } from '../components/pages/SecurityPage';
-import { ServicesPage } from '../components/pages/ServicesPage';
+import { AdminShell, type AdminSection } from '../components/AdminShell/AdminShell';
+import { LoginScreen } from '../components/LoginScreen/LoginScreen';
+import { IntegrationsPage } from '../components/pages/IntegrationsPage/IntegrationsPage';
+import { LogsPage } from '../components/pages/LogsPage/LogsPage';
+import { ModelsPage } from '../components/pages/ModelsPage/ModelsPage';
+import { OverviewPage } from '../components/pages/OverviewPage/OverviewPage';
+import { PlaceholderPage } from '../components/pages/PlaceholderPage/PlaceholderPage';
+import { SecurityPage } from '../components/pages/SecurityPage/SecurityPage';
+import { ServicesPage } from '../components/pages/ServicesPage/ServicesPage';
 import { api } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
@@ -34,7 +34,7 @@ export default function Home() {
     const [loadedSettings, status, session] = await Promise.all([
       api<Settings>('/api/settings'),
       api<{ services: Service[] }>('/api/status'),
-      api<{ username: string }>('/api/session')
+      api<{ username: string }>('/api/session'),
     ]);
     setSettings(loadedSettings);
     setServices(status.services || []);
@@ -55,12 +55,19 @@ export default function Home() {
     event.preventDefault();
     setLoginError('');
     try {
-      await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password: loginPassword }) });
+      await api('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password: loginPassword }),
+      });
       setLoginPassword('');
       setAuthenticated(true);
       await loadData();
     } catch (error) {
-      setLoginError(error instanceof Error && error.message === 'invalid_credentials' ? 'Неверный логин или пароль.' : String(error));
+      setLoginError(
+        error instanceof Error && error.message === 'invalid_credentials'
+          ? 'Неверный логин или пароль.'
+          : String(error),
+      );
     }
   }
 
@@ -76,7 +83,7 @@ export default function Home() {
     try {
       await api('/api/settings', {
         method: 'PUT',
-        body: JSON.stringify({ ...settings, telegramToken, aiApiKey, voiceToken })
+        body: JSON.stringify({ ...settings, telegramToken, aiApiKey, voiceToken }),
       });
       setTelegramToken('');
       setAiApiKey('');
@@ -94,7 +101,10 @@ export default function Home() {
     event.preventDefault();
     setAccountState('Сохраняю…');
     try {
-      await api('/api/account', { method: 'PUT', body: JSON.stringify({ username, currentPassword, newPassword }) });
+      await api('/api/account', {
+        method: 'PUT',
+        body: JSON.stringify({ username, currentPassword, newPassword }),
+      });
       setCurrentPassword('');
       setNewPassword('');
       setAccountState('Изменено. Войди снова.');
@@ -104,25 +114,91 @@ export default function Home() {
     }
   }
 
-  if (authenticated === null) return <main className="loadingScreen"><div className="loader" /></main>;
+  if (authenticated === null)
+    return (
+      <main className="loadingScreen">
+        <div className="loader" />
+      </main>
+    );
 
   if (!authenticated) {
-    return <LoginScreen username={username} password={loginPassword} error={loginError} onUsernameChange={setUsername} onPasswordChange={setLoginPassword} onSubmit={login} />;
+    return (
+      <LoginScreen
+        username={username}
+        password={loginPassword}
+        error={loginError}
+        onUsernameChange={setUsername}
+        onPasswordChange={setLoginPassword}
+        onSubmit={login}
+      />
+    );
   }
 
   const sharedSettingsProps = { settings, setSettings, saving, saveState, onSave: save };
 
   return (
-    <AdminShell section={section} username={username} services={services} onSectionChange={setSection} onLogout={logout}>
-      {section === 'overview' && <OverviewPage services={services} settings={settings} onRefresh={loadData} onNavigate={setSection} />}
-      {section === 'models' && <ModelsPage {...sharedSettingsProps} apiKey={aiApiKey} onApiKeyChange={setAiApiKey} />}
-      {section === 'integrations' && <IntegrationsPage settings={settings} onNavigate={setSection} />}
-      {section === 'services' && <ServicesPage {...sharedSettingsProps} services={services} telegramToken={telegramToken} voiceToken={voiceToken} onTelegramTokenChange={setTelegramToken} onVoiceTokenChange={setVoiceToken} />}
-      {section === 'users' && <PlaceholderPage title="Пользователи" description="Управление аккаунтами, ролями и привязками появится здесь." />}
-      {section === 'limits' && <PlaceholderPage title="Тарифы и лимиты" description="Общие тарифы и индивидуальные ограничения пользователей будут собраны в одном месте." />}
-      {section === 'system' && <PlaceholderPage title="Система" description="Ресурсы сервера, версии компонентов, обновления и резервные копии появятся здесь." />}
+    <AdminShell
+      section={section}
+      username={username}
+      services={services}
+      onSectionChange={setSection}
+      onLogout={logout}
+    >
+      {section === 'overview' && (
+        <OverviewPage
+          services={services}
+          settings={settings}
+          onRefresh={loadData}
+          onNavigate={setSection}
+        />
+      )}
+      {section === 'models' && (
+        <ModelsPage {...sharedSettingsProps} apiKey={aiApiKey} onApiKeyChange={setAiApiKey} />
+      )}
+      {section === 'integrations' && (
+        <IntegrationsPage settings={settings} onNavigate={setSection} />
+      )}
+      {section === 'services' && (
+        <ServicesPage
+          {...sharedSettingsProps}
+          services={services}
+          telegramToken={telegramToken}
+          voiceToken={voiceToken}
+          onTelegramTokenChange={setTelegramToken}
+          onVoiceTokenChange={setVoiceToken}
+        />
+      )}
+      {section === 'users' && (
+        <PlaceholderPage
+          title="Пользователи"
+          description="Управление аккаунтами, ролями и привязками появится здесь."
+        />
+      )}
+      {section === 'limits' && (
+        <PlaceholderPage
+          title="Тарифы и лимиты"
+          description="Общие тарифы и индивидуальные ограничения пользователей будут собраны в одном месте."
+        />
+      )}
+      {section === 'system' && (
+        <PlaceholderPage
+          title="Система"
+          description="Ресурсы сервера, версии компонентов, обновления и резервные копии появятся здесь."
+        />
+      )}
       {section === 'logs' && <LogsPage />}
-      {section === 'security' && <SecurityPage username={username} currentPassword={currentPassword} newPassword={newPassword} state={accountState} onUsernameChange={setUsername} onCurrentPasswordChange={setCurrentPassword} onNewPasswordChange={setNewPassword} onSubmit={changeAccount} />}
+      {section === 'security' && (
+        <SecurityPage
+          username={username}
+          currentPassword={currentPassword}
+          newPassword={newPassword}
+          state={accountState}
+          onUsernameChange={setUsername}
+          onCurrentPasswordChange={setCurrentPassword}
+          onNewPasswordChange={setNewPassword}
+          onSubmit={changeAccount}
+        />
+      )}
     </AdminShell>
   );
 }

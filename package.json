@@ -27,7 +27,9 @@
     "stop:api": "pm2 stop chatter-api",
     "logs": "pm2 logs chatter",
     "logs:api": "pm2 logs chatter-api",
-    "security:secrets": "node scripts/security/scan-secrets.mjs --mode all --report .secret-scan-report.json --fail-on high"
+    "security:secrets": "node scripts/security/scan-secrets.mjs --mode all --report .secret-scan-report.json --fail-on high",
+    "format": "prettier --write \"admin-panel/**/*.{ts,tsx,css,mjs,js,json,md}\"",
+    "format:check": "prettier --check \"admin-panel/**/*.{ts,tsx,css,mjs,js,json,md}\""
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^7.2.0",
@@ -46,6 +48,7 @@
   "devDependencies": {
     "@types/mailparser": "^3.4.6",
     "@types/node": "^20.0.0",
+    "prettier": "^3.9.5",
     "tsx": "^4.7.0",
     "typescript": "^5.9.3"
   }

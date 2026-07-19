@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Chatter Admin',
-  description: 'Self-hosted Chatter server management'
+  description: 'Self-hosted Chatter server management',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

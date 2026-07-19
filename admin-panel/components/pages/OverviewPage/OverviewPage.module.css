@@ -1,27 +1,180 @@
-.stack { display: flex; max-width: 1120px; flex-direction: column; gap: 14px; }
-.toolbar { display: flex; min-height: 38px; align-items: center; justify-content: space-between; gap: 20px; }
-.toolbar > div { display: flex; flex-direction: column; gap: 2px; }
-.toolbar strong { color: var(--text-primary); font-size: 12px; }
-.toolbar span { color: var(--text-muted); font-size: 10px; }
-.toolbar button { display: inline-flex; align-items: center; gap: 7px; }
-.toolbar svg { width: 14px; height: 14px; }
-.statusGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.statusCard { min-width: 0; padding: 14px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--bg-primary); }
-.statusHeading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.statusHeading strong { color: var(--text-primary); font-size: 12px; font-weight: 600; }
-.statusCard p { overflow: hidden; margin: 6px 0 0; color: var(--text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
-.good { background: var(--color-success); }.warning { background: var(--color-warning); }.off { background: var(--border-medium); }
-.columns { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, .75fr); gap: 14px; }
-.checklist { display: flex; flex-direction: column; }
-.setupRow { display: grid; grid-template-columns: 24px minmax(0, 1fr) 17px; align-items: center; gap: 11px; width: 100%; padding: 11px 0; border: 0; border-bottom: 1px solid var(--border-light); border-radius: 0; background: transparent; color: var(--text-secondary); text-align: left; cursor: pointer; }
-.setupRow:first-child { padding-top: 0; }.setupRow:last-child { padding-bottom: 0; border-bottom: 0; }
-.setupRow > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-.setupRow strong { font-size: 11px; font-weight: 600; }.setupRow small { color: var(--text-muted); font-size: 10px; }
-.setupRow > svg { width: 15px; color: var(--text-hint); }
-.check { display: grid; width: 20px; height: 20px; place-items: center; border: 1px solid var(--border-medium); border-radius: 50%; color: white; font-size: 11px; }
-.checkReady { border-color: var(--color-success); background: var(--color-success); }
-.summary { display: flex; flex-direction: column; gap: 5px; }
-.summary strong { color: var(--text-primary); font-size: 24px; font-weight: 600; }.summary > span { color: var(--text-muted); font-size: 11px; }
-.progress { height: 5px; margin-top: 12px; overflow: hidden; border-radius: 3px; background: var(--bg-input); }.progress span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s; }
-@media (max-width: 1000px) { .statusGrid { grid-template-columns: repeat(2, 1fr); } .columns { grid-template-columns: 1fr; } }
+.stack {
+  display: flex;
+  max-width: 1120px;
+  flex-direction: column;
+  gap: 14px;
+}
+.toolbar {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.toolbar > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.toolbar strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.toolbar span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.toolbar svg {
+  width: 14px;
+  height: 14px;
+}
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.statusCard {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+.statusHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.statusHeading strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.statusCard p {
+  overflow: hidden;
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+.good {
+  background: var(--color-success);
+}
+.warning {
+  background: var(--color-warning);
+}
+.off {
+  background: var(--border-medium);
+}
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.75fr);
+  gap: 14px;
+}
+.checklist {
+  display: flex;
+  flex-direction: column;
+}
+.setupRow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 17px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+.setupRow:first-child {
+  padding-top: 0;
+}
+.setupRow:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.setupRow > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.setupRow strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+.setupRow small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.setupRow > svg {
+  width: 15px;
+  color: var(--text-hint);
+}
+.check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--border-medium);
+  border-radius: 50%;
+  color: white;
+  font-size: 11px;
+}
+.checkReady {
+  border-color: var(--color-success);
+  background: var(--color-success);
+}
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.summary strong {
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 600;
+}
+.summary > span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.progress {
+  height: 5px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--bg-input);
+}
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+@media (max-width: 1000px) {
+  .statusGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}

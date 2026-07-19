@@ -1,1 +1,14 @@
-.form { max-width: 700px; }.actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 2px; }.actions span { color: var(--text-muted); font-size: 10px; }
+.form {
+  max-width: 700px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 2px;
+}
+.actions span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
