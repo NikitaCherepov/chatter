@@ -4,12 +4,15 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
 CONFIG_DIR="${CHATTER_CONFIG_DIR:-/var/lib/chatter}"
+INSTALL_DIR="${CHATTER_INSTALL_DIR:-/opt/chatter}"
+SOURCE_REF="${CHATTER_SOURCE_REF:-main}"
+SOURCE_BASE_URL="https://raw.githubusercontent.com/NikitaCherepov/chatter/${SOURCE_REF}"
 AUTH_WAS_PRESENT=0
 [[ -f "$CONFIG_DIR/auth.json" ]] && AUTH_WAS_PRESENT=1
 RESET_ADMIN=0
 
 if [[ "${EUID}" -ne 0 ]]; then
-  exec sudo --preserve-env=CHATTER_CONFIG_DIR,CHATTER_IMAGE_PREFIX,CHATTER_IMAGE_TAG,CHATTER_PUBLIC_HOST,SSH_CONNECTION bash "$0" "$@"
+  exec sudo --preserve-env=CHATTER_CONFIG_DIR,CHATTER_INSTALL_DIR,CHATTER_SOURCE_REF,CHATTER_IMAGE_PREFIX,CHATTER_IMAGE_TAG,CHATTER_PUBLIC_HOST,GH_TOKEN,GH_USERNAME,SSH_CONNECTION bash "$0" "$@"
 fi
 
 log() {
@@ -125,13 +128,51 @@ configure_firewall() {
   return 0
 }
 
-[[ -f "$PROJECT_DIR/docker-compose.yml" ]] || fail "Run install.sh from the cloned Chatter repository."
+download_source_file() {
+  local source_path="$1"
+  local destination="$2"
+  local curl_args=(-fsSL --retry 3 --connect-timeout 10)
+
+  if [[ -n "${GH_TOKEN:-}" ]]; then
+    curl_args+=(-H "Authorization: Bearer ${GH_TOKEN}")
+  fi
+
+  curl "${curl_args[@]}" "${SOURCE_BASE_URL}/${source_path}" -o "$destination"
+}
+
+bootstrap_installation() {
+  local staging_dir
+  staging_dir="$(mktemp -d)"
+  trap 'rm -rf "$staging_dir"' RETURN
+
+  log "Downloading Chatter installation files"
+  install -d -m 755 "$staging_dir/deploy" "$INSTALL_DIR/deploy"
+  download_source_file install.sh "$staging_dir/install.sh" || fail "Could not download install.sh from GitHub."
+  download_source_file docker-compose.yml "$staging_dir/docker-compose.yml" || fail "Could not download docker-compose.yml from GitHub."
+  download_source_file deploy/Caddyfile "$staging_dir/deploy/Caddyfile" || fail "Could not download deploy/Caddyfile from GitHub."
+
+  install -m 755 "$staging_dir/install.sh" "$INSTALL_DIR/install.sh"
+  install -m 644 "$staging_dir/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
+  install -m 644 "$staging_dir/deploy/Caddyfile" "$INSTALL_DIR/deploy/Caddyfile"
+
+  log "Continuing installation from ${INSTALL_DIR}"
+  exec bash "$INSTALL_DIR/install.sh" "$@"
+}
+
+if [[ ! -f "$PROJECT_DIR/docker-compose.yml" ]]; then
+  bootstrap_installation "$@"
+fi
 . /etc/os-release
 [[ "$ID" == "ubuntu" || "$ID" == "debian" ]] || fail "The first installer version supports Ubuntu and Debian only."
 command -v openssl >/dev/null 2>&1 || { apt-get update && apt-get install -y openssl; }
 command -v ss >/dev/null 2>&1 || { apt-get update && apt-get install -y iproute2; }
 command -v curl >/dev/null 2>&1 || { apt-get update && apt-get install -y ca-certificates curl; }
 install_docker
+
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  log "Signing in to the private GitHub container registry"
+  printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "${GH_USERNAME:-NikitaCherepov}" --password-stdin >/dev/null
+fi
 
 install -d -m 700 "$CONFIG_DIR"
 
