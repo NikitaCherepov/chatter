@@ -60,13 +60,21 @@ export function OverviewPage({
             />
             <SetupRow
               title="Telegram"
-              description="Бот и приложение заметок"
+              description="Основной Telegram-бот"
               ready={settings.telegramEnabled && settings.hasTelegramToken}
               onClick={() => onNavigate('services')}
             />
             <SetupRow
+              title="Webapp Notes"
+              description="Необязательное Telegram Mini App"
+              ready={
+                settings.notesEnabled && settings.hasTelegramToken && Boolean(settings.notesUrl)
+              }
+              onClick={() => onNavigate('services')}
+            />
+            <SetupRow
               title="Голос"
-              description="Локальный или внешний Voice API"
+              description="Распознавание и озвучка для Telegram"
               ready={settings.voiceMode !== 'off' && settings.hasVoiceToken}
               onClick={() => onNavigate('services')}
             />

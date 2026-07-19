@@ -47,7 +47,7 @@ services:
 
   webapp-notes:
     profiles:
-      - telegram
+      - notes
     build:
       context: ./webapp-notes
       dockerfile: Dockerfile

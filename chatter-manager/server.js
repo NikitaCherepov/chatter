@@ -117,6 +117,7 @@ writeEnv(COMPOSE_RUNTIME_ENV_FILE, {
 
 const defaultSettings = () => ({
   telegramEnabled: false,
+  notesEnabled: false,
   notesUrl: '',
   aiBaseUrl: 'https://openrouter.ai/api/v1',
   aiModel: '',
@@ -125,16 +126,32 @@ const defaultSettings = () => ({
   updatedAt: null
 });
 
-const loadSettings = () => ({ ...defaultSettings(), ...loadJson(SETTINGS_FILE, {}) });
+const loadSettings = () => {
+  const stored = loadJson(SETTINGS_FILE, {});
+  return {
+    ...defaultSettings(),
+    ...stored,
+    // Existing installations started Notes together with Telegram. Preserve
+    // that behaviour once, then persist the new independent flag on save.
+    notesEnabled: typeof stored.notesEnabled === 'boolean'
+      ? stored.notesEnabled
+      : Boolean(stored.telegramEnabled)
+  };
+};
 
 function publicSettings() {
   const backendEnv = parseEnv(BACKEND_ENV_FILE);
   const telegramEnv = parseEnv(TELEGRAM_ENV_FILE);
+  const providerModels = getProviderModels(backendEnv);
   return {
     ...loadSettings(),
     hasTelegramToken: Boolean(telegramEnv.TELEGRAM_TOKEN),
-    hasAiApiKey: Boolean(backendEnv.TIMEWEB_API_KEY),
-    hasVoiceToken: Boolean(backendEnv.VOICE_TRANSCRIBE_TOKEN || parseEnv(VOICE_ENV_FILE).VOICE_TRANSCRIBE_TOKEN)
+    hasAiApiKey: providerModels.proModels.some(model => Boolean(model.apiKey)),
+    hasVoiceToken: Boolean(backendEnv.VOICE_TRANSCRIBE_TOKEN || parseEnv(VOICE_ENV_FILE).VOICE_TRANSCRIBE_TOKEN),
+    proModels: providerModels.proModels.map(redactSecret),
+    liteModels: providerModels.liteModels.map(redactSecret),
+    visionModel: redactSecret(providerModels.visionModel),
+    manualModels: parseManualModels(backendEnv.MODELS_MANUAL).map(redactSecret)
   };
 }
 
@@ -147,22 +164,167 @@ function normalizeUrl(value, fieldName, { allowEmpty = true } = {}) {
   return trimmed;
 }
 
+function splitModelChain(value, fallback = []) {
+  const models = `${value || ''}`.split(',').map(model => model.trim()).filter(Boolean);
+  return models.length ? models : fallback;
+}
+
+function parseProviderModels(raw, prefix, fallbackBase, fallbackKey, fallbackModels) {
+  const chunks = `${raw || ''}`.trim()
+    ? `${raw}`.split(';').map(value => value.trim()).filter(Boolean)
+    : fallbackBase && fallbackModels.length
+      ? [`${fallbackBase}|${fallbackKey}|${fallbackModels.join(',')}`]
+      : [];
+  const result = [];
+  chunks.forEach((chunk, providerIndex) => {
+    const [baseUrl = '', apiKey = '', modelsRaw = ''] = chunk.split('|').map(value => value.trim());
+    splitModelChain(modelsRaw).forEach((model, modelIndex) => {
+      if (!baseUrl || !model) return;
+      result.push({ id: `${prefix}-${providerIndex}-${modelIndex}`, baseUrl, apiKey, model });
+    });
+  });
+  return result;
+}
+
+function getProviderModels(backendEnv) {
+  const proModels = parseProviderModels(
+    backendEnv.TIMEWEB_PRO_ENDPOINTS,
+    'pro',
+    backendEnv.TIMEWEB_BASE_URL,
+    backendEnv.TIMEWEB_API_KEY,
+    splitModelChain(backendEnv.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview'])
+  );
+  const liteModels = parseProviderModels(
+    backendEnv.TIMEWEB_LITE_ENDPOINTS,
+    'lite',
+    backendEnv.TIMEWEB_LITE_BASE_URL || backendEnv.TIMEWEB_BASE_URL,
+    backendEnv.TIMEWEB_LITE_API_KEY || backendEnv.TIMEWEB_API_KEY,
+    splitModelChain(backendEnv.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite'])
+  );
+  const visionModel = {
+    id: 'vision',
+    baseUrl: backendEnv.TIMEWEB_VISION_BASE_URL || proModels[0]?.baseUrl || backendEnv.TIMEWEB_BASE_URL || '',
+    apiKey: backendEnv.TIMEWEB_VISION_API_KEY || proModels[0]?.apiKey || backendEnv.TIMEWEB_API_KEY || '',
+    model: splitModelChain(
+      backendEnv.TIMEWEB_VISION_MODEL,
+      proModels[0]?.model ? [proModels[0].model] : []
+    )[0] || ''
+  };
+  return { proModels, liteModels, visionModel };
+}
+
+function parseManualModels(raw) {
+  return `${raw || ''}`.split(';').map(value => value.trim()).filter(Boolean).map((chunk, index) => {
+    const [baseUrl = '', apiKey = '', model = '', name = '', description = '', uniqueId = '', supportsVision = '0', adminOnly = '0'] = chunk.split('|').map(value => value.trim());
+    return {
+      id: uniqueId || `manual-${index}`,
+      baseUrl,
+      apiKey,
+      model,
+      name: name || model,
+      description,
+      uniqueId: uniqueId || `manual-${index}`,
+      supportsVision: ['1', 'true'].includes(supportsVision.toLowerCase()),
+      adminOnly: ['1', 'true'].includes(adminOnly.toLowerCase())
+    };
+  }).filter(model => model.baseUrl && model.apiKey && model.model && model.uniqueId);
+}
+
+function redactSecret(entry) {
+  return { ...entry, apiKey: '', hasApiKey: Boolean(entry.apiKey) };
+}
+
+function validateEnvPart(value, fieldName) {
+  const normalized = `${value || ''}`.trim();
+  if (!normalized || /[|;\r\n\0]/.test(normalized)) throw new Error(`${fieldName} is invalid`);
+  return normalized;
+}
+
+function mergeProviderModels(input, existing, label, { required = false } = {}) {
+  if (!Array.isArray(input)) return existing;
+  if (required && input.length === 0) throw new Error(`${label} requires at least one model`);
+  const existingKeys = new Map(existing.map(item => [item.id, item.apiKey]));
+  return input.map((item, index) => {
+    const id = `${item?.id || `${label}-${index}`}`;
+    const baseUrl = normalizeUrl(item?.baseUrl, `${label} provider URL`, { allowEmpty: false });
+    const model = validateEnvPart(item?.model, `${label} model`);
+    const apiKey = `${item?.apiKey || ''}`.trim() || existingKeys.get(id) || '';
+    if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error(`${label} API key is required`);
+    return { id, baseUrl, apiKey, model };
+  });
+}
+
+function mergeProviderModel(input, existing, label) {
+  if (!input || typeof input !== 'object') return existing;
+  const apiKey = `${input.apiKey || ''}`.trim() || existing.apiKey || '';
+  if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error(`${label} API key is required`);
+  return {
+    id: existing.id,
+    baseUrl: normalizeUrl(input.baseUrl, `${label} provider URL`, { allowEmpty: false }),
+    apiKey,
+    model: validateEnvPart(input.model, `${label} model`)
+  };
+}
+
+function mergeManualModels(input, existing) {
+  if (!Array.isArray(input)) return existing;
+  const existingKeys = new Map(existing.map(item => [item.id, item.apiKey]));
+  const uniqueIds = new Set();
+  return input.map((item, index) => {
+    const id = `${item?.id || `manual-new-${index}`}`;
+    const uniqueId = validateEnvPart(item?.uniqueId, 'Manual model ID');
+    if (uniqueIds.has(uniqueId)) throw new Error('Manual model IDs must be unique');
+    uniqueIds.add(uniqueId);
+    const apiKey = `${item?.apiKey || ''}`.trim() || existingKeys.get(id) || '';
+    if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error('Manual model API key is required');
+    return {
+      id,
+      baseUrl: normalizeUrl(item?.baseUrl, 'Manual model provider URL', { allowEmpty: false }),
+      apiKey,
+      model: validateEnvPart(item?.model, 'Manual model name'),
+      name: validateEnvPart(item?.name || item?.model, 'Manual display name'),
+      description: `${item?.description || ''}`.trim(),
+      uniqueId,
+      supportsVision: Boolean(item?.supportsVision),
+      adminOnly: Boolean(item?.adminOnly)
+    };
+  });
+}
+
+const serializeProviderModels = models => models.map(model => `${model.baseUrl}|${model.apiKey}|${model.model}`).join(';');
+const serializeManualModels = models => models.map(model => [model.baseUrl, model.apiKey, model.model, model.name, model.description.replace(/[|;\r\n]/g, ' '), model.uniqueId, model.supportsVision ? '1' : '0', model.adminOnly ? '1' : '0'].join('|')).join(';');
+
 function saveSettings(input) {
   const previous = loadSettings();
   const backendEnv = parseEnv(BACKEND_ENV_FILE);
   const telegramEnv = parseEnv(TELEGRAM_ENV_FILE);
   const voiceEnv = parseEnv(VOICE_ENV_FILE);
+  const existingProviderModels = getProviderModels(backendEnv);
+  const existingManualModels = parseManualModels(backendEnv.MODELS_MANUAL);
   const telegramEnabled = Boolean(input.telegramEnabled);
+  const notesEnabled = Boolean(input.notesEnabled);
   const telegramToken = `${input.telegramToken || ''}`.trim() || telegramEnv.TELEGRAM_TOKEN || '';
-  const aiApiKey = `${input.aiApiKey || ''}`.trim() || backendEnv.TIMEWEB_API_KEY || '';
-  const aiBaseUrl = normalizeUrl(input.aiBaseUrl ?? previous.aiBaseUrl, 'AI base URL', { allowEmpty: false });
-  const aiModel = `${input.aiModel ?? previous.aiModel ?? ''}`.trim();
+  const legacyAiApiKey = `${input.aiApiKey || ''}`.trim() || backendEnv.TIMEWEB_API_KEY || '';
+  const legacyAiBaseUrl = normalizeUrl(input.aiBaseUrl ?? previous.aiBaseUrl, 'AI base URL', { allowEmpty: false });
+  const legacyAiModel = `${input.aiModel ?? previous.aiModel ?? ''}`.trim();
+  const proModels = mergeProviderModels(input.proModels, existingProviderModels.proModels, 'PRO', { required: true });
+  const liteModels = mergeProviderModels(
+    input.liteModels,
+    existingProviderModels.liteModels,
+    'LITE',
+    { required: true }
+  );
+  const visionModel = mergeProviderModel(input.visionModel, existingProviderModels.visionModel, 'Vision');
+  const manualModels = mergeManualModels(input.manualModels, existingManualModels);
+  if (!Array.isArray(input.proModels) && proModels.length === 0 && legacyAiApiKey && legacyAiModel) {
+    proModels.push({ id: 'pro-legacy', baseUrl: legacyAiBaseUrl, apiKey: legacyAiApiKey, model: legacyAiModel });
+  }
   const notesUrl = normalizeUrl(input.notesUrl ?? previous.notesUrl, 'Notes URL');
   const voiceMode = ['off', 'local', 'remote'].includes(input.voiceMode) ? input.voiceMode : 'off';
   const voiceExternalUrl = normalizeUrl(input.voiceExternalUrl ?? previous.voiceExternalUrl, 'Voice URL');
   let voiceToken = `${input.voiceToken || ''}`.trim() || backendEnv.VOICE_TRANSCRIBE_TOKEN || voiceEnv.VOICE_TRANSCRIBE_TOKEN || '';
 
-  if (telegramEnabled && !telegramToken) throw new Error('Telegram token is required when Telegram is enabled');
+  if ((telegramEnabled || notesEnabled) && !telegramToken) throw new Error('Telegram token is required when Telegram or Notes is enabled');
   if (voiceMode === 'remote' && !voiceExternalUrl) throw new Error('External Voice URL is required');
   if (voiceMode !== 'off' && !voiceToken) voiceToken = randomSecret(32);
 
@@ -171,8 +333,8 @@ function saveSettings(input) {
     API_JWT_SECRET: backendEnv.API_JWT_SECRET || randomSecret(32),
     BACKEND_INTERNAL_TOKEN: internalToken,
     ENCRYPTION_KEY: backendEnv.ENCRYPTION_KEY || randomSecret(32),
-    TIMEWEB_API_KEY: aiApiKey,
-    TIMEWEB_BASE_URL: aiBaseUrl,
+    TIMEWEB_API_KEY: proModels[0]?.apiKey || legacyAiApiKey,
+    TIMEWEB_BASE_URL: proModels[0]?.baseUrl || legacyAiBaseUrl,
     TELEGRAM_TOKEN: telegramToken,
     VOICE_TRANSCRIBE_URL: voiceMode === 'local' ? 'http://voice:3030/api/voice' : voiceMode === 'remote' ? voiceExternalUrl : '',
     VOICE_TRANSCRIBE_TOKEN: voiceMode === 'off' ? '' : voiceToken
@@ -181,8 +343,34 @@ function saveSettings(input) {
   // overrides when switching between local and remote Voice installations.
   delete backendEnv.VOICE_TTS_URL;
   delete backendEnv.VOICE_SILERO_URL;
-  if (aiModel) backendEnv.TIMEWEB_MODEL = aiModel;
-  else delete backendEnv.TIMEWEB_MODEL;
+  if (proModels.length) {
+    backendEnv.TIMEWEB_MODEL = proModels[0].model;
+    backendEnv.TIMEWEB_PRO_ENDPOINTS = serializeProviderModels(proModels);
+  } else {
+    delete backendEnv.TIMEWEB_MODEL;
+    delete backendEnv.TIMEWEB_PRO_ENDPOINTS;
+  }
+  if (liteModels.length) {
+    backendEnv.TIMEWEB_LITE_BASE_URL = liteModels[0].baseUrl;
+    backendEnv.TIMEWEB_LITE_API_KEY = liteModels[0].apiKey;
+    backendEnv.TIMEWEB_LITE_MODEL = liteModels[0].model;
+    backendEnv.TIMEWEB_LITE_ENDPOINTS = serializeProviderModels(liteModels);
+  } else {
+    delete backendEnv.TIMEWEB_LITE_BASE_URL;
+    delete backendEnv.TIMEWEB_LITE_API_KEY;
+    delete backendEnv.TIMEWEB_LITE_MODEL;
+    delete backendEnv.TIMEWEB_LITE_ENDPOINTS;
+  }
+  backendEnv.TIMEWEB_LITE_ROUTER_ENABLED = '1';
+  backendEnv.TIMEWEB_VISION_BASE_URL = visionModel.baseUrl;
+  backendEnv.TIMEWEB_VISION_API_KEY = visionModel.apiKey;
+  backendEnv.TIMEWEB_VISION_MODEL = visionModel.model;
+  // These variables were briefly introduced for a Vision cascade, but the
+  // backend uses a single Vision PRO model.
+  delete backendEnv.TIMEWEB_VISION_ENDPOINTS;
+  delete backendEnv.TIMEWEB_LITE_VISION_ENDPOINTS;
+  if (manualModels.length) backendEnv.MODELS_MANUAL = serializeManualModels(manualModels);
+  else delete backendEnv.MODELS_MANUAL;
 
   Object.assign(telegramEnv, { TELEGRAM_TOKEN: telegramToken, BACKEND_INTERNAL_TOKEN: internalToken, NOTES_WEBAPP_URL: notesUrl });
   Object.assign(voiceEnv, {
@@ -197,7 +385,16 @@ function saveSettings(input) {
   writeEnv(BACKEND_ENV_FILE, backendEnv);
   writeEnv(TELEGRAM_ENV_FILE, telegramEnv);
   writeEnv(VOICE_ENV_FILE, voiceEnv);
-  const settings = { telegramEnabled, notesUrl, aiBaseUrl, aiModel, voiceMode, voiceExternalUrl, updatedAt: new Date().toISOString() };
+  const settings = {
+    telegramEnabled,
+    notesEnabled,
+    notesUrl,
+    aiBaseUrl: proModels[0]?.baseUrl || legacyAiBaseUrl,
+    aiModel: proModels.map(model => model.model).join(','),
+    voiceMode,
+    voiceExternalUrl,
+    updatedAt: new Date().toISOString()
+  };
   atomicWrite(SETTINGS_FILE, `${JSON.stringify(settings, null, 2)}\n`);
   return settings;
 }
@@ -245,9 +442,13 @@ async function applyConfiguration() {
   const settings = loadSettings();
   await runDocker(composeArgs('up', '-d', '--no-build', '--force-recreate', 'backend'));
   if (settings.telegramEnabled) {
-    await pullServices('telegram', ['telegram-bot', 'webapp-notes']);
-    await runDocker(composeArgs('--profile', 'telegram', 'up', '-d', '--no-build', 'telegram-bot', 'webapp-notes'));
-  } else await removeServices('telegram', ['telegram-bot', 'webapp-notes']);
+    await pullServices('telegram', ['telegram-bot']);
+    await runDocker(composeArgs('--profile', 'telegram', 'up', '-d', '--no-build', 'telegram-bot'));
+  } else await removeServices('telegram', ['telegram-bot']);
+  if (settings.notesEnabled) {
+    await pullServices('notes', ['webapp-notes']);
+    await runDocker(composeArgs('--profile', 'notes', 'up', '-d', '--no-build', 'webapp-notes'));
+  } else await removeServices('notes', ['webapp-notes']);
   if (settings.voiceMode === 'local') {
     await pullServices('voice', ['voice']);
     await runDocker(composeArgs('--profile', 'voice', 'up', '-d', '--no-build', 'voice'));
@@ -256,7 +457,7 @@ async function applyConfiguration() {
 
 async function getServiceStatus() {
   try {
-    const output = await runDocker(composeArgs('--profile', 'telegram', '--profile', 'voice', '--profile', 'admin', 'ps', '-a', '--format', 'json'), 30000);
+    const output = await runDocker(composeArgs('--profile', 'telegram', '--profile', 'notes', '--profile', 'voice', '--profile', 'admin', 'ps', '-a', '--format', 'json'), 30000);
     if (!output) return [];
     let rows;
     try { rows = JSON.parse(output); if (!Array.isArray(rows)) rows = [rows]; }

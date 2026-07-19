@@ -22,7 +22,6 @@ export default function Home() {
   const [settings, setSettings] = useState<Settings>(emptySettings);
   const [services, setServices] = useState<Service[]>([]);
   const [telegramToken, setTelegramToken] = useState('');
-  const [aiApiKey, setAiApiKey] = useState('');
   const [voiceToken, setVoiceToken] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState('');
@@ -36,7 +35,7 @@ export default function Home() {
       api<{ services: Service[] }>('/api/status'),
       api<{ username: string }>('/api/session'),
     ]);
-    setSettings(loadedSettings);
+    setSettings({ ...emptySettings, ...loadedSettings });
     setServices(status.services || []);
     setUsername(session.username);
   }, []);
@@ -83,10 +82,9 @@ export default function Home() {
     try {
       await api('/api/settings', {
         method: 'PUT',
-        body: JSON.stringify({ ...settings, telegramToken, aiApiKey, voiceToken }),
+        body: JSON.stringify({ ...settings, telegramToken, voiceToken }),
       });
       setTelegramToken('');
-      setAiApiKey('');
       setVoiceToken('');
       setSaveState('Настройки применены.');
       await loadData();
@@ -152,9 +150,7 @@ export default function Home() {
           onNavigate={setSection}
         />
       )}
-      {section === 'models' && (
-        <ModelsPage {...sharedSettingsProps} apiKey={aiApiKey} onApiKeyChange={setAiApiKey} />
-      )}
+      {section === 'models' && <ModelsPage {...sharedSettingsProps} />}
       {section === 'integrations' && (
         <IntegrationsPage settings={settings} onNavigate={setSection} />
       )}

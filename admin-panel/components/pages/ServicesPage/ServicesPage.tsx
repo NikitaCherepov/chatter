@@ -36,9 +36,9 @@ export function ServicesPage({
   return (
     <form className={grid.stack} onSubmit={onSave}>
       <Card
-        title="Telegram"
-        description="Бот и приложение заметок запускаются вместе"
-        aside={<ServiceBadge services={services} names={['telegram-bot', 'webapp-notes']} />}
+        title="Telegram-бот"
+        description="Основной интерфейс Chatter в Telegram"
+        aside={<ServiceBadge services={services} names={['telegram-bot']} />}
       >
         <div className={grid.fields}>
           <Toggle
@@ -49,8 +49,9 @@ export function ServicesPage({
             label="Сервис включён"
           />
           <FormField
-            label="Токен бота"
+            label="Токен Telegram-бота"
             state={<SecretState configured={settings.hasTelegramToken} />}
+            hint="Этот же токен используется Webapp Notes для проверки initData"
           >
             <input
               type="password"
@@ -60,9 +61,24 @@ export function ServicesPage({
               placeholder="Оставь пустым, чтобы не менять"
             />
           </FormField>
+        </div>
+      </Card>
+      <Card
+        title="Webapp Notes"
+        description="Отдельное Telegram Mini App для заметок"
+        aside={<ServiceBadge services={services} names={['webapp-notes']} />}
+      >
+        <div className={grid.fields}>
+          <Toggle
+            checked={settings.notesEnabled}
+            onChange={(notesEnabled) =>
+              setSettings((current) => ({ ...current, notesEnabled }))
+            }
+            label="Сервис включён"
+          />
           <FormField
-            label="HTTPS-адрес приложения заметок"
-            hint="Telegram открывает Web App только через доступный HTTPS-адрес"
+            label="Публичный HTTPS-адрес"
+            hint="Нужен Telegram для открытия Mini App; сам Telegram-бот может быть выключен"
           >
             <input
               type="url"
@@ -77,7 +93,7 @@ export function ServicesPage({
       </Card>
       <Card
         title="Voice"
-        description="Распознавание и синтез речи локально или на отдельном сервере"
+        description="Распознавание голосовых и озвучка ответов Telegram-бота"
         aside={<ServiceBadge services={services} names={['voice']} />}
       >
         <div className={grid.fields}>
@@ -123,7 +139,8 @@ export function ServicesPage({
           </FormField>
           {settings.voiceMode === 'local' && (
             <div className={styles.notice}>
-              Первый запуск может занять несколько минут: Docker загружает Voice-образ и модели.
+              Voice пока используется только Telegram-ботом. Первый локальный запуск может занять
+              несколько минут: Docker загружает образ и модели.
             </div>
           )}
         </div>

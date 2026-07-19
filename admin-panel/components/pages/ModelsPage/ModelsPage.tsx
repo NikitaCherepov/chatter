@@ -1,82 +1,95 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
-import type { Settings } from '../../../lib/types';
+import type { ProviderModelConfig, Settings } from '../../../lib/types';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
-import { Card } from '../../ui/Card/Card';
-import { FormField } from '../../ui/FormField/FormField';
-import { SecretState } from '../../ui/SecretState/SecretState';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
+import { ManualModelListEditor } from './ManualModelListEditor';
+import { ModelListEditor, ProviderModelFields } from './ModelListEditor';
+import styles from './ModelsPage.module.css';
 
 type Props = {
   settings: Settings;
   setSettings: Dispatch<SetStateAction<Settings>>;
-  apiKey: string;
   saving: boolean;
   saveState: string;
-  onApiKeyChange: (value: string) => void;
   onSave: (event: FormEvent) => void;
 };
 
-export function ModelsPage({
-  settings,
-  setSettings,
-  apiKey,
-  saving,
-  saveState,
-  onApiKeyChange,
-  onSave,
-}: Props) {
+export function ModelsPage({ settings, setSettings, saving, saveState, onSave }: Props) {
+  const updateVision = (patch: Partial<ProviderModelConfig>) => {
+    setSettings((current) => ({
+      ...current,
+      visionModel: { ...current.visionModel, ...patch },
+    }));
+  };
+
   return (
     <form className={grid.stack} onSubmit={onSave}>
-      <Card title="Основной провайдер" description="OpenAI-совместимый API для чата и инструментов">
-        <div className={grid.fields}>
-          <div className={grid.twoColumns}>
-            <FormField label="Адрес API">
-              <input
-                type="url"
-                value={settings.aiBaseUrl}
-                onChange={(event) =>
-                  setSettings((current) => ({ ...current, aiBaseUrl: event.target.value }))
-                }
-                required
-              />
-            </FormField>
-            <FormField
-              label="Модель"
-              hint="Если оставить пустым, backend использует модель по умолчанию"
-            >
-              <input
-                value={settings.aiModel}
-                onChange={(event) =>
-                  setSettings((current) => ({ ...current, aiModel: event.target.value }))
-                }
-                placeholder="По умолчанию из backend"
-              />
-            </FormField>
+      <details className={styles.section} open>
+        <summary>
+          <span>
+            <strong>Auto</strong>
+            <small>Основные цепочки PRO и LITE</small>
+          </span>
+        </summary>
+        <div className={styles.sectionBody}>
+          <ModelListEditor
+            title="PRO"
+            description="Если первая модель недоступна, Chatter автоматически попробует следующую."
+            models={settings.proModels}
+            onChange={(proModels) => setSettings((current) => ({ ...current, proModels }))}
+            required
+          />
+          <div className={styles.divider} />
+          <div className={styles.listHeading}>
+            <div>
+              <h3>LITE</h3>
+              <p>Быстрые модели для простых внутренних задач. Порядок работает так же.</p>
+            </div>
           </div>
-          <FormField
-            label="API-ключ"
-            state={<SecretState configured={settings.hasAiApiKey} />}
-            hint="Оставь поле пустым, чтобы сохранить текущий ключ"
-          >
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(event) => onApiKeyChange(event.target.value)}
-              autoComplete="off"
-              placeholder="Оставь пустым, чтобы не менять"
-            />
-          </FormField>
+          <ModelListEditor
+            models={settings.liteModels}
+            onChange={(liteModels) => setSettings((current) => ({ ...current, liteModels }))}
+            emptyText="LITE-модели пока не добавлены."
+            required
+          />
         </div>
-      </Card>
-      <Card
-        title="Каталог моделей"
-        description="Несколько моделей, коэффициенты стоимости и маршрутизация"
-      >
-        <div className="emptyInline">
-          <strong>Следующий этап</strong>
-          <span>Здесь появятся доступные модели провайдера и их индивидуальные настройки.</span>
+      </details>
+
+      <details className={styles.section}>
+        <summary>
+          <span>
+            <strong>Vision</strong>
+            <small>Одна отдельная PRO-модель для анализа изображений</small>
+          </span>
+        </summary>
+        <div className={styles.sectionBody}>
+          <div className={styles.singleModel}>
+            <div className={styles.modelTitle}>
+              <strong>{settings.visionModel.model || 'Vision PRO'}</strong>
+              <span>{settings.visionModel.baseUrl || 'Провайдер не указан'}</span>
+            </div>
+            <ProviderModelFields model={settings.visionModel} onChange={updateVision} />
+          </div>
         </div>
-      </Card>
+      </details>
+
+      <details className={styles.section}>
+        <summary>
+          <span>
+            <strong>Ручные модели</strong>
+            <small>Модели, которые пользователь выбирает вместо Auto</small>
+          </span>
+        </summary>
+        <div className={styles.sectionBody}>
+          <ManualModelListEditor
+            models={settings.manualModels}
+            onChange={(manualModels) =>
+              setSettings((current) => ({ ...current, manualModels }))
+            }
+          />
+        </div>
+      </details>
+
       <ActionBar saving={saving} state={saveState} />
     </form>
   );
