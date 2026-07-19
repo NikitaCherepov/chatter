@@ -14,7 +14,7 @@ import { SystemPage } from '../components/pages/SystemPage/SystemPage';
 import { UserDetailPage } from '../components/pages/UserDetailPage/UserDetailPage';
 import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { AccessKeysPage } from '../components/pages/AccessKeysPage/AccessKeysPage';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
 export default function Home() {
@@ -78,7 +78,7 @@ export default function Home() {
         })
         .catch(error => {
           if (cancelled) return;
-          if (error instanceof Error && error.message === 'unauthorized') {
+          if (error instanceof ApiError && error.status === 401) {
             setAuthenticated(false);
             return;
           }
