@@ -109,7 +109,10 @@ writeEnv(COMPOSE_RUNTIME_ENV_FILE, {
   CHATTER_CONFIG_DIR: CONFIG_DIR,
   BACKEND_PORT: process.env.BACKEND_PORT || '3050',
   NOTES_PORT: process.env.NOTES_PORT || '3001',
-  VOICE_PORT: process.env.VOICE_PORT || '3030'
+  VOICE_PORT: process.env.VOICE_PORT || '3030',
+  CHATTER_IMAGE_PREFIX: process.env.CHATTER_IMAGE_PREFIX || 'chatter',
+  CHATTER_IMAGE_TAG: process.env.CHATTER_IMAGE_TAG || 'local',
+  CHATTER_PULL_IMAGES: process.env.CHATTER_PULL_IMAGES || '0'
 });
 
 const defaultSettings = () => ({
@@ -233,13 +236,22 @@ async function removeServices(profile, services) {
   await runDocker(composeArgs('--profile', profile, 'rm', '-s', '-f', ...services), 2 * 60 * 1000);
 }
 
+async function pullServices(profile, services) {
+  if (process.env.CHATTER_PULL_IMAGES !== '1') return;
+  await runDocker(composeArgs('--profile', profile, 'pull', ...services));
+}
+
 async function applyConfiguration() {
   const settings = loadSettings();
-  await runDocker(composeArgs('up', '-d', '--force-recreate', 'backend'));
-  if (settings.telegramEnabled) await runDocker(composeArgs('--profile', 'telegram', 'up', '-d', '--build', 'telegram-bot', 'webapp-notes'));
-  else await removeServices('telegram', ['telegram-bot', 'webapp-notes']);
-  if (settings.voiceMode === 'local') await runDocker(composeArgs('--profile', 'voice', 'up', '-d', '--build', 'voice'));
-  else await removeServices('voice', ['voice']);
+  await runDocker(composeArgs('up', '-d', '--no-build', '--force-recreate', 'backend'));
+  if (settings.telegramEnabled) {
+    await pullServices('telegram', ['telegram-bot', 'webapp-notes']);
+    await runDocker(composeArgs('--profile', 'telegram', 'up', '-d', '--no-build', 'telegram-bot', 'webapp-notes'));
+  } else await removeServices('telegram', ['telegram-bot', 'webapp-notes']);
+  if (settings.voiceMode === 'local') {
+    await pullServices('voice', ['voice']);
+    await runDocker(composeArgs('--profile', 'voice', 'up', '-d', '--no-build', 'voice'));
+  } else await removeServices('voice', ['voice']);
 }
 
 async function getServiceStatus() {

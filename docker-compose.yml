@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend-api
       dockerfile: Dockerfile
-    image: chatter-backend:local
+    image: "${CHATTER_IMAGE_PREFIX:-chatter}-backend:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     env_file:
       - "${BACKEND_ENV_FILE:-./backend-api/.env}"
@@ -34,7 +34,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.bot
-    image: chatter-telegram-bot:local
+    image: "${CHATTER_IMAGE_PREFIX:-chatter}-telegram-bot:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     env_file:
       - "${TELEGRAM_ENV_FILE:-./.env}"
@@ -51,7 +51,7 @@ services:
     build:
       context: ./webapp-notes
       dockerfile: Dockerfile
-    image: chatter-webapp-notes:local
+    image: "${CHATTER_IMAGE_PREFIX:-chatter}-webapp-notes:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     env_file:
       - "${TELEGRAM_ENV_FILE:-./.env}"
@@ -82,7 +82,7 @@ services:
     build:
       context: ./voice-service
       dockerfile: Dockerfile
-    image: chatter-voice:local
+    image: "${CHATTER_IMAGE_PREFIX:-chatter}-voice:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     env_file:
       - path: "${VOICE_ENV_FILE:-./voice-service/.env}"
@@ -115,7 +115,7 @@ services:
     build:
       context: ./admin-panel
       dockerfile: Dockerfile
-    image: chatter-admin-panel:local
+    image: "${CHATTER_IMAGE_PREFIX:-chatter}-admin-panel:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -136,7 +136,7 @@ services:
     build:
       context: ./chatter-manager
       dockerfile: Dockerfile
-    image: chatter-manager:local
+    image: "${CHATTER_IMAGE_PREFIX:-chatter}-manager:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     env_file:
       - path: "${CHATTER_MANAGER_ENV_FILE:-./.chatter/manager.env}"
@@ -148,11 +148,14 @@ services:
       CHATTER_CONFIG_DIR: /config
       CHATTER_COMPOSE_FILE: /workspace/docker-compose.yml
       COMPOSE_PROJECT_NAME: chatter
+      CHATTER_IMAGE_PREFIX: "${CHATTER_IMAGE_PREFIX:-chatter}"
+      CHATTER_IMAGE_TAG: "${CHATTER_IMAGE_TAG:-local}"
+      CHATTER_PULL_IMAGES: "${CHATTER_PULL_IMAGES:-0}"
     ports:
       - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-8080}:8080"
     volumes:
       - "${CHATTER_CONFIG_DIR:-./.chatter}:/config"
-      - .:/workspace:ro
+      - ./docker-compose.yml:/workspace/docker-compose.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       admin-panel:

@@ -9,7 +9,7 @@ AUTH_WAS_PRESENT=0
 RESET_ADMIN=0
 
 if [[ "${EUID}" -ne 0 ]]; then
-  exec sudo --preserve-env=CHATTER_CONFIG_DIR bash "$0" "$@"
+  exec sudo --preserve-env=CHATTER_CONFIG_DIR,CHATTER_IMAGE_PREFIX,CHATTER_IMAGE_TAG bash "$0" "$@"
 fi
 
 log() {
@@ -96,6 +96,8 @@ BOOTSTRAP_PASSWORD_FILE="$CONFIG_DIR/admin.bootstrap"
 BACKEND_ENV="$CONFIG_DIR/backend.env"
 TELEGRAM_ENV="$CONFIG_DIR/telegram.env"
 VOICE_ENV="$CONFIG_DIR/voice.env"
+IMAGE_PREFIX="${CHATTER_IMAGE_PREFIX:-ghcr.io/nikitacherepov/chatter}"
+IMAGE_TAG="${CHATTER_IMAGE_TAG:-latest}"
 
 ADMIN_PORT="$(env_get "$COMPOSE_ENV" ADMIN_PORT)"
 [[ "$ADMIN_PORT" =~ ^[0-9]+$ ]] || ADMIN_PORT="$(find_free_port)"
@@ -179,14 +181,22 @@ write_private_file "$COMPOSE_ENV" \
   "VOICE_ENV_FILE=${VOICE_ENV}" \
   "CHATTER_MANAGER_ENV_FILE=${MANAGER_ENV}" \
   "CHATTER_CONFIG_DIR=${CONFIG_DIR}" \
+  "CHATTER_IMAGE_PREFIX=${IMAGE_PREFIX}" \
+  "CHATTER_IMAGE_TAG=${IMAGE_TAG}" \
+  "CHATTER_PULL_IMAGES=1" \
   "ADMIN_BIND=0.0.0.0" \
   "ADMIN_PORT=${ADMIN_PORT}"
 
-log "Building and starting the backend and admin panel"
-docker compose --env-file "$COMPOSE_ENV" --profile admin up -d --build backend admin-panel chatter-manager
+log "Downloading ready-to-run Chatter images"
+if ! docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin pull backend admin-panel chatter-manager; then
+  fail "Could not download Chatter images. While GHCR packages are private, run 'sudo docker login ghcr.io' and retry."
+fi
+
+log "Starting the backend and admin panel"
+docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin up -d --no-build backend admin-panel chatter-manager
 
 if [[ "$RESET_ADMIN" -eq 1 ]]; then
-  docker compose --env-file "$COMPOSE_ENV" --profile admin up -d --force-recreate chatter-manager
+  docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin up -d --no-build --force-recreate chatter-manager
 fi
 
 for _ in $(seq 1 60); do
@@ -195,7 +205,7 @@ for _ in $(seq 1 60); do
   fi
   sleep 2
 done
-curl -kfsS "https://127.0.0.1:${ADMIN_PORT}/health" >/dev/null 2>&1 || fail "Admin panel did not become healthy. Run: docker compose --env-file ${COMPOSE_ENV} --profile admin logs"
+curl -kfsS "https://127.0.0.1:${ADMIN_PORT}/health" >/dev/null 2>&1 || fail "Admin panel did not become healthy. Run: docker compose --project-name chatter --env-file ${COMPOSE_ENV} --profile admin logs"
 
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
   ufw allow "${ADMIN_PORT}/tcp" comment 'Chatter Admin' >/dev/null
