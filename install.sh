@@ -9,7 +9,7 @@ AUTH_WAS_PRESENT=0
 RESET_ADMIN=0
 
 if [[ "${EUID}" -ne 0 ]]; then
-  exec sudo --preserve-env=CHATTER_CONFIG_DIR,CHATTER_IMAGE_PREFIX,CHATTER_IMAGE_TAG bash "$0" "$@"
+  exec sudo --preserve-env=CHATTER_CONFIG_DIR,CHATTER_IMAGE_PREFIX,CHATTER_IMAGE_TAG,CHATTER_PUBLIC_HOST,SSH_CONNECTION bash "$0" "$@"
 fi
 
 log() {
@@ -80,6 +80,49 @@ install_docker() {
   systemctl enable --now docker
 }
 
+detect_ssh_port() {
+  local port=""
+  if [[ -n "${SSH_CONNECTION:-}" ]]; then
+    port="$(awk '{print $4}' <<<"$SSH_CONNECTION")"
+  elif command -v sshd >/dev/null 2>&1; then
+    port="$(sshd -T 2>/dev/null | awk '$1 == "port" { print $2; exit }')"
+  fi
+  [[ "$port" =~ ^[0-9]+$ ]] || port=22
+  printf '%s' "$port"
+}
+
+configure_firewall() {
+  local ssh_port
+  ssh_port="$(detect_ssh_port)"
+
+  if ! command -v ufw >/dev/null 2>&1; then
+    log "Installing UFW"
+    apt-get update
+    apt-get install -y ufw
+  fi
+
+  log "Allowing SSH, HTTP and HTTPS through UFW"
+  if ! ufw status | grep -q '^Status: active'; then
+    ufw default deny incoming >/dev/null
+    ufw default allow outgoing >/dev/null
+  fi
+  ufw allow "${ssh_port}/tcp" comment 'SSH' >/dev/null
+  ufw allow 80/tcp comment 'Chatter HTTP' >/dev/null
+  ufw allow 443/tcp comment 'Chatter HTTPS' >/dev/null
+  ufw --force enable >/dev/null
+
+  # Older Chatter installers exposed the random manager port publicly.
+  mapfile -t legacy_rules < <(
+    ufw status numbered |
+      sed -n 's/^\[[[:space:]]*\([0-9][0-9]*\)\].*Chatter Admin.*$/\1/p' |
+      sort -rn
+  )
+  local rule
+  for rule in "${legacy_rules[@]:-}"; do
+    [[ -n "$rule" ]] && ufw --force delete "$rule" >/dev/null
+  done
+}
+
 [[ -f "$PROJECT_DIR/docker-compose.yml" ]] || fail "Run install.sh from the cloned Chatter repository."
 . /etc/os-release
 [[ "$ID" == "ubuntu" || "$ID" == "debian" ]] || fail "The first installer version supports Ubuntu and Debian only."
@@ -120,11 +163,12 @@ if [[ "$AUTH_WAS_PRESENT" -eq 0 ]]; then
   fi
 fi
 
-SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
+SERVER_IP="${CHATTER_PUBLIC_HOST:-}"
+[[ -n "$SERVER_IP" ]] || SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
 if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
   SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 fi
-[[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || SERVER_IP="127.0.0.1"
+[[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "Could not detect the public IPv4 address. Retry with CHATTER_PUBLIC_HOST=1.2.3.4."
 
 if [[ ! -s "$CONFIG_DIR/tls.crt" || ! -s "$CONFIG_DIR/tls.key" ]]; then
   log "Creating an encrypted self-signed HTTPS endpoint"
@@ -156,7 +200,7 @@ if [[ ! -f "$TELEGRAM_ENV" ]]; then
   write_private_file "$TELEGRAM_ENV" \
     "TELEGRAM_TOKEN=" \
     "BACKEND_INTERNAL_TOKEN=${INTERNAL_TOKEN}" \
-    "NOTES_WEBAPP_URL="
+    "NOTES_WEBAPP_URL=https://${SERVER_IP}/notes"
 fi
 
 if [[ ! -f "$VOICE_ENV" ]]; then
@@ -185,40 +229,40 @@ write_private_file "$COMPOSE_ENV" \
   "CHATTER_IMAGE_PREFIX=${IMAGE_PREFIX}" \
   "CHATTER_IMAGE_TAG=${IMAGE_TAG}" \
   "CHATTER_PULL_IMAGES=1" \
-  "ADMIN_BIND=0.0.0.0" \
+  "CHATTER_PUBLIC_HOST=${SERVER_IP}" \
+  "CHATTER_PUBLIC_URL=https://${SERVER_IP}" \
+  "ADMIN_BIND=127.0.0.1" \
   "ADMIN_PORT=${ADMIN_PORT}"
 
+configure_firewall
+
 log "Downloading ready-to-run Chatter images"
-if ! docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin pull backend admin-panel chatter-manager; then
+if ! docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway pull backend admin-panel chatter-manager gateway; then
   fail "Could not download Chatter images. While GHCR packages are private, run 'sudo docker login ghcr.io' and retry."
 fi
 
-log "Starting the backend and admin panel"
-docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin up -d --no-build backend admin-panel chatter-manager
+log "Starting Chatter behind the HTTPS gateway"
+docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway up -d --no-build backend admin-panel chatter-manager gateway
 
 if [[ "$RESET_ADMIN" -eq 1 ]]; then
   docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin up -d --no-build --force-recreate chatter-manager
 fi
 
 for _ in $(seq 1 60); do
-  if curl -kfsS "https://127.0.0.1:${ADMIN_PORT}/health" >/dev/null 2>&1; then
+  if curl -kfsS --resolve "${SERVER_IP}:443:127.0.0.1" "https://${SERVER_IP}/health" >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
-curl -kfsS "https://127.0.0.1:${ADMIN_PORT}/health" >/dev/null 2>&1 || fail "Admin panel did not become healthy. Run: docker compose --project-name chatter --env-file ${COMPOSE_ENV} --profile admin logs"
-
-if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
-  ufw allow "${ADMIN_PORT}/tcp" comment 'Chatter Admin' >/dev/null
-fi
+curl -fsS --resolve "${SERVER_IP}:443:127.0.0.1" "https://${SERVER_IP}/health" >/dev/null 2>&1 || fail "The HTTPS gateway did not become ready. Ensure provider firewalls allow TCP 80/443, then rerun install.sh. Logs: docker compose --project-name chatter --env-file ${COMPOSE_ENV} --profile gateway logs gateway"
 
 printf '\nChatter is ready.\n\n'
-printf '  URL:      https://%s:%s\n' "$SERVER_IP" "$ADMIN_PORT"
+printf '  URL:      https://%s\n' "$SERVER_IP"
 if [[ "$AUTH_WAS_PRESENT" -eq 0 ]]; then
   printf '  Login:    %s\n' "$ADMIN_USERNAME"
   printf '  Password: %s\n\n' "$ADMIN_PASSWORD"
 else
   printf '  Admin credentials were preserved from the existing installation.\n\n'
 fi
-printf 'The first certificate is self-signed, so the browser will show a warning.\n'
+printf 'Caddy manages the public IP certificate and renews it automatically.\n'
 printf 'After login, configure the AI provider, Telegram and Voice in the panel.\n\n'

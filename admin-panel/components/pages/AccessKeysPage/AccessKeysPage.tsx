@@ -34,7 +34,10 @@ export function AccessKeysPage() {
   }, []);
 
   useEffect(() => {
-    setServerUrl(`http://${window.location.hostname}:3050`);
+    const directManager = Boolean(window.location.port && window.location.port !== '443');
+    setServerUrl(directManager
+      ? `${window.location.protocol}//${window.location.hostname}:3050`
+      : `${window.location.origin}/backend`);
     void load().catch(error => setState(`Ошибка: ${error instanceof Error ? error.message : String(error)}`));
   }, [load]);
 

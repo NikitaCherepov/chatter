@@ -1,0 +1,28 @@
+{$CHATTER_PUBLIC_HOST} {
+	encode zstd gzip
+
+	tls {
+		issuer acme {
+			profile shortlived
+		}
+	}
+
+	@backend path /backend /backend/*
+	handle @backend {
+		uri strip_prefix /backend
+		reverse_proxy backend:3050
+	}
+
+	@notes path /notes /notes/*
+	handle @notes {
+		reverse_proxy webapp-notes:3001
+	}
+
+	handle {
+		reverse_proxy https://chatter-manager:8080 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+}

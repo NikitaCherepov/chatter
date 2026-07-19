@@ -126,13 +126,17 @@ writeEnv(COMPOSE_RUNTIME_ENV_FILE, {
   VOICE_PORT: process.env.VOICE_PORT || '3030',
   CHATTER_IMAGE_PREFIX: process.env.CHATTER_IMAGE_PREFIX || 'chatter',
   CHATTER_IMAGE_TAG: process.env.CHATTER_IMAGE_TAG || 'local',
-  CHATTER_PULL_IMAGES: process.env.CHATTER_PULL_IMAGES || '0'
+  CHATTER_PULL_IMAGES: process.env.CHATTER_PULL_IMAGES || '0',
+  CHATTER_PUBLIC_HOST: process.env.CHATTER_PUBLIC_HOST || '',
+  CHATTER_PUBLIC_URL: process.env.CHATTER_PUBLIC_URL || ''
 });
 
 const defaultSettings = () => ({
   telegramEnabled: false,
   notesEnabled: false,
-  notesUrl: '',
+  notesUrl: process.env.CHATTER_PUBLIC_URL
+    ? `${process.env.CHATTER_PUBLIC_URL.replace(/\/+$/, '')}/notes`
+    : '',
   aiBaseUrl: 'https://openrouter.ai/api/v1',
   aiModel: '',
   voiceMode: 'off',
@@ -142,9 +146,13 @@ const defaultSettings = () => ({
 
 const loadSettings = () => {
   const stored = loadJson(SETTINGS_FILE, {});
+  const defaults = defaultSettings();
   return {
-    ...defaultSettings(),
+    ...defaults,
     ...stored,
+    notesUrl: typeof stored.notesUrl === 'string' && stored.notesUrl.trim()
+      ? stored.notesUrl
+      : defaults.notesUrl,
     // Existing installations started Notes together with Telegram. Preserve
     // that behaviour once, then persist the new independent flag on save.
     notesEnabled: typeof stored.notesEnabled === 'boolean'

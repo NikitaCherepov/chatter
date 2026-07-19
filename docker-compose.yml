@@ -13,7 +13,7 @@ services:
       API_DB_PATH: /data/chatter.db
       UPLOADS_DIR: /data/uploads
     ports:
-      - "${BACKEND_PORT:-3050}:3050"
+      - "127.0.0.1:${BACKEND_PORT:-3050}:3050"
     volumes:
       - chatter_backend_data:/data
       - chatter_backend_updates:/app/updates
@@ -59,7 +59,7 @@ services:
       NODE_ENV: production
       NOTES_DB_PATH: /data/chatter.db
     ports:
-      - "${NOTES_PORT:-3001}:3001"
+      - "127.0.0.1:${NOTES_PORT:-3001}:3001"
     volumes:
       - chatter_backend_data:/data
     depends_on:
@@ -70,7 +70,7 @@ services:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:3001/').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+        - "fetch('http://127.0.0.1:3001/notes').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
       interval: 10s
       timeout: 3s
       start_period: 15s
@@ -95,7 +95,7 @@ services:
       PYTHON_BIN: /opt/venv/bin/python
       PIPER_MODEL_PATH: /opt/models/piper/en_US-lessac-medium.onnx
     ports:
-      - "${VOICE_PORT:-3030}:3030"
+      - "127.0.0.1:${VOICE_PORT:-3030}:3030"
     volumes:
       - chatter_voice_model_cache:/home/node/.cache/torch
     healthcheck:
@@ -153,6 +153,8 @@ services:
       CHATTER_PULL_IMAGES: "${CHATTER_PULL_IMAGES:-0}"
       CHATTER_DATA_DIR: /data
       CHATTER_BACKUPS_DIR: /backups
+      CHATTER_PUBLIC_HOST: "${CHATTER_PUBLIC_HOST:-}"
+      CHATTER_PUBLIC_URL: "${CHATTER_PUBLIC_URL:-}"
     ports:
       - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-8080}:8080"
     volumes:
@@ -176,7 +178,27 @@ services:
       start_period: 10s
       retries: 5
 
+  gateway:
+    profiles:
+      - gateway
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      CHATTER_PUBLIC_HOST: "${CHATTER_PUBLIC_HOST}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - chatter_caddy_data:/data
+      - chatter_caddy_config:/config
+    depends_on:
+      chatter-manager:
+        condition: service_healthy
+
 volumes:
   chatter_backend_data:
   chatter_backend_updates:
   chatter_voice_model_cache:
+  chatter_caddy_data:
+  chatter_caddy_config:

@@ -43,6 +43,7 @@ declare global {
 const PAGE_SIZE = 20;
 const TITLE_MAX = 120;
 const CONTENT_MAX = 2000;
+const NOTES_API_PATH = "/notes/api/notes";
 
 const formatTs = (ts: number, language: string) => {
   if (!Number.isFinite(ts) || ts <= 0) return "-";
@@ -130,7 +131,7 @@ export function NotesApp() {
       params.set("offset", String(nextOffset));
       if (nextQuery.trim()) params.set("query", nextQuery.trim());
 
-      const res = await fetch(`/api/notes?${params.toString()}`, {
+      const res = await fetch(`${NOTES_API_PATH}?${params.toString()}`, {
         headers: { "x-telegram-init-data": initData },
         cache: "no-store",
       });
@@ -171,7 +172,7 @@ export function NotesApp() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch(`/api/notes/${id}`, {
+      const res = await fetch(`${NOTES_API_PATH}/${id}`, {
         headers: { "x-telegram-init-data": initData },
         cache: "no-store",
       });
@@ -212,7 +213,7 @@ export function NotesApp() {
     setSaving(true);
     try {
       const isUpdate = selectedId !== null;
-      const endpoint = isUpdate ? `/api/notes/${selectedId}` : "/api/notes";
+      const endpoint = isUpdate ? `${NOTES_API_PATH}/${selectedId}` : NOTES_API_PATH;
       const method = isUpdate ? "PUT" : "POST";
       const res = await fetch(endpoint, {
         method,
@@ -249,7 +250,7 @@ export function NotesApp() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/notes/${id}`, {
+      const res = await fetch(`${NOTES_API_PATH}/${id}`, {
         method: "DELETE",
         headers: { "x-telegram-init-data": initData },
       });
