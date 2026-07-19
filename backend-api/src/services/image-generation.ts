@@ -5,21 +5,10 @@ import type { UserPlan, UserRecord } from '../types.js';
 
 dotenv.config();
 
-// Provider switch: "proxyapi" (default) or "openrouter"
-const IMAGE_GEN_PROVIDER = `${process.env.IMAGE_GEN_PROVIDER || 'proxyapi'}`.trim().toLowerCase();
-
-// ProxyAPI settings (provider=proxyapi)
-const PROXYAPI_KEY = `${process.env.PROXYAPI_KEY || ''}`.trim();
-const PROXYAPI_BASE_URL = `${process.env.PROXYAPI_BASE_URL || 'https://api.proxyapi.ru/openai/v1'}`.trim();
-
-// Shared / defaults
-const IMAGE_GEN_MODEL = `${process.env.IMAGE_GEN_MODEL || 'gpt-image-1.5'}`.trim();
-const IMAGE_GEN_QUALITY = `${process.env.IMAGE_GEN_QUALITY || 'low'}`.trim();
-const IMAGE_GEN_SIZE = `${process.env.IMAGE_GEN_SIZE || '1024x1024'}`.trim();
-
-// OpenRouter settings (provider=openrouter)
 const OPENROUTER_API_KEY = `${process.env.OPENROUTER_API_KEY || ''}`.trim();
 const OPENROUTER_BASE_URL = `${process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'}`.trim();
+const IMAGE_GEN_MODEL = `${process.env.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality'}`.trim();
+const IMAGE_GEN_MAX_RESOLUTION = process.env.IMAGE_GEN_MAX_RESOLUTION === '1K' ? '1K' : '2K';
 
 const postJson = async (url: string, body: unknown, apiKey: string): Promise<any> => {
   const response = await fetch(url, {
@@ -77,38 +66,6 @@ export type ImageGenError = {
 };
 
 /**
- * ProxyAPI provider — OpenAI /images/generations endpoint.
- * Expects response.data[0].b64_json in response.
- */
-const generateProxyApi = async (prompt: string): Promise<ImageGenResult | ImageGenError> => {
-  if (!PROXYAPI_KEY) {
-    return { ok: false, error: 'Генерация изображений не настроена (нет PROXYAPI_KEY).' };
-  }
-
-  const responseData = await postJson(
-    `${PROXYAPI_BASE_URL}/images/generations`,
-    {
-      model: IMAGE_GEN_MODEL,
-      prompt,
-      quality: IMAGE_GEN_QUALITY,
-      size: IMAGE_GEN_SIZE
-    },
-    PROXYAPI_KEY,
-  );
-
-  const base64Data = responseData?.data?.[0]?.b64_json;
-  if (!base64Data) {
-    return { ok: false, error: 'API не вернул данные изображения.' };
-  }
-
-  return {
-    ok: true,
-    image_base64: base64Data,
-    prompt_used: prompt
-  };
-};
-
-/**
  * OpenRouter provider — /images endpoint (Grok Imagine).
  * Supports input_references for image-to-image generation (up to 3 images).
  * Expects response.data[0].b64_json.
@@ -124,11 +81,12 @@ const generateOpenRouter = async (
   const body: Record<string, unknown> = {
     model: IMAGE_GEN_MODEL,
     prompt,
+    resolution: IMAGE_GEN_MAX_RESOLUTION,
   };
 
   // Attach reference images
   if (inputImages && inputImages.length > 0) {
-    body.input_references = inputImages.slice(0, 10).map(img => ({
+    body.input_references = inputImages.slice(0, 3).map(img => ({
       type: 'image_url',
       image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
     }));
@@ -170,17 +128,7 @@ export const runImageGeneration = async (
   if (!trimmedPrompt) return { ok: false, error: 'Пустой промпт для генерации изображения.' };
 
   try {
-    let result: ImageGenResult | ImageGenError;
-
-    switch (IMAGE_GEN_PROVIDER) {
-      case 'openrouter':
-        result = await generateOpenRouter(trimmedPrompt, inputImages);
-        break;
-      case 'proxyapi':
-      default:
-        result = await generateProxyApi(trimmedPrompt);
-        break;
-    }
+    const result = await generateOpenRouter(trimmedPrompt, inputImages);
 
     if (result.ok) {
       incrementUserImageGenUsage(userId, 1);
@@ -190,7 +138,7 @@ export const runImageGeneration = async (
   } catch (err: any) {
     const status = err?.response?.status || 0;
     const message = err?.response?.data?.error?.message || err?.message || String(err);
-    console.error(`[image-generation] Ошибка генерации (${IMAGE_GEN_PROVIDER}, status=${status}):`, message);
+    console.error(`[image-generation] Ошибка генерации OpenRouter (status=${status}):`, message);
     return { ok: false, error: `Ошибка генерации изображения: ${message}` };
   }
 };

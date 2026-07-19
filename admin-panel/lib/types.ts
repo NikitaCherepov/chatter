@@ -42,6 +42,14 @@ export type CloudTtsSettings = {
   model: string;
 };
 
+export type ImageGenerationSettings = {
+  baseUrl: string;
+  apiKey: string;
+  hasApiKey: boolean;
+  model: string;
+  maxResolution: '1K' | '2K';
+};
+
 export type Settings = {
   telegramEnabled: boolean;
   notesEnabled: boolean;
@@ -61,6 +69,7 @@ export type Settings = {
   webSearch: WebSearchSettings;
   webReader: WebReaderSettings;
   cloudTts: CloudTtsSettings;
+  imageGeneration: ImageGenerationSettings;
 };
 
 export type Service = { service: string; state: string; health: string; status: string };
@@ -117,5 +126,12 @@ export const emptySettings: Settings = {
     apiKey: '',
     hasApiKey: false,
     model: 'sonic-3.5',
+  },
+  imageGeneration: {
+    baseUrl: 'https://openrouter.ai/api/v1',
+    apiKey: '',
+    hasApiKey: false,
+    model: 'x-ai/grok-imagine-image-quality',
+    maxResolution: '2K',
   },
 };

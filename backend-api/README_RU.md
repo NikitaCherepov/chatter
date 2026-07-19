@@ -31,42 +31,24 @@ npm run logs:api
 - `MAP_PINS_ENCRYPTION_KEY` - для шифрования координат меток карты (fallback на `ENCRYPTION_KEY`).
 - `DEVOPS_ENCRYPTION_KEY` - для шифрования учётных данных SSH серверов (пароли, ключи, sudo-пароль). Fallback на `ENCRYPTION_KEY`.
 - `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` опционально) - для `/internal/tools/read_url`.
-- `IMAGE_GEN_PROVIDER` — провайдер генерации: `proxyapi` (по умолчанию) или `openrouter`.
-- `PROXYAPI_KEY` - ключ ProxyAPI (provider=proxyapi).
-- `PROXYAPI_BASE_URL` - базовый URL ProxyAPI (по умолчанию `https://api.proxyapi.ru/openai/v1`).
-- `OPENROUTER_API_KEY` - ключ OpenRouter (provider=openrouter).
+- `OPENROUTER_API_KEY` - ключ OpenRouter для генерации изображений.
 - `OPENROUTER_BASE_URL` - базовый URL OpenRouter (по умолчанию `https://openrouter.ai/api/v1`).
-- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `gpt-image-1.5` для proxyapi, `x-ai/grok-imagine-image-quality` для openrouter).
-- `IMAGE_GEN_QUALITY` - качество: `low`/`medium`/`high` (по умолчанию `low`, только proxyapi).
-- `IMAGE_GEN_SIZE` - размер: `1024x1024` (по умолчанию `1024x1024`, только proxyapi).
+- `IMAGE_GEN_MODEL` - модель генерации (по умолчанию `x-ai/grok-imagine-image-quality`).
+- `IMAGE_GEN_MAX_RESOLUTION` - максимальное разрешение Grok: `1K` или `2K` (по умолчанию `2K`).
 - `CARTESIA_API_KEY` — API-ключ Cartesia.ai (обязательно для облачной озвучки, формат `sk_car_...`).
 - `CARTESIA_MODEL_ID` — модель TTS Cartesia (по умолчанию `sonic-3.5`).
 
 ### Генерация изображений
 
-Генерация живёт в `services/image-generation.ts`. Провайдер выбирается через `IMAGE_GEN_PROVIDER`:
-
-**provider=proxyapi** (по умолчанию) — OpenAI-compatible `/images/generations`:
+Генерация живёт в `services/image-generation.ts` и использует OpenRouter с Grok Imagine:
 
 ```text
-POST {PROXYAPI_BASE_URL}/images/generations
-Authorization: Bearer {PROXYAPI_KEY}
-
-{ "model": "...", "prompt": "...", "quality": "...", "size": "..." }
-→ response.data[0].b64_json
-```
-
-**provider=openrouter** — chat completion с image modality:
-
-```text
-POST {OPENROUTER_BASE_URL}/chat/completions
+POST {OPENROUTER_BASE_URL}/images
 Authorization: Bearer {OPENROUTER_API_KEY}
 
-{ "model": "...", "messages": [{ "role": "user", "content": "..." }], "modalities": ["image"] }
-→ response.choices[0].message.images[0].image_url.url → download → base64
+{ "model": "...", "prompt": "...", "resolution": "2K", "input_references": [...] }
+→ response.data[0].b64_json
 ```
-
-Для добавления нового провайдера — создать функцию `generateXxx()` и добавить case в switch `runImageGeneration`.
 
 ### TTS Cartesia (облачная озвучка)
 
@@ -668,7 +650,7 @@ services/subagents/
     - Передаёт `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` колбэки в `sendMessageThroughAi`
   - `POST /internal/ai/lite` -> `{ text }` -> `{ reply_text }` — LITE AI для проверки безопасности команд
   - `POST /internal/ai/admin-outreach` -> `{ target_user_id, admin_instruction }`
-  - `POST /internal/ai/generate-image` -> `{ user_id, prompt }` -> `{ ok: true, image_base64, prompt_used }` (требует `PROXYAPI_KEY`)
+  - `POST /internal/ai/generate-image` -> `{ user_id, prompt }` -> `{ ok: true, image_base64, prompt_used }` (требует `OPENROUTER_API_KEY`)
   - `POST /internal/messages/bind-telegram` -> `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
@@ -1027,7 +1009,7 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `save_to_cold_memory` | Сохранение в векторный архив |
 | `delete_from_cold_memory` | Удаление из векторного архива |
 | `random_roll` | Бросок монетки/кубиков |
-| `generate_image` | Генерация изображения (ProxyAPI, `b64_json`). Автоматически маршрутизируется через PRO. |
+| `generate_image` | Генерация изображения через OpenRouter и Grok Imagine. Автоматически маршрутизируется через PRO. |
 | `get_exchange_rates` | Курсы валют ЦБ РФ с динамикой изменения. По умолчанию возвращает USD и EUR. |
 
 ### Клиентские инструменты (desktop + Telegram)

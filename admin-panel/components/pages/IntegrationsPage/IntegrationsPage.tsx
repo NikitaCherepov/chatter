@@ -5,12 +5,13 @@ import type { AdminSection } from '../../AdminShell/AdminShell';
 import type { Settings } from '../../../lib/types';
 import { Icon } from '../../icons/icons';
 import { CloudTtsPage } from './CloudTtsPage';
+import { ImageGenerationPage } from './ImageGenerationPage';
 import { PineconePage } from './PineconePage';
 import { WebReaderPage } from './WebReaderPage';
 import { WebSearchPage } from './WebSearchPage';
 import styles from './IntegrationsPage.module.css';
 
-type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts';
+type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation';
 
 const integrations: Array<{
   id: IntegrationId;
@@ -23,6 +24,7 @@ const integrations: Array<{
   { id: 'web-search', name: 'Web Search', description: 'Поиск информации в интернете', group: 'Интернет', icon: 'WS' },
   { id: 'web-reader', name: 'Web Reader', description: 'Чтение и обработка веб-страниц', group: 'Интернет', icon: 'WR' },
   { id: 'cloud-tts', name: 'Cloud TTS', description: 'Облачные голоса Cartesia', group: 'Медиа', icon: 'TT' },
+  { id: 'image-generation', name: 'Генерация изображений', description: 'Создание изображений через внешний API', group: 'Медиа', icon: 'IG' },
 ];
 
 export function IntegrationsPage({
@@ -102,11 +104,30 @@ export function IntegrationsPage({
     );
   }
 
+  if (selected === 'image-generation') {
+    return (
+      <ImageGenerationPage
+        settings={settings.imageGeneration}
+        onChange={(patch) =>
+          setSettings((current) => ({
+            ...current,
+            imageGeneration: { ...current.imageGeneration, ...patch },
+          }))
+        }
+        saving={saving}
+        saveState={saveState}
+        onBack={() => setSelected(null)}
+        onSave={onSave}
+      />
+    );
+  }
+
   const configured: Record<IntegrationId, boolean> = {
     pinecone: settings.pinecone.hasApiKey,
     'web-search': settings.webSearch.hasApiKey,
     'web-reader': settings.webReader.hasToken,
     'cloud-tts': settings.cloudTts.hasApiKey,
+    'image-generation': settings.imageGeneration.hasApiKey,
   };
 
   return (

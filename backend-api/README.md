@@ -59,42 +59,24 @@ npm run i18n:translate:api:all
 - `MAP_PINS_ENCRYPTION_KEY` — for encrypting map pin coordinates (falls back to `ENCRYPTION_KEY`).
 - `DEVOPS_ENCRYPTION_KEY` — for encrypting SSH server credentials (passwords, keys, sudo password). Falls back to `ENCRYPTION_KEY`.
 - `BROWSERLESS_TOKEN` (+ `BROWSERLESS_BASE_URL` optionally) — for `/internal/tools/read_url`.
-- `IMAGE_GEN_PROVIDER` — generation provider: `proxyapi` (default) or `openrouter`.
-- `PROXYAPI_KEY` — ProxyAPI key (provider=proxyapi).
-- `PROXYAPI_BASE_URL` — ProxyAPI base URL (default `https://api.proxyapi.ru/openai/v1`).
-- `OPENROUTER_API_KEY` — OpenRouter key (provider=openrouter).
+- `OPENROUTER_API_KEY` — OpenRouter key for image generation.
 - `OPENROUTER_BASE_URL` — OpenRouter base URL (default `https://openrouter.ai/api/v1`).
-- `IMAGE_GEN_MODEL` — generation model (default `gpt-image-1.5` for proxyapi, `x-ai/grok-imagine-image-quality` for openrouter).
-- `IMAGE_GEN_QUALITY` — quality: `low`/`medium`/`high` (default `low`, proxyapi only).
-- `IMAGE_GEN_SIZE` — size: `1024x1024` (default `1024x1024`, proxyapi only).
+- `IMAGE_GEN_MODEL` — generation model (default `x-ai/grok-imagine-image-quality`).
+- `IMAGE_GEN_MAX_RESOLUTION` — maximum requested Grok resolution: `1K` or `2K` (default `2K`).
 - `CARTESIA_API_KEY` — Cartesia.ai API key (required for cloud TTS, format `sk_car_...`).
 - `CARTESIA_MODEL_ID` — Cartesia TTS model (default `sonic-3.5`).
 
 ### Image Generation
 
-Generation lives in `services/image-generation.ts`. The provider is selected via `IMAGE_GEN_PROVIDER`:
-
-**provider=proxyapi** (default) — OpenAI-compatible `/images/generations`:
+Generation lives in `services/image-generation.ts` and uses OpenRouter with Grok Imagine:
 
 ```text
-POST {PROXYAPI_BASE_URL}/images/generations
-Authorization: Bearer {PROXYAPI_KEY}
-
-{ "model": "...", "prompt": "...", "quality": "...", "size": "..." }
- response.data[0].b64_json
-```
-
-**provider=openrouter** — chat completion with image modality:
-
-```text
-POST {OPENROUTER_BASE_URL}/chat/completions
+POST {OPENROUTER_BASE_URL}/images
 Authorization: Bearer {OPENROUTER_API_KEY}
 
-{ "model": "...", "messages": [{ "role": "user", "content": "..." }], "modalities": ["image"] }
- response.choices[0].message.images[0].image_url.url → download → base64
+{ "model": "...", "prompt": "...", "resolution": "2K", "input_references": [...] }
+→ response.data[0].b64_json
 ```
-
-To add a new provider — create a `generateXxx()` function and add a case to the `runImageGeneration` switch.
 
 ### TTS Cartesia (cloud voiceover)
 
@@ -690,7 +672,7 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
     - Passes `onIntermediateMessage`, `onToolStatus`, `onDesktopAction` callbacks to `sendMessageThroughAi`
   - `POST /internal/ai/lite` → `{ text }` → `{ reply_text }` — LITE AI for command safety checks
   - `POST /internal/ai/admin-outreach` → `{ target_user_id, admin_instruction }`
-  - `POST /internal/ai/generate-image` → `{ user_id, prompt }` → `{ ok: true, image_base64, prompt_used }` (requires `PROXYAPI_KEY`)
+  - `POST /internal/ai/generate-image` → `{ user_id, prompt }` → `{ ok: true, image_base64, prompt_used }` (requires `OPENROUTER_API_KEY`)
   - `POST /internal/messages/bind-telegram` → `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
@@ -1050,7 +1032,7 @@ A numeric prefix `[N]` is added:
 | `save_to_cold_memory` | Save to the vector archive |
 | `delete_from_cold_memory` | Delete from the vector archive |
 | `random_roll` | Coin/dice roll |
-| `generate_image` | Generate an image (ProxyAPI, `b64_json`). Automatically routed through PRO. |
+| `generate_image` | Generate an image through OpenRouter and Grok Imagine. Automatically routed through PRO. |
 | `get_exchange_rates` | Central Bank of Russia exchange rates with change dynamics. Returns USD and EUR by default. |
 
 ### Client Tools (desktop + Telegram)

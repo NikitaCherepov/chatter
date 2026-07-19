@@ -10,8 +10,8 @@ const OLD_INDEX_NAME = "chattermemory";
 const NEW_INDEX_NAME = "chattermemory2";
 
 const openai = new OpenAI({
-  apiKey: process.env.PROXYAPI_KEY,
-  baseURL: 'https://api.proxyapi.ru/openai/v1' 
+  apiKey: process.env.TIMEWEB_EMBED_API_KEY,
+  baseURL: process.env.TIMEWEB_EMBED_BASE_URL
 });
 
 async function migrate() {
@@ -22,7 +22,11 @@ async function migrate() {
   const listResp = await fetch(listUrl, { headers: { 'Api-Key': PINECONE_API_KEY } });
   const listData: any = await listResp.json();
   
-  const allIds = listData.vectors?.map((v: any) => v.id) || [];
+  const allIds: string[] = Array.isArray(listData.vectors)
+    ? listData.vectors
+        .map((vector: { id?: unknown }) => `${vector.id || ''}`.trim())
+        .filter(Boolean)
+    : [];
   if (allIds.length === 0) {
     console.log("📭 Записей не найдено.");
     return;
@@ -49,7 +53,7 @@ async function migrate() {
       continue;
     }
 
-    // 3. Делаем новые эмбеддинги (через ProxyAPI)
+    // 3. Делаем новые эмбеддинги через настроенный OpenAI-совместимый API
     const texts = records.map((r: any) => r.metadata?.text).filter(Boolean);
     const embedResponse = await openai.embeddings.create({
       model: 'text-embedding-3-small',

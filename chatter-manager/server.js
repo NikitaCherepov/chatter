@@ -175,6 +175,13 @@ function publicSettings() {
       apiKey: '',
       hasApiKey: Boolean(backendEnv.CARTESIA_API_KEY),
       model: backendEnv.CARTESIA_MODEL_ID || 'sonic-3.5'
+    },
+    imageGeneration: {
+      baseUrl: backendEnv.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+      apiKey: '',
+      hasApiKey: Boolean(backendEnv.OPENROUTER_API_KEY),
+      model: backendEnv.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality',
+      maxResolution: backendEnv.IMAGE_GEN_MAX_RESOLUTION === '1K' ? '1K' : '2K'
     }
   };
 }
@@ -350,6 +357,9 @@ function saveSettings(input) {
   const webSearchInput = input.webSearch && typeof input.webSearch === 'object' ? input.webSearch : {};
   const webReaderInput = input.webReader && typeof input.webReader === 'object' ? input.webReader : {};
   const cloudTtsInput = input.cloudTts && typeof input.cloudTts === 'object' ? input.cloudTts : {};
+  const imageGenerationInput = input.imageGeneration && typeof input.imageGeneration === 'object'
+    ? input.imageGeneration
+    : {};
   if (!Array.isArray(input.proModels) && proModels.length === 0 && legacyAiApiKey && legacyAiModel) {
     proModels.push({ id: 'pro-legacy', baseUrl: legacyAiBaseUrl, apiKey: legacyAiApiKey, model: legacyAiModel });
   }
@@ -445,6 +455,21 @@ function saveSettings(input) {
     cloudTtsInput.model ?? backendEnv.CARTESIA_MODEL_ID ?? 'sonic-3.5',
     'Cloud TTS model'
   );
+  backendEnv.OPENROUTER_BASE_URL = normalizeUrl(
+    imageGenerationInput.baseUrl ?? backendEnv.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+    'OpenRouter image API URL',
+    { allowEmpty: false }
+  );
+  backendEnv.OPENROUTER_API_KEY = mergeSecret(
+    imageGenerationInput.apiKey,
+    backendEnv.OPENROUTER_API_KEY,
+    'OpenRouter image API key'
+  );
+  backendEnv.IMAGE_GEN_MODEL = validateEnvPart(
+    imageGenerationInput.model ?? backendEnv.IMAGE_GEN_MODEL ?? 'x-ai/grok-imagine-image-quality',
+    'Image generation model'
+  );
+  backendEnv.IMAGE_GEN_MAX_RESOLUTION = imageGenerationInput.maxResolution === '1K' ? '1K' : '2K';
 
   Object.assign(telegramEnv, { TELEGRAM_TOKEN: telegramToken, BACKEND_INTERNAL_TOKEN: internalToken, NOTES_WEBAPP_URL: notesUrl });
   Object.assign(voiceEnv, {

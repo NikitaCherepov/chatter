@@ -3216,7 +3216,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
     }
 
-    selectedImages = selectedImages.slice(0, 10);
+    selectedImages = selectedImages.slice(0, 3);
 
     const result = await runImageGeneration(user.id, prompt, selectedImages.length > 0 ? selectedImages : undefined);
     if (!result.ok) return `Ошибка генерации изображения: ${(result as any).error || 'unknown'}`;
