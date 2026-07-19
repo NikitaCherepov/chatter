@@ -109,7 +109,7 @@ export function ServicesPage({
             >
               <option value="off">Выключен</option>
               <option value="local">На этом сервере</option>
-              <option value="remote">На другом сервере</option>
+              <option value="remote" disabled>На другом сервере (скоро)</option>
             </select>
           </FormField>
           {settings.voiceMode === 'remote' && (

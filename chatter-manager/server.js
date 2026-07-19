@@ -418,6 +418,7 @@ function saveSettings(input) {
     TIMEWEB_API_KEY: proModels[0]?.apiKey || legacyAiApiKey,
     TIMEWEB_BASE_URL: proModels[0]?.baseUrl || legacyAiBaseUrl,
     TELEGRAM_TOKEN: telegramToken,
+    BACKEND_VOICE_API_ENABLED: voiceMode === 'off' ? '0' : '1',
     VOICE_TRANSCRIBE_URL: voiceMode === 'local' ? 'http://voice:3030/api/voice' : voiceMode === 'remote' ? voiceExternalUrl : '',
     VOICE_TRANSCRIBE_TOKEN: voiceMode === 'off' ? '' : voiceToken
   });
@@ -1011,10 +1012,25 @@ async function controlService(service, action) {
   if (!config) throw new Error('unknown_service');
   if (!['start', 'stop', 'restart'].includes(action)) throw new Error('unknown_service_action');
   const profileArgs = config.profile ? ['--profile', config.profile] : [];
+  if (service === 'voice' && action !== 'restart') {
+    const enabled = action === 'start';
+    const backendEnv = parseEnv(BACKEND_ENV_FILE);
+    const voiceEnv = parseEnv(VOICE_ENV_FILE);
+    const voiceToken = voiceEnv.VOICE_TRANSCRIBE_TOKEN || backendEnv.VOICE_TRANSCRIBE_TOKEN || randomSecret(32);
+    backendEnv.BACKEND_VOICE_API_ENABLED = enabled ? '1' : '0';
+    backendEnv.VOICE_TRANSCRIBE_URL = enabled ? 'http://voice:3030/api/voice' : '';
+    backendEnv.VOICE_TRANSCRIBE_TOKEN = enabled ? voiceToken : '';
+    voiceEnv.VOICE_TRANSCRIBE_TOKEN = voiceToken;
+    writeEnv(BACKEND_ENV_FILE, backendEnv);
+    writeEnv(VOICE_ENV_FILE, voiceEnv);
+  }
   if (action === 'start') {
     await runDocker(composeArgs(...profileArgs, 'up', '-d', '--no-build', service), 5 * 60 * 1000);
   } else {
     await runDocker(composeArgs(...profileArgs, action, service), 5 * 60 * 1000);
+  }
+  if (service === 'voice' && action !== 'restart') {
+    await runDocker(composeArgs('up', '-d', '--no-build', '--force-recreate', 'backend'), 5 * 60 * 1000);
   }
   if (action !== 'restart') {
     const running = action === 'start';
