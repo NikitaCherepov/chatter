@@ -121,6 +121,8 @@ configure_firewall() {
   for rule in "${legacy_rules[@]:-}"; do
     [[ -n "$rule" ]] && ufw --force delete "$rule" >/dev/null
   done
+
+  return 0
 }
 
 [[ -f "$PROJECT_DIR/docker-compose.yml" ]] || fail "Run install.sh from the cloned Chatter repository."
