@@ -24,6 +24,29 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function localizeReleaseNotes(rawNotes: string, language: string): string {
+  try {
+    const parsed = JSON.parse(rawNotes);
+    const changes = parsed?.changes;
+    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return rawNotes;
+
+    const normalizedLanguage = language.replace('_', '-').toLowerCase();
+    const availableLocales = Object.keys(changes);
+    const exactLocale = availableLocales.find((locale) => locale.toLowerCase() === normalizedLanguage);
+    const baseLanguage = normalizedLanguage.split('-')[0];
+    const baseLocale = availableLocales.find((locale) => locale.toLowerCase() === baseLanguage);
+    const selectedChanges = changes[exactLocale || baseLocale || 'en'];
+
+    if (!Array.isArray(selectedChanges) || selectedChanges.some((entry) => typeof entry !== 'string')) {
+      return rawNotes;
+    }
+
+    return selectedChanges.map((entry) => `• ${entry}`).join('\n');
+  } catch {
+    return rawNotes;
+  }
+}
+
 const overlayVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1 },
@@ -37,7 +60,7 @@ const modalVariants = {
 };
 
 export function UpdateModal({ info, onClose }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<UpdateStatus>('available');
   const [progress, setProgress] = useState(0);
   const [transferred, setTransferred] = useState(0);
@@ -86,6 +109,10 @@ export function UpdateModal({ info, onClose }: Props) {
   }, []);
 
   const sizeLabel = info.size > 0 ? formatBytes(info.size) : '';
+  const releaseNotes = localizeReleaseNotes(
+    info.releaseNotes,
+    i18n.resolvedLanguage || i18n.language || 'en',
+  );
 
   return (
     <AnimatePresence>
@@ -121,8 +148,8 @@ export function UpdateModal({ info, onClose }: Props) {
           </div>
 
           {/* Release notes */}
-          {info.releaseNotes && (
-            <div className={s.releaseNotes}>{info.releaseNotes}</div>
+          {releaseNotes && (
+            <div className={s.releaseNotes}>{releaseNotes}</div>
           )}
 
           {/* Size info */}

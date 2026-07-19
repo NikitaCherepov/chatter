@@ -1,0 +1,48 @@
+{
+  "changes": {
+    "en": [
+      "Desktop updates now use public GitHub Releases.",
+      "Differential downloads are supported through NSIS block maps."
+    ],
+    "ru": [
+      "Обновления Desktop теперь загружаются из публичных GitHub Releases.",
+      "Поддерживается дифференциальная загрузка через NSIS block map."
+    ],
+    "de": [
+      "Desktop-Updates verwenden jetzt öffentliche GitHub-Releases.",
+      "Differentielle Downloads werden über NSIS-Blockzuordnungen unterstützt."
+    ],
+    "es": [
+      "Las actualizaciones de escritorio ahora usan GitHub Releases público.",
+      "Las descargas diferenciales son compatibles mediante mapas de bloques NSIS."
+    ],
+    "fr": [
+      "Les mises à jour du bureau utilisent désormais les versions publiques de GitHub.",
+      "Les téléchargements différentiels sont pris en charge via les cartes de blocs NSIS."
+    ],
+    "it": [
+      "Gli aggiornamenti del desktop ora utilizzano le versioni pubbliche di GitHub.",
+      "I download differenziali sono supportati tramite mappe di blocchi NSIS."
+    ],
+    "ja": [
+      "デスクトップアップデートは公開GitHubリリースを使用するようになりました。",
+      "差分ダウンロードはNSISブロックマップでサポートされています。"
+    ],
+    "ko": [
+      "데스크톱 업데이트는 이제 공개 GitHub 릴리스를 사용합니다.",
+      "NSIS 블록 맵을 통해 차등 다운로드가 지원됩니다."
+    ],
+    "pl": [
+      "Aktualizacje pulpitu korzystają teraz z publicznych wydań GitHub.",
+      "Pobieranie różnicowe jest obsługiwane przez mapy bloków NSIS."
+    ],
+    "pt-BR": [
+      "As atualizações do desktop agora usam GitHub Releases públicos.",
+      "Downloads diferenciais são suportados através de mapas de blocos NSIS."
+    ],
+    "zh-CN": [
+      "桌面更新现在使用公共 GitHub Releases。",
+      "通过 NSIS 块映射支持差异下载。"
+    ]
+  }
+}

@@ -19,6 +19,7 @@ Options:
   --from <locale>        Source locale (default: ru; en with --all)
   --to <locale>          Target locale (default: en)
   --locales <directory>  Locale catalogs root (default: i18n/locales)
+  --changelog <file>     Translate changes arrays inside one changelog JSON
   --source <file>        Source JSON path
   --target <file>        Target JSON path
   --env <file>           Env file path (default: .env.i18n)
@@ -41,6 +42,7 @@ function parseArgs(argv) {
     from: '',
     to: '',
     locales: '',
+    changelog: '',
     source: '',
     target: '',
     env: '',
@@ -67,6 +69,7 @@ function parseArgs(argv) {
       case '--from': args.from = takeValue(); break;
       case '--to': args.to = takeValue(); break;
       case '--locales': args.locales = takeValue(); break;
+      case '--changelog': args.changelog = takeValue(); break;
       case '--source': args.source = takeValue(); break;
       case '--target': args.target = takeValue(); break;
       case '--env': args.env = takeValue(); break;
@@ -421,6 +424,59 @@ function createTranslationConfig(args, envFile) {
   return config;
 }
 
+async function translateChangelog({ args, file, sourceLocale, targetLocales, envFile }) {
+  const changelog = readJson(file, 'changelog');
+  const changes = changelog.changes;
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
+    throw new Error('Changelog must contain a changes object');
+  }
+
+  const source = changes[sourceLocale];
+  if (!Array.isArray(source) || source.length === 0 || source.some((entry) => typeof entry !== 'string' || !entry.trim())) {
+    throw new Error(`changes.${sourceLocale} must be a non-empty array of strings`);
+  }
+
+  let config;
+  for (const targetLocale of targetLocales) {
+    if (sourceLocale === targetLocale) continue;
+
+    const existing = Array.isArray(changes[targetLocale]) ? changes[targetLocale].slice(0, source.length) : [];
+    while (existing.length < source.length) existing.push('');
+
+    let selected = source
+      .map((text, index) => ({ key: `change_${index}`, source: text.trim(), index }))
+      .filter((entry) => args.force || typeof existing[entry.index] !== 'string' || !existing[entry.index].trim());
+    if (args.limit > 0) selected = selected.slice(0, args.limit);
+
+    console.log(`\n[${targetLocale}] Changelog: ${path.relative(projectRoot, file)}`);
+    console.log(`${args.force ? 'Selected' : 'Missing'}: ${selected.length} change(s)`);
+
+    if (args.dryRun) {
+      for (const entry of selected) console.log(`  ${entry.key}`);
+      continue;
+    }
+    if (selected.length === 0) continue;
+
+    if (!config) {
+      config = createTranslationConfig(args, envFile);
+      console.log(`Provider: ${config.provider}; reasoning: ${config.reasoningLevel}; batch size: ${config.batchSize}`);
+    }
+
+    let completed = 0;
+    const batches = chunk(selected, config.batchSize);
+    for (const batch of batches) {
+      const translations = await requestTranslations(batch, config, sourceLocale, targetLocale);
+      for (const entry of batch) existing[entry.index] = translations[entry.key];
+      completed += batch.length;
+      if (completed < selected.length) await sleep(config.delayMs);
+    }
+
+    changes[targetLocale] = existing;
+    saveJson(file, changelog);
+    console.log(`Done: wrote ${completed} change(s) to changes.${targetLocale}`);
+  }
+}
+
 async function translateCatalog({
   args,
   sourceEntries,
@@ -493,8 +549,26 @@ async function main() {
   const targetLocale = args.to || 'en';
   const localesRoot = path.resolve(projectRoot, args.locales || 'i18n/locales');
   const envFile = path.resolve(projectRoot, args.env || '.env.i18n');
-  const sourceFile = path.resolve(projectRoot, args.source || path.join(localesRoot, sourceLocale, 'translation.json'));
   loadEnvFile(envFile);
+
+  if (args.changelog) {
+    if (args.source || args.target) {
+      throw new Error('--changelog cannot be combined with --source or --target');
+    }
+    const targetLocales = args.all
+      ? listLocaleCatalogs(localesRoot).map((entry) => entry.locale)
+      : [targetLocale];
+    await translateChangelog({
+      args,
+      file: path.resolve(projectRoot, args.changelog),
+      sourceLocale,
+      targetLocales,
+      envFile,
+    });
+    return;
+  }
+
+  const sourceFile = path.resolve(projectRoot, args.source || path.join(localesRoot, sourceLocale, 'translation.json'));
   if (!fs.existsSync(sourceFile)) throw new Error(`Source catalog does not exist: ${sourceFile}`);
 
   const source = readJson(sourceFile, 'source');
