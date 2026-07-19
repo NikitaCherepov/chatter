@@ -1,0 +1,113 @@
+name: Build Desktop release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Require main branch
+        shell: pwsh
+        run: |
+          if ('${{ github.ref }}' -ne 'refs/heads/main') {
+            throw 'Desktop releases must be built from the main branch.'
+          }
+
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Read release version
+        id: version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./desktop-app/package.json').version"
+          if (-not $version) { throw 'desktop-app/package.json has no version.' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Ensure release does not already exist
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release $env:RELEASE_TAG already exists. Increase desktop-app/package.json version first."
+          }
+          exit 0
+
+      - name: Validate localized changelog
+        run: node scripts/build-desktop-release-notes.mjs --check
+
+      - name: Restore Desktop resource cache
+        uses: actions/cache@v4
+        with:
+          path: desktop-app/models
+          key: desktop-resources-${{ runner.os }}-${{ hashFiles('desktop-app/scripts/prepare-release-resources.ps1', 'desktop-app/scripts/download-default-piper-voices.ps1') }}
+
+      - name: Prepare Whisper and Piper resources
+        shell: powershell
+        run: desktop-app/scripts/prepare-release-resources.ps1
+
+      - name: Install Desktop dependencies
+        working-directory: desktop-app
+        run: npm ci
+
+      - name: Build Windows packages
+        working-directory: desktop-app
+        run: npm run build:win -- --publish never
+
+      - name: Build localized release notes
+        run: node scripts/build-desktop-release-notes.mjs --output desktop-release-notes.json
+
+      - name: Store build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatter-desktop-${{ steps.version.outputs.version }}
+          if-no-files-found: error
+          path: |
+            desktop-app/release/*.exe
+            desktop-app/release/*.blockmap
+            desktop-app/release/*.zip
+            desktop-app/release/latest.yml
+
+      - name: Create draft GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $assets = @(
+            Get-ChildItem -LiteralPath desktop-app/release -File |
+              Where-Object {
+                $_.Extension -in '.exe', '.blockmap', '.zip' -or $_.Name -eq 'latest.yml'
+              } |
+              ForEach-Object { $_.FullName }
+          )
+          if ($assets.Count -eq 0) { throw 'Desktop build produced no release files.' }
+
+          gh release create $env:RELEASE_TAG @assets `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $env:GITHUB_SHA `
+            --title "Chatter Desktop $env:RELEASE_VERSION" `
+            --notes-file desktop-release-notes.json `
+            --draft

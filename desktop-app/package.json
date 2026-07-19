@@ -65,8 +65,7 @@
     "files": [
       "dist/**/*",
       "!dist/wakeword-listener.exe",
-      "!dist/wakeword-listener/**",
-      ".env"
+      "!dist/wakeword-listener/**"
     ],
     "asarUnpack": [
       "node_modules/ffmpeg-static/**/*",

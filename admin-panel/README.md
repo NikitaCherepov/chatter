@@ -99,11 +99,7 @@ Restoring data is destructive and should require an explicit UI confirmation.
 
 ## Server Updates
 
-Server updates and Desktop updates are separate systems.
-
 The System page compares the digests of the currently running server images with the latest GHCR images. Checking downloads image metadata/layers but does not restart services. Applying an update pulls changed images and recreates only affected server containers. Release notes come from the localized `server-changelog.json` image label.
-
-Desktop uses GitHub Releases and `electron-updater`; it is not updated by this panel.
 
 ## Useful Diagnostics
 
