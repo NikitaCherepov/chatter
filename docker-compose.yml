@@ -151,6 +151,8 @@ services:
       CHATTER_IMAGE_PREFIX: "${CHATTER_IMAGE_PREFIX:-chatter}"
       CHATTER_IMAGE_TAG: "${CHATTER_IMAGE_TAG:-local}"
       CHATTER_PULL_IMAGES: "${CHATTER_PULL_IMAGES:-0}"
+      CHATTER_DATA_DIR: /data
+      CHATTER_BACKUPS_DIR: /backups
     ports:
       - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-8080}:8080"
     volumes:
@@ -158,6 +160,8 @@ services:
       - ./docker-compose.yml:/workspace/docker-compose.yml:ro
       - "${CHATTER_DOCKER_CONFIG_DIR:-./.chatter/docker-config}:/root/.docker:ro"
       - /var/run/docker.sock:/var/run/docker.sock
+      - chatter_backend_data:/data
+      - "${CHATTER_CONFIG_DIR:-./.chatter}/backups:/backups"
     depends_on:
       admin-panel:
         condition: service_healthy

@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const https = require('node:https');
+const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -12,6 +13,7 @@ const CONFIG_DIR = path.resolve(process.env.CHATTER_CONFIG_DIR || '/config');
 const COMPOSE_FILE = path.resolve(process.env.CHATTER_COMPOSE_FILE || '/workspace/docker-compose.yml');
 const PROJECT_DIR = path.dirname(COMPOSE_FILE);
 const PROJECT_NAME = process.env.COMPOSE_PROJECT_NAME || 'chatter';
+const DOCKER_BIN = process.env.CHATTER_DOCKER_BIN || 'docker';
 const AUTH_FILE = path.join(CONFIG_DIR, 'auth.json');
 const BOOTSTRAP_PASSWORD_FILE = path.resolve(process.env.ADMIN_BOOTSTRAP_PASSWORD_FILE || path.join(CONFIG_DIR, 'admin.bootstrap'));
 const SETTINGS_FILE = path.join(CONFIG_DIR, 'settings.json');
@@ -19,16 +21,25 @@ const BACKEND_ENV_FILE = path.join(CONFIG_DIR, 'backend.env');
 const TELEGRAM_ENV_FILE = path.join(CONFIG_DIR, 'telegram.env');
 const VOICE_ENV_FILE = path.join(CONFIG_DIR, 'voice.env');
 const COMPOSE_RUNTIME_ENV_FILE = path.join(CONFIG_DIR, 'compose.runtime.env');
+const BACKUP_SCHEDULE_FILE = path.join(CONFIG_DIR, 'backup-schedule.json');
 const ADMIN_PANEL_URL = new URL(process.env.ADMIN_PANEL_URL || 'http://admin-panel:3000');
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BACKUP_UPLOAD_BYTES = Number.parseInt(process.env.MAX_BACKUP_UPLOAD_BYTES || `${20 * 1024 * 1024 * 1024}`, 10);
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+const DATA_DIR = path.resolve(process.env.CHATTER_DATA_DIR || '/data');
+const DATABASE_FILE = path.join(DATA_DIR, 'chatter.db');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+const BACKUPS_DIR = path.resolve(process.env.CHATTER_BACKUPS_DIR || '/backups');
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+fs.mkdirSync(BACKUPS_DIR, { recursive: true, mode: 0o700 });
 
 const sessions = new Map();
 const loginAttempts = new Map();
 let applyPromise = null;
+let backupPromise = null;
+let restorePromise = null;
 
 const randomSecret = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
@@ -523,7 +534,7 @@ const composeArgs = (...args) => [
 
 function runDocker(args, timeoutMs = 20 * 60 * 1000) {
   return new Promise((resolve, reject) => {
-    const child = spawn('docker', args, {
+    const child = spawn(DOCKER_BIN, args, {
       cwd: PROJECT_DIR,
       env: { ...process.env, BACKEND_ENV_FILE, TELEGRAM_ENV_FILE, VOICE_ENV_FILE },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -540,6 +551,376 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000) {
       else reject(new Error(output.trim() || `docker exited with code ${code}`));
     });
   });
+}
+
+function runProcess(command, args, timeoutMs = 10 * 60 * 1000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    const append = (chunk) => {
+      output += chunk.toString();
+      if (output.length > 1024 * 1024) output = output.slice(-1024 * 1024);
+    };
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`${command} timed out`));
+    }, timeoutMs);
+    child.on('error', (error) => { clearTimeout(timer); reject(error); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(output.trim());
+      else reject(new Error(output.trim() || `${command} exited with code ${code}`));
+    });
+  });
+}
+
+async function pathSize(targetPath) {
+  if (!fs.existsSync(targetPath)) return 0;
+  try {
+    const output = await runProcess('du', ['-sk', targetPath], 30000);
+    return Math.max(0, Number.parseInt(output, 10) || 0) * 1024;
+  } catch {
+    return 0;
+  }
+}
+
+function readMemoryInfo() {
+  const values = {};
+  try {
+    for (const line of fs.readFileSync('/proc/meminfo', 'utf8').split(/\r?\n/)) {
+      const match = line.match(/^([A-Za-z_()]+):\s+(\d+)\s+kB$/);
+      if (match) values[match[1]] = Number(match[2]) * 1024;
+    }
+  } catch {
+    return {
+      total: os.totalmem(),
+      available: os.freemem(),
+      swapTotal: 0,
+      swapFree: 0
+    };
+  }
+  return {
+    total: values.MemTotal || os.totalmem(),
+    available: values.MemAvailable || values.MemFree || os.freemem(),
+    swapTotal: values.SwapTotal || 0,
+    swapFree: values.SwapFree || 0
+  };
+}
+
+const cpuSnapshot = () => os.cpus().reduce((result, cpu) => {
+  const total = Object.values(cpu.times).reduce((sum, value) => sum + value, 0);
+  return { idle: result.idle + cpu.times.idle, total: result.total + total };
+}, { idle: 0, total: 0 });
+
+async function cpuUsagePercent() {
+  const before = cpuSnapshot();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const after = cpuSnapshot();
+  const total = after.total - before.total;
+  const idle = after.idle - before.idle;
+  return total > 0 ? Math.max(0, Math.min(100, Math.round((1 - idle / total) * 1000) / 10)) : 0;
+}
+
+async function getSystemInfo() {
+  const memory = readMemoryInfo();
+  const disk = fs.statfsSync(DATA_DIR);
+  const [cpuUsage, uploadsSize, backupsSize] = await Promise.all([
+    cpuUsagePercent(),
+    pathSize(UPLOADS_DIR),
+    pathSize(BACKUPS_DIR)
+  ]);
+  const databaseSize = fs.existsSync(DATABASE_FILE) ? fs.statSync(DATABASE_FILE).size : 0;
+  return {
+    hostname: os.hostname(),
+    platform: `${os.type()} ${os.release()}`,
+    uptimeSeconds: Math.floor(os.uptime()),
+    cpu: {
+      model: os.cpus()[0]?.model || 'Unknown CPU',
+      cores: os.cpus().length,
+      usagePercent: cpuUsage,
+      loadAverage: os.loadavg()
+    },
+    memory: {
+      total: memory.total,
+      used: Math.max(0, memory.total - memory.available),
+      available: memory.available
+    },
+    swap: {
+      total: memory.swapTotal,
+      used: Math.max(0, memory.swapTotal - memory.swapFree),
+      available: memory.swapFree
+    },
+    disk: {
+      total: disk.blocks * disk.bsize,
+      available: disk.bavail * disk.bsize,
+      used: (disk.blocks - disk.bfree) * disk.bsize
+    },
+    storage: { databaseSize, uploadsSize, backupsSize }
+  };
+}
+
+const safeBackupName = (name) => /^chatter-[A-Za-z0-9._-]+\.tar\.gz$/.test(name) ? name : '';
+
+async function readBackupManifest(filePath) {
+  try {
+    return JSON.parse(await runProcess('tar', ['-xOzf', filePath, 'manifest.json'], 30000));
+  } catch {
+    return null;
+  }
+}
+
+async function listBackups() {
+  const entries = fs.readdirSync(BACKUPS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && safeBackupName(entry.name));
+  const backups = await Promise.all(entries.map(async (entry) => {
+    const filePath = path.join(BACKUPS_DIR, entry.name);
+    const [stat, manifest] = [fs.statSync(filePath), await readBackupManifest(filePath)];
+    return {
+      name: entry.name,
+      size: stat.size,
+      createdAt: manifest?.createdAt || stat.mtime.toISOString(),
+      includesUploads: Boolean(manifest?.includesUploads),
+      version: `${manifest?.version || 'unknown'}`,
+      source: manifest?.source === 'automatic' ? 'automatic' : 'manual'
+    };
+  }));
+  return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+async function createBackup({ includeUploads = false, source = 'manual' } = {}) {
+  if (!fs.existsSync(DATABASE_FILE)) throw new Error('Chatter database was not found');
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const timestamp = createdAt.replace(/[:.]/g, '-');
+  const suffix = includeUploads ? 'full' : 'database';
+  const name = `chatter-${timestamp}-${suffix}.tar.gz`;
+  const tempDir = path.join(BACKUPS_DIR, `.tmp-${id}`);
+  const tempArchive = path.join(BACKUPS_DIR, `.tmp-${id}.tar.gz`);
+  const destination = path.join(BACKUPS_DIR, name);
+  fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
+  try {
+    const databaseCopy = path.join(tempDir, 'database.sqlite');
+    await runProcess('sqlite3', [DATABASE_FILE, `.backup ${databaseCopy}`]);
+    const hasUploads = includeUploads && fs.existsSync(UPLOADS_DIR);
+    const manifest = {
+      format: 'chatter-backup',
+      schemaVersion: 1,
+      createdAt,
+      version: process.env.CHATTER_IMAGE_TAG || 'local',
+      includesUploads: hasUploads,
+      source: source === 'automatic' ? 'automatic' : 'manual'
+    };
+    fs.writeFileSync(path.join(tempDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+    const tarArgs = ['-czf', tempArchive, '-C', tempDir, 'manifest.json', 'database.sqlite'];
+    if (hasUploads) {
+      fs.symlinkSync(UPLOADS_DIR, path.join(tempDir, 'uploads'), 'dir');
+      tarArgs[0] = '-chzf';
+      tarArgs.push('uploads');
+    }
+    await runProcess('tar', tarArgs, 60 * 60 * 1000);
+    fs.renameSync(tempArchive, destination);
+    return (await listBackups()).find((backup) => backup.name === name);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(tempArchive, { force: true });
+  }
+}
+
+function getBackupSchedule() {
+  const stored = loadJson(BACKUP_SCHEDULE_FILE, {});
+  return {
+    frequency: ['daily', 'weekly'].includes(stored.frequency) ? stored.frequency : 'off',
+    includeUploads: stored.includeUploads === true,
+    retention: Math.min(30, Math.max(1, Number.parseInt(stored.retention, 10) || 7)),
+    lastRunAt: typeof stored.lastRunAt === 'string' ? stored.lastRunAt : ''
+  };
+}
+
+function saveBackupSchedule(input) {
+  const current = getBackupSchedule();
+  const schedule = {
+    frequency: ['daily', 'weekly'].includes(input.frequency) ? input.frequency : 'off',
+    includeUploads: input.includeUploads === true,
+    retention: Math.min(30, Math.max(1, Number.parseInt(input.retention, 10) || 7)),
+    lastRunAt: current.lastRunAt
+  };
+  atomicWrite(BACKUP_SCHEDULE_FILE, `${JSON.stringify(schedule, null, 2)}\n`);
+  return schedule;
+}
+
+async function pruneAutomaticBackups(retention) {
+  const automatic = (await listBackups()).filter((backup) => backup.source === 'automatic');
+  for (const backup of automatic.slice(retention)) fs.rmSync(path.join(BACKUPS_DIR, backup.name), { force: true });
+}
+
+async function runScheduledBackupIfDue() {
+  const schedule = getBackupSchedule();
+  if (schedule.frequency === 'off' || backupPromise) return;
+  const interval = schedule.frequency === 'weekly' ? 7 * 86400000 : 86400000;
+  const lastRun = Date.parse(schedule.lastRunAt) || 0;
+  if (Date.now() - lastRun < interval) return;
+  backupPromise = createBackup({ includeUploads: schedule.includeUploads, source: 'automatic' })
+    .then(async (backup) => {
+      const updated = { ...schedule, lastRunAt: new Date().toISOString() };
+      atomicWrite(BACKUP_SCHEDULE_FILE, `${JSON.stringify(updated, null, 2)}\n`);
+      await pruneAutomaticBackups(schedule.retention);
+      return backup;
+    })
+    .catch((error) => { console.error('[backups]', error.message); })
+    .finally(() => { backupPromise = null; });
+  await backupPromise;
+}
+
+async function sqliteQuickCheck(filePath) {
+  const output = await runProcess('sqlite3', [filePath, 'PRAGMA quick_check;'], 2 * 60 * 1000);
+  if (output.trim() !== 'ok') throw new Error(`SQLite integrity check failed: ${output || 'unknown error'}`);
+}
+
+async function inspectBackupArchive(filePath, extractDir) {
+  const names = `${await runProcess('tar', ['-tzf', filePath], 2 * 60 * 1000)}`.split(/\r?\n/).filter(Boolean);
+  const verbose = `${await runProcess('tar', ['-tvzf', filePath], 2 * 60 * 1000)}`.split(/\r?\n/).filter(Boolean);
+  if (names.length === 0 || names.length !== verbose.length) throw new Error('Backup archive is empty or invalid');
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index].replace(/^\.\//, '');
+    const normalized = path.posix.normalize(name);
+    const allowed = name === 'manifest.json' || name === 'database.sqlite' || name === 'uploads' || name.startsWith('uploads/');
+    if (!allowed || name.includes('\\') || normalized.startsWith('../') || path.posix.isAbsolute(name)) throw new Error('Backup archive contains an unsafe path');
+    if (!['-', 'd'].includes(verbose[index][0])) throw new Error('Backup archive contains unsupported links or special files');
+  }
+  if (!names.some((name) => name.replace(/^\.\//, '') === 'manifest.json') || !names.some((name) => name.replace(/^\.\//, '') === 'database.sqlite')) {
+    throw new Error('Backup archive must contain manifest.json and database.sqlite');
+  }
+  fs.mkdirSync(extractDir, { recursive: true, mode: 0o700 });
+  await runProcess('tar', ['-xzf', filePath, '-C', extractDir], 60 * 60 * 1000);
+  const manifest = loadJson(path.join(extractDir, 'manifest.json'), null);
+  if (manifest?.format !== 'chatter-backup' || manifest?.schemaVersion !== 1) throw new Error('Unsupported Chatter backup format');
+  await sqliteQuickCheck(path.join(extractDir, 'database.sqlite'));
+  return manifest;
+}
+
+function receiveUpload(req, destination) {
+  return new Promise((resolve, reject) => {
+    const declaredSize = Number(req.headers['content-length'] || 0);
+    if (declaredSize > MAX_BACKUP_UPLOAD_BYTES) return reject(new Error('Backup file is too large'));
+    const output = fs.createWriteStream(destination, { flags: 'wx', mode: 0o600 });
+    let size = 0;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      output.destroy();
+      fs.rmSync(destination, { force: true });
+      reject(error);
+    };
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BACKUP_UPLOAD_BYTES) {
+        fail(new Error('Backup file is too large'));
+        req.destroy();
+      }
+    });
+    req.on('error', fail);
+    req.on('aborted', () => fail(new Error('Backup upload was interrupted')));
+    output.on('error', fail);
+    output.on('finish', () => {
+      if (settled) return;
+      settled = true;
+      if (size === 0) return reject(new Error('Backup file is empty'));
+      resolve(size);
+    });
+    req.pipe(output);
+  });
+}
+
+async function importBackup(uploadPath, originalName) {
+  const createdAt = new Date().toISOString();
+  const timestamp = createdAt.replace(/[:.]/g, '-');
+  const lowerName = originalName.toLowerCase();
+  const destination = path.join(BACKUPS_DIR, `chatter-${timestamp}-imported.tar.gz`);
+  const tempDir = path.join(BACKUPS_DIR, `.import-${crypto.randomUUID()}`);
+  try {
+    if (lowerName.endsWith('.tar.gz') || lowerName.endsWith('.tgz')) {
+      const manifest = await inspectBackupArchive(uploadPath, tempDir);
+      fs.writeFileSync(path.join(tempDir, 'manifest.json'), `${JSON.stringify({ ...manifest, source: 'manual', importedAt: createdAt }, null, 2)}\n`, { mode: 0o600 });
+      const tarArgs = ['-czf', destination, '-C', tempDir, 'manifest.json', 'database.sqlite'];
+      if (fs.existsSync(path.join(tempDir, 'uploads'))) tarArgs.push('uploads');
+      await runProcess('tar', tarArgs, 60 * 60 * 1000);
+    } else if (lowerName.endsWith('.db') || lowerName.endsWith('.sqlite') || lowerName.endsWith('.sqlite3')) {
+      await sqliteQuickCheck(uploadPath);
+      fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
+      fs.copyFileSync(uploadPath, path.join(tempDir, 'database.sqlite'));
+      const manifest = {
+        format: 'chatter-backup', schemaVersion: 1, createdAt,
+        version: 'imported', includesUploads: false, source: 'manual'
+      };
+      fs.writeFileSync(path.join(tempDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+      await runProcess('tar', ['-czf', destination, '-C', tempDir, 'manifest.json', 'database.sqlite']);
+    } else throw new Error('Use a .db, .sqlite, .sqlite3, .tar.gz or .tgz file');
+    return (await listBackups()).find((backup) => backup.name === path.basename(destination));
+  } catch (error) {
+    fs.rmSync(destination, { force: true });
+    throw error;
+  } finally {
+    fs.rmSync(uploadPath, { force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function stopDataServices() {
+  await runDocker(composeArgs('--profile', 'telegram', '--profile', 'notes', 'stop', 'telegram-bot', 'webapp-notes', 'backend'), 3 * 60 * 1000);
+}
+
+async function restoreBackup(name) {
+  const safeName = safeBackupName(name);
+  const archivePath = safeName ? path.join(BACKUPS_DIR, safeName) : '';
+  if (!archivePath || !fs.existsSync(archivePath)) throw new Error('Backup was not found');
+  const id = crypto.randomUUID();
+  const extractDir = path.join(BACKUPS_DIR, `.restore-${id}`);
+  const oldDatabase = path.join(DATA_DIR, `.restore-old-${id}.sqlite`);
+  const newDatabase = path.join(DATA_DIR, `.restore-new-${id}.sqlite`);
+  const oldUploads = path.join(DATA_DIR, `.restore-old-uploads-${id}`);
+  const newUploads = path.join(DATA_DIR, `.restore-new-uploads-${id}`);
+  let databaseMoved = false;
+  let uploadsMoved = false;
+  try {
+    const manifest = await inspectBackupArchive(archivePath, extractDir);
+    await createBackup({ includeUploads: Boolean(manifest.includesUploads), source: 'manual' });
+    await stopDataServices();
+
+    fs.copyFileSync(path.join(extractDir, 'database.sqlite'), newDatabase);
+    if (fs.existsSync(DATABASE_FILE)) { fs.renameSync(DATABASE_FILE, oldDatabase); databaseMoved = true; }
+    fs.renameSync(newDatabase, DATABASE_FILE);
+    fs.rmSync(`${DATABASE_FILE}-wal`, { force: true });
+    fs.rmSync(`${DATABASE_FILE}-shm`, { force: true });
+
+    if (manifest.includesUploads && fs.existsSync(path.join(extractDir, 'uploads'))) {
+      fs.cpSync(path.join(extractDir, 'uploads'), newUploads, { recursive: true });
+      if (fs.existsSync(UPLOADS_DIR)) { fs.renameSync(UPLOADS_DIR, oldUploads); uploadsMoved = true; }
+      fs.renameSync(newUploads, UPLOADS_DIR);
+    }
+
+    await applyConfiguration();
+    fs.rmSync(oldDatabase, { force: true });
+    fs.rmSync(oldUploads, { recursive: true, force: true });
+    return { ok: true };
+  } catch (error) {
+    if (databaseMoved && fs.existsSync(oldDatabase)) {
+      fs.rmSync(DATABASE_FILE, { force: true });
+      fs.renameSync(oldDatabase, DATABASE_FILE);
+    }
+    if (uploadsMoved && fs.existsSync(oldUploads)) {
+      fs.rmSync(UPLOADS_DIR, { recursive: true, force: true });
+      fs.renameSync(oldUploads, UPLOADS_DIR);
+    }
+    try { await applyConfiguration(); } catch {}
+    throw error;
+  } finally {
+    fs.rmSync(extractDir, { recursive: true, force: true });
+    fs.rmSync(newDatabase, { force: true });
+    fs.rmSync(newUploads, { recursive: true, force: true });
+  }
 }
 
 async function removeServices(profile, services) {
@@ -759,6 +1140,71 @@ async function handleRequest(req, res) {
   if (!pathname.startsWith('/api/') || !requireSession(req, res)) return;
   if (req.method === 'GET' && pathname === '/api/settings') return sendJson(res, 200, publicSettings());
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
+  if (req.method === 'GET' && pathname === '/api/system') return sendJson(res, 200, await getSystemInfo());
+  if (req.method === 'GET' && pathname === '/api/backups') return sendJson(res, 200, { creating: Boolean(backupPromise), restoring: Boolean(restorePromise), backups: await listBackups() });
+  if (req.method === 'GET' && pathname === '/api/backups/schedule') return sendJson(res, 200, getBackupSchedule());
+
+  if (req.method === 'PUT' && pathname === '/api/backups/schedule') {
+    const schedule = saveBackupSchedule(await readJson(req));
+    void runScheduledBackupIfDue();
+    return sendJson(res, 200, schedule);
+  }
+
+  const backupDownloadMatch = pathname.match(/^\/api\/backups\/([^/]+)\/download$/);
+  if (req.method === 'GET' && backupDownloadMatch) {
+    const name = safeBackupName(decodeURIComponent(backupDownloadMatch[1]));
+    const filePath = name ? path.join(BACKUPS_DIR, name) : '';
+    if (!filePath || !fs.existsSync(filePath)) return sendJson(res, 404, { error: 'backup_not_found' });
+    const stat = fs.statSync(filePath);
+    securityHeaders(res);
+    res.writeHead(200, {
+      'Content-Type': 'application/gzip',
+      'Content-Length': stat.size,
+      'Content-Disposition': `attachment; filename="${name}"`
+    });
+    return fs.createReadStream(filePath).pipe(res);
+  }
+
+  if (req.method === 'POST' && pathname === '/api/backups/import') {
+    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    const originalName = path.basename(`${url.searchParams.get('filename') || ''}`);
+    if (!originalName) return sendJson(res, 400, { error: 'backup_filename_required' });
+    const uploadPath = path.join(BACKUPS_DIR, `.upload-${crypto.randomUUID()}`);
+    try {
+      await receiveUpload(req, uploadPath);
+      return sendJson(res, 201, { ok: true, backup: await importBackup(uploadPath, originalName) });
+    } catch (error) {
+      fs.rmSync(uploadPath, { force: true });
+      return sendJson(res, 400, { error: error.message || 'backup_import_failed' });
+    }
+  }
+
+  const backupRestoreMatch = pathname.match(/^\/api\/backups\/([^/]+)\/restore$/);
+  if (req.method === 'POST' && backupRestoreMatch) {
+    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    const name = safeBackupName(decodeURIComponent(backupRestoreMatch[1]));
+    if (!name) return sendJson(res, 400, { error: 'invalid_backup_name' });
+    restorePromise = restoreBackup(name).finally(() => { restorePromise = null; });
+    return sendJson(res, 200, await restorePromise);
+  }
+
+  const backupDeleteMatch = pathname.match(/^\/api\/backups\/([^/]+)$/);
+  if (req.method === 'DELETE' && backupDeleteMatch) {
+    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    const name = safeBackupName(decodeURIComponent(backupDeleteMatch[1]));
+    const filePath = name ? path.join(BACKUPS_DIR, name) : '';
+    if (!filePath || !fs.existsSync(filePath)) return sendJson(res, 404, { error: 'backup_not_found' });
+    fs.rmSync(filePath);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/backups') {
+    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    const body = await readJson(req);
+    backupPromise = createBackup({ includeUploads: body.includeUploads === true, source: 'manual' })
+      .finally(() => { backupPromise = null; });
+    return sendJson(res, 201, { ok: true, backup: await backupPromise });
+  }
 
   if (req.method === 'POST' && pathname === '/api/image-model/check') {
     try {
@@ -809,3 +1255,5 @@ if (process.env.ADMIN_TLS === '1') {
 } else server = http.createServer(requestHandler);
 
 server.listen(PORT, '0.0.0.0', () => console.log(`Chatter Manager is listening on ${process.env.ADMIN_TLS === '1' ? 'https' : 'http'}://0.0.0.0:${PORT}`));
+setTimeout(() => { void runScheduledBackupIfDue(); }, 10000).unref();
+setInterval(() => { void runScheduledBackupIfDue(); }, 5 * 60 * 1000).unref();

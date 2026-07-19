@@ -10,6 +10,7 @@ import { OverviewPage } from '../components/pages/OverviewPage/OverviewPage';
 import { PlaceholderPage } from '../components/pages/PlaceholderPage/PlaceholderPage';
 import { SecurityPage } from '../components/pages/SecurityPage/SecurityPage';
 import { ServicesPage } from '../components/pages/ServicesPage/ServicesPage';
+import { SystemPage } from '../components/pages/SystemPage/SystemPage';
 import { api } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
@@ -176,12 +177,7 @@ export default function Home() {
           description="Общие тарифы и индивидуальные ограничения пользователей будут собраны в одном месте."
         />
       )}
-      {section === 'system' && (
-        <PlaceholderPage
-          title="Система"
-          description="Ресурсы сервера, версии компонентов, обновления и резервные копии появятся здесь."
-        />
-      )}
+      {section === 'system' && <SystemPage />}
       {section === 'logs' && <LogsPage />}
       {section === 'security' && (
         <SecurityPage
