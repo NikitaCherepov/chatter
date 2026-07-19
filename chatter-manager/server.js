@@ -40,6 +40,7 @@ const loginAttempts = new Map();
 let applyPromise = null;
 let backupPromise = null;
 let restorePromise = null;
+let activeLogStreams = 0;
 
 const randomSecret = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
@@ -962,6 +963,79 @@ async function getServiceStatus() {
   }
 }
 
+const LOG_SERVICES = {
+  backend: ['backend'],
+  telegram: ['telegram-bot'],
+  notes: ['webapp-notes'],
+  voice: ['voice'],
+  manager: ['chatter-manager'],
+  admin: ['admin-panel']
+};
+
+function redactLogLine(line) {
+  return `${line}`
+    .replace(/\b\d{6,12}:[A-Za-z0-9_-]{30,}\b/g, '[REDACTED_TELEGRAM_TOKEN]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/\b(sk|sk-or-v1|pcsk|pplx)-[A-Za-z0-9_-]{16,}\b/gi, '[REDACTED_API_KEY]')
+    .replace(/\bAIza[A-Za-z0-9_-]{30,}\b/g, '[REDACTED_API_KEY]')
+    .replace(/([?&](?:token|api_key|key)=)[^&\s]+/gi, '$1[REDACTED]');
+}
+
+function streamDockerLogs(req, res, service, tail) {
+  if (activeLogStreams >= 3) return sendJson(res, 429, { error: 'too_many_log_streams' });
+  const selectedServices = service === 'all' ? [] : LOG_SERVICES[service];
+  if (!selectedServices) return sendJson(res, 400, { error: 'unknown_log_service' });
+  activeLogStreams += 1;
+  securityHeaders(res);
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.write(`event: ready\ndata: ${JSON.stringify({ service, tail })}\n\n`);
+
+  const args = composeArgs(
+    '--profile', 'telegram', '--profile', 'notes', '--profile', 'voice', '--profile', 'admin',
+    'logs', '--follow', '--timestamps', '--tail', String(tail), '--no-color', ...selectedServices
+  );
+  const child = spawn(DOCKER_BIN, args, {
+    cwd: PROJECT_DIR,
+    env: { ...process.env, BACKEND_ENV_FILE, TELEGRAM_ENV_FILE, VOICE_ENV_FILE },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let buffer = '';
+  let closed = false;
+  const sendChunk = (chunk) => {
+    buffer += chunk.toString('utf8');
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+    for (const line of lines) if (line) res.write(`data: ${JSON.stringify({ line: redactLogLine(line) })}\n\n`);
+  };
+  child.stdout.on('data', sendChunk);
+  child.stderr.on('data', sendChunk);
+  child.on('error', (error) => {
+    if (!closed) res.write(`event: stream-error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+  });
+  child.on('close', (code) => {
+    if (buffer && !closed) res.write(`data: ${JSON.stringify({ line: redactLogLine(buffer) })}\n\n`);
+    if (!closed) {
+      res.write(`event: ended\ndata: ${JSON.stringify({ code })}\n\n`);
+      res.end();
+    }
+  });
+  const heartbeat = setInterval(() => { if (!closed) res.write(': heartbeat\n\n'); }, 15000);
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    activeLogStreams = Math.max(0, activeLogStreams - 1);
+    if (!child.killed) child.kill('SIGTERM');
+  };
+  req.on('close', close);
+  res.on('close', close);
+}
+
 function securityHeaders(res) {
   res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -1138,6 +1212,11 @@ async function handleRequest(req, res) {
     return sendJson(res, session ? 200 : 401, session ? { authenticated: true, username: authConfig.username } : { authenticated: false });
   }
   if (!pathname.startsWith('/api/') || !requireSession(req, res)) return;
+  if (req.method === 'GET' && pathname === '/api/logs/stream') {
+    const service = `${url.searchParams.get('service') || 'all'}`;
+    const tail = Math.min(1000, Math.max(50, Number.parseInt(url.searchParams.get('tail') || '200', 10) || 200));
+    return streamDockerLogs(req, res, service, tail);
+  }
   if (req.method === 'GET' && pathname === '/api/settings') return sendJson(res, 200, publicSettings());
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
   if (req.method === 'GET' && pathname === '/api/system') return sendJson(res, 200, await getSystemInfo());

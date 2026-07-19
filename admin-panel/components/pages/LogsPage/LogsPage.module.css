@@ -5,35 +5,101 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 14px;
   margin-bottom: 14px;
 }
-.toolbar select {
-  width: 180px;
+.filters,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.toolbar span {
+.filters select {
+  width: 155px;
+}
+.filters select:nth-child(2) {
+  width: 112px;
+}
+.filters input {
+  width: 210px;
+}
+.actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 9px;
+}
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-hint);
-  font-size: 10px;
+  font-size: 9px;
+}
+.connection i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-warning);
+}
+.connection.connected {
+  color: var(--color-success);
+}
+.connection.connected i {
+  background: var(--color-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 15%, transparent);
 }
 .console {
-  display: flex;
-  min-height: 330px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 10px;
+  position: relative;
+  height: min(620px, calc(100vh - 255px));
+  min-height: 360px;
+  overflow: auto;
+  padding: 13px 15px;
   border: 1px solid var(--border-light);
   border-radius: 7px;
-  background: var(--text-primary);
+  background: #08101d;
   color: #cbd8e7;
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 10px;
+  line-height: 1.55;
 }
-.console span {
-  font-size: 11px;
+.line {
+  min-width: max-content;
+  white-space: pre;
 }
-.console code {
-  padding: 6px 9px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
-  font-size: 11px;
+.line:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+.empty {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  color: #71849b;
+  text-align: center;
+}
+.paused {
+  position: sticky;
+  right: 8px;
+  bottom: 8px;
+  width: max-content;
+  margin: 12px 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: #162338;
+  color: #dbe7f5;
+  font-family: inherit;
+  font-size: 9px;
+}
+@media (max-width: 1000px) {
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .filters,
+  .actions {
+    flex-wrap: wrap;
+  }
+  .filters input {
+    flex: 1;
+  }
 }
