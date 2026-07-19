@@ -152,7 +152,7 @@ export default function Home() {
       )}
       {section === 'models' && <ModelsPage {...sharedSettingsProps} />}
       {section === 'integrations' && (
-        <IntegrationsPage settings={settings} onNavigate={setSection} />
+        <IntegrationsPage {...sharedSettingsProps} onNavigate={setSection} />
       )}
       {section === 'services' && (
         <ServicesPage

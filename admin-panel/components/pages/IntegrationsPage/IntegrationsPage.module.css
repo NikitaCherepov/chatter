@@ -99,8 +99,92 @@ button.card:hover {
   color: var(--text-hint);
   font-size: 9px;
 }
+.detailPage {
+  display: flex;
+  max-width: 1120px;
+  flex-direction: column;
+  gap: 14px;
+}
+.detailHeader {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 18px;
+  border: 1px solid var(--border-light);
+  border-radius: 9px;
+  background: var(--bg-primary);
+}
+.detailHeader h2 {
+  margin: 0 0 3px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.detailHeader p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.backButton {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-input);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+}
+.backButton svg {
+  width: 15px;
+  transform: rotate(180deg);
+}
+.detailCard {
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: 9px;
+  background: var(--bg-primary);
+}
+.fieldSection {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
+  gap: 26px;
+  padding: 18px;
+}
+.fieldSection + .fieldSection {
+  border-top: 1px solid var(--border-light);
+}
+.sectionTitle h3 {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.sectionTitle p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.fields {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+.twoColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
 @media (max-width: 900px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+  .fieldSection,
+  .twoColumns {
     grid-template-columns: 1fr;
   }
 }

@@ -151,7 +151,31 @@ function publicSettings() {
     proModels: providerModels.proModels.map(redactSecret),
     liteModels: providerModels.liteModels.map(redactSecret),
     visionModel: redactSecret(providerModels.visionModel),
-    manualModels: parseManualModels(backendEnv.MODELS_MANUAL).map(redactSecret)
+    manualModels: parseManualModels(backendEnv.MODELS_MANUAL).map(redactSecret),
+    pinecone: {
+      apiKey: '',
+      hasApiKey: Boolean(backendEnv.PINECONE_API_KEY),
+      indexName: backendEnv.PINECONE_INDEX_NAME || 'bot-memory',
+      embeddingBaseUrl: backendEnv.TIMEWEB_EMBED_BASE_URL || providerModels.proModels[0]?.baseUrl || backendEnv.TIMEWEB_BASE_URL || '',
+      embeddingApiKey: '',
+      hasEmbeddingApiKey: Boolean(backendEnv.TIMEWEB_EMBED_API_KEY),
+      embeddingModel: backendEnv.TIMEWEB_EMBED_MODEL || backendEnv.VECTOR_EMBED_MODEL || 'text-embedding-3-small'
+    },
+    webSearch: {
+      baseUrl: backendEnv.TAVILY_API_BASE_URL || 'https://api.tavily.com',
+      apiKey: '',
+      hasApiKey: Boolean(backendEnv.TAVILY_API_KEY)
+    },
+    webReader: {
+      baseUrl: backendEnv.BROWSERLESS_BASE_URL || 'https://production-sfo.browserless.io',
+      token: '',
+      hasToken: Boolean(backendEnv.BROWSERLESS_TOKEN)
+    },
+    cloudTts: {
+      apiKey: '',
+      hasApiKey: Boolean(backendEnv.CARTESIA_API_KEY),
+      model: backendEnv.CARTESIA_MODEL_ID || 'sonic-3.5'
+    }
   };
 }
 
@@ -240,6 +264,12 @@ function validateEnvPart(value, fieldName) {
   return normalized;
 }
 
+function mergeSecret(value, existing, fieldName) {
+  const secret = `${value || ''}`.trim() || `${existing || ''}`;
+  if (/[\r\n\0]/.test(secret)) throw new Error(`${fieldName} contains invalid characters`);
+  return secret;
+}
+
 function mergeProviderModels(input, existing, label, { required = false } = {}) {
   if (!Array.isArray(input)) return existing;
   if (required && input.length === 0) throw new Error(`${label} requires at least one model`);
@@ -316,6 +346,10 @@ function saveSettings(input) {
   );
   const visionModel = mergeProviderModel(input.visionModel, existingProviderModels.visionModel, 'Vision');
   const manualModels = mergeManualModels(input.manualModels, existingManualModels);
+  const pineconeInput = input.pinecone && typeof input.pinecone === 'object' ? input.pinecone : {};
+  const webSearchInput = input.webSearch && typeof input.webSearch === 'object' ? input.webSearch : {};
+  const webReaderInput = input.webReader && typeof input.webReader === 'object' ? input.webReader : {};
+  const cloudTtsInput = input.cloudTts && typeof input.cloudTts === 'object' ? input.cloudTts : {};
   if (!Array.isArray(input.proModels) && proModels.length === 0 && legacyAiApiKey && legacyAiModel) {
     proModels.push({ id: 'pro-legacy', baseUrl: legacyAiBaseUrl, apiKey: legacyAiApiKey, model: legacyAiModel });
   }
@@ -371,6 +405,46 @@ function saveSettings(input) {
   delete backendEnv.TIMEWEB_LITE_VISION_ENDPOINTS;
   if (manualModels.length) backendEnv.MODELS_MANUAL = serializeManualModels(manualModels);
   else delete backendEnv.MODELS_MANUAL;
+  backendEnv.PINECONE_API_KEY = mergeSecret(pineconeInput.apiKey, backendEnv.PINECONE_API_KEY, 'Pinecone API key');
+  backendEnv.PINECONE_INDEX_NAME = validateEnvPart(
+    pineconeInput.indexName ?? backendEnv.PINECONE_INDEX_NAME ?? 'bot-memory',
+    'Pinecone index name'
+  );
+  backendEnv.TIMEWEB_EMBED_BASE_URL = normalizeUrl(
+    pineconeInput.embeddingBaseUrl ?? backendEnv.TIMEWEB_EMBED_BASE_URL ?? proModels[0]?.baseUrl,
+    'Embedding API URL',
+    { allowEmpty: false }
+  );
+  backendEnv.TIMEWEB_EMBED_API_KEY = mergeSecret(
+    pineconeInput.embeddingApiKey,
+    backendEnv.TIMEWEB_EMBED_API_KEY,
+    'Embedding API key'
+  );
+  if (backendEnv.PINECONE_API_KEY || backendEnv.TIMEWEB_EMBED_API_KEY) {
+    if (!backendEnv.PINECONE_API_KEY) throw new Error('Pinecone API key is required');
+    if (!backendEnv.TIMEWEB_EMBED_API_KEY) throw new Error('Embedding API key is required');
+  }
+  backendEnv.TIMEWEB_EMBED_MODEL = validateEnvPart(
+    pineconeInput.embeddingModel ?? backendEnv.TIMEWEB_EMBED_MODEL ?? backendEnv.VECTOR_EMBED_MODEL ?? 'text-embedding-3-small',
+    'Embedding model'
+  );
+  backendEnv.TAVILY_API_BASE_URL = normalizeUrl(
+    webSearchInput.baseUrl ?? backendEnv.TAVILY_API_BASE_URL ?? 'https://api.tavily.com',
+    'Web Search API URL',
+    { allowEmpty: false }
+  );
+  backendEnv.TAVILY_API_KEY = mergeSecret(webSearchInput.apiKey, backendEnv.TAVILY_API_KEY, 'Web Search API key');
+  backendEnv.BROWSERLESS_BASE_URL = normalizeUrl(
+    webReaderInput.baseUrl ?? backendEnv.BROWSERLESS_BASE_URL ?? 'https://production-sfo.browserless.io',
+    'Web Reader API URL',
+    { allowEmpty: false }
+  );
+  backendEnv.BROWSERLESS_TOKEN = mergeSecret(webReaderInput.token, backendEnv.BROWSERLESS_TOKEN, 'Web Reader token');
+  backendEnv.CARTESIA_API_KEY = mergeSecret(cloudTtsInput.apiKey, backendEnv.CARTESIA_API_KEY, 'Cloud TTS API key');
+  backendEnv.CARTESIA_MODEL_ID = validateEnvPart(
+    cloudTtsInput.model ?? backendEnv.CARTESIA_MODEL_ID ?? 'sonic-3.5',
+    'Cloud TTS model'
+  );
 
   Object.assign(telegramEnv, { TELEGRAM_TOKEN: telegramToken, BACKEND_INTERNAL_TOKEN: internalToken, NOTES_WEBAPP_URL: notesUrl });
   Object.assign(voiceEnv, {
