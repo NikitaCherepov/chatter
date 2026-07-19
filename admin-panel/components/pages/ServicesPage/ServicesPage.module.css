@@ -23,6 +23,18 @@
   grid-template-columns: 1fr auto;
   gap: 8px;
 }
+.copyButton {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.copyButton svg {
+  width: 15px;
+  height: 15px;
+}
 .notice {
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--color-info) 25%, var(--border-light));

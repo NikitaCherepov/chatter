@@ -12,6 +12,7 @@ export type IconName =
   | 'security'
   | 'logout'
   | 'refresh'
+  | 'copy'
   | 'arrow';
 
 const paths: Record<IconName, ReactNode> = {
@@ -79,6 +80,12 @@ const paths: Record<IconName, ReactNode> = {
   refresh: (
     <>
       <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </>
   ),
   arrow: <path d="m9 18 6-6-6-6" />,

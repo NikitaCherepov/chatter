@@ -1,5 +1,6 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import type { Service, Settings } from '../../../lib/types';
+import { Icon } from '../../icons/icons';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
 import { Card } from '../../ui/Card/Card';
 import { FormField } from '../../ui/FormField/FormField';
@@ -81,14 +82,16 @@ export function ServicesPage({
             hint="Установщик создаёт адрес по IP сервера автоматически. Он передаётся боту при сохранении настроек"
           >
             <div className={styles.urlRow}>
-              <input type="url" value={settings.notesUrl} readOnly placeholder="https://SERVER_IP/notes" />
+              <input type="url" value={settings.notesUrl} disabled placeholder="https://SERVER_IP/notes" />
               <button
                 type="button"
-                className="buttonSecondary"
+                className={styles.copyButton}
                 disabled={!settings.notesUrl}
                 onClick={() => void navigator.clipboard.writeText(settings.notesUrl)}
+                aria-label="Копировать адрес"
+                title="Копировать адрес"
               >
-                Копировать
+                <Icon name="copy" />
               </button>
             </div>
           </FormField>
