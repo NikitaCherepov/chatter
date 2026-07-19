@@ -174,6 +174,44 @@ button.card:hover {
   flex-direction: column;
   gap: 14px;
 }
+.inputWithAction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.checkButton {
+  min-width: 92px;
+  padding: 0 12px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.checkButton:hover:not(:disabled) {
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+.checkButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.checkSuccess,
+.checkDetails {
+  color: var(--color-success);
+}
+.checkDetails,
+.checkError {
+  font-size: 9px;
+  line-height: 1.45;
+}
+.checkError {
+  color: var(--color-error);
+}
+.parametersHint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
 .twoColumns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

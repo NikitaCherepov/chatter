@@ -48,6 +48,8 @@ export type ImageGenerationSettings = {
   hasApiKey: boolean;
   model: string;
   maxResolution: '1K' | '2K';
+  quality: 'auto' | 'low' | 'medium' | 'high';
+  supportedParameters: string[];
 };
 
 export type Settings = {
@@ -133,5 +135,7 @@ export const emptySettings: Settings = {
     hasApiKey: false,
     model: 'x-ai/grok-imagine-image-quality',
     maxResolution: '2K',
+    quality: 'auto',
+    supportedParameters: ['resolution', 'input_references'],
   },
 };

@@ -22,6 +22,7 @@ const COMPOSE_RUNTIME_ENV_FILE = path.join(CONFIG_DIR, 'compose.runtime.env');
 const ADMIN_PANEL_URL = new URL(process.env.ADMIN_PANEL_URL || 'http://admin-panel:3000');
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 64 * 1024;
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
 
@@ -177,11 +178,20 @@ function publicSettings() {
       model: backendEnv.CARTESIA_MODEL_ID || 'sonic-3.5'
     },
     imageGeneration: {
-      baseUrl: backendEnv.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+      baseUrl: OPENROUTER_BASE_URL,
       apiKey: '',
       hasApiKey: Boolean(backendEnv.OPENROUTER_API_KEY),
       model: backendEnv.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality',
-      maxResolution: backendEnv.IMAGE_GEN_MAX_RESOLUTION === '1K' ? '1K' : '2K'
+      maxResolution: backendEnv.IMAGE_GEN_MAX_RESOLUTION === '1K' ? '1K' : '2K',
+      quality: ['low', 'medium', 'high'].includes(backendEnv.IMAGE_GEN_QUALITY) ? backendEnv.IMAGE_GEN_QUALITY : 'auto',
+      supportedParameters: `${backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS || (
+        (backendEnv.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality') === 'x-ai/grok-imagine-image-quality'
+          ? 'resolution,input_references'
+          : ''
+      )}`
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => ['resolution', 'quality', 'input_references'].includes(value))
     }
   };
 }
@@ -455,11 +465,7 @@ function saveSettings(input) {
     cloudTtsInput.model ?? backendEnv.CARTESIA_MODEL_ID ?? 'sonic-3.5',
     'Cloud TTS model'
   );
-  backendEnv.OPENROUTER_BASE_URL = normalizeUrl(
-    imageGenerationInput.baseUrl ?? backendEnv.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
-    'OpenRouter image API URL',
-    { allowEmpty: false }
-  );
+  backendEnv.OPENROUTER_BASE_URL = OPENROUTER_BASE_URL;
   backendEnv.OPENROUTER_API_KEY = mergeSecret(
     imageGenerationInput.apiKey,
     backendEnv.OPENROUTER_API_KEY,
@@ -470,6 +476,14 @@ function saveSettings(input) {
     'Image generation model'
   );
   backendEnv.IMAGE_GEN_MAX_RESOLUTION = imageGenerationInput.maxResolution === '1K' ? '1K' : '2K';
+  backendEnv.IMAGE_GEN_QUALITY = ['low', 'medium', 'high'].includes(imageGenerationInput.quality)
+    ? imageGenerationInput.quality
+    : 'auto';
+  backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS = Array.isArray(imageGenerationInput.supportedParameters)
+    ? imageGenerationInput.supportedParameters
+      .filter((value) => ['resolution', 'quality', 'input_references'].includes(value))
+      .join(',') || 'none'
+    : backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS || 'resolution,input_references';
 
   Object.assign(telegramEnv, { TELEGRAM_TOKEN: telegramToken, BACKEND_INTERNAL_TOKEN: internalToken, NOTES_WEBAPP_URL: notesUrl });
   Object.assign(voiceEnv, {
@@ -590,6 +604,61 @@ function readJson(req) {
   });
 }
 
+function mergeCapability(target, name, descriptor) {
+  target.supportedParameters.add(name);
+  if (!descriptor || typeof descriptor !== 'object' || Array.isArray(descriptor)) return;
+  const current = target.parameters[name] || {};
+  const values = Array.isArray(descriptor.values)
+    ? descriptor.values.filter((value) => ['string', 'number', 'boolean'].includes(typeof value))
+    : [];
+  target.parameters[name] = {
+    type: typeof descriptor.type === 'string' ? descriptor.type : current.type,
+    values: [...new Set([...(current.values || []), ...values])],
+    ...(Number.isFinite(descriptor.min) ? { min: descriptor.min } : {}),
+    ...(Number.isFinite(descriptor.max) ? { max: descriptor.max } : {})
+  };
+}
+
+async function getOpenRouterImageCapabilities(input) {
+  const model = `${input.model || ''}`.trim();
+  const modelParts = model.split('/');
+  if (modelParts.length < 2 || modelParts.some((part) => !/^[A-Za-z0-9._:@-]+$/.test(part))) {
+    throw new Error('Use an OpenRouter model slug such as x-ai/grok-imagine-image-quality');
+  }
+
+  const savedApiKey = parseEnv(BACKEND_ENV_FILE).OPENROUTER_API_KEY || '';
+  const apiKey = `${input.apiKey || ''}`.trim() || savedApiKey;
+  if (!apiKey) throw new Error('OpenRouter API key is required to check the model');
+
+  const modelPath = modelParts.map(encodeURIComponent).join('/');
+  const response = await fetch(`${OPENROUTER_BASE_URL}/images/models/${modelPath}/endpoints`, {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) throw new Error(`OpenRouter model check failed (HTTP ${response.status})`);
+
+  const payload = await response.json();
+  const endpoints = payload?.data?.endpoints || payload?.endpoints || (Array.isArray(payload?.data) ? payload.data : []);
+  if (!Array.isArray(endpoints) || endpoints.length === 0) throw new Error('OpenRouter did not return image endpoints for this model');
+
+  const merged = { supportedParameters: new Set(), parameters: {} };
+  for (const endpoint of endpoints) {
+    const supported = endpoint?.supported_parameters;
+    if (Array.isArray(supported)) {
+      for (const name of supported) if (typeof name === 'string') mergeCapability(merged, name, null);
+    } else if (supported && typeof supported === 'object') {
+      for (const [name, descriptor] of Object.entries(supported)) mergeCapability(merged, name, descriptor);
+    }
+  }
+
+  return {
+    model,
+    endpointCount: endpoints.length,
+    supportedParameters: [...merged.supportedParameters].sort(),
+    parameters: merged.parameters
+  };
+}
+
 function parseCookies(req) {
   const result = {};
   for (const part of `${req.headers.cookie || ''}`.split(';')) {
@@ -690,6 +759,14 @@ async function handleRequest(req, res) {
   if (!pathname.startsWith('/api/') || !requireSession(req, res)) return;
   if (req.method === 'GET' && pathname === '/api/settings') return sendJson(res, 200, publicSettings());
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
+
+  if (req.method === 'POST' && pathname === '/api/image-model/check') {
+    try {
+      return sendJson(res, 200, await getOpenRouterImageCapabilities(await readJson(req)));
+    } catch (error) {
+      return sendJson(res, 400, { error: error.message || 'openrouter_model_check_failed' });
+    }
+  }
 
   if (req.method === 'PUT' && pathname === '/api/settings') {
     if (applyPromise) return sendJson(res, 409, { error: 'configuration_is_being_applied' });
