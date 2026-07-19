@@ -58,6 +58,12 @@
     "desktopOpeningToolsPanel": "Opening tools panel...",
     "desktopAction": "Performing action..."
   },
+  "moderationNotifications": {
+    "approved": "✅ Access approved. You can message the bot.",
+    "rejected": "❌ Your request was rejected by an administrator.",
+    "banned": "🚫 Access blocked by an administrator.",
+    "unbanned": "✅ The block was removed. Your request is awaiting approval again."
+  },
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] Reading directory...",

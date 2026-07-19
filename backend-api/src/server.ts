@@ -48,6 +48,7 @@ import {
   unlinkTelegramFromAccount,
 } from './services/accounts.js';
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
+import { translateForLanguage } from './i18n/index.js';
 
 dotenv.config();
 ensureDefaultPrompt();
@@ -68,6 +69,44 @@ db.transaction(() => {
 })();
 
 const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+type ModerationNotification = 'approved' | 'rejected' | 'banned' | 'unbanned';
+
+const notifyUserMessengers = async (
+  userId: number,
+  notification: ModerationNotification,
+  values: Record<string, string | number> = {},
+) => {
+  const user = getUserById(userId);
+  if (!user) return;
+
+  const text = translateForLanguage(user.language, `moderationNotifications.${notification}`, values);
+  const messengerIdentities = getAccountIdentities(userId)
+    .filter(identity => identity.provider !== 'password');
+
+  for (const identity of messengerIdentities) {
+    try {
+      if (identity.provider === 'telegram') {
+        const telegramId = Number(identity.provider_subject);
+        if (Number.isFinite(telegramId) && telegramId > 0) {
+          await sendTelegramMessage(telegramId, text, { strict: true, preferRich: false });
+        }
+      }
+    } catch (error) {
+      console.warn(`[moderation] failed to notify ${identity.provider} identity for account ${userId}:`, formatSafeError(error));
+    }
+  }
+};
+
+const queueUserMessengerNotification = (
+  userId: number,
+  notification: ModerationNotification,
+  values: Record<string, string | number> = {},
+) => {
+  void notifyUserMessengers(userId, notification, values).catch(error => {
+    console.warn(`[moderation] notification job failed for account ${userId}:`, formatSafeError(error));
+  });
+};
 
 const app = express();
 const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
@@ -2649,6 +2688,12 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
   const desktopOnline = !!client
     && client.ws.readyState === WebSocket.OPEN
     && Date.now() - client.lastPongAt <= WS_HEARTBEAT_GRACE_MS;
+  const subscription = db.prepare(`
+    SELECT plan, started_at, ends_at
+    FROM user_plan_subscriptions
+    WHERE user_id = ? AND is_current = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(userId) || null;
 
   return res.json({
     user: {
@@ -2663,6 +2708,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
       },
       chats_count: chatCount,
       ban: getBanRecord(userId) || null,
+      subscription,
       desktop: {
         online: desktopOnline,
         connected_at: client?.connectedAt ?? null,
@@ -2752,7 +2798,7 @@ app.get('/internal/users', internalAuth, (req, res) => {
 
 // ── Internal: User status/role/name management ────────────────────────────
 
-app.put('/internal/users/:id/status', internalAuth, (req, res) => {
+app.put('/internal/users/:id/status', internalAuth, async (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   const status = `${req.body?.status || ''}`.trim() as 'none' | 'approved' | 'disapproved' | 'banned';
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -2762,6 +2808,11 @@ app.put('/internal/users/:id/status', internalAuth, (req, res) => {
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
   updateUserStatus(userId, status);
+  if (user.status !== status) {
+    if (status === 'approved') queueUserMessengerNotification(userId, 'approved');
+    if (status === 'disapproved') queueUserMessengerNotification(userId, 'rejected');
+    if (status === 'banned') queueUserMessengerNotification(userId, 'banned');
+  }
   return res.json({ ok: true, status });
 });
 
@@ -2855,7 +2906,7 @@ app.post('/internal/sync-plan-limits', internalAuth, (_req, res) => {
 
 // ── Internal: Ban management ──────────────────────────────────────────────
 
-app.post('/internal/users/:id/ban', internalAuth, (req, res) => {
+app.post('/internal/users/:id/ban', internalAuth, async (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   const reason = `${req.body?.reason || ''}`.trim() || 'Решение администратора';
   const bannedBy = resolveInternalAccountId(req.body?.banned_by) || 0;
@@ -2866,10 +2917,11 @@ app.post('/internal/users/:id/ban', internalAuth, (req, res) => {
 
   setBan(userId, bannedBy, reason);
   updateUserStatus(userId, 'banned');
+  queueUserMessengerNotification(userId, 'banned', { reason });
   return res.json({ ok: true, reason });
 });
 
-app.delete('/internal/users/:id/ban', internalAuth, (req, res) => {
+app.delete('/internal/users/:id/ban', internalAuth, async (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
@@ -2878,6 +2930,7 @@ app.delete('/internal/users/:id/ban', internalAuth, (req, res) => {
 
   removeBan(userId);
   updateUserStatus(userId, 'none');
+  if (user.status === 'banned') queueUserMessengerNotification(userId, 'unbanned');
   return res.json({ ok: true, status: 'none' });
 });
 
@@ -2966,7 +3019,7 @@ app.get('/api/v1/admin/users/:id', adminMiddleware, (req: AuthedRequest, res) =>
   return res.json({ user: withAccountIdentities(user), ban });
 });
 
-app.put('/api/v1/admin/users/:id/status', adminMiddleware, (req: AuthedRequest, res) => {
+app.put('/api/v1/admin/users/:id/status', adminMiddleware, async (req: AuthedRequest, res) => {
   const userId = Number.parseInt(req.params.id, 10);
   const status = `${req.body?.status || ''}`.trim() as 'none' | 'approved' | 'disapproved' | 'banned';
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -2976,6 +3029,11 @@ app.put('/api/v1/admin/users/:id/status', adminMiddleware, (req: AuthedRequest, 
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
   updateUserStatus(userId, status);
+  if (user.status !== status) {
+    if (status === 'approved') queueUserMessengerNotification(userId, 'approved');
+    if (status === 'disapproved') queueUserMessengerNotification(userId, 'rejected');
+    if (status === 'banned') queueUserMessengerNotification(userId, 'banned');
+  }
   return res.json({ ok: true, status });
 });
 
@@ -3058,7 +3116,7 @@ app.post('/api/v1/admin/users/:id/plan', adminMiddleware, (req: AuthedRequest, r
   return res.json({ ok: true, plan, ends_at: endsAt });
 });
 
-app.post('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, res) => {
+app.post('/api/v1/admin/users/:id/ban', adminMiddleware, async (req: AuthedRequest, res) => {
   const userId = Number.parseInt(req.params.id, 10);
   const reason = `${req.body?.reason || ''}`.trim() || 'Решение администратора';
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -3068,10 +3126,11 @@ app.post('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, re
 
   setBan(userId, req.authUserId!, reason);
   updateUserStatus(userId, 'banned');
+  queueUserMessengerNotification(userId, 'banned', { reason });
   return res.json({ ok: true, reason });
 });
 
-app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, res) => {
+app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, async (req: AuthedRequest, res) => {
   const userId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
@@ -3080,6 +3139,7 @@ app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, (req: AuthedRequest, 
 
   removeBan(userId);
   updateUserStatus(userId, 'none');
+  if (user.status === 'banned') queueUserMessengerNotification(userId, 'unbanned');
   return res.json({ ok: true, status: 'none' });
 });
 

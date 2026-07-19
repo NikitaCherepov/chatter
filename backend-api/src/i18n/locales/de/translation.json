@@ -58,6 +58,12 @@
     "read_email_content": "📧 Lese E-Mail-Inhalt...",
     "send_email": "📧 Bereite eine E-Mail zur Bestätigung vor..."
   },
+  "moderationNotifications": {
+    "approved": "✅ Zugriff genehmigt. Sie können dem Bot eine Nachricht senden.",
+    "rejected": "❌ Ihre Anfrage wurde von einem Administrator abgelehnt.",
+    "banned": "🚫 Zugriff durch einen Administrator blockiert.",
+    "unbanned": "✅ Die Sperrung wurde aufgehoben. Ihre Anfrage wartet erneut auf Genehmigung."
+  },
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] Verzeichnis wird gelesen...",

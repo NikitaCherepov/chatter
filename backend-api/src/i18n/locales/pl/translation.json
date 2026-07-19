@@ -58,6 +58,12 @@
     "read_email_content": "📧 Odczytywanie treści e-maila...",
     "send_email": "📧 Przygotowywanie e-maila do potwierdzenia..."
   },
+  "moderationNotifications": {
+    "approved": "✅ Dostęp zatwierdzony. Możesz wysłać wiadomość do bota.",
+    "rejected": "❌ Twoja prośba została odrzucona przez administratora.",
+    "banned": "🚫 Dostęp zablokowany przez administratora.",
+    "unbanned": "✅ Blokada została usunięta. Twoja prośba oczekuje ponownego zatwierdzenia."
+  },
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] Odczyt katalogu...",

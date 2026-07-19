@@ -58,6 +58,12 @@
     "read_email_content": "📧 이메일 읽는 중...",
     "send_email": "📧 확인 이메일 준비 중..."
   },
+  "moderationNotifications": {
+    "approved": "✅ 액세스가 승인되었습니다. 봇에 메시지를 보낼 수 있습니다.",
+    "rejected": "❌ 관리자가 요청을 거부했습니다.",
+    "banned": "🚫 관리자가 액세스를 차단했습니다.",
+    "unbanned": "✅ 차단이 해제되었습니다. 요청이 다시 승인 대기 중입니다."
+  },
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] 디렉터리 읽는 중...",

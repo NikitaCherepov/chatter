@@ -58,6 +58,12 @@
     "read_email_content": "📧 メールを読込中...",
     "send_email": "📧 確認用メールを準備中..."
   },
+  "moderationNotifications": {
+    "approved": "✅ アクセスが承認されました。ボットにメッセージを送信できます。",
+    "rejected": "❌ あなたのリクエストは管理者によって拒否されました。",
+    "banned": "🚫 管理者によってアクセスがブロックされました。",
+    "unbanned": "✅ ブロックが解除されました。リクエストは再度承認待ちです。"
+  },
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] ディレクトリを読み取り中...",

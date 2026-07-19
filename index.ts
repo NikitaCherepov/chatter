@@ -2752,16 +2752,12 @@ const approveUserAccess = async (targetUserId: number) => {
         const defaultPrompt = await runBackendGetDefaultPrompt();
         if (defaultPrompt) await updateUserPrompt(targetUserId, defaultPrompt.id);
     }
-    await runBackendUnbanUser(targetUserId);
-    await updateUserStatus(targetUserId, 'approved');
     return true;
 };
 
 const disapproveUserAccess = async (targetUserId: number) => {
     const user = await getUser(targetUserId);
     if (!user) return false;
-    await updateUserStatus(targetUserId, 'disapproved');
-    await runBackendUnbanUser(targetUserId);
     await updateUserStatus(targetUserId, 'disapproved');
     return true;
 };
@@ -3060,9 +3056,6 @@ bot.command('ban', async (ctx) => {
     await banUserAccess(targetUserId, adminId, reason);
     ctx.reply(ctx.t('admin.userBanned', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 
-    if (targetUser.telegram_id) {
-        bot.telegram.sendMessage(targetUser.telegram_id, translateBot(targetUser.language, 'admin.notifications.bannedReason', { reason })).catch(() => undefined);
-    }
 });
 
 bot.command('unban', async (ctx) => {
@@ -3079,9 +3072,6 @@ bot.command('unban', async (ctx) => {
     await unbanUserAccess(targetUserId);
     ctx.reply(ctx.t('admin.userUnbanned', { name: targetUser.name ?? ctx.t('admin.unnamed'), id: targetUserId }));
 
-    if (targetUser.telegram_id) {
-        bot.telegram.sendMessage(targetUser.telegram_id, translateBot(targetUser.language, 'admin.notifications.unbanned')).catch(() => undefined);
-    }
 });
 
 // Команда смены имени
@@ -4216,15 +4206,6 @@ bot.action(/^mod:ok:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    try {
-        const target = await getUser(targetUserId);
-        if (target?.telegram_id) {
-            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.approved'));
-        }
-    } catch (err) {
-        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
-    }
-
     await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
     await ctx.answerCbQuery(ctx.t('admin.approved'));
 });
@@ -4243,15 +4224,6 @@ bot.action(/^mod:no:(\d+):(\d+)$/, async (ctx) => {
         return;
     }
 
-    try {
-        const target = await getUser(targetUserId);
-        if (target?.telegram_id) {
-            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.rejected'));
-        }
-    } catch (err) {
-        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
-    }
-
     await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
     await ctx.answerCbQuery(ctx.t('admin.rejected'));
 });
@@ -4267,19 +4239,10 @@ bot.action(/^mod:ban:(\d+):(\d+)$/, async (ctx) => {
     const targetUserId = Number.parseInt((ctx as any).match[1], 10);
     const page = Number.parseInt((ctx as any).match[2], 10);
 
-    const target = await getUser(targetUserId);
     const ok = await banUserAccess(targetUserId, adminId, ctx.t('admin.defaultBanReason'));
     if (!ok) {
         await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
-    }
-
-    try {
-        if (target?.telegram_id) {
-            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.banned'));
-        }
-    } catch (err) {
-        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
 
     await renderPendingList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4328,15 +4291,6 @@ bot.action(/^mod:unban:(\d+):(\d+)$/, async (ctx) => {
     if (!ok) {
         await ctx.answerCbQuery(ctx.t('admin.userNotFound'));
         return;
-    }
-
-    try {
-        const target = await getUser(targetUserId);
-        if (target?.telegram_id) {
-            await bot.telegram.sendMessage(target.telegram_id, translateBot(target.language, 'admin.notifications.unbanned'));
-        }
-    } catch (err) {
-        console.warn(`Не удалось отправить уведомление пользователю ${targetUserId}`);
     }
 
     await renderBannedList(ctx, Number.isNaN(page) ? 0 : page, 'edit');
@@ -4490,9 +4444,6 @@ bot.action(/^usr:ban:(\d+):(\d+)$/, async (ctx) => {
     const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
-    if (user.telegram_id) {
-        bot.telegram.sendMessage(user.telegram_id, translateBot(user.language, 'admin.notifications.banned')).catch(() => undefined);
-    }
     await ctx.answerCbQuery(ctx.t('admin.banned'));
 });
 
@@ -4518,9 +4469,6 @@ bot.action(/^usr:unban:(\d+):(\d+)$/, async (ctx) => {
     const refreshed = await getUser(targetUserId);
     if (refreshed) await renderAdminUserCard(ctx, refreshed, Number.isNaN(page) ? 0 : page, 'edit');
 
-    if (user.telegram_id) {
-        bot.telegram.sendMessage(user.telegram_id, translateBot(user.language, 'admin.notifications.unbanned')).catch(() => undefined);
-    }
     await ctx.answerCbQuery(ctx.t('admin.unbanned'));
 });
 

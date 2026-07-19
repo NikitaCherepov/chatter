@@ -1331,9 +1331,18 @@ async function handleRequest(req, res) {
   if (req.method === 'PUT' && userPlanMatch) {
     const body = await readJson(req);
     if (!['free', 'standart', 'pro'].includes(body.plan)) return sendJson(res, 400, { error: 'invalid_plan' });
+    const duration = `${body.duration || 'forever'}`;
+    if (!['day', 'week', 'month', 'year', 'forever'].includes(duration)) return sendJson(res, 400, { error: 'invalid_duration' });
+    const endDate = new Date();
+    let endsAt = null;
+    if (duration === 'day') endDate.setUTCDate(endDate.getUTCDate() + 1);
+    if (duration === 'week') endDate.setUTCDate(endDate.getUTCDate() + 7);
+    if (duration === 'month') endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+    if (duration === 'year') endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
+    if (duration !== 'forever') endsAt = endDate.toISOString();
     return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userPlanMatch[1]}/plan`, {
       method: 'POST',
-      body: JSON.stringify({ plan: body.plan }),
+      body: JSON.stringify({ plan: body.plan, ends_at: endsAt, record_subscription: true }),
     }));
   }
   const userBanMatch = pathname.match(/^\/api\/users\/(\d+)\/ban$/);

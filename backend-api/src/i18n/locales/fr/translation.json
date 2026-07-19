@@ -58,6 +58,12 @@
     "read_email_content": "📧 Lecture de l'email...",
     "send_email": "📧 Préparation d'un email de confirmation..."
   },
+  "moderationNotifications": {
+    "approved": "✅ Accès approuvé. Vous pouvez envoyer un message au bot.",
+    "rejected": "❌ Votre demande a été rejetée par un administrateur.",
+    "banned": "🚫 Accès bloqué par un administrateur.",
+    "unbanned": "✅ Le blocage a été levé. Votre demande est en attente d’approbation."
+  },
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] Lecture du répertoire...",

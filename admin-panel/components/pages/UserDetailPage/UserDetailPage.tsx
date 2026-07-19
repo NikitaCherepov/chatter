@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
+import { PlanDurationModal, type PlanDuration, type UserPlan } from './PlanDurationModal/PlanDurationModal';
 import styles from './UserDetailPage.module.css';
 
 type Identity = {
@@ -39,6 +40,7 @@ type UserDetail = {
   attachment_max_tokens: number;
   chats_count: number;
   ban: { reason: string; banned_at: string; banned_by: number | null } | null;
+  subscription: { plan: string; started_at: string; ends_at: string | null } | null;
   identities: Identity[];
   messages: { total: number; user: number; assistant: number; last_message_at: string | null };
   desktop: { online: boolean; connected_at: number | null; last_activity_at: number | null };
@@ -75,6 +77,8 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
   const [error, setError] = useState('');
   const [actionState, setActionState] = useState('');
   const [banReason, setBanReason] = useState('');
+  const [pendingPlan, setPendingPlan] = useState<UserPlan | null>(null);
+  const [planSaving, setPlanSaving] = useState(false);
 
   const loadUser = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -152,15 +156,19 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     }
   }
 
-  async function changePlan(plan: 'free' | 'standart' | 'pro') {
-    if (!user || plan === user.plan) return;
+  async function changePlan(plan: UserPlan, duration: PlanDuration) {
+    if (!user) return;
+    setPlanSaving(true);
     setActionState('Сохраняю тариф…');
     try {
-      await api(`/api/users/${user.id}/plan`, { method: 'PUT', body: JSON.stringify({ plan }) });
+      await api(`/api/users/${user.id}/plan`, { method: 'PUT', body: JSON.stringify({ plan, duration }) });
       setActionState('Тариф и лимиты обновлены');
+      setPendingPlan(null);
       await loadUser(true);
     } catch (planError) {
       setActionState(`Ошибка: ${planError instanceof Error ? planError.message : String(planError)}`);
+    } finally {
+      setPlanSaving(false);
     }
   }
 
@@ -213,7 +221,14 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         <div className={styles.accountGrid}>
           <label><span>Роль</span><select value={user.role} onChange={event => void changeRole(event.target.value as 'user' | 'admin')}><option value="user">Пользователь</option><option value="admin">Администратор</option></select></label>
           <label><span>Статус</span><select value={user.status} disabled={user.status === 'banned'} onChange={event => void changeStatus(event.target.value as 'none' | 'approved' | 'disapproved')}><option value="none">Ожидает</option><option value="approved">Активен</option><option value="disapproved">Отклонён</option>{user.status === 'banned' && <option value="banned">Заблокирован</option>}</select></label>
-          <label><span>Тариф</span><select value={user.plan} onChange={event => void changePlan(event.target.value as 'free' | 'standart' | 'pro')}><option value="free">Free</option><option value="standart">Standard</option><option value="pro">Pro</option></select></label>
+          <label>
+            <span>Тариф</span>
+            <select value={user.plan} onChange={event => setPendingPlan(event.target.value as UserPlan)}>
+              <option value="free">Free</option><option value="standart">Standard</option><option value="pro">Pro</option>
+            </select>
+            <small>{user.subscription?.ends_at ? `до ${formatDate(user.subscription.ends_at)}` : 'бессрочно'}</small>
+            <button type="button" className={styles.durationButton} onClick={() => setPendingPlan(user.plan as UserPlan)}>Изменить срок</button>
+          </label>
           <div><span>Язык</span><strong>{user.language || 'Не выбран'}</strong></div>
           <div><span>Предпочитаемая модель</span><strong>{user.preferred_model || 'Автоматически'}</strong></div>
           <div><span>Reasoning</span><strong>{user.reasoning_level || 'По умолчанию'}</strong></div>
@@ -254,6 +269,14 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
           <div><span>Документы</span><strong>{user.attachment_max_tokens ? formatNumber(user.attachment_max_tokens) : 'Авто'}</strong></div>
         </div>
       </Card>
+      {pendingPlan && (
+        <PlanDurationModal
+          plan={pendingPlan}
+          saving={planSaving}
+          onCancel={() => setPendingPlan(null)}
+          onConfirm={duration => void changePlan(pendingPlan, duration)}
+        />
+      )}
     </div>
   );
 }

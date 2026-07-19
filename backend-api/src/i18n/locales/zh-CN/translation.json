@@ -58,6 +58,12 @@
     "read_email_content": "📧 正在阅读电子邮件...",
     "send_email": "📧 正在准备确认邮件..."
   },
+  "moderationNotifications": {
+    "approved": "✅ 访问已批准。您可以向机器人发送消息。",
+    "rejected": "❌ 您的请求已被管理员拒绝。",
+    "banned": "🚫 管理员已阻止访问。",
+    "unbanned": "✅ 阻止已解除。您的请求正在等待再次批准。"
+  },
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] 正在读取目录...",

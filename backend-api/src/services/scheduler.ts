@@ -316,6 +316,7 @@ const expireFinishedPlanSubscriptions = () => {
 };
 
 let dailyResetTimer: NodeJS.Timeout | null = null;
+let planExpiryTimer: NodeJS.Timeout | null = null;
 
 const scheduleDailyCounterReset = () => {
   const now = new Date();
@@ -336,6 +337,20 @@ const scheduleDailyCounterReset = () => {
 };
 
 export const startTaskScheduler = () => {
+  // Plan expiry is account maintenance, not an optional scheduled-task feature.
+  // It must keep working even when BACKEND_SCHEDULER_ENABLED is disabled.
+  if (!planExpiryTimer) {
+    try { expireFinishedPlanSubscriptions(); } catch (err) {
+      console.error('[backend-scheduler] plan expiry check error:', err);
+    }
+    planExpiryTimer = setInterval(() => {
+      try { expireFinishedPlanSubscriptions(); } catch (err) {
+        console.error('[backend-scheduler] plan expiry check error:', err);
+      }
+    }, 30 * 60 * 1000);
+    planExpiryTimer.unref();
+  }
+
   const enabled = `${process.env.BACKEND_SCHEDULER_ENABLED || '0'}`.trim() === '1';
   if (!enabled) {
     console.log('[backend-scheduler] disabled (BACKEND_SCHEDULER_ENABLED != 1)');
@@ -357,17 +372,8 @@ export const startTaskScheduler = () => {
     }
   }, SCHEDULER_INTERVAL_MS);
 
-  // Start daily counter reset + plan expiry check
+  // Start daily counter reset
   scheduleDailyCounterReset();
-  try { expireFinishedPlanSubscriptions(); } catch (err) {
-    console.error('[backend-scheduler] plan expiry check error:', err);
-  }
-  // Run plan expiry check every 30 minutes
-  setInterval(() => {
-    try { expireFinishedPlanSubscriptions(); } catch (err) {
-      console.error('[backend-scheduler] plan expiry check error:', err);
-    }
-  }, 30 * 60 * 1000);
 
   // ── Currency rates (CBR) ── Fetch on startup, then daily at ~14:00 MSK (11:00 UTC)
   const scheduleCurrencyFetch = () => {
