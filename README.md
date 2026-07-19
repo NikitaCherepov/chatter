@@ -6,6 +6,23 @@ Telegram bot for the `chatter` project.
 
 `index.ts` handles the Telegram UX (commands, menus, text/voice/photo processing) and communicates with `backend-api` via an internal API for AI and user management.
 
+## Repository Map for Maintainers and Agents
+
+This README documents the Telegram bot. The complete self-hosted system is split into independently built services:
+
+| Path | Responsibility |
+|---|---|
+| [`backend-api/`](./backend-api) | Accounts, chats, AI orchestration, tools, storage, and internal/public APIs |
+| [`desktop-app/`](./desktop-app) | Electron client; updated separately through GitHub Releases |
+| [`admin-panel/`](./admin-panel) | Next.js server administration UI |
+| [`chatter-manager/`](./chatter-manager) | Authenticated host/Compose management API used by the panel |
+| [`webapp-notes/`](./webapp-notes) | Telegram Notes WebApp |
+| [`voice-service/`](./voice-service) | Optional transcription and TTS service |
+| [`docker-compose.yml`](./docker-compose.yml) | Production service topology and optional profiles |
+| [`install.sh`](./install.sh) | Ubuntu/Debian server bootstrap without building sources on the VPS |
+
+For installation, configuration storage, backups, service control, and server updates, start with [`admin-panel/README.md`](./admin-panel/README.md). Do not mix the two update paths: server containers update from GHCR, while Desktop updates from GitHub Releases through `electron-updater`.
+
 ## Key Things to Know
 
 - The bot and API run as two separate processes.
