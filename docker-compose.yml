@@ -6,7 +6,7 @@ services:
     image: chatter-backend:local
     restart: unless-stopped
     env_file:
-      - ./backend-api/.env
+      - "${BACKEND_ENV_FILE:-./backend-api/.env}"
     environment:
       NODE_ENV: production
       BACKEND_API_PORT: 3050
@@ -107,6 +107,65 @@ services:
       interval: 10s
       timeout: 3s
       start_period: 20s
+      retries: 5
+
+  admin-panel:
+    profiles:
+      - admin
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+    image: chatter-admin-panel:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+
+  chatter-manager:
+    profiles:
+      - admin
+    build:
+      context: ./chatter-manager
+      dockerfile: Dockerfile
+    image: chatter-manager:local
+    restart: unless-stopped
+    env_file:
+      - path: "${CHATTER_MANAGER_ENV_FILE:-./.chatter/manager.env}"
+        required: false
+    environment:
+      NODE_ENV: production
+      ADMIN_INTERNAL_PORT: 8080
+      ADMIN_PANEL_URL: http://admin-panel:3000
+      CHATTER_CONFIG_DIR: /config
+      CHATTER_COMPOSE_FILE: /workspace/docker-compose.yml
+      COMPOSE_PROJECT_NAME: chatter
+    ports:
+      - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-8080}:8080"
+    volumes:
+      - "${CHATTER_CONFIG_DIR:-./.chatter}:/config"
+      - .:/workspace:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      admin-panel:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const tls=process.env.ADMIN_TLS==='1';const lib=require(tls?'node:https':'node:http');const req=lib.get({hostname:'127.0.0.1',port:8080,path:'/health',rejectUnauthorized:false},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
       retries: 5
 
 volumes:

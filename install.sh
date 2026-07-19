@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
+CONFIG_DIR="${CHATTER_CONFIG_DIR:-/var/lib/chatter}"
+AUTH_WAS_PRESENT=0
+[[ -f "$CONFIG_DIR/auth.json" ]] && AUTH_WAS_PRESENT=1
+
+if [[ "${EUID}" -ne 0 ]]; then
+  exec sudo --preserve-env=CHATTER_CONFIG_DIR bash "$0" "$@"
+fi
+
+log() {
+  printf '\n[chatter] %s\n' "$1"
+}
+
+fail() {
+  printf '\n[chatter] ERROR: %s\n' "$1" >&2
+  exit 1
+}
+
+random_hex() {
+  openssl rand -hex "${1:-32}"
+}
+
+env_get() {
+  local file="$1"
+  local key="$2"
+  [[ -f "$file" ]] || return 0
+  sed -n "s/^${key}=//p" "$file" | tail -n 1
+}
+
+write_private_file() {
+  local file="$1"
+  shift
+  umask 077
+  printf '%s\n' "$@" > "$file"
+  chmod 600 "$file"
+}
+
+find_free_port() {
+  local candidate
+  for _ in $(seq 1 100); do
+    candidate="$(shuf -i 18000-40000 -n 1)"
+    if ! ss -ltnH | awk '{print $4}' | grep -Eq "[:.]${candidate}$"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+install_docker() {
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    return
+  fi
+
+  log "Installing Docker Engine and Compose plugin"
+  . /etc/os-release
+  [[ "$ID" == "ubuntu" || "$ID" == "debian" ]] || fail "The first installer version supports Ubuntu and Debian only."
+
+  apt-get update
+  apt-get install -y ca-certificates curl gnupg openssl iproute2
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL "https://download.docker.com/linux/${ID}/gpg" -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  local arch
+  arch="$(dpkg --print-architecture)"
+  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/%s %s stable\n' "$arch" "$ID" "$VERSION_CODENAME" > /etc/apt/sources.list.d/docker.list
+  apt-get update
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  systemctl enable --now docker
+}
+
+[[ -f "$PROJECT_DIR/docker-compose.yml" ]] || fail "Run install.sh from the cloned Chatter repository."
+. /etc/os-release
+[[ "$ID" == "ubuntu" || "$ID" == "debian" ]] || fail "The first installer version supports Ubuntu and Debian only."
+command -v openssl >/dev/null 2>&1 || { apt-get update && apt-get install -y openssl; }
+command -v ss >/dev/null 2>&1 || { apt-get update && apt-get install -y iproute2; }
+command -v curl >/dev/null 2>&1 || { apt-get update && apt-get install -y ca-certificates curl; }
+install_docker
+
+install -d -m 700 "$CONFIG_DIR"
+
+COMPOSE_ENV="$CONFIG_DIR/compose.env"
+MANAGER_ENV="$CONFIG_DIR/manager.env"
+BACKEND_ENV="$CONFIG_DIR/backend.env"
+TELEGRAM_ENV="$CONFIG_DIR/telegram.env"
+VOICE_ENV="$CONFIG_DIR/voice.env"
+
+ADMIN_PORT="$(env_get "$COMPOSE_ENV" ADMIN_PORT)"
+[[ "$ADMIN_PORT" =~ ^[0-9]+$ ]] || ADMIN_PORT="$(find_free_port)"
+
+ADMIN_USERNAME="$(env_get "$MANAGER_ENV" ADMIN_USERNAME)"
+ADMIN_PASSWORD="$(env_get "$MANAGER_ENV" ADMIN_PASSWORD)"
+[[ -n "$ADMIN_USERNAME" ]] || ADMIN_USERNAME="admin"
+[[ -n "$ADMIN_PASSWORD" ]] || ADMIN_PASSWORD="$(random_hex 16)"
+
+SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
+if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+  SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+fi
+[[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || SERVER_IP="127.0.0.1"
+
+if [[ ! -s "$CONFIG_DIR/tls.crt" || ! -s "$CONFIG_DIR/tls.key" ]]; then
+  log "Creating an encrypted self-signed HTTPS endpoint"
+  openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
+    -keyout "$CONFIG_DIR/tls.key" \
+    -out "$CONFIG_DIR/tls.crt" \
+    -subj "/CN=${SERVER_IP}" \
+    -addext "subjectAltName=IP:${SERVER_IP}" >/dev/null 2>&1
+  chmod 600 "$CONFIG_DIR/tls.key" "$CONFIG_DIR/tls.crt"
+fi
+
+if [[ ! -f "$BACKEND_ENV" ]]; then
+  INTERNAL_TOKEN="$(random_hex 32)"
+  write_private_file "$BACKEND_ENV" \
+    "API_JWT_SECRET=$(random_hex 32)" \
+    "BACKEND_INTERNAL_TOKEN=${INTERNAL_TOKEN}" \
+    "ENCRYPTION_KEY=$(random_hex 32)" \
+    "TIMEWEB_API_KEY=" \
+    "TIMEWEB_BASE_URL=https://openrouter.ai/api/v1" \
+    "TELEGRAM_TOKEN=" \
+    "VOICE_TRANSCRIBE_URL=" \
+    "VOICE_TRANSCRIBE_TOKEN="
+else
+  INTERNAL_TOKEN="$(env_get "$BACKEND_ENV" BACKEND_INTERNAL_TOKEN)"
+  [[ -n "$INTERNAL_TOKEN" ]] || fail "BACKEND_INTERNAL_TOKEN is missing from ${BACKEND_ENV}."
+fi
+
+if [[ ! -f "$TELEGRAM_ENV" ]]; then
+  write_private_file "$TELEGRAM_ENV" \
+    "TELEGRAM_TOKEN=" \
+    "BACKEND_INTERNAL_TOKEN=${INTERNAL_TOKEN}" \
+    "NOTES_WEBAPP_URL="
+fi
+
+if [[ ! -f "$VOICE_ENV" ]]; then
+  write_private_file "$VOICE_ENV" \
+    "VOICE_TRANSCRIBE_TOKEN=$(random_hex 32)" \
+    "VOICE_API_PORT=3030" \
+    "VOICE_TRANSCRIBE_LANGUAGE=auto" \
+    "TTS_DEFAULT_LANGUAGE=ru" \
+    "TTS_RU_PROVIDER=silero" \
+    "TTS_EN_PROVIDER=piper"
+fi
+
+write_private_file "$MANAGER_ENV" \
+  "ADMIN_USERNAME=${ADMIN_USERNAME}" \
+  "ADMIN_PASSWORD=${ADMIN_PASSWORD}" \
+  "ADMIN_TLS=1" \
+  "ADMIN_TLS_CERT=/config/tls.crt" \
+  "ADMIN_TLS_KEY=/config/tls.key"
+
+write_private_file "$COMPOSE_ENV" \
+  "BACKEND_ENV_FILE=${BACKEND_ENV}" \
+  "TELEGRAM_ENV_FILE=${TELEGRAM_ENV}" \
+  "VOICE_ENV_FILE=${VOICE_ENV}" \
+  "CHATTER_MANAGER_ENV_FILE=${MANAGER_ENV}" \
+  "CHATTER_CONFIG_DIR=${CONFIG_DIR}" \
+  "ADMIN_BIND=0.0.0.0" \
+  "ADMIN_PORT=${ADMIN_PORT}"
+
+log "Building and starting the backend and admin panel"
+docker compose --env-file "$COMPOSE_ENV" --profile admin up -d --build backend admin-panel chatter-manager
+
+for _ in $(seq 1 60); do
+  if curl -kfsS "https://127.0.0.1:${ADMIN_PORT}/health" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+curl -kfsS "https://127.0.0.1:${ADMIN_PORT}/health" >/dev/null 2>&1 || fail "Admin panel did not become healthy. Run: docker compose --env-file ${COMPOSE_ENV} --profile admin logs"
+
+if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
+  ufw allow "${ADMIN_PORT}/tcp" comment 'Chatter Admin' >/dev/null
+fi
+
+printf '\nChatter is ready.\n\n'
+printf '  URL:      https://%s:%s\n' "$SERVER_IP" "$ADMIN_PORT"
+if [[ "$AUTH_WAS_PRESENT" -eq 0 ]]; then
+  printf '  Login:    %s\n' "$ADMIN_USERNAME"
+  printf '  Password: %s\n\n' "$ADMIN_PASSWORD"
+else
+  printf '  Admin credentials were preserved from the existing installation.\n\n'
+fi
+printf 'The first certificate is self-signed, so the browser will show a warning.\n'
+printf 'After login, configure the AI provider, Telegram and Voice in the panel.\n\n'

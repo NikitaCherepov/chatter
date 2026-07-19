@@ -8,6 +8,7 @@ __pycache__/
 .env
 .env.telegram-test
 .env.i18n
+.chatter/
 *.db
 *.db-journal
 dist/
