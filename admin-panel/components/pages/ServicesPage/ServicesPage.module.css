@@ -18,6 +18,11 @@
 .running > span {
   background: var(--color-success);
 }
+.urlRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
 .notice {
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--color-info) 25%, var(--border-light));

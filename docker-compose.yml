@@ -181,7 +181,7 @@ services:
   gateway:
     profiles:
       - gateway
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.3-alpine
     restart: unless-stopped
     environment:
       CHATTER_PUBLIC_HOST: "${CHATTER_PUBLIC_HOST}"

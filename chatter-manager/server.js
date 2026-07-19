@@ -150,9 +150,11 @@ const loadSettings = () => {
   return {
     ...defaults,
     ...stored,
-    notesUrl: typeof stored.notesUrl === 'string' && stored.notesUrl.trim()
-      ? stored.notesUrl
-      : defaults.notesUrl,
+    notesUrl: defaults.notesUrl || (
+      typeof stored.notesUrl === 'string' && stored.notesUrl.trim()
+        ? stored.notesUrl
+        : ''
+    ),
     // Existing installations started Notes together with Telegram. Preserve
     // that behaviour once, then persist the new independent flag on save.
     notesEnabled: typeof stored.notesEnabled === 'boolean'
@@ -409,7 +411,8 @@ function saveSettings(input) {
   if (!Array.isArray(input.proModels) && proModels.length === 0 && legacyAiApiKey && legacyAiModel) {
     proModels.push({ id: 'pro-legacy', baseUrl: legacyAiBaseUrl, apiKey: legacyAiApiKey, model: legacyAiModel });
   }
-  const notesUrl = normalizeUrl(input.notesUrl ?? previous.notesUrl, 'Notes URL');
+  const notesUrl = defaultSettings().notesUrl
+    || normalizeUrl(input.notesUrl ?? previous.notesUrl, 'Notes URL');
   const voiceMode = ['off', 'local', 'remote'].includes(input.voiceMode) ? input.voiceMode : 'off';
   const voiceExternalUrl = normalizeUrl(input.voiceExternalUrl ?? previous.voiceExternalUrl, 'Voice URL');
   let voiceToken = `${input.voiceToken || ''}`.trim() || backendEnv.VOICE_TRANSCRIBE_TOKEN || voiceEnv.VOICE_TRANSCRIBE_TOKEN || '';

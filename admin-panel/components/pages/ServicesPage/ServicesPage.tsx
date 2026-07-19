@@ -77,17 +77,20 @@ export function ServicesPage({
             label="Сервис включён"
           />
           <FormField
-            label="Публичный HTTPS-адрес"
-            hint="Нужен Telegram для открытия Mini App; сам Telegram-бот может быть выключен"
+            label="Адрес Mini App"
+            hint="Установщик создаёт адрес по IP сервера автоматически. Он передаётся боту при сохранении настроек"
           >
-            <input
-              type="url"
-              value={settings.notesUrl}
-              onChange={(event) =>
-                setSettings((current) => ({ ...current, notesUrl: event.target.value }))
-              }
-              placeholder="https://example.com"
-            />
+            <div className={styles.urlRow}>
+              <input type="url" value={settings.notesUrl} readOnly placeholder="https://SERVER_IP/notes" />
+              <button
+                type="button"
+                className="buttonSecondary"
+                disabled={!settings.notesUrl}
+                onClick={() => void navigator.clipboard.writeText(settings.notesUrl)}
+              >
+                Копировать
+              </button>
+            </div>
           </FormField>
         </div>
       </Card>
