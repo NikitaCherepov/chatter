@@ -13,6 +13,7 @@ import { ServicesPage } from '../components/pages/ServicesPage/ServicesPage';
 import { SystemPage } from '../components/pages/SystemPage/SystemPage';
 import { UserDetailPage } from '../components/pages/UserDetailPage/UserDetailPage';
 import { UsersPage } from '../components/pages/UsersPage/UsersPage';
+import { AccessKeysPage } from '../components/pages/AccessKeysPage/AccessKeysPage';
 import { api } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
@@ -210,6 +211,7 @@ export default function Home() {
       )}
       {section === 'users' && selectedUserId && <UserDetailPage userId={selectedUserId} onBack={closeUser} />}
       {section === 'users' && !selectedUserId && <UsersPage onSelectUser={openUser} />}
+      {section === 'accessKeys' && <AccessKeysPage />}
       {section === 'limits' && (
         <PlaceholderPage
           title="Тарифы и лимиты"

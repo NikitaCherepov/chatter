@@ -52,6 +52,12 @@
     },
     "error": {
       "generic": "Etwas ist schiefgelaufen"
+    },
+    "connection": {
+      "subtitle": "Chatter mit Ihrem Server verbinden",
+      "placeholder": "Verbindungslink einfügen",
+      "connect": "Verbinden",
+      "change": "Anderen Server verwenden"
     }
   },
   "review": {

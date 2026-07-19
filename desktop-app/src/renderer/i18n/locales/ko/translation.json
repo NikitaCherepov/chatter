@@ -332,6 +332,12 @@
     },
     "error": {
       "generic": "문제가 발생했습니다"
+    },
+    "connection": {
+      "subtitle": "Chatter를 서버에 연결",
+      "placeholder": "연결 링크 붙여넣기",
+      "connect": "연결",
+      "change": "다른 서버 사용"
     }
   },
   "review": {

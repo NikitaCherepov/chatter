@@ -1321,6 +1321,22 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && pathname === '/api/users') {
     return sendJson(res, 200, await backendInternalRequest('/internal/admin/users-overview'));
   }
+  if (req.method === 'GET' && pathname === '/api/server-access-keys') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/server-access-keys'));
+  }
+  if (req.method === 'POST' && pathname === '/api/server-access-keys') {
+    const body = await readJson(req);
+    return sendJson(res, 201, await backendInternalRequest('/internal/admin/server-access-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name: `${body.name || ''}`.trim() }),
+    }));
+  }
+  const serverAccessKeyMatch = pathname.match(/^\/api\/server-access-keys\/(\d+)$/);
+  if (req.method === 'DELETE' && serverAccessKeyMatch) {
+    return sendJson(res, 200, await backendInternalRequest(`/internal/admin/server-access-keys/${serverAccessKeyMatch[1]}`, {
+      method: 'DELETE',
+    }));
+  }
   const userDetailMatch = pathname.match(/^\/api\/users\/(\d+)$/);
   if (req.method === 'GET' && userDetailMatch) {
     return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users-overview/${userDetailMatch[1]}`));

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/auth';
+import { clearServerConnection, configureServerConnection, loadServerConnection } from '../lib/api';
 import s from './AuthPage.module.scss';
 
 export function AuthPage() {
@@ -15,6 +16,20 @@ export function AuthPage() {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [connected, setConnected] = useState(() => Boolean(loadServerConnection()));
+  const [connectionLink, setConnectionLink] = useState('');
+
+  const handleConnection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await configureServerConnection(connectionLink);
+      setConnected(true);
+    } catch (err: any) {
+      setError(err?.message || t('auth.error.generic'));
+    } finally { setLoading(false); }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,9 +65,15 @@ export function AuthPage() {
           </svg>
           <h1 className={s.title}>Chatter</h1>
         </div>
-        <p className={s.subtitle}>
-          {mode === 'login' ? t('auth.subtitle.signIn') : t('auth.subtitle.createAccount')}
-        </p>
+        <p className={s.subtitle}>{connected ? (mode === 'login' ? t('auth.subtitle.signIn') : t('auth.subtitle.createAccount')) : t('auth.connection.subtitle')}</p>
+
+        {!connected ? (
+          <form onSubmit={handleConnection} className={s.form}>
+            <input className={s.input} type="text" placeholder={t('auth.connection.placeholder')} value={connectionLink} onChange={(e) => setConnectionLink(e.target.value)} required autoFocus />
+            {error && <div className={s.error}>{error}</div>}
+            <button className={s.button} type="submit" disabled={loading}>{loading ? t('common.pleaseWait') : t('auth.connection.connect')}</button>
+          </form>
+        ) : <>
 
         <form onSubmit={handleSubmit} className={s.form}>
           {mode === 'register' && (
@@ -100,6 +121,8 @@ export function AuthPage() {
             {mode === 'login' ? t('auth.actions.signUp') : t('auth.actions.signIn')}
           </a>
         </p>
+        <p className={s.switchText}><a href="#" className={s.link} onClick={(e) => { e.preventDefault(); clearServerConnection(); setConnected(false); setError(''); }}>{t('auth.connection.change')}</a></p>
+        </>}
       </div>
     </div>
   );

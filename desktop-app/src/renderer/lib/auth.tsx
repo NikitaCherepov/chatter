@@ -28,8 +28,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Initialize WebSocket after successful auth
           api.initWebSocket();
         })
-        .catch(() => {
-          // Token invalid or network error — fallback to cached
+        .catch((error) => {
+          if (error instanceof api.ApiError && error.status === 401) {
+            api.clearTokens();
+            localStorage.removeItem('chatter_user');
+            setUser(null);
+            return;
+          }
+          // A temporary network error should not sign the user out.
           const stored = localStorage.getItem('chatter_user');
           if (stored) {
             try { setUser(JSON.parse(stored)); } catch {}

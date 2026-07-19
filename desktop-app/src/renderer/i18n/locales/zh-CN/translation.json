@@ -52,6 +52,12 @@
     },
     "error": {
       "generic": "出了点问题"
+    },
+    "connection": {
+      "subtitle": "将Chatter连接到您的服务器",
+      "placeholder": "粘贴连接链接",
+      "connect": "连接",
+      "change": "使用其他服务器"
     }
   },
   "review": {

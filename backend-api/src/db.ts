@@ -154,6 +154,34 @@ db.exec(`
   ON user_plan_subscriptions(user_id);
   CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_current
   ON user_plan_subscriptions(user_id, is_current, ends_at);
+
+  CREATE TABLE IF NOT EXISTS server_access_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME,
+    revoked_at DATETIME
+  );
+
+  CREATE TABLE IF NOT EXISTS server_access_key_users (
+    key_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    first_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (key_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS server_access_key_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1))
+  );
+
+  INSERT OR IGNORE INTO server_access_key_state (id, enabled) VALUES (1, 0);
+
+  CREATE INDEX IF NOT EXISTS idx_server_access_key_users_user
+  ON server_access_key_users(user_id, last_used_at DESC);
 `);
 
 const hasUserColumn = (columnName: string) => {

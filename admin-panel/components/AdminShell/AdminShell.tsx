@@ -7,6 +7,7 @@ import styles from './AdminShell.module.css';
 export type AdminSection =
   | 'overview'
   | 'users'
+  | 'accessKeys'
   | 'models'
   | 'limits'
   | 'integrations'
@@ -19,6 +20,7 @@ type NavItem = { id: AdminSection; label: string; icon: IconName };
 const primaryItems: NavItem[] = [
   { id: 'overview', label: 'Обзор', icon: 'overview' },
   { id: 'users', label: 'Пользователи', icon: 'users' },
+  { id: 'accessKeys', label: 'Ключи доступа', icon: 'security' },
   { id: 'models', label: 'Модели', icon: 'models' },
   { id: 'limits', label: 'Тарифы и лимиты', icon: 'limits' },
   { id: 'integrations', label: 'Интеграции', icon: 'integrations' },
@@ -34,6 +36,7 @@ const secondaryItems: NavItem[] = [
 const titles: Record<AdminSection, [string, string]> = {
   overview: ['Обзор', 'Состояние сервера и компонентов Chatter'],
   users: ['Пользователи', 'Аккаунты, роли и привязки'],
+  accessKeys: ['Ключи доступа', 'Пропуски Desktop к этому серверу'],
   models: ['Модели', 'Провайдер и основная модель'],
   limits: ['Тарифы и лимиты', 'Общие правила и индивидуальные ограничения'],
   integrations: ['Интеграции', 'Внешние API и возможности Chatter'],

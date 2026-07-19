@@ -52,6 +52,12 @@
     },
     "error": {
       "generic": "Algo deu errado"
+    },
+    "connection": {
+      "subtitle": "Conecte o Chatter ao seu servidor",
+      "placeholder": "Cole o link de conexão",
+      "connect": "Conectar",
+      "change": "Usar outro servidor"
     }
   },
   "review": {

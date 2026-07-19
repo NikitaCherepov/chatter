@@ -332,6 +332,12 @@
     },
     "error": {
       "generic": "Qualcosa è andato storto"
+    },
+    "connection": {
+      "subtitle": "Collega Chatter al tuo server",
+      "placeholder": "Incolla il link di connessione",
+      "connect": "Connetti",
+      "change": "Usa un altro server"
     }
   },
   "review": {

@@ -41,6 +41,7 @@ type UserDetail = {
   chats_count: number;
   ban: { reason: string; banned_at: string; banned_by: number | null } | null;
   subscription: { plan: string; started_at: string; ends_at: string | null } | null;
+  last_server_access_key: { id: number; name: string; key_prefix: string; last_used_at: string; revoked_at: string | null } | null;
   identities: Identity[];
   messages: { total: number; user: number; assistant: number; last_message_at: string | null };
   desktop: { online: boolean; connected_at: number | null; last_activity_at: number | null };
@@ -232,6 +233,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
           <div><span>Язык</span><strong>{user.language || 'Не выбран'}</strong></div>
           <div><span>Предпочитаемая модель</span><strong>{user.preferred_model || 'Автоматически'}</strong></div>
           <div><span>Reasoning</span><strong>{user.reasoning_level || 'По умолчанию'}</strong></div>
+          <div><span>Последний ключ Desktop</span><strong>{user.last_server_access_key ? `${user.last_server_access_key.name} · ${user.last_server_access_key.key_prefix}` : 'Не использовался'}</strong><small>{user.last_server_access_key ? formatDate(user.last_server_access_key.last_used_at) : '—'}</small></div>
         </div>
         <div className={styles.banBar}>
           <div><strong>{user.status === 'banned' ? 'Пользователь заблокирован' : 'Блокировка аккаунта'}</strong><span>{user.ban?.reason || 'Блокировка отзывает текущие сессии пользователя'}</span></div>

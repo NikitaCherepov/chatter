@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import { getUserById } from './services/chats.js';
 import { getAuthPrincipal, resolveAccountId } from './services/accounts.js';
+import { isServerAccessKeyActive } from './services/server-access-keys.js';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ type TokenPayload = {
   exp: number;
   iat: number;
   ver?: number;
+  sak?: number;
 };
 
 export type AuthedRequest = Record<string, any> & { authUserId?: number };
@@ -64,6 +66,7 @@ export const verifyToken = (token: string, expectedType: 'access' | 'refresh') =
   const tokenVersion = Number.isFinite(Number(decoded.ver)) ? Math.floor(Number(decoded.ver)) : 0;
   const currentVersion = principal.auth_token_version;
   if (tokenVersion !== currentVersion) return null;
+  if (decoded.sak && !isServerAccessKeyActive(decoded.sak)) return null;
 
   const canonicalAccountId = principal.account_id;
   const user = getUserById(canonicalAccountId);
@@ -117,7 +120,7 @@ const parseInitData = (initData: string) => {
 
 export const validateTelegramInitData = (initData: string) => parseInitData(initData);
 
-export const issueAuthTokens = (userId: number) => {
+export const issueAuthTokens = (userId: number, serverAccessKeyId?: number) => {
   userId = resolveAccountId(userId);
   const user = getUserById(userId);
   if (!user || (user.status !== 'approved' && user.is_admin !== 1)) {
@@ -125,8 +128,9 @@ export const issueAuthTokens = (userId: number) => {
   }
   const now = Math.floor(Date.now() / 1000);
   const version = Math.max(0, Math.floor(Number(user.auth_token_version || 0)));
-  const access = signPayload({ sub: userId, typ: 'access', iat: now, exp: now + ACCESS_TTL_SEC, ver: version });
-  const refresh = signPayload({ sub: userId, typ: 'refresh', iat: now, exp: now + REFRESH_TTL_SEC, ver: version });
+  const serverKeyClaim = serverAccessKeyId && serverAccessKeyId > 0 ? { sak: serverAccessKeyId } : {};
+  const access = signPayload({ sub: userId, typ: 'access', iat: now, exp: now + ACCESS_TTL_SEC, ver: version, ...serverKeyClaim });
+  const refresh = signPayload({ sub: userId, typ: 'refresh', iat: now, exp: now + REFRESH_TTL_SEC, ver: version, ...serverKeyClaim });
   return {
     access_token: access,
     refresh_token: refresh,
@@ -138,7 +142,7 @@ export const issueAuthTokens = (userId: number) => {
 export const refreshAccessToken = (refreshToken: string) => {
   const payload = verifyToken(refreshToken, 'refresh');
   if (!payload) return null;
-  return issueAuthTokens(payload.sub);
+  return issueAuthTokens(payload.sub, payload.sak);
 };
 
 export const authMiddleware = (req: AuthedRequest, res: any, next: any) => {

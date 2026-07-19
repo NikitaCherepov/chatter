@@ -49,6 +49,7 @@ import {
 } from './services/accounts.js';
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
+import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 
 dotenv.config();
 ensureDefaultPrompt();
@@ -123,7 +124,7 @@ const buildRejectedByUserError = (commentRaw: unknown) => {
 app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Chatter-Server-Key');
   if (_req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -159,12 +160,28 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'backend-api', now: Math.floor(Date.now() / 1000) });
 });
 
+app.get('/api/v1/server-access/validate', (req, res) => {
+  const accessKey = validateServerAccessKey(`${req.headers['x-chatter-server-key'] || ''}`);
+  if (!accessKey) return res.status(403).json({ error: 'invalid_server_access_key' });
+  return res.json({ ok: true, key: { id: accessKey.id, name: accessKey.name } });
+});
+
 const internalAuth = (req: any, res: any, next: any) => {
   if (!BACKEND_INTERNAL_TOKEN) return res.status(503).json({ error: 'internal_token_not_configured' });
   const authHeader = `${req.headers.authorization || ''}`;
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (token !== BACKEND_INTERNAL_TOKEN) return res.status(401).json({ error: 'unauthorized_internal' });
   next();
+};
+
+const serverAccessKeyForPasswordAuth = (req: any, res: any) => {
+  if (!isServerAccessKeyGateEnabled()) return null;
+  const accessKey = validateServerAccessKey(`${req.headers['x-chatter-server-key'] || ''}`);
+  if (!accessKey) {
+    res.status(403).json({ error: 'server_access_key_required' });
+    return false;
+  }
+  return accessKey;
 };
 
 // Internal API contracts use canonical account IDs exclusively. Telegram IDs
@@ -764,6 +781,8 @@ app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
 });
 
 app.post('/api/v1/auth/register', (req, res) => {
+  const serverAccessKey = serverAccessKeyForPasswordAuth(req, res);
+  if (serverAccessKey === false) return;
   const login = `${req.body?.login || ''}`.trim().toLowerCase();
   const password = `${req.body?.password || ''}`;
   const name = `${req.body?.name || ''}`.trim() || null;
@@ -783,7 +802,8 @@ app.post('/api/v1/auth/register', (req, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(500).json({ error: 'user_create_failed' });
 
-  const tokens = issueAuthTokens(userId);
+  if (serverAccessKey) associateServerAccessKeyUser(serverAccessKey.id, userId);
+  const tokens = issueAuthTokens(userId, serverAccessKey?.id);
   return res.status(201).json({
     ...tokens,
     user: toAuthUserDto(user)
@@ -840,6 +860,8 @@ const toAuthUserDto = (user: UserRecord) => {
 };
 
 app.post('/api/v1/auth/login', (req, res) => {
+  const serverAccessKey = serverAccessKeyForPasswordAuth(req, res);
+  if (serverAccessKey === false) return;
   const login = `${req.body?.login || ''}`.trim().toLowerCase();
   const password = `${req.body?.password || ''}`;
 
@@ -856,7 +878,8 @@ app.post('/api/v1/auth/login', (req, res) => {
     return res.status(403).json({ error: 'access_not_approved', status: user.status });
   }
 
-  const tokens = issueAuthTokens(user.id);
+  if (serverAccessKey) associateServerAccessKeyUser(serverAccessKey.id, user.id);
+  const tokens = issueAuthTokens(user.id, serverAccessKey?.id);
   return res.json({
     ...tokens,
     user: toAuthUserDto(user)
@@ -2646,6 +2669,22 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
   });
 });
 
+app.get('/internal/admin/server-access-keys', internalAuth, (_req, res) => {
+  return res.json({ keys: listServerAccessKeys(), enabled: isServerAccessKeyGateEnabled() });
+});
+
+app.post('/internal/admin/server-access-keys', internalAuth, (req, res) => {
+  return res.status(201).json({ key: createServerAccessKey(`${req.body?.name || ''}`) });
+});
+
+app.delete('/internal/admin/server-access-keys/:id', internalAuth, (req, res) => {
+  const keyId = Math.floor(Number(req.params.id));
+  if (!Number.isFinite(keyId) || keyId <= 0) return res.status(400).json({ error: 'bad_key_id' });
+  const result = revokeServerAccessKey(keyId);
+  if (!result.changes) return res.status(404).json({ error: 'key_not_found' });
+  return res.json({ ok: true });
+});
+
 app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
@@ -2709,6 +2748,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
       chats_count: chatCount,
       ban: getBanRecord(userId) || null,
       subscription,
+      last_server_access_key: getLastServerAccessKeyForUser(userId),
       desktop: {
         online: desktopOnline,
         connected_at: client?.connectedAt ?? null,

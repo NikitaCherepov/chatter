@@ -33,6 +33,12 @@
     "user": "User"
   },
   "auth": {
+    "connection": {
+      "subtitle": "Connect Chatter to your server",
+      "placeholder": "Paste the connection link",
+      "connect": "Connect",
+      "change": "Use another server"
+    },
     "subtitle": {
       "signIn": "Sign in to continue",
       "createAccount": "Create an account"

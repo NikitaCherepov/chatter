@@ -1,6 +1,39 @@
-const API_BASE: string = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3050';
+const DEFAULT_API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3050';
+const CONNECTION_KEY = 'chatter_server_connection';
 
-export { API_BASE };
+export type ServerConnection = { apiBase: string; key: string };
+
+export function loadServerConnection(): ServerConnection | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CONNECTION_KEY) || 'null') as ServerConnection | null;
+    return parsed?.apiBase && parsed?.key ? parsed : null;
+  } catch { return null; }
+}
+
+export let API_BASE: string = loadServerConnection()?.apiBase || DEFAULT_API_BASE;
+
+export async function configureServerConnection(connectionLink: string) {
+  const parsed = new URL(connectionLink.trim());
+  if (parsed.protocol !== 'chatter:') throw new Error('invalid_connection_link');
+  const server = `${parsed.searchParams.get('server') || ''}`.trim().replace(/\/+$/, '');
+  const key = `${parsed.searchParams.get('key') || ''}`.trim();
+  const serverUrl = new URL(server);
+  if (!['http:', 'https:'].includes(serverUrl.protocol) || !key) throw new Error('invalid_connection_link');
+  const response = await fetch(`${server}/api/v1/server-access/validate`, {
+    headers: { 'X-Chatter-Server-Key': key },
+  });
+  if (!response.ok) throw new Error('invalid_server_access_key');
+  const connection = { apiBase: server, key };
+  localStorage.setItem(CONNECTION_KEY, JSON.stringify(connection));
+  API_BASE = server;
+  return connection;
+}
+
+export function clearServerConnection() {
+  localStorage.removeItem(CONNECTION_KEY);
+  clearTokens();
+  API_BASE = DEFAULT_API_BASE;
+}
 
 type Tokens = {
   access_token: string;
@@ -71,6 +104,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (tokens?.access_token) {
     headers['Authorization'] = `Bearer ${tokens.access_token}`;
   }
+  const connection = loadServerConnection();
+  if (connection?.key) headers['X-Chatter-Server-Key'] = connection.key;
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
@@ -85,7 +120,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       return retry.json();
     }
     clearTokens();
-    throw new Error('Session expired');
+    throw new ApiError(401, 'session_expired');
   }
 
   if (!res.ok) {
@@ -132,9 +167,10 @@ export async function login(login: string, password: string): Promise<AuthRespon
 
 export async function refreshToken(refresh_token: string): Promise<Tokens | null> {
   try {
+    const connection = loadServerConnection();
     const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(connection?.key ? { 'X-Chatter-Server-Key': connection.key } : {}) },
       body: JSON.stringify({ refresh_token }),
     });
     if (!res.ok) return null;

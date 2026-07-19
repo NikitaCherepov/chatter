@@ -52,6 +52,12 @@
     },
     "error": {
       "generic": "問題が発生しました"
+    },
+    "connection": {
+      "subtitle": "Chatterをサーバーに接続",
+      "placeholder": "接続リンクを貼り付け",
+      "connect": "接続",
+      "change": "別のサーバーを使用"
     }
   },
   "review": {

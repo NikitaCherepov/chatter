@@ -1,0 +1,87 @@
+.stack {
+  display: flex;
+  max-width: 1180px;
+  flex-direction: column;
+  gap: 14px;
+}
+.createForm {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  align-items: end;
+  gap: 10px;
+}
+.createForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.createForm label span {
+  color: var(--text-hint);
+  font-size: 9px;
+}
+.created {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-top: 14px;
+}
+.state {
+  min-height: 14px;
+  margin: 9px 0 0;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.table {
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+}
+.header,
+.row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.65fr 0.8fr 0.8fr 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+.header {
+  background: var(--bg-secondary);
+  color: var(--text-hint);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+.row {
+  min-height: 54px;
+  border-top: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.row > span:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.row strong {
+  color: var(--text-primary);
+}
+.row small {
+  color: var(--text-hint);
+  font-size: 8px;
+}
+.empty {
+  padding: 28px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: center;
+}
+@media (max-width: 950px) {
+  .createForm {
+    grid-template-columns: 1fr;
+  }
+  .header {
+    display: none;
+  }
+  .row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
