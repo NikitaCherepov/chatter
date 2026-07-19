@@ -16,14 +16,20 @@ tags.
 
 ## Testing while packages are private
 
-Create a GitHub personal access token with only `read:packages`, then log in on
-the test server before running the installer:
+Create a GitHub personal access token with only `read:packages`. After Docker is
+installed, log in on the test server and run the installer again:
 
 ```bash
-printf '%s' "$GHCR_TOKEN" | sudo docker login ghcr.io \
-  --username YOUR_GITHUB_USERNAME --password-stdin
+sudo docker login ghcr.io --username NikitaCherepov
 sudo bash install.sh
 ```
+
+Paste the token into Docker's `Password` prompt; terminal input is hidden.
+
+The installer mounts the root Docker configuration read-only into
+`chatter-manager`, so optional services enabled later from the admin panel can
+pull the same private images. The registry token is not copied into Chatter's
+environment files.
 
 Do not put the token in `compose.env`, service environment files, or the Git
 repository. Once the six GHCR packages are public, installation no longer needs
