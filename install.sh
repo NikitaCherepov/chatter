@@ -162,6 +162,12 @@ bootstrap_installation() {
 if [[ ! -f "$PROJECT_DIR/docker-compose.yml" ]]; then
   bootstrap_installation "$@"
 fi
+
+# Docker Compose resolves its default compose file from the current working
+# directory. Bootstrap installations are executed from /opt/chatter while the
+# caller may still be in $HOME, so always enter the installed project directory.
+cd "$PROJECT_DIR"
+
 . /etc/os-release
 [[ "$ID" == "ubuntu" || "$ID" == "debian" ]] || fail "The first installer version supports Ubuntu and Debian only."
 command -v openssl >/dev/null 2>&1 || { apt-get update && apt-get install -y openssl; }

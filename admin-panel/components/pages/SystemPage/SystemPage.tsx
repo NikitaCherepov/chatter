@@ -18,6 +18,7 @@ export function SystemPage() {
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState('');
   const [schedule, setSchedule] = useState<BackupSchedule>({ frequency: 'off', includeUploads: false, retention: 7, lastRunAt: '' });
@@ -63,15 +64,17 @@ export function SystemPage() {
   }
 
   async function importBackup(file: File) {
-    setImporting(true); setState(`Проверяем и импортируем ${file.name}…`);
+    setImporting(true); setImportProgress(0); setState(`Загружаем ${file.name}: 0% (${formatBytes(0)} из ${formatBytes(file.size)})`);
     try {
-      const response = await fetch(`/api/backups/import?filename=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+      await uploadBackup(file, (loaded, total) => {
+        const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+        setImportProgress(percent);
+        setState(`Загружаем ${file.name}: ${percent}% (${formatBytes(loaded)} из ${formatBytes(total)})`);
+      }, () => setState('Файл загружен. Сервер проверяет и импортирует архив…'));
       await load(); setState('Файл импортирован. Теперь его можно восстановить.');
     } catch (error) {
       setState(`Ошибка: ${error instanceof Error ? error.message : String(error)}`);
-    } finally { setImporting(false); }
+    } finally { setImporting(false); setImportProgress(null); }
   }
 
   async function restoreSelectedBackup(backup: BackupInfo) {
@@ -102,10 +105,31 @@ export function SystemPage() {
       <ServerUpdatePanel />
       <Card title="Автоматические бэкапы" description="Manager запускает их сам, отдельный cron не требуется"><BackupSchedulePanel schedule={schedule} saving={scheduleSaving} state={scheduleState} onChange={(patch) => { setSchedule((current) => ({ ...current, ...patch })); setScheduleState(''); }} onSave={() => void saveSchedule()} /></Card>
       <Card title="Резервные копии" description="База данных включается всегда, медиафайлы — по желанию">
-        <BackupsPanel backups={backups} creating={creating} restoring={restoring} importing={importing} includeUploads={includeUploads} state={state} onIncludeUploadsChange={setIncludeUploads} onCreate={() => void createBackup()} onImport={(file) => void importBackup(file)} onRestore={(backup) => void restoreSelectedBackup(backup)} onDelete={(backup) => void deleteBackup(backup)} />
+        <BackupsPanel backups={backups} creating={creating} restoring={restoring} importing={importing} importProgress={importProgress} includeUploads={includeUploads} state={state} onIncludeUploadsChange={setIncludeUploads} onCreate={() => void createBackup()} onImport={(file) => void importBackup(file)} onRestore={(backup) => void restoreSelectedBackup(backup)} onDelete={(backup) => void deleteBackup(backup)} />
       </Card>
     </div>
   );
+}
+
+function uploadBackup(file: File, onProgress: (loaded: number, total: number) => void, onUploaded: () => void) {
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `/api/backups/import?filename=${encodeURIComponent(file.name)}`);
+    request.setRequestHeader('Content-Type', 'application/octet-stream');
+    request.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total);
+    });
+    request.upload.addEventListener('load', onUploaded);
+    request.addEventListener('load', () => {
+      let body: { error?: string } = {};
+      try { body = JSON.parse(request.responseText); } catch { /* The HTTP status is enough. */ }
+      if (request.status >= 200 && request.status < 300) resolve();
+      else reject(new Error(body.error || `HTTP ${request.status}`));
+    });
+    request.addEventListener('error', () => reject(new Error('Не удалось загрузить файл')));
+    request.addEventListener('abort', () => reject(new Error('Загрузка отменена')));
+    request.send(file);
+  });
 }
 
 function StorageItem({ title, value }: { title: string; value: string }) {

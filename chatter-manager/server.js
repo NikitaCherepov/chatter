@@ -1773,6 +1773,10 @@ if (process.env.ADMIN_TLS === '1') {
   server = https.createServer({ cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) }, requestHandler);
 } else server = http.createServer(requestHandler);
 
+// Backup archives can take longer than Node's five-minute default to upload
+// over a slow connection. Size is still bounded by MAX_BACKUP_UPLOAD_BYTES.
+server.requestTimeout = 60 * 60 * 1000;
+
 server.listen(PORT, '0.0.0.0', () => console.log(`Chatter Manager is listening on ${process.env.ADMIN_TLS === '1' ? 'https' : 'http'}://0.0.0.0:${PORT}`));
 setTimeout(() => { void runScheduledBackupIfDue(); }, 10000).unref();
 setInterval(() => { void runScheduledBackupIfDue(); }, 5 * 60 * 1000).unref();

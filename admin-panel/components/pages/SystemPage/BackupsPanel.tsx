@@ -2,11 +2,12 @@ import type { BackupInfo } from './types';
 import { formatBytes } from './types';
 import styles from './SystemPage.module.css';
 
-export function BackupsPanel({ backups, creating, restoring, importing, includeUploads, state, onIncludeUploadsChange, onCreate, onImport, onRestore, onDelete }: {
+export function BackupsPanel({ backups, creating, restoring, importing, importProgress, includeUploads, state, onIncludeUploadsChange, onCreate, onImport, onRestore, onDelete }: {
   backups: BackupInfo[];
   creating: boolean;
   restoring: boolean;
   importing: boolean;
+  importProgress: number | null;
   includeUploads: boolean;
   state: string;
   onIncludeUploadsChange: (value: boolean) => void;
@@ -23,7 +24,7 @@ export function BackupsPanel({ backups, creating, restoring, importing, includeU
           <span><strong>Включить загруженные файлы</strong><small>Фотографии, документы и аудио могут значительно увеличить архив</small></span>
         </label>
         <div className={styles.primaryActions}>
-          <label className={`buttonSecondary ${styles.importButton}`}><input type="file" accept=".db,.sqlite,.sqlite3,.tar.gz,.tgz" disabled={creating || restoring || importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImport(file); event.target.value = ''; }} />{importing ? 'Импортируем…' : 'Импортировать'}</label>
+          <label className={`buttonSecondary ${styles.importButton}`}><input type="file" accept=".db,.sqlite,.sqlite3,.tar.gz,.tgz" disabled={creating || restoring || importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImport(file); event.target.value = ''; }} />{importing ? (importProgress === 100 ? 'Проверяем…' : `Загрузка ${importProgress ?? 0}%`) : 'Импортировать'}</label>
           <button type="button" className="buttonPrimary" onClick={onCreate} disabled={creating || restoring || importing}>{creating ? 'Создаём…' : 'Создать бэкап'}</button>
         </div>
       </div>
