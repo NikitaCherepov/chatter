@@ -42,6 +42,29 @@ PIPER_MODEL_PATH=./models/piper/en_US-hfc_male-medium.onnx
 
 Only the selected model is loaded into memory. Restart the service after changing it.
 
+## Docker
+
+From the repository root, copy the example environment file and set a long random ASCII token:
+
+```bash
+cp kz-server-voice-transcriber/.env.example kz-server-voice-transcriber/.env
+```
+
+Start only the Voice service:
+
+```bash
+docker compose --profile voice up -d voice
+```
+
+The image contains `ffmpeg`, whisper.cpp with the multilingual `small` model,
+CPU-only PyTorch, and the default English Piper voice. The Russian Silero model
+is downloaded on its first request and retained in a Docker volume.
+
+Check readiness at `http://127.0.0.1:3030/health`. For a separate Voice server,
+run the same service there and configure Chatter with
+`VOICE_TRANSCRIBE_URL=http://VOICE_SERVER:3030/api/voice` and the same token.
+Use HTTPS when this connection crosses the public internet.
+
 Create the runtime configuration and set a long random bearer token:
 
 ```bash

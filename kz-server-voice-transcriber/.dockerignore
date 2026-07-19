@@ -1,0 +1,10 @@
+node_modules
+.npm-cache
+.env
+.env.*
+tmp
+models
+__pycache__
+*.py[cod]
+Dockerfile*
+README.md

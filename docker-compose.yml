@@ -76,6 +76,40 @@ services:
       start_period: 15s
       retries: 5
 
+  voice:
+    profiles:
+      - voice
+    build:
+      context: ./kz-server-voice-transcriber
+      dockerfile: Dockerfile
+    image: chatter-voice:local
+    restart: unless-stopped
+    env_file:
+      - path: "${VOICE_ENV_FILE:-./kz-server-voice-transcriber/.env}"
+        required: false
+    environment:
+      NODE_ENV: production
+      VOICE_API_PORT: 3030
+      WHISPER_BIN: /opt/whisper/whisper-cli
+      WHISPER_MODEL: /opt/whisper/ggml-small.bin
+      PYTHON_BIN: /opt/venv/bin/python
+      PIPER_MODEL_PATH: /opt/models/piper/en_US-lessac-medium.onnx
+    ports:
+      - "${VOICE_PORT:-3030}:3030"
+    volumes:
+      - chatter_voice_model_cache:/home/node/.cache/torch
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3030/health').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+
 volumes:
   chatter_backend_data:
   chatter_backend_updates:
+  chatter_voice_model_cache:

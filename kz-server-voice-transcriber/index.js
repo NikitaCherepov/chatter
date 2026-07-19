@@ -89,9 +89,11 @@ const PYTHON_BIN = `${process.env.PYTHON_BIN || 'python3'}`.trim();
 const PIPER_MODEL_PATH = resolveOptionalPath(process.env.PIPER_MODEL_PATH);
 const PIPER_CONFIG_PATH = resolveOptionalPath(process.env.PIPER_CONFIG_PATH);
 const WHISPER_LANGUAGE = parseWhisperLanguage(process.env.VOICE_TRANSCRIBE_LANGUAGE);
-const TMP_DIR = path.resolve(__dirname, 'tmp');
-const WHISPER_BIN = path.resolve(__dirname, '../whisper.cpp/build/bin/whisper-cli');
-const WHISPER_MODEL = path.resolve(__dirname, '../whisper.cpp/models/ggml-small.bin');
+const TMP_DIR = resolveOptionalPath(process.env.VOICE_TMP_DIR) || path.resolve(__dirname, 'tmp');
+const WHISPER_BIN = resolveOptionalPath(process.env.WHISPER_BIN)
+    || path.resolve(__dirname, '../whisper.cpp/build/bin/whisper-cli');
+const WHISPER_MODEL = resolveOptionalPath(process.env.WHISPER_MODEL)
+    || path.resolve(__dirname, '../whisper.cpp/models/ggml-small.bin');
 const SILERO_SCRIPT = path.resolve(__dirname, 'silero_tts.py');
 const PIPER_WORKER_SCRIPT = path.resolve(__dirname, 'piper_tts_worker.py');
 
@@ -105,6 +107,16 @@ const upload = multer({
     }
 });
 const jsonBody = express.json({ limit: '1mb' });
+
+app.get('/health', (_req, res) => {
+    const missing = [];
+    if (!fs.existsSync(WHISPER_BIN)) missing.push('whisper_bin');
+    if (!fs.existsSync(WHISPER_MODEL)) missing.push('whisper_model');
+    if (missing.length > 0) {
+        return res.status(503).json({ status: 'unavailable', missing });
+    }
+    return res.json({ status: 'ok' });
+});
 
 const formatSafeError = (error) => error instanceof Error ? error.message : String(error);
 
