@@ -13,6 +13,7 @@ const COMPOSE_FILE = path.resolve(process.env.CHATTER_COMPOSE_FILE || '/workspac
 const PROJECT_DIR = path.dirname(COMPOSE_FILE);
 const PROJECT_NAME = process.env.COMPOSE_PROJECT_NAME || 'chatter';
 const AUTH_FILE = path.join(CONFIG_DIR, 'auth.json');
+const BOOTSTRAP_PASSWORD_FILE = path.resolve(process.env.ADMIN_BOOTSTRAP_PASSWORD_FILE || path.join(CONFIG_DIR, 'admin.bootstrap'));
 const SETTINGS_FILE = path.join(CONFIG_DIR, 'settings.json');
 const BACKEND_ENV_FILE = path.join(CONFIG_DIR, 'backend.env');
 const TELEGRAM_ENV_FILE = path.join(CONFIG_DIR, 'telegram.env');
@@ -55,12 +56,18 @@ function initializeAuth() {
   const existing = loadJson(AUTH_FILE, null);
   if (existing?.username && existing?.salt && existing?.hash) return existing;
   const username = `${process.env.ADMIN_USERNAME || 'admin'}`.trim();
-  const password = `${process.env.ADMIN_PASSWORD || ''}`;
+  let password = '';
+  try {
+    password = fs.readFileSync(BOOTSTRAP_PASSWORD_FILE, 'utf8').trim();
+  } catch {
+    // Handled by the validation error below.
+  }
   if (!username || password.length < 12) {
-    throw new Error('ADMIN_USERNAME and an ADMIN_PASSWORD of at least 12 characters are required on first start');
+    throw new Error('ADMIN_USERNAME and a bootstrap password file with at least 12 characters are required on first start');
   }
   const auth = { username, ...hashPassword(password), updatedAt: new Date().toISOString() };
   atomicWrite(AUTH_FILE, `${JSON.stringify(auth, null, 2)}\n`);
+  fs.rmSync(BOOTSTRAP_PASSWORD_FILE, { force: true });
   return auth;
 }
 

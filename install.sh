@@ -6,6 +6,7 @@ PROJECT_DIR="$SCRIPT_DIR"
 CONFIG_DIR="${CHATTER_CONFIG_DIR:-/var/lib/chatter}"
 AUTH_WAS_PRESENT=0
 [[ -f "$CONFIG_DIR/auth.json" ]] && AUTH_WAS_PRESENT=1
+RESET_ADMIN=0
 
 if [[ "${EUID}" -ne 0 ]]; then
   exec sudo --preserve-env=CHATTER_CONFIG_DIR bash "$0" "$@"
@@ -19,6 +20,12 @@ fail() {
   printf '\n[chatter] ERROR: %s\n' "$1" >&2
   exit 1
 }
+
+if [[ "${1:-}" == "--reset-admin" ]]; then
+  RESET_ADMIN=1
+elif [[ $# -gt 0 ]]; then
+  fail "Unknown option: $1"
+fi
 
 random_hex() {
   openssl rand -hex "${1:-32}"
@@ -85,6 +92,7 @@ install -d -m 700 "$CONFIG_DIR"
 
 COMPOSE_ENV="$CONFIG_DIR/compose.env"
 MANAGER_ENV="$CONFIG_DIR/manager.env"
+BOOTSTRAP_PASSWORD_FILE="$CONFIG_DIR/admin.bootstrap"
 BACKEND_ENV="$CONFIG_DIR/backend.env"
 TELEGRAM_ENV="$CONFIG_DIR/telegram.env"
 VOICE_ENV="$CONFIG_DIR/voice.env"
@@ -93,9 +101,22 @@ ADMIN_PORT="$(env_get "$COMPOSE_ENV" ADMIN_PORT)"
 [[ "$ADMIN_PORT" =~ ^[0-9]+$ ]] || ADMIN_PORT="$(find_free_port)"
 
 ADMIN_USERNAME="$(env_get "$MANAGER_ENV" ADMIN_USERNAME)"
-ADMIN_PASSWORD="$(env_get "$MANAGER_ENV" ADMIN_PASSWORD)"
 [[ -n "$ADMIN_USERNAME" ]] || ADMIN_USERNAME="admin"
-[[ -n "$ADMIN_PASSWORD" ]] || ADMIN_PASSWORD="$(random_hex 16)"
+
+if [[ "$RESET_ADMIN" -eq 1 ]]; then
+  rm -f "$CONFIG_DIR/auth.json" "$BOOTSTRAP_PASSWORD_FILE"
+  AUTH_WAS_PRESENT=0
+fi
+
+ADMIN_PASSWORD=""
+if [[ "$AUTH_WAS_PRESENT" -eq 0 ]]; then
+  if [[ -s "$BOOTSTRAP_PASSWORD_FILE" ]]; then
+    ADMIN_PASSWORD="$(<"$BOOTSTRAP_PASSWORD_FILE")"
+  else
+    ADMIN_PASSWORD="$(random_hex 16)"
+    write_private_file "$BOOTSTRAP_PASSWORD_FILE" "$ADMIN_PASSWORD"
+  fi
+fi
 
 SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
 if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
@@ -148,7 +169,6 @@ fi
 
 write_private_file "$MANAGER_ENV" \
   "ADMIN_USERNAME=${ADMIN_USERNAME}" \
-  "ADMIN_PASSWORD=${ADMIN_PASSWORD}" \
   "ADMIN_TLS=1" \
   "ADMIN_TLS_CERT=/config/tls.crt" \
   "ADMIN_TLS_KEY=/config/tls.key"
@@ -164,6 +184,10 @@ write_private_file "$COMPOSE_ENV" \
 
 log "Building and starting the backend and admin panel"
 docker compose --env-file "$COMPOSE_ENV" --profile admin up -d --build backend admin-panel chatter-manager
+
+if [[ "$RESET_ADMIN" -eq 1 ]]; then
+  docker compose --env-file "$COMPOSE_ENV" --profile admin up -d --force-recreate chatter-manager
+fi
 
 for _ in $(seq 1 60); do
   if curl -kfsS "https://127.0.0.1:${ADMIN_PORT}/health" >/dev/null 2>&1; then
