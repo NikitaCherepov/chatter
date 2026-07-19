@@ -690,8 +690,21 @@ async function inspectImage(reference) {
 }
 
 function decodeImageChangelog(value) {
-  if (!value) return '';
-  try { return Buffer.from(`${value}`, 'base64').toString('utf8').trim(); } catch { return ''; }
+  if (!value) return {};
+  try {
+    const decoded = Buffer.from(`${value}`, 'base64').toString('utf8').trim();
+    const parsed = JSON.parse(decoded);
+    if (Array.isArray(parsed?.changes)) {
+      return { en: parsed.changes.filter(change => typeof change === 'string' && change.trim()).map(change => change.trim()) };
+    }
+    if (!parsed?.changes || typeof parsed.changes !== 'object') return {};
+    return Object.fromEntries(Object.entries(parsed.changes).flatMap(([locale, changes]) => {
+      if (!Array.isArray(changes)) return [];
+      return [[locale, changes.filter(change => typeof change === 'string' && change.trim()).map(change => change.trim())]];
+    }));
+  } catch {
+    return {};
+  }
 }
 
 async function inspectRunningService(service, profiles) {
@@ -716,7 +729,7 @@ async function getServerUpdateInfo({ pull = false } = {}) {
     latestHash: '—',
     available: false,
     changedServices: [],
-    changelog: '',
+    changelog: {},
     rebuiltFromSameCommit: false,
     checkedAt: null,
     operation: readUpdateState()
@@ -738,7 +751,7 @@ async function getServerUpdateInfo({ pull = false } = {}) {
   const manager = comparisons.find(item => item.service === 'chatter-manager');
   result.installedHash = shortImageHash(manager?.running);
   result.latestHash = shortImageHash(manager?.latest);
-  result.changelog = manager?.latest?.changelog || '';
+  result.changelog = manager?.latest?.changelog || {};
   result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
   result.available = result.changedServices.length > 0;
   result.rebuiltFromSameCommit = result.available

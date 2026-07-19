@@ -2,11 +2,6 @@ name: Build server Docker images
 
 on:
   workflow_dispatch:
-    inputs:
-      changelog:
-        description: What changed in this server build?
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -61,9 +56,9 @@ jobs:
       - name: Encode changelog
         id: changelog
         shell: bash
-        env:
-          CHANGELOG: ${{ inputs.changelog }}
-        run: echo "value=$(printf '%s' "$CHANGELOG" | base64 -w 0)" >> "$GITHUB_OUTPUT"
+        run: |
+          jq -e '.changes as $c | ($c | type) == "object" and ($c.en | type) == "array" and ($c.ru | type) == "array" and all($c.en[]; type == "string") and all($c.ru[]; type == "string") and ($c.en | length) == ($c.ru | length)' server-changelog.json >/dev/null
+          echo "value=$(base64 -w 0 server-changelog.json)" >> "$GITHUB_OUTPUT"
 
       - name: Generate image metadata
         id: metadata

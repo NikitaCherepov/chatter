@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import styles from './ServerUpdateModal.module.css';
 
 export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameCommit, updating, onCancel, onConfirm }: {
-  changelog: string;
+  changelog: Record<string, string[]>;
   changedServices: string[];
   rebuiltFromSameCommit: boolean;
   updating: boolean;
@@ -27,7 +27,7 @@ export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameC
         <h2 id="server-update-title">Обновление сервера</h2>
         {rebuiltFromSameCommit && <p className={styles.notice}>Образы пересобраны из того же коммита.</p>}
         <h3>Что изменилось</h3>
-        <div className={styles.changelog}>{changelog || 'Описание для этой сборки не указано.'}</div>
+        <pre className={styles.changelog}>{JSON.stringify({ changes: changelog }, null, 2)}</pre>
         <p>Сервисы: {changedServices.join(', ')}</p>
         <p>Перед перезапуском автоматически создастся резервная копия базы данных.</p>
         <div className={styles.actions}>

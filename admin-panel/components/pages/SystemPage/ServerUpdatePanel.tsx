@@ -19,7 +19,7 @@ type ServerUpdateInfo = {
   latestHash: string;
   available: boolean;
   changedServices: string[];
-  changelog: string;
+  changelog: Record<string, string[]>;
   rebuiltFromSameCommit: boolean;
   checkedAt: string | null;
   operation: UpdateOperation;
