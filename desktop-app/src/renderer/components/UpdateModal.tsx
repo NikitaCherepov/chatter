@@ -34,7 +34,10 @@ function localizeReleaseNotes(rawNotes: string, language: string): string {
     const availableLocales = Object.keys(changes);
     const exactLocale = availableLocales.find((locale) => locale.toLowerCase() === normalizedLanguage);
     const baseLanguage = normalizedLanguage.split('-')[0];
-    const baseLocale = availableLocales.find((locale) => locale.toLowerCase() === baseLanguage);
+    const baseLocale = availableLocales.find((locale) => {
+      const normalizedLocale = locale.toLowerCase();
+      return normalizedLocale === baseLanguage || normalizedLocale.startsWith(`${baseLanguage}-`);
+    });
     const selectedChanges = changes[exactLocale || baseLocale || 'en'];
 
     if (!Array.isArray(selectedChanges) || selectedChanges.some((entry) => typeof entry !== 'string')) {
