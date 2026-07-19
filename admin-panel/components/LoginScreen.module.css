@@ -1,0 +1,13 @@
+.container { display: flex; width: 100%; height: 100vh; align-items: center; justify-content: center; background: var(--bg-secondary); }
+.card { width: 380px; padding: 40px 36px; border: 1px solid var(--border-light); border-radius: 12px; background: var(--bg-primary); box-shadow: var(--shadow-card); }
+.logoRow { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 4px; }
+.title { margin: 0; color: var(--text-primary); font-size: 24px; font-weight: 700; }
+.subtitle { margin: 8px 0 28px; color: var(--text-muted); font-size: 13px; text-align: center; }
+.form { display: flex; flex-direction: column; gap: 14px; }
+.input { min-height: auto; padding: 11px 14px; border: 1px solid var(--border-input); border-radius: 8px; outline: none; background: var(--bg-input); color: var(--text-body); font-size: 14px; transition: border-color .15s; }
+.input:focus { border-color: var(--accent); }
+.input::placeholder { color: var(--text-hint); }
+.button { margin-top: 4px; padding: 11px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-contrast); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+.error { padding: 4px 0; color: var(--color-error); font-size: 13px; text-align: center; }
+.divider { height: 1px; margin: 24px 0 16px; background: var(--border-light); }
+.hint { margin: 0; color: var(--text-muted); font-size: 13px; text-align: center; }

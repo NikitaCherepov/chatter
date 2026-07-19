@@ -1,0 +1,2 @@
+.brand { display: flex; align-items: center; gap: 9px; color: var(--text-primary); font-size: 13px; font-weight: 700; }
+.mark { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 6px; background: var(--accent); color: var(--accent-contrast); font-size: 12px; line-height: 1; }

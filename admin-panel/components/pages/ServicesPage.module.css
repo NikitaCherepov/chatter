@@ -1,0 +1,4 @@
+.badge { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 10px; font-weight: 500; }
+.badge > span { width: 6px; height: 6px; border-radius: 50%; background: var(--border-medium); }
+.running { color: var(--color-success); }.running > span { background: var(--color-success); }
+.notice { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--color-info) 25%, var(--border-light)); border-radius: 6px; background: color-mix(in srgb, var(--color-info) 6%, var(--bg-primary)); color: var(--text-muted); font-size: 10px; line-height: 1.5; }
