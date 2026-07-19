@@ -1241,7 +1241,15 @@ async function backendInternalRequest(pathname, options = {}) {
 function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true;
-  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+  try {
+    const originUrl = new URL(origin);
+    if (originUrl.host === req.headers.host) return true;
+
+    const publicUrl = process.env.CHATTER_PUBLIC_URL;
+    return Boolean(publicUrl && originUrl.origin === new URL(publicUrl).origin);
+  } catch {
+    return false;
+  }
 }
 
 const clientIp = (req) => req.socket.remoteAddress || 'unknown';
