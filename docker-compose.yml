@@ -16,7 +16,6 @@ services:
       - "127.0.0.1:${BACKEND_PORT:-3050}:3050"
     volumes:
       - chatter_backend_data:/data
-      - chatter_backend_updates:/app/updates
     healthcheck:
       test:
         - CMD
@@ -200,7 +199,6 @@ services:
 
 volumes:
   chatter_backend_data:
-  chatter_backend_updates:
   chatter_voice_model_cache:
   chatter_caddy_data:
   chatter_caddy_config:

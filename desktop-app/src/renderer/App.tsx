@@ -70,8 +70,6 @@ export function App() {
 function UpdateListener() {
   const [updateInfo, setUpdateInfo] = useState<{
     version: string;
-    type: 'minor' | 'major';
-    downloadUrl: string;
     releaseNotes: string;
     size: number;
   } | null>(null);

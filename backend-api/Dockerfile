@@ -34,7 +34,7 @@ COPY --from=build /app/dist ./dist
 # TypeScript does not copy Markdown system prompts into dist.
 COPY --from=build /app/src/services/subagents/prompts ./dist/services/subagents/prompts
 
-RUN mkdir -p /data/uploads /app/updates \
+RUN mkdir -p /data/uploads \
     && chown -R node:node /app /data
 
 USER node

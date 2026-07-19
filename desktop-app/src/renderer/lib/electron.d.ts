@@ -34,19 +34,14 @@ declare global {
       updateCheck: () => Promise<{
         updateAvailable?: boolean;
         version?: string;
-        type?: 'minor' | 'major';
-        downloadUrl?: string;
         releaseNotes?: string;
         size?: number;
         error?: string;
       }>;
-      updateDownload: (downloadUrl: string) => Promise<{ success?: boolean; tempPath?: string; error?: string }>;
-      updateInstallMinor: (tempPath: string) => Promise<{ success?: boolean; error?: string }>;
-      updateInstallMajor: (tempPath: string) => Promise<{ success?: boolean; error?: string }>;
+      updateDownload: () => Promise<{ success?: boolean; error?: string }>;
+      updateInstall: () => Promise<{ success?: boolean; error?: string }>;
       onUpdateAvailable: (callback: (info: {
         version: string;
-        type: 'minor' | 'major';
-        downloadUrl: string;
         releaseNotes: string;
         size: number;
       }) => void) => () => void;

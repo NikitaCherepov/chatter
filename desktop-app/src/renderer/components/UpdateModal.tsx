@@ -5,8 +5,6 @@ import s from './UpdateModal.module.scss';
 
 interface UpdateInfo {
   version: string;
-  type: 'minor' | 'major';
-  downloadUrl: string;
   releaseNotes: string;
   size: number;
 }
@@ -44,7 +42,6 @@ export function UpdateModal({ info, onClose }: Props) {
   const [progress, setProgress] = useState(0);
   const [transferred, setTransferred] = useState(0);
   const [total, setTotal] = useState(0);
-  const [tempPath, setTempPath] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   // Listen for download progress
@@ -63,7 +60,7 @@ export function UpdateModal({ info, onClose }: Props) {
     setProgress(0);
     setErrorMsg('');
 
-    const result = await electronAPI.updateDownload(info.downloadUrl);
+    const result = await electronAPI.updateDownload();
 
     if (result.error) {
       setStatus('error');
@@ -71,27 +68,23 @@ export function UpdateModal({ info, onClose }: Props) {
       return;
     }
 
-    setTempPath(result.tempPath);
     setStatus('downloaded');
-  }, [info.downloadUrl]);
+  }, []);
 
   const handleInstall = useCallback(async () => {
-    if (!electronAPI || !tempPath) return;
+    if (!electronAPI) return;
 
     setStatus('installing');
     setErrorMsg('');
 
-    const result = info.type === 'minor'
-      ? await electronAPI.updateInstallMinor(tempPath)
-      : await electronAPI.updateInstallMajor(tempPath);
+    const result = await electronAPI.updateInstall();
 
     if (result?.error) {
       setStatus('error');
       setErrorMsg(result.error);
     }
-  }, [info.type, tempPath]);
+  }, []);
 
-  const isMinor = info.type === 'minor';
   const sizeLabel = info.size > 0 ? formatBytes(info.size) : '';
 
   return (
@@ -116,8 +109,8 @@ export function UpdateModal({ info, onClose }: Props) {
               <div className={s.title}>
                 {t('update.available', { version: info.version })}
               </div>
-              <div className={`${s.badge} ${isMinor ? s.minor : s.major}`}>
-                {isMinor ? t('update.quick') : t('update.full')}
+              <div className={`${s.badge} ${s.minor}`}>
+                {t('update.quick')}
               </div>
             </div>
             <button className={s.closeBtn} onClick={onClose} aria-label={t('common.close')}>
@@ -136,7 +129,6 @@ export function UpdateModal({ info, onClose }: Props) {
           {sizeLabel && status === 'available' && (
             <div className={s.sizeInfo}>
               {t('update.downloadSize', { size: sizeLabel })}
-              {!isMinor && t('update.reinstallRequired')}
             </div>
           )}
 
@@ -199,7 +191,7 @@ export function UpdateModal({ info, onClose }: Props) {
                   {t('common.later')}
                 </button>
                 <button className={`${s.btn} ${s.btnDanger}`} onClick={handleInstall}>
-                  {isMinor ? t('update.restartAndUpdate') : t('update.install')}
+                  {t('update.restartAndUpdate')}
                 </button>
               </>
             )}

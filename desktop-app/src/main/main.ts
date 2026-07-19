@@ -1,4 +1,5 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, screen, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, shell } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -9,7 +10,6 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
 
-const originalFs = require('original-fs') as typeof fs;
 const execFileAsync = util.promisify(execFile);
 
 function asarUnpackedPath(filePath: string) {
@@ -1388,335 +1388,119 @@ function createWindow() {
   });
 }
 
-// ── Custom Updater (ASAR Hot-Swap + Full Installer) ──────────────────────
+// ── Desktop updater (public GitHub Releases) ─────────────────────────────
 
-interface VersionManifest {
-  version: string;
-  type: 'minor' | 'major';
-  downloadUrl: string;
-  releaseNotes?: string;
-  size?: number;
+
+function formatDesktopReleaseNotes(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return '';
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (entry && typeof entry === 'object' && 'note' in entry) {
+        return typeof entry.note === 'string' ? entry.note : '';
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
 }
 
-function areAutoUpdatesEnabled(): boolean {
-  return /^(1|true|yes|on)$/i.test(process.env.AUTO_UPDATES_ENABLED?.trim() || '');
-}
-
-function getUpdatesBaseUrl(): string | null {
-  const configuredUrl = process.env.UPDATES_FEED_URL?.trim();
-  return configuredUrl ? configuredUrl.replace(/\/$/, '') : null;
-}
-
-function compareVersions(a: string, b: string): number {
-  const parse = (version: string) => version
-    .split('.')
-    .map((part) => Number.parseInt(part.replace(/\D.*$/, ''), 10) || 0);
-
-  const left = parse(a);
-  const right = parse(b);
-  const maxLength = Math.max(left.length, right.length);
-
-  for (let i = 0; i < maxLength; i += 1) {
-    const diff = (left[i] || 0) - (right[i] || 0);
-    if (diff !== 0) return diff;
-  }
-
-  return 0;
-}
-
-function isNewerVersion(candidate: string, current: string): boolean {
-  return compareVersions(candidate, current) > 0;
-}
-
-function getUpdateTempExtension(downloadUrl: string): string {
-  try {
-    const parsed = new URL(downloadUrl);
-    const ext = path.extname(parsed.pathname).toLowerCase();
-    if (ext === '.exe') return ext;
-  } catch {
-    const ext = path.extname(downloadUrl).toLowerCase();
-    if (ext === '.exe') return ext;
-  }
-
-  return '.tmp';
-}
-
-function setupCustomUpdater() {
-  if (!app.isPackaged) return;
-  if (!areAutoUpdatesEnabled()) {
-    console.log('[updater] disabled (set AUTO_UPDATES_ENABLED=true to enable)');
-    return;
-  }
-
-  const baseUrl = getUpdatesBaseUrl();
-  if (!baseUrl) {
-    console.warn('[updater] AUTO_UPDATES_ENABLED is true, but UPDATES_FEED_URL is not configured');
-    return;
-  }
-
+function setupGithubDesktopUpdater() {
+  const enabled = app.isPackaged;
   const logPath = path.join(app.getPath('userData'), 'updater.log');
-  const logStream = fs.createWriteStream(logPath, { flags: 'a' });
-  const log = (msg: string) => {
-    const line = `[${new Date().toISOString()}] ${msg}\n`;
-    logStream.write(line);
-    console.log(`[updater] ${msg}`);
+  const log = (message: string) => {
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${message}\n`, 'utf8');
+    console.log(`[updater] ${message}`);
   };
 
-  log('=== app started ===');
-  log(`version: ${app.getVersion()}`);
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
-  const manifestUrl = `${baseUrl}/version.json`;
+  autoUpdater.on('checking-for-update', () => log('checking for update'));
+  autoUpdater.on('update-not-available', (info) => log(`up to date: ${info.version}`));
+  autoUpdater.on('update-available', (info) => {
+    log(`update available: ${info.version}`);
+    mainWindow?.webContents.send('update:available', {
+      version: info.version,
+      releaseNotes: formatDesktopReleaseNotes(info.releaseNotes),
+      size: 0,
+    });
+  });
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update:progress', {
+      percent: Math.round(progress.percent),
+      transferred: progress.transferred,
+      total: progress.total,
+    });
+  });
+  autoUpdater.on('update-downloaded', (info) => log(`update downloaded: ${info.version}`));
+  autoUpdater.on('error', (error) => log(`error: ${error.message}`));
 
-  // ── IPC: check-for-updates ────────────────────────────────────────────
   ipcMain.handle('update:check', async (event) => {
     assertTrustedIpcSender(event);
+    if (!enabled) return { updateAvailable: false, disabled: true };
+
     try {
-      log(`checking: ${manifestUrl}`);
-      const response = await net.fetch(manifestUrl);
-      if (!response.ok) {
-        log(`manifest fetch failed: ${response.status}`);
-        return { error: `manifest_fetch_failed: ${response.status}` };
+      const result = await autoUpdater.checkForUpdates();
+      if (!result?.updateInfo || result.updateInfo.version === app.getVersion()) {
+        return { updateAvailable: false };
       }
-
-      const manifest = (await response.json()) as VersionManifest;
-      log(`manifest version: ${manifest.version}, type: ${manifest.type}`);
-
-      const currentVersion = app.getVersion();
-      if (isNewerVersion(manifest.version, currentVersion)) {
-        return {
-          updateAvailable: true,
-          version: manifest.version,
-          type: manifest.type,
-          downloadUrl: manifest.downloadUrl.startsWith('http')
-            ? manifest.downloadUrl
-            : `${baseUrl}/${manifest.downloadUrl}`,
-          releaseNotes: manifest.releaseNotes || '',
-          size: manifest.size || 0,
-        };
-      }
-
-      return { updateAvailable: false };
-    } catch (err: any) {
-      log(`check error: ${err?.message || err}`);
-      return { error: err?.message || String(err) };
+      return {
+        updateAvailable: true,
+        version: result.updateInfo.version,
+        releaseNotes: formatDesktopReleaseNotes(result.updateInfo.releaseNotes),
+        size: 0,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`check failed: ${message}`);
+      return { error: message };
     }
   });
 
-  // ── IPC: update:download ──────────────────────────────────────────────
-  ipcMain.handle('update:download', async (event, downloadUrl: string) => {
+  ipcMain.handle('update:download', async (event) => {
     assertTrustedIpcSender(event);
+    if (!enabled) return { error: 'updates_disabled' };
+
     try {
-      log(`downloading: ${downloadUrl}`);
-
-      const response = await net.fetch(downloadUrl);
-      if (!response.ok) {
-        log(`download failed: ${response.status}`);
-        return { error: `download_failed: ${response.status}` };
-      }
-
-      const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
-      const tempDir = app.getPath('temp');
-      const tempPath = path.join(tempDir, `chatter_update_${Date.now()}${getUpdateTempExtension(downloadUrl)}`);
-      const fileStream = fs.createWriteStream(tempPath);
-      const streamError = new Promise<never>((_resolve, reject) => {
-        fileStream.once('error', reject);
-      });
-
-      let downloadedBytes = 0;
-
-      if (!response.body) {
-        log('no response body');
-        return { error: 'no_response_body' };
-      }
-
-      const reader = response.body.getReader();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        if (!fileStream.write(value)) {
-          await Promise.race([
-            new Promise<void>((resolve) => fileStream.once('drain', resolve)),
-            streamError,
-          ]);
-        }
-        downloadedBytes += value.length;
-
-        mainWindow?.webContents.send('update:progress', {
-          percent: totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0,
-          transferred: downloadedBytes,
-          total: totalBytes,
-        });
-      }
-
-      fileStream.end();
-      await Promise.race([
-        new Promise<void>((resolve) => fileStream.once('finish', resolve)),
-        streamError,
-      ]);
-
-      log(`download complete: ${downloadedBytes} bytes -> ${tempPath}`);
-      return { success: true, tempPath };
-    } catch (err: any) {
-      log(`download error: ${err?.message || err}`);
-      return { error: err?.message || String(err) };
-    }
-  });
-
-  // ── IPC: update:install-minor (ASAR Hot-Swap) ────────────────────────
-  ipcMain.handle('update:install-minor', async (event, tempPath: string) => {
-    assertTrustedIpcSender(event);
-    try {
-      if (!fs.existsSync(tempPath)) {
-        return { error: 'temp_file_not_found' };
-      }
-
-      const asarPath = path.join(process.resourcesPath, 'app.asar');
-      const backupPath = `${asarPath}.bak`;
-
-      log(`installing minor update: ${tempPath} -> ${asarPath}`);
-
-      // Electron patches fs for .asar paths; original-fs accesses the real archive file.
-      if (!originalFs.existsSync(asarPath)) {
-        return { error: `app_asar_not_found: ${asarPath}` };
-      }
-      originalFs.copyFileSync(asarPath, backupPath);
-      log(`backup created: ${backupPath}`);
-
-      // Write helper script for hot-swap (file is locked while app is running).
-      const exePath = app.getPath('exe');
-      const scriptPath = path.join(app.getPath('temp'), `chatter_hotswap_${Date.now()}.ps1`);
-      const launcherPath = path.join(app.getPath('temp'), `chatter_hotswap_${Date.now()}.vbs`);
-      const hotswapLogPath = path.join(app.getPath('userData'), 'updater-hotswap.log');
-      const currentPid = process.pid;
-
-      const psString = (value: string) => `'${value.replace(/'/g, "''")}'`;
-      const scriptContent = [
-        '$ErrorActionPreference = "Stop"',
-        `$tempFile = ${psString(tempPath)}`,
-        `$asarFile = ${psString(asarPath)}`,
-        `$exeFile = ${psString(exePath)}`,
-        `$logFile = ${psString(hotswapLogPath)}`,
-        `$scriptFile = ${psString(scriptPath)}`,
-        `$launcherFile = ${psString(launcherPath)}`,
-        'try {',
-        `  Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] hotswap started, waiting for pid ${currentPid}"`,
-        `  while (Get-Process -Id ${currentPid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }`,
-        '  Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] copying update"',
-        '  Copy-Item -LiteralPath $tempFile -Destination $asarFile -Force',
-        '  Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue',
-        '  Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] restart app"',
-        '  Start-Process -FilePath $exeFile -WorkingDirectory (Split-Path -Parent $exeFile)',
-        '} catch {',
-        '  try { Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] hotswap failed: $($_.Exception.Message)" } catch {}',
-        '  try { Start-Process -FilePath $exeFile -WorkingDirectory (Split-Path -Parent $exeFile) } catch {}',
-        '  exit 1',
-        '} finally {',
-        '  Start-Sleep -Milliseconds 250',
-        '  Remove-Item -LiteralPath $launcherFile -Force -ErrorAction SilentlyContinue',
-        '  Remove-Item -LiteralPath $scriptFile -Force -ErrorAction SilentlyContinue',
-        '}',
-      ].join('\r\n');
-
-      fs.writeFileSync(scriptPath, scriptContent, 'utf-8');
-      const vbsCommand = `"powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${scriptPath}"`;
-      const vbsString = (value: string) => `"${value.replace(/"/g, '""')}"`;
-      const launcherContent = [
-        'Set shell = CreateObject("WScript.Shell")',
-        `shell.Run ${vbsString(vbsCommand)}, 0, False`,
-        'Set shell = Nothing',
-      ].join('\r\n');
-      fs.writeFileSync(launcherPath, launcherContent, 'utf-8');
-      log(`hotswap script: ${scriptPath}`);
-      log(`hotswap launcher: ${launcherPath}`);
-
-      const child = spawn('wscript.exe', [launcherPath], {
-        detached: true,
-        windowsHide: true,
-        stdio: 'ignore',
-      });
-      child.unref();
-      log(`hotswap launcher pid: ${child.pid || 'unknown'}`);
-
-      setTimeout(() => app.exit(0), 250);
+      await autoUpdater.downloadUpdate();
       return { success: true };
-    } catch (err: any) {
-      log(`install-minor error: ${err?.message || err}`);
-      return { error: err?.message || String(err) };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`download failed: ${message}`);
+      return { error: message };
     }
   });
 
-  // ── IPC: update:install-major (run full installer) ───────────────────
-  ipcMain.handle('update:install-major', async (event, tempPath: string) => {
+  ipcMain.handle('update:install', (event) => {
     assertTrustedIpcSender(event);
-    try {
-      if (!fs.existsSync(tempPath)) {
-        return { error: 'installer_not_found' };
-      }
-      if (path.extname(tempPath).toLowerCase() !== '.exe') {
-        return { error: 'installer_must_be_exe' };
-      }
+    if (!enabled) return { error: 'updates_disabled' };
 
-      log(`installing major update, running: ${tempPath}`);
-
-      spawn(tempPath, ['/S'], {
-        detached: true,
-        windowsHide: true,
-      }).unref();
-
-      app.quit();
-      return { success: true };
-    } catch (err: any) {
-      log(`install-major error: ${err?.message || err}`);
-      return { error: err?.message || String(err) };
-    }
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    return { success: true };
   });
 
-  // ── Auto-check on startup (notify renderer only) ─────────────────────
-  setTimeout(async () => {
-    try {
-      const response = await net.fetch(manifestUrl);
-      if (!response.ok) {
-        log(`auto-check failed: ${response.status}`);
-        return;
-      }
+  if (!enabled) {
+    console.log('[updater] disabled in development');
+    return;
+  }
 
-      const manifest = (await response.json()) as VersionManifest;
-      const currentVersion = app.getVersion();
-
-      if (isNewerVersion(manifest.version, currentVersion)) {
-        log(`auto-check: update ${manifest.version} available (${manifest.type})`);
-        mainWindow?.webContents.send('update:available', {
-          version: manifest.version,
-          type: manifest.type,
-          downloadUrl: manifest.downloadUrl.startsWith('http')
-            ? manifest.downloadUrl
-            : `${baseUrl}/${manifest.downloadUrl}`,
-          releaseNotes: manifest.releaseNotes || '',
-          size: manifest.size || 0,
-        });
-      } else {
-        log('auto-check: up to date');
-      }
-    } catch (err: any) {
-      log(`auto-check error: ${err?.message || err}`);
-    }
+  log(`app started: ${app.getVersion()}`);
+  setTimeout(() => {
+    void autoUpdater.checkForUpdates().catch((error) => {
+      log(`startup check failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
   }, 3000);
-
-  app.on('window-all-closed', () => {
-    logStream.end();
-  });
 }
-
-// ── App lifecycle ─────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
   if (process.platform !== 'darwin') {
     Menu.setApplicationMenu(null);
   }
   createWindow();
-  setupCustomUpdater();
+  setupGithubDesktopUpdater();
 });
 
 app.on('window-all-closed', () => {
