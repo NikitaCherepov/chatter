@@ -45,6 +45,37 @@ services:
       backend:
         condition: service_healthy
 
+  webapp-notes:
+    profiles:
+      - telegram
+    build:
+      context: ./webapp-notes
+      dockerfile: Dockerfile
+    image: chatter-webapp-notes:local
+    restart: unless-stopped
+    env_file:
+      - "${TELEGRAM_ENV_FILE:-./.env}"
+    environment:
+      NODE_ENV: production
+      NOTES_DB_PATH: /data/chatter.db
+    ports:
+      - "${NOTES_PORT:-3001}:3001"
+    volumes:
+      - chatter_backend_data:/data
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+
 volumes:
   chatter_backend_data:
   chatter_backend_updates:

@@ -6,7 +6,7 @@ Telegram Web App для заметок (Next.js SSR + SQLite).
 
 Скопируй `.env.example` в `.env` и укажи:
 
-- `TELEGRAM_BOT_TOKEN` — токен того же бота.
+- `TELEGRAM_TOKEN` — токен того же бота (`TELEGRAM_BOT_TOKEN` тоже поддерживается для совместимости).
 - `NOTES_DB_PATH` — путь к `chatter.db` (по умолчанию `../chatter.db`).
 - `TELEGRAM_INIT_DATA_MAX_AGE_SECONDS` — срок действия Telegram `initData` в секундах (по умолчанию 3600).
 

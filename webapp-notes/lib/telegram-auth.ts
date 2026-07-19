@@ -37,7 +37,11 @@ type TelegramIdentityContext = {
 };
 
 export const verifyAndExtractTelegramUser = (initData: string): TelegramIdentityContext | null => {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const botToken = (
+    process.env.TELEGRAM_TOKEN
+    || process.env.TELEGRAM_BOT_TOKEN
+    || ''
+  ).trim();
   if (!botToken || !initData) return null;
 
   const params = new URLSearchParams(initData);
