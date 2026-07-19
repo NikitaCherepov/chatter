@@ -11,6 +11,7 @@ import { PlaceholderPage } from '../components/pages/PlaceholderPage/Placeholder
 import { SecurityPage } from '../components/pages/SecurityPage/SecurityPage';
 import { ServicesPage } from '../components/pages/ServicesPage/ServicesPage';
 import { SystemPage } from '../components/pages/SystemPage/SystemPage';
+import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { api } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
@@ -165,12 +166,7 @@ export default function Home() {
           onVoiceTokenChange={setVoiceToken}
         />
       )}
-      {section === 'users' && (
-        <PlaceholderPage
-          title="Пользователи"
-          description="Управление аккаунтами, ролями и привязками появится здесь."
-        />
-      )}
+      {section === 'users' && <UsersPage />}
       {section === 'limits' && (
         <PlaceholderPage
           title="Тарифы и лимиты"

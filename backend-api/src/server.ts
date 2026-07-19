@@ -2516,6 +2516,95 @@ const withAccountIdentities = <T extends { id: number }>(user: T) => {
   };
 };
 
+app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
+  const total = Number((db.prepare('SELECT COUNT(*) AS count FROM users').get() as { count: number }).count) || 0;
+  const users = db.prepare(`
+    SELECT
+      u.id,
+      u.name,
+      u.role,
+      u.is_admin,
+      u.status,
+      u.plan,
+      u.language,
+      u.created_at,
+      COUNT(cm.id) AS message_count,
+      MAX(cm.created_at) AS last_message_at
+    FROM users u
+    LEFT JOIN chat_messages cm ON cm.user_id = u.id
+    GROUP BY u.id
+    ORDER BY COALESCE(MAX(cm.created_at), u.created_at) DESC, u.id DESC
+    LIMIT 500
+  `).all() as Array<{
+    id: number;
+    name: string | null;
+    role: string;
+    is_admin: number;
+    status: string;
+    plan: string;
+    language: string | null;
+    created_at: string | null;
+    message_count: number;
+    last_message_at: string | null;
+  }>;
+
+  const identitiesByAccount = new Map<number, Array<{
+    provider: string;
+    provider_subject: string;
+    username: string | null;
+  }>>();
+
+  if (users.length > 0) {
+    const placeholders = users.map(() => '?').join(', ');
+    const identities = db.prepare(`
+      SELECT account_id, provider, provider_subject, username
+      FROM account_identities
+      WHERE account_id IN (${placeholders})
+      ORDER BY id ASC
+    `).all(...users.map(user => user.id)) as Array<{
+      account_id: number;
+      provider: string;
+      provider_subject: string;
+      username: string | null;
+    }>;
+
+    for (const identity of identities) {
+      const accountIdentities = identitiesByAccount.get(identity.account_id) || [];
+      accountIdentities.push({
+        provider: identity.provider,
+        provider_subject: identity.provider_subject,
+        username: identity.username,
+      });
+      identitiesByAccount.set(identity.account_id, accountIdentities);
+    }
+  }
+
+  const now = Date.now();
+  return res.json({
+    users: users.map(user => {
+      const client = wsClients.get(user.id);
+      const desktopOnline = !!client
+        && client.ws.readyState === WebSocket.OPEN
+        && now - client.lastPongAt <= WS_HEARTBEAT_GRACE_MS;
+
+      return {
+        ...user,
+        account_id: user.id,
+        is_admin: user.is_admin === 1 || user.role === 'admin',
+        message_count: Number(user.message_count) || 0,
+        identities: identitiesByAccount.get(user.id) || [],
+        desktop: {
+          online: desktopOnline,
+          connected_at: client?.connectedAt ?? null,
+          last_activity_at: client?.lastMessageAt ?? null,
+        },
+      };
+    }),
+    total,
+    limited: total > users.length,
+  });
+});
+
 app.get('/internal/users/by-telegram/:telegramId', internalAuth, (req, res) => {
   const telegramId = Math.floor(Number(req.params.telegramId));
   if (!Number.isFinite(telegramId) || telegramId <= 0) {

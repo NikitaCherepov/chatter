@@ -23,6 +23,7 @@ const VOICE_ENV_FILE = path.join(CONFIG_DIR, 'voice.env');
 const COMPOSE_RUNTIME_ENV_FILE = path.join(CONFIG_DIR, 'compose.runtime.env');
 const BACKUP_SCHEDULE_FILE = path.join(CONFIG_DIR, 'backup-schedule.json');
 const ADMIN_PANEL_URL = new URL(process.env.ADMIN_PANEL_URL || 'http://admin-panel:3000');
+const BACKEND_INTERNAL_URL = new URL(process.env.BACKEND_INTERNAL_URL || 'http://backend:3050');
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_BACKUP_UPLOAD_BYTES = Number.parseInt(process.env.MAX_BACKUP_UPLOAD_BYTES || `${20 * 1024 * 1024 * 1024}`, 10);
@@ -1137,6 +1138,19 @@ function requireSession(req, res) {
   return false;
 }
 
+async function getBackendUsersOverview() {
+  const internalToken = parseEnv(BACKEND_ENV_FILE).BACKEND_INTERNAL_TOKEN || '';
+  if (!internalToken) throw new Error('backend_internal_token_not_configured');
+
+  const response = await fetch(new URL('/internal/admin/users-overview', BACKEND_INTERNAL_URL), {
+    headers: { Authorization: `Bearer ${internalToken}` },
+    signal: AbortSignal.timeout(5000),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `backend_http_${response.status}`);
+  return body;
+}
+
 function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true;
@@ -1219,6 +1233,7 @@ async function handleRequest(req, res) {
   }
   if (req.method === 'GET' && pathname === '/api/settings') return sendJson(res, 200, publicSettings());
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
+  if (req.method === 'GET' && pathname === '/api/users') return sendJson(res, 200, await getBackendUsersOverview());
   if (req.method === 'GET' && pathname === '/api/system') return sendJson(res, 200, await getSystemInfo());
   if (req.method === 'GET' && pathname === '/api/backups') return sendJson(res, 200, { creating: Boolean(backupPromise), restoring: Boolean(restorePromise), backups: await listBackups() });
   if (req.method === 'GET' && pathname === '/api/backups/schedule') return sendJson(res, 200, getBackupSchedule());
