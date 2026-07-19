@@ -66,13 +66,31 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    api<{ authenticated: boolean; username: string }>('/api/session')
-      .then(async (session) => {
-        setAuthenticated(true);
-        setUsername(session.username);
-        await loadData();
-      })
-      .catch(() => setAuthenticated(false));
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    const checkSession = (attempt = 0) => {
+      api<{ authenticated: boolean; username: string }>('/api/session')
+        .then(async (session) => {
+          if (cancelled) return;
+          setAuthenticated(true);
+          setUsername(session.username);
+          await loadData();
+        })
+        .catch(error => {
+          if (cancelled) return;
+          if (error instanceof Error && error.message === 'unauthorized') {
+            setAuthenticated(false);
+            return;
+          }
+          if (attempt < 15) retryTimer = window.setTimeout(() => checkSession(attempt + 1), 2000);
+          else setAuthenticated(false);
+        });
+    };
+    checkSession();
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+    };
   }, [loadData]);
 
   async function login(event: FormEvent) {

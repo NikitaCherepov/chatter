@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
+import { ServerUpdateModal } from './ServerUpdateModal/ServerUpdateModal';
 import styles from './SystemPage.module.css';
 
 type UpdateOperation = {
@@ -18,6 +19,8 @@ type ServerUpdateInfo = {
   latestHash: string;
   available: boolean;
   changedServices: string[];
+  changelog: string;
+  rebuiltFromSameCommit: boolean;
   checkedAt: string | null;
   operation: UpdateOperation;
 };
@@ -36,6 +39,7 @@ export function ServerUpdatePanel() {
   const [info, setInfo] = useState<ServerUpdateInfo | null>(null);
   const [checking, setChecking] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
@@ -77,11 +81,11 @@ export function ServerUpdatePanel() {
   }
 
   async function update() {
-    if (!window.confirm('Обновить серверные сервисы? Перед перезапуском будет создан бэкап базы данных.')) return;
     setUpdating(true);
     setMessage('Запускаем обновление…');
     try {
       await api('/api/server-update', { method: 'POST', body: '{}' });
+      setConfirming(false);
       await load();
     } catch (error) {
       setUpdating(false);
@@ -96,11 +100,12 @@ export function ServerUpdatePanel() {
       : !info.supported
         ? 'Недоступно локально'
     : info?.available
-      ? 'Доступно обновление'
+      ? info.rebuiltFromSameCommit ? 'Образ пересобран' : 'Доступно обновление'
       : 'Обновлений нет';
 
   return (
-    <Card title="Обновление сервера" description="Проверяются только Docker-образы серверных сервисов. Desktop не затрагивается.">
+    <>
+      <Card title="Обновление сервера" description="Проверяются только Docker-образы серверных сервисов. Desktop не затрагивается.">
       <div className={styles.updateContent}>
         <div className={styles.versionGrid}>
           <HashItem label="Запущенная сборка" value={info?.installedHash || '—'} />
@@ -121,11 +126,22 @@ export function ServerUpdatePanel() {
           <small>«Проверить» скачивает образы, но не перезапускает сервисы.</small>
           <div>
             <button type="button" className="buttonSecondary" disabled={checking || updating || !info?.supported} onClick={() => void check()}>Проверить</button>
-            <button type="button" disabled={!info?.available || updating || checking} onClick={() => void update()}>{updating ? 'Обновляем…' : 'Обновить сервер'}</button>
+            <button type="button" disabled={!info?.available || updating || checking} onClick={() => setConfirming(true)}>{updating ? 'Обновляем…' : 'Обновить сервер'}</button>
           </div>
         </div>
       </div>
-    </Card>
+      </Card>
+      {confirming && info && (
+        <ServerUpdateModal
+          changelog={info.changelog}
+          changedServices={info.changedServices}
+          rebuiltFromSameCommit={info.rebuiltFromSameCommit}
+          updating={updating}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => void update()}
+        />
+      )}
+    </>
   );
 }
 

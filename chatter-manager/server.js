@@ -15,6 +15,7 @@ const PROJECT_DIR = path.dirname(COMPOSE_FILE);
 const PROJECT_NAME = process.env.COMPOSE_PROJECT_NAME || 'chatter';
 const DOCKER_BIN = process.env.CHATTER_DOCKER_BIN || 'docker';
 const AUTH_FILE = path.join(CONFIG_DIR, 'auth.json');
+const SESSIONS_FILE = path.join(CONFIG_DIR, 'admin-sessions.json');
 const BOOTSTRAP_PASSWORD_FILE = path.resolve(process.env.ADMIN_BOOTSTRAP_PASSWORD_FILE || path.join(CONFIG_DIR, 'admin.bootstrap'));
 const SETTINGS_FILE = path.join(CONFIG_DIR, 'settings.json');
 const BACKEND_ENV_FILE = path.join(CONFIG_DIR, 'backend.env');
@@ -69,6 +70,27 @@ function verifyPassword(password, auth) {
 function loadJson(filePath, fallback) {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; }
 }
+
+function persistSessions() {
+  const now = Date.now();
+  const entries = [...sessions.entries()]
+    .filter(([, session]) => session.expiresAt > now)
+    .map(([token, session]) => [token, { expiresAt: session.expiresAt }]);
+  atomicWrite(SESSIONS_FILE, `${JSON.stringify({ sessions: entries }, null, 2)}\n`);
+}
+
+function restoreSessions() {
+  const now = Date.now();
+  const stored = loadJson(SESSIONS_FILE, { sessions: [] });
+  for (const entry of Array.isArray(stored.sessions) ? stored.sessions : []) {
+    const [token, session] = Array.isArray(entry) ? entry : [];
+    if (typeof token === 'string' && token.length >= 32 && Number(session?.expiresAt) > now) {
+      sessions.set(token, { expiresAt: Number(session.expiresAt), lastPersistedAt: now });
+    }
+  }
+}
+
+restoreSessions();
 
 function initializeAuth() {
   const existing = loadJson(AUTH_FILE, null);
@@ -662,8 +684,14 @@ async function inspectImage(reference) {
   const config = JSON.parse(configOutput);
   return {
     id: `${id || ''}`,
-    revision: `${config?.Labels?.['org.opencontainers.image.revision'] || ''}`
+    revision: `${config?.Labels?.['org.opencontainers.image.revision'] || ''}`,
+    changelog: decodeImageChangelog(config?.Labels?.['io.chatter.server.changelog-base64'])
   };
+}
+
+function decodeImageChangelog(value) {
+  if (!value) return '';
+  try { return Buffer.from(`${value}`, 'base64').toString('utf8').trim(); } catch { return ''; }
 }
 
 async function inspectRunningService(service, profiles) {
@@ -688,6 +716,8 @@ async function getServerUpdateInfo({ pull = false } = {}) {
     latestHash: '—',
     available: false,
     changedServices: [],
+    changelog: '',
+    rebuiltFromSameCommit: false,
     checkedAt: null,
     operation: readUpdateState()
   };
@@ -708,8 +738,12 @@ async function getServerUpdateInfo({ pull = false } = {}) {
   const manager = comparisons.find(item => item.service === 'chatter-manager');
   result.installedHash = shortImageHash(manager?.running);
   result.latestHash = shortImageHash(manager?.latest);
+  result.changelog = manager?.latest?.changelog || '';
   result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
   result.available = result.changedServices.length > 0;
+  result.rebuiltFromSameCommit = result.available
+    && result.installedHash !== '—'
+    && result.installedHash === result.latestHash;
   return result;
 }
 
@@ -722,7 +756,7 @@ async function launchServerUpdateHelper(targetHash, selection) {
     '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
     '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
     ...profileArgs,
-    'up', '-d', '--no-build', '--pull', 'never', '--force-recreate',
+    'up', '-d', '--no-build', '--pull', 'never', '--force-recreate', '--wait', '--wait-timeout', '180',
     ...selection.services
   ].join(' ');
   const script = `set -eu
@@ -1379,8 +1413,16 @@ function parseCookies(req) {
 function getSession(req) {
   const token = parseCookies(req).chatter_admin_session;
   const session = token ? sessions.get(token) : null;
-  if (!session || session.expiresAt <= Date.now()) { if (token) sessions.delete(token); return null; }
-  session.expiresAt = Date.now() + SESSION_TTL_MS;
+  if (!session || session.expiresAt <= Date.now()) {
+    if (token && sessions.delete(token)) persistSessions();
+    return null;
+  }
+  const now = Date.now();
+  session.expiresAt = now + SESSION_TTL_MS;
+  if (!session.lastPersistedAt || now - session.lastPersistedAt > 5 * 60 * 1000) {
+    session.lastPersistedAt = now;
+    persistSessions();
+  }
   return session;
 }
 
@@ -1474,7 +1516,8 @@ async function handleRequest(req, res) {
     }
     loginAttempts.delete(ip);
     const token = randomSecret(32);
-    sessions.set(token, { expiresAt: Date.now() + SESSION_TTL_MS });
+    sessions.set(token, { expiresAt: Date.now() + SESSION_TTL_MS, lastPersistedAt: Date.now() });
+    persistSessions();
     const secure = process.env.ADMIN_TLS === '1';
     res.setHeader('Set-Cookie', `chatter_admin_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_MS / 1000}${secure ? '; Secure' : ''}`);
     return sendJson(res, 200, { ok: true, username: authConfig.username });
@@ -1482,7 +1525,7 @@ async function handleRequest(req, res) {
 
   if (req.method === 'POST' && pathname === '/api/logout') {
     const token = parseCookies(req).chatter_admin_session;
-    if (token) sessions.delete(token);
+    if (token && sessions.delete(token)) persistSessions();
     res.setHeader('Set-Cookie', 'chatter_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
     return sendJson(res, 200, { ok: true });
   }
@@ -1698,6 +1741,7 @@ async function handleRequest(req, res) {
     authConfig = { username, ...hashPassword(newPassword), updatedAt: new Date().toISOString() };
     atomicWrite(AUTH_FILE, `${JSON.stringify(authConfig, null, 2)}\n`);
     sessions.clear();
+    persistSessions();
     return sendJson(res, 200, { ok: true });
   }
   return sendJson(res, 404, { error: 'not_found' });

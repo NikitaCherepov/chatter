@@ -2,6 +2,11 @@ name: Build server Docker images
 
 on:
   workflow_dispatch:
+    inputs:
+      changelog:
+        description: What changed in this server build?
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -53,6 +58,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Encode changelog
+        id: changelog
+        shell: bash
+        env:
+          CHANGELOG: ${{ inputs.changelog }}
+        run: echo "value=$(printf '%s' "$CHANGELOG" | base64 -w 0)" >> "$GITHUB_OUTPUT"
+
       - name: Generate image metadata
         id: metadata
         uses: docker/metadata-action@v6
@@ -61,6 +73,8 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=sha-
+          labels: |
+            io.chatter.server.changelog-base64=${{ steps.changelog.outputs.value }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
