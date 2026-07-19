@@ -168,6 +168,71 @@
   color: var(--text-muted);
   font-size: 10px;
 }
+.updateContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.versionGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 10px;
+}
+.versionItem,
+.versionStatus {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+}
+.versionItem {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+}
+.versionItem span {
+  color: var(--text-hint);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.versionItem strong,
+.versionStatus strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.versionStatus {
+  gap: 9px;
+}
+.versionStatus > span {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+.updateAvailable {
+  background: var(--color-warning);
+}
+.updateCurrent {
+  background: var(--color-success);
+}
+.updateActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.updateActions small {
+  color: var(--text-hint);
+  font-size: 9px;
+}
+.updateActions > div {
+  display: flex;
+  gap: 8px;
+}
 .scheduleGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -254,7 +319,8 @@
 }
 @media (max-width: 1000px) {
   .metricGrid,
-  .serverMeta {
+  .serverMeta,
+  .versionGrid {
     grid-template-columns: repeat(2, 1fr);
   }
   .tableHeader {

@@ -32,6 +32,9 @@ const DATA_DIR = path.resolve(process.env.CHATTER_DATA_DIR || '/data');
 const DATABASE_FILE = path.join(DATA_DIR, 'chatter.db');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const BACKUPS_DIR = path.resolve(process.env.CHATTER_BACKUPS_DIR || '/backups');
+const UPDATE_STATE_FILE = path.join(CONFIG_DIR, 'server-update.json');
+const HOST_PROJECT_DIR = `${process.env.CHATTER_HOST_PROJECT_DIR || ''}`.trim();
+const HOST_CONFIG_DIR = `${process.env.CHATTER_HOST_CONFIG_DIR || ''}`.trim();
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
 fs.mkdirSync(BACKUPS_DIR, { recursive: true, mode: 0o700 });
@@ -41,6 +44,7 @@ const loginAttempts = new Map();
 let applyPromise = null;
 let backupPromise = null;
 let restorePromise = null;
+let updatePromise = null;
 let activeLogStreams = 0;
 
 const randomSecret = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
@@ -593,6 +597,172 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000) {
   });
 }
 
+const SERVER_IMAGE_SUFFIXES = {
+  backend: 'backend',
+  'telegram-bot': 'telegram-bot',
+  'webapp-notes': 'webapp-notes',
+  voice: 'voice',
+  'admin-panel': 'admin-panel',
+  'chatter-manager': 'manager'
+};
+
+function serverUpdatesSupported() {
+  return process.env.CHATTER_PULL_IMAGES === '1'
+    && process.env.CHATTER_IMAGE_TAG === 'latest'
+    && path.isAbsolute(HOST_PROJECT_DIR)
+    && path.isAbsolute(HOST_CONFIG_DIR)
+    && HOST_PROJECT_DIR !== '/'
+    && HOST_CONFIG_DIR !== '/';
+}
+
+function readUpdateState() {
+  const state = loadJson(UPDATE_STATE_FILE, { status: 'idle', targetHash: '', message: '', updatedAt: null });
+  const active = ['queued', 'backup', 'restarting'].includes(state.status);
+  const updatedAt = Date.parse(state.updatedAt) || 0;
+  if (active && Date.now() - updatedAt > 60 * 60 * 1000) {
+    return { ...state, status: 'failed', message: 'server_update_timed_out' };
+  }
+  return state;
+}
+
+function writeUpdateState(patch) {
+  const state = { ...readUpdateState(), ...patch, updatedAt: new Date().toISOString() };
+  atomicWrite(UPDATE_STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
+  return state;
+}
+
+function serverUpdateInProgress() {
+  return Boolean(updatePromise) || ['queued', 'backup', 'restarting'].includes(readUpdateState().status);
+}
+
+function updateServiceSelection() {
+  const settings = loadSettings();
+  const profiles = ['admin'];
+  const services = ['backend', 'admin-panel', 'chatter-manager'];
+  if (settings.telegramEnabled) { profiles.push('telegram'); services.push('telegram-bot'); }
+  if (settings.notesEnabled) { profiles.push('notes'); services.push('webapp-notes'); }
+  if (settings.voiceMode === 'local') { profiles.push('voice'); services.push('voice'); }
+  return { profiles, services };
+}
+
+function imageReference(service) {
+  const suffix = SERVER_IMAGE_SUFFIXES[service];
+  const prefix = `${process.env.CHATTER_IMAGE_PREFIX || ''}`.trim();
+  const tag = `${process.env.CHATTER_IMAGE_TAG || ''}`.trim();
+  if (!suffix || !prefix || !tag || /[\s'"`$]/.test(`${prefix}${tag}`)) throw new Error('invalid_server_image_reference');
+  return `${prefix}-${suffix}:${tag}`;
+}
+
+async function inspectImage(reference) {
+  const [idOutput, configOutput] = await Promise.all([
+    runDocker(['image', 'inspect', '--format', '{{json .Id}}', reference], 30000),
+    runDocker(['image', 'inspect', '--format', '{{json .Config}}', reference], 30000)
+  ]);
+  const id = JSON.parse(idOutput);
+  const config = JSON.parse(configOutput);
+  return {
+    id: `${id || ''}`,
+    revision: `${config?.Labels?.['org.opencontainers.image.revision'] || ''}`
+  };
+}
+
+async function inspectRunningService(service, profiles) {
+  const profileArgs = profiles.flatMap(profile => ['--profile', profile]);
+  const containerId = await runDocker(composeArgs(...profileArgs, 'ps', '-a', '-q', service), 30000);
+  if (!containerId) return null;
+  const imageId = await runDocker(['inspect', '--format', '{{.Image}}', containerId.split(/\r?\n/)[0]], 30000);
+  if (!imageId) return null;
+  return inspectImage(imageId);
+}
+
+function shortImageHash(image) {
+  if (!image) return '—';
+  if (image.revision) return image.revision.slice(0, 7);
+  return image.id.replace(/^sha256:/, '').slice(0, 12) || '—';
+}
+
+async function getServerUpdateInfo({ pull = false } = {}) {
+  const result = {
+    supported: serverUpdatesSupported(),
+    installedHash: '—',
+    latestHash: '—',
+    available: false,
+    changedServices: [],
+    checkedAt: null,
+    operation: readUpdateState()
+  };
+  if (!result.supported) return result;
+  const selection = updateServiceSelection();
+  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  if (pull) {
+    await runDocker(composeArgs(...profileArgs, 'pull', ...selection.services), 60 * 60 * 1000);
+    result.checkedAt = new Date().toISOString();
+  }
+  const comparisons = await Promise.all(selection.services.map(async (service) => {
+    const [running, latest] = await Promise.all([
+      inspectRunningService(service, selection.profiles),
+      inspectImage(imageReference(service))
+    ]);
+    return { service, running, latest, changed: Boolean(running && latest.id && running.id !== latest.id) };
+  }));
+  const manager = comparisons.find(item => item.service === 'chatter-manager');
+  result.installedHash = shortImageHash(manager?.running);
+  result.latestHash = shortImageHash(manager?.latest);
+  result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
+  result.available = result.changedServices.length > 0;
+  return result;
+}
+
+async function launchServerUpdateHelper(targetHash, selection) {
+  const managerImage = imageReference('chatter-manager');
+  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  const composeCommand = [
+    'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
+    '--project-directory', '"$HOST_PROJECT_DIR"',
+    '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
+    '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
+    ...profileArgs,
+    'up', '-d', '--no-build', '--pull', 'never', '--force-recreate',
+    ...selection.services
+  ].join(' ');
+  const script = `set -eu
+report_failure() {
+  code=$?
+  if [ "$code" -ne 0 ]; then
+    printf '{"status":"failed","targetHash":"%s","message":"server_restart_failed","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"
+  fi
+}
+trap report_failure EXIT
+sleep 2
+${composeCommand}
+printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"`;
+  await runDocker([
+    'run', '--detach', '--rm', '--name', `chatter-server-updater-${Date.now()}`,
+    '--entrypoint', '/bin/sh',
+    '--env', `HOST_PROJECT_DIR=${HOST_PROJECT_DIR}`,
+    '--env', `HOST_CONFIG_DIR=${HOST_CONFIG_DIR}`,
+    '--env', `COMPOSE_PROJECT_NAME=${PROJECT_NAME}`,
+    '--env', `TARGET_HASH=${targetHash}`,
+    '--volume', '/var/run/docker.sock:/var/run/docker.sock',
+    '--volume', `${HOST_PROJECT_DIR}:${HOST_PROJECT_DIR}:ro`,
+    '--volume', `${HOST_CONFIG_DIR}:${HOST_CONFIG_DIR}`,
+    managerImage, '-c', script
+  ], 60000);
+}
+
+async function performServerUpdate(snapshot) {
+  const selection = updateServiceSelection();
+  try {
+    writeUpdateState({ status: 'backup', targetHash: snapshot.latestHash, message: 'creating_backup' });
+    await createBackup({ includeUploads: false, source: 'automatic' });
+    writeUpdateState({ status: 'restarting', targetHash: snapshot.latestHash, message: 'restarting_server_services' });
+    await launchServerUpdateHelper(snapshot.latestHash, selection);
+  } catch (error) {
+    writeUpdateState({ status: 'failed', targetHash: snapshot.latestHash, message: error.message || 'server_update_failed' });
+    throw error;
+  }
+}
+
 function runProcess(command, args, timeoutMs = 10 * 60 * 1000) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -797,7 +967,7 @@ async function pruneAutomaticBackups(retention) {
 
 async function runScheduledBackupIfDue() {
   const schedule = getBackupSchedule();
-  if (schedule.frequency === 'off' || backupPromise) return;
+  if (schedule.frequency === 'off' || backupPromise || serverUpdateInProgress()) return;
   const interval = schedule.frequency === 'weekly' ? 7 * 86400000 : 86400000;
   const lastRun = Date.parse(schedule.lastRunAt) || 0;
   if (Date.now() - lastRun < interval) return;
@@ -1328,8 +1498,33 @@ async function handleRequest(req, res) {
   }
   if (req.method === 'GET' && pathname === '/api/settings') return sendJson(res, 200, publicSettings());
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
+  if (req.method === 'GET' && pathname === '/api/server-update') {
+    if (url.searchParams.get('refresh') === '1' && serverUpdateInProgress()) return sendJson(res, 409, { error: 'server_update_is_in_progress' });
+    try {
+      return sendJson(res, 200, await getServerUpdateInfo({ pull: url.searchParams.get('refresh') === '1' }));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'server_update_check_failed' });
+    }
+  }
+  if (req.method === 'POST' && pathname === '/api/server-update') {
+    if (!serverUpdatesSupported()) return sendJson(res, 409, { error: 'server_updates_not_available_for_this_installation' });
+    if (serverUpdateInProgress() || applyPromise || backupPromise || restorePromise) return sendJson(res, 409, { error: 'another_operation_is_in_progress' });
+    let snapshot;
+    try {
+      snapshot = await getServerUpdateInfo();
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'server_update_check_failed' });
+    }
+    if (!snapshot.available) return sendJson(res, 409, { error: 'server_is_already_current' });
+    writeUpdateState({ status: 'queued', targetHash: snapshot.latestHash, message: 'server_update_queued' });
+    updatePromise = performServerUpdate(snapshot)
+      .catch(error => console.error('[manager:server-update]', error))
+      .finally(() => { updatePromise = null; });
+    return sendJson(res, 202, { ok: true, targetHash: snapshot.latestHash });
+  }
   const serviceActionMatch = pathname.match(/^\/api\/services\/([^/]+)\/(start|stop|restart)$/);
   if (req.method === 'POST' && serviceActionMatch) {
+    if (serverUpdateInProgress()) return sendJson(res, 409, { error: 'server_update_is_in_progress' });
     try {
       return sendJson(res, 200, await controlService(serviceActionMatch[1], serviceActionMatch[2]));
     } catch (error) {
@@ -1433,7 +1628,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'POST' && pathname === '/api/backups/import') {
-    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    if (backupPromise || restorePromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
     const originalName = path.basename(`${url.searchParams.get('filename') || ''}`);
     if (!originalName) return sendJson(res, 400, { error: 'backup_filename_required' });
     const uploadPath = path.join(BACKUPS_DIR, `.upload-${crypto.randomUUID()}`);
@@ -1448,7 +1643,7 @@ async function handleRequest(req, res) {
 
   const backupRestoreMatch = pathname.match(/^\/api\/backups\/([^/]+)\/restore$/);
   if (req.method === 'POST' && backupRestoreMatch) {
-    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    if (backupPromise || restorePromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
     const name = safeBackupName(decodeURIComponent(backupRestoreMatch[1]));
     if (!name) return sendJson(res, 400, { error: 'invalid_backup_name' });
     restorePromise = restoreBackup(name).finally(() => { restorePromise = null; });
@@ -1457,7 +1652,7 @@ async function handleRequest(req, res) {
 
   const backupDeleteMatch = pathname.match(/^\/api\/backups\/([^/]+)$/);
   if (req.method === 'DELETE' && backupDeleteMatch) {
-    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    if (backupPromise || restorePromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
     const name = safeBackupName(decodeURIComponent(backupDeleteMatch[1]));
     const filePath = name ? path.join(BACKUPS_DIR, name) : '';
     if (!filePath || !fs.existsSync(filePath)) return sendJson(res, 404, { error: 'backup_not_found' });
@@ -1466,7 +1661,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'POST' && pathname === '/api/backups') {
-    if (backupPromise || restorePromise) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
+    if (backupPromise || restorePromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
     const body = await readJson(req);
     backupPromise = createBackup({ includeUploads: body.includeUploads === true, source: 'manual' })
       .finally(() => { backupPromise = null; });
@@ -1482,7 +1677,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'PUT' && pathname === '/api/settings') {
-    if (applyPromise) return sendJson(res, 409, { error: 'configuration_is_being_applied' });
+    if (applyPromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'configuration_is_being_applied' });
     try {
       saveSettings(await readJson(req));
     } catch (error) {

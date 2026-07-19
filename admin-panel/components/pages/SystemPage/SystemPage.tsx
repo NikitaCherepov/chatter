@@ -6,6 +6,7 @@ import { Card } from '../../ui/Card/Card';
 import { BackupsPanel } from './BackupsPanel';
 import { BackupSchedulePanel } from './BackupSchedulePanel';
 import { ServerMetrics } from './ServerMetrics';
+import { ServerUpdatePanel } from './ServerUpdatePanel';
 import type { BackupInfo, BackupSchedule, SystemInfo } from './types';
 import { formatBytes } from './types';
 import styles from './SystemPage.module.css';
@@ -98,6 +99,7 @@ export function SystemPage() {
     <div className={styles.stack}>
       <div className={styles.toolbar}><span>{loading ? 'Обновляем данные…' : 'Данные получены от Chatter Manager'}</span><button type="button" className="buttonSecondary" onClick={() => void load()} disabled={loading}>Обновить</button></div>
       {info && <><Card title="Состояние сервера" description="CPU, память, swap и место на диске"><ServerMetrics info={info} /></Card><div className={styles.storageGrid}><StorageItem title="База данных" value={formatBytes(info.storage.databaseSize)} /><StorageItem title="Загруженные файлы" value={formatBytes(info.storage.uploadsSize)} /><StorageItem title="Резервные копии" value={formatBytes(info.storage.backupsSize)} /></div></>}
+      <ServerUpdatePanel />
       <Card title="Автоматические бэкапы" description="Manager запускает их сам, отдельный cron не требуется"><BackupSchedulePanel schedule={schedule} saving={scheduleSaving} state={scheduleState} onChange={(patch) => { setSchedule((current) => ({ ...current, ...patch })); setScheduleState(''); }} onSave={() => void saveSchedule()} /></Card>
       <Card title="Резервные копии" description="База данных включается всегда, медиафайлы — по желанию">
         <BackupsPanel backups={backups} creating={creating} restoring={restoring} importing={importing} includeUploads={includeUploads} state={state} onIncludeUploadsChange={setIncludeUploads} onCreate={() => void createBackup()} onImport={(file) => void importBackup(file)} onRestore={(backup) => void restoreSelectedBackup(backup)} onDelete={(backup) => void deleteBackup(backup)} />
