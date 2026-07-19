@@ -80,12 +80,12 @@ services:
     profiles:
       - voice
     build:
-      context: ./kz-server-voice-transcriber
+      context: ./voice-service
       dockerfile: Dockerfile
     image: chatter-voice:local
     restart: unless-stopped
     env_file:
-      - path: "${VOICE_ENV_FILE:-./kz-server-voice-transcriber/.env}"
+      - path: "${VOICE_ENV_FILE:-./voice-service/.env}"
         required: false
     environment:
       NODE_ENV: production

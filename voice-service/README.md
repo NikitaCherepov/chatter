@@ -47,7 +47,7 @@ Only the selected model is loaded into memory. Restart the service after changin
 From the repository root, copy the example environment file and set a long random ASCII token:
 
 ```bash
-cp kz-server-voice-transcriber/.env.example kz-server-voice-transcriber/.env
+cp voice-service/.env.example voice-service/.env
 ```
 
 Start only the Voice service:

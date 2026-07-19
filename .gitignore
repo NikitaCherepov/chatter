@@ -13,8 +13,8 @@ __pycache__/
 dist/
 backend-api/dist/
 settings.local.json
-kz-server-voice-transcriber/tmp/
-kz-server-voice-transcriber/models/
+voice-service/tmp/
+voice-service/models/
 transcriber/temp_audio_*
 transcriber/transcription_*
 
