@@ -16,6 +16,29 @@ Browser -> Caddy (HTTPS) -> chatter-manager -> admin-panel
 - `admin-panel` calls same-origin `/api/*` routes. It does not need to know the manager's internal address.
 - `backend-api` does not receive the Docker socket.
 
+### How API calls reach backend-api
+
+**The admin panel never talks to `backend-api` directly.** Every `/api/*` request from the browser first hits `chatter-manager`, which:
+
+1. Authenticates the admin via the `chatter_admin_session` cookie.
+2. Either handles the request itself (e.g. `/api/settings`, `/api/services/*`), or forwards it to `backend-api` using an internal bearer token stored in `backend.env` (`BACKEND_INTERNAL_TOKEN`).
+3. The forwarded calls go to `backend-api`'s `/internal/*` routes — these are protected by `internalAuth` middleware (simple bearer token), **not** by JWT `adminMiddleware`.
+
+This means each new admin endpoint requires three coordinated pieces:
+
+| Layer | File | What to add |
+|-------|------|-------------|
+| Backend route | `backend-api/src/server.ts` | `app.get('/internal/admin/<name>', internalAuth, ...)` |
+| Manager proxy | `chatter-manager/server.js` | `if (pathname === '/api/<name>') return sendJson(res, 200, await backendInternalRequest('/internal/admin/<name>'));` |
+| Frontend call | `admin-panel/components/.../*.tsx` | `api('/api/<name>')` |
+
+**Forget any one of the three and the browser will see `{ error: 'not_found' }`** (from chatter-manager's catch-all 404) or `{ error: 'unauthorized' }` (from backend's `internalAuth`).
+
+Path conventions in current code:
+- Frontend → Manager: `/api/<resource>` (no version prefix), e.g. `/api/users/123`, `/api/plan-limits`.
+- Manager → Backend: `/internal/admin/<resource>` for admin-only operations, `/internal/<resource>` for general operations.
+- Direct backend routes under `/api/v1/*` (JWT-protected) are **not reachable from the browser** through chatter-manager. They exist for first-party clients (Desktop, Telegram bot) that authenticate with their own JWTs.
+
 ## Implemented Pages
 
 - **Overview** — service health and start, stop, or restart controls.

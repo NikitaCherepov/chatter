@@ -332,10 +332,14 @@ function UsageDonut({ percent }: { percent: number }) {
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
-  const color = clamped >= 90 ? '#e74' : clamped >= 70 ? '#ec4' : '#4a9';
+  const color = clamped >= 90
+    ? 'var(--color-error)'
+    : clamped >= 70
+      ? 'var(--color-warning)'
+      : 'var(--color-success)';
   return (
     <svg viewBox="0 0 100 100" width="100" height="100" className={styles.donut}>
-      <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--border, #2a2a2a)" strokeWidth="10" />
+      <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--border-light)" strokeWidth="10" />
       <circle
         cx="50" cy="50" r={radius} fill="none" stroke={color} strokeWidth="10"
         strokeDasharray={circumference} strokeDashoffset={offset}
