@@ -351,9 +351,9 @@ export const startTaskScheduler = () => {
     planExpiryTimer.unref();
   }
 
-  const enabled = `${process.env.BACKEND_SCHEDULER_ENABLED || '0'}`.trim() === '1';
+  const enabled = `${process.env.BACKEND_SCHEDULER_ENABLED || '1'}`.trim() === '1';
   if (!enabled) {
-    console.log('[backend-scheduler] disabled (BACKEND_SCHEDULER_ENABLED != 1)');
+    console.log('[backend-scheduler] disabled (BACKEND_SCHEDULER_ENABLED=0)');
     return;
   }
   if (timer) return;
