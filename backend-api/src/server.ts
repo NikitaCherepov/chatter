@@ -4989,11 +4989,9 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         await sendWsJson({ type: 'dice_roll', roll });
       },
       onStreamToken: async (text) => {
-        console.log('[ws chat_send] stream_token sending', { textLen: text.length });
         await sendWsJson({ type: 'stream_token', text });
       },
       onReasoningStream: async (text) => {
-        console.log('[ws chat_send] reasoning_token sending', { textLen: text.length });
         await sendWsJson({ type: 'reasoning_token', text });
       },
     });
