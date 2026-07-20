@@ -3,6 +3,13 @@ import { FormField } from '../../ui/FormField/FormField';
 import { SecretState } from '../../ui/SecretState/SecretState';
 import styles from './ModelsPage.module.css';
 
+type CoefficientManager = {
+  /** Returns saved coefficient for the uniqueId (or undefined if not set). */
+  get: (uniqueId: string | undefined | null) => number | undefined;
+  /** Persists new coefficient for the uniqueId. */
+  save: (uniqueId: string, coefficient: number) => void | Promise<void>;
+};
+
 type Props = {
   title?: string;
   description?: string;
@@ -10,6 +17,8 @@ type Props = {
   onChange: (models: ProviderModelConfig[]) => void;
   required?: boolean;
   emptyText?: string;
+  /** When provided, each model card gets a "Коэффициент стоимости" field. */
+  coefficientManager?: CoefficientManager;
 };
 
 const newModel = (): ProviderModelConfig => ({
@@ -27,6 +36,7 @@ export function ModelListEditor({
   onChange,
   required = false,
   emptyText = 'Модели пока не добавлены.',
+  coefficientManager,
 }: Props) {
   const update = (index: number, patch: Partial<ProviderModelConfig>) => {
     onChange(models.map((model, itemIndex) => (itemIndex === index ? { ...model, ...patch } : model)));
@@ -64,7 +74,11 @@ export function ModelListEditor({
               <SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />
             </summary>
             <div className={styles.modelBody}>
-              <ProviderModelFields model={model} onChange={(patch) => update(index, patch)} />
+              <ProviderModelFields
+                model={model}
+                onChange={(patch) => update(index, patch)}
+                coefficientManager={coefficientManager}
+              />
               <div className={styles.modelActions}>
                 <button className="buttonSecondary" type="button" disabled={index === 0} onClick={() => move(index, -1)}>
                   Выше
@@ -96,10 +110,12 @@ export function ProviderModelFields({
   model,
   onChange,
   required = true,
+  coefficientManager,
 }: {
   model: ProviderModelConfig;
   onChange: (patch: Partial<ProviderModelConfig>) => void;
   required?: boolean;
+  coefficientManager?: CoefficientManager;
 }) {
   return (
     <div className={styles.fields}>
@@ -132,6 +148,25 @@ export function ProviderModelFields({
           placeholder={`auto-${(model.model || 'model').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'model'}`}
         />
       </FormField>
+      {coefficientManager && (
+        <FormField
+          label="Коэффициент стоимости"
+          hint="0 = бесплатная (не расходует квоту), 1 = по умолчанию, 0.7 = дешевле, 1.5 = дороже"
+        >
+          <input
+            type="number"
+            min={0}
+            step={0.1}
+            value={coefficientManager.get(model.uniqueId) ?? 1}
+            onBlur={(event) => {
+              const value = Number(event.target.value);
+              const coef = Number.isFinite(value) && value >= 0 ? value : 1;
+              const id = model.uniqueId?.trim();
+              if (id) void coefficientManager.save(id, coef);
+            }}
+          />
+        </FormField>
+      )}
       <FormField
         label="API-ключ"
         state={<SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />}

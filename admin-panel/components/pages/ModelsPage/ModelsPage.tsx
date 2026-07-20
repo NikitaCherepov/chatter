@@ -1,5 +1,6 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import type { ProviderModelConfig, Settings } from '../../../lib/types';
+import { useModelCoefficients } from '../../../lib/useModelCoefficients';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import { ManualModelListEditor } from './ManualModelListEditor';
@@ -15,6 +16,11 @@ type Props = {
 };
 
 export function ModelsPage({ settings, setSettings, saving, saveState, onSave }: Props) {
+  // One shared coefficient manager for PRO / LITE / Vision (Manual has its own
+  // because its editor hydrates coefficient into ManualModelConfig).
+  const { getCoefficient, saveCoefficient, state: coeffState } = useModelCoefficients();
+  const coefficientManager = { get: getCoefficient, save: saveCoefficient };
+
   const updateVision = (patch: Partial<ProviderModelConfig>) => {
     setSettings((current) => ({
       ...current,
@@ -38,6 +44,7 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
             models={settings.proModels}
             onChange={(proModels) => setSettings((current) => ({ ...current, proModels }))}
             required
+            coefficientManager={coefficientManager}
           />
           <div className={styles.divider} />
           <div className={styles.listHeading}>
@@ -51,7 +58,9 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
             onChange={(liteModels) => setSettings((current) => ({ ...current, liteModels }))}
             emptyText="LITE-модели пока не добавлены."
             required
+            coefficientManager={coefficientManager}
           />
+          {coeffState && <p className={styles.empty}>{coeffState}</p>}
         </div>
       </details>
 
@@ -68,8 +77,14 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
               <strong>{settings.visionModel.model || 'Используется PRO-модель'}</strong>
               <span>{settings.visionModel.baseUrl || 'Отдельный Vision-провайдер не настроен'}</span>
             </div>
-            <ProviderModelFields model={settings.visionModel} onChange={updateVision} required={false} />
+            <ProviderModelFields
+              model={settings.visionModel}
+              onChange={updateVision}
+              required={false}
+              coefficientManager={coefficientManager}
+            />
           </div>
+          {coeffState && <p className={styles.empty}>{coeffState}</p>}
         </div>
       </details>
 

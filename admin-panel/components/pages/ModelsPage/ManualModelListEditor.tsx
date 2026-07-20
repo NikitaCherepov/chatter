@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ManualModelConfig } from '../../../lib/types';
-import { api } from '../../../lib/api';
+import { useModelCoefficients } from '../../../lib/useModelCoefficients';
 import { FormField } from '../../ui/FormField/FormField';
 import { Toggle } from '../../ui/Toggle/Toggle';
 import { ProviderModelFields } from './ModelListEditor';
@@ -30,51 +30,21 @@ export function ManualModelListEditor({
   models: ManualModelConfig[];
   onChange: (models: ManualModelConfig[]) => void;
 }) {
-  // Coefficients are stored separately in backend (model_overrides table).
-  // We load them ONCE on first mount and only inject values for models that
-  // have NOT been touched locally since the last save (local edits win).
-  const [coeffState, setCoeffState] = useState<string>('');
-  const loadedOnceRef = useRef(false);
-  const dirtyIdsRef = useRef<Set<string>>(new Set());
+  // Load coefficients once on first mount; inject server values into models
+  // that have NOT been locally edited since.
+  const { getCoefficient, saveCoefficient, state: coeffState } = useModelCoefficients();
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
-    if (loadedOnceRef.current) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await api<{ coefficients: Record<string, number> }>('/api/model-coefficients');
-        if (cancelled) return;
-        loadedOnceRef.current = true;
-        // Only apply server values for uniqueIds the user has NOT edited locally.
-        onChange(models.map(model => {
-          if (dirtyIdsRef.current.has(model.uniqueId)) return model;
-          const coefficient = response.coefficients?.[model.uniqueId];
-          return coefficient === undefined ? model : { ...model, coefficient };
-        }));
-        setCoeffState('');
-      } catch (err) {
-        setCoeffState(`Не удалось загрузить коэффициенты: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    })();
-    return () => { cancelled = true; };
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    onChange(models.map(model => {
+      const fromServer = getCoefficient(model.uniqueId);
+      if (fromServer === undefined) return model;
+      return { ...model, coefficient: fromServer };
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Persist coefficient to backend on blur. Marks the model as "dirty" so a
-  // late-fetched server value cannot overwrite the user's edit.
-  const updateCoefficient = async (uniqueId: string, coefficient: number) => {
-    if (!uniqueId) return;
-    dirtyIdsRef.current.add(uniqueId);
-    try {
-      await api(`/api/model-coefficients/${encodeURIComponent(uniqueId)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ coefficient }),
-      });
-      setCoeffState('Коэффициент сохранён');
-    } catch (err) {
-      setCoeffState(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
 
   const update = (index: number, patch: Partial<ManualModelConfig>) => {
     onChange(models.map((model, itemIndex) => (itemIndex === index ? { ...model, ...patch } : model)));
@@ -121,7 +91,7 @@ export function ManualModelListEditor({
                   const value = Number(event.target.value);
                   update(index, { coefficient: Number.isFinite(value) && value >= 0 ? value : 1 });
                 }}
-                onBlur={(event) => void updateCoefficient(model.uniqueId, Number(event.target.value))}
+                onBlur={(event) => void saveCoefficient(model.uniqueId, Number(event.target.value))}
               />
             </FormField>
             <div className={styles.toggleRow}>
