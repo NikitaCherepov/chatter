@@ -15,6 +15,7 @@ export function SystemPage() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [includeUploads, setIncludeUploads] = useState(false);
+  const [includeConfiguration, setIncludeConfiguration] = useState(false);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -45,7 +46,7 @@ export function SystemPage() {
     setCreating(true);
     setState(includeUploads ? 'Создаём архив базы данных и файлов…' : 'Создаём снимок базы данных…');
     try {
-      await api('/api/backups', { method: 'POST', body: JSON.stringify({ includeUploads }) });
+      await api('/api/backups', { method: 'POST', body: JSON.stringify({ includeUploads, includeConfiguration }) });
       await load(); setState('Бэкап создан.');
     } catch (error) {
       setState(`Ошибка: ${error instanceof Error ? error.message : String(error)}`);
@@ -105,7 +106,7 @@ export function SystemPage() {
       <ServerUpdatePanel />
       <Card title="Автоматические бэкапы" description="Manager запускает их сам, отдельный cron не требуется"><BackupSchedulePanel schedule={schedule} saving={scheduleSaving} state={scheduleState} onChange={(patch) => { setSchedule((current) => ({ ...current, ...patch })); setScheduleState(''); }} onSave={() => void saveSchedule()} /></Card>
       <Card title="Резервные копии" description="База данных включается всегда, медиафайлы — по желанию">
-        <BackupsPanel backups={backups} creating={creating} restoring={restoring} importing={importing} importProgress={importProgress} includeUploads={includeUploads} state={state} onIncludeUploadsChange={setIncludeUploads} onCreate={() => void createBackup()} onImport={(file) => void importBackup(file)} onRestore={(backup) => void restoreSelectedBackup(backup)} onDelete={(backup) => void deleteBackup(backup)} />
+        <BackupsPanel backups={backups} creating={creating} restoring={restoring} importing={importing} importProgress={importProgress} includeUploads={includeUploads} includeConfiguration={includeConfiguration} state={state} onIncludeUploadsChange={setIncludeUploads} onIncludeConfigurationChange={setIncludeConfiguration} onCreate={() => void createBackup()} onImport={(file) => void importBackup(file)} onRestore={(backup) => void restoreSelectedBackup(backup)} onDelete={(backup) => void deleteBackup(backup)} />
       </Card>
     </div>
   );

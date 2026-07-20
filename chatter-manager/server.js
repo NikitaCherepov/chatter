@@ -36,6 +36,13 @@ const BACKUPS_DIR = path.resolve(process.env.CHATTER_BACKUPS_DIR || '/backups');
 const UPDATE_STATE_FILE = path.join(CONFIG_DIR, 'server-update.json');
 const HOST_PROJECT_DIR = `${process.env.CHATTER_HOST_PROJECT_DIR || ''}`.trim();
 const HOST_CONFIG_DIR = `${process.env.CHATTER_HOST_CONFIG_DIR || ''}`.trim();
+const BACKUP_CONFIG_FILES = [
+  'backend.env',
+  'telegram.env',
+  'voice.env',
+  'compose.runtime.env',
+  'settings.json'
+];
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
 fs.mkdirSync(BACKUPS_DIR, { recursive: true, mode: 0o700 });
@@ -985,6 +992,7 @@ async function listBackups() {
       size: stat.size,
       createdAt: manifest?.createdAt || stat.mtime.toISOString(),
       includesUploads: Boolean(manifest?.includesUploads),
+      includesConfiguration: Boolean(manifest?.includesConfiguration),
       version: `${manifest?.version || 'unknown'}`,
       source: manifest?.source === 'automatic' ? 'automatic' : 'manual'
     };
@@ -992,7 +1000,7 @@ async function listBackups() {
   return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-async function createBackup({ includeUploads = false, source = 'manual' } = {}) {
+async function createBackup({ includeUploads = false, includeConfiguration = false, source = 'manual' } = {}) {
   if (!fs.existsSync(DATABASE_FILE)) throw new Error('Chatter database was not found');
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
@@ -1007,16 +1015,30 @@ async function createBackup({ includeUploads = false, source = 'manual' } = {}) 
     const databaseCopy = path.join(tempDir, 'database.sqlite');
     await runProcess('sqlite3', [DATABASE_FILE, `.backup ${databaseCopy}`]);
     const hasUploads = includeUploads && fs.existsSync(UPLOADS_DIR);
+    const configurationFiles = includeConfiguration
+      ? BACKUP_CONFIG_FILES.filter((file) => fs.existsSync(path.join(CONFIG_DIR, file)))
+      : [];
+    if (configurationFiles.length) {
+      const configBackupDir = path.join(tempDir, 'config');
+      fs.mkdirSync(configBackupDir, { recursive: true, mode: 0o700 });
+      for (const file of configurationFiles) {
+        fs.copyFileSync(path.join(CONFIG_DIR, file), path.join(configBackupDir, file));
+        fs.chmodSync(path.join(configBackupDir, file), 0o600);
+      }
+    }
     const manifest = {
       format: 'chatter-backup',
       schemaVersion: 1,
       createdAt,
       version: process.env.CHATTER_IMAGE_TAG || 'local',
       includesUploads: hasUploads,
+      includesConfiguration: configurationFiles.length > 0,
+      configurationFiles,
       source: source === 'automatic' ? 'automatic' : 'manual'
     };
     fs.writeFileSync(path.join(tempDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
     const tarArgs = ['-czf', tempArchive, '-C', tempDir, 'manifest.json', 'database.sqlite'];
+    if (configurationFiles.length) tarArgs.push('config');
     if (hasUploads) {
       fs.symlinkSync(UPLOADS_DIR, path.join(tempDir, 'uploads'), 'dir');
       tarArgs[0] = '-chzf';
@@ -1088,7 +1110,8 @@ async function inspectBackupArchive(filePath, extractDir) {
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index].replace(/^\.\//, '');
     const normalized = path.posix.normalize(name);
-    const allowed = name === 'manifest.json' || name === 'database.sqlite' || name === 'uploads' || name.startsWith('uploads/');
+    const allowedConfig = name === 'config' || name === 'config/' || BACKUP_CONFIG_FILES.some((file) => name === `config/${file}`);
+    const allowed = name === 'manifest.json' || name === 'database.sqlite' || name === 'uploads' || name.startsWith('uploads/') || allowedConfig;
     if (!allowed || name.includes('\\') || normalized.startsWith('../') || path.posix.isAbsolute(name)) throw new Error('Backup archive contains an unsafe path');
     if (!['-', 'd'].includes(verbose[index][0])) throw new Error('Backup archive contains unsupported links or special files');
   }
@@ -1200,7 +1223,7 @@ async function restoreBackup(name) {
   let uploadsMoved = false;
   try {
     const manifest = await inspectBackupArchive(archivePath, extractDir);
-    await createBackup({ includeUploads: Boolean(manifest.includesUploads), source: 'manual' });
+    await createBackup({ includeUploads: Boolean(manifest.includesUploads), includeConfiguration: Boolean(manifest.includesConfiguration), source: 'manual' });
     await stopDataServices();
 
     const databaseOwner = fs.statSync(fs.existsSync(DATABASE_FILE) ? DATABASE_FILE : DATA_DIR);
@@ -1218,6 +1241,14 @@ async function restoreBackup(name) {
       if (fs.existsSync(UPLOADS_DIR)) { fs.renameSync(UPLOADS_DIR, oldUploads); uploadsMoved = true; }
       fs.renameSync(newUploads, UPLOADS_DIR);
       setOwnershipRecursive(UPLOADS_DIR, uploadsOwner.uid, uploadsOwner.gid);
+    }
+
+    if (manifest.includesConfiguration && fs.existsSync(path.join(extractDir, 'config'))) {
+      for (const file of BACKUP_CONFIG_FILES) {
+        const source = path.join(extractDir, 'config', file);
+        if (!fs.existsSync(source)) continue;
+        atomicWrite(path.join(CONFIG_DIR, file), fs.readFileSync(source), 0o600);
+      }
     }
 
     await applyConfiguration();
@@ -1829,7 +1860,11 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && pathname === '/api/backups') {
     if (backupPromise || restorePromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'backup_operation_in_progress' });
     const body = await readJson(req);
-    backupPromise = createBackup({ includeUploads: body.includeUploads === true, source: 'manual' })
+    backupPromise = createBackup({
+      includeUploads: body.includeUploads === true,
+      includeConfiguration: body.includeConfiguration === true,
+      source: 'manual'
+    })
       .finally(() => { backupPromise = null; });
     return sendJson(res, 201, { ok: true, backup: await backupPromise });
   }

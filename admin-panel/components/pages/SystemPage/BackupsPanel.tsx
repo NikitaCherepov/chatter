@@ -2,15 +2,17 @@ import type { BackupInfo } from './types';
 import { formatBytes } from './types';
 import styles from './SystemPage.module.css';
 
-export function BackupsPanel({ backups, creating, restoring, importing, importProgress, includeUploads, state, onIncludeUploadsChange, onCreate, onImport, onRestore, onDelete }: {
+export function BackupsPanel({ backups, creating, restoring, importing, importProgress, includeUploads, includeConfiguration, state, onIncludeUploadsChange, onIncludeConfigurationChange, onCreate, onImport, onRestore, onDelete }: {
   backups: BackupInfo[];
   creating: boolean;
   restoring: boolean;
   importing: boolean;
   importProgress: number | null;
   includeUploads: boolean;
+  includeConfiguration: boolean;
   state: string;
   onIncludeUploadsChange: (value: boolean) => void;
+  onIncludeConfigurationChange: (value: boolean) => void;
   onCreate: () => void;
   onImport: (file: File) => void;
   onRestore: (backup: BackupInfo) => void;
@@ -23,6 +25,10 @@ export function BackupsPanel({ backups, creating, restoring, importing, importPr
           <input type="checkbox" checked={includeUploads} onChange={(event) => onIncludeUploadsChange(event.target.checked)} />
           <span><strong>Включить загруженные файлы</strong><small>Фотографии, документы и аудио могут значительно увеличить архив</small></span>
         </label>
+        <label className={styles.mediaOption}>
+          <input type="checkbox" checked={includeConfiguration} onChange={(event) => onIncludeConfigurationChange(event.target.checked)} />
+          <span><strong>Включить конфигурацию и секреты</strong><small>API-ключи и настройки сервисов. Храни такой архив в безопасном месте</small></span>
+        </label>
         <div className={styles.primaryActions}>
           <label className={`buttonSecondary ${styles.importButton}`}><input type="file" accept=".db,.sqlite,.sqlite3,.tar.gz,.tgz" disabled={creating || restoring || importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImport(file); event.target.value = ''; }} />{importing ? (importProgress === 100 ? 'Проверяем…' : `Загрузка ${importProgress ?? 0}%`) : 'Импортировать'}</label>
           <button type="button" className="buttonPrimary" onClick={onCreate} disabled={creating || restoring || importing}>{creating ? 'Создаём…' : 'Создать бэкап'}</button>
@@ -34,7 +40,7 @@ export function BackupsPanel({ backups, creating, restoring, importing, importPr
         {backups.length === 0 ? <div className={styles.empty}>Резервных копий пока нет.</div> : backups.map((backup) => (
           <div className={styles.tableRow} key={backup.name}>
             <span>{new Date(backup.createdAt).toLocaleString()}</span>
-            <span>{backup.includesUploads ? 'БД + файлы' : 'Только БД'}</span>
+            <span>{[backup.includesUploads ? 'БД + файлы' : 'БД', backup.includesConfiguration ? 'конфигурация' : ''].filter(Boolean).join(' + ')}</span>
             <span>{formatBytes(backup.size)}</span><span>{backup.version}{backup.source === 'automatic' ? ' · авто' : ''}</span>
             <span className={styles.rowActions}>
               <a className="buttonSecondary" href={`/api/backups/${encodeURIComponent(backup.name)}/download`}>Скачать</a>

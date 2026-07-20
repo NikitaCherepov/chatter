@@ -14,6 +14,7 @@ export type BackupInfo = {
   size: number;
   createdAt: string;
   includesUploads: boolean;
+  includesConfiguration: boolean;
   version: string;
   source: 'manual' | 'automatic';
 };
