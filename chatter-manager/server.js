@@ -1172,6 +1172,7 @@ async function importBackup(uploadPath, originalName) {
       fs.writeFileSync(path.join(tempDir, 'manifest.json'), `${JSON.stringify({ ...manifest, source: 'manual', importedAt: createdAt }, null, 2)}\n`, { mode: 0o600 });
       const tarArgs = ['-czf', destination, '-C', tempDir, 'manifest.json', 'database.sqlite'];
       if (fs.existsSync(path.join(tempDir, 'uploads'))) tarArgs.push('uploads');
+      if (fs.existsSync(path.join(tempDir, 'config'))) tarArgs.push('config');
       await runProcess('tar', tarArgs, 60 * 60 * 1000);
     } else if (lowerName.endsWith('.db') || lowerName.endsWith('.sqlite') || lowerName.endsWith('.sqlite3')) {
       await sqliteQuickCheck(uploadPath);
