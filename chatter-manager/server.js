@@ -267,13 +267,31 @@ function parseProviderModels(raw, prefix, fallbackBase, fallbackKey, fallbackMod
       : [];
   const result = [];
   chunks.forEach((chunk, providerIndex) => {
-    const [baseUrl = '', apiKey = '', modelsRaw = ''] = chunk.split('|').map(value => value.trim());
-    splitModelChain(modelsRaw).forEach((model, modelIndex) => {
+    const parts = chunk.split('|').map(value => value.trim());
+    const baseUrl = parts[0] || '';
+    const apiKey = parts[1] || '';
+    const modelsRaw = parts[2] || '';
+    // 4th field: comma-separated uniqueIds, one per model in modelsRaw.
+    // Backward-compat: if absent or fewer entries than models, synthesize from prefix+model.
+    const uniqueIdsRaw = parts[3] || '';
+    const uniqueIdCandidates = uniqueIdsRaw ? uniqueIdsRaw.split(',').map(value => value.trim()) : [];
+    const models = splitModelChain(modelsRaw);
+    models.forEach((model, modelIndex) => {
       if (!baseUrl || !model) return;
-      result.push({ id: `${prefix}-${providerIndex}-${modelIndex}`, baseUrl, apiKey, model });
+      const explicitId = uniqueIdCandidates[modelIndex];
+      const uniqueId = explicitId || `${prefix}-${slugifyModelId(model)}-${providerIndex}-${modelIndex}`;
+      result.push({ id: `${prefix}-${providerIndex}-${modelIndex}`, uniqueId, baseUrl, apiKey, model });
     });
   });
   return result;
+}
+
+function slugifyModelId(value) {
+  return `${value || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'model';
 }
 
 function getProviderModels(backendEnv) {
@@ -299,6 +317,7 @@ function getProviderModels(backendEnv) {
   const visionModel = hasExplicitVision
     ? {
         id: 'vision',
+        uniqueId: backendEnv.TIMEWEB_VISION_UNIQUE_ID || 'vision',
         baseUrl: backendEnv.TIMEWEB_VISION_BASE_URL || proModels[0]?.baseUrl || backendEnv.TIMEWEB_BASE_URL || '',
         apiKey: backendEnv.TIMEWEB_VISION_API_KEY || proModels[0]?.apiKey || backendEnv.TIMEWEB_API_KEY || '',
         model: splitModelChain(
@@ -306,7 +325,7 @@ function getProviderModels(backendEnv) {
           proModels[0]?.model ? [proModels[0].model] : []
         )[0] || ''
       }
-    : { id: 'vision', baseUrl: '', apiKey: '', model: '' };
+    : { id: 'vision', uniqueId: 'vision', baseUrl: '', apiKey: '', model: '' };
   return { proModels, liteModels, visionModel };
 }
 
@@ -397,7 +416,14 @@ function mergeManualModels(input, existing) {
   });
 }
 
-const serializeProviderModels = models => models.map(model => `${model.baseUrl}|${model.apiKey}|${model.model}`).join(';');
+const serializeProviderModels = models => models
+  .map(model => {
+    const uniqueId = `${model.uniqueId || ''}`.trim();
+    return uniqueId
+      ? `${model.baseUrl}|${model.apiKey}|${model.model}|${uniqueId}`
+      : `${model.baseUrl}|${model.apiKey}|${model.model}`;
+  })
+  .join(';');
 const serializeManualModels = models => models.map(model => [model.baseUrl, model.apiKey, model.model, model.name, model.description.replace(/[|;\r\n]/g, ' '), model.uniqueId, model.supportsVision ? '1' : '0', model.adminOnly ? '1' : '0'].join('|')).join(';');
 
 function saveSettings(input) {
@@ -486,10 +512,16 @@ function saveSettings(input) {
     backendEnv.TIMEWEB_VISION_BASE_URL = visionModel.baseUrl;
     backendEnv.TIMEWEB_VISION_API_KEY = visionModel.apiKey;
     backendEnv.TIMEWEB_VISION_MODEL = visionModel.model;
+    if (visionModel.uniqueId) {
+      backendEnv.TIMEWEB_VISION_UNIQUE_ID = visionModel.uniqueId;
+    } else {
+      delete backendEnv.TIMEWEB_VISION_UNIQUE_ID;
+    }
   } else {
     delete backendEnv.TIMEWEB_VISION_BASE_URL;
     delete backendEnv.TIMEWEB_VISION_API_KEY;
     delete backendEnv.TIMEWEB_VISION_MODEL;
+    delete backendEnv.TIMEWEB_VISION_UNIQUE_ID;
   }
   // These variables were briefly introduced for a Vision cascade, but the
   // backend uses a single Vision PRO model.
@@ -1129,6 +1161,17 @@ async function stopDataServices() {
   await runDocker(composeArgs('--profile', 'telegram', '--profile', 'notes', 'stop', 'telegram-bot', 'webapp-notes', 'backend'), 3 * 60 * 1000);
 }
 
+function setOwnershipRecursive(targetPath, uid, gid) {
+  const stat = fs.lstatSync(targetPath);
+  if (stat.isDirectory()) {
+    for (const entry of fs.readdirSync(targetPath)) {
+      setOwnershipRecursive(path.join(targetPath, entry), uid, gid);
+    }
+  }
+  if (stat.isSymbolicLink()) fs.lchownSync(targetPath, uid, gid);
+  else fs.chownSync(targetPath, uid, gid);
+}
+
 async function restoreBackup(name) {
   const safeName = safeBackupName(name);
   const archivePath = safeName ? path.join(BACKUPS_DIR, safeName) : '';
@@ -1146,16 +1189,21 @@ async function restoreBackup(name) {
     await createBackup({ includeUploads: Boolean(manifest.includesUploads), source: 'manual' });
     await stopDataServices();
 
+    const databaseOwner = fs.statSync(fs.existsSync(DATABASE_FILE) ? DATABASE_FILE : DATA_DIR);
     fs.copyFileSync(path.join(extractDir, 'database.sqlite'), newDatabase);
     if (fs.existsSync(DATABASE_FILE)) { fs.renameSync(DATABASE_FILE, oldDatabase); databaseMoved = true; }
     fs.renameSync(newDatabase, DATABASE_FILE);
+    fs.chownSync(DATABASE_FILE, databaseOwner.uid, databaseOwner.gid);
+    fs.chmodSync(DATABASE_FILE, 0o600);
     fs.rmSync(`${DATABASE_FILE}-wal`, { force: true });
     fs.rmSync(`${DATABASE_FILE}-shm`, { force: true });
 
     if (manifest.includesUploads && fs.existsSync(path.join(extractDir, 'uploads'))) {
+      const uploadsOwner = fs.statSync(fs.existsSync(UPLOADS_DIR) ? UPLOADS_DIR : DATA_DIR);
       fs.cpSync(path.join(extractDir, 'uploads'), newUploads, { recursive: true });
       if (fs.existsSync(UPLOADS_DIR)) { fs.renameSync(UPLOADS_DIR, oldUploads); uploadsMoved = true; }
       fs.renameSync(newUploads, UPLOADS_DIR);
+      setOwnershipRecursive(UPLOADS_DIR, uploadsOwner.uid, uploadsOwner.gid);
     }
 
     await applyConfiguration();
