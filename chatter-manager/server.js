@@ -56,6 +56,9 @@ let updatePromise = null;
 let activeLogStreams = 0;
 
 const randomSecret = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
+const METRICS_MAX = 10080;
+const METRICS_INTERVAL_MS = 60_000;
+const metricsHistory = [];
 
 function atomicWrite(filePath, content, mode = 0o600) {
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -989,6 +992,37 @@ async function getSystemInfo() {
   };
 }
 
+async function collectMetricsSnapshot() {
+  try {
+    const info = await getSystemInfo();
+    metricsHistory.push({
+      ts: Date.now(),
+      cpu: info.cpu.usagePercent,
+      memUsed: info.memory.used,
+      memTotal: info.memory.total,
+      swapUsed: info.swap.used,
+      swapTotal: info.swap.total,
+      diskUsed: info.disk.used,
+      diskTotal: info.disk.total,
+    });
+    if (metricsHistory.length > METRICS_MAX) metricsHistory.splice(0, metricsHistory.length - METRICS_MAX);
+  } catch (error) {
+    console.error('[manager] metrics collection failed:', error.message);
+  }
+}
+
+function downsample(arr, target) {
+  if (arr.length <= target) return arr;
+  const step = arr.length / target;
+  const result = [];
+  for (let i = 0; i < target; i++) {
+    const slice = arr.slice(Math.floor(i * step), Math.floor((i + 1) * step));
+    const avg = (field) => Math.round(slice.reduce((s, p) => s + p[field], 0) / slice.length);
+    result.push({ ...slice[0], cpu: avg('cpu'), memUsed: avg('memUsed'), swapUsed: avg('swapUsed'), diskUsed: avg('diskUsed') });
+  }
+  return result;
+}
+
 const safeBackupName = (name) => /^chatter-[A-Za-z0-9._-]+\.tar\.gz$/.test(name) ? name : '';
 
 async function readBackupManifest(filePath) {
@@ -1819,6 +1853,21 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userBanMatch[1]}/ban`, { method: 'DELETE' }));
   }
   if (req.method === 'GET' && pathname === '/api/system') return sendJson(res, 200, await getSystemInfo());
+  if (req.method === 'GET' && pathname === '/api/system/metrics') {
+    const range = url.searchParams.get('range') || '24h';
+    const rangeMs = range === '7d' ? 7 * 86400000 : range === '3d' ? 3 * 86400000 : 86400000;
+    const cutoff = Date.now() - rangeMs;
+    const filtered = metricsHistory.filter((p) => p.ts >= cutoff);
+    const points = downsample(filtered, 1440).map((p) => ({
+      ts: p.ts,
+      cpu: p.cpu,
+      mem: p.memTotal > 0 ? Math.round((p.memUsed / p.memTotal) * 1000) / 10 : 0,
+      swap: p.swapTotal > 0 ? Math.round((p.swapUsed / p.swapTotal) * 1000) / 10 : 0,
+      disk: p.diskTotal > 0 ? Math.round((p.diskUsed / p.diskTotal) * 1000) / 10 : 0,
+    }));
+    return sendJson(res, 200, { range, points });
+  }
+
   if (req.method === 'GET' && pathname === '/api/backups') return sendJson(res, 200, { creating: Boolean(backupPromise), restoring: Boolean(restorePromise), backups: await listBackups() });
   if (req.method === 'GET' && pathname === '/api/backups/schedule') return sendJson(res, 200, getBackupSchedule());
 
@@ -1944,3 +1993,5 @@ server.requestTimeout = 60 * 60 * 1000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Chatter Manager is listening on ${process.env.ADMIN_TLS === '1' ? 'https' : 'http'}://0.0.0.0:${PORT}`));
 setTimeout(() => { void runScheduledBackupIfDue(); }, 10000).unref();
 setInterval(() => { void runScheduledBackupIfDue(); }, 5 * 60 * 1000).unref();
+void collectMetricsSnapshot();
+setInterval(() => { void collectMetricsSnapshot(); }, METRICS_INTERVAL_MS).unref();

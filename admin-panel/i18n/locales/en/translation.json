@@ -462,6 +462,13 @@
       "uploads": "Uploads",
       "backups": "Backups"
     },
+    "chart": {
+      "last24h": "24h",
+      "last3days": "3 days",
+      "last7days": "7 days",
+      "loading": "Loading metrics\u2026",
+      "noData": "No metrics data yet. The chart will appear after the first minute."
+    },
     "backups": {
       "title": "Backups",
       "description": "Database is always included, media files are optional",

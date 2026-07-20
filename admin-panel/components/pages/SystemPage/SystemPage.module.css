@@ -327,9 +327,68 @@
     display: none;
   }
   .tableRow {
-    grid-template-columns: repeat(2, 1fr);
   }
   .rowActions {
     justify-content: flex-start;
   }
+}
+.state {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.metricActive {
+  border-color: var(--accent);
+  background: var(--bg-primary);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.metric {
+  cursor: pointer;
+}
+.metricActive:hover,
+.metric:hover {
+  border-color: var(--accent-focus);
+}
+.chartWrap {
+  height: 260px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
+}
+.chartEmpty {
+  display: flex;
+  height: 260px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
+  color: var(--text-hint);
+  font-size: 11px;
+}
+.rangeSelector {
+  display: flex;
+  gap: 4px;
+}
+.rangeBtn,
+.rangeBtnActive {
+  min-height: 26px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.rangeBtnActive {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.rangeBtn:hover {
+  border-color: var(--accent-focus);
+  background: var(--bg-primary);
 }

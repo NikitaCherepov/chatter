@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { I18nProvider } from './I18nProvider';
+import { QueryProvider } from '../components/QueryProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ru">
       <body>
-        <I18nProvider>{children}</I18nProvider>
+        <QueryProvider>
+          <I18nProvider>{children}</I18nProvider>
+        </QueryProvider>
       </body>
     </html>
   );
