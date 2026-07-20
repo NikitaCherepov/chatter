@@ -1,0 +1,119 @@
+.root {
+  --rg-bg: #e8f0fe;
+  --rg-hover: #d2e3fc;
+  --rg-accent: #1a73e8;
+  --rg-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  --rg-radius: 8px;
+  --rg-size: 30px;
+
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  width: var(--rg-size);
+  height: var(--rg-size);
+  border-radius: var(--rg-radius);
+  border: none;
+  background-color: var(--rg-bg);
+  color: var(--rg-accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--rg-shadow);
+  transition: background-color 0.12s, color 0.12s;
+  padding: 0;
+}
+
+.trigger:hover {
+  background-color: var(--rg-hover);
+}
+
+.triggerActive {
+  background-color: var(--rg-accent);
+  color: #fff;
+}
+
+.triggerActive:hover {
+  background-color: var(--rg-accent);
+  opacity: 0.9;
+}
+
+.dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 1100;
+  min-width: 120px;
+  padding: 6px 10px;
+  background-color: var(--rg-bg);
+  border-radius: var(--rg-radius);
+  box-shadow: var(--rg-shadow);
+  animation: rgSlideUp 0.12s ease-out;
+}
+
+@keyframes rgSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.option:not(:last-child) {
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  margin-bottom: 3px;
+}
+
+.radio {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(26, 115, 232, 0.4);
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s;
+}
+
+.radioChecked {
+  border-color: var(--rg-accent);
+}
+
+.radioDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--rg-accent);
+}
+
+.optionLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rg-accent);
+  white-space: nowrap;
+}
+
+.hiddenInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
