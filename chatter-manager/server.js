@@ -1655,9 +1655,52 @@ async function handleRequest(req, res) {
       method: 'DELETE',
     }));
   }
+
+  // ── Plan limits (token quotas per plan) ────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/plan-limits') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/plan-limits'));
+  }
+  if (req.method === 'PUT' && pathname === '/api/plan-limits') {
+    const body = await readJson(req);
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/plan-limits', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }));
+  }
+  if (req.method === 'POST' && pathname === '/api/sync-plan-limits') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/sync-plan-limits', {
+      method: 'POST',
+      body: '{}',
+    }));
+  }
+
+  // ── Model coefficients (token quota multipliers) ───────────────────────
+  if (req.method === 'GET' && pathname === '/api/model-coefficients') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-coefficients'));
+  }
+  const modelCoefficientMatch = pathname.match(/^\/api\/model-coefficients\/(.+)$/);
+  if (modelCoefficientMatch) {
+    const modelId = decodeURIComponent(modelCoefficientMatch[1]);
+    const safePath = `/internal/admin/model-coefficients/${encodeURIComponent(modelId)}`;
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      return sendJson(res, 200, await backendInternalRequest(safePath, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }));
+    }
+    if (req.method === 'DELETE') {
+      return sendJson(res, 200, await backendInternalRequest(safePath, { method: 'DELETE' }));
+    }
+  }
+
   const userDetailMatch = pathname.match(/^\/api\/users\/(\d+)$/);
   if (req.method === 'GET' && userDetailMatch) {
     return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users-overview/${userDetailMatch[1]}`));
+  }
+  const userUsageMatch = pathname.match(/^\/api\/users\/(\d+)\/usage$/);
+  if (req.method === 'GET' && userUsageMatch) {
+    return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users/${userUsageMatch[1]}/usage`));
   }
   const userRoleMatch = pathname.match(/^\/api\/users\/(\d+)\/role$/);
   if (req.method === 'PUT' && userRoleMatch) {

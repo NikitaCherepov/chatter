@@ -3174,19 +3174,19 @@ app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, async (req: AuthedReq
   return res.json({ ok: true, status: 'none' });
 });
 
-app.post('/api/v1/admin/sync-plan-limits', adminMiddleware, (_req: AuthedRequest, res) => {
+// ─── Plan limits config (admin-editable) ────────────────────────────────────
+
+app.post('/internal/admin/sync-plan-limits', internalAuth, (_req, res) => {
   syncAllUsersPlanLimits();
   return res.json({ ok: true });
 });
 
-// ─── Plan limits config (admin-editable) ────────────────────────────────────
-
-app.get('/api/v1/admin/plan-limits', adminMiddleware, (_req: AuthedRequest, res) => {
+app.get('/internal/admin/plan-limits', internalAuth, (_req, res) => {
   const limits = loadPlanLimitsFromDb();
   return res.json({ limits });
 });
 
-app.put('/api/v1/admin/plan-limits', adminMiddleware, (req: AuthedRequest, res) => {
+app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
   const body = req.body as { limits?: Record<string, unknown> } | null;
   if (!body || !body.limits || typeof body.limits !== 'object') {
     return res.status(400).json({ error: 'bad_limits_payload' });
@@ -3214,14 +3214,14 @@ app.put('/api/v1/admin/plan-limits', adminMiddleware, (req: AuthedRequest, res) 
 
 // ─── Model overrides (coefficients) ─────────────────────────────────────────
 
-app.get('/api/v1/admin/model-coefficients', adminMiddleware, (_req: AuthedRequest, res) => {
+app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
   const rows = db.prepare('SELECT model_id, coefficient, updated_at FROM model_overrides').all() as Array<{ model_id: string; coefficient: number; updated_at: number }>;
   const map: Record<string, number> = {};
   for (const row of rows) map[row.model_id] = row.coefficient;
   return res.json({ coefficients: map });
 });
 
-app.put('/api/v1/admin/model-coefficients/:modelId', adminMiddleware, (req: AuthedRequest, res) => {
+app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) => {
   const modelId = `${req.params.modelId || ''}`.trim();
   if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
   const body = req.body as { coefficient?: number } | null;
@@ -3231,7 +3231,7 @@ app.put('/api/v1/admin/model-coefficients/:modelId', adminMiddleware, (req: Auth
   return res.json({ ok: true, model_id: modelId, coefficient: raw });
 });
 
-app.delete('/api/v1/admin/model-coefficients/:modelId', adminMiddleware, (req: AuthedRequest, res) => {
+app.delete('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) => {
   const modelId = `${req.params.modelId || ''}`.trim();
   if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
   db.prepare('DELETE FROM model_overrides WHERE model_id = ?').run(modelId);
@@ -3241,7 +3241,7 @@ app.delete('/api/v1/admin/model-coefficients/:modelId', adminMiddleware, (req: A
 
 // ─── User usage (stats for admin UI) ────────────────────────────────────────
 
-app.get('/api/v1/admin/users/:id/usage', adminMiddleware, (req: AuthedRequest, res) => {
+app.get('/internal/admin/users/:id/usage', internalAuth, (req, res) => {
   const userId = resolveAccountId(Number(req.params.id));
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 

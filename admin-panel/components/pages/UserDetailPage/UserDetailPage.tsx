@@ -357,7 +357,7 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
     let cancelled = false;
     void (async () => {
       try {
-        const response = await api<{ by_model: UsageByModelRow[] }>(`/api/v1/admin/users/${userId}/usage`);
+        const response = await api<{ by_model: UsageByModelRow[] }>(`/api/users/${userId}/usage`);
         if (!cancelled) {
           setRows(response.by_model || []);
           setError('');

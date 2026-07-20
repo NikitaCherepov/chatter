@@ -42,7 +42,7 @@ export function ManualModelListEditor({
     let cancelled = false;
     void (async () => {
       try {
-        const response = await api<{ coefficients: Record<string, number> }>('/api/v1/admin/model-coefficients');
+        const response = await api<{ coefficients: Record<string, number> }>('/api/model-coefficients');
         if (cancelled) return;
         loadedOnceRef.current = true;
         // Only apply server values for uniqueIds the user has NOT edited locally.
@@ -66,7 +66,7 @@ export function ManualModelListEditor({
     if (!uniqueId) return;
     dirtyIdsRef.current.add(uniqueId);
     try {
-      await api(`/api/v1/admin/model-coefficients/${encodeURIComponent(uniqueId)}`, {
+      await api(`/api/model-coefficients/${encodeURIComponent(uniqueId)}`, {
         method: 'PUT',
         body: JSON.stringify({ coefficient }),
       });

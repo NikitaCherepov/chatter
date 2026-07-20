@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
+import { FormField } from '../../ui/FormField/FormField';
 import { Toggle } from '../../ui/Toggle/Toggle';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import styles from './PlanLimitsPage.module.css';
@@ -38,7 +39,7 @@ export function PlanLimitsPage() {
 
   const load = useCallback(async () => {
     try {
-      const response = await api<{ limits: PlanLimitsData }>('/api/v1/admin/plan-limits');
+      const response = await api<{ limits: PlanLimitsData }>('/api/plan-limits');
       if (response.limits) setLimits({ ...emptyLimits, ...response.limits });
     } catch (err) {
       setState(`Не удалось загрузить лимиты: ${err instanceof Error ? err.message : String(err)}`);
@@ -56,7 +57,7 @@ export function PlanLimitsPage() {
     setSaving(true);
     setState('Сохраняю…');
     try {
-      await api('/api/v1/admin/plan-limits', { method: 'PUT', body: JSON.stringify({ limits }) });
+      await api('/api/plan-limits', { method: 'PUT', body: JSON.stringify({ limits }) });
       setState('Лимиты сохранены. Новые подписки получат обновлённые значения автоматически. Существующим пользователям нажмите «Синхронизировать».');
     } catch (err) {
       setState(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
@@ -67,7 +68,7 @@ export function PlanLimitsPage() {
     if (!window.confirm('Применить текущие лимиты ко всем существующим пользователям? Это обновит daily_web_search_limit, daily_image_gen_limit, max_context_tokens и weekly_tokens_quota.')) return;
     setState('Синхронизирую…');
     try {
-      await api('/api/v1/admin/sync-plan-limits', { method: 'POST', body: '{}' });
+      await api('/api/sync-plan-limits', { method: 'POST', body: '{}' });
       setState('Лимиты синхронизированы для всех пользователей.');
     } catch (err) {
       setState(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
@@ -81,8 +82,10 @@ export function PlanLimitsPage() {
         return (
           <Card key={id} title={`Тариф: ${label}`} description={hint}>
             <div className={styles.row}>
-              <label className={styles.field}>
-                <span>Недельная квота токенов</span>
+              <FormField
+                label="Недельная квота токенов"
+                hint={`~${formatNumber(cfg.weekly_token_quota)} условных единиц в неделю. 0 = нет квоты (только флаги).`}
+              >
                 <input
                   type="number"
                   min={0}
@@ -90,10 +93,8 @@ export function PlanLimitsPage() {
                   value={cfg.weekly_token_quota}
                   onChange={(e) => update(id, { weekly_token_quota: Math.max(0, Number(e.target.value) || 0) })}
                 />
-                <small>~{formatNumber(cfg.weekly_token_quota)} условных единиц в неделю. 0 = нет квоты (только флаги).</small>
-              </label>
-              <label className={styles.field}>
-                <span>Лимит контекста (токенов)</span>
+              </FormField>
+              <FormField label="Лимит контекста (токенов)">
                 <input
                   type="number"
                   min={0}
@@ -101,11 +102,10 @@ export function PlanLimitsPage() {
                   value={cfg.max_context_tokens}
                   onChange={(e) => update(id, { max_context_tokens: Math.max(0, Number(e.target.value) || 0) })}
                 />
-              </label>
+              </FormField>
             </div>
             <div className={styles.row}>
-              <label className={styles.field}>
-                <span>Web-поиск в день</span>
+              <FormField label="Web-поиск в день">
                 <input
                   type="number"
                   min={0}
@@ -113,9 +113,8 @@ export function PlanLimitsPage() {
                   value={cfg.daily_web_search_limit}
                   onChange={(e) => update(id, { daily_web_search_limit: Math.max(0, Number(e.target.value) || 0) })}
                 />
-              </label>
-              <label className={styles.field}>
-                <span>Генераций картинок в день</span>
+              </FormField>
+              <FormField label="Генераций картинок в день">
                 <input
                   type="number"
                   min={0}
@@ -123,7 +122,7 @@ export function PlanLimitsPage() {
                   value={cfg.daily_image_gen_limit}
                   onChange={(e) => update(id, { daily_image_gen_limit: Math.max(0, Number(e.target.value) || 0) })}
                 />
-              </label>
+              </FormField>
             </div>
             <div className={styles.toggleRow}>
               <Toggle
