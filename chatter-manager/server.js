@@ -854,6 +854,13 @@ async function performServerUpdate(snapshot) {
   const selection = updateServiceSelection();
   try {
     writeUpdateState({ status: 'backup', targetHash: snapshot.latestHash, message: 'creating_backup' });
+    // Stop the data services BEFORE taking the backup. The backend keeps
+    // chatter.db open; running `sqlite3 .backup` against a live database on
+    // slow-I/O hosts aborts with "database is locked" while the backend is
+    // checkpointing its WAL. The manager itself is not stopped here (it owns
+    // this update flow), and launchServerUpdateHelper recreates everything,
+    // including the manager, from a detached container.
+    await stopDataServicesForUpdate(selection);
     await createBackup({ includeUploads: false, source: 'automatic' });
     writeUpdateState({ status: 'restarting', targetHash: snapshot.latestHash, message: 'restarting_server_services' });
     await launchServerUpdateHelper(snapshot.latestHash, selection);
@@ -861,6 +868,17 @@ async function performServerUpdate(snapshot) {
     writeUpdateState({ status: 'failed', targetHash: snapshot.latestHash, message: error.message || 'server_update_failed' });
     throw error;
   }
+}
+
+// Stops only the services that touch chatter.db / uploads. The manager and
+// admin-panel are left running: the manager drives this update, and the panel
+// needs to keep polling /api/server/updates/state. The helper container later
+// recreates (and thus restarts) every selected service, including the manager.
+async function stopDataServicesForUpdate(selection) {
+  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  const dataServices = selection.services.filter(service => service !== 'chatter-manager' && service !== 'admin-panel');
+  if (dataServices.length === 0) return;
+  await runDocker(composeArgs(...profileArgs, 'stop', ...dataServices), 3 * 60 * 1000);
 }
 
 function runProcess(command, args, timeoutMs = 10 * 60 * 1000) {
