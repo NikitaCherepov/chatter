@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../ui/Card/Card';
 import { LogConsole } from './LogConsole';
 import { LogToolbar, type LogService } from './LogToolbar';
 import styles from './LogsPage.module.css';
 
 export function LogsPage() {
+  const { t } = useTranslation();
   const [service, setService] = useState<LogService>('all');
   const [tail, setTail] = useState(200);
   const [lines, setLines] = useState<string[]>([]);
@@ -28,14 +30,14 @@ export function LogsPage() {
       } catch { /* Ignore malformed log events. */ }
     };
     source.addEventListener('stream-error', (event) => {
-      try { setError((JSON.parse((event as MessageEvent).data) as { error?: string }).error || 'Поток логов завершился с ошибкой'); }
-      catch { setError('Поток логов завершился с ошибкой'); }
+      try { setError((JSON.parse((event as MessageEvent).data) as { error?: string }).error || t('logs.streamError')); }
+      catch { setError(t('logs.streamError')); }
       setConnected(false);
     });
     source.addEventListener('ended', () => setConnected(false));
-    source.onerror = () => { setConnected(false); setError('Нет соединения с потоком логов. Повторяем подключение…'); };
+    source.onerror = () => { setConnected(false); setError(t('logs.noConnection')); };
     return () => source.close();
-  }, [service, tail]);
+  }, [service, tail, t]);
 
   const visibleLines = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -54,7 +56,7 @@ export function LogsPage() {
     URL.revokeObjectURL(url);
   }
 
-  return <div className={styles.wrap}><Card title="Логи сервисов" description="Live-вывод Docker Compose, доступный только администратору">
+  return <div className={styles.wrap}><Card title={t('logs.title')} description={t('logs.description')}>
     <LogToolbar service={service} tail={tail} paused={paused} connected={connected} search={search} onServiceChange={setService} onTailChange={setTail} onPausedChange={setPaused} onSearchChange={setSearch} onClear={() => setLines([])} onDownload={download} />
     <LogConsole lines={visibleLines} paused={paused} error={error} consoleRef={consoleRef} />
   </Card></div>;

@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../ui/Card/Card';
 import { FormField } from '../../ui/FormField/FormField';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
@@ -25,21 +26,22 @@ export function SecurityPage({
   onNewPasswordChange,
   onSubmit,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <form className={styles.form} onSubmit={onSubmit}>
       <Card
-        title="Данные администратора"
-        description="После изменения потребуется войти в панель заново"
+        title={t('security.adminData')}
+        description={t('security.reLoginHint')}
       >
         <div className={grid.fields}>
-          <FormField label="Логин">
+          <FormField label={t('security.usernameLabel')}>
             <input
               value={username}
               onChange={(event) => onUsernameChange(event.target.value)}
               required
             />
           </FormField>
-          <FormField label="Текущий пароль">
+          <FormField label={t('security.currentPassword')}>
             <input
               type="password"
               value={currentPassword}
@@ -48,7 +50,7 @@ export function SecurityPage({
               required
             />
           </FormField>
-          <FormField label="Новый пароль" hint="Минимум 12 символов">
+          <FormField label={t('security.newPassword')} hint={t('security.passwordHint')}>
             <input
               type="password"
               value={newPassword}
@@ -60,7 +62,7 @@ export function SecurityPage({
           </FormField>
           <div className={styles.actions}>
             <span>{state}</span>
-            <button type="submit">Сменить данные</button>
+            <button type="submit">{t('security.changeData')}</button>
           </div>
         </div>
       </Card>

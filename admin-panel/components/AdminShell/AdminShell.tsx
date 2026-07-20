@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Service } from '../../lib/types';
+import { useTranslation } from 'react-i18next';
 import { Brand } from '../Brand/Brand';
 import { Icon, type IconName } from '../icons/icons';
 import styles from './AdminShell.module.css';
@@ -16,35 +17,6 @@ export type AdminSection =
   | 'logs'
   | 'security';
 type NavItem = { id: AdminSection; label: string; icon: IconName };
-
-const primaryItems: NavItem[] = [
-  { id: 'overview', label: 'Обзор', icon: 'overview' },
-  { id: 'users', label: 'Пользователи', icon: 'users' },
-  { id: 'accessKeys', label: 'Ключи доступа', icon: 'security' },
-  { id: 'models', label: 'Модели', icon: 'models' },
-  { id: 'limits', label: 'Тарифы и лимиты', icon: 'limits' },
-  { id: 'integrations', label: 'Интеграции', icon: 'integrations' },
-  { id: 'services', label: 'Сервисы', icon: 'services' },
-];
-
-const secondaryItems: NavItem[] = [
-  { id: 'system', label: 'Система', icon: 'system' },
-  { id: 'logs', label: 'Логи', icon: 'logs' },
-  { id: 'security', label: 'Безопасность', icon: 'security' },
-];
-
-const titles: Record<AdminSection, [string, string]> = {
-  overview: ['Обзор', 'Состояние сервера и компонентов Chatter'],
-  users: ['Пользователи', 'Аккаунты, роли и привязки'],
-  accessKeys: ['Ключи доступа', 'Пропуски Desktop к этому серверу'],
-  models: ['Модели', 'Провайдер и основная модель'],
-  limits: ['Тарифы и лимиты', 'Общие правила и индивидуальные ограничения'],
-  integrations: ['Интеграции', 'Внешние API и возможности Chatter'],
-  services: ['Сервисы', 'Telegram, Voice и дополнительные компоненты'],
-  system: ['Система', 'Сервер, обновления и резервные копии'],
-  logs: ['Логи', 'События и ошибки сервисов'],
-  security: ['Безопасность', 'Доступ к панели управления'],
-};
 
 type Props = {
   section: AdminSection;
@@ -63,6 +35,37 @@ export function AdminShell({
   onSectionChange,
   onLogout,
 }: Props) {
+  const { t } = useTranslation();
+
+  const primaryItems: NavItem[] = [
+    { id: 'overview', label: t('nav.overview'), icon: 'overview' },
+    { id: 'users', label: t('nav.users'), icon: 'users' },
+    { id: 'accessKeys', label: t('nav.accessKeys'), icon: 'security' },
+    { id: 'models', label: t('nav.models'), icon: 'models' },
+    { id: 'limits', label: t('nav.limits'), icon: 'limits' },
+    { id: 'integrations', label: t('nav.integrations'), icon: 'integrations' },
+    { id: 'services', label: t('nav.services'), icon: 'services' },
+  ];
+
+  const secondaryItems: NavItem[] = [
+    { id: 'system', label: t('nav.system'), icon: 'system' },
+    { id: 'logs', label: t('nav.logs'), icon: 'logs' },
+    { id: 'security', label: t('nav.security'), icon: 'security' },
+  ];
+
+  const titles: Record<AdminSection, [string, string]> = {
+    overview: [t('nav.overviewTitle'), t('nav.overviewDesc')],
+    users: [t('nav.usersTitle'), t('nav.usersDesc')],
+    accessKeys: [t('nav.accessKeysTitle'), t('nav.accessKeysDesc')],
+    models: [t('nav.modelsTitle'), t('nav.modelsDesc')],
+    limits: [t('nav.limitsTitle'), t('nav.limitsDesc')],
+    integrations: [t('nav.integrationsTitle'), t('nav.integrationsDesc')],
+    services: [t('nav.servicesTitle'), t('nav.servicesDesc')],
+    system: [t('nav.systemTitle'), t('nav.systemDesc')],
+    logs: [t('nav.logsTitle'), t('nav.logsDesc')],
+    security: [t('nav.securityTitle'), t('nav.securityDesc')],
+  };
+
   const backend = services.find((service) => service.service === 'backend');
   const healthy = backend?.state === 'running' && (!backend.health || backend.health === 'healthy');
   const [title, subtitle] = titles[section];
@@ -74,7 +77,7 @@ export function AdminShell({
           <Brand />
           <span className={styles.adminLabel}>Admin</span>
         </div>
-        <nav className={styles.navigation} aria-label="Основная навигация">
+        <nav className={styles.navigation} aria-label={t('nav.mainNav')}>
           <NavigationItems items={primaryItems} active={section} onSelect={onSectionChange} />
           <div className={styles.divider} />
           <NavigationItems items={secondaryItems} active={section} onSelect={onSectionChange} />
@@ -82,7 +85,7 @@ export function AdminShell({
         <div className={styles.account}>
           <span className={styles.avatar}>{username.slice(0, 1).toUpperCase()}</span>
           <span className={styles.username}>{username}</span>
-          <button className={styles.logout} type="button" onClick={onLogout} title="Выйти">
+          <button className={styles.logout} type="button" onClick={onLogout} title={t('nav.logout')}>
             <Icon name="logout" />
           </button>
         </div>
@@ -97,7 +100,7 @@ export function AdminShell({
             className={`${styles.serverStatus} ${healthy ? styles.serverHealthy : styles.serverProblem}`}
           >
             <span />
-            {healthy ? 'Сервер работает' : 'Нужна проверка'}
+            {healthy ? t('nav.serverHealthy') : t('nav.serverNeedsCheck')}
           </div>
         </header>
         <div className={styles.content}>{children}</div>

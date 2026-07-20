@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
 import { FormField } from '../../ui/FormField/FormField';
@@ -24,15 +25,12 @@ const emptyLimits: PlanLimitsData = {
   pro: { daily_web_search_limit: 20, daily_image_gen_limit: 5, image_attachments_allowed: true, max_context_tokens: 1_000_000, weekly_token_quota: 30_000_000 },
 };
 
-const PLAN_LABELS: { id: 'free' | 'standart' | 'pro'; label: string; hint: string }[] = [
-  { id: 'free', label: 'Free', hint: 'Базовые пользователи без подписки' },
-  { id: 'standart', label: 'Standart', hint: 'Стандартная подписка' },
-  { id: 'pro', label: 'Pro', hint: 'Премиум-подписка' },
-];
+const PLAN_IDS: ('free' | 'standart' | 'pro')[] = ['free', 'standart', 'pro'];
 
 const formatNumber = (value: number) => new Intl.NumberFormat('ru').format(Number(value) || 0);
 
 export function PlanLimitsPage() {
+  const { t } = useTranslation();
   const [limits, setLimits] = useState<PlanLimitsData>(emptyLimits);
   const [state, setState] = useState('');
   const [saving, setSaving] = useState(false);
@@ -42,7 +40,7 @@ export function PlanLimitsPage() {
       const response = await api<{ limits: PlanLimitsData }>('/api/plan-limits');
       if (response.limits) setLimits({ ...emptyLimits, ...response.limits });
     } catch (err) {
-      setState(`Не удалось загрузить лимиты: ${err instanceof Error ? err.message : String(err)}`);
+      setState(t('planLimits.loadError', { message: err instanceof Error ? err.message : String(err) }));
     }
   }, []);
 
@@ -55,36 +53,36 @@ export function PlanLimitsPage() {
   async function save(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
-    setState('Сохраняю…');
+    setState(t('planLimits.actions.saving'));
     try {
       await api('/api/plan-limits', { method: 'PUT', body: JSON.stringify({ limits }) });
-      setState('Лимиты сохранены. Новые подписки получат обновлённые значения автоматически. Существующим пользователям нажмите «Синхронизировать».');
+      setState(t('planLimits.saved'));
     } catch (err) {
-      setState(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
+      setState(t('planLimits.loadError', { message: err instanceof Error ? err.message : String(err) }));
     } finally { setSaving(false); }
   }
 
   async function syncAll() {
-    if (!window.confirm('Применить текущие лимиты ко всем существующим пользователям? Это обновит daily_web_search_limit, daily_image_gen_limit, max_context_tokens и weekly_tokens_quota.')) return;
-    setState('Синхронизирую…');
+    if (!window.confirm(t('planLimits.syncConfirm'))) return;
+    setState(t('planLimits.syncing'));
     try {
       await api('/api/sync-plan-limits', { method: 'POST', body: '{}' });
-      setState('Лимиты синхронизированы для всех пользователей.');
+      setState(t('planLimits.synced'));
     } catch (err) {
-      setState(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
+      setState(t('planLimits.loadError', { message: err instanceof Error ? err.message : String(err) }));
     }
   }
 
   return (
     <form className={grid.stack} onSubmit={save} noValidate>
-      {PLAN_LABELS.map(({ id, label, hint }) => {
+      {PLAN_IDS.map(id => {
         const cfg = limits[id];
         return (
-          <Card key={id} title={`Тариф: ${label}`} description={hint}>
+          <Card key={id} title={t('planLimits.planTitle', { label: t(`planLimits.plans.${id}.label`) })} description={t(`planLimits.plans.${id}.hint`)}>
             <div className={styles.row}>
               <FormField
-                label="Недельная квота токенов"
-                hint={`~${formatNumber(cfg.weekly_token_quota)} условных единиц в неделю. 0 = нет квоты (только флаги).`}
+                label={t('planLimits.weeklyQuotaLabel')}
+                hint={t('planLimits.weeklyQuotaHint', { units: formatNumber(cfg.weekly_token_quota) })}
               >
                 <input
                   type="number"
@@ -94,7 +92,7 @@ export function PlanLimitsPage() {
                   onChange={(e) => update(id, { weekly_token_quota: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FormField>
-              <FormField label="Лимит контекста (токенов)">
+              <FormField label={t('planLimits.contextLimitLabel')}>
                 <input
                   type="number"
                   min={0}
@@ -105,7 +103,7 @@ export function PlanLimitsPage() {
               </FormField>
             </div>
             <div className={styles.row}>
-              <FormField label="Web-поиск в день">
+              <FormField label={t('planLimits.webSearchLabel')}>
                 <input
                   type="number"
                   min={0}
@@ -114,7 +112,7 @@ export function PlanLimitsPage() {
                   onChange={(e) => update(id, { daily_web_search_limit: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FormField>
-              <FormField label="Генераций картинок в день">
+              <FormField label={t('planLimits.imageGenLabel')}>
                 <input
                   type="number"
                   min={0}
@@ -128,20 +126,20 @@ export function PlanLimitsPage() {
               <Toggle
                 checked={cfg.image_attachments_allowed}
                 onChange={(image_attachments_allowed) => update(id, { image_attachments_allowed })}
-                label="Разрешить прикреплять изображения"
+                label={t('planLimits.allowImageAttach')}
               />
             </div>
           </Card>
         );
       })}
 
-      <Card title="Действия" description="Применить лимиты ко всем текущим пользователям">
+      <Card title={t('planLimits.actions.title')} description={t('planLimits.actions.description')}>
         <div className={styles.actions}>
           <button type="submit" className="buttonPrimary" disabled={saving}>
-            {saving ? 'Сохраняю…' : 'Сохранить лимиты'}
+            {saving ? t('planLimits.actions.saving') : t('planLimits.actions.saveLimits')}
           </button>
           <button type="button" className="buttonSecondary" onClick={() => void syncAll()} disabled={saving}>
-            Синхронизировать всем пользователям
+            {t('planLimits.actions.syncAll')}
           </button>
         </div>
         {state && <p className={styles.state}>{state}</p>}

@@ -124,7 +124,7 @@ export default function Home() {
   async function save(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
-    setSaveState('Сохраняю настройки и запускаю контейнеры…');
+    setSaveState(t('common.savingSettings'));
     try {
       await api('/api/settings', {
         method: 'PUT',
@@ -132,10 +132,10 @@ export default function Home() {
       });
       setTelegramToken('');
       setVoiceToken('');
-      setSaveState('Настройки применены.');
+      setSaveState(t('common.settingsApplied'));
       await loadData();
     } catch (error) {
-      setSaveState(`Ошибка: ${error instanceof Error ? error.message : String(error)}`);
+      setSaveState(`${t('common.error')}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSaving(false);
     }
@@ -143,7 +143,7 @@ export default function Home() {
 
   async function changeAccount(event: FormEvent) {
     event.preventDefault();
-    setAccountState('Сохраняю…');
+    setAccountState(t('common.saving'));
     try {
       await api('/api/account', {
         method: 'PUT',
@@ -151,10 +151,10 @@ export default function Home() {
       });
       setCurrentPassword('');
       setNewPassword('');
-      setAccountState('Изменено. Войди снова.');
+      setAccountState(t('common.changedRelogin'));
       setTimeout(() => setAuthenticated(false), 700);
     } catch (error) {
-      setAccountState(`Ошибка: ${error instanceof Error ? error.message : String(error)}`);
+      setAccountState(`${t('common.error')}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

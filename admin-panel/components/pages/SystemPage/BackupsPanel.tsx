@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { BackupInfo } from './types';
 import { formatBytes } from './types';
 import styles from './SystemPage.module.css';
@@ -18,34 +19,35 @@ export function BackupsPanel({ backups, creating, restoring, importing, importPr
   onRestore: (backup: BackupInfo) => void;
   onDelete: (backup: BackupInfo) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={styles.backupContent}>
       <div className={styles.backupToolbar}>
         <label className={styles.mediaOption}>
           <input type="checkbox" checked={includeUploads} onChange={(event) => onIncludeUploadsChange(event.target.checked)} />
-          <span><strong>Включить загруженные файлы</strong><small>Фотографии, документы и аудио могут значительно увеличить архив</small></span>
+          <span><strong>{t('system.backups.includeUploads')}</strong><small>{t('system.backups.includeUploadsHint')}</small></span>
         </label>
         <label className={styles.mediaOption}>
           <input type="checkbox" checked={includeConfiguration} onChange={(event) => onIncludeConfigurationChange(event.target.checked)} />
-          <span><strong>Включить конфигурацию и секреты</strong><small>API-ключи и настройки сервисов. Храни такой архив в безопасном месте</small></span>
+          <span><strong>{t('system.backups.includeConfig')}</strong><small>{t('system.backups.includeConfigHint')}</small></span>
         </label>
         <div className={styles.primaryActions}>
-          <label className={`buttonSecondary ${styles.importButton}`}><input type="file" accept=".db,.sqlite,.sqlite3,.tar.gz,.tgz" disabled={creating || restoring || importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImport(file); event.target.value = ''; }} />{importing ? (importProgress === 100 ? 'Проверяем…' : `Загрузка ${importProgress ?? 0}%`) : 'Импортировать'}</label>
-          <button type="button" className="buttonPrimary" onClick={onCreate} disabled={creating || restoring || importing}>{creating ? 'Создаём…' : 'Создать бэкап'}</button>
+          <label className={`buttonSecondary ${styles.importButton}`}><input type="file" accept=".db,.sqlite,.sqlite3,.tar.gz,.tgz" disabled={creating || restoring || importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImport(file); event.target.value = ''; }} />{importing ? (importProgress === 100 ? t('system.backups.verifying') : t('system.backups.importing', { percent: importProgress ?? 0 })) : t('system.backups.importButton')}</label>
+          <button type="button" className="buttonPrimary" onClick={onCreate} disabled={creating || restoring || importing}>{creating ? t('system.backups.creating') : t('system.backups.createBackup')}</button>
         </div>
       </div>
       {state && <p className={styles.operationState}>{state}</p>}
       <div className={styles.backupTable}>
-        <div className={styles.tableHeader}><span>Дата</span><span>Содержимое</span><span>Размер</span><span>Версия</span><span /></div>
-        {backups.length === 0 ? <div className={styles.empty}>Резервных копий пока нет.</div> : backups.map((backup) => (
+        <div className={styles.tableHeader}><span>{t('system.backups.tableHeaders.date')}</span><span>{t('system.backups.tableHeaders.content')}</span><span>{t('system.backups.tableHeaders.size')}</span><span>{t('system.backups.tableHeaders.version')}</span><span /></div>
+        {backups.length === 0 ? <div className={styles.empty}>{t('system.backups.empty')}</div> : backups.map((backup) => (
           <div className={styles.tableRow} key={backup.name}>
             <span>{new Date(backup.createdAt).toLocaleString()}</span>
-            <span>{[backup.includesUploads ? 'БД + файлы' : 'БД', backup.includesConfiguration ? 'конфигурация' : ''].filter(Boolean).join(' + ')}</span>
-            <span>{formatBytes(backup.size)}</span><span>{backup.version}{backup.source === 'automatic' ? ' · авто' : ''}</span>
+            <span>{[backup.includesUploads ? t('system.backups.dbAndFiles') : t('system.backups.db'), backup.includesConfiguration ? t('system.backups.configuration') : ''].filter(Boolean).join(' + ')}</span>
+            <span>{formatBytes(backup.size)}</span><span>{backup.version}{backup.source === 'automatic' ? ` · ${t('system.backups.auto')}` : ''}</span>
             <span className={styles.rowActions}>
-              <a className="buttonSecondary" href={`/api/backups/${encodeURIComponent(backup.name)}/download`}>Скачать</a>
-              <button type="button" className="buttonSecondary" onClick={() => onRestore(backup)} disabled={creating || restoring || importing}>Восстановить</button>
-              <button type="button" className="buttonSecondary" onClick={() => onDelete(backup)} disabled={creating || restoring || importing}>Удалить</button>
+              <a className="buttonSecondary" href={`/api/backups/${encodeURIComponent(backup.name)}/download`}>{t('system.backups.download')}</a>
+              <button type="button" className="buttonSecondary" onClick={() => onRestore(backup)} disabled={creating || restoring || importing}>{t('system.backups.restore')}</button>
+              <button type="button" className="buttonSecondary" onClick={() => onDelete(backup)} disabled={creating || restoring || importing}>{t('system.backups.delete')}</button>
             </span>
           </div>
         ))}

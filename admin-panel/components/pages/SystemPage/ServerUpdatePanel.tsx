@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
 import { ServerUpdateModal } from './ServerUpdateModal/ServerUpdateModal';
@@ -26,21 +27,23 @@ type ServerUpdateInfo = {
 };
 
 const activeStatuses = new Set(['queued', 'backup', 'restarting']);
-const statusText: Record<UpdateOperation['status'], string> = {
-  idle: '',
-  queued: 'Обновление запускается…',
-  backup: 'Создаём резервную копию базы данных…',
-  restarting: 'Перезапускаем серверные сервисы. Панель ненадолго отключится…',
-  complete: 'Сервер обновлён.',
-  failed: 'Обновление не удалось.',
-};
 
 export function ServerUpdatePanel() {
+  const { t } = useTranslation();
   const [info, setInfo] = useState<ServerUpdateInfo | null>(null);
   const [checking, setChecking] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState('');
+
+  const statusText: Record<UpdateOperation['status'], string> = {
+    idle: '',
+    queued: t('system.update.stages.queued'),
+    backup: t('system.update.stages.backup'),
+    restarting: t('system.update.stages.restarting'),
+    complete: t('system.update.stages.complete'),
+    failed: t('system.update.stages.failed'),
+  };
 
   const load = useCallback(async () => {
     const next = await api<ServerUpdateInfo>('/api/server-update');
@@ -51,11 +54,13 @@ export function ServerUpdatePanel() {
     else if (next.operation.status === 'complete') setMessage(statusText.complete);
     else if (active) setMessage(statusText[next.operation.status]);
     return next;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t]);
 
   useEffect(() => {
-    load().catch(error => setMessage(`Ошибка: ${error instanceof Error ? error.message : String(error)}`))
+    load().catch(error => setMessage(t('system.error', { message: error instanceof Error ? error.message : String(error) })))
       .finally(() => setChecking(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   useEffect(() => {
@@ -68,13 +73,13 @@ export function ServerUpdatePanel() {
 
   async function check() {
     setChecking(true);
-    setMessage('Скачиваем сведения о свежих серверных образах…');
+    setMessage(t('system.update.fetchingInfo'));
     try {
       const next = await api<ServerUpdateInfo>('/api/server-update?refresh=1');
       setInfo(next);
-      setMessage(next.available ? 'Найдены новые серверные образы.' : 'Сервер уже использует свежие образы.');
+      setMessage(next.available ? t('system.update.found') : t('system.update.alreadyFresh'));
     } catch (error) {
-      setMessage(`Ошибка проверки: ${error instanceof Error ? error.message : String(error)}`);
+      setMessage(t('system.update.checkError', { message: error instanceof Error ? error.message : String(error) }));
     } finally {
       setChecking(false);
     }
@@ -82,51 +87,51 @@ export function ServerUpdatePanel() {
 
   async function update() {
     setUpdating(true);
-    setMessage('Запускаем обновление…');
+    setMessage(t('system.update.starting'));
     try {
       await api('/api/server-update', { method: 'POST', body: '{}' });
       setConfirming(false);
       await load();
     } catch (error) {
       setUpdating(false);
-      setMessage(`Ошибка обновления: ${error instanceof Error ? error.message : String(error)}`);
+      setMessage(t('system.update.updateError', { message: error instanceof Error ? error.message : String(error) }));
     }
   }
 
   const statusLabel = checking
-    ? 'Проверяем…'
+    ? t('system.update.checking')
     : !info
-      ? 'Не удалось проверить'
+      ? t('system.update.checkFailed')
       : !info.supported
-        ? 'Недоступно локально'
+        ? t('system.update.unavailable')
     : info?.available
-      ? info.rebuiltFromSameCommit ? 'Образ пересобран' : 'Доступно обновление'
-      : 'Обновлений нет';
+      ? info.rebuiltFromSameCommit ? t('system.update.rebuild') : t('system.update.updateAvailable')
+      : t('system.update.upToDate');
 
   return (
     <>
-      <Card title="Обновление сервера" description="Проверяются только Docker-образы серверных сервисов. Desktop не затрагивается.">
+      <Card title={t('system.update.title')} description={t('system.update.description')}>
       <div className={styles.updateContent}>
         <div className={styles.versionGrid}>
-          <HashItem label="Запущенная сборка" value={info?.installedHash || '—'} />
-          <HashItem label="Свежая сборка" value={info?.latestHash || '—'} />
+          <HashItem label={t('system.update.installedBuild')} value={info?.installedHash || '\u2014'} />
+          <HashItem label={t('system.update.latestBuild')} value={info?.latestHash || '\u2014'} />
           <div className={styles.versionStatus}>
             <span className={info?.available || !info?.supported ? styles.updateAvailable : styles.updateCurrent} />
             <strong>{statusLabel}</strong>
           </div>
         </div>
         {!info?.supported && !checking && (
-          <p className={styles.operationState}>Обновление доступно только для серверной установки, работающей на Docker-образах latest.</p>
+          <p className={styles.operationState}>{t('system.update.updateDockerOnly')}</p>
         )}
         {info?.changedServices.length ? (
-          <p className={styles.operationState}>Изменились: {info.changedServices.join(', ')}</p>
+          <p className={styles.operationState}>{t('system.update.changes.changed', { services: info.changedServices.join(', ') })}</p>
         ) : null}
         {message && <p className={styles.operationState}>{message}</p>}
         <div className={styles.updateActions}>
-          <small>«Проверить» скачивает образы, но не перезапускает сервисы.</small>
+          <small>{t('system.update.checkHint')}</small>
           <div>
-            <button type="button" className="buttonSecondary" disabled={checking || updating || !info?.supported} onClick={() => void check()}>Проверить</button>
-            <button type="button" disabled={!info?.available || updating || checking} onClick={() => setConfirming(true)}>{updating ? 'Обновляем…' : 'Обновить сервер'}</button>
+            <button type="button" className="buttonSecondary" disabled={checking || updating || !info?.supported} onClick={() => void check()}>{t('system.update.check')}</button>
+            <button type="button" disabled={!info?.available || updating || checking} onClick={() => setConfirming(true)}>{updating ? t('system.update.updating') : t('system.update.updateButton')}</button>
           </div>
         </div>
       </div>

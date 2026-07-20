@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { BackupSchedule } from './types';
 import styles from './SystemPage.module.css';
 
@@ -14,23 +15,24 @@ export function BackupSchedulePanel({
   onChange: (patch: Partial<BackupSchedule>) => void;
   onSave: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={styles.scheduleGrid}>
       <label>
-        <span>Периодичность</span>
+        <span>{t('system.schedule.frequency')}</span>
         <select
           value={schedule.frequency}
           onChange={(event) =>
             onChange({ frequency: event.target.value as BackupSchedule['frequency'] })
           }
         >
-          <option value="off">Выключено</option>
-          <option value="daily">Ежедневно</option>
-          <option value="weekly">Еженедельно</option>
+          <option value="off">{t('system.schedule.off')}</option>
+          <option value="daily">{t('system.schedule.daily')}</option>
+          <option value="weekly">{t('system.schedule.weekly')}</option>
         </select>
       </label>
       <label>
-        <span>Хранить последних копий</span>
+        <span>{t('system.schedule.keepCount')}</span>
         <input
           type="number"
           min="1"
@@ -48,19 +50,19 @@ export function BackupSchedulePanel({
           disabled={schedule.frequency === 'off'}
         />
         <span>
-          <strong>Добавлять файлы</strong>
-          <small>По умолчанию автобэкап сохраняет только базу</small>
+          <strong>{t('system.schedule.includeFiles')}</strong>
+          <small>{t('system.schedule.includeFilesHint')}</small>
         </span>
       </label>
       <div className={styles.scheduleAction}>
         <span>
           {state ||
             (schedule.lastRunAt
-              ? `Последний запуск: ${new Date(schedule.lastRunAt).toLocaleString()}`
-              : 'Автобэкапы ещё не запускались')}
+              ? t('system.schedule.lastRun', { time: new Date(schedule.lastRunAt).toLocaleString() })
+              : t('system.schedule.neverRun'))}
         </span>
         <button type="button" className="buttonSecondary" onClick={onSave} disabled={saving}>
-          {saving ? 'Сохраняем…' : 'Сохранить расписание'}
+          {saving ? t('system.schedule.saving') : t('system.schedule.saveSchedule')}
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from './api';
 
 /**
@@ -17,6 +18,7 @@ import { api } from './api';
  * (PRO / LITE / VISION fallback chains).
  */
 export function useModelCoefficients() {
+  const { t } = useTranslation();
   const [map, setMap] = useState<Record<string, number>>({});
   const [state, setState] = useState('');
   const loadedOnceRef = useRef(false);
@@ -40,7 +42,7 @@ export function useModelCoefficients() {
         });
         setState('');
       } catch (err) {
-        setState(`Не удалось загрузить коэффициенты: ${err instanceof Error ? err.message : String(err)}`);
+        setState(`${t('common.coefficientLoadError')}: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
     return () => { cancelled = true; };
@@ -55,9 +57,9 @@ export function useModelCoefficients() {
         method: 'PUT',
         body: JSON.stringify({ coefficient }),
       });
-      setState('Коэффициент сохранён');
+      setState(t('common.coefficientSaved'));
     } catch (err) {
-      setState(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
+      setState(`${t('common.error')}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, []);
 
