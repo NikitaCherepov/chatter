@@ -1025,7 +1025,7 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
     temperature: 0.7
   };
 
-  const meta = await createCompletionWithLiteProviderFallback(requestBody, undefined, 'none');
+  const meta = await createCompletionWithLiteProviderFallback(requestBody, undefined, null);
   const msg = meta.response?.choices?.[0]?.message;
   const content = msg?.content;
   if (typeof content !== 'string' || !content.trim()) {
