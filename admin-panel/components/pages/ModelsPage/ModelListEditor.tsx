@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { ProviderModelConfig } from '../../../lib/types';
 import { FormField } from '../../ui/FormField/FormField';
 import { SecretState } from '../../ui/SecretState/SecretState';
@@ -17,7 +18,7 @@ type Props = {
   onChange: (models: ProviderModelConfig[]) => void;
   required?: boolean;
   emptyText?: string;
-  /** When provided, each model card gets a "Коэффициент стоимости" field. */
+  /** When provided, each model card gets a cost coefficient field. */
   coefficientManager?: CoefficientManager;
 };
 
@@ -35,9 +36,10 @@ export function ModelListEditor({
   models,
   onChange,
   required = false,
-  emptyText = 'Модели пока не добавлены.',
+  emptyText,
   coefficientManager,
 }: Props) {
+  const { t } = useTranslation();
   const update = (index: number, patch: Partial<ProviderModelConfig>) => {
     onChange(models.map((model, itemIndex) => (itemIndex === index ? { ...model, ...patch } : model)));
   };
@@ -60,16 +62,16 @@ export function ModelListEditor({
           </div>
         </div>
       )}
-      {!models.length && <p className={styles.empty}>{emptyText}</p>}
+      {!models.length && <p className={styles.empty}>{emptyText || t('models.common.emptyText')}</p>}
       {models.map((model, index) => (
         <div className={styles.modelSequence} key={model.id}>
-          {index > 0 && <span className={styles.nextLabel}>следующая модель</span>}
+          {index > 0 && <span className={styles.nextLabel}>{t('models.common.nextModel')}</span>}
           <details className={styles.modelCard} open={index === 0 ? true : undefined}>
             <summary>
               <span className={styles.order}>{index + 1}</span>
               <span className={styles.modelTitle}>
-                <strong>{model.model || 'Новая модель'}</strong>
-                <span>{model.baseUrl || 'Провайдер не указан'}</span>
+                <strong>{model.model || t('models.common.newModel')}</strong>
+                <span>{model.baseUrl || t('models.common.providerNotSet')}</span>
               </span>
               <SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />
             </summary>
@@ -81,10 +83,10 @@ export function ModelListEditor({
               />
               <div className={styles.modelActions}>
                 <button className="buttonSecondary" type="button" disabled={index === 0} onClick={() => move(index, -1)}>
-                  Выше
+                  {t('models.common.moveUp')}
                 </button>
                 <button className="buttonSecondary" type="button" disabled={index === models.length - 1} onClick={() => move(index, 1)}>
-                  Ниже
+                  {t('models.common.moveDown')}
                 </button>
                 <button
                   className={styles.dangerButton}
@@ -92,7 +94,7 @@ export function ModelListEditor({
                   disabled={required && models.length === 1}
                   onClick={() => onChange(models.filter((_, itemIndex) => itemIndex !== index))}
                 >
-                  Удалить
+                  {t('models.common.remove')}
                 </button>
               </div>
             </div>
@@ -100,7 +102,7 @@ export function ModelListEditor({
         </div>
       ))}
       <button className="buttonSecondary" type="button" onClick={() => onChange([...models, newModel()])}>
-        + Добавить модель
+        {t('models.common.addModel')}
       </button>
     </div>
   );
@@ -117,10 +119,11 @@ export function ProviderModelFields({
   required?: boolean;
   coefficientManager?: CoefficientManager;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={styles.fields}>
       <div className={styles.twoColumns}>
-        <FormField label="Ссылка на провайдера">
+        <FormField label={t('models.providerFields.baseUrl')}>
           <input
             type="url"
             value={model.baseUrl}
@@ -129,7 +132,7 @@ export function ProviderModelFields({
             required={required}
           />
         </FormField>
-        <FormField label="Название модели">
+        <FormField label={t('models.providerFields.modelName')}>
           <input
             value={model.model}
             onChange={(event) => onChange({ model: event.target.value })}
@@ -139,8 +142,8 @@ export function ProviderModelFields({
         </FormField>
       </div>
       <FormField
-        label="ID модели для учёта квоты"
-        hint="Стабильный идентификатор, по которому подтягивается коэффициент. Если пусто — генерируется автоматически при сохранении."
+        label={t('models.providerFields.quotaId')}
+        hint={t('models.providerFields.quotaIdHint')}
       >
         <input
           value={model.uniqueId ?? ''}
@@ -150,8 +153,8 @@ export function ProviderModelFields({
       </FormField>
       {coefficientManager && (
         <FormField
-          label="Коэффициент стоимости"
-          hint="0 = бесплатная (не расходует квоту), 1 = по умолчанию, 0.7 = дешевле, 1.5 = дороже"
+          label={t('models.providerFields.coefficient')}
+          hint={t('models.providerFields.coefficientHint')}
         >
           <input
             type="number"
@@ -168,16 +171,16 @@ export function ProviderModelFields({
         </FormField>
       )}
       <FormField
-        label="API-ключ"
+        label={t('models.providerFields.apiKey')}
         state={<SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />}
-        hint={model.hasApiKey ? 'Оставь пустым, чтобы сохранить текущий ключ' : undefined}
+        hint={model.hasApiKey ? t('models.providerFields.apiKeyHint') : undefined}
       >
         <input
           type="password"
           value={model.apiKey}
           onChange={(event) => onChange({ apiKey: event.target.value })}
           autoComplete="off"
-          placeholder={model.hasApiKey ? 'Оставь пустым, чтобы не менять' : 'Вставь API-ключ'}
+          placeholder={model.hasApiKey ? t('models.providerFields.apiKeyPlaceholderExisting') : t('models.providerFields.apiKeyPlaceholderNew')}
           required={required && !model.hasApiKey}
         />
       </FormField>

@@ -48,5 +48,69 @@
       "running": "running\u2026",
       "notRunning": "not running"
     }
+  },
+  "common": {
+    "saved": "saved",
+    "notSet": "not set",
+    "saving": "Applying\u2026",
+    "saveAndApply": "Save and apply",
+    "error": "Error"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "PRO and LITE fallback chains"
+    },
+    "pro": {
+      "description": "If the first model is unavailable, Chatter automatically tries the next one."
+    },
+    "lite": {
+      "description": "Fast models for simple internal tasks. Same fallback order applies.",
+      "emptyText": "No LITE models added yet."
+    },
+    "vision": {
+      "subtitle": "Optional dedicated model; without it the first PRO model is used",
+      "fallbackModel": "Using PRO model",
+      "fallbackProvider": "No dedicated Vision provider configured"
+    },
+    "manual": {
+      "title": "Manual Models",
+      "subtitle": "Models the user can select instead of Auto",
+      "catalog": "Catalog",
+      "fallbackHint": "If a manual model errors, Chatter falls back to Auto.",
+      "emptyText": "No manual models added yet.",
+      "newModel": "New manual model",
+      "modelNotSet": "Model not specified",
+      "nameLabel": "Display name",
+      "namePlaceholder": "e.g. Claude Sonnet",
+      "uniqueIdLabel": "Unique ID",
+      "descriptionLabel": "Short description",
+      "descriptionPlaceholder": "What tasks this model is suitable for",
+      "supportsVision": "Supports images",
+      "adminOnly": "Admins only",
+      "remove": "Remove model",
+      "addModel": "+ Add manual model"
+    },
+    "common": {
+      "emptyText": "No models added yet.",
+      "nextModel": "next model",
+      "newModel": "New model",
+      "providerNotSet": "Provider not set",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove",
+      "addModel": "+ Add model"
+    },
+    "providerFields": {
+      "baseUrl": "Provider URL",
+      "modelName": "Model name",
+      "quotaId": "Model ID for quota tracking",
+      "quotaIdHint": "Stable identifier used to look up the coefficient. If empty, generated automatically on save.",
+      "coefficient": "Cost coefficient",
+      "coefficientHint": "0 = free (no quota usage), 1 = default, 0.7 = cheaper, 1.5 = more expensive",
+      "apiKey": "API key",
+      "apiKeyHint": "Leave empty to keep the current key",
+      "apiKeyPlaceholderExisting": "Leave empty to keep unchanged",
+      "apiKeyPlaceholderNew": "Paste API key"
+    }
   }
 }

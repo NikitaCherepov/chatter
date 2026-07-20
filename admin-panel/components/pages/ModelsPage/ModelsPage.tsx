@@ -1,4 +1,5 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ProviderModelConfig, Settings } from '../../../lib/types';
 import { useModelCoefficients } from '../../../lib/useModelCoefficients';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
@@ -20,6 +21,7 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
   // because its editor hydrates coefficient into ManualModelConfig).
   const { getCoefficient, saveCoefficient, state: coeffState } = useModelCoefficients();
   const coefficientManager = { get: getCoefficient, save: saveCoefficient };
+  const { t } = useTranslation();
 
   const updateVision = (patch: Partial<ProviderModelConfig>) => {
     setSettings((current) => ({
@@ -34,13 +36,13 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
         <summary>
           <span>
             <strong>Auto</strong>
-            <small>Основные цепочки PRO и LITE</small>
+            <small>{t('models.auto.subtitle')}</small>
           </span>
         </summary>
         <div className={styles.sectionBody}>
           <ModelListEditor
             title="PRO"
-            description="Если первая модель недоступна, Chatter автоматически попробует следующую."
+            description={t('models.pro.description')}
             models={settings.proModels}
             onChange={(proModels) => setSettings((current) => ({ ...current, proModels }))}
             required
@@ -50,13 +52,13 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
           <div className={styles.listHeading}>
             <div>
               <h3>LITE</h3>
-              <p>Быстрые модели для простых внутренних задач. Порядок работает так же.</p>
+              <p>{t('models.lite.description')}</p>
             </div>
           </div>
           <ModelListEditor
             models={settings.liteModels}
             onChange={(liteModels) => setSettings((current) => ({ ...current, liteModels }))}
-            emptyText="LITE-модели пока не добавлены."
+            emptyText={t('models.lite.emptyText')}
             required
             coefficientManager={coefficientManager}
           />
@@ -68,14 +70,14 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
         <summary>
           <span>
             <strong>Vision</strong>
-            <small>Необязательная отдельная модель; без неё используется первая PRO-модель</small>
+            <small>{t('models.vision.subtitle')}</small>
           </span>
         </summary>
         <div className={styles.sectionBody}>
           <div className={styles.singleModel}>
             <div className={styles.modelTitle}>
-              <strong>{settings.visionModel.model || 'Используется PRO-модель'}</strong>
-              <span>{settings.visionModel.baseUrl || 'Отдельный Vision-провайдер не настроен'}</span>
+              <strong>{settings.visionModel.model || t('models.vision.fallbackModel')}</strong>
+              <span>{settings.visionModel.baseUrl || t('models.vision.fallbackProvider')}</span>
             </div>
             <ProviderModelFields
               model={settings.visionModel}
@@ -91,8 +93,8 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
       <details className={styles.section}>
         <summary>
           <span>
-            <strong>Ручные модели</strong>
-            <small>Модели, которые пользователь выбирает вместо Auto</small>
+            <strong>{t('models.manual.title')}</strong>
+            <small>{t('models.manual.subtitle')}</small>
           </span>
         </summary>
         <div className={styles.sectionBody}>

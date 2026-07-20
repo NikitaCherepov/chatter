@@ -48,5 +48,69 @@
       "running": "运行中…",
       "notRunning": "未运行"
     }
+  },
+  "common": {
+    "saved": "已保存",
+    "notSet": "未设置",
+    "saving": "正在应用…",
+    "saveAndApply": "保存并应用",
+    "error": "错误"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "PRO 和 LITE 回退链"
+    },
+    "pro": {
+      "description": "如果第一个模型不可用，Chatter 会自动尝试下一个。"
+    },
+    "lite": {
+      "description": "用于简单内部任务的快速模型。同样适用回退顺序。",
+      "emptyText": "尚未添加 LITE 模型。"
+    },
+    "vision": {
+      "subtitle": "可选专用模型；未设置时使用第一个 PRO 模型",
+      "fallbackModel": "使用 PRO 模型",
+      "fallbackProvider": "未配置专用 Vision 提供商"
+    },
+    "manual": {
+      "title": "手动模型",
+      "subtitle": "用户可选择替代自动模型的模型",
+      "catalog": "目录",
+      "fallbackHint": "如果手动模型出错，Chatter 将回退到自动模型。",
+      "emptyText": "尚未添加手动模型。",
+      "newModel": "新建手动模型",
+      "modelNotSet": "未指定模型",
+      "nameLabel": "显示名称",
+      "namePlaceholder": "例如 Claude Sonnet",
+      "uniqueIdLabel": "唯一标识",
+      "descriptionLabel": "简短描述",
+      "descriptionPlaceholder": "该模型适合哪些任务",
+      "supportsVision": "支持图像",
+      "adminOnly": "仅管理员",
+      "remove": "移除模型",
+      "addModel": "+ 添加手动模型"
+    },
+    "common": {
+      "emptyText": "尚未添加任何模型。",
+      "nextModel": "下一个模型",
+      "newModel": "新模型",
+      "providerNotSet": "未设置提供商",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "remove": "移除",
+      "addModel": "+ 添加模型"
+    },
+    "providerFields": {
+      "baseUrl": "提供商 URL",
+      "modelName": "模型名称",
+      "quotaId": "用于配额跟踪的模型 ID",
+      "quotaIdHint": "用于查找系数的稳定标识符。如果为空，保存时自动生成。",
+      "coefficient": "成本系数",
+      "coefficientHint": "0 = 免费（无配额消耗），1 = 默认，0.7 = 更便宜，1.5 = 更贵",
+      "apiKey": "API 密钥",
+      "apiKeyHint": "留空以保留当前密钥",
+      "apiKeyPlaceholderExisting": "留空以保持不变",
+      "apiKeyPlaceholderNew": "粘贴 API 密钥"
+    }
   }
 }

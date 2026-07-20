@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ManualModelConfig } from '../../../lib/types';
 import { useModelCoefficients } from '../../../lib/useModelCoefficients';
 import { FormField } from '../../ui/FormField/FormField';
@@ -33,6 +34,7 @@ export function ManualModelListEditor({
   // Load coefficients once on first mount; inject server values into models
   // that have NOT been locally edited since.
   const { getCoefficient, saveCoefficient, state: coeffState } = useModelCoefficients();
+  const { t } = useTranslation();
   const hydratedRef = useRef(false);
 
   useEffect(() => {
@@ -54,34 +56,34 @@ export function ManualModelListEditor({
     <div className={styles.modelList}>
       <div className={styles.listHeading}>
         <div>
-          <h3>Каталог</h3>
-          <p>При ошибке ручной модели Chatter вернётся к Auto.</p>
+          <h3>{t('models.manual.catalog')}</h3>
+          <p>{t('models.manual.fallbackHint')}</p>
         </div>
       </div>
-      {!models.length && <p className={styles.empty}>Ручные модели пока не добавлены.</p>}
+      {!models.length && <p className={styles.empty}>{t('models.manual.emptyText')}</p>}
       {models.map((model, index) => (
         <details className={styles.modelCard} key={model.id} open={index === 0 ? true : undefined}>
           <summary>
             <span className={styles.order}>{index + 1}</span>
             <span className={styles.modelTitle}>
-              <strong>{model.name || model.model || 'Новая ручная модель'}</strong>
-              <span>{model.model || 'Модель не указана'}</span>
+              <strong>{model.name || model.model || t('models.manual.newModel')}</strong>
+              <span>{model.model || t('models.manual.modelNotSet')}</span>
             </span>
           </summary>
           <div className={styles.modelBody}>
             <ProviderModelFields model={model} onChange={(patch) => update(index, patch)} />
             <div className={styles.twoColumns}>
-              <FormField label="Название в интерфейсе">
-                <input value={model.name} onChange={(event) => update(index, { name: event.target.value })} placeholder="Например, Claude Sonnet" required />
+              <FormField label={t('models.manual.nameLabel')}>
+                <input value={model.name} onChange={(event) => update(index, { name: event.target.value })} placeholder={t('models.manual.namePlaceholder')} required />
               </FormField>
-              <FormField label="Уникальный ID">
+              <FormField label={t('models.manual.uniqueIdLabel')}>
                 <input value={model.uniqueId} onChange={(event) => update(index, { uniqueId: event.target.value })} required />
               </FormField>
             </div>
-            <FormField label="Короткое описание">
-              <input value={model.description} onChange={(event) => update(index, { description: event.target.value })} placeholder="Для каких задач подходит модель" />
+            <FormField label={t('models.manual.descriptionLabel')}>
+              <input value={model.description} onChange={(event) => update(index, { description: event.target.value })} placeholder={t('models.manual.descriptionPlaceholder')} />
             </FormField>
-            <FormField label="Коэффициент стоимости" hint="0 = бесплатная (не расходует квоту), 1 = по умолчанию, 0.7 = дешевле, 1.5 = дороже">
+            <FormField label={t('models.providerFields.coefficient')} hint={t('models.providerFields.coefficientHint')}>
               <input
                 type="number"
                 min={0}
@@ -95,17 +97,17 @@ export function ManualModelListEditor({
               />
             </FormField>
             <div className={styles.toggleRow}>
-              <Toggle checked={model.supportsVision} onChange={(supportsVision) => update(index, { supportsVision })} label="Поддерживает изображения" />
-              <Toggle checked={model.adminOnly} onChange={(adminOnly) => update(index, { adminOnly })} label="Только для администраторов" />
+              <Toggle checked={model.supportsVision} onChange={(supportsVision) => update(index, { supportsVision })} label={t('models.manual.supportsVision')} />
+              <Toggle checked={model.adminOnly} onChange={(adminOnly) => update(index, { adminOnly })} label={t('models.manual.adminOnly')} />
             </div>
             <button className={styles.dangerButton} type="button" onClick={() => onChange(models.filter((_, itemIndex) => itemIndex !== index))}>
-              Удалить модель
+              {t('models.manual.remove')}
             </button>
           </div>
         </details>
       ))}
       <button className="buttonSecondary" type="button" onClick={() => onChange([...models, newManualModel()])}>
-        + Добавить ручную модель
+        {t('models.manual.addModel')}
       </button>
       {coeffState && <p className={styles.empty}>{coeffState}</p>}
     </div>

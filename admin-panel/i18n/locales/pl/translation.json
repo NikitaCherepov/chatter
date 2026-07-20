@@ -48,5 +48,69 @@
       "running": "uruchomiony…",
       "notRunning": "nie uruchomiony"
     }
+  },
+  "common": {
+    "saved": "zapisano",
+    "notSet": "nie ustawiono",
+    "saving": "Stosowanie…",
+    "saveAndApply": "Zapisz i zastosuj",
+    "error": "Błąd"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "Łańcuchy zastępcze PRO i LITE"
+    },
+    "pro": {
+      "description": "Jeśli pierwszy model jest niedostępny, Chatter automatycznie próbuje następnego."
+    },
+    "lite": {
+      "description": "Szybkie modele do prostych zadań wewnętrznych. Obowiązuje ta sama kolejność zastępcza.",
+      "emptyText": "Nie dodano jeszcze żadnych modeli LITE."
+    },
+    "vision": {
+      "subtitle": "Opcjonalny dedykowany model; bez niego używany jest pierwszy model PRO",
+      "fallbackModel": "Używanie modelu PRO",
+      "fallbackProvider": "Nie skonfigurowano dedykowanego dostawcy Vision"
+    },
+    "manual": {
+      "title": "Modele ręczne",
+      "subtitle": "Modele, które użytkownik może wybrać zamiast Auto",
+      "catalog": "Katalog",
+      "fallbackHint": "Jeśli model ręczny zgłosi błąd, Chatter przełącza się na Auto.",
+      "emptyText": "Nie dodano jeszcze żadnych modeli ręcznych.",
+      "newModel": "Nowy model ręczny",
+      "modelNotSet": "Nie określono modelu",
+      "nameLabel": "Nazwa wyświetlana",
+      "namePlaceholder": "np. Claude Sonnet",
+      "uniqueIdLabel": "Unikalny identyfikator",
+      "descriptionLabel": "Krótki opis",
+      "descriptionPlaceholder": "Do jakich zadań ten model jest odpowiedni",
+      "supportsVision": "Obsługuje obrazy",
+      "adminOnly": "Tylko administratorzy",
+      "remove": "Usuń model",
+      "addModel": "+ Dodaj model ręcznie"
+    },
+    "common": {
+      "emptyText": "Nie dodano jeszcze żadnych modeli.",
+      "nextModel": "następny model",
+      "newModel": "Nowy model",
+      "providerNotSet": "Dostawca nie ustawiony",
+      "moveUp": "Przesuń w górę",
+      "moveDown": "Przesuń w dół",
+      "remove": "Usuń",
+      "addModel": "+ Dodaj model"
+    },
+    "providerFields": {
+      "baseUrl": "URL dostawcy",
+      "modelName": "Nazwa modelu",
+      "quotaId": "ID modelu do śledzenia limitów",
+      "quotaIdHint": "Stały identyfikator używany do wyszukiwania współczynnika. Jeśli pusty, generowany automatycznie przy zapisie.",
+      "coefficient": "Współczynnik kosztu",
+      "coefficientHint": "0 = darmowe (brak użycia limitu), 1 = domyślne, 0,7 = tańsze, 1,5 = droższe",
+      "apiKey": "Klucz API",
+      "apiKeyHint": "Pozostaw puste, aby zachować obecny klucz",
+      "apiKeyPlaceholderExisting": "Pozostaw puste, aby nie zmieniać",
+      "apiKeyPlaceholderNew": "Wklej klucz API"
+    }
   }
 }

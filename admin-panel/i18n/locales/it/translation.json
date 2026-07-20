@@ -48,5 +48,69 @@
       "running": "in esecuzione…",
       "notRunning": "non in esecuzione"
     }
+  },
+  "common": {
+    "saved": "salvato",
+    "notSet": "non impostato",
+    "saving": "Applicazione…",
+    "saveAndApply": "Salva e applica",
+    "error": "Errore"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "Catene di fallback PRO e LITE"
+    },
+    "pro": {
+      "description": "Se il primo modello non è disponibile, Chatter prova automaticamente il successivo."
+    },
+    "lite": {
+      "description": "Modelli veloci per attività interne semplici. Vale lo stesso ordine di fallback.",
+      "emptyText": "Nessun modello LITE ancora aggiunto."
+    },
+    "vision": {
+      "subtitle": "Modello dedicato opzionale; in sua assenza viene usato il primo modello PRO",
+      "fallbackModel": "Utilizzo del modello PRO",
+      "fallbackProvider": "Nessun provider Vision dedicato configurato"
+    },
+    "manual": {
+      "title": "Modelli manuali",
+      "subtitle": "Modelli che l'utente può selezionare invece di Auto",
+      "catalog": "Catalogo",
+      "fallbackHint": "Se un modello manuale genera un errore, Chatter torna ad Auto.",
+      "emptyText": "Nessun modello manuale aggiunto.",
+      "newModel": "Nuovo modello manuale",
+      "modelNotSet": "Modello non specificato",
+      "nameLabel": "Nome visualizzato",
+      "namePlaceholder": "es. Claude Sonnet",
+      "uniqueIdLabel": "ID univoco",
+      "descriptionLabel": "Breve descrizione",
+      "descriptionPlaceholder": "Per quali attività è adatto questo modello",
+      "supportsVision": "Supporta immagini",
+      "adminOnly": "Solo amministratori",
+      "remove": "Rimuovi modello",
+      "addModel": "+ Aggiungi modello manuale"
+    },
+    "common": {
+      "emptyText": "Nessun modello aggiunto ancora.",
+      "nextModel": "modello successivo",
+      "newModel": "Nuovo modello",
+      "providerNotSet": "Provider non impostato",
+      "moveUp": "Sposta su",
+      "moveDown": "Sposta giù",
+      "remove": "Rimuovi",
+      "addModel": "+ Aggiungi modello"
+    },
+    "providerFields": {
+      "baseUrl": "URL del provider",
+      "modelName": "Nome del modello",
+      "quotaId": "ID modello per il tracciamento delle quote",
+      "quotaIdHint": "Identificatore stabile utilizzato per cercare il coefficiente. Se vuoto, generato automaticamente al salvataggio.",
+      "coefficient": "Coefficiente di costo",
+      "coefficientHint": "0 = gratuito (nessun utilizzo di quota), 1 = predefinito, 0.7 = più economico, 1.5 = più costoso",
+      "apiKey": "Chiave API",
+      "apiKeyHint": "Lascia vuoto per mantenere la chiave corrente",
+      "apiKeyPlaceholderExisting": "Lascia vuoto per non modificare",
+      "apiKeyPlaceholderNew": "Incolla la chiave API"
+    }
   }
 }

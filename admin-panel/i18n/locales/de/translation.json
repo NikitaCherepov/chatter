@@ -48,5 +48,69 @@
       "running": "läuft…",
       "notRunning": "läuft nicht"
     }
+  },
+  "common": {
+    "saved": "gespeichert",
+    "notSet": "nicht festgelegt",
+    "saving": "Wird angewendet…",
+    "saveAndApply": "Speichern und anwenden",
+    "error": "Fehler"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "PRO- und LITE-Fallback-Ketten"
+    },
+    "pro": {
+      "description": "Wenn das erste Modell nicht verfügbar ist, versucht Chatter automatisch das nächste."
+    },
+    "lite": {
+      "description": "Schnelle Modelle für einfache interne Aufgaben. Gleiche Fallback-Reihenfolge.",
+      "emptyText": "Noch keine LITE-Modelle hinzugefügt."
+    },
+    "vision": {
+      "subtitle": "Optionales dediziertes Modell; ohne dieses wird das erste PRO-Modell verwendet",
+      "fallbackModel": "PRO-Modell wird verwendet",
+      "fallbackProvider": "Kein dedizierter Vision-Anbieter konfiguriert"
+    },
+    "manual": {
+      "title": "Manuelle Modelle",
+      "subtitle": "Modelle, die der Benutzer anstelle von Auto auswählen kann",
+      "catalog": "Katalog",
+      "fallbackHint": "Wenn ein manuelles Modell fehlschlägt, fällt Chatter auf Auto zurück.",
+      "emptyText": "Noch keine manuellen Modelle hinzugefügt.",
+      "newModel": "Neues manuelles Modell",
+      "modelNotSet": "Modell nicht angegeben",
+      "nameLabel": "Anzeigename",
+      "namePlaceholder": "z.B. Claude Sonnet",
+      "uniqueIdLabel": "Eindeutige ID",
+      "descriptionLabel": "Kurzbeschreibung",
+      "descriptionPlaceholder": "Für welche Aufgaben dieses Modell geeignet ist",
+      "supportsVision": "Unterstützt Bilder",
+      "adminOnly": "Nur Admins",
+      "remove": "Modell entfernen",
+      "addModel": "+ Manuelles Modell hinzufügen"
+    },
+    "common": {
+      "emptyText": "Noch keine Modelle hinzugefügt.",
+      "nextModel": "nächstes Modell",
+      "newModel": "Neues Modell",
+      "providerNotSet": "Anbieter nicht festgelegt",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "remove": "Entfernen",
+      "addModel": "+ Modell hinzufügen"
+    },
+    "providerFields": {
+      "baseUrl": "Anbieter-URL",
+      "modelName": "Modellname",
+      "quotaId": "Modell-ID für Kontingentverfolgung",
+      "quotaIdHint": "Stabile Kennung zur Suche des Koeffizienten. Wenn leer, wird beim Speichern automatisch generiert.",
+      "coefficient": "Kostenkoeffizient",
+      "coefficientHint": "0 = kostenlos (keine Kontingentnutzung), 1 = Standard, 0,7 = günstiger, 1,5 = teurer",
+      "apiKey": "API-Schlüssel",
+      "apiKeyHint": "Leer lassen, um den aktuellen Schlüssel zu behalten",
+      "apiKeyPlaceholderExisting": "Leer lassen, um unverändert zu lassen",
+      "apiKeyPlaceholderNew": "API-Schlüssel einfügen"
+    }
   }
 }

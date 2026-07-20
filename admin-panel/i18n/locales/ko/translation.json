@@ -48,5 +48,69 @@
       "running": "실행 중…",
       "notRunning": "실행 중 아님"
     }
+  },
+  "common": {
+    "saved": "저장됨",
+    "notSet": "설정되지 않음",
+    "saving": "적용 중…",
+    "saveAndApply": "저장 및 적용",
+    "error": "오류"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "PRO 및 LITE 폴백 체인"
+    },
+    "pro": {
+      "description": "첫 번째 모델을 사용할 수 없으면 Chatter가 자동으로 다음 모델을 시도합니다."
+    },
+    "lite": {
+      "description": "간단한 내부 작업을 위한 빠른 모델. 동일한 폴백 순서가 적용됩니다.",
+      "emptyText": "아직 추가된 LITE 모델이 없습니다."
+    },
+    "vision": {
+      "subtitle": "선택적 전용 모델; 없으면 첫 번째 PRO 모델이 사용됩니다.",
+      "fallbackModel": "PRO 모델 사용 중",
+      "fallbackProvider": "전용 Vision 제공업체가 구성되지 않음"
+    },
+    "manual": {
+      "title": "수동 모델",
+      "subtitle": "사용자가 자동 대신 선택할 수 있는 모델",
+      "catalog": "카탈로그",
+      "fallbackHint": "수동 모델에서 오류가 발생하면 Chatter가 자동으로 대체합니다.",
+      "emptyText": "아직 추가된 수동 모델이 없습니다.",
+      "newModel": "새 수동 모델",
+      "modelNotSet": "모델이 지정되지 않음",
+      "nameLabel": "표시 이름",
+      "namePlaceholder": "예: Claude Sonnet",
+      "uniqueIdLabel": "고유 ID",
+      "descriptionLabel": "간단한 설명",
+      "descriptionPlaceholder": "이 모델이 적합한 작업",
+      "supportsVision": "이미지 지원",
+      "adminOnly": "관리자 전용",
+      "remove": "모델 제거",
+      "addModel": "+ 수동 모델 추가"
+    },
+    "common": {
+      "emptyText": "아직 추가된 모델이 없습니다.",
+      "nextModel": "다음 모델",
+      "newModel": "새 모델",
+      "providerNotSet": "공급자가 설정되지 않음",
+      "moveUp": "위로 이동",
+      "moveDown": "아래로 이동",
+      "remove": "제거",
+      "addModel": "+ 모델 추가"
+    },
+    "providerFields": {
+      "baseUrl": "공급자 URL",
+      "modelName": "모델 이름",
+      "quotaId": "할당량 추적용 모델 ID",
+      "quotaIdHint": "계수를 조회하는 데 사용되는 안정적인 식별자입니다. 비어 있으면 저장 시 자동으로 생성됩니다.",
+      "coefficient": "비용 계수",
+      "coefficientHint": "0 = 무료(할당량 사용 없음), 1 = 기본값, 0.7 = 저렴, 1.5 = 비쌈",
+      "apiKey": "API 키",
+      "apiKeyHint": "비워두면 현재 키를 유지합니다",
+      "apiKeyPlaceholderExisting": "비워두면 변경되지 않습니다",
+      "apiKeyPlaceholderNew": "API 키 붙여넣기"
+    }
   }
 }

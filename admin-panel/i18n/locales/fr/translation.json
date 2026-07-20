@@ -48,5 +48,69 @@
       "running": "en cours…",
       "notRunning": "pas en cours"
     }
+  },
+  "common": {
+    "saved": "enregistré",
+    "notSet": "non défini",
+    "saving": "Application…",
+    "saveAndApply": "Enregistrer et appliquer",
+    "error": "Erreur"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "Chaînes de repli PRO et LITE"
+    },
+    "pro": {
+      "description": "Si le premier modèle est indisponible, Chatter essaie automatiquement le suivant."
+    },
+    "lite": {
+      "description": "Modèles rapides pour tâches internes simples. Même ordre de repli.",
+      "emptyText": "Aucun modèle LITE ajouté pour l'instant."
+    },
+    "vision": {
+      "subtitle": "Modèle dédié optionnel ; sinon, le premier modèle PRO est utilisé",
+      "fallbackModel": "Utilisation du modèle PRO",
+      "fallbackProvider": "Aucun fournisseur Vision dédié configuré"
+    },
+    "manual": {
+      "title": "Modèles manuels",
+      "subtitle": "Modèles que l'utilisateur peut sélectionner au lieu d'Auto",
+      "catalog": "Catalogue",
+      "fallbackHint": "Si un modèle manuel génère une erreur, Chatter revient à Auto.",
+      "emptyText": "Aucun modèle manuel ajouté pour l'instant.",
+      "newModel": "Nouveau modèle manuel",
+      "modelNotSet": "Modèle non spécifié",
+      "nameLabel": "Nom d'affichage",
+      "namePlaceholder": "ex. Claude Sonnet",
+      "uniqueIdLabel": "ID unique",
+      "descriptionLabel": "Brève description",
+      "descriptionPlaceholder": "Pour quelles tâches ce modèle est adapté",
+      "supportsVision": "Prend en charge les images",
+      "adminOnly": "Administrateurs uniquement",
+      "remove": "Supprimer le modèle",
+      "addModel": "+ Ajouter un modèle manuel"
+    },
+    "common": {
+      "emptyText": "Aucun modèle ajouté pour l'instant.",
+      "nextModel": "modèle suivant",
+      "newModel": "Nouveau modèle",
+      "providerNotSet": "Fournisseur non défini",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "remove": "Supprimer",
+      "addModel": "+ Ajouter un modèle"
+    },
+    "providerFields": {
+      "baseUrl": "URL du fournisseur",
+      "modelName": "Nom du modèle",
+      "quotaId": "ID du modèle pour le suivi des quotas",
+      "quotaIdHint": "Identifiant stable utilisé pour rechercher le coefficient. Si vide, généré automatiquement lors de l'enregistrement.",
+      "coefficient": "Coefficient de coût",
+      "coefficientHint": "0 = gratuit (pas d'utilisation de quota), 1 = par défaut, 0.7 = moins cher, 1.5 = plus cher",
+      "apiKey": "Clé API",
+      "apiKeyHint": "Laissez vide pour conserver la clé actuelle",
+      "apiKeyPlaceholderExisting": "Laissez vide pour ne pas modifier",
+      "apiKeyPlaceholderNew": "Collez la clé API"
+    }
   }
 }

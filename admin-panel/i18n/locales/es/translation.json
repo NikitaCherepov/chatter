@@ -48,5 +48,69 @@
       "running": "en ejecución…",
       "notRunning": "no en ejecución"
     }
+  },
+  "common": {
+    "saved": "guardado",
+    "notSet": "no establecido",
+    "saving": "Aplicando…",
+    "saveAndApply": "Guardar y aplicar",
+    "error": "Error"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "Cadenas de respaldo PRO y LITE"
+    },
+    "pro": {
+      "description": "Si el primer modelo no está disponible, Chatter intenta automáticamente el siguiente."
+    },
+    "lite": {
+      "description": "Modelos rápidos para tareas internas simples. Se aplica el mismo orden de respaldo.",
+      "emptyText": "Aún no se han añadido modelos LITE."
+    },
+    "vision": {
+      "subtitle": "Modelo dedicado opcional; sin él se usa el primer modelo PRO",
+      "fallbackModel": "Usando modelo PRO",
+      "fallbackProvider": "No hay un proveedor de Vision dedicado configurado"
+    },
+    "manual": {
+      "title": "Modelos manuales",
+      "subtitle": "Modelos que el usuario puede seleccionar en lugar de Auto",
+      "catalog": "Catálogo",
+      "fallbackHint": "Si un modelo manual falla, Chatter recurre a Auto.",
+      "emptyText": "Aún no se han añadido modelos manuales.",
+      "newModel": "Nuevo modelo manual",
+      "modelNotSet": "Modelo no especificado",
+      "nameLabel": "Nombre para mostrar",
+      "namePlaceholder": "p. ej. Claude Sonnet",
+      "uniqueIdLabel": "ID único",
+      "descriptionLabel": "Descripción breve",
+      "descriptionPlaceholder": "Para qué tareas es adecuado este modelo",
+      "supportsVision": "Admite imágenes",
+      "adminOnly": "Solo administradores",
+      "remove": "Eliminar modelo",
+      "addModel": "+ Añadir modelo manual"
+    },
+    "common": {
+      "emptyText": "Aún no se han añadido modelos.",
+      "nextModel": "siguiente modelo",
+      "newModel": "Nuevo modelo",
+      "providerNotSet": "Proveedor no configurado",
+      "moveUp": "Subir",
+      "moveDown": "Bajar",
+      "remove": "Eliminar",
+      "addModel": "+ Agregar modelo"
+    },
+    "providerFields": {
+      "baseUrl": "URL del proveedor",
+      "modelName": "Nombre del modelo",
+      "quotaId": "ID del modelo para seguimiento de cuota",
+      "quotaIdHint": "Identificador estable utilizado para buscar el coeficiente. Si está vacío, se genera automáticamente al guardar.",
+      "coefficient": "Coeficiente de costo",
+      "coefficientHint": "0 = gratis (sin uso de cuota), 1 = predeterminado, 0.7 = más barato, 1.5 = más caro",
+      "apiKey": "Clave API",
+      "apiKeyHint": "Dejar vacío para mantener la clave actual",
+      "apiKeyPlaceholderExisting": "Dejar vacío para no modificar",
+      "apiKeyPlaceholderNew": "Pegar clave API"
+    }
   }
 }

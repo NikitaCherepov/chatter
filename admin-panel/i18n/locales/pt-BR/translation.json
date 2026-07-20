@@ -48,5 +48,69 @@
       "running": "em execução…",
       "notRunning": "não está em execução"
     }
+  },
+  "common": {
+    "saved": "salvo",
+    "notSet": "não definido",
+    "saving": "Aplicando…",
+    "saveAndApply": "Salvar e aplicar",
+    "error": "Erro"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "Cadeias de fallback PRO e LITE"
+    },
+    "pro": {
+      "description": "Se o primeiro modelo estiver indisponível, o Chatter tenta automaticamente o próximo."
+    },
+    "lite": {
+      "description": "Modelos rápidos para tarefas internas simples. A mesma ordem de fallback se aplica.",
+      "emptyText": "Nenhum modelo LITE adicionado ainda."
+    },
+    "vision": {
+      "subtitle": "Modelo dedicado opcional; sem ele, o primeiro modelo PRO é usado",
+      "fallbackModel": "Usando modelo PRO",
+      "fallbackProvider": "Nenhum provedor de Visão dedicado configurado"
+    },
+    "manual": {
+      "title": "Modelos Manuais",
+      "subtitle": "Modelos que o usuário pode selecionar em vez de Auto",
+      "catalog": "Catálogo",
+      "fallbackHint": "Se um modelo manual falhar, o Chatter usa o Auto como fallback.",
+      "emptyText": "Nenhum modelo manual adicionado ainda.",
+      "newModel": "Novo modelo manual",
+      "modelNotSet": "Modelo não especificado",
+      "nameLabel": "Nome de exibição",
+      "namePlaceholder": "ex. Claude Sonnet",
+      "uniqueIdLabel": "ID único",
+      "descriptionLabel": "Descrição curta",
+      "descriptionPlaceholder": "Para quais tarefas este modelo é adequado",
+      "supportsVision": "Suporta imagens",
+      "adminOnly": "Apenas administradores",
+      "remove": "Remover modelo",
+      "addModel": "+ Adicionar modelo manual"
+    },
+    "common": {
+      "emptyText": "Nenhum modelo adicionado ainda.",
+      "nextModel": "próximo modelo",
+      "newModel": "Novo modelo",
+      "providerNotSet": "Provedor não definido",
+      "moveUp": "Mover para cima",
+      "moveDown": "Mover para baixo",
+      "remove": "Remover",
+      "addModel": "+ Adicionar modelo"
+    },
+    "providerFields": {
+      "baseUrl": "URL do provedor",
+      "modelName": "Nome do modelo",
+      "quotaId": "ID do modelo para rastreamento de cota",
+      "quotaIdHint": "Identificador estável usado para consultar o coeficiente. Se vazio, gerado automaticamente ao salvar.",
+      "coefficient": "Coeficiente de custo",
+      "coefficientHint": "0 = gratuito (sem uso de cota), 1 = padrão, 0,7 = mais barato, 1,5 = mais caro",
+      "apiKey": "Chave da API",
+      "apiKeyHint": "Deixe em branco para manter a chave atual",
+      "apiKeyPlaceholderExisting": "Deixe em branco para manter inalterado",
+      "apiKeyPlaceholderNew": "Cole a chave da API"
+    }
   }
 }

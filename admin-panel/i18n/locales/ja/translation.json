@@ -48,5 +48,69 @@
       "running": "実行中…",
       "notRunning": "未実行"
     }
+  },
+  "common": {
+    "saved": "保存しました",
+    "notSet": "未設定",
+    "saving": "適用中…",
+    "saveAndApply": "保存して適用",
+    "error": "エラー"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "PRO および LITE フォールバックチェーン"
+    },
+    "pro": {
+      "description": "最初のモデルが利用できない場合、Chatter は自動的に次のモデルを試します。"
+    },
+    "lite": {
+      "description": "単純な内部タスク向けの高速モデル。同じフォールバック順序が適用されます。",
+      "emptyText": "まだ LITE モデルが追加されていません。"
+    },
+    "vision": {
+      "subtitle": "オプションの専用モデル。設定しない場合は最初の PRO モデルが使用されます。",
+      "fallbackModel": "PROモデルを使用中",
+      "fallbackProvider": "専用のVisionプロバイダーが設定されていません"
+    },
+    "manual": {
+      "title": "手動モデル",
+      "subtitle": "ユーザーがAutoの代わりに選択できるモデル",
+      "catalog": "カタログ",
+      "fallbackHint": "手動モデルでエラーが発生した場合、ChatterはAutoにフォールバックします。",
+      "emptyText": "まだ手動モデルが追加されていません。",
+      "newModel": "新しい手動モデル",
+      "modelNotSet": "モデルが指定されていません",
+      "nameLabel": "表示名",
+      "namePlaceholder": "例: Claude Sonnet",
+      "uniqueIdLabel": "ユニークID",
+      "descriptionLabel": "簡単な説明",
+      "descriptionPlaceholder": "このモデルが適しているタスク",
+      "supportsVision": "画像対応",
+      "adminOnly": "管理者のみ",
+      "remove": "モデルを削除",
+      "addModel": "+ 手動モデルを追加"
+    },
+    "common": {
+      "emptyText": "まだモデルが追加されていません。",
+      "nextModel": "次のモデル",
+      "newModel": "新しいモデル",
+      "providerNotSet": "プロバイダーが設定されていません",
+      "moveUp": "上に移動",
+      "moveDown": "下に移動",
+      "remove": "削除",
+      "addModel": "+ モデルを追加"
+    },
+    "providerFields": {
+      "baseUrl": "プロバイダーURL",
+      "modelName": "モデル名",
+      "quotaId": "クォータ追跡用のモデルID",
+      "quotaIdHint": "係数を検索するために使用される安定した識別子。空の場合は、保存時に自動生成されます。",
+      "coefficient": "コスト係数",
+      "coefficientHint": "0 = 無料（クォータ消費なし）、1 = デフォルト、0.7 = より安い、1.5 = より高い",
+      "apiKey": "APIキー",
+      "apiKeyHint": "空欄のままにすると現在のキーを保持",
+      "apiKeyPlaceholderExisting": "空欄のままにすると変更なし",
+      "apiKeyPlaceholderNew": "APIキーを貼り付け"
+    }
   }
 }
