@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Select } from '../../../ui/Select/Select';
 import styles from './PlanDurationModal.module.css';
 
 export type UserPlan = 'free' | 'standart' | 'pro';
@@ -44,17 +45,20 @@ export function PlanDurationModal({
         <p>{plan === 'free' ? t('users.planDuration.freeHint') : t('users.planDuration.durationHint')}</p>
         <label>
           <span>{t('users.planDuration.durationLabel')}</span>
-          <select
+          <Select
             value={duration}
-            onChange={event => setDuration(event.target.value as PlanDuration)}
+            onChange={(value) => setDuration(value as PlanDuration)}
             disabled={saving || plan === 'free'}
-          >
-            {plan !== 'free' && <option value="day">{t('users.planDuration.durationDay')}</option>}
-            {plan !== 'free' && <option value="week">{t('users.planDuration.durationWeek')}</option>}
-            {plan !== 'free' && <option value="month">{t('users.planDuration.durationMonth')}</option>}
-            {plan !== 'free' && <option value="year">{t('users.planDuration.durationYear')}</option>}
-            <option value="forever">{t('users.planDuration.forever')}</option>
-          </select>
+            options={[
+              ...(plan !== 'free' ? [
+                { value: 'day', label: t('users.planDuration.durationDay') },
+                { value: 'week', label: t('users.planDuration.durationWeek') },
+                { value: 'month', label: t('users.planDuration.durationMonth') },
+                { value: 'year', label: t('users.planDuration.durationYear') },
+              ] : []),
+              { value: 'forever', label: t('users.planDuration.forever') },
+            ]}
+          />
         </label>
         <div className={styles.actions}>
           <button type="button" className="buttonSecondary" onClick={onCancel} disabled={saving}>{t('users.planDuration.cancel')}</button>

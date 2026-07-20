@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import type { ImageGenerationSettings } from '../../../lib/types';
 import { FormField } from '../../ui/FormField/FormField';
+import { Input } from '../../ui/Input/Input';
+import { Select } from '../../ui/Select/Select';
 import { IntegrationDetailPage } from './IntegrationDetailPage';
 import { IntegrationSecretField } from './IntegrationSecretField';
 import styles from './IntegrationsPage.module.css';
@@ -101,7 +103,7 @@ export function ImageGenerationPage({
         </div>
         <div className={styles.fields}>
           <FormField label={t('integrations.imageGeneration.apiUrlLabel')} hint={t('integrations.imageGeneration.apiUrlHint')}>
-            <input type="url" value={OPENROUTER_BASE_URL} readOnly />
+            <Input type="url" value={OPENROUTER_BASE_URL} readOnly />
           </FormField>
           <IntegrationSecretField
             label={t('integrations.imageGeneration.apiKeyLabel')}
@@ -118,7 +120,7 @@ export function ImageGenerationPage({
             }
           >
             <div className={styles.inputWithAction}>
-              <input
+              <Input
                 value={settings.model}
                 onChange={(event) => {
                   onChange({ model: event.target.value, supportedParameters: [] });
@@ -145,32 +147,34 @@ export function ImageGenerationPage({
               label={t('integrations.imageGeneration.resolutionLabel')}
               hint={t('integrations.imageGeneration.resolutionHint')}
             >
-              <select
+              <Select
                 value={settings.maxResolution}
-                onChange={(event) =>
+                onChange={(value) =>
                   onChange({
-                    maxResolution: event.target.value as ImageGenerationSettings['maxResolution'],
+                    maxResolution: value as ImageGenerationSettings['maxResolution'],
                   })
                 }
-              >
-                <option value="1K">1K</option>
-                <option value="2K">2K</option>
-              </select>
+                options={[
+                  { value: '1K', label: '1K' },
+                  { value: '2K', label: '2K' },
+                ]}
+              />
             </FormField>
           )}
           {supportsQuality && (
             <FormField label={t('integrations.imageGeneration.qualityLabel')} hint={t('integrations.imageGeneration.qualityHint')}>
-              <select
+              <Select
                 value={settings.quality}
-                onChange={(event) =>
-                  onChange({ quality: event.target.value as ImageGenerationSettings['quality'] })
+                onChange={(value) =>
+                  onChange({ quality: value as ImageGenerationSettings['quality'] })
                 }
-              >
-                <option value="auto">Auto</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
+                options={[
+                  { value: 'auto', label: 'Auto' },
+                  { value: 'low', label: 'Low' },
+                  { value: 'medium', label: 'Medium' },
+                  { value: 'high', label: 'High' },
+                ]}
+              />
             </FormField>
           )}
           {settings.supportedParameters.length === 0 && (

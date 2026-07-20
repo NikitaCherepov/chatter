@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Checkbox } from '../../ui/Checkbox/Checkbox';
 import type { BackupInfo } from './types';
 import { formatBytes } from './types';
 import styles from './SystemPage.module.css';
@@ -23,14 +24,14 @@ export function BackupsPanel({ backups, creating, restoring, importing, importPr
   return (
     <div className={styles.backupContent}>
       <div className={styles.backupToolbar}>
-        <label className={styles.mediaOption}>
-          <input type="checkbox" checked={includeUploads} onChange={(event) => onIncludeUploadsChange(event.target.checked)} />
+        <div className={styles.mediaOption}>
+          <Checkbox checked={includeUploads} onChange={onIncludeUploadsChange} />
           <span><strong>{t('system.backups.includeUploads')}</strong><small>{t('system.backups.includeUploadsHint')}</small></span>
-        </label>
-        <label className={styles.mediaOption}>
-          <input type="checkbox" checked={includeConfiguration} onChange={(event) => onIncludeConfigurationChange(event.target.checked)} />
+        </div>
+        <div className={styles.mediaOption}>
+          <Checkbox checked={includeConfiguration} onChange={onIncludeConfigurationChange} />
           <span><strong>{t('system.backups.includeConfig')}</strong><small>{t('system.backups.includeConfigHint')}</small></span>
-        </label>
+        </div>
         <div className={styles.primaryActions}>
           <label className={`buttonSecondary ${styles.importButton}`}><input type="file" accept=".db,.sqlite,.sqlite3,.tar.gz,.tgz" disabled={creating || restoring || importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImport(file); event.target.value = ''; }} />{importing ? (importProgress === 100 ? t('system.backups.verifying') : t('system.backups.importing', { percent: importProgress ?? 0 })) : t('system.backups.importButton')}</label>
           <button type="button" className="buttonPrimary" onClick={onCreate} disabled={creating || restoring || importing}>{creating ? t('system.backups.creating') : t('system.backups.createBackup')}</button>

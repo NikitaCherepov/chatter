@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../lib/api';
 import { useTranslation } from 'react-i18next';
 import { Card } from '../../ui/Card/Card';
+import { Input } from '../../ui/Input/Input';
+import { Select } from '../../ui/Select/Select';
 import styles from './UsersPage.module.css';
 
 type Identity = { provider: string; provider_subject: string; username: string | null };
@@ -129,20 +131,46 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
 
       <Card title={t('users.list.title')} description={t('users.list.description')}>
         <div className={styles.filters}>
-          <input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('users.list.searchPlaceholder')} aria-label={t('users.list.searchAriaLabel')} />
-          <select value={status} onChange={event => setStatus(event.target.value)} aria-label={t('users.list.statusLabel')}>
-            <option value="all">{t('users.list.filter.allStatuses')}</option><option value="approved">{t('users.list.filter.active')}</option>
-            <option value="none">{t('users.list.filter.pending')}</option><option value="banned">{t('users.list.filter.blocked')}</option>
-            <option value="disapproved">{t('users.list.filter.rejected')}</option>
-          </select>
-          <select value={plan} onChange={event => setPlan(event.target.value)} aria-label={t('users.list.planLabel')}>
-            <option value="all">{t('users.list.filter.allPlans')}</option><option value="free">Free</option>
-            <option value="standart">Standard</option><option value="pro">Pro</option>
-          </select>
-          <select value={connection} onChange={event => setConnection(event.target.value)} aria-label={t('users.list.connectionLabel')}>
-            <option value="all">{t('users.list.filter.anyConnection')}</option><option value="online">{t('users.list.filter.desktopOnline')}</option>
-            <option value="offline">{t('users.list.filter.desktopOffline')}</option>
-          </select>
+          <Input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t('users.list.searchPlaceholder')}
+            aria-label={t('users.list.searchAriaLabel')}
+          />
+          <Select
+            value={status}
+            onChange={setStatus}
+            aria-label={t('users.list.statusLabel')}
+            options={[
+              { value: 'all', label: t('users.list.filter.allStatuses') },
+              { value: 'approved', label: t('users.list.filter.active') },
+              { value: 'none', label: t('users.list.filter.pending') },
+              { value: 'banned', label: t('users.list.filter.blocked') },
+              { value: 'disapproved', label: t('users.list.filter.rejected') },
+            ]}
+          />
+          <Select
+            value={plan}
+            onChange={setPlan}
+            aria-label={t('users.list.planLabel')}
+            options={[
+              { value: 'all', label: t('users.list.filter.allPlans') },
+              { value: 'free', label: 'Free' },
+              { value: 'standart', label: 'Standard' },
+              { value: 'pro', label: 'Pro' },
+            ]}
+          />
+          <Select
+            value={connection}
+            onChange={setConnection}
+            aria-label={t('users.list.connectionLabel')}
+            options={[
+              { value: 'all', label: t('users.list.filter.anyConnection') },
+              { value: 'online', label: t('users.list.filter.desktopOnline') },
+              { value: 'offline', label: t('users.list.filter.desktopOffline') },
+            ]}
+          />
         </div>
 
         {error && <div className={styles.error}>{t('users.list.loadError', { error })}</div>}

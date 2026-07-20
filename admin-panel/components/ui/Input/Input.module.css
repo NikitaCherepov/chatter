@@ -1,0 +1,30 @@
+.input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  outline: none;
+  background: var(--bg-input);
+  color: var(--text-body);
+  font: inherit;
+  font-size: 11px;
+  transition: border-color 0.1s;
+}
+
+.input::placeholder {
+  color: var(--text-hint);
+}
+
+.input:hover {
+  border-color: var(--border-medium);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -5,7 +5,9 @@ import { Icon } from '../../icons/icons';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
 import { Card } from '../../ui/Card/Card';
 import { FormField } from '../../ui/FormField/FormField';
+import { Input } from '../../ui/Input/Input';
 import { SecretState } from '../../ui/SecretState/SecretState';
+import { Select } from '../../ui/Select/Select';
 import { Toggle } from '../../ui/Toggle/Toggle';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import styles from './ServicesPage.module.css';
@@ -57,7 +59,7 @@ export function ServicesPage({
             state={<SecretState configured={settings.hasTelegramToken} />}
             hint={t('services.telegram.tokenHint')}
           >
-            <input
+            <Input
               type="password"
               value={telegramToken}
               onChange={(event) => onTelegramTokenChange(event.target.value)}
@@ -85,7 +87,7 @@ export function ServicesPage({
             hint={t('services.notes.urlHint')}
           >
             <div className={styles.urlRow}>
-              <input type="url" value={settings.notesUrl} disabled placeholder="https://SERVER_IP/notes" />
+              <Input type="url" value={settings.notesUrl} disabled placeholder="https://SERVER_IP/notes" />
               <button
                 type="button"
                 className={styles.copyButton}
@@ -107,23 +109,24 @@ export function ServicesPage({
       >
         <div className={grid.fields}>
           <FormField label={t('services.voice.modeLabel')}>
-            <select
+            <Select
               value={settings.voiceMode}
-              onChange={(event) =>
+              onChange={(value) =>
                 setSettings((current) => ({
                   ...current,
-                  voiceMode: event.target.value as Settings['voiceMode'],
+                  voiceMode: value as Settings['voiceMode'],
                 }))
               }
-            >
-              <option value="off">{t('services.voice.modeOff')}</option>
-              <option value="local">{t('services.voice.modeLocal')}</option>
-              <option value="remote" disabled>{t('services.voice.modeRemoteSoon')}</option>
-            </select>
+              options={[
+                { value: 'off', label: t('services.voice.modeOff') },
+                { value: 'local', label: t('services.voice.modeLocal') },
+                { value: 'remote', label: t('services.voice.modeRemoteSoon'), disabled: true },
+              ]}
+            />
           </FormField>
           {settings.voiceMode === 'remote' && (
             <FormField label={t('services.voice.apiUrlLabel')}>
-              <input
+              <Input
                 type="url"
                 value={settings.voiceExternalUrl}
                 onChange={(event) =>
@@ -138,7 +141,7 @@ export function ServicesPage({
             state={<SecretState configured={settings.hasVoiceToken} />}
             hint={t('services.voice.tokenHint')}
           >
-            <input
+            <Input
               type="password"
               value={voiceToken}
               onChange={(event) => onVoiceTokenChange(event.target.value)}

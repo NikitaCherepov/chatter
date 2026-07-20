@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { Checkbox } from '../../ui/Checkbox/Checkbox';
+import { Input } from '../../ui/Input/Input';
+import { Select } from '../../ui/Select/Select';
 import type { BackupSchedule } from './types';
 import styles from './SystemPage.module.css';
 
@@ -20,40 +23,38 @@ export function BackupSchedulePanel({
     <div className={styles.scheduleGrid}>
       <label>
         <span>{t('system.schedule.frequency')}</span>
-        <select
+        <Select
           value={schedule.frequency}
-          onChange={(event) =>
-            onChange({ frequency: event.target.value as BackupSchedule['frequency'] })
-          }
-        >
-          <option value="off">{t('system.schedule.off')}</option>
-          <option value="daily">{t('system.schedule.daily')}</option>
-          <option value="weekly">{t('system.schedule.weekly')}</option>
-        </select>
+          onChange={(value) => onChange({ frequency: value as BackupSchedule['frequency'] })}
+          options={[
+            { value: 'off', label: t('system.schedule.off') },
+            { value: 'daily', label: t('system.schedule.daily') },
+            { value: 'weekly', label: t('system.schedule.weekly') },
+          ]}
+        />
       </label>
       <label>
         <span>{t('system.schedule.keepCount')}</span>
-        <input
+        <Input
           type="number"
-          min="1"
-          max="30"
+          min={1}
+          max={30}
           value={schedule.retention}
           onChange={(event) => onChange({ retention: Number(event.target.value) })}
           disabled={schedule.frequency === 'off'}
         />
       </label>
-      <label className={styles.scheduleCheckbox}>
-        <input
-          type="checkbox"
+      <div className={styles.scheduleCheckbox}>
+        <Checkbox
           checked={schedule.includeUploads}
-          onChange={(event) => onChange({ includeUploads: event.target.checked })}
+          onChange={(checked) => onChange({ includeUploads: checked })}
           disabled={schedule.frequency === 'off'}
         />
         <span>
           <strong>{t('system.schedule.includeFiles')}</strong>
           <small>{t('system.schedule.includeFilesHint')}</small>
         </span>
-      </label>
+      </div>
       <div className={styles.scheduleAction}>
         <span>
           {state ||

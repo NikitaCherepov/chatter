@@ -21,6 +21,8 @@ export type SelectOption = {
   label: string;
   hint?: string;
   badge?: SelectBadge;
+  /** Disable this option — shown greyed-out, not clickable, aria-disabled. */
+  disabled?: boolean;
 };
 
 type Props = {
@@ -160,9 +162,13 @@ export function Select({
             {filtered.map((opt) => (
               <button
                 key={opt.value}
-                className={`${styles.option} ${opt.value === value ? styles.optionActive : ''}`}
-                onClick={() => handleSelect(opt.value)}
+                className={`${styles.option} ${opt.value === value ? styles.optionActive : ''} ${opt.disabled ? styles.optionDisabled : ''}`}
+                onClick={() => {
+                  if (!opt.disabled) handleSelect(opt.value);
+                }}
                 type="button"
+                disabled={opt.disabled}
+                aria-disabled={opt.disabled}
               >
                 <div className={styles.optionMain}>
                   <span className={styles.optionLabel}>{opt.label}</span>

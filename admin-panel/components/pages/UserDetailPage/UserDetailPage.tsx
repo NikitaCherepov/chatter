@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
+import { Select } from '../../ui/Select/Select';
 import { PlanDurationModal, type PlanDuration, type UserPlan } from './PlanDurationModal/PlanDurationModal';
 import styles from './UserDetailPage.module.css';
 
@@ -232,16 +233,45 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         aside={<span className={user.desktop.online ? styles.online : styles.offline}>{user.desktop.online ? t('users.detail.desktopOnline') : t('users.detail.desktopOffline')}</span>}
       >
         <div className={styles.accountGrid}>
-          <label><span>{t('users.detail.roleLabel')}</span><select value={user.role} onChange={event => void changeRole(event.target.value as 'user' | 'admin')}><option value="user">{t('users.detail.roleUser')}</option><option value="admin">{t('users.detail.roleAdmin')}</option></select></label>
-          <label><span>{t('users.detail.statusLabel')}</span><select value={user.status} disabled={user.status === 'banned'} onChange={event => void changeStatus(event.target.value as 'none' | 'approved' | 'disapproved')}><option value="none">{t('users.list.status.none')}</option><option value="approved">{t('users.list.status.approved')}</option><option value="disapproved">{t('users.list.status.disapproved')}</option>{user.status === 'banned' && <option value="banned">{t('users.list.status.banned')}</option>}</select></label>
-          <label>
+          <div>
+            <span>{t('users.detail.roleLabel')}</span>
+            <Select
+              value={user.role}
+              onChange={(value) => void changeRole(value as 'user' | 'admin')}
+              options={[
+                { value: 'user', label: t('users.detail.roleUser') },
+                { value: 'admin', label: t('users.detail.roleAdmin') },
+              ]}
+            />
+          </div>
+          <div>
+            <span>{t('users.detail.statusLabel')}</span>
+            <Select
+              value={user.status}
+              disabled={user.status === 'banned'}
+              onChange={(value) => void changeStatus(value as 'none' | 'approved' | 'disapproved')}
+              options={[
+                { value: 'none', label: t('users.list.status.none') },
+                { value: 'approved', label: t('users.list.status.approved') },
+                { value: 'disapproved', label: t('users.list.status.disapproved') },
+                ...(user.status === 'banned' ? [{ value: 'banned', label: t('users.list.status.banned') }] : []),
+              ]}
+            />
+          </div>
+          <div>
             <span>{t('users.detail.planLabel')}</span>
-            <select value={user.plan} onChange={event => setPendingPlan(event.target.value as UserPlan)}>
-              <option value="free">Free</option><option value="standart">Standard</option><option value="pro">Pro</option>
-            </select>
+            <Select
+              value={user.plan}
+              onChange={(value) => setPendingPlan(value as UserPlan)}
+              options={[
+                { value: 'free', label: 'Free' },
+                { value: 'standart', label: 'Standard' },
+                { value: 'pro', label: 'Pro' },
+              ]}
+            />
             <small>{user.subscription?.ends_at ? t('users.detail.planUntil', { date: formatDate(user.subscription.ends_at) }) : t('users.detail.planForever')}</small>
             <button type="button" className={styles.durationButton} onClick={() => setPendingPlan(user.plan as UserPlan)}>{t('users.detail.changeDuration')}</button>
-          </label>
+          </div>
           <div><span>{t('users.detail.languageLabel')}</span><strong>{user.language || t('users.detail.languageNotSet')}</strong></div>
           <div><span>{t('users.detail.preferredModelLabel')}</span><strong>{user.preferred_model || t('users.detail.preferredModelAuto')}</strong></div>
           <div><span>{t('users.detail.reasoningLabel')}</span><strong>{user.reasoning_level || t('users.detail.reasoningDefault')}</strong></div>

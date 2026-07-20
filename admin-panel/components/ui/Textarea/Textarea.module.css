@@ -1,0 +1,32 @@
+.textarea {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  outline: none;
+  background: var(--bg-input);
+  color: var(--text-body);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.1s;
+}
+
+.textarea::placeholder {
+  color: var(--text-hint);
+}
+
+.textarea:hover {
+  border-color: var(--border-medium);
+}
+
+.textarea:focus {
+  border-color: var(--accent);
+}
+
+.textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

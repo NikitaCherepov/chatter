@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next';
+import { Input } from '../../ui/Input/Input';
+import { Select } from '../../ui/Select/Select';
 import styles from './LogsPage.module.css';
 
 export type LogService = 'all' | 'backend' | 'telegram' | 'notes' | 'voice' | 'manager' | 'admin';
@@ -32,30 +34,35 @@ export function LogToolbar({
   return (
     <div className={styles.toolbar}>
       <div className={styles.filters}>
-        <select
+        <Select
           value={service}
-          onChange={(event) => onServiceChange(event.target.value as LogService)}
+          onChange={(value) => onServiceChange(value as LogService)}
           aria-label={t('logs.serviceFilter')}
-        >
-          <option value="all">{t('logs.allServices')}</option>
-          <option value="backend">Backend</option>
-          <option value="telegram">Telegram Bot</option>
-          <option value="notes">Webapp Notes</option>
-          <option value="voice">Voice</option>
-          <option value="manager">Chatter Manager</option>
-          <option value="admin">Admin Panel</option>
-        </select>
-        <select
-          value={tail}
-          onChange={(event) => onTailChange(Number(event.target.value))}
+          searchable
+          searchPlaceholder={t('ui.search')}
+          emptyText={t('ui.nothingFound')}
+          options={[
+            { value: 'all', label: t('logs.allServices') },
+            { value: 'backend', label: 'Backend' },
+            { value: 'telegram', label: 'Telegram Bot' },
+            { value: 'notes', label: 'Webapp Notes' },
+            { value: 'voice', label: 'Voice' },
+            { value: 'manager', label: 'Chatter Manager' },
+            { value: 'admin', label: 'Admin Panel' },
+          ]}
+        />
+        <Select
+          value={String(tail)}
+          onChange={(value) => onTailChange(Number(value))}
           aria-label={t('logs.lineCount')}
-        >
-          <option value="100">{t('logs.linesTemplate', { count: 100 })}</option>
-          <option value="200">{t('logs.linesTemplate', { count: 200 })}</option>
-          <option value="500">{t('logs.linesTemplate', { count: 500 })}</option>
-          <option value="1000">{t('logs.linesTemplate', { count: 1000 })}</option>
-        </select>
-        <input
+          options={[
+            { value: '100', label: t('logs.linesTemplate', { count: 100 }) },
+            { value: '200', label: t('logs.linesTemplate', { count: 200 }) },
+            { value: '500', label: t('logs.linesTemplate', { count: 500 }) },
+            { value: '1000', label: t('logs.linesTemplate', { count: 1000 }) },
+          ]}
+        />
+        <Input
           type="search"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
