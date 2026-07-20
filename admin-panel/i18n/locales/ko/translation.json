@@ -573,7 +573,14 @@
         "failed": "업데이트에 실패했습니다."
       }
     },
-    "error": "오류: {{message}}"
+    "error": "오류: {{message}}",
+    "chart": {
+      "last24h": "24시간",
+      "last3days": "3일",
+      "last7days": "7일",
+      "loading": "메트릭 로딩 중…",
+      "noData": "아직 메트릭 데이터가 없습니다. 첫 1분 후에 차트가 나타납니다."
+    }
   },
   "logs": {
     "title": "서비스 로그",

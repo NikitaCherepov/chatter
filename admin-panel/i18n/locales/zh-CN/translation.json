@@ -573,7 +573,14 @@
         "failed": "更新失败。"
       }
     },
-    "error": "错误：{{message}}"
+    "error": "错误：{{message}}",
+    "chart": {
+      "last24h": "24小时",
+      "last3days": "3天",
+      "last7days": "7天",
+      "loading": "正在加载指标…",
+      "noData": "暂无指标数据。图表将在第一分钟后显示。"
+    }
   },
   "logs": {
     "title": "服务日志",

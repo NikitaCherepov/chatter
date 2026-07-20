@@ -573,7 +573,14 @@
         "failed": "Aktualizacja nie powiodła się."
       }
     },
-    "error": "Błąd: {{message}}"
+    "error": "Błąd: {{message}}",
+    "chart": {
+      "last24h": "24h",
+      "last3days": "3 dni",
+      "last7days": "7 dni",
+      "loading": "Ładowanie metryk…",
+      "noData": "Brak danych metryk. Wykres pojawi się po pierwszej minucie."
+    }
   },
   "logs": {
     "title": "Logi usług",

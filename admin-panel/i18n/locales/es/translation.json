@@ -573,7 +573,14 @@
         "failed": "Actualización fallida."
       }
     },
-    "error": "Error: {{message}}"
+    "error": "Error: {{message}}",
+    "chart": {
+      "last24h": "24h",
+      "last3days": "3 días",
+      "last7days": "7 días",
+      "loading": "Cargando métricas…",
+      "noData": "Aún no hay datos de métricas. El gráfico aparecerá después del primer minuto."
+    }
   },
   "logs": {
     "title": "Registros del servicio",

@@ -573,7 +573,14 @@
         "failed": "Update fehlgeschlagen."
       }
     },
-    "error": "Fehler: {{message}}"
+    "error": "Fehler: {{message}}",
+    "chart": {
+      "last24h": "24h",
+      "last3days": "3 Tage",
+      "last7days": "7 Tage",
+      "loading": "Metriken werden geladen…",
+      "noData": "Noch keine Metrikdaten. Das Diagramm erscheint nach der ersten Minute."
+    }
   },
   "logs": {
     "title": "Dienstprotokolle",

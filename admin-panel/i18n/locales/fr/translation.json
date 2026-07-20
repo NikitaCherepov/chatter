@@ -573,7 +573,14 @@
         "failed": "Échec de la mise à jour."
       }
     },
-    "error": "Erreur : {{message}}"
+    "error": "Erreur : {{message}}",
+    "chart": {
+      "last24h": "24h",
+      "last3days": "3 jours",
+      "last7days": "7 jours",
+      "loading": "Chargement des métriques…",
+      "noData": "Aucune donnée de métrique pour l'instant. Le graphique apparaîtra après la première minute."
+    }
   },
   "logs": {
     "title": "Journaux de service",
