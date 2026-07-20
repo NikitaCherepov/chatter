@@ -468,6 +468,32 @@ export const withAbort = async <T>(promise: Promise<T>, signal?: AbortSignal): P
     if (onAbort) signal.removeEventListener('abort', onAbort);
   }
 };
+
+export const deriveChildSignal = (parent?: AbortSignal): { signal: AbortSignal | undefined; cleanup: () => void } => {
+  if (!parent) return { signal: undefined, cleanup: () => {} };
+  if (parent.aborted) return { signal: AbortSignal.abort(createAbortError()), cleanup: () => {} };
+
+  const controller = new AbortController();
+  const onParentAbort = () => controller.abort(createAbortError());
+  parent.addEventListener('abort', onParentAbort, { once: true });
+  // Close the TOCTOU window between the aborted check above and addEventListener:
+  // if the parent aborted in that gap, the listener would never fire (it only
+  // triggers on future aborts), leaving the child forever un-aborted. Re-check
+  // after subscribing and detach synchronously if we lost the race.
+  if (parent.aborted) {
+    parent.removeEventListener('abort', onParentAbort);
+    return { signal: AbortSignal.abort(createAbortError()), cleanup: () => {} };
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      parent.removeEventListener('abort', onParentAbort);
+      // If the child never aborted on its own, there is nothing to release;
+      // if it did (e.g. SDK fetchWithTimeout timeout), this is a no-op.
+    },
+  };
+};
 const RETRY_SECONDS = Math.max(0, Number.parseInt(process.env.TIMEWEB_MODEL_RETRY_SECONDS || '3', 10) || 3);
 const RETRIES_PER_MODEL = Math.max(0, Number.parseInt(process.env.TIMEWEB_MODEL_RETRIES_PER_MODEL || '1', 10) || 1);
 
@@ -666,10 +692,17 @@ const streamAndAssemble = async (
     stream: true,
     stream_options: { include_usage: true },
   };
-  const stream = await client.chat.completions.create(
-    streamPayload as any,
-    signal ? { signal } : {}
-  );
+  // Pass a child signal to the SDK, not the parent. OpenAI SDK registers an
+  // abort listener on whatever signal it gets and never removes it (only fires
+  // it once if the parent aborts). Reusing the parent across iterations leaked
+  // one listener per call => MaxListenersExceededWarning. The child is detached
+  // in the finally below.
+  const { signal: sdkSignal, cleanup: cleanupSdkSignal } = deriveChildSignal(signal);
+  try {
+    const stream = await client.chat.completions.create(
+      streamPayload as any,
+      sdkSignal ? { signal: sdkSignal } : {}
+    );
 
   // Буферы для throttle
   let textBuffer = '';
@@ -798,6 +831,11 @@ const streamAndAssemble = async (
     choices: [{ message: assembledMessage }],
     ...(finalUsage ? { usage: finalUsage } : {}),
   };
+  } finally {
+    // Detach the per-call child signal from the parent so the parent's listener
+    // list does not grow across agent-loop iterations.
+    cleanupSdkSignal();
+  }
 };
 
 const createCompletionWithModelFallback = async (
@@ -836,7 +874,14 @@ const createCompletionWithModelFallback = async (
         // Если есть streamCallbacks — стримим и собираем, иначе обычный запрос
         const response = streamCallbacks
           ? await streamAndAssemble(client, providerRequestBody, model, streamCallbacks, signal)
-          : await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
+          : await (() => {
+              // Same child-signal trick as in streamAndAssemble: the OpenAI SDK
+              // leaks an abort listener on the shared parent signal per call.
+              const { signal: sdkSignal, cleanup } = deriveChildSignal(signal);
+              return client.chat.completions
+                .create({ ...providerRequestBody, model } as any, sdkSignal ? { signal: sdkSignal } : {})
+                .finally(cleanup);
+            })();
         const modelIndex = modelChain.indexOf(model);
         const uniqueIdUsed = modelIndex >= 0 ? (uniqueIds[modelIndex] || null) : null;
         return { response, modelUsed: model, uniqueIdUsed, failedModels };
