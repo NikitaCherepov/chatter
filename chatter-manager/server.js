@@ -795,6 +795,19 @@ async function getServerUpdateInfo({ pull = false } = {}) {
 async function launchServerUpdateHelper(targetHash, selection) {
   const managerImage = imageReference('chatter-manager');
   const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  // Stop the running services BEFORE recreating them. Otherwise the backend
+  // keeps chatter.db open and the recreation step fails with "database is
+  // being used by another connection" on servers with slow I/O. The helper
+  // runs in a standalone container detached from the project, so it keeps
+  // executing even after every service it stops has gone away.
+  const stopCommand = [
+    'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
+    '--project-directory', '"$HOST_PROJECT_DIR"',
+    '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
+    '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
+    ...profileArgs,
+    'stop', ...selection.services
+  ].join(' ');
   const composeCommand = [
     'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
     '--project-directory', '"$HOST_PROJECT_DIR"',
@@ -813,6 +826,7 @@ report_failure() {
 }
 trap report_failure EXIT
 sleep 2
+${stopCommand}
 ${composeCommand}
 printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"`;
   await runDocker([
@@ -1302,6 +1316,11 @@ async function controlService(service, action) {
   }
   if (action === 'start') {
     await runDocker(composeArgs(...profileArgs, 'up', '-d', '--no-build', service), 5 * 60 * 1000);
+  } else if (action === 'restart') {
+    // A plain `docker restart` reuses the existing container and never picks
+    // up changes from the private env files. Recreate the container so the
+    // service sees the current configuration after a single click.
+    await runDocker(composeArgs(...profileArgs, 'up', '-d', '--no-build', '--force-recreate', service), 5 * 60 * 1000);
   } else {
     await runDocker(composeArgs(...profileArgs, action, service), 5 * 60 * 1000);
   }
