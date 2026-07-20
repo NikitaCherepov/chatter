@@ -8,5 +8,45 @@
     "submitButton": "サインイン",
     "firstTimeHint": "初期認証情報はインストーラーによって表示されました。",
     "invalidCredentials": "ユーザー名またはパスワードが無効です。"
+  },
+  "overview": {
+    "componentStatus": "コンポーネントステータス",
+    "updatesAfterApply": "設定適用後の更新",
+    "refresh": "更新",
+    "actionError": "アクションが失敗しました: {{error}}",
+    "quickSetup": {
+      "title": "クイックセットアップ",
+      "description": "完全な機能に必要なコアコンポーネント"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "メインモデル",
+        "description": "OpenAI互換プロバイダー"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "メインのTelegramボット"
+      },
+      "notes": {
+        "title": "Webapp ノート",
+        "description": "オプションの Telegram ミニアプリ"
+      },
+      "voice": {
+        "title": "音声",
+        "description": "Telegram 向け音声認識と TTS"
+      }
+    },
+    "config": {
+      "title": "設定",
+      "description": "現在の接続状況",
+      "keysSummary": "{{count}} / 3 のコアキーが保存済み"
+    },
+    "serviceCard": {
+      "restart": "{{name}} を再起動",
+      "stop": "{{name}} を停止",
+      "start": "{{name}} を開始",
+      "running": "実行中…",
+      "notRunning": "未実行"
+    }
   }
 }

@@ -8,5 +8,45 @@
     "submitButton": "Войти",
     "firstTimeHint": "Данные для первого входа показал установщик.",
     "invalidCredentials": "Неверный логин или пароль."
+  },
+  "overview": {
+    "componentStatus": "Состояние компонентов",
+    "updatesAfterApply": "Обновляется после применения настроек",
+    "refresh": "Обновить",
+    "actionError": "Не удалось выполнить действие: {{error}}",
+    "quickSetup": {
+      "title": "Быстрая настройка",
+      "description": "Основные части, необходимые для полноценной работы"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "Основная модель",
+        "description": "OpenAI-совместимый провайдер"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "Основной Telegram-бот"
+      },
+      "notes": {
+        "title": "Webapp Notes",
+        "description": "Необязательное Telegram Mini App"
+      },
+      "voice": {
+        "title": "Голос",
+        "description": "Распознавание и озвучка для Telegram"
+      }
+    },
+    "config": {
+      "title": "Конфигурация",
+      "description": "Текущее состояние подключений",
+      "keysSummary": "{{count}} из 3 основных ключей сохранено"
+    },
+    "serviceCard": {
+      "restart": "Перезапустить {{name}}",
+      "stop": "Остановить {{name}}",
+      "start": "Запустить {{name}}",
+      "running": "выполняется…",
+      "notRunning": "не запущен"
+    }
   }
 }

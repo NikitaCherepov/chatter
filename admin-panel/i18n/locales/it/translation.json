@@ -8,5 +8,45 @@
     "submitButton": "Accedi",
     "firstTimeHint": "Le credenziali iniziali sono state mostrate dall'installatore.",
     "invalidCredentials": "Nome utente o password non validi."
+  },
+  "overview": {
+    "componentStatus": "Stato dei componenti",
+    "updatesAfterApply": "Aggiornamenti dopo l'applicazione delle impostazioni",
+    "refresh": "Aggiorna",
+    "actionError": "Azione fallita: {{error}}",
+    "quickSetup": {
+      "title": "Configurazione rapida",
+      "description": "Componenti principali necessari per la piena funzionalità"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "Modello principale",
+        "description": "Provider compatibile con OpenAI"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "Bot Telegram principale"
+      },
+      "notes": {
+        "title": "Note Webapp",
+        "description": "Mini App Telegram opzionale"
+      },
+      "voice": {
+        "title": "Voce",
+        "description": "Riconoscimento vocale e TTS per Telegram"
+      }
+    },
+    "config": {
+      "title": "Configurazione",
+      "description": "Stato connessione corrente",
+      "keysSummary": "{{count}} di 3 chiavi principali salvate"
+    },
+    "serviceCard": {
+      "restart": "Riavvia {{name}}",
+      "stop": "Ferma {{name}}",
+      "start": "Avvia {{name}}",
+      "running": "in esecuzione…",
+      "notRunning": "non in esecuzione"
+    }
   }
 }

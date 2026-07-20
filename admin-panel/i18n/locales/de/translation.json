@@ -8,5 +8,45 @@
     "submitButton": "Anmelden",
     "firstTimeHint": "Die ersten Anmeldedaten wurden vom Installationsprogramm angezeigt.",
     "invalidCredentials": "Ungültiger Benutzername oder ungültiges Passwort."
+  },
+  "overview": {
+    "componentStatus": "Komponentenstatus",
+    "updatesAfterApply": "Aktualisierungen nach Übernahme der Einstellungen",
+    "refresh": "Aktualisieren",
+    "actionError": "Aktion fehlgeschlagen: {{error}}",
+    "quickSetup": {
+      "title": "Schnelleinrichtung",
+      "description": "Kernkomponenten für volle Funktionalität"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "Hauptmodell",
+        "description": "OpenAI-kompatibler Anbieter"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "Haupt-Telegram-Bot"
+      },
+      "notes": {
+        "title": "Webapp-Notizen",
+        "description": "Optionale Telegram Mini-App"
+      },
+      "voice": {
+        "title": "Sprache",
+        "description": "Spracherkennung und TTS für Telegram"
+      }
+    },
+    "config": {
+      "title": "Konfiguration",
+      "description": "Aktueller Verbindungsstatus",
+      "keysSummary": "{{count}} von 3 Kernschlüsseln gespeichert"
+    },
+    "serviceCard": {
+      "restart": "{{name}} neu starten",
+      "stop": "{{name}} stoppen",
+      "start": "{{name}} starten",
+      "running": "läuft…",
+      "notRunning": "läuft nicht"
+    }
   }
 }

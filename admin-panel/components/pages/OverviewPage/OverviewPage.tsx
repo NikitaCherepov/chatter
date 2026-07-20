@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AdminSection } from '../../AdminShell/AdminShell';
 import type { Service, Settings } from '../../../lib/types';
 import { api } from '../../../lib/api';
@@ -26,6 +27,7 @@ export function OverviewPage({
 }) {
   const [busyService, setBusyService] = useState('');
   const [actionError, setActionError] = useState('');
+  const { t } = useTranslation();
   const serviceMap = new Map(services.map((service) => [service.service, service]));
   const configured = [
     settings.hasAiApiKey,
@@ -53,12 +55,12 @@ export function OverviewPage({
     <div className={styles.stack}>
       <div className={styles.toolbar}>
         <div>
-          <strong>Состояние компонентов</strong>
-          <span>Обновляется после применения настроек</span>
+          <strong>{t('overview.componentStatus')}</strong>
+          <span>{t('overview.updatesAfterApply')}</span>
         </div>
         <button type="button" className="buttonSecondary" onClick={() => void onRefresh()}>
           <Icon name="refresh" />
-          Обновить
+          {t('overview.refresh')}
         </button>
       </div>
       <div className={styles.statusGrid}>
@@ -72,45 +74,44 @@ export function OverviewPage({
           />
         ))}
       </div>
-      {actionError && <div className={styles.actionError}>Не удалось выполнить действие: {actionError}</div>}
+      {actionError && <div className={styles.actionError}>{t('overview.actionError', { error: actionError })}</div>}
       <div className={styles.columns}>
         <Card
-          title="Быстрая настройка"
-          description="Основные части, необходимые для полноценной работы"
+          title={t('overview.quickSetup.title')}
+          description={t('overview.quickSetup.description')}
         >
           <div className={styles.checklist}>
             <SetupRow
-              title="Основная модель"
-              description="OpenAI-совместимый провайдер"
+              title={t('overview.setupRows.mainModel.title')}
+              description={t('overview.setupRows.mainModel.description')}
               ready={settings.hasAiApiKey}
               onClick={() => onNavigate('models')}
             />
             <SetupRow
-              title="Telegram"
-              description="Основной Telegram-бот"
+              title={t('overview.setupRows.telegram.title')}
+              description={t('overview.setupRows.telegram.description')}
               ready={settings.telegramEnabled && settings.hasTelegramToken}
               onClick={() => onNavigate('services')}
             />
             <SetupRow
-              title="Webapp Notes"
-              description="Необязательное Telegram Mini App"
+              title={t('overview.setupRows.notes.title')}
+              description={t('overview.setupRows.notes.description')}
               ready={
                 settings.notesEnabled && settings.hasTelegramToken && Boolean(settings.notesUrl)
               }
               onClick={() => onNavigate('services')}
             />
             <SetupRow
-              title="Голос"
-              description="Распознавание и озвучка для Telegram"
+              title={t('overview.setupRows.voice.title')}
+              description={t('overview.setupRows.voice.description')}
               ready={settings.voiceMode !== 'off' && settings.hasVoiceToken}
               onClick={() => onNavigate('services')}
             />
           </div>
         </Card>
-        <Card title="Конфигурация" description="Текущее состояние подключений">
+        <Card title={t('overview.config.title')} description={t('overview.config.description')}>
           <div className={styles.summary}>
-            <strong>{configured} из 3</strong>
-            <span>основных ключей сохранено</span>
+            <strong>{t('overview.config.keysSummary', { count: configured })}</strong>
             <div className={styles.progress}>
               <span style={{ width: `${(configured / 3) * 100}%` }} />
             </div>
@@ -132,6 +133,7 @@ function ServiceCard({
   busy: boolean;
   onAction: (action: 'start' | 'stop' | 'restart') => void;
 }) {
+  const { t } = useTranslation();
   const running = service?.state === 'running';
   const healthy = running && (!service.health || service.health === 'healthy');
   return (
@@ -143,16 +145,16 @@ function ServiceCard({
           <div className={styles.statusActions}>
             {running ? (
               <>
-                <button type="button" disabled={busy} onClick={() => onAction('restart')} title={`Перезапустить ${name}`} aria-label={`Перезапустить ${name}`}>↻</button>
-                <button type="button" disabled={busy} onClick={() => onAction('stop')} title={`Остановить ${name}`} aria-label={`Остановить ${name}`}>■</button>
+                <button type="button" disabled={busy} onClick={() => onAction('restart')} title={t('overview.serviceCard.restart', { name })} aria-label={t('overview.serviceCard.restart', { name })}>↻</button>
+                <button type="button" disabled={busy} onClick={() => onAction('stop')} title={t('overview.serviceCard.stop', { name })} aria-label={t('overview.serviceCard.stop', { name })}>■</button>
               </>
             ) : (
-              <button type="button" disabled={busy} onClick={() => onAction('start')} title={`Запустить ${name}`} aria-label={`Запустить ${name}`}>▶</button>
+              <button type="button" disabled={busy} onClick={() => onAction('start')} title={t('overview.serviceCard.start', { name })} aria-label={t('overview.serviceCard.start', { name })}>▶</button>
             )}
           </div>
         </div>
       </div>
-      <p>{busy ? 'выполняется…' : service?.health || service?.status || 'не запущен'}</p>
+      <p>{busy ? t('overview.serviceCard.running') : service?.health || service?.status || t('overview.serviceCard.notRunning')}</p>
     </article>
   );
 }

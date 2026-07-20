@@ -8,5 +8,45 @@
     "submitButton": "Sign in",
     "firstTimeHint": "The initial credentials were shown by the installer.",
     "invalidCredentials": "Invalid username or password."
+  },
+  "overview": {
+    "componentStatus": "Component status",
+    "updatesAfterApply": "Updates after applying settings",
+    "refresh": "Refresh",
+    "actionError": "Action failed: {{error}}",
+    "quickSetup": {
+      "title": "Quick Setup",
+      "description": "Core components needed for full functionality"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "Main Model",
+        "description": "OpenAI-compatible provider"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "Main Telegram bot"
+      },
+      "notes": {
+        "title": "Webapp Notes",
+        "description": "Optional Telegram Mini App"
+      },
+      "voice": {
+        "title": "Voice",
+        "description": "Speech recognition and TTS for Telegram"
+      }
+    },
+    "config": {
+      "title": "Configuration",
+      "description": "Current connection status",
+      "keysSummary": "{{count}} of 3 core keys saved"
+    },
+    "serviceCard": {
+      "restart": "Restart {{name}}",
+      "stop": "Stop {{name}}",
+      "start": "Start {{name}}",
+      "running": "running\u2026",
+      "notRunning": "not running"
+    }
   }
 }

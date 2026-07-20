@@ -8,5 +8,45 @@
     "submitButton": "Zaloguj się",
     "firstTimeHint": "Początkowe dane logowania zostały wyświetlone przez instalatora.",
     "invalidCredentials": "Nieprawidłowa nazwa użytkownika lub hasło."
+  },
+  "overview": {
+    "componentStatus": "Stan komponentów",
+    "updatesAfterApply": "Aktualizacje po zastosowaniu ustawień",
+    "refresh": "Odśwież",
+    "actionError": "Akcja nie powiodła się: {{error}}",
+    "quickSetup": {
+      "title": "Szybka konfiguracja",
+      "description": "Podstawowe komponenty potrzebne do pełnej funkcjonalności"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "Główny model",
+        "description": "Dostawca zgodny z OpenAI"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "Główny bot Telegram"
+      },
+      "notes": {
+        "title": "Notatki Webapp",
+        "description": "Opcjonalna miniaplikacja Telegram"
+      },
+      "voice": {
+        "title": "Głos",
+        "description": "Rozpoznawanie mowy i TTS dla Telegram"
+      }
+    },
+    "config": {
+      "title": "Konfiguracja",
+      "description": "Bieżący stan połączenia",
+      "keysSummary": "Zapisano {{count}} z 3 kluczy podstawowych"
+    },
+    "serviceCard": {
+      "restart": "Uruchom ponownie {{name}}",
+      "stop": "Zatrzymaj {{name}}",
+      "start": "Uruchom {{name}}",
+      "running": "uruchomiony…",
+      "notRunning": "nie uruchomiony"
+    }
   }
 }

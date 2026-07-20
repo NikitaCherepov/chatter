@@ -8,5 +8,45 @@
     "submitButton": "로그인",
     "firstTimeHint": "초기 자격 증명은 설치 프로그램에 의해 표시되었습니다.",
     "invalidCredentials": "사용자 이름 또는 비밀번호가 잘못되었습니다."
+  },
+  "overview": {
+    "componentStatus": "구성 요소 상태",
+    "updatesAfterApply": "설정 적용 후 업데이트",
+    "refresh": "새로 고침",
+    "actionError": "작업 실패: {{error}}",
+    "quickSetup": {
+      "title": "빠른 설정",
+      "description": "전체 기능에 필요한 핵심 구성 요소"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "메인 모델",
+        "description": "OpenAI 호환 제공자"
+      },
+      "telegram": {
+        "title": "텔레그램",
+        "description": "메인 텔레그램 봇"
+      },
+      "notes": {
+        "title": "Webapp 노트",
+        "description": "선택적 Telegram 미니 앱"
+      },
+      "voice": {
+        "title": "음성",
+        "description": "Telegram용 음성 인식 및 TTS"
+      }
+    },
+    "config": {
+      "title": "구성",
+      "description": "현재 연결 상태",
+      "keysSummary": "핵심 키 {{count}}개 중 3개 저장됨"
+    },
+    "serviceCard": {
+      "restart": "{{name}} 다시 시작",
+      "stop": "{{name}} 중지",
+      "start": "{{name}} 시작",
+      "running": "실행 중…",
+      "notRunning": "실행 중 아님"
+    }
   }
 }

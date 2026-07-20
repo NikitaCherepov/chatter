@@ -8,5 +8,45 @@
     "submitButton": "登录",
     "firstTimeHint": "初始凭据由安装程序显示。",
     "invalidCredentials": "用户名或密码无效。"
+  },
+  "overview": {
+    "componentStatus": "组件状态",
+    "updatesAfterApply": "应用设置后的更新",
+    "refresh": "刷新",
+    "actionError": "操作失败：{{error}}",
+    "quickSetup": {
+      "title": "快速设置",
+      "description": "实现完整功能所需的核心组件"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "主模型",
+        "description": "兼容 OpenAI 的提供商"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "主 Telegram 机器人"
+      },
+      "notes": {
+        "title": "Webapp 笔记",
+        "description": "可选的 Telegram 迷你应用"
+      },
+      "voice": {
+        "title": "语音",
+        "description": "Telegram 的语音识别和 TTS"
+      }
+    },
+    "config": {
+      "title": "配置",
+      "description": "当前连接状态",
+      "keysSummary": "已保存 {{count}} 个核心密钥（共 3 个）"
+    },
+    "serviceCard": {
+      "restart": "重启 {{name}}",
+      "stop": "停止 {{name}}",
+      "start": "启动 {{name}}",
+      "running": "运行中…",
+      "notRunning": "未运行"
+    }
   }
 }
