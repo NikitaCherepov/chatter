@@ -216,5 +216,40 @@
       "capabilitySupported": "obsługiwane",
       "capabilityNotClaimed": "niezgłoszone"
     }
+  },
+  "services": {
+    "telegram": {
+      "title": "Bot Telegram",
+      "description": "Główny interfejs Chatter w Telegramie",
+      "enabled": "Usługa włączona",
+      "tokenLabel": "Token bota Telegram",
+      "tokenHint": "Ten sam token jest używany przez Webapp Notes do walidacji initData",
+      "tokenPlaceholder": "Pozostaw puste, aby zachować bez zmian"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "Samodzielna miniaplikacja Telegram do notatek",
+      "enabled": "Usługa włączona",
+      "urlLabel": "URL miniaplikacji",
+      "urlHint": "Instalator automatycznie tworzy adres z adresu IP serwera. Jest on przekazywany do bota podczas zapisywania ustawień.",
+      "copyAddress": "Kopiuj adres"
+    },
+    "voice": {
+      "title": "Głos",
+      "description": "Rozpoznawanie mowy i TTS dla odpowiedzi bota Telegram",
+      "modeLabel": "Tryb",
+      "modeOff": "Wyłączony",
+      "modeLocal": "Na tym serwerze",
+      "modeRemoteSoon": "Na innym serwerze (wkrótce)",
+      "apiUrlLabel": "URL API głosowego",
+      "tokenLabel": "Token głosowy",
+      "tokenHint": "Token jest generowany automatycznie dla trybu lokalnego",
+      "tokenPlaceholder": "Pozostaw puste, aby zachować bez zmian",
+      "notice": "Głos jest obecnie używany tylko przez bota Telegram. Pierwsze lokalne uruchomienie może potrwać kilka minut: Docker pobiera obraz i modele."
+    },
+    "badge": {
+      "running": "uruchomiony",
+      "notRunning": "nie uruchomiony"
+    }
   }
 }

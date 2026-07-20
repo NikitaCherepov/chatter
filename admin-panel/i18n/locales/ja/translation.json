@@ -216,5 +216,40 @@
       "capabilitySupported": "対応",
       "capabilityNotClaimed": "未申請"
     }
+  },
+  "services": {
+    "telegram": {
+      "title": "Telegramボット",
+      "description": "Telegram上のメインChatterインターフェース",
+      "enabled": "サービス有効",
+      "tokenLabel": "Telegramボットトークン",
+      "tokenHint": "同じトークンがWebapp NotesのinitData検証に使用されます",
+      "tokenPlaceholder": "変更しない場合は空のままにしてください"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "メモ用のスタンドアロンTelegramミニアプリ",
+      "enabled": "サービス有効",
+      "urlLabel": "ミニアプリURL",
+      "urlHint": "インストーラーはサーバーIPから自動的にアドレスを作成します。設定保存時にボットに渡されます。",
+      "copyAddress": "アドレスをコピー"
+    },
+    "voice": {
+      "title": "音声",
+      "description": "Telegramボット応答の音声認識とTTS",
+      "modeLabel": "モード",
+      "modeOff": "無効",
+      "modeLocal": "このサーバー上",
+      "modeRemoteSoon": "別のサーバー上（近日対応）",
+      "apiUrlLabel": "音声API URL",
+      "tokenLabel": "音声トークン",
+      "tokenHint": "ローカルモードではトークンが自動生成されます",
+      "tokenPlaceholder": "変更しない場合は空のままにしてください",
+      "notice": "音声は現在Telegramボットでのみ使用されています。初回のローカル起動には数分かかる場合があります：Dockerがイメージとモデルをダウンロードします。"
+    },
+    "badge": {
+      "running": "実行中",
+      "notRunning": "未実行"
+    }
   }
 }

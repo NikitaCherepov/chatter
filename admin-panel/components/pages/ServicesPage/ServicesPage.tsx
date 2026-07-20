@@ -1,4 +1,5 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Service, Settings } from '../../../lib/types';
 import { Icon } from '../../icons/icons';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
@@ -34,11 +35,13 @@ export function ServicesPage({
   onVoiceTokenChange,
   onSave,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <form className={grid.stack} onSubmit={onSave}>
       <Card
-        title="Telegram-бот"
-        description="Основной интерфейс Chatter в Telegram"
+        title={t('services.telegram.title')}
+        description={t('services.telegram.description')}
         aside={<ServiceBadge services={services} names={['telegram-bot']} />}
       >
         <div className={grid.fields}>
@@ -47,26 +50,26 @@ export function ServicesPage({
             onChange={(telegramEnabled) =>
               setSettings((current) => ({ ...current, telegramEnabled }))
             }
-            label="Сервис включён"
+            label={t('services.telegram.enabled')}
           />
           <FormField
-            label="Токен Telegram-бота"
+            label={t('services.telegram.tokenLabel')}
             state={<SecretState configured={settings.hasTelegramToken} />}
-            hint="Этот же токен используется Webapp Notes для проверки initData"
+            hint={t('services.telegram.tokenHint')}
           >
             <input
               type="password"
               value={telegramToken}
               onChange={(event) => onTelegramTokenChange(event.target.value)}
               autoComplete="off"
-              placeholder="Оставь пустым, чтобы не менять"
+              placeholder={t('services.telegram.tokenPlaceholder')}
             />
           </FormField>
         </div>
       </Card>
       <Card
-        title="Webapp Notes"
-        description="Отдельное Telegram Mini App для заметок"
+        title={t('services.notes.title')}
+        description={t('services.notes.description')}
         aside={<ServiceBadge services={services} names={['webapp-notes']} />}
       >
         <div className={grid.fields}>
@@ -75,11 +78,11 @@ export function ServicesPage({
             onChange={(notesEnabled) =>
               setSettings((current) => ({ ...current, notesEnabled }))
             }
-            label="Сервис включён"
+            label={t('services.notes.enabled')}
           />
           <FormField
-            label="Адрес Mini App"
-            hint="Установщик создаёт адрес по IP сервера автоматически. Он передаётся боту при сохранении настроек"
+            label={t('services.notes.urlLabel')}
+            hint={t('services.notes.urlHint')}
           >
             <div className={styles.urlRow}>
               <input type="url" value={settings.notesUrl} disabled placeholder="https://SERVER_IP/notes" />
@@ -88,8 +91,8 @@ export function ServicesPage({
                 className={styles.copyButton}
                 disabled={!settings.notesUrl}
                 onClick={() => void navigator.clipboard.writeText(settings.notesUrl)}
-                aria-label="Копировать адрес"
-                title="Копировать адрес"
+                aria-label={t('services.notes.copyAddress')}
+                title={t('services.notes.copyAddress')}
               >
                 <Icon name="copy" />
               </button>
@@ -98,12 +101,12 @@ export function ServicesPage({
         </div>
       </Card>
       <Card
-        title="Voice"
-        description="Распознавание голосовых и озвучка ответов Telegram-бота"
+        title={t('services.voice.title')}
+        description={t('services.voice.description')}
         aside={<ServiceBadge services={services} names={['voice']} />}
       >
         <div className={grid.fields}>
-          <FormField label="Режим">
+          <FormField label={t('services.voice.modeLabel')}>
             <select
               value={settings.voiceMode}
               onChange={(event) =>
@@ -113,13 +116,13 @@ export function ServicesPage({
                 }))
               }
             >
-              <option value="off">Выключен</option>
-              <option value="local">На этом сервере</option>
-              <option value="remote" disabled>На другом сервере (скоро)</option>
+              <option value="off">{t('services.voice.modeOff')}</option>
+              <option value="local">{t('services.voice.modeLocal')}</option>
+              <option value="remote" disabled>{t('services.voice.modeRemoteSoon')}</option>
             </select>
           </FormField>
           {settings.voiceMode === 'remote' && (
-            <FormField label="Адрес Voice API">
+            <FormField label={t('services.voice.apiUrlLabel')}>
               <input
                 type="url"
                 value={settings.voiceExternalUrl}
@@ -131,22 +134,21 @@ export function ServicesPage({
             </FormField>
           )}
           <FormField
-            label="Токен Voice"
+            label={t('services.voice.tokenLabel')}
             state={<SecretState configured={settings.hasVoiceToken} />}
-            hint="Для локального режима токен создаётся автоматически"
+            hint={t('services.voice.tokenHint')}
           >
             <input
               type="password"
               value={voiceToken}
               onChange={(event) => onVoiceTokenChange(event.target.value)}
               autoComplete="off"
-              placeholder="Оставь пустым, чтобы не менять"
+              placeholder={t('services.voice.tokenPlaceholder')}
             />
           </FormField>
           {settings.voiceMode === 'local' && (
             <div className={styles.notice}>
-              Voice пока используется только Telegram-ботом. Первый локальный запуск может занять
-              несколько минут: Docker загружает образ и модели.
+              {t('services.voice.notice')}
             </div>
           )}
         </div>
@@ -157,12 +159,13 @@ export function ServicesPage({
 }
 
 function ServiceBadge({ services, names }: { services: Service[]; names: string[] }) {
+  const { t } = useTranslation();
   const matches = services.filter((service) => names.includes(service.service));
   const running = matches.length > 0 && matches.every((service) => service.state === 'running');
   return (
     <span className={`${styles.badge} ${running ? styles.running : ''}`}>
       <span />
-      {running ? 'работает' : 'не запущен'}
+      {running ? t('services.badge.running') : t('services.badge.notRunning')}
     </span>
   );
 }

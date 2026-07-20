@@ -216,5 +216,40 @@
       "capabilitySupported": "поддерживаются",
       "capabilityNotClaimed": "не заявлены"
     }
+  },
+  "services": {
+    "telegram": {
+      "title": "Telegram-бот",
+      "description": "Основной интерфейс Chatter в Telegram",
+      "enabled": "Сервис включён",
+      "tokenLabel": "Токен Telegram-бота",
+      "tokenHint": "Этот же токен используется Webapp Notes для проверки initData",
+      "tokenPlaceholder": "Оставь пустым, чтобы не менять"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "Отдельное Telegram Mini App для заметок",
+      "enabled": "Сервис включён",
+      "urlLabel": "Адрес Mini App",
+      "urlHint": "Установщик создаёт адрес по IP сервера автоматически. Он передаётся боту при сохранении настроек",
+      "copyAddress": "Копировать адрес"
+    },
+    "voice": {
+      "title": "Voice",
+      "description": "Распознавание голосовых и озвучка ответов Telegram-бота",
+      "modeLabel": "Режим",
+      "modeOff": "Выключен",
+      "modeLocal": "На этом сервере",
+      "modeRemoteSoon": "На другом сервере (скоро)",
+      "apiUrlLabel": "Адрес Voice API",
+      "tokenLabel": "Токен Voice",
+      "tokenHint": "Для локального режима токен создаётся автоматически",
+      "tokenPlaceholder": "Оставь пустым, чтобы не менять",
+      "notice": "Voice пока используется только Telegram-ботом. Первый локальный запуск может занять несколько минут: Docker загружает образ и модели."
+    },
+    "badge": {
+      "running": "работает",
+      "notRunning": "не запущен"
+    }
   }
 }

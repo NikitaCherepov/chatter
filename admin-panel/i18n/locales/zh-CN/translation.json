@@ -216,5 +216,40 @@
       "capabilitySupported": "支持",
       "capabilityNotClaimed": "未声明"
     }
+  },
+  "services": {
+    "telegram": {
+      "title": "Telegram 机器人",
+      "description": "Telegram 中的主要 Chatter 界面",
+      "enabled": "服务已启用",
+      "tokenLabel": "Telegram 机器人令牌",
+      "tokenHint": "Webapp Notes 使用相同的令牌进行 initData 验证",
+      "tokenPlaceholder": "留空以保持原样"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "用于笔记的独立 Telegram 小程序",
+      "enabled": "服务已启用",
+      "urlLabel": "小程序 URL",
+      "urlHint": "安装程序会根据服务器IP自动生成地址。保存设置时，该地址会传递给机器人。",
+      "copyAddress": "复制地址"
+    },
+    "voice": {
+      "title": "语音",
+      "description": "为Telegram机器人响应提供语音识别和TTS功能",
+      "modeLabel": "模式",
+      "modeOff": "已禁用",
+      "modeLocal": "本服务器",
+      "modeRemoteSoon": "其他服务器（即将推出）",
+      "apiUrlLabel": "语音API URL",
+      "tokenLabel": "语音令牌",
+      "tokenHint": "本地模式下令牌自动生成",
+      "tokenPlaceholder": "留空以保持不变",
+      "notice": "语音当前仅由Telegram机器人使用。首次本地启动可能需要几分钟：Docker会下载镜像和模型。"
+    },
+    "badge": {
+      "running": "运行中",
+      "notRunning": "未运行"
+    }
   }
 }

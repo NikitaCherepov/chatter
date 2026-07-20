@@ -216,5 +216,40 @@
       "capabilitySupported": "unterstützt",
       "capabilityNotClaimed": "nicht beansprucht"
     }
+  },
+  "services": {
+    "telegram": {
+      "title": "Telegram-Bot",
+      "description": "Haupt-Chatter-Schnittstelle in Telegram",
+      "enabled": "Dienst aktiviert",
+      "tokenLabel": "Telegram-Bot-Token",
+      "tokenHint": "Dasselbe Token wird von Webapp Notes für die initData-Validierung verwendet",
+      "tokenPlaceholder": "Leer lassen, um unverändert zu lassen"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "Eigenständige Telegram Mini App für Notizen",
+      "enabled": "Dienst aktiviert",
+      "urlLabel": "Mini-App-URL",
+      "urlHint": "Der Installer erstellt automatisch eine Adresse aus der Server-IP. Sie wird beim Speichern der Einstellungen an den Bot übergeben.",
+      "copyAddress": "Adresse kopieren"
+    },
+    "voice": {
+      "title": "Sprache",
+      "description": "Spracherkennung und TTS für Telegram-Bot-Antworten",
+      "modeLabel": "Modus",
+      "modeOff": "Deaktiviert",
+      "modeLocal": "Auf diesem Server",
+      "modeRemoteSoon": "Auf einem anderen Server (demnächst)",
+      "apiUrlLabel": "Sprach-API-URL",
+      "tokenLabel": "Sprach-Token",
+      "tokenHint": "Token wird automatisch für den lokalen Modus generiert",
+      "tokenPlaceholder": "Leer lassen, um unverändert zu lassen",
+      "notice": "Sprache wird derzeit nur vom Telegram-Bot verwendet. Der erste lokale Start kann mehrere Minuten dauern: Docker lädt das Image und die Modelle herunter."
+    },
+    "badge": {
+      "running": "läuft",
+      "notRunning": "läuft nicht"
+    }
   }
 }

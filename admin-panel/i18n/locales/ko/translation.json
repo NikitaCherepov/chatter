@@ -216,5 +216,40 @@
       "capabilitySupported": "지원됨",
       "capabilityNotClaimed": "주장되지 않음"
     }
+  },
+  "services": {
+    "telegram": {
+      "title": "텔레그램 봇",
+      "description": "텔레그램의 메인 채터 인터페이스",
+      "enabled": "서비스 활성화",
+      "tokenLabel": "텔레그램 봇 토큰",
+      "tokenHint": "Webapp Notes에서 initData 검증에 동일한 토큰이 사용됩니다",
+      "tokenPlaceholder": "변경하지 않으려면 비워 두세요"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "노트를 위한 독립형 텔레그램 미니 앱",
+      "enabled": "서비스 활성화",
+      "urlLabel": "미니 앱 URL",
+      "urlHint": "설치 프로그램이 서버 IP에서 자동으로 주소를 생성합니다. 설정 저장 시 봇에 전달됩니다.",
+      "copyAddress": "주소 복사"
+    },
+    "voice": {
+      "title": "음성",
+      "description": "Telegram 봇 응답을 위한 음성 인식 및 TTS",
+      "modeLabel": "모드",
+      "modeOff": "비활성화",
+      "modeLocal": "이 서버에서",
+      "modeRemoteSoon": "다른 서버에서 (곧)",
+      "apiUrlLabel": "음성 API URL",
+      "tokenLabel": "음성 토큰",
+      "tokenHint": "로컬 모드에서는 토큰이 자동으로 생성됩니다",
+      "tokenPlaceholder": "변경하지 않으려면 비워 두세요",
+      "notice": "음성은 현재 Telegram 봇에서만 사용됩니다. 첫 번째 로컬 시작 시 Docker가 이미지와 모델을 다운로드하므로 몇 분 정도 걸릴 수 있습니다."
+    },
+    "badge": {
+      "running": "실행 중",
+      "notRunning": "실행 중 아님"
+    }
   }
 }

@@ -216,5 +216,40 @@
       "capabilitySupported": "pris en charge",
       "capabilityNotClaimed": "non revendiqué"
     }
+  },
+  "services": {
+    "telegram": {
+      "title": "Bot Telegram",
+      "description": "Interface principale de Chatter dans Telegram",
+      "enabled": "Service activé",
+      "tokenLabel": "Jeton du bot Telegram",
+      "tokenHint": "Le même jeton est utilisé par Webapp Notes pour la validation initData",
+      "tokenPlaceholder": "Laisser vide pour conserver inchangé"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "Mini App Telegram autonome pour les notes",
+      "enabled": "Service activé",
+      "urlLabel": "URL de la Mini App",
+      "urlHint": "Le programme d'installation crée une adresse à partir de l'IP du serveur automatiquement. Elle est transmise au bot lors de l'enregistrement des paramètres.",
+      "copyAddress": "Copier l'adresse"
+    },
+    "voice": {
+      "title": "Voix",
+      "description": "Reconnaissance vocale et TTS pour les réponses du bot Telegram",
+      "modeLabel": "Mode",
+      "modeOff": "Désactivé",
+      "modeLocal": "Sur ce serveur",
+      "modeRemoteSoon": "Sur un autre serveur (bientôt)",
+      "apiUrlLabel": "URL de l'API vocale",
+      "tokenLabel": "Jeton vocal",
+      "tokenHint": "Le jeton est généré automatiquement pour le mode local",
+      "tokenPlaceholder": "Laissez vide pour ne pas modifier",
+      "notice": "La voix n'est actuellement utilisée que par le bot Telegram. Le premier démarrage local peut prendre plusieurs minutes : Docker télécharge l'image et les modèles."
+    },
+    "badge": {
+      "running": "en cours",
+      "notRunning": "arrêté"
+    }
   }
 }
