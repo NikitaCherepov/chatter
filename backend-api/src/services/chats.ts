@@ -52,7 +52,6 @@ export const createOrUpdateUserForApiRegistration = (name: string | null = null)
   ensureActiveChat(userId);
   return userId;
 };
-
 export const setUserTimezone = (userId: number, timezoneOffset: number) => db.prepare(`
   UPDATE users
   SET timezone_offset = ?, timezone_confirmed = 1
@@ -1987,69 +1986,3 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
   };
 };
 
-/**
- * Backfill token_count / reasoning_tokens для существующих сообщений.
- * Запускается один раз при старте сервера (если есть строки без подсчёта).
- * Работает порциями по BATCH, чтобы не блокировать event loop надолго.
- *
- * Возвращает количество обработанных строк.
- */
-export const backfillMessageTokens = (batchSize = 500): number => {
-  // Берём строки, где token_count = 0 (default), начиная со старых.
-  // token_count=0 у нормальных сообщений практически невозможен (минимум 4 токена на обёртку).
-  const rows = db.prepare(`
-    SELECT id, role, content, reasoning_content, tool_calls_json
-    FROM chat_messages
-    WHERE token_count = 0
-    ORDER BY id ASC
-    LIMIT ?
-  `).all(batchSize) as Array<{ id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null }>;
-
-  if (rows.length === 0) return 0;
-
-  const updateStmt = db.prepare(`
-    UPDATE chat_messages SET token_count = ?, reasoning_tokens = ? WHERE id = ?
-  `);
-  const tx = db.transaction(() => {
-    for (const row of rows) {
-      let tokenCount = 0;
-      let reasoningTokens = 0;
-
-      if (row.role === 'user') {
-        tokenCount = countMessageTokens('user', row.content);
-      } else {
-        const expanded = expandAssistantMessage(row.content, row.tool_calls_json);
-        for (const msg of expanded) {
-          if (msg.role === 'assistant') {
-            let msgTokens = countMessageTokens('assistant', msg.content);
-            if (Array.isArray(msg.tool_calls)) {
-              for (const tc of msg.tool_calls) {
-                msgTokens += countToolCallTokens(
-                  tc.function?.name ?? '',
-                  tc.function?.arguments,
-                  tc.id ?? ''
-                );
-              }
-            }
-            tokenCount += msgTokens;
-          } else if (msg.role === 'tool') {
-            tokenCount += countToolResultTokens(
-              msg.name ?? '',
-              msg.tool_call_id ?? '',
-              msg.content ?? ''
-            );
-          }
-        }
-        if (row.reasoning_content) {
-          reasoningTokens = countTokens(row.reasoning_content);
-        }
-      }
-      // Zero is the "not processed yet" marker. Empty legacy messages may
-      // legitimately count to zero, so keep a minimum sentinel value to avoid
-      // selecting the same rows forever during startup backfill.
-      updateStmt.run(Math.max(1, tokenCount), reasoningTokens, row.id);
-    }
-  });
-  tx();
-  return rows.length;
-};
