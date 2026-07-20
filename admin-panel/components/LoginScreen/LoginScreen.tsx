@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './LoginScreen.module.css';
 
 type Props = {
@@ -18,6 +19,8 @@ export function LoginScreen({
   onPasswordChange,
   onSubmit,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <main className={styles.container}>
       <section className={styles.card}>
@@ -34,14 +37,14 @@ export function LoginScreen({
           </svg>
           <h1 className={styles.title}>Chatter</h1>
         </div>
-        <p className={styles.subtitle}>Вход в панель управления</p>
+        <p className={styles.subtitle}>{t('login.subtitle')}</p>
         <form className={styles.form} onSubmit={onSubmit}>
           <input
             className={styles.input}
             value={username}
             onChange={(event) => onUsernameChange(event.target.value)}
-            placeholder="Логин"
-            aria-label="Логин"
+            placeholder={t('login.usernamePlaceholder')}
+            aria-label={t('login.usernameLabel')}
             autoComplete="username"
             required
             autoFocus
@@ -51,18 +54,18 @@ export function LoginScreen({
             value={password}
             onChange={(event) => onPasswordChange(event.target.value)}
             type="password"
-            placeholder="Пароль"
-            aria-label="Пароль"
+            placeholder={t('login.passwordPlaceholder')}
+            aria-label={t('login.passwordLabel')}
             autoComplete="current-password"
             required
           />
           {error && <div className={styles.error}>{error}</div>}
           <button className={styles.button} type="submit">
-            Войти
+            {t('login.submitButton')}
           </button>
         </form>
         <div className={styles.divider} />
-        <p className={styles.hint}>Данные для первого входа показал установщик.</p>
+        <p className={styles.hint}>{t('login.firstTimeHint')}</p>
       </section>
     </main>
   );

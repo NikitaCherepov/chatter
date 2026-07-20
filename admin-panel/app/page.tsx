@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AdminShell, type AdminSection } from '../components/AdminShell/AdminShell';
 import { LoginScreen } from '../components/LoginScreen/LoginScreen';
 import { IntegrationsPage } from '../components/pages/IntegrationsPage/IntegrationsPage';
@@ -34,6 +35,7 @@ export default function Home() {
   const [newPassword, setNewPassword] = useState('');
   const [accountState, setAccountState] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const syncUserRoute = () => {
@@ -108,7 +110,7 @@ export default function Home() {
     } catch (error) {
       setLoginError(
         error instanceof Error && error.message === 'invalid_credentials'
-          ? 'Неверный логин или пароль.'
+          ? t('login.invalidCredentials')
           : String(error),
       );
     }

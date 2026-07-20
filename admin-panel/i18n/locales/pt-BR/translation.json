@@ -1,0 +1,12 @@
+{
+  "login": {
+    "subtitle": "Login do painel de administração",
+    "usernameLabel": "Nome de usuário",
+    "usernamePlaceholder": "Nome de usuário",
+    "passwordLabel": "Senha",
+    "passwordPlaceholder": "Senha",
+    "submitButton": "Entrar",
+    "firstTimeHint": "As credenciais iniciais foram exibidas pelo instalador.",
+    "invalidCredentials": "Nome de usuário ou senha inválidos."
+  }
+}

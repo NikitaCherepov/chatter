@@ -1,0 +1,12 @@
+{
+  "login": {
+    "subtitle": "Вход в панель управления",
+    "usernameLabel": "Логин",
+    "usernamePlaceholder": "Логин",
+    "passwordLabel": "Пароль",
+    "passwordPlaceholder": "Пароль",
+    "submitButton": "Войти",
+    "firstTimeHint": "Данные для первого входа показал установщик.",
+    "invalidCredentials": "Неверный логин или пароль."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "login": {
+    "subtitle": "Admin-Panel-Anmeldung",
+    "usernameLabel": "Benutzername",
+    "usernamePlaceholder": "Benutzername",
+    "passwordLabel": "Passwort",
+    "passwordPlaceholder": "Passwort",
+    "submitButton": "Anmelden",
+    "firstTimeHint": "Die ersten Anmeldedaten wurden vom Installationsprogramm angezeigt.",
+    "invalidCredentials": "Ungültiger Benutzername oder ungültiges Passwort."
+  }
+}

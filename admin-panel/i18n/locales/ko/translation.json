@@ -1,0 +1,12 @@
+{
+  "login": {
+    "subtitle": "관리자 패널 로그인",
+    "usernameLabel": "사용자 이름",
+    "usernamePlaceholder": "사용자 이름",
+    "passwordLabel": "비밀번호",
+    "passwordPlaceholder": "비밀번호",
+    "submitButton": "로그인",
+    "firstTimeHint": "초기 자격 증명은 설치 프로그램에 의해 표시되었습니다.",
+    "invalidCredentials": "사용자 이름 또는 비밀번호가 잘못되었습니다."
+  }
+}

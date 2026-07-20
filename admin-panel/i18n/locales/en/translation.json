@@ -1,0 +1,12 @@
+{
+  "login": {
+    "subtitle": "Admin panel login",
+    "usernameLabel": "Username",
+    "usernamePlaceholder": "Username",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Password",
+    "submitButton": "Sign in",
+    "firstTimeHint": "The initial credentials were shown by the installer.",
+    "invalidCredentials": "Invalid username or password."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "login": {
+    "subtitle": "Logowanie do panelu administracyjnego",
+    "usernameLabel": "Nazwa użytkownika",
+    "usernamePlaceholder": "Nazwa użytkownika",
+    "passwordLabel": "Hasło",
+    "passwordPlaceholder": "Hasło",
+    "submitButton": "Zaloguj się",
+    "firstTimeHint": "Początkowe dane logowania zostały wyświetlone przez instalatora.",
+    "invalidCredentials": "Nieprawidłowa nazwa użytkownika lub hasło."
+  }
+}
