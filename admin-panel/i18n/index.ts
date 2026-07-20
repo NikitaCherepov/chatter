@@ -1,5 +1,6 @@
 import { createInstance } from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
 import deTranslation from './locales/de/translation.json';
 import enTranslation from './locales/en/translation.json';
 import esTranslation from './locales/es/translation.json';
@@ -28,28 +29,34 @@ export const SUPPORTED_LANGUAGES = [
 
 const i18n = createInstance();
 
-i18n.use(initReactI18next).init({
-  resources: {
-    de: { translation: deTranslation },
-    en: { translation: enTranslation },
-    es: { translation: esTranslation },
-    fr: { translation: frTranslation },
-    it: { translation: itTranslation },
-    ja: { translation: jaTranslation },
-    ko: { translation: koTranslation },
-    pl: { translation: plTranslation },
-    'pt-BR': { translation: ptBrTranslation },
-    ru: { translation: ruTranslation },
-    'zh-CN': { translation: zhCnTranslation },
-  },
-  lng: 'ru',
-  fallbackLng: 'ru',
-  supportedLngs: SUPPORTED_LANGUAGES,
-  load: 'currentOnly',
-  initAsync: false,
-  interpolation: {
-    escapeValue: false,
-  },
-});
+i18n
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources: {
+      de: { translation: deTranslation },
+      en: { translation: enTranslation },
+      es: { translation: esTranslation },
+      fr: { translation: frTranslation },
+      it: { translation: itTranslation },
+      ja: { translation: jaTranslation },
+      ko: { translation: koTranslation },
+      pl: { translation: plTranslation },
+      'pt-BR': { translation: ptBrTranslation },
+      ru: { translation: ruTranslation },
+      'zh-CN': { translation: zhCnTranslation },
+    },
+    fallbackLng: 'en',
+    supportedLngs: SUPPORTED_LANGUAGES,
+    detection: {
+      order: ['navigator'],
+      caches: [],
+    },
+    load: 'currentOnly',
+    initAsync: false,
+    interpolation: {
+      escapeValue: false,
+    },
+  });
 
 export default i18n;
