@@ -32,4 +32,21 @@
 .statsGrid > div { display: flex; min-width: 0; min-height: 68px; justify-content: center; flex-direction: column; padding: 11px 13px; border: 1px solid var(--border-light); border-radius: 7px; background: var(--bg-secondary); }
 .statsGrid span { color: var(--text-hint); font-size: 9px; }
 .statsGrid strong { overflow: hidden; margin-top: 5px; color: var(--text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+.usageRow { display: grid; grid-template-columns: 160px 1fr; gap: 24px; align-items: flex-start; }
+.usageDonut { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.usageDonutCaption { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.usageDonutCaption strong { color: var(--text-primary); font-size: 11px; }
+.usageDonutCaption small { color: var(--text-hint); font-size: 9px; }
+.donut { display: block; }
+.donutText { font-size: 22px; font-weight: 600; }
+
+.usageTableWrap { overflow-x: auto; }
+.usageTable { width: 100%; border-collapse: collapse; font-size: 11px; }
+.usageTable th, .usageTable td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border-light); }
+.usageTable th { color: var(--text-hint); font-size: 9px; text-transform: uppercase; }
+.usageTable td strong { color: var(--text-primary); font-size: 11px; }
+.usageTable td small { display: block; color: var(--text-muted); font-size: 9px; }
+
+.error { color: var(--color-error); font-size: 10px; padding: 12px 0; }
 @media (max-width: 1000px) { .accountGrid, .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .banBar { grid-template-columns: 1fr 1fr; } .banBar > div { grid-column: 1 / -1; } .connectionHeader { display: none; } .connectionRow { grid-template-columns: 1fr 1.5fr; } }

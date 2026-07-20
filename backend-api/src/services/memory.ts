@@ -1,13 +1,10 @@
 import { db } from '../db.js';
 import { getUserById } from './chats.js';
+import { chargeTokens } from './token-quota.js';
 
 const MAX_CORE_MEMORY_LENGTH = 400;
-const TOKENS_PER_PRICE_BLOCK = 500_000;
-const PRICE_PER_PRICE_BLOCK_RUB = 102;
-const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
 
 const extractTokens = (response: any) => Number(response?.usage?.total_tokens || 0);
-const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;
 
 export const runCoreMemoryMerge = async (
   aiCall: (requestPayload: Record<string, unknown>) => Promise<{ response: any; usedModel: string; usedProvider: string }>,
@@ -60,16 +57,20 @@ ${fact}
     const response = completion.response;
     const mergeTokens = extractTokens(response);
     if (mergeTokens > 0) {
-      const safeTokens = Math.max(0, Math.floor(mergeTokens));
-      const costRub = toRubFromTokens(safeTokens);
-      db.prepare(`
-        UPDATE users
-        SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
-            total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
-            daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
-            total_cost_rub = COALESCE(total_cost_rub, 0) + ?
-        WHERE id = ?
-      `).run(safeTokens, safeTokens, costRub, costRub, userId);
+      // Charge via unified ledger (weekly_tokens_used + user_token_usage row).
+      chargeTokens({
+        userId,
+        route: 'memory-merge',
+        modelId: completion.usedModel || null,
+        modelName: completion.usedModel || null,
+        providerName: completion.usedProvider || null,
+        promptTokens: 0,
+        completionTokens: 0,
+        cacheHitTokens: 0,
+        cacheMissTokens: 0,
+        reasoningTokens: 0,
+        totalTokens: mergeTokens,
+      });
     }
 
     const raw = response?.choices?.[0]?.message?.content?.trim() || '';

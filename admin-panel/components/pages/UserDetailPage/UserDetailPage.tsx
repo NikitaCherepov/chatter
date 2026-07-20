@@ -24,8 +24,9 @@ type UserDetail = {
   language: string | null;
   created_at: string | null;
   daily_message_count: number;
-  daily_tokens_used: number;
-  total_tokens_used: number;
+  weekly_tokens_used: number;
+  weekly_tokens_quota: number;
+  weekly_window_started_at: number;
   daily_web_search_count: number;
   daily_web_search_limit: number;
   total_web_search_count: number;
@@ -192,9 +193,18 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
   if (loading && !user) return <div className={styles.loading}>Загружаю пользователя…</div>;
   if (!user) return <div className={styles.loading}>Не удалось загрузить пользователя: {error}</div>;
 
+  const weeklyPercent = user.weekly_tokens_quota > 0
+    ? Math.min(100, Math.round((user.weekly_tokens_used || 0) / user.weekly_tokens_quota * 100))
+    : 0;
+  const weeklyResetsAt = user.weekly_window_started_at
+    ? formatDate(new Date((user.weekly_window_started_at + 7 * 24 * 60 * 60) * 1000).toISOString())
+    : '—';
+
   const stats = [
-    ['Токены сегодня', formatNumber(user.daily_tokens_used)],
-    ['Токены всего', formatNumber(user.total_tokens_used)],
+    ['Квота недели', user.weekly_tokens_quota > 0
+      ? `${formatNumber(user.weekly_tokens_used)} / ${formatNumber(user.weekly_tokens_quota)} (${weeklyPercent}%)`
+      : '∞'],
+    ['Сброс квоты', weeklyResetsAt],
     ['Сообщения', formatNumber(user.messages.total)],
     ['Запросы пользователя', formatNumber(user.messages.user)],
     ['Ответы ассистента', formatNumber(user.messages.assistant)],
@@ -264,6 +274,8 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         <div className={styles.statsGrid}>{stats.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
       </Card>
 
+      <UsageByModelCard userId={user.id} quotaUsed={user.weekly_tokens_used} quotaTotal={user.weekly_tokens_quota} />
+
       <Card title="Лимиты контекста" description="Технические значения, которые уже хранятся для аккаунта">
         <div className={styles.statsGrid}>
           <div><span>Лимит тарифа</span><strong>{formatNumber(user.max_context_tokens_limit)}</strong></div>
@@ -280,5 +292,121 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         />
       )}
     </div>
+  );
+}
+
+// ─── Usage by model (donut + table) ─────────────────────────────────────────
+
+type UsageByModelRow = {
+  model_id: string | null;
+  model_name: string | null;
+  route: string | null;
+  provider_name: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cache_hit_tokens: number;
+  cache_miss_tokens: number;
+  reasoning_tokens: number;
+  total_tokens: number;
+  charged_tokens: number;
+  free_requests: number;
+  aborted_requests: number;
+  request_count: number;
+};
+
+const routeLabels: Record<string, string> = {
+  'manual': 'Manual',
+  'auto-pro': 'Auto PRO',
+  'auto-lite': 'Auto LITE',
+  'auto-vision': 'Auto Vision',
+  'memory-merge': 'Память',
+  'scheduler-condition': 'Планировщик',
+};
+
+function formatTokens(value: number) {
+  return new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function UsageDonut({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - clamped / 100);
+  const color = clamped >= 90 ? '#e74' : clamped >= 70 ? '#ec4' : '#4a9';
+  return (
+    <svg viewBox="0 0 100 100" width="100" height="100" className={styles.donut}>
+      <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--border, #2a2a2a)" strokeWidth="10" />
+      <circle
+        cx="50" cy="50" r={radius} fill="none" stroke={color} strokeWidth="10"
+        strokeDasharray={circumference} strokeDashoffset={offset}
+        transform="rotate(-90 50 50)"
+        style={{ transition: 'stroke-dashoffset 0.4s ease' }}
+      />
+      <text x="50" y="50" textAnchor="middle" dominantBaseline="middle" className={styles.donutText} fill="currentColor">
+        {clamped}%
+      </text>
+    </svg>
+  );
+}
+
+function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; quotaUsed: number; quotaTotal: number }) {
+  const [rows, setRows] = useState<UsageByModelRow[] | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await api<{ by_model: UsageByModelRow[] }>(`/api/v1/admin/users/${userId}/usage`);
+        if (!cancelled) {
+          setRows(response.by_model || []);
+          setError('');
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const percent = quotaTotal > 0 ? Math.min(100, Math.round((quotaUsed || 0) / quotaTotal * 100)) : 0;
+
+  return (
+    <Card title="Использование по моделям" description="За текущее недельное окно. Не зависит от удаления чатов.">
+      <div className={styles.usageRow}>
+        <div className={styles.usageDonut}>
+          <UsageDonut percent={percent} />
+          <div className={styles.usageDonutCaption}>
+            <strong>{formatTokens(quotaUsed || 0)} / {quotaTotal > 0 ? formatTokens(quotaTotal) : '∞'}</strong>
+            <small>условных единиц</small>
+          </div>
+        </div>
+        <div className={styles.usageTableWrap}>
+          {error && <div className={styles.error}>Не удалось загрузить: {error}</div>}
+          {!rows && !error && <div className={styles.loading}>Загружаю…</div>}
+          {rows && rows.length === 0 && <div className={styles.loading}>За текущее окно запросов пока нет.</div>}
+          {rows && rows.length > 0 && (
+            <table className={styles.usageTable}>
+              <thead><tr>
+                <th>Модель</th><th>Маршрут</th><th>Запросов</th>
+                <th>Токенов</th><th>Cache hit</th><th>Списано</th>
+              </tr></thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <tr key={`${row.model_id || 'null'}-${idx}`}>
+                    <td><strong>{row.model_name || row.model_id || '—'}</strong><small>{row.provider_name || ''}</small></td>
+                    <td>{row.route ? (routeLabels[row.route] || row.route) : '—'}</td>
+                    <td>{row.request_count}{row.aborted_requests > 0 && <small title="прервано"> · {row.aborted_requests}⛔</small>}</td>
+                    <td>{formatTokens(row.total_tokens)}</td>
+                    <td>{formatTokens(row.cache_hit_tokens)}</td>
+                    <td>{row.free_requests > 0 && row.charged_tokens === 0 ? <span title="бесплатная модель">free</span> : formatTokens(row.charged_tokens)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

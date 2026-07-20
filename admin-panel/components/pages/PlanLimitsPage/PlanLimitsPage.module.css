@@ -1,0 +1,50 @@
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field span {
+  font-size: 13px;
+  color: var(--muted, #888);
+}
+
+.field input {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #333);
+  background: var(--input-bg, #1a1a1a);
+  color: inherit;
+  font: inherit;
+}
+
+.field small {
+  font-size: 11px;
+  color: var(--muted, #888);
+  opacity: 0.8;
+}
+
+.toggleRow {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.state {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted, #888);
+}

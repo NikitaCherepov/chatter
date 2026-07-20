@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import { checkQuota, chargeTokens } from './token-quota.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -76,6 +77,8 @@ type LiteProvider = {
   baseURL: string;
   client: OpenAI;
   modelChain: string[];
+  /** Per-model uniqueIds aligned with modelChain. Missing entry → falls back to model name. */
+  uniqueIds: (string | null)[];
 };
 
 type ManualModelEntry = {
@@ -93,6 +96,8 @@ type CompletionMeta = {
   response: any;
   usedModel: string;
   usedProvider: string;
+  /** Stable identifier for the model that produced this completion (for cost accounting). */
+  usedUniqueId?: string | null;
   baseURLUsed?: string;
   failedModels?: string[];
   failedProviders?: string[];
@@ -114,6 +119,22 @@ const PRO_CLIENT = PRO_API_KEY
     })
   : null;
 
+const slugifyModelId = (value: string) => {
+  const slug = `${value || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return slug || 'model';
+};
+
+const parseProviderUniqueIds = (raw: string, count: number, prefix: string, fallbackModel: string): (string | null)[] => {
+  if (!raw) return new Array(count).fill(null);
+  const parts = raw.split(',').map(v => `${v || ''}`.trim());
+  const result: (string | null)[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const explicit = parts[i];
+    result.push(explicit || `${prefix}-${slugifyModelId(fallbackModel)}-${i}`);
+  }
+  return result;
+};
+
 const parseProProviders = (): LiteProvider[] => {
   const defaultBase = (process.env.TIMEWEB_BASE_URL || '').trim();
   const defaultKey = (process.env.TIMEWEB_API_KEY || '').trim();
@@ -126,25 +147,28 @@ const parseProProviders = (): LiteProvider[] => {
       name: 'pro-1',
       baseURL: defaultBase,
       client: PRO_CLIENT!,
-      modelChain: defaultModels
+      modelChain: defaultModels,
+      uniqueIds: defaultModels.map((m, i) => `pro-${slugifyModelId(m)}-0-${i}`),
     }];
   }
 
   const chunks = raw.split(';').map(v => v.trim()).filter(Boolean);
   const providers: LiteProvider[] = [];
-  for (let i = 0; i < chunks.length; i += 1) {
-    const [baseRaw, keyRaw, modelsRaw] = chunks[i].split('|').map(v => `${v || ''}`.trim());
-    const base = baseRaw || defaultBase;
-    const key = keyRaw || defaultKey;
-    const models = parseModelChain(modelsRaw, defaultModels);
-    if (!base || !key || !models.length) continue;
+  chunks.forEach((chunk, providerIdx) => {
+    const parts = chunk.split('|').map(v => `${v || ''}`.trim());
+    const base = parts[0] || defaultBase;
+    const key = parts[1] || defaultKey;
+    const models = parseModelChain(parts[2] || '', defaultModels);
+    if (!base || !key || !models.length) return;
+    const uniqueIds = parseProviderUniqueIds(parts[3] || '', models.length, 'pro', models[0] || 'model');
     providers.push({
-      name: `pro-${i + 1}`,
+      name: `pro-${providerIdx + 1}`,
       baseURL: base,
       client: new OpenAI({ apiKey: key, baseURL: base }),
-      modelChain: models
+      modelChain: models,
+      uniqueIds,
     });
-  }
+  });
   return providers;
 };
 
@@ -162,25 +186,28 @@ const parseLiteProviders = (): LiteProvider[] => {
       name: 'lite-1',
       baseURL: defaultBase,
       client: new OpenAI({ apiKey: defaultKey, baseURL: defaultBase }),
-      modelChain: defaultModels
+      modelChain: defaultModels,
+      uniqueIds: defaultModels.map((m, i) => `lite-${slugifyModelId(m)}-0-${i}`),
     }];
   }
 
   const chunks = raw.split(';').map(v => v.trim()).filter(Boolean);
   const providers: LiteProvider[] = [];
-  for (let i = 0; i < chunks.length; i += 1) {
-    const [baseRaw, keyRaw, modelsRaw] = chunks[i].split('|').map(v => `${v || ''}`.trim());
-    const base = baseRaw || defaultBase;
-    const key = keyRaw || defaultKey;
-    const models = parseModelChain(modelsRaw, defaultModels);
-    if (!base || !key || !models.length) continue;
+  chunks.forEach((chunk, providerIdx) => {
+    const parts = chunk.split('|').map(v => `${v || ''}`.trim());
+    const base = parts[0] || defaultBase;
+    const key = parts[1] || defaultKey;
+    const models = parseModelChain(parts[2] || '', defaultModels);
+    if (!base || !key || !models.length) return;
+    const uniqueIds = parseProviderUniqueIds(parts[3] || '', models.length, 'lite', models[0] || 'model');
     providers.push({
-      name: `lite-${i + 1}`,
+      name: `lite-${providerIdx + 1}`,
       baseURL: base,
       client: new OpenAI({ apiKey: key, baseURL: base }),
-      modelChain: models
+      modelChain: models,
+      uniqueIds,
     });
-  }
+  });
   return providers;
 };
 
@@ -190,6 +217,7 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
   const proDefaultBase = (process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
   const proDefaultKey = (process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
   const proDefaultModels = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [PRO_MODEL_CHAIN[0] || 'glm-4v']);
+  const visionUniqueId = (process.env.TIMEWEB_VISION_UNIQUE_ID || 'vision').trim();
 
   const proProviders: LiteProvider[] = [];
   if (proDefaultBase && proDefaultKey) {
@@ -197,7 +225,8 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
       name: 'vision-pro-1',
       baseURL: proDefaultBase,
       client: new OpenAI({ apiKey: proDefaultKey, baseURL: proDefaultBase }),
-      modelChain: proDefaultModels
+      modelChain: proDefaultModels,
+      uniqueIds: proDefaultModels.map((m, i) => i === 0 ? visionUniqueId : `vision-${slugifyModelId(m)}-${i}`),
     });
   }
 
@@ -211,7 +240,8 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
       name: 'vision-lite-1',
       baseURL: liteDefaultBase,
       client: new OpenAI({ apiKey: liteDefaultKey, baseURL: liteDefaultBase }),
-      modelChain: liteDefaultModels
+      modelChain: liteDefaultModels,
+      uniqueIds: liteDefaultModels.map((m, i) => i === 0 ? `${visionUniqueId}-lite` : `vision-lite-${slugifyModelId(m)}-${i}`),
     });
   }
 
@@ -779,7 +809,8 @@ const createCompletionWithModelFallback = async (
   signal?: AbortSignal,
   reasoningLevel?: ReasoningLevel | null,
   modelSettings?: ModelSettings | null,
-  streamCallbacks?: StreamCallbacks
+  streamCallbacks?: StreamCallbacks,
+  uniqueIds: (string | null)[] = []
 ) => {
   const failedModels: string[] = [];
   let lastError: unknown = null;
@@ -806,7 +837,9 @@ const createCompletionWithModelFallback = async (
         const response = streamCallbacks
           ? await streamAndAssemble(client, providerRequestBody, model, streamCallbacks, signal)
           : await client.chat.completions.create({ ...providerRequestBody, model } as any, signal ? { signal } : {});
-        return { response, modelUsed: model, failedModels };
+        const modelIndex = modelChain.indexOf(model);
+        const uniqueIdUsed = modelIndex >= 0 ? (uniqueIds[modelIndex] || null) : null;
+        return { response, modelUsed: model, uniqueIdUsed, failedModels };
       } catch (err) {
         if (isAbortError(err)) throw err;
         lastError = err;
@@ -848,7 +881,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks, provider.uniqueIds);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -860,6 +893,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
       return {
         response: completion.response,
         modelUsed: completion.modelUsed,
+        uniqueIdUsed: completion.uniqueIdUsed,
         providerUsed: provider.name,
         baseURLUsed: provider.baseURL,
         failedProviders,
@@ -895,7 +929,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         baseURL: provider.baseURL,
         models: provider.modelChain
       });
-      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks);
+      const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestBody, provider.name, provider.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks, provider.uniqueIds);
       if (completion.failedModels.length) {
         failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
       }
@@ -907,6 +941,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
       return {
         response: completion.response,
         modelUsed: completion.modelUsed,
+        uniqueIdUsed: completion.uniqueIdUsed,
         providerUsed: provider.name,
         baseURLUsed: provider.baseURL,
         failedProviders,
@@ -2846,10 +2881,11 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
   // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
   if (manualModel) {
     try {
-      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks);
+      const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks, [manualModel.id]);
       return {
         response: completion.response,
         usedModel: completion.modelUsed,
+        usedUniqueId: completion.uniqueIdUsed || manualModel.id,
         usedProvider: 'manual',
         baseURLUsed: manualModel.baseURL,
         failedModels: completion.failedModels,
@@ -2876,13 +2912,14 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
     for (const provider of providers) {
       try {
         // Vision-запросы не стримим (анализ фото — не диалог)
-        const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestPayload, provider.name, provider.baseURL, signal, reasoningLevel);
+        const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestPayload, provider.name, provider.baseURL, signal, reasoningLevel, undefined, undefined, provider.uniqueIds);
         if (completion.failedModels.length) {
           failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
         }
         return {
           response: completion.response,
           usedModel: completion.modelUsed,
+          usedUniqueId: completion.uniqueIdUsed,
           usedProvider: provider.name,
           baseURLUsed: provider.baseURL,
           failedModels,
@@ -2904,6 +2941,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
       return {
         response: res.response,
         usedModel: res.modelUsed,
+        usedUniqueId: res.uniqueIdUsed,
         usedProvider: res.providerUsed,
         baseURLUsed: res.baseURLUsed,
         failedModels: res.failedModels,
@@ -2911,10 +2949,12 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
       };
     }
     if (!PRO_CLIENT) throw new Error('timeweb_api_key_not_configured');
-    const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload, 'pro-main', '', signal, reasoningLevel, modelSettings, streamCallbacks);
+    const fallbackIds = PRO_MODEL_CHAIN.map((m, i) => `pro-${slugifyModelId(m)}-0-${i}`);
+    const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload, 'pro-main', '', signal, reasoningLevel, modelSettings, streamCallbacks, fallbackIds);
     return {
       response: res.response,
       usedModel: res.modelUsed,
+      usedUniqueId: res.uniqueIdUsed,
       usedProvider: 'pro-main',
       baseURLUsed: process.env.TIMEWEB_BASE_URL || '',
       failedModels: res.failedModels
@@ -2924,6 +2964,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
   return {
     response: res.response,
     usedModel: res.modelUsed,
+    usedUniqueId: res.uniqueIdUsed,
     usedProvider: res.providerUsed,
     baseURLUsed: res.baseURLUsed,
     failedModels: res.failedModels,
@@ -5571,6 +5612,17 @@ export const sendMessageThroughAi = async (
   if (!user) throw new Error('user_not_found');
   if (user.status !== 'approved' && user.is_admin !== 1) throw new Error('user_not_approved');
 
+  // Weekly token quota check (admin bypasses). Lazily advances the rolling window.
+  const quotaCheck = checkQuota(userId, user.is_admin === 1);
+  if (!quotaCheck.ok) {
+    const err = new Error('quota_exceeded') as Error & { code?: string; quota?: number; used?: number; resetsAt?: number };
+    err.code = 'quota_exceeded';
+    err.quota = quotaCheck.quota;
+    err.used = quotaCheck.used;
+    err.resetsAt = (quotaCheck as { resetsAt: number }).resetsAt;
+    throw err;
+  }
+
   const images = options?.images?.filter(img => img.base64) ?? [];
   const hasImages = images.length > 0;
   const requestedRegenerateFromHistory = Boolean(options?.regenerateFromHistory);
@@ -5681,19 +5733,67 @@ export const sendMessageThroughAi = async (
   let totalTokens = 0;
   let usedModel = '';
   let usedProvider = '';
+  let usedUniqueId: string | null = null;
   let responsePromptName = 'Chatter';
   let diceRollValue: number | null = null;
   const usageCalls: TokenUsageCall[] = [];
-  const recordCompletionUsage = (completion: Pick<CompletionMeta, 'response' | 'usedModel' | 'usedProvider'>) => {
+  const recordCompletionUsage = (completion: Pick<CompletionMeta, 'response' | 'usedModel' | 'usedProvider' | 'usedUniqueId'>) => {
     const normalized = normalizeTokenUsage(completion.response?.usage);
     if (normalized.total_tokens <= 0) return normalized;
     usageCalls.push({
       ...normalized,
       model: completion.usedModel || 'unknown',
       provider: completion.usedProvider || 'unknown',
+      uniqueId: completion.usedUniqueId ?? null,
     });
     totalTokens += normalized.total_tokens;
     return normalized;
+  };
+
+  /**
+   * Charges weekly_tokens_used + inserts a user_token_usage row.
+   * Uses the FIRST model that started answering as the source of coefficient lookup.
+   *   - manual mode: model_id = manualModel.id
+   *   - auto mode: model_id = first usageCall.uniqueId (PRO/LITE/VISION) when present,
+   *     otherwise falls back to real API model name (usageCalls[0].model).
+   * Safe to call from finally/catch — never throws.
+   */
+  const chargeFromUsageCalls = (opts: { aborted?: boolean; assistantMessageId?: number }) => {
+    if (usageCalls.length === 0) return;
+    const aggregate = sumTokenUsage(usageCalls);
+    if (aggregate.total_tokens <= 0) return;
+
+    // First call that produced tokens = "model that started answering".
+    const firstCall = usageCalls[0];
+    const route = manualModel
+      ? 'manual'
+      : (forceProRoute ? 'auto-pro' : 'auto-lite');
+    // Prefer uniqueId (stable key for PRO/LITE/VISION auto-routing), fall back to manual id,
+    // then to real API model name.
+    const coefficientKey = manualModel?.id
+      || firstCall.uniqueId
+      || usedUniqueId
+      || firstCall.model
+      || usedModel
+      || null;
+    const displayName = (manualModel?.name || usedModel || firstCall.model || null);
+
+    chargeTokens({
+      userId,
+      chatId,
+      messageId: opts.assistantMessageId ?? null,
+      route,
+      modelId: coefficientKey,
+      modelName: displayName,
+      providerName: usedProvider || firstCall.provider || null,
+      promptTokens: aggregate.prompt_tokens,
+      completionTokens: aggregate.completion_tokens,
+      cacheHitTokens: aggregate.cache_hit_tokens,
+      cacheMissTokens: aggregate.cache_miss_tokens,
+      reasoningTokens: aggregate.reasoning_tokens,
+      totalTokens: aggregate.total_tokens,
+      aborted: opts?.aborted ?? false,
+    });
   };
 
   // ── Soft-abort buffers: объявляем ВНЕ try, чтобы catch имел к ним доступ ──
@@ -5707,6 +5807,11 @@ export const sendMessageThroughAi = async (
   const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
   let assistantTelegramChatId: number | null = null;
   let userMessageId = 0;
+
+  // Tracking for token-quota charge in finally block.
+  let chargeAssistantMessageId = 0;
+  let chargeAborted = false;
+  let chargeDone = false;
 
   // Subagent traces — полные trace ad-hoc субагентов для отдельного UI-блока.
   // Не уходят в AI-контекст, только для отображения в сообщении.
@@ -6182,6 +6287,7 @@ PRO
     }
     usedModel = completion.usedModel;
     usedProvider = completion.usedProvider;
+    if (completion.usedUniqueId) usedUniqueId = completion.usedUniqueId;
     const response = completion.response;
     recordCompletionUsage(completion);
     const message = response?.choices?.[0]?.message || {};
@@ -6526,6 +6632,7 @@ iterations.push(currentIteration);
       }
       usedModel = finalCompletion.usedModel;
       usedProvider = finalCompletion.usedProvider;
+      if (finalCompletion.usedUniqueId) usedUniqueId = finalCompletion.usedUniqueId;
       recordCompletionUsage(finalCompletion);
     } catch (err: any) {
       if (isAbortError(err)) throw err;
@@ -6581,29 +6688,16 @@ iterations.push(currentIteration);
       );
 
   const safeTokens = Math.max(0, Math.floor(aggregateUsage.total_tokens || totalTokens));
-  const costRub = toRubFromTokens(safeTokens);
   const countAsUserMessage = options?.countAsUserMessage !== false;
   if (countAsUserMessage) {
     db.prepare(`
     UPDATE users
-    SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
-        total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
-        daily_message_count = COALESCE(daily_message_count, 0) + 1,
-        total_message_length = COALESCE(total_message_length, 0) + ?,
-        daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
-        total_cost_rub = COALESCE(total_cost_rub, 0) + ?
+    SET daily_message_count = COALESCE(daily_message_count, 0) + 1,
+        total_message_length = COALESCE(total_message_length, 0) + ?
     WHERE id = ?
-  `).run(safeTokens, safeTokens, userTextForHistory.length, costRub, costRub, userId);
-  } else {
-    db.prepare(`
-      UPDATE users
-      SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
-          total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
-          daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
-          total_cost_rub = COALESCE(total_cost_rub, 0) + ?
-      WHERE id = ?
-    `).run(safeTokens, safeTokens, costRub, costRub, userId);
+  `).run(userTextForHistory.length, userId);
   }
+  // Quota charge (weekly_tokens_used + user_token_usage) is handled in finally via chargeFromUsageCalls.
 
   trimUserHistoryByChat(userId, chatId, maxContextTokens);
 
@@ -6625,6 +6719,10 @@ iterations.push(currentIteration);
       }
     }
   }
+
+  // Surface assistantMessageId + completion status to finally block for quota charge.
+  chargeAssistantMessageId = assistantMessageId;
+  chargeAborted = false;
 
   return {
     reply_text: answer,
@@ -6701,6 +6799,10 @@ iterations.push(currentIteration);
         }
       }
 
+      // Surface to finally for quota charge (aborted = true).
+      chargeAssistantMessageId = abortedMessageId;
+      chargeAborted = true;
+
       return {
         reply_text: abortedAnswer,
         reasoning_content: abortedReasoning,
@@ -6733,6 +6835,15 @@ iterations.push(currentIteration);
   } finally {
     if (activeGenerations.get(userId) === abortController) {
       activeGenerations.delete(userId);
+    }
+    // Quota charge happens once per call, even on abort.
+    if (!chargeDone) {
+      chargeDone = true;
+      try {
+        chargeFromUsageCalls({ aborted: chargeAborted, assistantMessageId: chargeAssistantMessageId });
+      } catch (chargeErr) {
+        console.warn('[token-quota] charge in finally failed:', chargeErr);
+      }
     }
   }
 };

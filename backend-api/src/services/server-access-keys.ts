@@ -46,8 +46,7 @@ export const revokeServerAccessKey = (keyId: number) => db.prepare(
 export const listServerAccessKeys = () => db.prepare(`
   SELECT k.id, k.name, k.key_prefix, k.created_at, k.last_used_at, k.revoked_at,
     COUNT(ku.user_id) AS user_count,
-    COALESCE(SUM(u.total_tokens_used), 0) AS total_tokens_used,
-    COALESCE(SUM(u.daily_tokens_used), 0) AS daily_tokens_used
+    COALESCE(SUM(u.weekly_tokens_used), 0) AS weekly_tokens_used
   FROM server_access_keys k
   LEFT JOIN server_access_key_users ku ON ku.key_id = k.id
   LEFT JOIN users u ON u.id = ku.user_id

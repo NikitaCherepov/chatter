@@ -4,6 +4,7 @@ import { getUserById, ensureActiveChat, createChat, appendChatMessage, updateUse
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
 import { getDueTasks, updateTaskNextExecution, updateTaskStatus } from './tasks.js';
 import { sendMessageThroughAi } from './ai.js';
+import { chargeTokens } from './token-quota.js';
 import { db } from '../db.js';
 import { fetchAndSaveCurrencyRates } from './currency.js';
 import { sendToDesktop, isDesktopOnline } from '../ws-clients.js';
@@ -23,8 +24,6 @@ const PRO_CLIENT = PRO_API_KEY
   : null;
 const SCHEDULER_INTERVAL_MS = Math.max(5_000, Number.parseInt(process.env.BACKEND_SCHEDULER_INTERVAL_MS || '30000', 10) || 30_000);
 
-const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * (102 / 500_000);
-
 const createCompletionWithFallback = async (requestBody: Record<string, unknown>) => {
   if (!PRO_CLIENT) throw new Error('timeweb_api_key_not_configured');
   let lastErr: unknown = null;
@@ -42,15 +41,17 @@ const createCompletionWithFallback = async (requestBody: Record<string, unknown>
 const incrementUserTokenUsage = (userId: number, tokensUsed: number) => {
   const safeTokens = Math.max(0, Math.floor(tokensUsed || 0));
   if (safeTokens <= 0) return;
-  const costRub = toRubFromTokens(safeTokens);
-  db.prepare(`
-    UPDATE users
-    SET daily_tokens_used = COALESCE(daily_tokens_used, 0) + ?,
-        total_tokens_used = COALESCE(total_tokens_used, 0) + ?,
-        daily_cost_rub = COALESCE(daily_cost_rub, 0) + ?,
-        total_cost_rub = COALESCE(total_cost_rub, 0) + ?
-    WHERE id = ?
-  `).run(safeTokens, safeTokens, costRub, costRub, userId);
+  // Charge via unified ledger.
+  chargeTokens({
+    userId,
+    route: 'scheduler-condition',
+    promptTokens: 0,
+    completionTokens: 0,
+    cacheHitTokens: 0,
+    cacheMissTokens: 0,
+    reasoningTokens: 0,
+    totalTokens: safeTokens,
+  });
 };
 
 // ── Delivery: unified push for task results ─────────────────────────────────
@@ -277,8 +278,6 @@ let running = false;
 const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
   SET daily_message_count = 0,
-      daily_tokens_used = 0,
-      daily_cost_rub = 0,
       daily_web_search_count = 0,
       daily_image_gen_count = 0
 `).run();

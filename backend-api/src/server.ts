@@ -28,6 +28,8 @@ import { startTaskScheduler } from './services/scheduler.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
+import { seedPlanLimitsIfEmpty, loadPlanLimitsFromDb, savePlanLimitsToDb, DEFAULT_PLAN_LIMITS, PLAN_IDS, type PlanLimits } from './services/plan-limits.js';
+import { refreshCoefficientCache, setCoefficient } from './services/token-quota.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
@@ -2572,7 +2574,9 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
       u.is_admin,
       u.status,
       u.plan,
-      u.total_tokens_used,
+      u.weekly_tokens_used,
+      u.weekly_tokens_quota,
+      u.weekly_window_started_at,
       u.language,
       u.created_at,
       COUNT(cm.id) AS message_count,
@@ -2589,7 +2593,9 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
     is_admin: number;
     status: string;
     plan: string;
-    total_tokens_used: number;
+    weekly_tokens_used: number;
+    weekly_tokens_quota: number;
+    weekly_window_started_at: number;
     language: string | null;
     created_at: string | null;
     message_count: number;
@@ -2676,7 +2682,8 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
   const user = db.prepare(`
     SELECT
       id, name, role, is_admin, status, plan, language, created_at,
-      daily_message_count, daily_tokens_used, total_tokens_used,
+      daily_message_count,
+      weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
       daily_web_search_count, daily_web_search_limit, total_web_search_count,
       daily_image_gen_count, daily_image_gen_limit, total_image_gen_count,
       total_message_length, preferred_model, reasoning_level,
@@ -3170,6 +3177,133 @@ app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, async (req: AuthedReq
 app.post('/api/v1/admin/sync-plan-limits', adminMiddleware, (_req: AuthedRequest, res) => {
   syncAllUsersPlanLimits();
   return res.json({ ok: true });
+});
+
+// ─── Plan limits config (admin-editable) ────────────────────────────────────
+
+app.get('/api/v1/admin/plan-limits', adminMiddleware, (_req: AuthedRequest, res) => {
+  const limits = loadPlanLimitsFromDb();
+  return res.json({ limits });
+});
+
+app.put('/api/v1/admin/plan-limits', adminMiddleware, (req: AuthedRequest, res) => {
+  const body = req.body as { limits?: Record<string, unknown> } | null;
+  if (!body || !body.limits || typeof body.limits !== 'object') {
+    return res.status(400).json({ error: 'bad_limits_payload' });
+  }
+  // All three plans must be present in the payload; reject if any are missing
+  // so that a partial save cannot silently drop configuration.
+  const incoming = body.limits as Record<string, any>;
+  const next = {} as Record<typeof PLAN_IDS[number], PlanLimits>;
+  for (const plan of PLAN_IDS) {
+    const entry = incoming[plan];
+    if (!entry || typeof entry !== 'object') {
+      return res.status(400).json({ error: `missing_plan_${plan}` });
+    }
+    next[plan] = {
+      daily_web_search_limit: Math.max(0, Math.floor(Number(entry.daily_web_search_limit) || 0)),
+      daily_image_gen_limit: Math.max(0, Math.floor(Number(entry.daily_image_gen_limit) || 0)),
+      image_attachments_allowed: Boolean(entry.image_attachments_allowed),
+      max_context_tokens: Math.max(0, Math.floor(Number(entry.max_context_tokens) || 0)),
+      weekly_token_quota: Math.max(0, Number(entry.weekly_token_quota) || 0),
+    };
+  }
+  savePlanLimitsToDb(next);
+  return res.json({ ok: true, limits: next });
+});
+
+// ─── Model overrides (coefficients) ─────────────────────────────────────────
+
+app.get('/api/v1/admin/model-coefficients', adminMiddleware, (_req: AuthedRequest, res) => {
+  const rows = db.prepare('SELECT model_id, coefficient, updated_at FROM model_overrides').all() as Array<{ model_id: string; coefficient: number; updated_at: number }>;
+  const map: Record<string, number> = {};
+  for (const row of rows) map[row.model_id] = row.coefficient;
+  return res.json({ coefficients: map });
+});
+
+app.put('/api/v1/admin/model-coefficients/:modelId', adminMiddleware, (req: AuthedRequest, res) => {
+  const modelId = `${req.params.modelId || ''}`.trim();
+  if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
+  const body = req.body as { coefficient?: number } | null;
+  const raw = Number(body?.coefficient);
+  if (!Number.isFinite(raw) || raw < 0) return res.status(400).json({ error: 'bad_coefficient' });
+  setCoefficient(modelId, raw);
+  return res.json({ ok: true, model_id: modelId, coefficient: raw });
+});
+
+app.delete('/api/v1/admin/model-coefficients/:modelId', adminMiddleware, (req: AuthedRequest, res) => {
+  const modelId = `${req.params.modelId || ''}`.trim();
+  if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
+  db.prepare('DELETE FROM model_overrides WHERE model_id = ?').run(modelId);
+  refreshCoefficientCache();
+  return res.json({ ok: true });
+});
+
+// ─── User usage (stats for admin UI) ────────────────────────────────────────
+
+app.get('/api/v1/admin/users/:id/usage', adminMiddleware, (req: AuthedRequest, res) => {
+  const userId = resolveAccountId(Number(req.params.id));
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = db.prepare(`
+    SELECT id, plan, weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at
+    FROM users WHERE id = ?
+  `).get(userId) as { id: number; plan: string; weekly_tokens_used: number; weekly_tokens_quota: number; weekly_window_started_at: number } | undefined;
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = user.weekly_window_started_at || now;
+  const windowEnd = windowStart + 7 * 24 * 60 * 60;
+
+  // Aggregate by model_id (all-time for stats honesty; window is for current quota).
+  const byModel = db.prepare(`
+    SELECT
+      model_id,
+      MAX(model_name) AS model_name,
+      MAX(route) AS route,
+      MAX(provider_name) AS provider_name,
+      SUM(prompt_tokens) AS prompt_tokens,
+      SUM(completion_tokens) AS completion_tokens,
+      SUM(cache_hit_tokens) AS cache_hit_tokens,
+      SUM(cache_miss_tokens) AS cache_miss_tokens,
+      SUM(reasoning_tokens) AS reasoning_tokens,
+      SUM(total_tokens) AS total_tokens,
+      SUM(charged_tokens) AS charged_tokens,
+      SUM(CASE WHEN charged_tokens = 0 THEN 1 ELSE 0 END) AS free_requests,
+      SUM(CASE WHEN aborted = 1 THEN 1 ELSE 0 END) AS aborted_requests,
+      COUNT(*) AS request_count
+    FROM user_token_usage
+    WHERE user_id = ? AND created_at >= ?
+    GROUP BY model_id
+    ORDER BY SUM(charged_tokens) DESC
+  `).all(userId, windowStart) as Array<{
+    model_id: string | null;
+    model_name: string | null;
+    route: string | null;
+    provider_name: string | null;
+    prompt_tokens: number;
+    completion_tokens: number;
+    cache_hit_tokens: number;
+    cache_miss_tokens: number;
+    reasoning_tokens: number;
+    total_tokens: number;
+    charged_tokens: number;
+    free_requests: number;
+    aborted_requests: number;
+    request_count: number;
+  }>;
+
+  return res.json({
+    user: {
+      id: user.id,
+      plan: user.plan,
+      weekly_tokens_used: user.weekly_tokens_used || 0,
+      weekly_tokens_quota: user.weekly_tokens_quota || 0,
+      weekly_window_started_at: windowStart,
+      weekly_window_ends_at: windowEnd,
+    },
+    by_model: byModel,
+  });
 });
 
 // ── Admin Update Manager ───────────────────────────────────────────────────
@@ -4520,6 +4654,12 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 
 const server = app.listen(PORT, () => {
   console.log(`[backend-api] started on :${PORT}`);
+  // Seed plan_limits_config with defaults if empty (first run only).
+  try {
+    seedPlanLimitsIfEmpty();
+  } catch (err) {
+    console.warn('[plan-limits] seed failed:', formatSafeError(err));
+  }
   if (BACKEND_VOICE_API_ENABLED) {
     console.log('[backend-voice] enabled (BACKEND_VOICE_API_ENABLED=1), endpoint: POST /internal/voice/turn');
   } else {

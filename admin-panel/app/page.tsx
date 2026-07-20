@@ -14,6 +14,7 @@ import { SystemPage } from '../components/pages/SystemPage/SystemPage';
 import { UserDetailPage } from '../components/pages/UserDetailPage/UserDetailPage';
 import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { AccessKeysPage } from '../components/pages/AccessKeysPage/AccessKeysPage';
+import { PlanLimitsPage } from '../components/pages/PlanLimitsPage/PlanLimitsPage';
 import { api, ApiError } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
@@ -230,12 +231,7 @@ export default function Home() {
       {section === 'users' && selectedUserId && <UserDetailPage userId={selectedUserId} onBack={closeUser} />}
       {section === 'users' && !selectedUserId && <UsersPage onSelectUser={openUser} />}
       {section === 'accessKeys' && <AccessKeysPage />}
-      {section === 'limits' && (
-        <PlaceholderPage
-          title="Тарифы и лимиты"
-          description="Общие тарифы и индивидуальные ограничения пользователей будут собраны в одном месте."
-        />
-      )}
+      {section === 'limits' && <PlanLimitsPage />}
       {section === 'system' && <SystemPage />}
       {section === 'logs' && <LogsPage />}
       {section === 'security' && (

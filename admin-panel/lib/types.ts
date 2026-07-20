@@ -4,6 +4,8 @@ export type ProviderModelConfig = {
   model: string;
   apiKey: string;
   hasApiKey: boolean;
+  /** Stable id used to look up coefficient in model_overrides. Auto-generated server-side if empty. */
+  uniqueId?: string;
 };
 
 export type ManualModelConfig = ProviderModelConfig & {
@@ -12,6 +14,8 @@ export type ManualModelConfig = ProviderModelConfig & {
   uniqueId: string;
   supportsVision: boolean;
   adminOnly: boolean;
+  /** Token quota coefficient. 0 = free model, 1 = default, 0.7 = cheaper, 1.5 = expensive. */
+  coefficient?: number;
 };
 
 export type PineconeSettings = {

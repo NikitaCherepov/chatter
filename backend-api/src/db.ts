@@ -237,10 +237,12 @@ ensureUserColumn('status', "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DE
 ensureUserColumn('plan', "ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
 ensureUserColumn('created_at', 'ALTER TABLE users ADD COLUMN created_at DATETIME');
 ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_message_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_tokens_used', 'ALTER TABLE users ADD COLUMN daily_tokens_used INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('total_tokens_used', 'ALTER TABLE users ADD COLUMN total_tokens_used INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_cost_rub', 'ALTER TABLE users ADD COLUMN daily_cost_rub REAL NOT NULL DEFAULT 0');
-ensureUserColumn('total_cost_rub', 'ALTER TABLE users ADD COLUMN total_cost_rub REAL NOT NULL DEFAULT 0');
+// Weekly token quota (conditional units). weekly_window_started_at = unix epoch start of current 7-day window.
+ensureUserColumn('weekly_tokens_used', 'ALTER TABLE users ADD COLUMN weekly_tokens_used REAL NOT NULL DEFAULT 0');
+ensureUserColumn('weekly_tokens_quota', 'ALTER TABLE users ADD COLUMN weekly_tokens_quota REAL NOT NULL DEFAULT 0');
+ensureUserColumn('weekly_window_started_at', 'ALTER TABLE users ADD COLUMN weekly_window_started_at INTEGER NOT NULL DEFAULT 0');
+// Legacy columns (daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub) are no longer created
+// for fresh installs. They are dropped below via dropLegacyUserColumns() for upgraded databases.
 ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_web_search_limit', 'ALTER TABLE users ADD COLUMN daily_web_search_limit INTEGER NOT NULL DEFAULT 10');
 ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
@@ -329,10 +331,9 @@ db.exec(`
   UPDATE users SET plan = 'free' WHERE plan IS NULL OR plan = '' OR plan NOT IN ('free', 'standart', 'pro');
   UPDATE users SET daily_message_count = 0 WHERE daily_message_count IS NULL;
   UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL;
-  UPDATE users SET daily_tokens_used = 0 WHERE daily_tokens_used IS NULL;
-  UPDATE users SET total_tokens_used = 0 WHERE total_tokens_used IS NULL;
-  UPDATE users SET daily_cost_rub = 0 WHERE daily_cost_rub IS NULL;
-  UPDATE users SET total_cost_rub = 0 WHERE total_cost_rub IS NULL;
+  UPDATE users SET weekly_tokens_used = 0 WHERE weekly_tokens_used IS NULL OR weekly_tokens_used < 0;
+  UPDATE users SET weekly_tokens_quota = 0 WHERE weekly_tokens_quota IS NULL OR weekly_tokens_quota < 0;
+  UPDATE users SET weekly_window_started_at = 0 WHERE weekly_window_started_at IS NULL OR weekly_window_started_at < 0;
   UPDATE users SET daily_web_search_count = 0 WHERE daily_web_search_count IS NULL;
   UPDATE users SET daily_web_search_limit = 10 WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0;
   UPDATE users SET total_web_search_count = 0 WHERE total_web_search_count IS NULL;
@@ -561,4 +562,83 @@ db.exec(`
     created_at INTEGER NOT NULL
   )
 `);
+
+// ── Plan limits config (admin-editable) ──────────────────────────────────
+// Stores per-plan overrides. Seeded from code defaults on first run via
+// seedPlanLimitsIfEmpty(). Source of truth after seeding is the DB content.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS plan_limits_config (
+    plan TEXT PRIMARY KEY,
+    config_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+// ── Model overrides (coefficient for token quota accounting) ─────────────
+// model_id matches the uniqueId from MODELS_MANUAL / PRO / LITE / VISION env.
+// coefficient = multiplier applied to total_tokens for quota accounting.
+//   0   = model does not consume quota at all (free model)
+//   1   = default
+//   0.7 = cheaper than baseline
+//   1.5 = more expensive than baseline
+// Rows are created lazily when admin sets a coefficient via UI. Missing row = 1.0.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS model_overrides (
+    model_id TEXT PRIMARY KEY,
+    coefficient REAL NOT NULL DEFAULT 1.0 CHECK (coefficient >= 0),
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+// ── User token usage (immutable accounting ledger) ────────────────────────
+// Source of truth for cost / statistics. NOT affected by chat/message deletion.
+// One row per AI response (manual or auto, including aborts).
+// charged_tokens = total_tokens × coefficient at the moment of response.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    chat_id INTEGER,
+    message_id INTEGER,
+    route TEXT,
+    model_id TEXT,
+    model_name TEXT,
+    provider_name TEXT,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_hit_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_miss_tokens INTEGER NOT NULL DEFAULT 0,
+    reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    charged_tokens REAL NOT NULL DEFAULT 0,
+    aborted INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )
+`);
+
+db.exec("CREATE INDEX IF NOT EXISTS idx_utu_user_created ON user_token_usage(user_id, created_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_utu_user_model_created ON user_token_usage(user_id, model_id, created_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_utu_created_at ON user_token_usage(created_at)");
+
+// ── Drop legacy columns from upgraded databases ───────────────────────────
+// SQLite ≥ 3.35 supports ALTER TABLE DROP COLUMN. Wrapped in try/catch: if the
+// column is already gone (fresh install or re-run), the error is ignored.
+// Same for the is_free column in user_token_usage (replaced by coefficient === 0 logic).
+const dropLegacyColumn = (table: string, column: string) => {
+  try {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!cols.some(c => c.name === column)) return;
+    db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
+  } catch (err) {
+    console.warn(`[db] drop ${table}.${column} failed (ignored):`, err);
+  }
+};
+dropLegacyColumn('users', 'daily_tokens_used');
+dropLegacyColumn('users', 'total_tokens_used');
+dropLegacyColumn('users', 'daily_cost_rub');
+dropLegacyColumn('users', 'total_cost_rub');
+dropLegacyColumn('user_token_usage', 'is_free');
 

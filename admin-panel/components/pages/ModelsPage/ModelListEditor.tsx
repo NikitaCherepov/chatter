@@ -123,6 +123,16 @@ export function ProviderModelFields({
         </FormField>
       </div>
       <FormField
+        label="ID модели для учёта квоты"
+        hint="Стабильный идентификатор, по которому подтягивается коэффициент. Если пусто — генерируется автоматически при сохранении."
+      >
+        <input
+          value={model.uniqueId ?? ''}
+          onChange={(event) => onChange({ uniqueId: event.target.value })}
+          placeholder={`auto-${(model.model || 'model').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'model'}`}
+        />
+      </FormField>
+      <FormField
         label="API-ключ"
         state={<SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />}
         hint={model.hasApiKey ? 'Оставь пустым, чтобы сохранить текущий ключ' : undefined}

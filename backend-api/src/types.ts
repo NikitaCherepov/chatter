@@ -19,10 +19,9 @@ export type UserRecord = {
   timezone_offset?: number | null;
   timezone_confirmed?: number;
   daily_message_count: number;
-  daily_tokens_used?: number;
-  total_tokens_used?: number;
-  daily_cost_rub?: number;
-  total_cost_rub?: number;
+  weekly_tokens_used?: number;
+  weekly_tokens_quota?: number;
+  weekly_window_started_at?: number;
   daily_web_search_count?: number;
   daily_web_search_limit?: number;
   total_web_search_count?: number;
@@ -90,6 +89,7 @@ export type NormalizedTokenUsage = {
 export type TokenUsageCall = NormalizedTokenUsage & {
   model: string;
   provider: string;
+  uniqueId?: string | null;
 };
 
 export type MessageUsage = {

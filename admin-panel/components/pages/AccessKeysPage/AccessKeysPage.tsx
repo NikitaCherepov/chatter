@@ -13,8 +13,7 @@ type AccessKey = {
   last_used_at: string | null;
   revoked_at: string | null;
   user_count: number;
-  total_tokens_used: number;
-  daily_tokens_used: number;
+  weekly_tokens_used: number;
 };
 
 const formatNumber = (value: number) => new Intl.NumberFormat('ru').format(Number(value) || 0);
@@ -85,10 +84,10 @@ export function AccessKeysPage() {
 
       <Card title="Выданные ключи" description="Статистика считается по аккаунтам, которые входили через ключ">
         <div className={styles.table}>
-          <div className={styles.header}><span>Ключ</span><span>Пользователи</span><span>Токены сегодня</span><span>Токены всего</span><span>Последнее использование</span><span /></div>
+          <div className={styles.header}><span>Ключ</span><span>Пользователи</span><span>Токенов за неделю</span><span>Последнее использование</span><span /></div>
           {keys.map(key => <div className={styles.row} key={key.id}>
             <span><strong>{key.name}</strong><small>{key.key_prefix}{key.revoked_at ? ' · отозван' : ''}</small></span>
-            <span>{formatNumber(key.user_count)}</span><span>{formatNumber(key.daily_tokens_used)}</span><span>{formatNumber(key.total_tokens_used)}</span>
+            <span>{formatNumber(key.user_count)}</span><span>{formatNumber(key.weekly_tokens_used)}</span>
             <span>{formatDate(key.last_used_at)}</span>
             <span>{key.revoked_at ? <small>{formatDate(key.revoked_at)}</small> : <button type="button" className="buttonSecondary" onClick={() => void revoke(key)}>Отозвать</button>}</span>
           </div>)}

@@ -14,7 +14,7 @@ import {
   resolveTelegramAccountForUpsert,
 } from './accounts.js';
 import { formatAutomaticChatTitle, normalizeSupportedLanguage } from '../i18n/languages.js';
-import { DEFAULT_USER_PLAN, getPlanLimits, PLAN_LIMITS } from './plan-limits.js';
+import { getPlanLimits, getDefaultUserPlanLimits, loadPlanLimitsFromDb } from './plan-limits.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -1492,8 +1492,6 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
 export const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
   SET daily_message_count = 0,
-      daily_tokens_used = 0,
-      daily_cost_rub = 0,
       daily_web_search_count = 0,
       daily_image_gen_count = 0
 `).run();
@@ -1589,7 +1587,7 @@ export const upsertTelegramUser = (
   const normalizedLanguage = normalizeSupportedLanguage(language);
   const effectiveRole = role === 'admin' ? 'admin' : 'user';
   const effectiveIsAdmin = effectiveRole === 'admin' ? 1 : 0;
-  const limits = PLAN_LIMITS[DEFAULT_USER_PLAN];
+  const limits = getDefaultUserPlanLimits();
 
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
@@ -1619,7 +1617,7 @@ export const createPendingTelegramUser = (
 ) => db.transaction(() => {
   const accountId = resolveTelegramAccountForUpsert(tgId);
   const normalizedLanguage = normalizeSupportedLanguage(language);
-  const limits = PLAN_LIMITS[DEFAULT_USER_PLAN];
+  const limits = getDefaultUserPlanLimits();
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
       daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens)
@@ -1750,14 +1748,16 @@ export const updateUserPlan = (userId: number, plan: UserPlan) => {
           WHEN COALESCE(max_context_tokens, 0) <= 0 THEN ?
           WHEN max_context_tokens > ? THEN ?
           ELSE max_context_tokens
-        END
+        END,
+        weekly_tokens_quota = ?
     WHERE id = ?
   `).run(plan, limits.daily_web_search_limit, limits.daily_image_gen_limit,
-    limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, userId);
+    limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens,
+    limits.weekly_token_quota, userId);
 };
 
 export const syncAllUsersPlanLimits = () => {
-  for (const [plan, limits] of Object.entries(PLAN_LIMITS)) {
+  for (const [plan, limits] of Object.entries(loadPlanLimitsFromDb())) {
     db.prepare(`
       UPDATE users
       SET daily_web_search_limit = ?,
@@ -1767,10 +1767,12 @@ export const syncAllUsersPlanLimits = () => {
             WHEN COALESCE(max_context_tokens, 0) <= 0 THEN ?
             WHEN max_context_tokens > ? THEN ?
             ELSE max_context_tokens
-          END
+          END,
+          weekly_tokens_quota = ?
       WHERE plan = ?
     `).run(limits.daily_web_search_limit, limits.daily_image_gen_limit,
-      limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, plan);
+      limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens,
+      limits.weekly_token_quota, plan);
   }
 };
 

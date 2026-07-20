@@ -51,10 +51,7 @@ const quoteIdentifier = (value: string) => `"${value.replace(/"/g, '""')}"`;
 const additiveUserColumns = [
   'daily_message_count',
   'total_message_length',
-  'daily_tokens_used',
-  'total_tokens_used',
-  'daily_cost_rub',
-  'total_cost_rub',
+  'weekly_tokens_used',
   'daily_web_search_count',
   'total_web_search_count',
   'daily_image_gen_count',
