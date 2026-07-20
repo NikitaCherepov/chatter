@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
 import { PlanDurationModal, type PlanDuration, type UserPlan } from './PlanDurationModal/PlanDurationModal';
@@ -74,6 +75,7 @@ function identityValue(identity: Identity) {
 }
 
 export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () => void }) {
+  const { t } = useTranslation();
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,16 +112,16 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
       {
         name: 'Desktop',
         linked: Boolean(password),
-        value: password ? identityValue(password) : 'Аккаунт для входа не создан',
-        state: user.desktop.online ? 'Онлайн сейчас' : password ? 'Сейчас не подключён' : 'Не привязан',
+        value: password ? identityValue(password) : t('users.detail.noAccount'),
+        state: user.desktop.online ? t('users.detail.onlineNow') : password ? t('users.detail.notConnected') : t('users.detail.notBound'),
         online: user.desktop.online,
         updated: user.desktop.online ? formatDate(user.desktop.last_activity_at) : password ? formatDate(password.updated_at) : '—',
       },
       {
         name: 'Telegram',
         linked: Boolean(telegram),
-        value: telegram ? identityValue(telegram) : 'Telegram не привязан',
-        state: telegram ? 'Привязан' : 'Не привязан',
+        value: telegram ? identityValue(telegram) : t('users.detail.telegramNotBound'),
+        state: telegram ? t('users.detail.bound') : t('users.detail.notBound'),
         online: null,
         updated: telegram ? formatDate(telegram.updated_at) : '—',
       },
@@ -127,7 +129,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         name: identity.provider,
         linked: true,
         value: identityValue(identity),
-        state: 'Привязан',
+        state: t('users.detail.bound'),
         online: null,
         updated: formatDate(identity.updated_at),
       })),
@@ -136,39 +138,39 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
 
   async function changeRole(role: 'user' | 'admin') {
     if (!user || role === user.role) return;
-    setActionState('Сохраняю роль…');
+    setActionState(t('users.detail.actions.savingRole'));
     try {
       await api(`/api/users/${user.id}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
-      setActionState('Роль сохранена');
+      setActionState(t('users.detail.actions.roleSaved'));
       await loadUser(true);
     } catch (roleError) {
-      setActionState(`Ошибка: ${roleError instanceof Error ? roleError.message : String(roleError)}`);
+      setActionState(t('users.detail.actions.error', { error: roleError instanceof Error ? roleError.message : String(roleError) }));
     }
   }
 
   async function changeStatus(status: 'none' | 'approved' | 'disapproved') {
     if (!user || status === user.status) return;
-    setActionState('Сохраняю статус…');
+    setActionState(t('users.detail.actions.savingStatus'));
     try {
       await api(`/api/users/${user.id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
-      setActionState('Статус сохранён');
+      setActionState(t('users.detail.actions.statusSaved'));
       await loadUser(true);
     } catch (statusError) {
-      setActionState(`Ошибка: ${statusError instanceof Error ? statusError.message : String(statusError)}`);
+      setActionState(t('users.detail.actions.error', { error: statusError instanceof Error ? statusError.message : String(statusError) }));
     }
   }
 
   async function changePlan(plan: UserPlan, duration: PlanDuration) {
     if (!user) return;
     setPlanSaving(true);
-    setActionState('Сохраняю тариф…');
+    setActionState(t('users.detail.actions.savingPlan'));
     try {
       await api(`/api/users/${user.id}/plan`, { method: 'PUT', body: JSON.stringify({ plan, duration }) });
-      setActionState('Тариф и лимиты обновлены');
+      setActionState(t('users.detail.actions.planSaved'));
       setPendingPlan(null);
       await loadUser(true);
     } catch (planError) {
-      setActionState(`Ошибка: ${planError instanceof Error ? planError.message : String(planError)}`);
+      setActionState(t('users.detail.actions.error', { error: planError instanceof Error ? planError.message : String(planError) }));
     } finally {
       setPlanSaving(false);
     }
@@ -177,21 +179,21 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
   async function toggleBan() {
     if (!user) return;
     const unban = user.status === 'banned';
-    setActionState(unban ? 'Разблокирую…' : 'Блокирую…');
+    setActionState(unban ? t('users.detail.actions.unbanInProgress') : t('users.detail.actions.banInProgress'));
     try {
       await api(`/api/users/${user.id}/ban`, unban
         ? { method: 'DELETE' }
         : { method: 'POST', body: JSON.stringify({ reason: banReason }) });
       setBanReason('');
-      setActionState(unban ? 'Пользователь разблокирован и ожидает одобрения' : 'Пользователь заблокирован');
+      setActionState(unban ? t('users.detail.actions.userUnbanned') : t('users.detail.actions.userBanned'));
       await loadUser(true);
     } catch (banError) {
-      setActionState(`Ошибка: ${banError instanceof Error ? banError.message : String(banError)}`);
+      setActionState(t('users.detail.actions.error', { error: banError instanceof Error ? banError.message : String(banError) }));
     }
   }
 
-  if (loading && !user) return <div className={styles.loading}>Загружаю пользователя…</div>;
-  if (!user) return <div className={styles.loading}>Не удалось загрузить пользователя: {error}</div>;
+  if (loading && !user) return <div className={styles.loading}>{t('users.detail.loading')}</div>;
+  if (!user) return <div className={styles.loading}>{t('users.detail.loadError', { error })}</div>;
 
   const weeklyPercent = user.weekly_tokens_quota > 0
     ? Math.min(100, Math.round((user.weekly_tokens_used || 0) / user.weekly_tokens_quota * 100))
@@ -201,61 +203,61 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     : '—';
 
   const stats = [
-    ['Квота недели', user.weekly_tokens_quota > 0
+    [t('users.detail.usage.stats.weeklyQuota'), user.weekly_tokens_quota > 0
       ? `${formatNumber(user.weekly_tokens_used)} / ${formatNumber(user.weekly_tokens_quota)} (${weeklyPercent}%)`
       : '∞'],
-    ['Сброс квоты', weeklyResetsAt],
-    ['Сообщения', formatNumber(user.messages.total)],
-    ['Запросы пользователя', formatNumber(user.messages.user)],
-    ['Ответы ассистента', formatNumber(user.messages.assistant)],
-    ['Чаты', formatNumber(user.chats_count)],
-    ['Поиск сегодня', `${formatNumber(user.daily_web_search_count)} / ${formatNumber(user.daily_web_search_limit)}`],
-    ['Поиск всего', formatNumber(user.total_web_search_count)],
-    ['Изображения сегодня', `${formatNumber(user.daily_image_gen_count)} / ${formatNumber(user.daily_image_gen_limit)}`],
-    ['Изображения всего', formatNumber(user.total_image_gen_count)],
-    ['Длина сообщений', formatNumber(user.total_message_length)],
-    ['Последнее сообщение', formatDate(user.messages.last_message_at)],
+    [t('users.detail.usage.stats.quotaReset'), weeklyResetsAt],
+    [t('users.detail.usage.stats.messages'), formatNumber(user.messages.total)],
+    [t('users.detail.usage.stats.userRequests'), formatNumber(user.messages.user)],
+    [t('users.detail.usage.stats.assistantResponses'), formatNumber(user.messages.assistant)],
+    [t('users.detail.usage.stats.chats'), formatNumber(user.chats_count)],
+    [t('users.detail.usage.stats.searchToday'), `${formatNumber(user.daily_web_search_count)} / ${formatNumber(user.daily_web_search_limit)}`],
+    [t('users.detail.usage.stats.searchTotal'), formatNumber(user.total_web_search_count)],
+    [t('users.detail.usage.stats.imagesToday'), `${formatNumber(user.daily_image_gen_count)} / ${formatNumber(user.daily_image_gen_limit)}`],
+    [t('users.detail.usage.stats.imagesTotal'), formatNumber(user.total_image_gen_count)],
+    [t('users.detail.usage.stats.messageLength'), formatNumber(user.total_message_length)],
+    [t('users.detail.usage.stats.lastMessage'), formatDate(user.messages.last_message_at)],
   ];
 
   return (
     <div className={styles.stack}>
       <div className={styles.toolbar}>
-        <button type="button" className="buttonSecondary" onClick={onBack}>← К пользователям</button>
-        <button type="button" className="buttonSecondary" onClick={() => void loadUser()} disabled={loading}>Обновить</button>
+        <button type="button" className="buttonSecondary" onClick={onBack}>{t('users.detail.back')}</button>
+        <button type="button" className="buttonSecondary" onClick={() => void loadUser()} disabled={loading}>{t('users.detail.refresh')}</button>
       </div>
 
       <Card
-        title={user.name || `Пользователь ${user.id}`}
-        description={`ID ${user.id} · создан ${formatDate(user.created_at)}`}
-        aside={<span className={user.desktop.online ? styles.online : styles.offline}>{user.desktop.online ? 'Desktop онлайн' : 'Desktop офлайн'}</span>}
+        title={user.name || t('users.list.userDefaultName', { id: user.id })}
+        description={t('users.detail.description', { id: user.id, created: formatDate(user.created_at) })}
+        aside={<span className={user.desktop.online ? styles.online : styles.offline}>{user.desktop.online ? t('users.detail.desktopOnline') : t('users.detail.desktopOffline')}</span>}
       >
         <div className={styles.accountGrid}>
-          <label><span>Роль</span><select value={user.role} onChange={event => void changeRole(event.target.value as 'user' | 'admin')}><option value="user">Пользователь</option><option value="admin">Администратор</option></select></label>
-          <label><span>Статус</span><select value={user.status} disabled={user.status === 'banned'} onChange={event => void changeStatus(event.target.value as 'none' | 'approved' | 'disapproved')}><option value="none">Ожидает</option><option value="approved">Активен</option><option value="disapproved">Отклонён</option>{user.status === 'banned' && <option value="banned">Заблокирован</option>}</select></label>
+          <label><span>{t('users.detail.roleLabel')}</span><select value={user.role} onChange={event => void changeRole(event.target.value as 'user' | 'admin')}><option value="user">{t('users.detail.roleUser')}</option><option value="admin">{t('users.detail.roleAdmin')}</option></select></label>
+          <label><span>{t('users.detail.statusLabel')}</span><select value={user.status} disabled={user.status === 'banned'} onChange={event => void changeStatus(event.target.value as 'none' | 'approved' | 'disapproved')}><option value="none">{t('users.list.status.none')}</option><option value="approved">{t('users.list.status.approved')}</option><option value="disapproved">{t('users.list.status.disapproved')}</option>{user.status === 'banned' && <option value="banned">{t('users.list.status.banned')}</option>}</select></label>
           <label>
-            <span>Тариф</span>
+            <span>{t('users.detail.planLabel')}</span>
             <select value={user.plan} onChange={event => setPendingPlan(event.target.value as UserPlan)}>
               <option value="free">Free</option><option value="standart">Standard</option><option value="pro">Pro</option>
             </select>
-            <small>{user.subscription?.ends_at ? `до ${formatDate(user.subscription.ends_at)}` : 'бессрочно'}</small>
-            <button type="button" className={styles.durationButton} onClick={() => setPendingPlan(user.plan as UserPlan)}>Изменить срок</button>
+            <small>{user.subscription?.ends_at ? t('users.detail.planUntil', { date: formatDate(user.subscription.ends_at) }) : t('users.detail.planForever')}</small>
+            <button type="button" className={styles.durationButton} onClick={() => setPendingPlan(user.plan as UserPlan)}>{t('users.detail.changeDuration')}</button>
           </label>
-          <div><span>Язык</span><strong>{user.language || 'Не выбран'}</strong></div>
-          <div><span>Предпочитаемая модель</span><strong>{user.preferred_model || 'Автоматически'}</strong></div>
-          <div><span>Reasoning</span><strong>{user.reasoning_level || 'По умолчанию'}</strong></div>
-          <div><span>Последний ключ Desktop</span><strong>{user.last_server_access_key ? `${user.last_server_access_key.name} · ${user.last_server_access_key.key_prefix}` : 'Не использовался'}</strong><small>{user.last_server_access_key ? formatDate(user.last_server_access_key.last_used_at) : '—'}</small></div>
+          <div><span>{t('users.detail.languageLabel')}</span><strong>{user.language || t('users.detail.languageNotSet')}</strong></div>
+          <div><span>{t('users.detail.preferredModelLabel')}</span><strong>{user.preferred_model || t('users.detail.preferredModelAuto')}</strong></div>
+          <div><span>{t('users.detail.reasoningLabel')}</span><strong>{user.reasoning_level || t('users.detail.reasoningDefault')}</strong></div>
+          <div><span>{t('users.detail.lastDesktopKey')}</span><strong>{user.last_server_access_key ? `${user.last_server_access_key.name} · ${user.last_server_access_key.key_prefix}` : t('users.detail.desktopKeyNotUsed')}</strong><small>{user.last_server_access_key ? formatDate(user.last_server_access_key.last_used_at) : '—'}</small></div>
         </div>
         <div className={styles.banBar}>
-          <div><strong>{user.status === 'banned' ? 'Пользователь заблокирован' : 'Блокировка аккаунта'}</strong><span>{user.ban?.reason || 'Блокировка отзывает текущие сессии пользователя'}</span></div>
-          {user.status !== 'banned' && <input value={banReason} onChange={event => setBanReason(event.target.value)} placeholder="Причина (необязательно)" disabled={user.role === 'admin'} />}
-          <button type="button" className={styles.dangerButton} onClick={() => void toggleBan()} disabled={user.role === 'admin'}>{user.status === 'banned' ? 'Разблокировать' : 'Заблокировать'}</button>
+          <div><strong>{user.status === 'banned' ? t('users.detail.ban.banned') : t('users.detail.ban.blockAccount')}</strong><span>{user.ban?.reason || t('users.detail.ban.banHint')}</span></div>
+          {user.status !== 'banned' && <input value={banReason} onChange={event => setBanReason(event.target.value)} placeholder={t('users.detail.ban.reasonPlaceholder')} disabled={user.role === 'admin'} />}
+          <button type="button" className={styles.dangerButton} onClick={() => void toggleBan()} disabled={user.role === 'admin'}>{user.status === 'banned' ? t('users.detail.ban.unban') : t('users.detail.ban.ban')}</button>
         </div>
         {actionState && <p className={styles.actionState}>{actionState}</p>}
       </Card>
 
-      <Card title="Подключения" description="Способы входа и текущее соединение Desktop">
+      <Card title={t('users.detail.connections.title')} description={t('users.detail.connections.description')}>
         <div className={styles.connectionTable}>
-          <div className={styles.connectionHeader}><span>Клиент</span><span>Аккаунт</span><span>Состояние</span><span>Активность</span></div>
+          <div className={styles.connectionHeader}><span>{t('users.detail.connections.headers.client')}</span><span>{t('users.detail.connections.headers.account')}</span><span>{t('users.detail.connections.headers.state')}</span><span>{t('users.detail.connections.headers.activity')}</span></div>
           {connections.map(connection => (
             <div className={styles.connectionRow} key={connection.name}>
               <strong>{connection.name}</strong>
@@ -270,17 +272,17 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         </div>
       </Card>
 
-      <Card title="Использование" description="Текущие накопленные счётчики без содержимого переписки">
+      <Card title={t('users.detail.usage.title')} description={t('users.detail.usage.description')}>
         <div className={styles.statsGrid}>{stats.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
       </Card>
 
       <UsageByModelCard userId={user.id} quotaUsed={user.weekly_tokens_used} quotaTotal={user.weekly_tokens_quota} />
 
-      <Card title="Лимиты контекста" description="Технические значения, которые уже хранятся для аккаунта">
+      <Card title={t('users.detail.contextLimits.title')} description={t('users.detail.contextLimits.description')}>
         <div className={styles.statsGrid}>
-          <div><span>Лимит тарифа</span><strong>{formatNumber(user.max_context_tokens_limit)}</strong></div>
-          <div><span>Выбранный контекст</span><strong>{formatNumber(user.max_context_tokens)}</strong></div>
-          <div><span>Документы</span><strong>{user.attachment_max_tokens ? formatNumber(user.attachment_max_tokens) : 'Авто'}</strong></div>
+          <div><span>{t('users.detail.contextLimits.planLimit')}</span><strong>{formatNumber(user.max_context_tokens_limit)}</strong></div>
+          <div><span>{t('users.detail.contextLimits.selectedContext')}</span><strong>{formatNumber(user.max_context_tokens)}</strong></div>
+          <div><span>{t('users.detail.contextLimits.documents')}</span><strong>{user.attachment_max_tokens ? formatNumber(user.attachment_max_tokens) : t('users.detail.contextLimits.documentsAuto')}</strong></div>
         </div>
       </Card>
       {pendingPlan && (
@@ -314,15 +316,6 @@ type UsageByModelRow = {
   request_count: number;
 };
 
-const routeLabels: Record<string, string> = {
-  'manual': 'Manual',
-  'auto-pro': 'Auto PRO',
-  'auto-lite': 'Auto LITE',
-  'auto-vision': 'Auto Vision',
-  'memory-merge': 'Память',
-  'scheduler-condition': 'Планировщик',
-};
-
 function formatTokens(value: number) {
   return new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
 }
@@ -354,6 +347,15 @@ function UsageDonut({ percent }: { percent: number }) {
 }
 
 function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; quotaUsed: number; quotaTotal: number }) {
+  const { t } = useTranslation();
+  const routeLabels: Record<string, string> = {
+    'manual': 'Manual',
+    'auto-pro': 'Auto PRO',
+    'auto-lite': 'Auto LITE',
+    'auto-vision': 'Auto Vision',
+    'memory-merge': t('users.detail.contextBreakdown.memoryMerge'),
+    'scheduler-condition': t('users.detail.contextBreakdown.schedulerCondition'),
+  };
   const [rows, setRows] = useState<UsageByModelRow[] | null>(null);
   const [error, setError] = useState('');
 
@@ -376,34 +378,34 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
   const percent = quotaTotal > 0 ? Math.min(100, Math.round((quotaUsed || 0) / quotaTotal * 100)) : 0;
 
   return (
-    <Card title="Использование по моделям" description="За текущее недельное окно. Не зависит от удаления чатов.">
+    <Card title={t('users.detail.modelUsage.title')} description={t('users.detail.modelUsage.description')}>
       <div className={styles.usageRow}>
         <div className={styles.usageDonut}>
           <UsageDonut percent={percent} />
           <div className={styles.usageDonutCaption}>
             <strong>{formatTokens(quotaUsed || 0)} / {quotaTotal > 0 ? formatTokens(quotaTotal) : '∞'}</strong>
-            <small>условных единиц</small>
+            <small>{t('users.detail.modelUsage.conditionalUnits')}</small>
           </div>
         </div>
         <div className={styles.usageTableWrap}>
-          {error && <div className={styles.error}>Не удалось загрузить: {error}</div>}
-          {!rows && !error && <div className={styles.loading}>Загружаю…</div>}
-          {rows && rows.length === 0 && <div className={styles.loading}>За текущее окно запросов пока нет.</div>}
+          {error && <div className={styles.error}>{t('users.detail.modelUsage.loadError', { error })}</div>}
+          {!rows && !error && <div className={styles.loading}>{t('users.detail.modelUsage.loading')}</div>}
+          {rows && rows.length === 0 && <div className={styles.loading}>{t('users.detail.modelUsage.empty')}</div>}
           {rows && rows.length > 0 && (
             <table className={styles.usageTable}>
               <thead><tr>
-                <th>Модель</th><th>Маршрут</th><th>Запросов</th>
-                <th>Токенов</th><th>Cache hit</th><th>Списано</th>
+                <th>{t('users.detail.modelUsage.tableHeaders.model')}</th><th>{t('users.detail.modelUsage.tableHeaders.route')}</th><th>{t('users.detail.modelUsage.tableHeaders.requests')}</th>
+                <th>{t('users.detail.modelUsage.tableHeaders.tokens')}</th><th>{t('users.detail.modelUsage.tableHeaders.cacheHit')}</th><th>{t('users.detail.modelUsage.tableHeaders.charged')}</th>
               </tr></thead>
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={`${row.model_id || 'null'}-${idx}`}>
                     <td><strong>{row.model_name || row.model_id || '—'}</strong><small>{row.provider_name || ''}</small></td>
                     <td>{row.route ? (routeLabels[row.route] || row.route) : '—'}</td>
-                    <td>{row.request_count}{row.aborted_requests > 0 && <small title="прервано"> · {row.aborted_requests}⛔</small>}</td>
+                    <td>{row.request_count}{row.aborted_requests > 0 && <small title={t('users.detail.modelUsage.aborted')}> · {row.aborted_requests}⛔</small>}</td>
                     <td>{formatTokens(row.total_tokens)}</td>
                     <td>{formatTokens(row.cache_hit_tokens)}</td>
-                    <td>{row.free_requests > 0 && row.charged_tokens === 0 ? <span title="бесплатная модель">free</span> : formatTokens(row.charged_tokens)}</td>
+                    <td>{row.free_requests > 0 && row.charged_tokens === 0 ? <span title={t('users.detail.modelUsage.freeTooltip')}>{t('users.detail.modelUsage.free')}</span> : formatTokens(row.charged_tokens)}</td>
                   </tr>
                 ))}
               </tbody>

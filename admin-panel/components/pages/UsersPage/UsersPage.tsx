@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../lib/api';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../ui/Card/Card';
 import styles from './UsersPage.module.css';
 
@@ -25,12 +26,6 @@ type UserOverview = {
 };
 type UsersResponse = { users: UserOverview[]; total: number; limited: boolean };
 
-const statusLabels: Record<string, string> = {
-  approved: 'Активен',
-  none: 'Ожидает',
-  disapproved: 'Отклонён',
-  banned: 'Заблокирован',
-};
 const planLabels: Record<string, string> = { free: 'Free', standart: 'Standard', pro: 'Pro' };
 
 function formatDate(value: string | null) {
@@ -76,6 +71,14 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
   const [connection, setConnection] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { t } = useTranslation();
+
+  const statusLabels: Record<string, string> = {
+    approved: t('users.list.status.approved'),
+    none: t('users.list.status.none'),
+    disapproved: t('users.list.status.disapproved'),
+    banned: t('users.list.status.banned'),
+  };
 
   const loadUsers = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -119,35 +122,35 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
   return (
     <div className={styles.stack}>
       <div className={styles.summary}>
-        <span>{total} пользователей</span>
-        <span><i className={styles.onlineDot} />{onlineCount} подключено</span>
-        <button className="buttonSecondary" onClick={() => void loadUsers()} disabled={loading}>Обновить</button>
+        <span>{t('users.list.totalUsers', { count: total })}</span>
+        <span><i className={styles.onlineDot} />{t('users.list.onlineCount', { count: onlineCount })}</span>
+        <button className="buttonSecondary" onClick={() => void loadUsers()} disabled={loading}>{t('users.list.refresh')}</button>
       </div>
 
-      <Card title="Пользователи" description="Аккаунты, доступ и активность клиентов">
+      <Card title={t('users.list.title')} description={t('users.list.description')}>
         <div className={styles.filters}>
-          <input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Имя, ID, Telegram или почта" aria-label="Поиск пользователей" />
-          <select value={status} onChange={event => setStatus(event.target.value)} aria-label="Статус">
-            <option value="all">Все статусы</option><option value="approved">Активные</option>
-            <option value="none">Ожидают</option><option value="banned">Заблокированные</option>
-            <option value="disapproved">Отклонённые</option>
+          <input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('users.list.searchPlaceholder')} aria-label={t('users.list.searchAriaLabel')} />
+          <select value={status} onChange={event => setStatus(event.target.value)} aria-label={t('users.list.statusLabel')}>
+            <option value="all">{t('users.list.filter.allStatuses')}</option><option value="approved">{t('users.list.filter.active')}</option>
+            <option value="none">{t('users.list.filter.pending')}</option><option value="banned">{t('users.list.filter.blocked')}</option>
+            <option value="disapproved">{t('users.list.filter.rejected')}</option>
           </select>
-          <select value={plan} onChange={event => setPlan(event.target.value)} aria-label="Тариф">
-            <option value="all">Все тарифы</option><option value="free">Free</option>
+          <select value={plan} onChange={event => setPlan(event.target.value)} aria-label={t('users.list.planLabel')}>
+            <option value="all">{t('users.list.filter.allPlans')}</option><option value="free">Free</option>
             <option value="standart">Standard</option><option value="pro">Pro</option>
           </select>
-          <select value={connection} onChange={event => setConnection(event.target.value)} aria-label="Подключение">
-            <option value="all">Любое подключение</option><option value="online">Desktop онлайн</option>
-            <option value="offline">Desktop офлайн</option>
+          <select value={connection} onChange={event => setConnection(event.target.value)} aria-label={t('users.list.connectionLabel')}>
+            <option value="all">{t('users.list.filter.anyConnection')}</option><option value="online">{t('users.list.filter.desktopOnline')}</option>
+            <option value="offline">{t('users.list.filter.desktopOffline')}</option>
           </select>
         </div>
 
-        {error && <div className={styles.error}>Не удалось загрузить пользователей: {error}</div>}
-        {limited && <div className={styles.notice}>Показаны первые 500 аккаунтов.</div>}
+        {error && <div className={styles.error}>{t('users.list.loadError', { error })}</div>}
+        {limited && <div className={styles.notice}>{t('users.list.limited')}</div>}
 
         <div className={styles.tableWrap}>
           <table className={styles.table}>
-            <thead><tr><th>Пользователь</th><th>Статус</th><th>Тариф</th><th>Квота (неделя)</th><th>Сообщений</th><th>Последнее сообщение</th><th>Создан</th></tr></thead>
+            <thead><tr><th>{t('users.list.tableHeaders.user')}</th><th>{t('users.list.tableHeaders.status')}</th><th>{t('users.list.tableHeaders.plan')}</th><th>{t('users.list.tableHeaders.quota')}</th><th>{t('users.list.tableHeaders.messages')}</th><th>{t('users.list.tableHeaders.lastMessage')}</th><th>{t('users.list.tableHeaders.created')}</th></tr></thead>
             <tbody>
               {filteredUsers.map(user => {
                 const used = user.weekly_tokens_used || 0;
@@ -156,17 +159,17 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
                 return (
                   <tr key={user.id}>
                     <td><div className={styles.userCell}>
-                      <i className={user.desktop.online ? styles.onlineDot : styles.offlineDot} title={user.desktop.online ? 'Desktop подключён' : 'Desktop не подключён'} />
-                      <div><button className={styles.userLink} type="button" onClick={() => onSelectUser(user.id)}>{user.name || `Пользователь ${user.id}`}</button><span>#{user.id}{user.identities[0] ? ` · ${identityLabel(user.identities[0])}` : ''}</span></div>
+                      <i className={user.desktop.online ? styles.onlineDot : styles.offlineDot} title={user.desktop.online ? t('users.list.desktopOnline') : t('users.list.desktopOffline')} />
+                      <div><button className={styles.userLink} type="button" onClick={() => onSelectUser(user.id)}>{user.name || t('users.list.userDefaultName', { id: user.id })}</button><span>#{user.id}{user.identities[0] ? ` · ${identityLabel(user.identities[0])}` : ''}</span></div>
                     </div></td>
                     <td><div className={styles.badges}>
                       <span className={`${styles.badge} ${styles[`status_${user.status}`] || ''}`}>{statusLabels[user.status] || user.status}</span>
-                      {user.is_admin && <span className={styles.adminBadge}>Админ</span>}
+                      {user.is_admin && <span className={styles.adminBadge}>{t('users.list.adminBadge')}</span>}
                     </div></td>
                     <td><span className={styles.plan}>{planLabels[user.plan] || user.plan}</span></td>
                     <td>
                       {quota > 0 ? (
-                        <div className={styles.quotaCell} title={`${formatTokens(used)} / ${formatTokens(quota)} условных единиц`}>
+                        <div className={styles.quotaCell} title={t('users.list.quotaTooltip', { used: formatTokens(used), quota: formatTokens(quota) })}>
                           <div className={styles.quotaBar}><div className={styles.quotaBarFill} style={{ width: `${percent}%` }} data-warn={percent >= 90 || undefined} /></div>
                           <span className={styles.quotaLabel}>{quotaLabel(used, quota)}</span>
                         </div>
@@ -182,8 +185,8 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
               })}
             </tbody>
           </table>
-          {!loading && filteredUsers.length === 0 && <div className={styles.empty}>По выбранным фильтрам пользователей нет.</div>}
-          {loading && users.length === 0 && <div className={styles.empty}>Загружаю пользователей…</div>}
+          {!loading && filteredUsers.length === 0 && <div className={styles.empty}>{t('users.list.noResults')}</div>}
+          {loading && users.length === 0 && <div className={styles.empty}>{t('users.list.loading')}</div>}
         </div>
       </Card>
     </div>

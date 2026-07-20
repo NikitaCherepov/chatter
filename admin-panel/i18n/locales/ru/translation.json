@@ -251,5 +251,179 @@
       "running": "работает",
       "notRunning": "не запущен"
     }
+  },
+  "users": {
+    "list": {
+      "title": "Пользователи",
+      "description": "Аккаунты, доступ и активность клиентов",
+      "totalUsers": "{{count}} пользователей",
+      "onlineCount": "{{count}} подключено",
+      "refresh": "Обновить",
+      "searchPlaceholder": "Имя, ID, Telegram или почта",
+      "searchAriaLabel": "Поиск пользователей",
+      "statusLabel": "Статус",
+      "planLabel": "Тариф",
+      "connectionLabel": "Подключение",
+      "noResults": "По выбранным фильтрам пользователей нет.",
+      "loading": "Загружаю пользователей…",
+      "loadError": "Не удалось загрузить пользователей: {{error}}",
+      "limited": "Показаны первые 500 аккаунтов.",
+      "userDefaultName": "Пользователь {{id}}",
+      "adminBadge": "Админ",
+      "desktopOnline": "Desktop подключён",
+      "desktopOffline": "Desktop не подключён",
+      "quotaTooltip": "{{used}} / {{quota}} условных единиц",
+      "tableHeaders": {
+        "user": "Пользователь",
+        "status": "Статус",
+        "plan": "Тариф",
+        "quota": "Квота (неделя)",
+        "messages": "Сообщений",
+        "lastMessage": "Последнее сообщение",
+        "created": "Создан"
+      },
+      "filter": {
+        "allStatuses": "Все статусы",
+        "active": "Активные",
+        "pending": "Ожидают",
+        "blocked": "Заблокированные",
+        "rejected": "Отклонённые",
+        "allPlans": "Все тарифы",
+        "anyConnection": "Любое подключение",
+        "desktopOnline": "Desktop онлайн",
+        "desktopOffline": "Desktop офлайн"
+      },
+      "status": {
+        "approved": "Активен",
+        "none": "Ожидает",
+        "disapproved": "Отклонён",
+        "banned": "Заблокирован"
+      }
+    },
+    "detail": {
+      "back": "← К пользователям",
+      "refresh": "Обновить",
+      "loading": "Загружаю пользователя…",
+      "loadError": "Не удалось загрузить пользователя: {{error}}",
+      "description": "ID {{id}} · создан {{created}}",
+      "noAccount": "Аккаунт для входа не создан",
+      "onlineNow": "Онлайн сейчас",
+      "notConnected": "Сейчас не подключён",
+      "notBound": "Не привязан",
+      "bound": "Привязан",
+      "telegramNotBound": "Telegram не привязан",
+      "desktopOnline": "Desktop онлайн",
+      "desktopOffline": "Desktop офлайн",
+      "roleLabel": "Роль",
+      "roleUser": "Пользователь",
+      "roleAdmin": "Администратор",
+      "statusLabel": "Статус",
+      "planLabel": "Тариф",
+      "planForever": "бессрочно",
+      "planUntil": "до {{date}}",
+      "changeDuration": "Изменить срок",
+      "languageLabel": "Язык",
+      "languageNotSet": "Не выбран",
+      "preferredModelLabel": "Предпочитаемая модель",
+      "preferredModelAuto": "Автоматически",
+      "reasoningLabel": "Reasoning",
+      "reasoningDefault": "По умолчанию",
+      "lastDesktopKey": "Последний ключ Desktop",
+      "desktopKeyNotUsed": "Не использовался",
+      "connections": {
+        "title": "Подключения",
+        "description": "Способы входа и текущее соединение Desktop",
+        "headers": {
+          "client": "Клиент",
+          "account": "Аккаунт",
+          "state": "Состояние",
+          "activity": "Активность"
+        }
+      },
+      "usage": {
+        "title": "Использование",
+        "description": "Текущие накопленные счётчики без содержимого переписки",
+        "stats": {
+          "weeklyQuota": "Квота недели",
+          "quotaReset": "Сброс квоты",
+          "messages": "Сообщения",
+          "userRequests": "Запросы пользователя",
+          "assistantResponses": "Ответы ассистента",
+          "chats": "Чаты",
+          "searchToday": "Поиск сегодня",
+          "searchTotal": "Поиск всего",
+          "imagesToday": "Изображения сегодня",
+          "imagesTotal": "Изображения всего",
+          "messageLength": "Длина сообщений",
+          "lastMessage": "Последнее сообщение"
+        }
+      },
+      "contextLimits": {
+        "title": "Лимиты контекста",
+        "description": "Технические значения, которые уже хранятся для аккаунта",
+        "planLimit": "Лимит тарифа",
+        "selectedContext": "Выбранный контекст",
+        "documents": "Документы",
+        "documentsAuto": "Авто"
+      },
+      "ban": {
+        "banned": "Пользователь заблокирован",
+        "blockAccount": "Блокировка аккаунта",
+        "banHint": "Блокировка отзывает текущие сессии пользователя",
+        "reasonPlaceholder": "Причина (необязательно)",
+        "ban": "Заблокировать",
+        "unban": "Разблокировать"
+      },
+      "actions": {
+        "savingRole": "Сохраняю роль…",
+        "roleSaved": "Роль сохранена",
+        "savingStatus": "Сохраняю статус…",
+        "statusSaved": "Статус сохранён",
+        "savingPlan": "Сохраняю тариф…",
+        "planSaved": "Тариф и лимиты обновлены",
+        "banInProgress": "Блокирую…",
+        "unbanInProgress": "Разблокирую…",
+        "userUnbanned": "Пользователь разблокирован и ожидает одобрения",
+        "userBanned": "Пользователь заблокирован",
+        "error": "Ошибка: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Использование по моделям",
+        "description": "За текущее недельное окно. Не зависит от удаления чатов.",
+        "loading": "Загружаю…",
+        "loadError": "Не удалось загрузить: {{error}}",
+        "empty": "За текущее окно запросов пока нет.",
+        "conditionalUnits": "условных единиц",
+        "tableHeaders": {
+          "model": "Модель",
+          "route": "Маршрут",
+          "requests": "Запросов",
+          "tokens": "Токенов",
+          "cacheHit": "Cache hit",
+          "charged": "Списано"
+        },
+        "free": "free",
+        "aborted": "прервано",
+        "freeTooltip": "бесплатная модель"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Память",
+        "schedulerCondition": "Планировщик"
+      }
+    },
+    "planDuration": {
+      "title": "Тариф {{plan}}",
+      "freeHint": "Бесплатный тариф устанавливается бессрочно.",
+      "durationHint": "На какой срок назначить тариф?",
+      "durationLabel": "Срок",
+      "durationDay": "1 день",
+      "durationWeek": "1 неделя",
+      "durationMonth": "1 месяц",
+      "durationYear": "1 год",
+      "forever": "Бессрочно",
+      "cancel": "Отмена",
+      "saving": "Сохраняю…",
+      "assign": "Назначить"
+    }
   }
 }

@@ -251,5 +251,179 @@
       "running": "em execução",
       "notRunning": "não está em execução"
     }
+  },
+  "users": {
+    "list": {
+      "title": "Usuários",
+      "description": "Contas, acesso e atividade do cliente",
+      "totalUsers": "{{count}} usuários",
+      "onlineCount": "{{count}} online",
+      "refresh": "Atualizar",
+      "searchPlaceholder": "Nome, ID, Telegram ou e-mail",
+      "searchAriaLabel": "Pesquisar usuários",
+      "statusLabel": "Status",
+      "planLabel": "Plano",
+      "connectionLabel": "Conexão",
+      "noResults": "Nenhum usuário corresponde aos filtros selecionados.",
+      "loading": "Carregando usuários...",
+      "loadError": "Falha ao carregar usuários: {{error}}",
+      "limited": "Exibindo as primeiras 500 contas.",
+      "userDefaultName": "Usuário {{id}}",
+      "adminBadge": "Admin",
+      "desktopOnline": "Desktop conectado",
+      "desktopOffline": "Desktop desconectado",
+      "quotaTooltip": "{{used}} / {{quota}} unidades condicionais",
+      "tableHeaders": {
+        "user": "Usuário",
+        "status": "Status",
+        "plan": "Plano",
+        "quota": "Cota (semana)",
+        "messages": "Mensagens",
+        "lastMessage": "Última mensagem",
+        "created": "Criado"
+      },
+      "filter": {
+        "allStatuses": "Todos os status",
+        "active": "Ativo",
+        "pending": "Pendente",
+        "blocked": "Bloqueado",
+        "rejected": "Rejeitado",
+        "allPlans": "Todos os planos",
+        "anyConnection": "Qualquer conexão",
+        "desktopOnline": "Desktop online",
+        "desktopOffline": "Desktop offline"
+      },
+      "status": {
+        "approved": "Ativo",
+        "none": "Pendente",
+        "disapproved": "Rejeitado",
+        "banned": "Bloqueado"
+      }
+    },
+    "detail": {
+      "back": "← Usuários",
+      "refresh": "Atualizar",
+      "loading": "Carregando usuário…",
+      "loadError": "Falha ao carregar usuário: {{error}}",
+      "description": "ID {{id}} · criado {{created}}",
+      "noAccount": "Nenhuma conta de login criada",
+      "onlineNow": "Online agora",
+      "notConnected": "Não conectado",
+      "notBound": "Não vinculado",
+      "bound": "Vinculado",
+      "telegramNotBound": "Telegram não vinculado",
+      "desktopOnline": "Desktop online",
+      "desktopOffline": "Desktop offline",
+      "roleLabel": "Função",
+      "roleUser": "Usuário",
+      "roleAdmin": "Admin",
+      "statusLabel": "Status",
+      "planLabel": "Plano",
+      "planForever": "para sempre",
+      "planUntil": "até {{date}}",
+      "changeDuration": "Alterar duração",
+      "languageLabel": "Idioma",
+      "languageNotSet": "Não definido",
+      "preferredModelLabel": "Modelo preferido",
+      "preferredModelAuto": "Automático",
+      "reasoningLabel": "Raciocínio",
+      "reasoningDefault": "Padrão",
+      "lastDesktopKey": "Última chave do Desktop",
+      "desktopKeyNotUsed": "Não usada",
+      "connections": {
+        "title": "Conexões",
+        "description": "Métodos de login e conexão atual do Desktop",
+        "headers": {
+          "client": "Cliente",
+          "account": "Conta",
+          "state": "Estado",
+          "activity": "Atividade"
+        }
+      },
+      "usage": {
+        "title": "Uso",
+        "description": "Contadores acumulados atuais sem conteúdo de conversa",
+        "stats": {
+          "weeklyQuota": "Cota semanal",
+          "quotaReset": "Reinicialização da cota",
+          "messages": "Mensagens",
+          "userRequests": "Solicitações do usuário",
+          "assistantResponses": "Respostas do assistente",
+          "chats": "Chats",
+          "searchToday": "Pesquisas hoje",
+          "searchTotal": "Total de pesquisas",
+          "imagesToday": "Imagens hoje",
+          "imagesTotal": "Total de imagens",
+          "messageLength": "Tamanho da mensagem",
+          "lastMessage": "Última mensagem"
+        }
+      },
+      "contextLimits": {
+        "title": "Limites de contexto",
+        "description": "Valores técnicos já armazenados para a conta",
+        "planLimit": "Limite do plano",
+        "selectedContext": "Contexto selecionado",
+        "documents": "Documentos",
+        "documentsAuto": "Automático"
+      },
+      "ban": {
+        "banned": "Usuário está banido",
+        "blockAccount": "Bloquear conta",
+        "banHint": "Bloquear revoga as sessões atuais do usuário",
+        "reasonPlaceholder": "Motivo (opcional)",
+        "ban": "Banir",
+        "unban": "Desbanir"
+      },
+      "actions": {
+        "savingRole": "Salvando função…",
+        "roleSaved": "Função salva",
+        "savingStatus": "Salvando status…",
+        "statusSaved": "Status salvo",
+        "savingPlan": "Salvando plano…",
+        "planSaved": "Plano e limites atualizados",
+        "banInProgress": "Banindo…",
+        "unbanInProgress": "Desbanindo…",
+        "userUnbanned": "Usuário desbanido e pendente de aprovação",
+        "userBanned": "Usuário banido",
+        "error": "Erro: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Uso por modelo",
+        "description": "Para a janela semanal atual. Não afetado pela exclusão de chat.",
+        "loading": "Carregando…",
+        "loadError": "Falha ao carregar: {{error}}",
+        "empty": "Nenhuma solicitação na janela atual ainda.",
+        "conditionalUnits": "unidades condicionais",
+        "tableHeaders": {
+          "model": "Modelo",
+          "route": "Rota",
+          "requests": "Solicitações",
+          "tokens": "Tokens",
+          "cacheHit": "Cache hit",
+          "charged": "Cobrado"
+        },
+        "free": "gratuito",
+        "aborted": "abortado",
+        "freeTooltip": "modelo gratuito"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Memória",
+        "schedulerCondition": "Agendador"
+      }
+    },
+    "planDuration": {
+      "title": "Plano {{plan}}",
+      "freeHint": "O plano gratuito é definido permanentemente.",
+      "durationHint": "Por quanto tempo o plano deve ser atribuído?",
+      "durationLabel": "Duração",
+      "durationDay": "1 dia",
+      "durationWeek": "1 semana",
+      "durationMonth": "1 mês",
+      "durationYear": "1 ano",
+      "forever": "Para sempre",
+      "cancel": "Cancelar",
+      "saving": "Salvando…",
+      "assign": "Atribuir"
+    }
   }
 }

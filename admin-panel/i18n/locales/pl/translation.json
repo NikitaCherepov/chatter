@@ -251,5 +251,179 @@
       "running": "uruchomiony",
       "notRunning": "nie uruchomiony"
     }
+  },
+  "users": {
+    "list": {
+      "title": "Użytkownicy",
+      "description": "Konta, dostęp i aktywność klientów",
+      "totalUsers": "{{count}} użytkowników",
+      "onlineCount": "{{count}} online",
+      "refresh": "Odśwież",
+      "searchPlaceholder": "Nazwa, ID, Telegram lub email",
+      "searchAriaLabel": "Szukaj użytkowników",
+      "statusLabel": "Status",
+      "planLabel": "Plan",
+      "connectionLabel": "Połączenie",
+      "noResults": "Brak użytkowników pasujących do wybranych filtrów.",
+      "loading": "Ładowanie użytkowników...",
+      "loadError": "Nie udało się załadować użytkowników: {{error}}",
+      "limited": "Wyświetlanie pierwszych 500 kont.",
+      "userDefaultName": "Użytkownik {{id}}",
+      "adminBadge": "Admin",
+      "desktopOnline": "Pulpit podłączony",
+      "desktopOffline": "Pulpit niepodłączony",
+      "quotaTooltip": "{{used}} / {{quota}} jednostek warunkowych",
+      "tableHeaders": {
+        "user": "Użytkownik",
+        "status": "Status",
+        "plan": "Plan",
+        "quota": "Limit (tydzień)",
+        "messages": "Wiadomości",
+        "lastMessage": "Ostatnia wiadomość",
+        "created": "Utworzono"
+      },
+      "filter": {
+        "allStatuses": "Wszystkie statusy",
+        "active": "Aktywny",
+        "pending": "Oczekujący",
+        "blocked": "Zablokowany",
+        "rejected": "Odrzucone",
+        "allPlans": "Wszystkie plany",
+        "anyConnection": "Dowolne połączenie",
+        "desktopOnline": "Komputer online",
+        "desktopOffline": "Komputer offline"
+      },
+      "status": {
+        "approved": "Aktywny",
+        "none": "Oczekujący",
+        "disapproved": "Odrzucony",
+        "banned": "Zablokowany"
+      }
+    },
+    "detail": {
+      "back": "← Użytkownicy",
+      "refresh": "Odśwież",
+      "loading": "Ładowanie użytkownika…",
+      "loadError": "Nie udało się załadować użytkownika: {{error}}",
+      "description": "ID {{id}} · utworzono {{created}}",
+      "noAccount": "Nie utworzono konta logowania",
+      "onlineNow": "Online teraz",
+      "notConnected": "Nie połączono",
+      "notBound": "Nie powiązano",
+      "bound": "Powiązano",
+      "telegramNotBound": "Telegram nie powiązany",
+      "desktopOnline": "Komputer stacjonarny online",
+      "desktopOffline": "Komputer stacjonarny offline",
+      "roleLabel": "Rola",
+      "roleUser": "Użytkownik",
+      "roleAdmin": "Administrator",
+      "statusLabel": "Status",
+      "planLabel": "Plan",
+      "planForever": "na zawsze",
+      "planUntil": "do {{date}}",
+      "changeDuration": "Zmień czas trwania",
+      "languageLabel": "Język",
+      "languageNotSet": "Nie ustawiono",
+      "preferredModelLabel": "Preferowany model",
+      "preferredModelAuto": "Auto",
+      "reasoningLabel": "Rozumowanie",
+      "reasoningDefault": "Domyślne",
+      "lastDesktopKey": "Ostatni klucz Desktop",
+      "desktopKeyNotUsed": "Nie używany",
+      "connections": {
+        "title": "Połączenia",
+        "description": "Metody logowania i bieżące połączenie Desktop",
+        "headers": {
+          "client": "Klient",
+          "account": "Konto",
+          "state": "Stan",
+          "activity": "Aktywność"
+        }
+      },
+      "usage": {
+        "title": "Użycie",
+        "description": "Bieżące skumulowane liczniki bez treści konwersacji",
+        "stats": {
+          "weeklyQuota": "Tygodniowy limit",
+          "quotaReset": "Reset limitu",
+          "messages": "Wiadomości",
+          "userRequests": "Żądania użytkownika",
+          "assistantResponses": "Odpowiedzi asystenta",
+          "chats": "Czaty",
+          "searchToday": "Wyszukiwania dzisiaj",
+          "searchTotal": "Wyszukiwania łącznie",
+          "imagesToday": "Obrazy dzisiaj",
+          "imagesTotal": "Obrazy łącznie",
+          "messageLength": "Długość wiadomości",
+          "lastMessage": "Ostatnia wiadomość"
+        }
+      },
+      "contextLimits": {
+        "title": "Limity kontekstu",
+        "description": "Wartości techniczne już zapisane na koncie",
+        "planLimit": "Limit planu",
+        "selectedContext": "Wybrany kontekst",
+        "documents": "Dokumenty",
+        "documentsAuto": "Auto"
+      },
+      "ban": {
+        "banned": "Użytkownik jest zbanowany",
+        "blockAccount": "Zablokuj konto",
+        "banHint": "Blokada unieważnia bieżące sesje użytkownika",
+        "reasonPlaceholder": "Powód (opcjonalnie)",
+        "ban": "Zbanuj",
+        "unban": "Odbanuj"
+      },
+      "actions": {
+        "savingRole": "Zapisywanie roli…",
+        "roleSaved": "Rola zapisana",
+        "savingStatus": "Zapisywanie statusu…",
+        "statusSaved": "Status zapisany",
+        "savingPlan": "Zapisywanie planu…",
+        "planSaved": "Plan i limity zaktualizowane",
+        "banInProgress": "Blokowanie…",
+        "unbanInProgress": "Odblokowywanie…",
+        "userUnbanned": "Użytkownik odblokowany i oczekuje na zatwierdzenie",
+        "userBanned": "Użytkownik zablokowany",
+        "error": "Błąd: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Użycie według modelu",
+        "description": "Dla bieżącego okna tygodniowego. Nie dotyczy usuwania czatów.",
+        "loading": "Ładowanie…",
+        "loadError": "Nie udało się załadować: {{error}}",
+        "empty": "Brak zapytań w bieżącym oknie.",
+        "conditionalUnits": "jednostki warunkowe",
+        "tableHeaders": {
+          "model": "Model",
+          "route": "Trasa",
+          "requests": "Zapytania",
+          "tokens": "Tokeny",
+          "cacheHit": "Trafienie pamięci podręcznej",
+          "charged": "Naliczone"
+        },
+        "free": "darmowy",
+        "aborted": "przerwany",
+        "freeTooltip": "darmowy model"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Pamięć",
+        "schedulerCondition": "Harmonogram"
+      }
+    },
+    "planDuration": {
+      "title": "Plan {{plan}}",
+      "freeHint": "Darmowy plan jest ustawiony na stałe.",
+      "durationHint": "Jak długo plan ma być przypisany?",
+      "durationLabel": "Czas trwania",
+      "durationDay": "1 dzień",
+      "durationWeek": "1 tydzień",
+      "durationMonth": "1 miesiąc",
+      "durationYear": "1 rok",
+      "forever": "Na zawsze",
+      "cancel": "Anuluj",
+      "saving": "Zapisywanie…",
+      "assign": "Przypisz"
+    }
   }
 }

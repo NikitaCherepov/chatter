@@ -251,5 +251,179 @@
       "running": "in esecuzione",
       "notRunning": "non in esecuzione"
     }
+  },
+  "users": {
+    "list": {
+      "title": "Utenti",
+      "description": "Account, accessi e attività client",
+      "totalUsers": "{{count}} utenti",
+      "onlineCount": "{{count}} online",
+      "refresh": "Aggiorna",
+      "searchPlaceholder": "Nome, ID, Telegram o email",
+      "searchAriaLabel": "Cerca utenti",
+      "statusLabel": "Stato",
+      "planLabel": "Piano",
+      "connectionLabel": "Connessione",
+      "noResults": "Nessun utente corrisponde ai filtri selezionati.",
+      "loading": "Caricamento utenti...",
+      "loadError": "Impossibile caricare gli utenti: {{error}}",
+      "limited": "Mostrati i primi 500 account.",
+      "userDefaultName": "Utente {{id}}",
+      "adminBadge": "Amministratore",
+      "desktopOnline": "Desktop connesso",
+      "desktopOffline": "Desktop non connesso",
+      "quotaTooltip": "{{used}} / {{quota}} unità condizionali",
+      "tableHeaders": {
+        "user": "Utente",
+        "status": "Stato",
+        "plan": "Piano",
+        "quota": "Quota (settimana)",
+        "messages": "Messaggi",
+        "lastMessage": "Ultimo messaggio",
+        "created": "Creato"
+      },
+      "filter": {
+        "allStatuses": "Tutti gli stati",
+        "active": "Attivo",
+        "pending": "In attesa",
+        "blocked": "Bloccato",
+        "rejected": "Respinto",
+        "allPlans": "Tutti i piani",
+        "anyConnection": "Qualsiasi connessione",
+        "desktopOnline": "Desktop online",
+        "desktopOffline": "Desktop offline"
+      },
+      "status": {
+        "approved": "Attivo",
+        "none": "In attesa",
+        "disapproved": "Respinto",
+        "banned": "Bloccato"
+      }
+    },
+    "detail": {
+      "back": "← Utenti",
+      "refresh": "Aggiorna",
+      "loading": "Caricamento utente…",
+      "loadError": "Impossibile caricare l'utente: {{error}}",
+      "description": "ID {{id}} · creato {{created}}",
+      "noAccount": "Nessun account di accesso creato",
+      "onlineNow": "Online ora",
+      "notConnected": "Non connesso",
+      "notBound": "Non collegato",
+      "bound": "Collegato",
+      "telegramNotBound": "Telegram non collegato",
+      "desktopOnline": "Desktop online",
+      "desktopOffline": "Desktop offline",
+      "roleLabel": "Ruolo",
+      "roleUser": "Utente",
+      "roleAdmin": "Amministratore",
+      "statusLabel": "Stato",
+      "planLabel": "Piano",
+      "planForever": "per sempre",
+      "planUntil": "fino al {{date}}",
+      "changeDuration": "Modifica durata",
+      "languageLabel": "Lingua",
+      "languageNotSet": "Non impostata",
+      "preferredModelLabel": "Modello preferito",
+      "preferredModelAuto": "Auto",
+      "reasoningLabel": "Ragionamento",
+      "reasoningDefault": "Predefinito",
+      "lastDesktopKey": "Ultima chiave Desktop",
+      "desktopKeyNotUsed": "Non utilizzata",
+      "connections": {
+        "title": "Connessioni",
+        "description": "Metodi di accesso e connessione Desktop corrente",
+        "headers": {
+          "client": "Client",
+          "account": "Account",
+          "state": "Stato",
+          "activity": "Attività"
+        }
+      },
+      "usage": {
+        "title": "Utilizzo",
+        "description": "Contatori cumulativi correnti senza contenuto della conversazione",
+        "stats": {
+          "weeklyQuota": "Quota settimanale",
+          "quotaReset": "Reimpostazione quota",
+          "messages": "Messaggi",
+          "userRequests": "Richieste utente",
+          "assistantResponses": "Risposte dell'assistente",
+          "chats": "Chat",
+          "searchToday": "Ricerca oggi",
+          "searchTotal": "Ricerca totale",
+          "imagesToday": "Immagini oggi",
+          "imagesTotal": "Immagini totali",
+          "messageLength": "Lunghezza messaggio",
+          "lastMessage": "Ultimo messaggio"
+        }
+      },
+      "contextLimits": {
+        "title": "Limiti di contesto",
+        "description": "Valori tecnici già memorizzati per l'account",
+        "planLimit": "Limite del piano",
+        "selectedContext": "Contesto selezionato",
+        "documents": "Documenti",
+        "documentsAuto": "Auto"
+      },
+      "ban": {
+        "banned": "Utente bannato",
+        "blockAccount": "Blocca account",
+        "banHint": "Il blocco revoca le sessioni correnti dell'utente",
+        "reasonPlaceholder": "Motivo (opzionale)",
+        "ban": "Banna",
+        "unban": "Sbanna"
+      },
+      "actions": {
+        "savingRole": "Salvataggio ruolo…",
+        "roleSaved": "Ruolo salvato",
+        "savingStatus": "Salvataggio stato…",
+        "statusSaved": "Stato salvato",
+        "savingPlan": "Salvataggio piano…",
+        "planSaved": "Piano e limiti aggiornati",
+        "banInProgress": "Ban in corso…",
+        "unbanInProgress": "Rimozione ban in corso…",
+        "userUnbanned": "Ban rimosso, in attesa di approvazione",
+        "userBanned": "Utente bannato",
+        "error": "Errore: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Utilizzo per modello",
+        "description": "Per la finestra settimanale corrente. Non influenzato dall'eliminazione delle chat.",
+        "loading": "Caricamento…",
+        "loadError": "Caricamento fallito: {{error}}",
+        "empty": "Nessuna richiesta nella finestra corrente.",
+        "conditionalUnits": "unità condizionali",
+        "tableHeaders": {
+          "model": "Modello",
+          "route": "Percorso",
+          "requests": "Richieste",
+          "tokens": "Token",
+          "cacheHit": "Cache hit",
+          "charged": "Addebitato"
+        },
+        "free": "gratuito",
+        "aborted": "annullato",
+        "freeTooltip": "modello gratuito"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Memoria",
+        "schedulerCondition": "Pianificatore"
+      }
+    },
+    "planDuration": {
+      "title": "Piano {{plan}}",
+      "freeHint": "Il piano gratuito è impostato in modo permanente.",
+      "durationHint": "Per quanto tempo deve essere assegnato il piano?",
+      "durationLabel": "Durata",
+      "durationDay": "1 giorno",
+      "durationWeek": "1 settimana",
+      "durationMonth": "1 mese",
+      "durationYear": "1 anno",
+      "forever": "Per sempre",
+      "cancel": "Annulla",
+      "saving": "Salvataggio…",
+      "assign": "Assegna"
+    }
   }
 }

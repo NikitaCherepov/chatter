@@ -251,5 +251,179 @@
       "running": "実行中",
       "notRunning": "未実行"
     }
+  },
+  "users": {
+    "list": {
+      "title": "ユーザー",
+      "description": "アカウント、アクセス、クライアントアクティビティ",
+      "totalUsers": "{{count}} ユーザー",
+      "onlineCount": "{{count}} オンライン",
+      "refresh": "更新",
+      "searchPlaceholder": "名前、ID、Telegram、メール",
+      "searchAriaLabel": "ユーザーを検索",
+      "statusLabel": "ステータス",
+      "planLabel": "プラン",
+      "connectionLabel": "接続",
+      "noResults": "選択したフィルターに一致するユーザーはいません。",
+      "loading": "ユーザーを読み込み中...",
+      "loadError": "ユーザーの読み込みに失敗しました: {{error}}",
+      "limited": "最初の500アカウントを表示しています。",
+      "userDefaultName": "ユーザー {{id}}",
+      "adminBadge": "管理者",
+      "desktopOnline": "デスクトップ接続済み",
+      "desktopOffline": "デスクトップ未接続",
+      "quotaTooltip": "{{used}} / {{quota}} 条件付きユニット",
+      "tableHeaders": {
+        "user": "ユーザー",
+        "status": "ステータス",
+        "plan": "プラン",
+        "quota": "クォータ（週）",
+        "messages": "メッセージ",
+        "lastMessage": "最終メッセージ",
+        "created": "作成日"
+      },
+      "filter": {
+        "allStatuses": "すべてのステータス",
+        "active": "アクティブ",
+        "pending": "保留中",
+        "blocked": "ブロック済み",
+        "rejected": "拒否",
+        "allPlans": "すべてのプラン",
+        "anyConnection": "すべての接続",
+        "desktopOnline": "デスクトップオンライン",
+        "desktopOffline": "デスクトップオフライン"
+      },
+      "status": {
+        "approved": "アクティブ",
+        "none": "保留中",
+        "disapproved": "拒否",
+        "banned": "ブロック"
+      }
+    },
+    "detail": {
+      "back": "← ユーザー",
+      "refresh": "更新",
+      "loading": "ユーザーを読み込み中…",
+      "loadError": "ユーザーの読み込みに失敗しました: {{error}}",
+      "description": "ID {{id}} · 作成日 {{created}}",
+      "noAccount": "ログインアカウント未作成",
+      "onlineNow": "オンライン中",
+      "notConnected": "未接続",
+      "notBound": "未バインド",
+      "bound": "バインド済み",
+      "telegramNotBound": "Telegram未バインド",
+      "desktopOnline": "デスクトップオンライン",
+      "desktopOffline": "デスクトップオフライン",
+      "roleLabel": "ロール",
+      "roleUser": "ユーザー",
+      "roleAdmin": "管理者",
+      "statusLabel": "ステータス",
+      "planLabel": "プラン",
+      "planForever": "無期限",
+      "planUntil": "{{date}}まで",
+      "changeDuration": "期間変更",
+      "languageLabel": "言語",
+      "languageNotSet": "未設定",
+      "preferredModelLabel": "優先モデル",
+      "preferredModelAuto": "自動",
+      "reasoningLabel": "推論",
+      "reasoningDefault": "デフォルト",
+      "lastDesktopKey": "最終デスクトップキー",
+      "desktopKeyNotUsed": "未使用",
+      "connections": {
+        "title": "接続",
+        "description": "ログイン方法と現在のデスクトップ接続",
+        "headers": {
+          "client": "クライアント",
+          "account": "アカウント",
+          "state": "状態",
+          "activity": "アクティビティ"
+        }
+      },
+      "usage": {
+        "title": "使用量",
+        "description": "会話内容を含まない現在の累積カウンター",
+        "stats": {
+          "weeklyQuota": "週間クォータ",
+          "quotaReset": "クォータリセット",
+          "messages": "メッセージ",
+          "userRequests": "ユーザーリクエスト",
+          "assistantResponses": "アシスタント応答数",
+          "chats": "チャット数",
+          "searchToday": "本日の検索数",
+          "searchTotal": "総検索数",
+          "imagesToday": "本日の画像数",
+          "imagesTotal": "総画像数",
+          "messageLength": "メッセージ長",
+          "lastMessage": "最終メッセージ"
+        }
+      },
+      "contextLimits": {
+        "title": "コンテキスト制限",
+        "description": "アカウントに保存されている技術値",
+        "planLimit": "プラン制限",
+        "selectedContext": "選択中のコンテキスト",
+        "documents": "ドキュメント",
+        "documentsAuto": "自動"
+      },
+      "ban": {
+        "banned": "ユーザーは禁止されています",
+        "blockAccount": "アカウントをブロック",
+        "banHint": "ブロックするとユーザーの現在のセッションが無効になります",
+        "reasonPlaceholder": "理由（任意）",
+        "ban": "禁止",
+        "unban": "禁止解除"
+      },
+      "actions": {
+        "savingRole": "ロールを保存中…",
+        "roleSaved": "ロールを保存しました",
+        "savingStatus": "ステータスを保存中…",
+        "statusSaved": "ステータスを保存しました",
+        "savingPlan": "プランを保存中…",
+        "planSaved": "プランと制限を更新しました",
+        "banInProgress": "BAN中…",
+        "unbanInProgress": "BAN解除中…",
+        "userUnbanned": "ユーザーのBANが解除され、承認待ちです",
+        "userBanned": "ユーザーをBANしました",
+        "error": "エラー: {{error}}"
+      },
+      "modelUsage": {
+        "title": "モデル別使用量",
+        "description": "現在の週間ウィンドウのデータです。チャット削除の影響は受けません。",
+        "loading": "読み込み中…",
+        "loadError": "読み込みに失敗しました: {{error}}",
+        "empty": "現在のウィンドウにはまだリクエストがありません。",
+        "conditionalUnits": "条件付きユニット",
+        "tableHeaders": {
+          "model": "モデル",
+          "route": "ルート",
+          "requests": "リクエスト",
+          "tokens": "トークン",
+          "cacheHit": "キャッシュヒット",
+          "charged": "課金"
+        },
+        "free": "無料",
+        "aborted": "中断",
+        "freeTooltip": "無料モデル"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "メモリ",
+        "schedulerCondition": "スケジューラ"
+      }
+    },
+    "planDuration": {
+      "title": "プラン{{plan}}",
+      "freeHint": "無料プランは永続的に設定されています。",
+      "durationHint": "プランの割り当て期間を指定してください。",
+      "durationLabel": "期間",
+      "durationDay": "1日",
+      "durationWeek": "1週間",
+      "durationMonth": "1ヶ月",
+      "durationYear": "1年",
+      "forever": "無期限",
+      "cancel": "キャンセル",
+      "saving": "保存中…",
+      "assign": "割り当て"
+    }
   }
 }

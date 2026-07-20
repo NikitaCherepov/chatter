@@ -251,5 +251,179 @@
       "running": "运行中",
       "notRunning": "未运行"
     }
+  },
+  "users": {
+    "list": {
+      "title": "用户",
+      "description": "账户、访问和客户端活动",
+      "totalUsers": "{{count}} 个用户",
+      "onlineCount": "{{count}} 在线",
+      "refresh": "刷新",
+      "searchPlaceholder": "姓名、ID、Telegram 或邮箱",
+      "searchAriaLabel": "搜索用户",
+      "statusLabel": "状态",
+      "planLabel": "套餐",
+      "connectionLabel": "连接",
+      "noResults": "没有用户匹配所选筛选条件。",
+      "loading": "正在加载用户...",
+      "loadError": "加载用户失败：{{error}}",
+      "limited": "仅显示前500个账户。",
+      "userDefaultName": "用户{{id}}",
+      "adminBadge": "管理员",
+      "desktopOnline": "桌面已连接",
+      "desktopOffline": "桌面未连接",
+      "quotaTooltip": "{{used}} / {{quota}} 条件单位",
+      "tableHeaders": {
+        "user": "用户",
+        "status": "状态",
+        "plan": "套餐",
+        "quota": "配额（周）",
+        "messages": "消息数",
+        "lastMessage": "最后消息",
+        "created": "创建时间"
+      },
+      "filter": {
+        "allStatuses": "所有状态",
+        "active": "活跃",
+        "pending": "待处理",
+        "blocked": "已屏蔽",
+        "rejected": "已拒绝",
+        "allPlans": "所有方案",
+        "anyConnection": "任何连接",
+        "desktopOnline": "桌面在线",
+        "desktopOffline": "桌面离线"
+      },
+      "status": {
+        "approved": "活跃",
+        "none": "待审核",
+        "disapproved": "已拒绝",
+        "banned": "已封禁"
+      }
+    },
+    "detail": {
+      "back": "← 用户",
+      "refresh": "刷新",
+      "loading": "正在加载用户…",
+      "loadError": "加载用户失败：{{error}}",
+      "description": "ID {{id}} · 创建于 {{created}}",
+      "noAccount": "未创建登录账号",
+      "onlineNow": "当前在线",
+      "notConnected": "未连接",
+      "notBound": "未绑定",
+      "bound": "已绑定",
+      "telegramNotBound": "Telegram 未绑定",
+      "desktopOnline": "桌面在线",
+      "desktopOffline": "桌面离线",
+      "roleLabel": "角色",
+      "roleUser": "用户",
+      "roleAdmin": "管理员",
+      "statusLabel": "状态",
+      "planLabel": "套餐",
+      "planForever": "永久",
+      "planUntil": "直到 {{date}}",
+      "changeDuration": "更改时长",
+      "languageLabel": "语言",
+      "languageNotSet": "未设置",
+      "preferredModelLabel": "首选模型",
+      "preferredModelAuto": "自动",
+      "reasoningLabel": "推理",
+      "reasoningDefault": "默认",
+      "lastDesktopKey": "上次桌面密钥",
+      "desktopKeyNotUsed": "未使用",
+      "connections": {
+        "title": "连接",
+        "description": "登录方式和当前桌面连接",
+        "headers": {
+          "client": "客户端",
+          "account": "账户",
+          "state": "状态",
+          "activity": "活动"
+        }
+      },
+      "usage": {
+        "title": "使用量",
+        "description": "当前累计计数器，不含对话内容",
+        "stats": {
+          "weeklyQuota": "每周配额",
+          "quotaReset": "配额重置",
+          "messages": "消息",
+          "userRequests": "用户请求",
+          "assistantResponses": "助手回复",
+          "chats": "聊天",
+          "searchToday": "今日搜索",
+          "searchTotal": "搜索总数",
+          "imagesToday": "今日图片",
+          "imagesTotal": "图片总数",
+          "messageLength": "消息长度",
+          "lastMessage": "最后消息"
+        }
+      },
+      "contextLimits": {
+        "title": "上下文限制",
+        "description": "已存储在账户中的技术值",
+        "planLimit": "计划限制",
+        "selectedContext": "选定上下文",
+        "documents": "文档",
+        "documentsAuto": "自动"
+      },
+      "ban": {
+        "banned": "用户已被封禁",
+        "blockAccount": "封禁账户",
+        "banHint": "封禁将撤销用户当前会话",
+        "reasonPlaceholder": "原因（可选）",
+        "ban": "封禁",
+        "unban": "解封"
+      },
+      "actions": {
+        "savingRole": "正在保存角色…",
+        "roleSaved": "角色已保存",
+        "savingStatus": "正在保存状态…",
+        "statusSaved": "状态已保存",
+        "savingPlan": "正在保存方案…",
+        "planSaved": "方案和限制已更新",
+        "banInProgress": "正在封禁…",
+        "unbanInProgress": "正在解封…",
+        "userUnbanned": "用户已解封，待审批",
+        "userBanned": "用户已封禁",
+        "error": "错误：{{error}}"
+      },
+      "modelUsage": {
+        "title": "按模型使用情况",
+        "description": "针对当前每周窗口。不受聊天删除影响。",
+        "loading": "加载中…",
+        "loadError": "加载失败：{{error}}",
+        "empty": "当前窗口尚无请求。",
+        "conditionalUnits": "条件单位",
+        "tableHeaders": {
+          "model": "模型",
+          "route": "路由",
+          "requests": "请求数",
+          "tokens": "令牌",
+          "cacheHit": "缓存命中",
+          "charged": "已计费"
+        },
+        "free": "免费",
+        "aborted": "已中止",
+        "freeTooltip": "免费模型"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "内存",
+        "schedulerCondition": "调度器"
+      }
+    },
+    "planDuration": {
+      "title": "计划 {{plan}}",
+      "freeHint": "免费计划永久设置。",
+      "durationHint": "计划应分配多长时间？",
+      "durationLabel": "时长",
+      "durationDay": "1天",
+      "durationWeek": "1周",
+      "durationMonth": "1个月",
+      "durationYear": "1年",
+      "forever": "永久",
+      "cancel": "取消",
+      "saving": "保存中…",
+      "assign": "分配"
+    }
   }
 }

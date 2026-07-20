@@ -251,5 +251,179 @@
       "running": "running",
       "notRunning": "not running"
     }
+  },
+  "users": {
+    "list": {
+      "title": "Users",
+      "description": "Accounts, access, and client activity",
+      "totalUsers": "{{count}} users",
+      "onlineCount": "{{count}} online",
+      "refresh": "Refresh",
+      "searchPlaceholder": "Name, ID, Telegram or email",
+      "searchAriaLabel": "Search users",
+      "statusLabel": "Status",
+      "planLabel": "Plan",
+      "connectionLabel": "Connection",
+      "noResults": "No users match the selected filters.",
+      "loading": "Loading users...",
+      "loadError": "Failed to load users: {{error}}",
+      "limited": "Showing the first 500 accounts.",
+      "userDefaultName": "User {{id}}",
+      "adminBadge": "Admin",
+      "desktopOnline": "Desktop connected",
+      "desktopOffline": "Desktop not connected",
+      "quotaTooltip": "{{used}} / {{quota}} conditional units",
+      "tableHeaders": {
+        "user": "User",
+        "status": "Status",
+        "plan": "Plan",
+        "quota": "Quota (week)",
+        "messages": "Messages",
+        "lastMessage": "Last message",
+        "created": "Created"
+      },
+      "filter": {
+        "allStatuses": "All statuses",
+        "active": "Active",
+        "pending": "Pending",
+        "blocked": "Blocked",
+        "rejected": "Rejected",
+        "allPlans": "All plans",
+        "anyConnection": "Any connection",
+        "desktopOnline": "Desktop online",
+        "desktopOffline": "Desktop offline"
+      },
+      "status": {
+        "approved": "Active",
+        "none": "Pending",
+        "disapproved": "Rejected",
+        "banned": "Blocked"
+      }
+    },
+    "detail": {
+      "back": "← Users",
+      "refresh": "Refresh",
+      "loading": "Loading user…",
+      "loadError": "Failed to load user: {{error}}",
+      "description": "ID {{id}} · created {{created}}",
+      "noAccount": "No login account created",
+      "onlineNow": "Online now",
+      "notConnected": "Not connected",
+      "notBound": "Not bound",
+      "bound": "Bound",
+      "telegramNotBound": "Telegram not bound",
+      "desktopOnline": "Desktop online",
+      "desktopOffline": "Desktop offline",
+      "roleLabel": "Role",
+      "roleUser": "User",
+      "roleAdmin": "Admin",
+      "statusLabel": "Status",
+      "planLabel": "Plan",
+      "planForever": "forever",
+      "planUntil": "until {{date}}",
+      "changeDuration": "Change duration",
+      "languageLabel": "Language",
+      "languageNotSet": "Not set",
+      "preferredModelLabel": "Preferred model",
+      "preferredModelAuto": "Auto",
+      "reasoningLabel": "Reasoning",
+      "reasoningDefault": "Default",
+      "lastDesktopKey": "Last Desktop key",
+      "desktopKeyNotUsed": "Not used",
+      "connections": {
+        "title": "Connections",
+        "description": "Login methods and current Desktop connection",
+        "headers": {
+          "client": "Client",
+          "account": "Account",
+          "state": "State",
+          "activity": "Activity"
+        }
+      },
+      "usage": {
+        "title": "Usage",
+        "description": "Current accumulated counters without conversation content",
+        "stats": {
+          "weeklyQuota": "Weekly quota",
+          "quotaReset": "Quota reset",
+          "messages": "Messages",
+          "userRequests": "User requests",
+          "assistantResponses": "Assistant responses",
+          "chats": "Chats",
+          "searchToday": "Search today",
+          "searchTotal": "Search total",
+          "imagesToday": "Images today",
+          "imagesTotal": "Images total",
+          "messageLength": "Message length",
+          "lastMessage": "Last message"
+        }
+      },
+      "contextLimits": {
+        "title": "Context limits",
+        "description": "Technical values already stored for the account",
+        "planLimit": "Plan limit",
+        "selectedContext": "Selected context",
+        "documents": "Documents",
+        "documentsAuto": "Auto"
+      },
+      "ban": {
+        "banned": "User is banned",
+        "blockAccount": "Block account",
+        "banHint": "Blocking revokes the user's current sessions",
+        "reasonPlaceholder": "Reason (optional)",
+        "ban": "Ban",
+        "unban": "Unban"
+      },
+      "actions": {
+        "savingRole": "Saving role…",
+        "roleSaved": "Role saved",
+        "savingStatus": "Saving status…",
+        "statusSaved": "Status saved",
+        "savingPlan": "Saving plan…",
+        "planSaved": "Plan and limits updated",
+        "banInProgress": "Banning…",
+        "unbanInProgress": "Unbanning…",
+        "userUnbanned": "User unbanned and pending approval",
+        "userBanned": "User banned",
+        "error": "Error: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Usage by model",
+        "description": "For the current weekly window. Not affected by chat deletion.",
+        "loading": "Loading…",
+        "loadError": "Failed to load: {{error}}",
+        "empty": "No requests in the current window yet.",
+        "conditionalUnits": "conditional units",
+        "tableHeaders": {
+          "model": "Model",
+          "route": "Route",
+          "requests": "Requests",
+          "tokens": "Tokens",
+          "cacheHit": "Cache hit",
+          "charged": "Charged"
+        },
+        "free": "free",
+        "aborted": "aborted",
+        "freeTooltip": "free model"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Memory",
+        "schedulerCondition": "Scheduler"
+      }
+    },
+    "planDuration": {
+      "title": "Plan {{plan}}",
+      "freeHint": "The free plan is set permanently.",
+      "durationHint": "How long should the plan be assigned?",
+      "durationLabel": "Duration",
+      "durationDay": "1 day",
+      "durationWeek": "1 week",
+      "durationMonth": "1 month",
+      "durationYear": "1 year",
+      "forever": "Forever",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "assign": "Assign"
+    }
   }
 }

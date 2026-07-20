@@ -251,5 +251,179 @@
       "running": "läuft",
       "notRunning": "läuft nicht"
     }
+  },
+  "users": {
+    "list": {
+      "title": "Benutzer",
+      "description": "Konten, Zugriff und Client-Aktivität",
+      "totalUsers": "{{count}} Benutzer",
+      "onlineCount": "{{count}} online",
+      "refresh": "Aktualisieren",
+      "searchPlaceholder": "Name, ID, Telegram oder E-Mail",
+      "searchAriaLabel": "Benutzer suchen",
+      "statusLabel": "Status",
+      "planLabel": "Plan",
+      "connectionLabel": "Verbindung",
+      "noResults": "Keine Benutzer entsprechen den ausgewählten Filtern.",
+      "loading": "Benutzer werden geladen...",
+      "loadError": "Benutzer konnten nicht geladen werden: {{error}}",
+      "limited": "Die ersten 500 Konten werden angezeigt.",
+      "userDefaultName": "Benutzer {{id}}",
+      "adminBadge": "Admin",
+      "desktopOnline": "Desktop verbunden",
+      "desktopOffline": "Desktop nicht verbunden",
+      "quotaTooltip": "{{used}} / {{quota}} bedingte Einheiten",
+      "tableHeaders": {
+        "user": "Benutzer",
+        "status": "Status",
+        "plan": "Plan",
+        "quota": "Kontingent (Woche)",
+        "messages": "Nachrichten",
+        "lastMessage": "Letzte Nachricht",
+        "created": "Erstellt"
+      },
+      "filter": {
+        "allStatuses": "Alle Status",
+        "active": "Aktiv",
+        "pending": "Ausstehend",
+        "blocked": "Gesperrt",
+        "rejected": "Abgelehnt",
+        "allPlans": "Alle Tarife",
+        "anyConnection": "Jede Verbindung",
+        "desktopOnline": "Desktop online",
+        "desktopOffline": "Desktop offline"
+      },
+      "status": {
+        "approved": "Aktiv",
+        "none": "Ausstehend",
+        "disapproved": "Abgelehnt",
+        "banned": "Gesperrt"
+      }
+    },
+    "detail": {
+      "back": "← Benutzer",
+      "refresh": "Aktualisieren",
+      "loading": "Benutzer wird geladen…",
+      "loadError": "Fehler beim Laden des Benutzers: {{error}}",
+      "description": "ID {{id}} · erstellt {{created}}",
+      "noAccount": "Kein Login-Konto erstellt",
+      "onlineNow": "Jetzt online",
+      "notConnected": "Nicht verbunden",
+      "notBound": "Nicht gebunden",
+      "bound": "Gebunden",
+      "telegramNotBound": "Telegram nicht gebunden",
+      "desktopOnline": "Desktop online",
+      "desktopOffline": "Desktop offline",
+      "roleLabel": "Rolle",
+      "roleUser": "Benutzer",
+      "roleAdmin": "Admin",
+      "statusLabel": "Status",
+      "planLabel": "Plan",
+      "planForever": "unbegrenzt",
+      "planUntil": "bis {{date}}",
+      "changeDuration": "Dauer ändern",
+      "languageLabel": "Sprache",
+      "languageNotSet": "Nicht festgelegt",
+      "preferredModelLabel": "Bevorzugtes Modell",
+      "preferredModelAuto": "Auto",
+      "reasoningLabel": "Reasoning",
+      "reasoningDefault": "Standard",
+      "lastDesktopKey": "Letzter Desktop-Schlüssel",
+      "desktopKeyNotUsed": "Nicht verwendet",
+      "connections": {
+        "title": "Verbindungen",
+        "description": "Anmeldemethoden und aktuelle Desktop-Verbindung",
+        "headers": {
+          "client": "Client",
+          "account": "Konto",
+          "state": "Status",
+          "activity": "Aktivität"
+        }
+      },
+      "usage": {
+        "title": "Nutzung",
+        "description": "Aktuelle akkumulierte Zähler ohne Gesprächsinhalt",
+        "stats": {
+          "weeklyQuota": "Wöchentliches Kontingent",
+          "quotaReset": "Kontingent-Reset",
+          "messages": "Nachrichten",
+          "userRequests": "Benutzeranfragen",
+          "assistantResponses": "Antworten des Assistenten",
+          "chats": "Chats",
+          "searchToday": "Suche heute",
+          "searchTotal": "Suche gesamt",
+          "imagesToday": "Bilder heute",
+          "imagesTotal": "Bilder gesamt",
+          "messageLength": "Nachrichtenlänge",
+          "lastMessage": "Letzte Nachricht"
+        }
+      },
+      "contextLimits": {
+        "title": "Kontextgrenzen",
+        "description": "Bereits für das Konto gespeicherte technische Werte",
+        "planLimit": "Planlimit",
+        "selectedContext": "Ausgewählter Kontext",
+        "documents": "Dokumente",
+        "documentsAuto": "Auto"
+      },
+      "ban": {
+        "banned": "Benutzer ist gesperrt",
+        "blockAccount": "Konto sperren",
+        "banHint": "Sperren widerruft die aktuellen Sitzungen des Benutzers",
+        "reasonPlaceholder": "Grund (optional)",
+        "ban": "Sperren",
+        "unban": "Entsperren"
+      },
+      "actions": {
+        "savingRole": "Rolle wird gespeichert…",
+        "roleSaved": "Rolle gespeichert",
+        "savingStatus": "Status wird gespeichert…",
+        "statusSaved": "Status gespeichert",
+        "savingPlan": "Plan wird gespeichert…",
+        "planSaved": "Plan und Limits aktualisiert",
+        "banInProgress": "Sperren läuft…",
+        "unbanInProgress": "Entsperren läuft…",
+        "userUnbanned": "Benutzer entsperrt und ausstehende Genehmigung",
+        "userBanned": "Benutzer gesperrt",
+        "error": "Fehler: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Nutzung nach Modell",
+        "description": "Für das aktuelle wöchentliche Fenster. Nicht durch Chat-Löschung beeinflusst.",
+        "loading": "Laden…",
+        "loadError": "Laden fehlgeschlagen: {{error}}",
+        "empty": "Noch keine Anfragen im aktuellen Fenster.",
+        "conditionalUnits": "bedingte Einheiten",
+        "tableHeaders": {
+          "model": "Modell",
+          "route": "Route",
+          "requests": "Anfragen",
+          "tokens": "Tokens",
+          "cacheHit": "Cache-Treffer",
+          "charged": "Berechnet"
+        },
+        "free": "kostenlos",
+        "aborted": "abgebrochen",
+        "freeTooltip": "kostenloses Modell"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Speicher",
+        "schedulerCondition": "Planer"
+      }
+    },
+    "planDuration": {
+      "title": "Plan {{plan}}",
+      "freeHint": "Der kostenlose Plan ist dauerhaft eingestellt.",
+      "durationHint": "Wie lange soll der Plan zugewiesen sein?",
+      "durationLabel": "Dauer",
+      "durationDay": "1 Tag",
+      "durationWeek": "1 Woche",
+      "durationMonth": "1 Monat",
+      "durationYear": "1 Jahr",
+      "forever": "Unbegrenzt",
+      "cancel": "Abbrechen",
+      "saving": "Speichern…",
+      "assign": "Zuweisen"
+    }
   }
 }
