@@ -8,6 +8,7 @@ export type IconName =
   | 'integrations'
   | 'services'
   | 'system'
+  | 'backups'
   | 'logs'
   | 'security'
   | 'logout'
@@ -59,6 +60,15 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <rect x="4" y="4" width="16" height="16" rx="2" />
       <path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+    </>
+  ),
+  backups: (
+    <>
+      <path d="M12 2L3 7l9 5 9-5-9-5Z" />
+      <path d="m3 17 9 5 9-5" />
+      <path d="m3 12 9 5 9-5" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 9v6M9 12h6" />
     </>
   ),
   logs: (

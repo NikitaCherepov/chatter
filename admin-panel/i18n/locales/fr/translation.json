@@ -681,7 +681,7 @@
     "servicesTitle": "Services",
     "servicesDesc": "Telegram, Voice et composants supplémentaires",
     "systemTitle": "Système",
-    "systemDesc": "Serveur, mises à jour et sauvegardes",
+    "systemDesc": "Serveur, surveillance et mises à jour",
     "logsTitle": "Journaux",
     "logsDesc": "Événements et erreurs de service",
     "securityTitle": "Sécurité",
@@ -689,7 +689,10 @@
     "mainNav": "Navigation principale",
     "logout": "Se déconnecter",
     "serverHealthy": "Le serveur est sain",
-    "serverNeedsCheck": "Nécessite une vérification"
+    "serverNeedsCheck": "Nécessite une vérification",
+    "backups": "Sauvegardes",
+    "backupsTitle": "Sauvegardes",
+    "backupsDesc": "Créer, importer, restaurer et planifier"
   },
   "security": {
     "adminData": "Données d'administration",

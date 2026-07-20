@@ -51,6 +51,60 @@ Path conventions in current code:
 - **Logs** — selectable live Docker logs.
 - **Security** — administrator credentials.
 
+## Internationalization (i18n)
+
+All UI text lives in translation dictionaries; no hardcoded strings appear in components. The panel supports 11 languages: `ru`, `en`, `de`, `es`, `fr`, `it`, `ja`, `ko`, `pl`, `pt-BR`, `zh-CN`.
+
+### How it works
+
+- **Runtime:** [`i18next`](https://www.i18next.com/) with [`react-i18next`](https://react.i18next.com/) hooks (`useTranslation`) in every component.
+- **Auto-detection:** `i18next-browser-languagedetector` picks the language from `navigator.language`. Falls back to Russian when the detected language is not in the supported list.
+- **Bundling:** All locale catalogs are imported at build time in [`i18n/index.ts`](./i18n/index.ts). Empty `{}` catalogs for untranslated languages simply fall through to the fallback.
+
+```
+admin-panel/i18n/
+  index.ts                  # i18next init + all locale imports
+  locales/
+    ru/translation.json     # Source dictionary (Russian)
+    en/translation.json     # English
+    de/translation.json     # …remaining locales filled by script
+    …
+```
+
+### Adding a new translation key
+
+1. Add the key to `locales/ru/translation.json` (source).
+2. Add the English value to `locales/en/translation.json`.
+3. Use `const { t } = useTranslation()` in the component and reference the key: `t('namespace.key')`.
+
+Key format: nested JSON objects, dot-separated in code (`overview.quickSetup.title`). Interpolation uses `{{variable}}` placeholders.
+
+### Translating to other languages
+
+The shared translation script at [`scripts/translate-i18n.mjs`](../scripts/translate-i18n.mjs) sends missing strings to an LLM API for translation:
+
+```bash
+# Single locale (ru → en by default)
+npm run i18n:translate:admin
+
+# All locales (en → every other language)
+npm run i18n:translate:admin:all
+
+# Dry-run (print missing keys without API calls)
+npm run i18n:translate:admin -- --dry-run
+
+# Everything (bot + desktop + api + notes + admin)
+npm run i18n:translate:all
+```
+
+The script requires an `.env.i18n` file with `I18N_TRANSLATE_API_KEY` (OpenAI or compatible endpoint). It preserves `{{placeholders}}`, URLs, and product names. Existing translations are never overwritten — only missing keys are translated.
+
+### Adding a new language
+
+1. Create `admin-panel/i18n/locales/<code>/translation.json` with `{}`.
+2. Import it and register it in [`i18n/index.ts`](./i18n/index.ts) (follow the existing import pattern).
+3. Run `npm run i18n:translate:admin -- --to <code>` to fill the catalog.
+
 ## Configuration and Secrets
 
 The browser never receives saved secret values. API responses return empty secret fields plus flags such as `hasApiKey`; leaving a secret input empty preserves the existing value.

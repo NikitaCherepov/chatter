@@ -12,6 +12,7 @@ import { PlaceholderPage } from '../components/pages/PlaceholderPage/Placeholder
 import { SecurityPage } from '../components/pages/SecurityPage/SecurityPage';
 import { ServicesPage } from '../components/pages/ServicesPage/ServicesPage';
 import { SystemPage } from '../components/pages/SystemPage/SystemPage';
+import { BackupsPage } from '../components/pages/BackupsPage/BackupsPage';
 import { UserDetailPage } from '../components/pages/UserDetailPage/UserDetailPage';
 import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { AccessKeysPage } from '../components/pages/AccessKeysPage/AccessKeysPage';
@@ -235,6 +236,7 @@ export default function Home() {
       {section === 'accessKeys' && <AccessKeysPage />}
       {section === 'limits' && <PlanLimitsPage />}
       {section === 'system' && <SystemPage />}
+      {section === 'backups' && <BackupsPage />}
       {section === 'logs' && <LogsPage />}
       {section === 'security' && (
         <SecurityPage

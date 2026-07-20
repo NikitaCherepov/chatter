@@ -681,7 +681,7 @@
     "servicesTitle": "サービス",
     "servicesDesc": "Telegram、Voice、その他コンポーネント",
     "systemTitle": "システム",
-    "systemDesc": "サーバー、アップデート、バックアップ",
+    "systemDesc": "サーバー、監視、アップデート",
     "logsTitle": "ログ",
     "logsDesc": "サービスのイベントとエラー",
     "securityTitle": "セキュリティ",
@@ -689,7 +689,10 @@
     "mainNav": "メインナビゲーション",
     "logout": "ログアウト",
     "serverHealthy": "サーバーは正常です",
-    "serverNeedsCheck": "確認が必要です"
+    "serverNeedsCheck": "確認が必要です",
+    "backups": "バックアップ",
+    "backupsTitle": "バックアップ",
+    "backupsDesc": "作成、インポート、復元、スケジュール"
   },
   "security": {
     "adminData": "管理者データ",

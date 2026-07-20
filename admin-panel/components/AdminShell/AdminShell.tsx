@@ -14,6 +14,7 @@ export type AdminSection =
   | 'integrations'
   | 'services'
   | 'system'
+  | 'backups'
   | 'logs'
   | 'security';
 type NavItem = { id: AdminSection; label: string; icon: IconName };
@@ -49,6 +50,7 @@ export function AdminShell({
 
   const secondaryItems: NavItem[] = [
     { id: 'system', label: t('nav.system'), icon: 'system' },
+    { id: 'backups', label: t('nav.backups'), icon: 'backups' },
     { id: 'logs', label: t('nav.logs'), icon: 'logs' },
     { id: 'security', label: t('nav.security'), icon: 'security' },
   ];
@@ -62,6 +64,7 @@ export function AdminShell({
     integrations: [t('nav.integrationsTitle'), t('nav.integrationsDesc')],
     services: [t('nav.servicesTitle'), t('nav.servicesDesc')],
     system: [t('nav.systemTitle'), t('nav.systemDesc')],
+    backups: [t('nav.backupsTitle'), t('nav.backupsDesc')],
     logs: [t('nav.logsTitle'), t('nav.logsDesc')],
     security: [t('nav.securityTitle'), t('nav.securityDesc')],
   };

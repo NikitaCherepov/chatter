@@ -2044,7 +2044,10 @@ export const backfillMessageTokens = (batchSize = 500): number => {
           reasoningTokens = countTokens(row.reasoning_content);
         }
       }
-      updateStmt.run(tokenCount, reasoningTokens, row.id);
+      // Zero is the "not processed yet" marker. Empty legacy messages may
+      // legitimately count to zero, so keep a minimum sentinel value to avoid
+      // selecting the same rows forever during startup backfill.
+      updateStmt.run(Math.max(1, tokenCount), reasoningTokens, row.id);
     }
   });
   tx();

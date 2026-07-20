@@ -681,7 +681,7 @@
     "servicesTitle": "서비스",
     "servicesDesc": "Telegram, Voice 및 추가 구성 요소",
     "systemTitle": "시스템",
-    "systemDesc": "서버, 업데이트 및 백업",
+    "systemDesc": "서버, 모니터링 및 업데이트",
     "logsTitle": "로그",
     "logsDesc": "서비스 이벤트 및 오류",
     "securityTitle": "보안",
@@ -689,7 +689,10 @@
     "mainNav": "주 메뉴",
     "logout": "로그아웃",
     "serverHealthy": "서버 상태 양호",
-    "serverNeedsCheck": "확인 필요"
+    "serverNeedsCheck": "확인 필요",
+    "backups": "백업",
+    "backupsTitle": "백업",
+    "backupsDesc": "생성, 가져오기, 복원 및 예약"
   },
   "security": {
     "adminData": "관리자 데이터",

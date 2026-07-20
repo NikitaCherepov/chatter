@@ -681,7 +681,7 @@
     "servicesTitle": "Dienste",
     "servicesDesc": "Telegram, Voice und zusätzliche Komponenten",
     "systemTitle": "System",
-    "systemDesc": "Server, Updates und Backups",
+    "systemDesc": "Server, Monitoring und Updates",
     "logsTitle": "Protokolle",
     "logsDesc": "Ereignisse und Fehler der Dienste",
     "securityTitle": "Sicherheit",
@@ -689,7 +689,10 @@
     "mainNav": "Hauptnavigation",
     "logout": "Abmelden",
     "serverHealthy": "Server ist gesund",
-    "serverNeedsCheck": "Muss überprüft werden"
+    "serverNeedsCheck": "Muss überprüft werden",
+    "backups": "Backups",
+    "backupsTitle": "Backups",
+    "backupsDesc": "Erstellen, importieren, wiederherstellen und planen"
   },
   "security": {
     "adminData": "Admin-Daten",

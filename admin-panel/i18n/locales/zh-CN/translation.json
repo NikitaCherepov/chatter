@@ -681,7 +681,7 @@
     "servicesTitle": "服务",
     "servicesDesc": "Telegram、语音及其他组件",
     "systemTitle": "系统",
-    "systemDesc": "服务器、更新和备份",
+    "systemDesc": "服务器、监控和更新",
     "logsTitle": "日志",
     "logsDesc": "服务事件和错误",
     "securityTitle": "安全",
@@ -689,7 +689,10 @@
     "mainNav": "主导航",
     "logout": "退出登录",
     "serverHealthy": "服务器运行正常",
-    "serverNeedsCheck": "需要检查"
+    "serverNeedsCheck": "需要检查",
+    "backups": "备份",
+    "backupsTitle": "备份",
+    "backupsDesc": "创建、导入、恢复和计划"
   },
   "security": {
     "adminData": "管理员数据",
