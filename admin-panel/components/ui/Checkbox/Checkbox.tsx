@@ -11,14 +11,14 @@ type Props = {
 };
 
 /**
- * Переиспользуемый чекбокс.
+ * Reusable checkbox.
  *
- * Стили 1-в-1 с desktop-app/src/renderer/components/Checkbox.tsx —
- * нативный <input type="checkbox"> 16x16 с accent-color: var(--accent).
+ * Styles mirror desktop-app/src/renderer/components/Checkbox.tsx 1:1 —
+ * native <input type="checkbox"> 16x16 with accent-color: var(--accent).
  *
- * В админке есть отдельный компонент Toggle (iOS-like switch) для
- * boolean-флагов в формах. Checkbox подходит для карточек выбора,
- * многоселектов и случаев, где нужна компактная классическая галочка.
+ * The admin panel already has a separate Toggle component (iOS-like switch)
+ * for boolean flags inside forms. Checkbox is suited for selection cards,
+ * multi-select lists, and anywhere a compact classic checkmark is needed.
  */
 export function Checkbox({ checked, onChange, label, disabled }: Props) {
   return (

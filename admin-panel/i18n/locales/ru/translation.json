@@ -62,6 +62,11 @@
     "coefficientLoadError": "Не удалось загрузить коэффициенты",
     "coefficientSaved": "Коэффициент сохранён"
   },
+  "ui": {
+    "search": "Поиск…",
+    "nothingFound": "Ничего не найдено",
+    "auto": "авто"
+  },
   "models": {
     "auto": {
       "subtitle": "Основные цепочки PRO и LITE"

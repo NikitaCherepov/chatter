@@ -62,6 +62,11 @@
     "coefficientLoadError": "Failed to load coefficients",
     "coefficientSaved": "Coefficient saved"
   },
+  "ui": {
+    "search": "Search…",
+    "nothingFound": "Nothing found",
+    "auto": "auto"
+  },
   "models": {
     "auto": {
       "subtitle": "PRO and LITE fallback chains"

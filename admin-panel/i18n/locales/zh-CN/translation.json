@@ -702,5 +702,10 @@
     "newPassword": "新密码",
     "passwordHint": "至少12个字符",
     "changeData": "更改数据"
+  },
+  "ui": {
+    "search": "搜索…",
+    "nothingFound": "未找到任何内容",
+    "auto": "自动"
   }
 }

@@ -702,5 +702,10 @@
     "newPassword": "새 비밀번호",
     "passwordHint": "최소 12자",
     "changeData": "데이터 변경"
+  },
+  "ui": {
+    "search": "검색…",
+    "nothingFound": "결과 없음",
+    "auto": "자동"
   }
 }

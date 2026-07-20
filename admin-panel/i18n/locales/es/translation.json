@@ -702,5 +702,10 @@
     "newPassword": "Nueva contraseña",
     "passwordHint": "Al menos 12 caracteres",
     "changeData": "Cambiar datos"
+  },
+  "ui": {
+    "search": "Buscar…",
+    "nothingFound": "No se encontró nada",
+    "auto": "automático"
   }
 }

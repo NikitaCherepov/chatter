@@ -3,16 +3,16 @@
 import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
 import styles from './Select.module.css';
 
-/** Ограниченный набор цветов бейджа — каждый берётся из CSS-переменной. */
+/** Limited set of badge colors — each comes from a CSS variable. */
 export type BadgeColor = 'success' | 'error' | 'info' | 'warning';
 
-/** Бейдж для option: если нет icon — рисуется текст в квадратных скобках. */
+/** Badge for an option: if no icon is provided — the text is rendered in [brackets]. */
 export type SelectBadge = {
-  /** Текст бейджа (для title, а при отсутствии icon — для отображения в [скобках]) */
+  /** Badge text (used for title, and for [bracketed] display when icon is missing) */
   text: string;
-  /** Цвет. По умолчанию 'success' */
+  /** Color. Defaults to 'success' */
   color?: BadgeColor;
-  /** Кастомная иконка. Если не передана — рисуется [text] */
+  /** Custom icon. If not provided — [text] is rendered */
   icon?: ReactNode;
 };
 
@@ -36,13 +36,14 @@ type Props = {
 };
 
 /**
- * Переиспользуемый Select.
+ * Reusable Select.
  *
- * Стили 1-в-1 с desktop-app/src/renderer/components/Select.tsx —
- * синхронизирован с глобальными CSS-переменными из globals.css.
+ * Styles mirror desktop-app/src/renderer/components/Select.tsx 1:1 —
+ * synced with the global CSS variables from globals.css.
  *
- * Локализацию caller передаёт через пропсы (placeholder/searchPlaceholder/emptyText),
- * чтобы не привязывать компонент к конкретному i18n-namespace.
+ * Localization is passed by the caller via props
+ * (placeholder/searchPlaceholder/emptyText), so the component is not
+ * tied to any specific i18n namespace.
  */
 export function Select({
   options,

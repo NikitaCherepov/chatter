@@ -12,22 +12,22 @@ type Props = {
   options: RadioOption[];
   value: string;
   onChange: (value: string) => void;
-  /** Иконка внутри триггера (по умолчанию — иконка «слоёв»). */
+  /** Icon inside the trigger (default — "layers" icon). */
   icon?: ReactNode;
   className?: string;
 };
 
 /**
- * Переиспользуемый RadioGroup в виде компактного dropdown-триггера.
+ * Reusable RadioGroup rendered as a compact dropdown trigger.
  *
- * Стили 1-в-1 с desktop-app/src/renderer/components/RadioGroup.tsx.
+ * Styles mirror desktop-app/src/renderer/components/RadioGroup.tsx 1:1.
  *
- * В десктопе используется на карте (MapTool) — выбор слоя карты.
- * Цветовая схема «карточная» (голубой фон #e8f0fe, синий текст #1a73 e8)
- * — намеренно отличается от формы-стиля, т.к. это «плавающая» кнопка
- * поверх контента (карта, диаграммы и т.д.). Управляется через
- * CSS-переменные --rg-bg / --rg-hover / --rg-accent / --rg-shadow
- * в .root, при желании можно переопределить.
+ * In the desktop app it's used on the map (MapTool) to pick the map layer.
+ * The "card" color scheme (blue background #e8f0fe, blue text #1a73e8) is
+ * intentionally different from form-style controls — this is a floating
+ * button meant to sit on top of content (map, charts, etc.). Colors are
+ * exposed via the --rg-bg / --rg-hover / --rg-accent / --rg-shadow CSS
+ * variables on .root and can be overridden if needed.
  */
 export function RadioGroup({ options, value, onChange, icon, className }: Props) {
   const [open, setOpen] = useState(false);

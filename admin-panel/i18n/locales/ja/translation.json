@@ -702,5 +702,10 @@
     "newPassword": "新しいパスワード",
     "passwordHint": "12文字以上",
     "changeData": "データを変更"
+  },
+  "ui": {
+    "search": "検索…",
+    "nothingFound": "見つかりませんでした",
+    "auto": "自動"
   }
 }

@@ -15,19 +15,19 @@ type NumericSliderProps = CommonProps & {
   step: number;
   value: number | null;
   onChange: (value: number | null) => void;
-  /** Вызывается при отпускании ползунка / Enter / Space — удобно для commit в API. */
+  /** Called on slider release / Enter / Space — handy for committing to the API. */
   onCommit?: () => void;
-  /** Кастомное форматирование значения в правой части. */
+  /** Custom formatting of the value shown on the right. */
   formatValue?: (v: number) => string;
-  /** Текст-плейсхолдер для значения null (например, «авто»). */
+  /** Placeholder text for the null value (e.g. "auto"). */
   nullLabel?: string;
 };
 
 type DiscreteSliderProps = CommonProps & {
   mode: 'discrete';
-  /** Упорядоченный список значений (null разрешён — обычно как «auto»). */
+  /** Ordered list of values (null is allowed — typically used as "auto"). */
   values: (string | null)[];
-  /** Подписи по значению. null → nullLabel. */
+  /** Labels keyed by value. null falls back to nullLabel. */
   labels: Record<string, string>;
   value: string | null;
   onChange: (value: string | null) => void;
@@ -38,19 +38,21 @@ type DiscreteSliderProps = CommonProps & {
 export type SliderProps = NumericSliderProps | DiscreteSliderProps;
 
 /**
- * Переиспользуемый слайдер.
+ * Reusable slider.
  *
- * Стили 1-в-1 с desktop-app/src/renderer/components/Slider.tsx.
+ * Styles mirror desktop-app/src/renderer/components/Slider.tsx 1:1.
  *
- * Два режима:
- *  - `numeric`  —  Label | ═══●═══ value    (например, temperature 0..2)
- *  - `discrete` —  Label ═══●═══ value       (например, reasoning level: low/medium/high)
+ * Two modes:
+ *  - `numeric`  —  Label | ═══●═══ value    (e.g. temperature 0..2)
+ *  - `discrete` —  Label ═══●═══ value       (e.g. reasoning level: low/medium/high)
  *
- * `onCommit` вызывается при onMouseUp/onTouchEnd/Enter/Space —
- * удобно для optimistic-save в админке (не спамить API при каждом изменении).
+ * `onCommit` is called on onMouseUp/onTouchEnd/Enter/Space —
+ * convenient for optimistic saves in the admin panel (don't spam the API
+ * on every change).
  *
- * В десктопе `nullLabel` жёстко завязан на i18n-ключ `settings.reasoning.autoLower`.
- * В админке локализацию передаёт caller через пропс `nullLabel` (default: «авто»).
+ * In the desktop app `nullLabel` was hardcoded to the i18n key
+ * `settings.reasoning.autoLower`. Here the caller passes the localized
+ * string via the `nullLabel` prop (default: "авто").
  */
 export function Slider(props: SliderProps) {
   if (props.mode === 'discrete') {
