@@ -135,22 +135,22 @@
         "description": "Vector memory",
         "group": "Memory"
       },
-      "webSearch": {
+      "web-search": {
         "name": "Web Search",
         "description": "Search the internet",
         "group": "Internet"
       },
-      "webReader": {
+      "web-reader": {
         "name": "Web Reader",
         "description": "Read and process web pages",
         "group": "Internet"
       },
-      "cloudTts": {
+      "cloud-tts": {
         "name": "Cloud TTS",
         "description": "Cartesia cloud voices",
         "group": "Media"
       },
-      "imageGeneration": {
+      "image-generation": {
         "name": "Image Generation",
         "description": "Generate images via external API",
         "group": "Media"

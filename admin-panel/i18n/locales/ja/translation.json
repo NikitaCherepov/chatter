@@ -58,7 +58,9 @@
     "sectionReady": "セクション準備完了",
     "savingSettings": "設定を保存してコンテナを起動中…",
     "settingsApplied": "設定が適用されました。",
-    "changedRelogin": "変更されました。再度ログインしてください。"
+    "changedRelogin": "変更されました。再度ログインしてください。",
+    "coefficientLoadError": "係数の読み込みに失敗しました",
+    "coefficientSaved": "係数が保存されました"
   },
   "models": {
     "auto": {
@@ -149,6 +151,26 @@
         "group": "メディア"
       },
       "imageGeneration": {
+        "name": "画像生成",
+        "description": "外部API経由で画像を生成",
+        "group": "メディア"
+      },
+      "web-search": {
+        "name": "ウェブ検索",
+        "description": "インターネットを検索",
+        "group": "インターネット"
+      },
+      "web-reader": {
+        "name": "ウェブリーダー",
+        "description": "ウェブページの読み取りと処理",
+        "group": "インターネット"
+      },
+      "cloud-tts": {
+        "name": "クラウドTTS",
+        "description": "Cartesiaクラウド音声",
+        "group": "メディア"
+      },
+      "image-generation": {
         "name": "画像生成",
         "description": "外部API経由で画像を生成",
         "group": "メディア"

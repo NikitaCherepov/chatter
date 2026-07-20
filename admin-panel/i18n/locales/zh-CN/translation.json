@@ -58,7 +58,9 @@
     "sectionReady": "部分就绪",
     "savingSettings": "正在保存设置并启动容器…",
     "settingsApplied": "设置已应用。",
-    "changedRelogin": "已更改。请重新登录。"
+    "changedRelogin": "已更改。请重新登录。",
+    "coefficientLoadError": "加载系数失败",
+    "coefficientSaved": "系数已保存"
   },
   "models": {
     "auto": {
@@ -149,6 +151,26 @@
         "group": "媒体"
       },
       "imageGeneration": {
+        "name": "图像生成",
+        "description": "通过外部API生成图像",
+        "group": "媒体"
+      },
+      "web-search": {
+        "name": "网页搜索",
+        "description": "搜索互联网",
+        "group": "互联网"
+      },
+      "web-reader": {
+        "name": "网页阅读器",
+        "description": "读取并处理网页",
+        "group": "互联网"
+      },
+      "cloud-tts": {
+        "name": "云端TTS",
+        "description": "Cartesia云端语音",
+        "group": "媒体"
+      },
+      "image-generation": {
         "name": "图像生成",
         "description": "通过外部API生成图像",
         "group": "媒体"

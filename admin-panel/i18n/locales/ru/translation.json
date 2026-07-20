@@ -135,22 +135,22 @@
         "description": "Векторная память",
         "group": "Память"
       },
-      "webSearch": {
+      "web-search": {
         "name": "Web Search",
         "description": "Поиск информации в интернете",
         "group": "Интернет"
       },
-      "webReader": {
+      "web-reader": {
         "name": "Web Reader",
         "description": "Чтение и обработка веб-страниц",
         "group": "Интернет"
       },
-      "cloudTts": {
+      "cloud-tts": {
         "name": "Cloud TTS",
         "description": "Облачные голоса Cartesia",
         "group": "Медиа"
       },
-      "imageGeneration": {
+      "image-generation": {
         "name": "Генерация изображений",
         "description": "Создание изображений через внешний API",
         "group": "Медиа"

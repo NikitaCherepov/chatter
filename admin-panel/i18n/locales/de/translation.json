@@ -58,7 +58,9 @@
     "sectionReady": "Bereit",
     "savingSettings": "Einstellungen werden gespeichert und Container gestartet…",
     "settingsApplied": "Einstellungen übernommen.",
-    "changedRelogin": "Geändert. Bitte erneut anmelden."
+    "changedRelogin": "Geändert. Bitte erneut anmelden.",
+    "coefficientLoadError": "Fehler beim Laden der Koeffizienten",
+    "coefficientSaved": "Koeffizient gespeichert"
   },
   "models": {
     "auto": {
@@ -149,6 +151,26 @@
         "group": "Medien"
       },
       "imageGeneration": {
+        "name": "Bildgenerierung",
+        "description": "Bilder über externe API generieren",
+        "group": "Medien"
+      },
+      "web-search": {
+        "name": "Websuche",
+        "description": "Das Internet durchsuchen",
+        "group": "Internet"
+      },
+      "web-reader": {
+        "name": "Web-Reader",
+        "description": "Webseiten lesen und verarbeiten",
+        "group": "Internet"
+      },
+      "cloud-tts": {
+        "name": "Cloud TTS",
+        "description": "Cartesia Cloud-Stimmen",
+        "group": "Medien"
+      },
+      "image-generation": {
         "name": "Bildgenerierung",
         "description": "Bilder über externe API generieren",
         "group": "Medien"

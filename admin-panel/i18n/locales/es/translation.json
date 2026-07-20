@@ -58,7 +58,9 @@
     "sectionReady": "Sección lista",
     "savingSettings": "Guardando ajustes e iniciando contenedores…",
     "settingsApplied": "Ajustes aplicados.",
-    "changedRelogin": "Cambiado. Inicie sesión de nuevo."
+    "changedRelogin": "Cambiado. Inicie sesión de nuevo.",
+    "coefficientLoadError": "Error al cargar los coeficientes",
+    "coefficientSaved": "Coeficiente guardado"
   },
   "models": {
     "auto": {
@@ -149,6 +151,26 @@
         "group": "Medios"
       },
       "imageGeneration": {
+        "name": "Generación de imágenes",
+        "description": "Generar imágenes a través de API externa",
+        "group": "Medios"
+      },
+      "web-search": {
+        "name": "Búsqueda web",
+        "description": "Buscar en internet",
+        "group": "Internet"
+      },
+      "web-reader": {
+        "name": "Lector web",
+        "description": "Leer y procesar páginas web",
+        "group": "Internet"
+      },
+      "cloud-tts": {
+        "name": "Cloud TTS",
+        "description": "Voces en la nube de Cartesia",
+        "group": "Medios"
+      },
+      "image-generation": {
         "name": "Generación de imágenes",
         "description": "Generar imágenes a través de API externa",
         "group": "Medios"

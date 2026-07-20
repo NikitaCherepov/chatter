@@ -58,7 +58,9 @@
     "sectionReady": "섹션 준비 완료",
     "savingSettings": "설정 저장 및 컨테이너 시작 중…",
     "settingsApplied": "설정이 적용되었습니다.",
-    "changedRelogin": "변경되었습니다. 다시 로그인하세요."
+    "changedRelogin": "변경되었습니다. 다시 로그인하세요.",
+    "coefficientLoadError": "계수 로드 실패",
+    "coefficientSaved": "계수 저장됨"
   },
   "models": {
     "auto": {
@@ -149,6 +151,26 @@
         "group": "미디어"
       },
       "imageGeneration": {
+        "name": "이미지 생성",
+        "description": "외부 API를 통해 이미지 생성",
+        "group": "미디어"
+      },
+      "web-search": {
+        "name": "웹 검색",
+        "description": "인터넷 검색",
+        "group": "인터넷"
+      },
+      "web-reader": {
+        "name": "웹 리더",
+        "description": "웹 페이지 읽기 및 처리",
+        "group": "인터넷"
+      },
+      "cloud-tts": {
+        "name": "클라우드 TTS",
+        "description": "Cartesia 클라우드 음성",
+        "group": "미디어"
+      },
+      "image-generation": {
         "name": "이미지 생성",
         "description": "외부 API를 통해 이미지 생성",
         "group": "미디어"

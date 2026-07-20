@@ -58,7 +58,9 @@
     "sectionReady": "Sekcja gotowa",
     "savingSettings": "Zapisywanie ustawień i uruchamianie kontenerów…",
     "settingsApplied": "Ustawienia zastosowane.",
-    "changedRelogin": "Zmieniono. Zaloguj się ponownie."
+    "changedRelogin": "Zmieniono. Zaloguj się ponownie.",
+    "coefficientLoadError": "Nie udało się załadować współczynników",
+    "coefficientSaved": "Współczynnik zapisany"
   },
   "models": {
     "auto": {
@@ -149,6 +151,26 @@
         "group": "Media"
       },
       "imageGeneration": {
+        "name": "Generowanie obrazów",
+        "description": "Generuj obrazy przez zewnętrzne API",
+        "group": "Media"
+      },
+      "web-search": {
+        "name": "Wyszukiwanie internetowe",
+        "description": "Przeszukaj internet",
+        "group": "Internet"
+      },
+      "web-reader": {
+        "name": "Czytnik stron internetowych",
+        "description": "Czytaj i przetwarzaj strony internetowe",
+        "group": "Internet"
+      },
+      "cloud-tts": {
+        "name": "Cloud TTS",
+        "description": "Głosy chmurowe Cartesia",
+        "group": "Media"
+      },
+      "image-generation": {
         "name": "Generowanie obrazów",
         "description": "Generuj obrazy przez zewnętrzne API",
         "group": "Media"
