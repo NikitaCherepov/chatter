@@ -112,5 +112,109 @@
       "apiKeyPlaceholderExisting": "Leave empty to keep unchanged",
       "apiKeyPlaceholderNew": "Paste API key"
     }
+  },
+  "integrations": {
+    "title": "Connected capabilities",
+    "subtitle": "Open an integration to configure keys and service parameters.",
+    "statusConfigured": "Connected",
+    "statusNotConfigured": "Not configured",
+    "back": "Back",
+    "modelsLink": {
+      "label": "Models",
+      "description": "OpenAI-compatible API"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "Vector memory",
+        "group": "Memory"
+      },
+      "webSearch": {
+        "name": "Web Search",
+        "description": "Search the internet",
+        "group": "Internet"
+      },
+      "webReader": {
+        "name": "Web Reader",
+        "description": "Read and process web pages",
+        "group": "Internet"
+      },
+      "cloudTts": {
+        "name": "Cloud TTS",
+        "description": "Cartesia cloud voices",
+        "group": "Media"
+      },
+      "imageGeneration": {
+        "name": "Image Generation",
+        "description": "Generate images via external API",
+        "group": "Media"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "Paste API key",
+      "hint": "Leave empty to keep the current key",
+      "placeholderExisting": "Leave empty to keep unchanged"
+    },
+    "pinecone": {
+      "pageDescription": "Chatter vector memory. Pinecone stores data, and the embedding model turns text into vectors.",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "Create an index in Pinecone and provide its name along with the API key.",
+      "apiKeyLabel": "Pinecone API key",
+      "indexNameLabel": "Index name",
+      "embedding": {
+        "sectionTitle": "Embedding model",
+        "sectionIntro": "A separate OpenAI-compatible API that turns text into vectors for Pinecone.",
+        "apiUrlLabel": "API URL",
+        "modelLabel": "Model",
+        "apiKeyLabel": "Embedding provider API key"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "Search the internet for up-to-date information via Tavily.",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "Used by the search tool. Daily user limits are configured separately.",
+      "apiUrlLabel": "API URL",
+      "apiKeyLabel": "Tavily API key"
+    },
+    "webReader": {
+      "pageDescription": "Open and clean web page content via Browserless.",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "Backend uses Browserless BQL to open a page and extract its text.",
+      "apiUrlLabel": "Browserless URL",
+      "apiKeyLabel": "Browserless token",
+      "tokenPlaceholder": "Paste Browserless token"
+    },
+    "cloudTts": {
+      "pageDescription": "Cloud TTS and Cartesia voice catalog.",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "The key is stored server-side only and used by the backend for voice listing and audio generation.",
+      "apiKeyLabel": "Cartesia API key",
+      "modelLabel": "Model"
+    },
+    "imageGeneration": {
+      "pageTitle": "Image Generation",
+      "pageDescription": "Currently only OpenRouter is supported. GPT Image, Nano Banana, and Grok models connect through its unified Image API.",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "A dedicated key is used only for image generation and is stored on the server.",
+      "apiUrlLabel": "API URL",
+      "apiUrlHint": "Other providers are not yet supported",
+      "apiKeyLabel": "OpenRouter API key",
+      "modelLabel": "Model",
+      "modelHint": "Enter the OpenRouter model slug and check available parameters",
+      "modelAvailable": "available",
+      "resolutionLabel": "Maximum resolution",
+      "resolutionHint": "Parameter supported by the selected model",
+      "qualityLabel": "Quality",
+      "qualityHint": "Higher quality means more expensive generation",
+      "parametersHint": "Check the model to configure supported parameters.",
+      "checkButton": "Check",
+      "checking": "Checking\u2026",
+      "checkError": "Failed to check model",
+      "capabilityResolution": "resolution",
+      "capabilityQuality": "quality",
+      "capabilityReferences": "references",
+      "capabilitySupported": "supported",
+      "capabilityNotClaimed": "not claimed"
+    }
   }
 }

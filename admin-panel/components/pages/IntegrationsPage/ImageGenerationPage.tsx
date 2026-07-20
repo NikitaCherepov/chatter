@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import type { ImageGenerationSettings } from '../../../lib/types';
 import { FormField } from '../../ui/FormField/FormField';
@@ -22,14 +23,14 @@ type ModelCheck = {
   parameters: Record<string, CapabilityDescriptor>;
 };
 
-function describeCapability(result: ModelCheck) {
+function describeCapability(result: ModelCheck, t: (key: string) => string) {
   const resolution = result.parameters.resolution?.values?.join(', ');
   const quality = result.parameters.quality?.values?.join(', ');
   const references = result.supportedParameters.includes('input_references');
   const details = [
-    resolution ? `разрешение: ${resolution}` : null,
-    quality ? `качество: ${quality}` : null,
-    `референсы: ${references ? 'поддерживаются' : 'не заявлены'}`,
+    resolution ? `${t('integrations.imageGeneration.capabilityResolution')}: ${resolution}` : null,
+    quality ? `${t('integrations.imageGeneration.capabilityQuality')}: ${quality}` : null,
+    `${t('integrations.imageGeneration.capabilityReferences')}: ${references ? t('integrations.imageGeneration.capabilitySupported') : t('integrations.imageGeneration.capabilityNotClaimed')}`,
   ].filter(Boolean);
 
   return details.join(' · ');
@@ -50,6 +51,7 @@ export function ImageGenerationPage({
   onBack: () => void;
   onSave: (event: FormEvent) => void;
 }) {
+  const { t } = useTranslation();
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ModelCheck | null>(null);
   const [checkError, setCheckError] = useState('');
@@ -77,7 +79,7 @@ export function ImageGenerationPage({
       if (qualities.length > 0 && !qualities.includes(settings.quality)) patch.quality = 'auto';
       onChange(patch);
     } catch (error) {
-      setCheckError(error instanceof Error ? error.message : 'Не удалось проверить модель');
+      setCheckError(error instanceof Error ? error.message : t('integrations.imageGeneration.checkError'));
     } finally {
       setChecking(false);
     }
@@ -85,8 +87,8 @@ export function ImageGenerationPage({
 
   return (
     <IntegrationDetailPage
-      title="Генерация изображений"
-      description="Пока поддерживается только OpenRouter. Модели GPT Image, Nano Banana и Grok подключаются через его единый Image API."
+      title={t('integrations.imageGeneration.pageTitle')}
+      description={t('integrations.imageGeneration.pageDescription')}
       saving={saving}
       saveState={saveState}
       onBack={onBack}
@@ -94,25 +96,25 @@ export function ImageGenerationPage({
     >
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
-          <h3>OpenRouter</h3>
-          <p>Отдельный ключ используется только для генерации изображений и хранится на сервере.</p>
+          <h3>{t('integrations.imageGeneration.sectionTitle')}</h3>
+          <p>{t('integrations.imageGeneration.sectionIntro')}</p>
         </div>
         <div className={styles.fields}>
-          <FormField label="Адрес API" hint="Другие провайдеры пока не поддерживаются">
+          <FormField label={t('integrations.imageGeneration.apiUrlLabel')} hint={t('integrations.imageGeneration.apiUrlHint')}>
             <input type="url" value={OPENROUTER_BASE_URL} readOnly />
           </FormField>
           <IntegrationSecretField
-            label="OpenRouter API-ключ"
+            label={t('integrations.imageGeneration.apiKeyLabel')}
             value={settings.apiKey}
             configured={settings.hasApiKey}
             onChange={(apiKey) => onChange({ apiKey })}
             required
           />
           <FormField
-            label="Модель"
-            hint="Укажи OpenRouter slug модели и проверь доступные параметры"
+            label={t('integrations.imageGeneration.modelLabel')}
+            hint={t('integrations.imageGeneration.modelHint')}
             state={
-              checkResult ? <span className={styles.checkSuccess}>доступна</span> : undefined
+              checkResult ? <span className={styles.checkSuccess}>{t('integrations.imageGeneration.modelAvailable')}</span> : undefined
             }
           >
             <div className={styles.inputWithAction}>
@@ -132,16 +134,16 @@ export function ImageGenerationPage({
                 onClick={checkModel}
                 disabled={checking || !settings.model.trim() || (!settings.apiKey && !settings.hasApiKey)}
               >
-                {checking ? 'Проверяем…' : 'Проверить'}
+                {checking ? t('integrations.imageGeneration.checking') : t('integrations.imageGeneration.checkButton')}
               </button>
             </div>
-            {checkResult && <span className={styles.checkDetails}>{describeCapability(checkResult)}</span>}
+            {checkResult && <span className={styles.checkDetails}>{describeCapability(checkResult, t)}</span>}
             {checkError && <span className={styles.checkError}>{checkError}</span>}
           </FormField>
           {supportsResolution && (
             <FormField
-              label="Максимальное разрешение"
-              hint="Параметр поддерживается выбранной моделью"
+              label={t('integrations.imageGeneration.resolutionLabel')}
+              hint={t('integrations.imageGeneration.resolutionHint')}
             >
               <select
                 value={settings.maxResolution}
@@ -157,7 +159,7 @@ export function ImageGenerationPage({
             </FormField>
           )}
           {supportsQuality && (
-            <FormField label="Качество" hint="Чем выше качество, тем дороже генерация">
+            <FormField label={t('integrations.imageGeneration.qualityLabel')} hint={t('integrations.imageGeneration.qualityHint')}>
               <select
                 value={settings.quality}
                 onChange={(event) =>
@@ -172,7 +174,7 @@ export function ImageGenerationPage({
             </FormField>
           )}
           {settings.supportedParameters.length === 0 && (
-            <p className={styles.parametersHint}>Проверь модель, чтобы настроить поддерживаемые параметры.</p>
+            <p className={styles.parametersHint}>{t('integrations.imageGeneration.parametersHint')}</p>
           )}
         </div>
       </section>

@@ -1,4 +1,5 @@
 import type { FormEvent, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
 import { Icon } from '../../icons/icons';
 import styles from './IntegrationsPage.module.css';
@@ -20,10 +21,11 @@ export function IntegrationDetailPage({
   onSave: (event: FormEvent) => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <form className={styles.detailPage} onSubmit={onSave}>
       <header className={styles.detailHeader}>
-        <button className={styles.backButton} type="button" onClick={onBack} aria-label="Назад">
+        <button className={styles.backButton} type="button" onClick={onBack} aria-label={t('integrations.back')}>
           <Icon name="arrow" />
         </button>
         <div>

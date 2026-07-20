@@ -112,5 +112,109 @@
       "apiKeyPlaceholderExisting": "비워두면 변경되지 않습니다",
       "apiKeyPlaceholderNew": "API 키 붙여넣기"
     }
+  },
+  "integrations": {
+    "title": "연결된 기능",
+    "subtitle": "통합을 열어 키와 서비스 매개변수를 구성하세요.",
+    "statusConfigured": "연결됨",
+    "statusNotConfigured": "구성되지 않음",
+    "back": "뒤로",
+    "modelsLink": {
+      "label": "모델",
+      "description": "OpenAI 호환 API"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "벡터 메모리",
+        "group": "메모리"
+      },
+      "webSearch": {
+        "name": "웹 검색",
+        "description": "인터넷 검색",
+        "group": "인터넷"
+      },
+      "webReader": {
+        "name": "웹 리더",
+        "description": "웹 페이지 읽기 및 처리",
+        "group": "인터넷"
+      },
+      "cloudTts": {
+        "name": "클라우드 TTS",
+        "description": "Cartesia 클라우드 음성",
+        "group": "미디어"
+      },
+      "imageGeneration": {
+        "name": "이미지 생성",
+        "description": "외부 API를 통해 이미지 생성",
+        "group": "미디어"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "API 키 붙여넣기",
+      "hint": "비워두면 현재 키 유지",
+      "placeholderExisting": "비워두면 변경되지 않음"
+    },
+    "pinecone": {
+      "pageDescription": "채터 벡터 메모리. Pinecone은 데이터를 저장하고, 임베딩 모델은 텍스트를 벡터로 변환합니다.",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "Pinecone에서 인덱스를 생성하고 인덱스 이름과 API 키를 제공하세요.",
+      "apiKeyLabel": "Pinecone API 키",
+      "indexNameLabel": "인덱스 이름",
+      "embedding": {
+        "sectionTitle": "임베딩 모델",
+        "sectionIntro": "Pinecone을 위해 텍스트를 벡터로 변환하는 별도의 OpenAI 호환 API입니다.",
+        "apiUrlLabel": "API URL",
+        "modelLabel": "모델",
+        "apiKeyLabel": "임베딩 제공자 API 키"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "Tavily를 통해 인터넷에서 최신 정보를 검색합니다.",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "검색 도구에서 사용됩니다. 일일 사용자 제한은 별도로 설정됩니다.",
+      "apiUrlLabel": "API URL",
+      "apiKeyLabel": "Tavily API 키"
+    },
+    "webReader": {
+      "pageDescription": "Browserless를 통해 웹 페이지 콘텐츠를 열고 정리합니다.",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "백엔드는 Browserless BQL을 사용하여 페이지를 열고 텍스트를 추출합니다.",
+      "apiUrlLabel": "Browserless URL",
+      "apiKeyLabel": "Browserless 토큰",
+      "tokenPlaceholder": "Browserless 토큰 붙여넣기"
+    },
+    "cloudTts": {
+      "pageDescription": "Cloud TTS 및 Cartesia 음성 카탈로그.",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "키는 서버 측에만 저장되며 백엔드에서 음성 목록 및 오디오 생성에 사용됩니다.",
+      "apiKeyLabel": "Cartesia API 키",
+      "modelLabel": "모델"
+    },
+    "imageGeneration": {
+      "pageTitle": "이미지 생성",
+      "pageDescription": "현재 OpenRouter만 지원됩니다. GPT Image, Nano Banana, Grok 모델은 통합 Image API를 통해 연결됩니다.",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "전용 키는 이미지 생성에만 사용되며 서버에 저장됩니다.",
+      "apiUrlLabel": "API URL",
+      "apiUrlHint": "다른 제공자는 아직 지원되지 않습니다",
+      "apiKeyLabel": "OpenRouter API 키",
+      "modelLabel": "모델",
+      "modelHint": "OpenRouter 모델 슬러그를 입력하고 사용 가능한 매개변수를 확인하세요",
+      "modelAvailable": "사용 가능",
+      "resolutionLabel": "최대 해상도",
+      "resolutionHint": "선택한 모델이 지원하는 매개변수",
+      "qualityLabel": "품질",
+      "qualityHint": "높은 품질은 더 비싼 생성 비용을 의미합니다",
+      "parametersHint": "모델을 확인하여 지원되는 매개변수를 구성하세요.",
+      "checkButton": "확인",
+      "checking": "확인 중…",
+      "checkError": "모델 확인 실패",
+      "capabilityResolution": "해상도",
+      "capabilityQuality": "품질",
+      "capabilityReferences": "참조",
+      "capabilitySupported": "지원됨",
+      "capabilityNotClaimed": "주장되지 않음"
+    }
   }
 }

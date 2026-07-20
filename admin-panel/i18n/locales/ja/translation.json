@@ -112,5 +112,109 @@
       "apiKeyPlaceholderExisting": "空欄のままにすると変更なし",
       "apiKeyPlaceholderNew": "APIキーを貼り付け"
     }
+  },
+  "integrations": {
+    "title": "接続機能",
+    "subtitle": "統合を開いてキーとサービスパラメータを設定します。",
+    "statusConfigured": "接続済み",
+    "statusNotConfigured": "未設定",
+    "back": "戻る",
+    "modelsLink": {
+      "label": "モデル",
+      "description": "OpenAI互換API"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "ベクトルメモリ",
+        "group": "メモリ"
+      },
+      "webSearch": {
+        "name": "ウェブ検索",
+        "description": "インターネットを検索",
+        "group": "インターネット"
+      },
+      "webReader": {
+        "name": "ウェブリーダー",
+        "description": "ウェブページを読み込んで処理",
+        "group": "インターネット"
+      },
+      "cloudTts": {
+        "name": "クラウドTTS",
+        "description": "Cartesiaクラウド音声",
+        "group": "メディア"
+      },
+      "imageGeneration": {
+        "name": "画像生成",
+        "description": "外部API経由で画像を生成",
+        "group": "メディア"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "APIキーを貼り付け",
+      "hint": "空欄のままにすると現在のキーが維持されます",
+      "placeholderExisting": "空欄のままにすると変更されません"
+    },
+    "pinecone": {
+      "pageDescription": "Chatterベクトルメモリ。Pineconeはデータを保存し、埋め込みモデルがテキストをベクトルに変換します。",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "Pineconeでインデックスを作成し、その名前とAPIキーを指定してください。",
+      "apiKeyLabel": "Pinecone APIキー",
+      "indexNameLabel": "インデックス名",
+      "embedding": {
+        "sectionTitle": "埋め込みモデル",
+        "sectionIntro": "Pinecone用にテキストをベクトルに変換する、OpenAI互換の別のAPIです。",
+        "apiUrlLabel": "API URL",
+        "modelLabel": "モデル",
+        "apiKeyLabel": "埋め込みプロバイダーAPIキー"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "Tavilyを介して最新情報をインターネットで検索します。",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "検索ツールで使用されます。1日のユーザー制限は別途設定されます。",
+      "apiUrlLabel": "API URL",
+      "apiKeyLabel": "Tavily APIキー"
+    },
+    "webReader": {
+      "pageDescription": "Browserless を介して Web ページのコンテンツを開き、クリーンにします。",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "バックエンドは Browserless BQL を使用してページを開き、テキストを抽出します。",
+      "apiUrlLabel": "Browserless URL",
+      "apiKeyLabel": "Browserless トークン",
+      "tokenPlaceholder": "Browserless トークンを貼り付け"
+    },
+    "cloudTts": {
+      "pageDescription": "Cloud TTS と Cartesia 音声カタログ。",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "キーはサーバーサイドのみに保存され、バックエンドで音声一覧と音声生成に使用されます。",
+      "apiKeyLabel": "Cartesia API キー",
+      "modelLabel": "モデル"
+    },
+    "imageGeneration": {
+      "pageTitle": "画像生成",
+      "pageDescription": "現在はOpenRouterのみサポートされています。GPT Image、Nano Banana、Grokモデルは、その統合Image APIを介して接続します。",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "専用キーは画像生成のみに使用され、サーバーに保存されます。",
+      "apiUrlLabel": "API URL",
+      "apiUrlHint": "他のプロバイダーはまだサポートされていません",
+      "apiKeyLabel": "OpenRouter APIキー",
+      "modelLabel": "モデル",
+      "modelHint": "OpenRouterモデルスラッグを入力し、利用可能なパラメータを確認してください",
+      "modelAvailable": "利用可能",
+      "resolutionLabel": "最大解像度",
+      "resolutionHint": "選択したモデルでサポートされるパラメータ",
+      "qualityLabel": "品質",
+      "qualityHint": "高品質ほど生成コストが高くなります",
+      "parametersHint": "モデルを確認して、サポートされるパラメータを設定してください。",
+      "checkButton": "確認",
+      "checking": "確認中…",
+      "checkError": "モデルの確認に失敗しました",
+      "capabilityResolution": "解像度",
+      "capabilityQuality": "品質",
+      "capabilityReferences": "参照",
+      "capabilitySupported": "対応",
+      "capabilityNotClaimed": "未申請"
+    }
   }
 }

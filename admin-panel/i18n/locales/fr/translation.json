@@ -112,5 +112,109 @@
       "apiKeyPlaceholderExisting": "Laissez vide pour ne pas modifier",
       "apiKeyPlaceholderNew": "Collez la clé API"
     }
+  },
+  "integrations": {
+    "title": "Capacités connectées",
+    "subtitle": "Ouvrez une intégration pour configurer les clés et les paramètres du service.",
+    "statusConfigured": "Connecté",
+    "statusNotConfigured": "Non configuré",
+    "back": "Retour",
+    "modelsLink": {
+      "label": "Modèles",
+      "description": "API compatible OpenAI"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "Mémoire vectorielle",
+        "group": "Mémoire"
+      },
+      "webSearch": {
+        "name": "Recherche Web",
+        "description": "Rechercher sur Internet",
+        "group": "Internet"
+      },
+      "webReader": {
+        "name": "Lecteur Web",
+        "description": "Lire et traiter des pages Web",
+        "group": "Internet"
+      },
+      "cloudTts": {
+        "name": "TTS Cloud",
+        "description": "Voix cloud Cartesia",
+        "group": "Média"
+      },
+      "imageGeneration": {
+        "name": "Génération d'images",
+        "description": "Générer des images via une API externe",
+        "group": "Média"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "Coller la clé API",
+      "hint": "Laisser vide pour conserver la clé actuelle",
+      "placeholderExisting": "Laisser vide pour ne pas modifier"
+    },
+    "pinecone": {
+      "pageDescription": "Mémoire vectorielle de Chatter. Pinecone stocke les données, et le modèle d'embedding transforme le texte en vecteurs.",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "Créez un index dans Pinecone et fournissez son nom ainsi que la clé API.",
+      "apiKeyLabel": "Clé API Pinecone",
+      "indexNameLabel": "Nom de l'index",
+      "embedding": {
+        "sectionTitle": "Modèle d'embedding",
+        "sectionIntro": "Une API séparée compatible OpenAI qui transforme le texte en vecteurs pour Pinecone.",
+        "apiUrlLabel": "URL de l'API",
+        "modelLabel": "Modèle",
+        "apiKeyLabel": "Clé API du fournisseur d'embedding"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "Recherchez sur Internet des informations à jour via Tavily.",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "Utilisé par l'outil de recherche. Les limites quotidiennes par utilisateur sont configurées séparément.",
+      "apiUrlLabel": "URL de l'API",
+      "apiKeyLabel": "Clé API Tavily"
+    },
+    "webReader": {
+      "pageDescription": "Ouvrir et nettoyer le contenu d'une page web via Browserless.",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "Le backend utilise BQL de Browserless pour ouvrir une page et en extraire le texte.",
+      "apiUrlLabel": "URL Browserless",
+      "apiKeyLabel": "Jeton Browserless",
+      "tokenPlaceholder": "Coller le jeton Browserless"
+    },
+    "cloudTts": {
+      "pageDescription": "Cloud TTS et catalogue de voix Cartesia.",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "La clé est stockée uniquement côté serveur et utilisée par le backend pour lister les voix et générer l'audio.",
+      "apiKeyLabel": "Clé API Cartesia",
+      "modelLabel": "Modèle"
+    },
+    "imageGeneration": {
+      "pageTitle": "Génération d'images",
+      "pageDescription": "Actuellement, seul OpenRouter est pris en charge. Les modèles GPT Image, Nano Banana et Grok se connectent via son API Image unifiée.",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "Une clé dédiée est utilisée uniquement pour la génération d'images et est stockée sur le serveur.",
+      "apiUrlLabel": "URL de l'API",
+      "apiUrlHint": "Les autres fournisseurs ne sont pas encore pris en charge",
+      "apiKeyLabel": "Clé API OpenRouter",
+      "modelLabel": "Modèle",
+      "modelHint": "Saisissez le slug du modèle OpenRouter et vérifiez les paramètres disponibles",
+      "modelAvailable": "disponible",
+      "resolutionLabel": "Résolution maximale",
+      "resolutionHint": "Paramètre pris en charge par le modèle sélectionné",
+      "qualityLabel": "Qualité",
+      "qualityHint": "Une qualité supérieure signifie une génération plus coûteuse",
+      "parametersHint": "Vérifiez le modèle pour configurer les paramètres pris en charge.",
+      "checkButton": "Vérifier",
+      "checking": "Vérification…",
+      "checkError": "Échec de la vérification du modèle",
+      "capabilityResolution": "résolution",
+      "capabilityQuality": "qualité",
+      "capabilityReferences": "références",
+      "capabilitySupported": "pris en charge",
+      "capabilityNotClaimed": "non revendiqué"
+    }
   }
 }

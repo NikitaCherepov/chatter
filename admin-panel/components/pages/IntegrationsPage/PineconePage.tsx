@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { PineconeSettings } from '../../../lib/types';
 import { FormField } from '../../ui/FormField/FormField';
 import { IntegrationDetailPage } from './IntegrationDetailPage';
@@ -20,10 +21,11 @@ export function PineconePage({
   onBack: () => void;
   onSave: (event: FormEvent) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <IntegrationDetailPage
       title="Pinecone"
-      description="Векторная память Chatter. Pinecone хранит данные, а embedding-модель превращает текст в векторы."
+      description={t('integrations.pinecone.pageDescription')}
       saving={saving}
       saveState={saveState}
       onBack={onBack}
@@ -31,18 +33,18 @@ export function PineconePage({
     >
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
-          <h3>Pinecone</h3>
-          <p>Создай индекс в Pinecone и укажи его имя вместе с API-ключом.</p>
+          <h3>{t('integrations.pinecone.sectionTitle')}</h3>
+          <p>{t('integrations.pinecone.sectionIntro')}</p>
         </div>
         <div className={styles.fields}>
           <IntegrationSecretField
-            label="Pinecone API-ключ"
+            label={t('integrations.pinecone.apiKeyLabel')}
             value={settings.apiKey}
             configured={settings.hasApiKey}
             onChange={(apiKey) => onChange({ apiKey })}
             required
           />
-          <FormField label="Название индекса">
+          <FormField label={t('integrations.pinecone.indexNameLabel')}>
             <input
               value={settings.indexName}
               onChange={(event) => onChange({ indexName: event.target.value })}
@@ -54,12 +56,12 @@ export function PineconePage({
       </section>
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
-          <h3>Embedding-модель</h3>
-          <p>Отдельный OpenAI-совместимый API, который превращает текст в векторы для Pinecone.</p>
+          <h3>{t('integrations.pinecone.embedding.sectionTitle')}</h3>
+          <p>{t('integrations.pinecone.embedding.sectionIntro')}</p>
         </div>
         <div className={styles.fields}>
           <div className={styles.twoColumns}>
-            <FormField label="Адрес API">
+            <FormField label={t('integrations.pinecone.embedding.apiUrlLabel')}>
               <input
                 type="url"
                 value={settings.embeddingBaseUrl}
@@ -67,7 +69,7 @@ export function PineconePage({
                 required
               />
             </FormField>
-            <FormField label="Модель">
+            <FormField label={t('integrations.pinecone.embedding.modelLabel')}>
               <input
                 value={settings.embeddingModel}
                 onChange={(event) => onChange({ embeddingModel: event.target.value })}
@@ -76,7 +78,7 @@ export function PineconePage({
             </FormField>
           </div>
           <IntegrationSecretField
-            label="API-ключ embedding-провайдера"
+            label={t('integrations.pinecone.embedding.apiKeyLabel')}
             value={settings.embeddingApiKey}
             configured={settings.hasEmbeddingApiKey}
             onChange={(embeddingApiKey) => onChange({ embeddingApiKey })}

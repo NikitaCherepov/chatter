@@ -3,6 +3,7 @@ import type { WebSearchSettings } from '../../../lib/types';
 import { FormField } from '../../ui/FormField/FormField';
 import { IntegrationDetailPage } from './IntegrationDetailPage';
 import { IntegrationSecretField } from './IntegrationSecretField';
+import { useTranslation } from 'react-i18next';
 import styles from './IntegrationsPage.module.css';
 
 export function WebSearchPage({
@@ -20,10 +21,11 @@ export function WebSearchPage({
   onBack: () => void;
   onSave: (event: FormEvent) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <IntegrationDetailPage
       title="Web Search"
-      description="Поиск актуальной информации в интернете через Tavily."
+      description={t('integrations.webSearch.pageDescription')}
       saving={saving}
       saveState={saveState}
       onBack={onBack}
@@ -32,10 +34,10 @@ export function WebSearchPage({
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
           <h3>Tavily</h3>
-          <p>Используется инструментом поиска. Дневные ограничения пользователей настраиваются отдельно.</p>
+          <p>{t('integrations.webSearch.sectionIntro')}</p>
         </div>
         <div className={styles.fields}>
-          <FormField label="Адрес API">
+          <FormField label={t('integrations.webSearch.apiUrlLabel')}>
             <input
               type="url"
               value={settings.baseUrl}
@@ -44,7 +46,7 @@ export function WebSearchPage({
             />
           </FormField>
           <IntegrationSecretField
-            label="Tavily API-ключ"
+            label={t('integrations.webSearch.apiKeyLabel')}
             value={settings.apiKey}
             configured={settings.hasApiKey}
             onChange={(apiKey) => onChange({ apiKey })}

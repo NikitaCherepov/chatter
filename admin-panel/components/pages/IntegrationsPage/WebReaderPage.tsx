@@ -3,6 +3,7 @@ import type { WebReaderSettings } from '../../../lib/types';
 import { FormField } from '../../ui/FormField/FormField';
 import { IntegrationDetailPage } from './IntegrationDetailPage';
 import { IntegrationSecretField } from './IntegrationSecretField';
+import { useTranslation } from 'react-i18next';
 import styles from './IntegrationsPage.module.css';
 
 export function WebReaderPage({
@@ -20,10 +21,11 @@ export function WebReaderPage({
   onBack: () => void;
   onSave: (event: FormEvent) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <IntegrationDetailPage
       title="Web Reader"
-      description="Открытие и очистка содержимого веб-страниц через Browserless."
+      description={t('integrations.webReader.pageDescription')}
       saving={saving}
       saveState={saveState}
       onBack={onBack}
@@ -32,10 +34,10 @@ export function WebReaderPage({
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
           <h3>Browserless</h3>
-          <p>Backend использует Browserless BQL, чтобы открыть страницу и извлечь её текст.</p>
+          <p>{t('integrations.webReader.sectionIntro')}</p>
         </div>
         <div className={styles.fields}>
-          <FormField label="Адрес Browserless">
+          <FormField label={t('integrations.webReader.apiUrlLabel')}>
             <input
               type="url"
               value={settings.baseUrl}
@@ -44,11 +46,10 @@ export function WebReaderPage({
             />
           </FormField>
           <IntegrationSecretField
-            label="Browserless token"
+            label={t('integrations.webReader.apiKeyLabel')}
             value={settings.token}
             configured={settings.hasToken}
             onChange={(token) => onChange({ token })}
-            placeholder="Вставь токен Browserless"
           />
         </div>
       </section>

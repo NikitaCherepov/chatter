@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AdminSection } from '../../AdminShell/AdminShell';
 import type { Settings } from '../../../lib/types';
 import { Icon } from '../../icons/icons';
@@ -13,18 +14,12 @@ import styles from './IntegrationsPage.module.css';
 
 type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation';
 
-const integrations: Array<{
-  id: IntegrationId;
-  name: string;
-  description: string;
-  group: string;
-  icon: string;
-}> = [
-  { id: 'pinecone', name: 'Pinecone', description: 'Векторная память', group: 'Память', icon: 'Pi' },
-  { id: 'web-search', name: 'Web Search', description: 'Поиск информации в интернете', group: 'Интернет', icon: 'WS' },
-  { id: 'web-reader', name: 'Web Reader', description: 'Чтение и обработка веб-страниц', group: 'Интернет', icon: 'WR' },
-  { id: 'cloud-tts', name: 'Cloud TTS', description: 'Облачные голоса Cartesia', group: 'Медиа', icon: 'TT' },
-  { id: 'image-generation', name: 'Генерация изображений', description: 'Создание изображений через внешний API', group: 'Медиа', icon: 'IG' },
+const INTEGRATION_IDS: Array<{ id: IntegrationId; icon: string }> = [
+  { id: 'pinecone', icon: 'Pi' },
+  { id: 'web-search', icon: 'WS' },
+  { id: 'web-reader', icon: 'WR' },
+  { id: 'cloud-tts', icon: 'TT' },
+  { id: 'image-generation', icon: 'IG' },
 ];
 
 export function IntegrationsPage({
@@ -42,6 +37,7 @@ export function IntegrationsPage({
   onSave: (event: FormEvent) => void;
   onNavigate: (section: AdminSection) => void;
 }) {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<IntegrationId | null>(null);
 
   if (selected === 'pinecone') {
@@ -134,21 +130,21 @@ export function IntegrationsPage({
     <div className={styles.stack}>
       <section className={styles.intro}>
         <div>
-          <h2>Подключённые возможности</h2>
-          <p>Открой интеграцию, чтобы указать ключи и параметры сервиса.</p>
+          <h2>{t('integrations.title')}</h2>
+          <p>{t('integrations.subtitle')}</p>
         </div>
       </section>
       <div className={styles.grid}>
         <button type="button" className={styles.card} onClick={() => onNavigate('models')}>
           <span className={styles.icon}>AI</span>
           <span className={styles.info}>
-            <small>Модели</small>
-            <strong>OpenAI-совместимые API</strong>
-            <em>{settings.hasAiApiKey ? 'Подключено' : 'Не настроено'}</em>
+            <small>{t('integrations.modelsLink.label')}</small>
+            <strong>{t('integrations.modelsLink.description')}</strong>
+            <em>{settings.hasAiApiKey ? t('integrations.statusConfigured') : t('integrations.statusNotConfigured')}</em>
           </span>
           <Icon name="arrow" />
         </button>
-        {integrations.map((item) => (
+        {INTEGRATION_IDS.map((item) => (
           <button
             type="button"
             className={styles.card}
@@ -157,9 +153,9 @@ export function IntegrationsPage({
           >
             <span className={styles.icon}>{item.icon}</span>
             <span className={styles.info}>
-              <small>{item.group}</small>
-              <strong>{item.name}</strong>
-              <em>{configured[item.id] ? 'Подключено' : item.description}</em>
+              <small>{t(`integrations.items.${item.id}.group`)}</small>
+              <strong>{t(`integrations.items.${item.id}.name`)}</strong>
+              <em>{configured[item.id] ? t('integrations.statusConfigured') : t(`integrations.items.${item.id}.description`)}</em>
             </span>
             <Icon name="arrow" />
           </button>

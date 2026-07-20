@@ -112,5 +112,109 @@
       "apiKeyPlaceholderExisting": "Оставь пустым, чтобы не менять",
       "apiKeyPlaceholderNew": "Вставь API-ключ"
     }
+  },
+  "integrations": {
+    "title": "Подключённые возможности",
+    "subtitle": "Открой интеграцию, чтобы указать ключи и параметры сервиса.",
+    "statusConfigured": "Подключено",
+    "statusNotConfigured": "Не настроено",
+    "back": "Назад",
+    "modelsLink": {
+      "label": "Модели",
+      "description": "OpenAI-совместимые API"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "Векторная память",
+        "group": "Память"
+      },
+      "webSearch": {
+        "name": "Web Search",
+        "description": "Поиск информации в интернете",
+        "group": "Интернет"
+      },
+      "webReader": {
+        "name": "Web Reader",
+        "description": "Чтение и обработка веб-страниц",
+        "group": "Интернет"
+      },
+      "cloudTts": {
+        "name": "Cloud TTS",
+        "description": "Облачные голоса Cartesia",
+        "group": "Медиа"
+      },
+      "imageGeneration": {
+        "name": "Генерация изображений",
+        "description": "Создание изображений через внешний API",
+        "group": "Медиа"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "Вставь API-ключ",
+      "hint": "Оставь пустым, чтобы сохранить текущий ключ",
+      "placeholderExisting": "Оставь пустым, чтобы не менять"
+    },
+    "pinecone": {
+      "pageDescription": "Векторная память Chatter. Pinecone хранит данные, а embedding-модель превращает текст в векторы.",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "Создай индекс в Pinecone и укажи его имя вместе с API-ключом.",
+      "apiKeyLabel": "Pinecone API-ключ",
+      "indexNameLabel": "Название индекса",
+      "embedding": {
+        "sectionTitle": "Embedding-модель",
+        "sectionIntro": "Отдельный OpenAI-совместимый API, который превращает текст в векторы для Pinecone.",
+        "apiUrlLabel": "Адрес API",
+        "modelLabel": "Модель",
+        "apiKeyLabel": "API-ключ embedding-провайдера"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "Поиск актуальной информации в интернете через Tavily.",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "Используется инструментом поиска. Дневные ограничения пользователей настраиваются отдельно.",
+      "apiUrlLabel": "Адрес API",
+      "apiKeyLabel": "Tavily API-ключ"
+    },
+    "webReader": {
+      "pageDescription": "Открытие и очистка содержимого веб-страниц через Browserless.",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "Backend использует Browserless BQL, чтобы открыть страницу и извлечь её текст.",
+      "apiUrlLabel": "Адрес Browserless",
+      "apiKeyLabel": "Browserless token",
+      "tokenPlaceholder": "Вставь токен Browserless"
+    },
+    "cloudTts": {
+      "pageDescription": "Облачная озвучка и каталог голосов Cartesia.",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "Ключ хранится только на сервере и используется backend для получения голосов и генерации аудио.",
+      "apiKeyLabel": "Cartesia API-ключ",
+      "modelLabel": "Модель"
+    },
+    "imageGeneration": {
+      "pageTitle": "Генерация изображений",
+      "pageDescription": "Пока поддерживается только OpenRouter. Модели GPT Image, Nano Banana и Grok подключаются через его единый Image API.",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "Отдельный ключ используется только для генерации изображений и хранится на сервере.",
+      "apiUrlLabel": "Адрес API",
+      "apiUrlHint": "Другие провайдеры пока не поддерживаются",
+      "apiKeyLabel": "OpenRouter API-ключ",
+      "modelLabel": "Модель",
+      "modelHint": "Укажи OpenRouter slug модели и проверь доступные параметры",
+      "modelAvailable": "доступна",
+      "resolutionLabel": "Максимальное разрешение",
+      "resolutionHint": "Параметр поддерживается выбранной моделью",
+      "qualityLabel": "Качество",
+      "qualityHint": "Чем выше качество, тем дороже генерация",
+      "parametersHint": "Проверь модель, чтобы настроить поддерживаемые параметры.",
+      "checkButton": "Проверить",
+      "checking": "Проверяем…",
+      "checkError": "Не удалось проверить модель",
+      "capabilityResolution": "разрешение",
+      "capabilityQuality": "качество",
+      "capabilityReferences": "референсы",
+      "capabilitySupported": "поддерживаются",
+      "capabilityNotClaimed": "не заявлены"
+    }
   }
 }

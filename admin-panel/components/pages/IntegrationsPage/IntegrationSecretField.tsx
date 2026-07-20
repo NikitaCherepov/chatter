@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { FormField } from '../../ui/FormField/FormField';
 import { SecretState } from '../../ui/SecretState/SecretState';
 
@@ -6,7 +7,7 @@ export function IntegrationSecretField({
   value,
   configured,
   onChange,
-  placeholder = 'Вставь API-ключ',
+  placeholder,
   hint,
   required = false,
 }: {
@@ -18,18 +19,19 @@ export function IntegrationSecretField({
   hint?: string;
   required?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <FormField
       label={label}
       state={<SecretState configured={configured || Boolean(value)} />}
-      hint={hint || (configured ? 'Оставь пустым, чтобы сохранить текущий ключ' : undefined)}
+      hint={hint || (configured ? t('integrations.secretField.hint') : undefined)}
     >
       <input
         type="password"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         autoComplete="off"
-        placeholder={configured ? 'Оставь пустым, чтобы не менять' : placeholder}
+        placeholder={configured ? t('integrations.secretField.placeholderExisting') : (placeholder || t('integrations.secretField.placeholderNew'))}
         required={required && !configured}
       />
     </FormField>

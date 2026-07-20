@@ -112,5 +112,109 @@
       "apiKeyPlaceholderExisting": "留空以保持不变",
       "apiKeyPlaceholderNew": "粘贴 API 密钥"
     }
+  },
+  "integrations": {
+    "title": "已连接的功能",
+    "subtitle": "打开集成以配置密钥和服务参数。",
+    "statusConfigured": "已连接",
+    "statusNotConfigured": "未配置",
+    "back": "返回",
+    "modelsLink": {
+      "label": "模型",
+      "description": "兼容OpenAI的API"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "向量记忆",
+        "group": "记忆"
+      },
+      "webSearch": {
+        "name": "网页搜索",
+        "description": "搜索互联网",
+        "group": "互联网"
+      },
+      "webReader": {
+        "name": "网页阅读器",
+        "description": "读取和处理网页",
+        "group": "互联网"
+      },
+      "cloudTts": {
+        "name": "云端TTS",
+        "description": "Cartesia云端语音",
+        "group": "媒体"
+      },
+      "imageGeneration": {
+        "name": "图像生成",
+        "description": "通过外部API生成图像",
+        "group": "媒体"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "粘贴API密钥",
+      "hint": "留空以保留当前密钥",
+      "placeholderExisting": "留空以保持不变"
+    },
+    "pinecone": {
+      "pageDescription": "Chatter向量记忆。Pinecone存储数据，嵌入模型将文本转换为向量。",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "在Pinecone中创建索引，并提供索引名称和API密钥。",
+      "apiKeyLabel": "Pinecone API密钥",
+      "indexNameLabel": "索引名称",
+      "embedding": {
+        "sectionTitle": "嵌入模型",
+        "sectionIntro": "一个独立的 OpenAI 兼容 API，将文本转换为向量以供 Pinecone 使用。",
+        "apiUrlLabel": "API URL",
+        "modelLabel": "模型",
+        "apiKeyLabel": "嵌入提供者 API 密钥"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "通过 Tavily 搜索互联网以获取最新信息。",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "由搜索工具使用。每日用户限制单独配置。",
+      "apiUrlLabel": "API URL",
+      "apiKeyLabel": "Tavily API 密钥"
+    },
+    "webReader": {
+      "pageDescription": "通过Browserless打开并清理网页内容。",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "后端使用Browserless BQL打开页面并提取文本。",
+      "apiUrlLabel": "Browserless URL",
+      "apiKeyLabel": "Browserless token",
+      "tokenPlaceholder": "粘贴Browserless token"
+    },
+    "cloudTts": {
+      "pageDescription": "云端TTS和Cartesia语音目录。",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "密钥仅存储在服务器端，后端用于语音列表和音频生成。",
+      "apiKeyLabel": "Cartesia API密钥",
+      "modelLabel": "模型"
+    },
+    "imageGeneration": {
+      "pageTitle": "图像生成",
+      "pageDescription": "目前仅支持 OpenRouter。GPT Image、Nano Banana 和 Grok 模型通过其统一图像 API 连接。",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "专用密钥仅用于图像生成，并存储在服务器上。",
+      "apiUrlLabel": "API URL",
+      "apiUrlHint": "尚不支持其他提供商",
+      "apiKeyLabel": "OpenRouter API 密钥",
+      "modelLabel": "模型",
+      "modelHint": "输入 OpenRouter 模型 slug 并检查可用参数",
+      "modelAvailable": "可用",
+      "resolutionLabel": "最大分辨率",
+      "resolutionHint": "所选模型支持的参数",
+      "qualityLabel": "质量",
+      "qualityHint": "质量越高，生成成本越高",
+      "parametersHint": "检查模型以配置支持的参数。",
+      "checkButton": "检查",
+      "checking": "检查中…",
+      "checkError": "检查模型失败",
+      "capabilityResolution": "分辨率",
+      "capabilityQuality": "质量",
+      "capabilityReferences": "参考",
+      "capabilitySupported": "支持",
+      "capabilityNotClaimed": "未声明"
+    }
   }
 }
