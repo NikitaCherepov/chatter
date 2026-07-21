@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   backend:
     build:
@@ -5,6 +11,7 @@ services:
       dockerfile: Dockerfile
     image: "${CHATTER_IMAGE_PREFIX:-chatter}-backend:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - "${BACKEND_ENV_FILE:-./backend-api/.env}"
     environment:
@@ -35,6 +42,7 @@ services:
       dockerfile: Dockerfile.bot
     image: "${CHATTER_IMAGE_PREFIX:-chatter}-telegram-bot:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - "${TELEGRAM_ENV_FILE:-./.env}"
     environment:
@@ -52,6 +60,7 @@ services:
       dockerfile: Dockerfile
     image: "${CHATTER_IMAGE_PREFIX:-chatter}-webapp-notes:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - "${TELEGRAM_ENV_FILE:-./.env}"
     environment:
@@ -83,6 +92,7 @@ services:
       dockerfile: Dockerfile
     image: "${CHATTER_IMAGE_PREFIX:-chatter}-voice:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - path: "${VOICE_ENV_FILE:-./voice-service/.env}"
         required: false
@@ -116,6 +126,7 @@ services:
       dockerfile: Dockerfile
     image: "${CHATTER_IMAGE_PREFIX:-chatter}-admin-panel:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
     healthcheck:
@@ -137,6 +148,7 @@ services:
       dockerfile: Dockerfile
     image: "${CHATTER_IMAGE_PREFIX:-chatter}-manager:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - path: "${CHATTER_MANAGER_ENV_FILE:-./.chatter/manager.env}"
         required: false
@@ -184,6 +196,7 @@ services:
       - gateway
     image: caddy:2.11.3-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       CHATTER_PUBLIC_HOST: "${CHATTER_PUBLIC_HOST}"
     ports:
