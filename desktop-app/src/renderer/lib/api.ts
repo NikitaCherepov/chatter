@@ -119,7 +119,13 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-  if (res.status === 401 && tokens?.refresh_token && !path.includes('/auth/')) {
+  const refreshExcludedPaths = new Set([
+    '/api/v1/auth/login',
+    '/api/v1/auth/register',
+    '/api/v1/auth/refresh',
+  ]);
+
+  if (res.status === 401 && tokens?.refresh_token && !refreshExcludedPaths.has(path)) {
     const refreshed = await refreshToken(tokens.refresh_token);
     if (refreshed) {
       saveTokens(refreshed);
@@ -127,6 +133,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       reconnectWebSocket();
       headers['Authorization'] = `Bearer ${refreshed.access_token}`;
       const retry = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      if (!retry.ok) {
+        const body = await retry.json().catch(() => ({}));
+        if (retry.status === 401) clearTokens();
+        throw new ApiError(retry.status, body.error || 'unknown_error', body);
+      }
       return retry.json();
     }
     clearTokens();
