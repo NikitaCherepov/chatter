@@ -709,6 +709,9 @@ function updateServiceSelection() {
   return { profiles, services };
 }
 
+let lastPullTime = 0;
+const PULL_COOLDOWN_MS = 5 * 60 * 1000;
+
 function imageReference(service) {
   const suffix = SERVER_IMAGE_SUFFIXES[service];
   const prefix = `${process.env.CHATTER_IMAGE_PREFIX || ''}`.trim();
@@ -780,7 +783,11 @@ async function getServerUpdateInfo({ pull = false } = {}) {
   const selection = updateServiceSelection();
   const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
   if (pull) {
-    await runDocker(composeArgs(...profileArgs, 'pull', ...selection.services), 60 * 60 * 1000);
+    const now = Date.now();
+    if (now - lastPullTime >= PULL_COOLDOWN_MS) {
+      await runDocker(composeArgs(...profileArgs, 'pull', ...selection.services), 60 * 60 * 1000);
+      lastPullTime = now;
+    }
     result.checkedAt = new Date().toISOString();
   }
   const comparisons = await Promise.all(selection.services.map(async (service) => {

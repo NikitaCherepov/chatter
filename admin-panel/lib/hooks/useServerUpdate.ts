@@ -6,8 +6,8 @@ const activeStatuses = new Set(['queued', 'backup', 'restarting']);
 export function useServerUpdate() {
   return useQuery({
     queryKey: ['server-update'],
-    queryFn: () => serverUpdateService.getStatus(),
-    staleTime: 1 * 60_000,
+    queryFn: () => serverUpdateService.refresh(),
+    staleTime: 5 * 60_000,
     refetchInterval: (query) => {
       const status = query.state.data?.operation.status;
       return status && activeStatuses.has(status) ? 2_000 : false;

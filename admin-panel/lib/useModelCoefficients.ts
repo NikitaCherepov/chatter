@@ -63,11 +63,17 @@ export function useModelCoefficients() {
     }
   }, []);
 
+  const setCoefficient = useCallback((uniqueId: string, coefficient: number) => {
+    if (!uniqueId) return;
+    dirtyRef.current.add(uniqueId);
+    setMap(prev => ({ ...prev, [uniqueId]: coefficient }));
+  }, []);
+
   const getCoefficient = useCallback((uniqueId: string | undefined | null): number | undefined => {
     if (!uniqueId) return undefined;
     const value = map[uniqueId];
     return typeof value === 'number' ? value : undefined;
   }, [map]);
 
-  return { map, getCoefficient, saveCoefficient, state };
+  return { map, getCoefficient, setCoefficient, saveCoefficient, state };
 }

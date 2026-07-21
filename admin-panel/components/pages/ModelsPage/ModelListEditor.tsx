@@ -7,6 +7,8 @@ import styles from './ModelsPage.module.css';
 type CoefficientManager = {
   /** Returns saved coefficient for the uniqueId (or undefined if not set). */
   get: (uniqueId: string | undefined | null) => number | undefined;
+  /** Updates the controlled input locally without issuing an API request. */
+  set: (uniqueId: string, coefficient: number) => void;
   /** Persists new coefficient for the uniqueId. */
   save: (uniqueId: string, coefficient: number) => void | Promise<void>;
 };
@@ -161,6 +163,13 @@ export function ProviderModelFields({
             min={0}
             step={0.1}
             value={coefficientManager.get(model.uniqueId) ?? 1}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              const id = model.uniqueId?.trim();
+              if (id && Number.isFinite(value) && value >= 0) {
+                coefficientManager.set(id, value);
+              }
+            }}
             onBlur={(event) => {
               const value = Number(event.target.value);
               const coef = Number.isFinite(value) && value >= 0 ? value : 1;
