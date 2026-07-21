@@ -15,6 +15,7 @@ export function UpdateStatusCard() {
   const [confirming, setConfirming] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState('');
   const [message, setMessage] = useState('');
 
   const activeStatuses = useMemo(() => new Set(['queued', 'backup', 'restarting']), []);
@@ -26,9 +27,8 @@ export function UpdateStatusCard() {
     setRefreshing(true);
     setMessage(t('system.update.fetchingInfo'));
     try {
-      await serverUpdateService.refresh();
-      await queryClient.invalidateQueries({ queryKey: ['server-update'] });
-      const fresh = queryClient.getQueryData<ReturnType<typeof useServerUpdate>['data']>(['server-update']);
+      const fresh = await serverUpdateService.refresh();
+      queryClient.setQueryData(['server-update'], fresh);
       setMessage(fresh?.available ? t('system.update.found') : t('system.update.alreadyFresh'));
     } catch (err) {
       setMessage(t('system.update.checkError', { message: err instanceof Error ? err.message : String(err) }));
@@ -39,12 +39,24 @@ export function UpdateStatusCard() {
 
   async function apply() {
     setApplying(true);
+    setApplyError('');
     setMessage(t('system.update.starting'));
     try {
       await serverUpdateService.apply();
+      queryClient.setQueryData(['server-update'], (current: typeof info) => current ? {
+        ...current,
+        operation: {
+          status: 'queued' as const,
+          targetHash: current.latestHash,
+          message: 'server_update_queued',
+          updatedAt: new Date().toISOString(),
+        },
+      } : current);
       await queryClient.invalidateQueries({ queryKey: ['server-update'] });
     } catch (err) {
-      setMessage(t('system.update.updateError', { message: err instanceof Error ? err.message : String(err) }));
+      const error = err instanceof Error ? err.message : String(err);
+      setApplyError(error);
+      setMessage(t('system.update.updateError', { message: error }));
     } finally {
       setApplying(false);
     }
@@ -78,7 +90,10 @@ export function UpdateStatusCard() {
             {t('system.update.check')}
           </button>
           {info.available && (
-            <button type="button" disabled={busy || updateInProgress} onClick={() => setConfirming(true)}>
+            <button type="button" disabled={busy || updateInProgress} onClick={() => {
+              setApplyError('');
+              setConfirming(true);
+            }}>
               {updateInProgress ? t('system.update.updating') : t('system.update.updateButton')}
             </button>
           )}
@@ -89,8 +104,8 @@ export function UpdateStatusCard() {
           changelog={info.changelog}
           rebuiltFromSameCommit={info.rebuiltFromSameCommit}
           updating={updateInProgress}
-          operationStatus={info.operation.status}
-          operationMessage={info.operation.message}
+          operationStatus={applyError ? 'failed' : info.operation.status}
+          operationMessage={applyError || info.operation.message}
           onCancel={() => setConfirming(false)}
           onConfirm={() => void apply()}
         />

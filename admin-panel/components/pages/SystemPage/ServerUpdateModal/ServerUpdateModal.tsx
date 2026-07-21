@@ -23,10 +23,12 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
     failed: 100,
   };
   const activeStatuses = new Set(['queued', 'backup', 'restarting', 'complete', 'failed']);
-  const stageKey = operationStatus && activeStatuses.has(operationStatus) ? `system.update.stages.${operationStatus}` : null;
-  const showProgress = updating;
-  const progressPercent = stageProgress[operationStatus] ?? 0;
-  const failed = operationStatus === 'failed';
+  const effectiveStatus = operationStatus === 'idle' && updating ? 'queued' : operationStatus;
+  const stageKey = effectiveStatus && activeStatuses.has(effectiveStatus) ? `system.update.stages.${effectiveStatus}` : null;
+  const terminal = effectiveStatus === 'complete' || effectiveStatus === 'failed';
+  const showProgress = updating || terminal;
+  const progressPercent = stageProgress[effectiveStatus] ?? 0;
+  const failed = effectiveStatus === 'failed';
 
   const releaseNotes = useMemo(() => {
     const available = Object.keys(changelog);
@@ -51,11 +53,11 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
   }, [onCancel, updating]);
 
   useEffect(() => {
-    if (operationStatus === 'complete') {
+    if (effectiveStatus === 'complete') {
       const timer = setTimeout(() => window.location.reload(), 1500);
       return () => clearTimeout(timer);
     }
-  }, [operationStatus]);
+  }, [effectiveStatus]);
 
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={event => {
@@ -85,7 +87,9 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
           </div>
         )}
         <div className={styles.actions}>
-          {showProgress ? (
+          {updating ? (
+            <button type="button" disabled>{t('system.update.changes.updating')}</button>
+          ) : terminal ? (
             <button type="button" onClick={onCancel}>{t('system.update.changes.cancel')}</button>
           ) : (
             <>
