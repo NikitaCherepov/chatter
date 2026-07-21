@@ -615,25 +615,35 @@ function createWindow() {
         const { exec } = require('child_process');
         const execAsync = util.promisify(exec);
 
-        // Fix кракозябр на Windows: cmd.exe получает аргументы в системной ANSI
-        // кодировке (cp1251/cp866), chcp 65001 срабатывает уже после парсинга.
-        // Решение: двойной Base64.
-        // 1) Исходная команда кодируется в Base64 (UTF-16LE для .NET) — защищает
-        //    от сломанных кавычек, спецсимволов, кириллицы в аргументах.
-        // 2) PowerShell-скрипт, который декодирует команду и выполняет её через
-        //    `cmd.exe /c` (сохраняем cmd-семантику &&, |, >), сам тоже пакуется в
-        //    Base64 и передаётся через -EncodedCommand.
+        // On Windows, cmd.exe receives arguments in the system ANSI code page
+        // (cp1251/cp866). chcp 65001 takes effect only after parsing, so
+        // non-ASCII arguments get corrupted before the command runs.
+        //
+        // Non-ASCII commands (Cyrillic etc.): double Base64 wrapper.
+        // 1) The original command + chcp 65001 is encoded in Base64 (UTF-16LE
+        //    for .NET) — protects quotes, special chars, and Cyrillic in args.
+        // 2) A PowerShell script decodes that Base64 and runs the command via
+        //    `cmd.exe /c` (preserving cmd semantics: &&, |, >). The PS script
+        //    itself is also Base64-encoded and passed via -EncodedCommand.
+        //
+        // ASCII-only commands: direct cmd.exe, no PowerShell overhead.
+        // chcp 65001 ensures UTF-8 output (npx spinners, checkmarks etc.).
         let execCmd = cmd;
         if (process.platform === 'win32') {
-          const cmdB64 = Buffer.from(cmd, 'utf16le').toString('base64');
-          const psScript = [
-            '$OutputEncoding = [System.Text.Encoding]::UTF8',
-            '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-            `$decCmd = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${cmdB64}'))`,
-            'cmd.exe /c "$decCmd"',
-          ].join('; ');
-          const scriptB64 = Buffer.from(psScript, 'utf16le').toString('base64');
-          execCmd = `powershell -NoProfile -EncodedCommand ${scriptB64}`;
+          if (/[^\x00-\x7F]/.test(cmd)) {
+            const wrappedCmd = `chcp 65001 >nul && ${cmd}`;
+            const cmdB64 = Buffer.from(wrappedCmd, 'utf16le').toString('base64');
+            const psScript = [
+              '$OutputEncoding = [System.Text.Encoding]::UTF8',
+              '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+              `$decCmd = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${cmdB64}'))`,
+              '& cmd.exe /c $decCmd',
+            ].join('; ');
+            const scriptB64 = Buffer.from(psScript, 'utf16le').toString('base64');
+            execCmd = `powershell -NoProfile -EncodedCommand ${scriptB64}`;
+          } else {
+            execCmd = `chcp 65001 >nul && ${cmd}`;
+          }
         }
         const cmdStartedAt = Date.now();
         console.log('[execute-commands] cmd start', {
