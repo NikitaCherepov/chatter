@@ -7,8 +7,6 @@
     "presync:languages": "echo \"[sync] copying shared/languages.ts to all projects...\"",
     "predev": "npm run sync:languages",
     "predev:api": "npm run sync:languages",
-    "prebuild": "npm run sync:languages",
-    "prebuild:api": "npm run sync:languages",
     "build": "tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('i18n/locales','dist/i18n/locales',{ recursive: true })\"",
     "build:api": "tsc -p backend-api/tsconfig.json && node -e \"require('node:fs').cpSync('backend-api/src/i18n/locales','backend-api/dist/i18n/locales',{ recursive: true })\"",
     "i18n:extract:bot": "node scripts/extract-bot-i18n.mjs --source index.ts --catalog i18n/locales/ru/translation.json",
