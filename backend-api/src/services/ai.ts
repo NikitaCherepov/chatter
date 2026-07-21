@@ -18,7 +18,7 @@ import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
 import { countTokens } from './tokenizer.js';
-import { listSubagentNames, buildSubagentListDescription } from './subagents/registry.js';
+import { listSubagentNames, buildSubagentListDescription, getSubagent } from './subagents/registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 
 dotenv.config();
@@ -371,7 +371,7 @@ const EMPTY_TOKEN_USAGE: NormalizedTokenUsage = {
   reasoning_tokens: 0,
 };
 
-const normalizeTokenUsage = (rawUsage: any): NormalizedTokenUsage => {
+export const normalizeTokenUsage = (rawUsage: any): NormalizedTokenUsage => {
   if (!rawUsage || typeof rawUsage !== 'object') return { ...EMPTY_TOKEN_USAGE };
 
   const promptTokens = toSafeTokenCount(
@@ -3029,7 +3029,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -5385,15 +5385,31 @@ Respond in the user's language. Be detailed and precise.`
           manualModel: subagentExtra?.manualModel,
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
+          onUsageCall: subagentExtra?.onSubagentUsageCall,
           runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
       });
+
+      const registeredAgent = getSubagent(agentName);
+      const subagentTrace = {
+        task,
+        system_prompt: registeredAgent.systemPrompt.slice(0, 2000),
+        tools: registeredAgent.sharedTools,
+        tools_used: result.toolCallsHistory.map(t => t.tool),
+        answer: result.answer,
+        summary: result.summary,
+        aborted: result.aborted,
+        iterations: result.iterations || [],
+        usage: result.usage || null,
+      };
+      subagentExtra?.onSubagentTrace?.(subagentTrace);
 
       return JSON.stringify({
         status: 'success',
         answer: result.answer,
         summary: result.summary,
         tools_used: result.toolCallsHistory.map(t => t.tool),
+        subagentTrace,
       });
     } catch (err: any) {
       console.warn('[ai] invoke_subagent error:', err?.message || err);
@@ -5468,6 +5484,7 @@ Respond in the user's language. Be detailed and precise.`
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
           onSubagentTrace: subagentExtra?.onSubagentTrace,
+          onUsageCall: subagentExtra?.onSubagentUsageCall,
           runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
       });
@@ -5481,6 +5498,7 @@ Respond in the user's language. Be detailed and precise.`
         summary: result.summary,
         aborted: result.aborted,
         iterations: result.iterations || [],
+        usage: result.usage || null,
       };
 
       const response: any = {
@@ -5510,6 +5528,7 @@ Respond in the user's language. Be detailed and precise.`
             summary: result.summary,
             aborted: result.aborted,
             iterations: result.iterations || [],
+            usage: result.usage || null,
           });
         } catch {}
       }
@@ -5782,6 +5801,7 @@ export const sendMessageThroughAi = async (
   let responsePromptName = 'Chatter';
   let diceRollValue: number | null = null;
   const usageCalls: TokenUsageCall[] = [];
+  const subagentUsageCalls: Array<TokenUsageCall & { agentName: string }> = [];
   const recordCompletionUsage = (completion: Pick<CompletionMeta, 'response' | 'usedModel' | 'usedProvider' | 'usedUniqueId'>) => {
     const normalized = normalizeTokenUsage(completion.response?.usage);
     if (normalized.total_tokens <= 0) return normalized;
@@ -5804,41 +5824,71 @@ export const sendMessageThroughAi = async (
    * Safe to call from finally/catch — never throws.
    */
   const chargeFromUsageCalls = (opts: { aborted?: boolean; assistantMessageId?: number }) => {
-    if (usageCalls.length === 0) return;
-    const aggregate = sumTokenUsage(usageCalls);
-    if (aggregate.total_tokens <= 0) return;
+    if (usageCalls.length > 0) {
+      const aggregate = sumTokenUsage(usageCalls);
+      if (aggregate.total_tokens > 0) {
+        // First call that produced tokens = "model that started answering".
+        const firstCall = usageCalls[0];
+        const route = manualModel
+          ? 'manual'
+          : (forceProRoute ? 'auto-pro' : 'auto-lite');
+        const coefficientKey = manualModel?.id
+          || firstCall.uniqueId
+          || usedUniqueId
+          || firstCall.model
+          || usedModel
+          || null;
+        const displayName = (manualModel?.name || usedModel || firstCall.model || null);
 
-    // First call that produced tokens = "model that started answering".
-    const firstCall = usageCalls[0];
-    const route = manualModel
-      ? 'manual'
-      : (forceProRoute ? 'auto-pro' : 'auto-lite');
-    // Prefer uniqueId (stable key for PRO/LITE/VISION auto-routing), fall back to manual id,
-    // then to real API model name.
-    const coefficientKey = manualModel?.id
-      || firstCall.uniqueId
-      || usedUniqueId
-      || firstCall.model
-      || usedModel
-      || null;
-    const displayName = (manualModel?.name || usedModel || firstCall.model || null);
+        chargeTokens({
+          userId,
+          chatId: chatId > 0 ? chatId : null,
+          messageId: opts.assistantMessageId ?? null,
+          route,
+          modelId: coefficientKey,
+          modelName: displayName,
+          providerName: usedProvider || firstCall.provider || null,
+          promptTokens: aggregate.prompt_tokens,
+          completionTokens: aggregate.completion_tokens,
+          cacheHitTokens: aggregate.cache_hit_tokens,
+          cacheMissTokens: aggregate.cache_miss_tokens,
+          reasoningTokens: aggregate.reasoning_tokens,
+          totalTokens: aggregate.total_tokens,
+          aborted: opts?.aborted ?? false,
+        });
+      }
+    }
 
-    chargeTokens({
-      userId,
-      chatId,
-      messageId: opts.assistantMessageId ?? null,
-      route,
-      modelId: coefficientKey,
-      modelName: displayName,
-      providerName: usedProvider || firstCall.provider || null,
-      promptTokens: aggregate.prompt_tokens,
-      completionTokens: aggregate.completion_tokens,
-      cacheHitTokens: aggregate.cache_hit_tokens,
-      cacheMissTokens: aggregate.cache_miss_tokens,
-      reasoningTokens: aggregate.reasoning_tokens,
-      totalTokens: aggregate.total_tokens,
-      aborted: opts?.aborted ?? false,
-    });
+    // Subagents may use a different model from the parent. Group their calls by
+    // agent/model/provider so each coefficient and admin statistic stays honest.
+    const grouped = new Map<string, Array<TokenUsageCall & { agentName: string }>>();
+    for (const call of subagentUsageCalls) {
+      const key = JSON.stringify([call.agentName, call.uniqueId || call.model, call.provider]);
+      const group = grouped.get(key) || [];
+      group.push(call);
+      grouped.set(key, group);
+    }
+    for (const group of grouped.values()) {
+      const aggregate = sumTokenUsage(group);
+      if (aggregate.total_tokens <= 0) continue;
+      const firstCall = group[0];
+      chargeTokens({
+        userId,
+        chatId: chatId > 0 ? chatId : null,
+        messageId: opts.assistantMessageId ?? null,
+        route: `subagent:${firstCall.agentName}`,
+        modelId: firstCall.uniqueId || firstCall.model || null,
+        modelName: firstCall.model || null,
+        providerName: firstCall.provider || null,
+        promptTokens: aggregate.prompt_tokens,
+        completionTokens: aggregate.completion_tokens,
+        cacheHitTokens: aggregate.cache_hit_tokens,
+        cacheMissTokens: aggregate.cache_miss_tokens,
+        reasoningTokens: aggregate.reasoning_tokens,
+        totalTokens: aggregate.total_tokens,
+        aborted: opts?.aborted ?? false,
+      });
+    }
   };
 
   // ── Soft-abort buffers: объявляем ВНЕ try, чтобы catch имел к ним доступ ──
@@ -5868,6 +5918,7 @@ export const sendMessageThroughAi = async (
     answer: string;
     summary: string;
     aborted?: boolean;
+    usage?: MessageUsage | null;
     iterations: Array<{
       step: number;
       content: string;
@@ -6455,6 +6506,9 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           subagentReasoningLevel,
           onToolStatus: options?.onToolStatus,
           onDesktopAction: options?.onDesktopAction,
+          onSubagentUsageCall: (agentName: string, usage: TokenUsageCall) => {
+            subagentUsageCalls.push({ ...usage, agentName });
+          },
           displayManifest: options?.displayManifest,
           currentDisplayState: options?.currentDisplayState,
           availableToolDefs: executionTools.filter(
@@ -6516,7 +6570,7 @@ const applyExecutedToolCall = (executed: ExecutedToolCall) => {
   if (toolContent.trim()) {
     toolOutputsForFallback.push(toolContent.trim());
   }
-  if (toolName === 'spawn_subagent') {
+  if (toolName === 'spawn_subagent' || toolName === 'invoke_subagent') {
     try {
       const parsed = JSON.parse(toolContent);
       if (parsed?.subagentTrace && typeof parsed.subagentTrace === 'object') {

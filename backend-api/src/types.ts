@@ -130,6 +130,7 @@ export type MessageDto = {
     answer: string;
     summary: string;
     aborted?: boolean;
+    usage?: MessageUsage | null;
     iterations: Array<{
       step: number;
       content: string;
@@ -211,6 +212,7 @@ export type AiSendResult = {
     answer: string;
     summary: string;
     aborted?: boolean;
+    usage?: MessageUsage | null;
     iterations: Array<{
       step: number;
       content: string;

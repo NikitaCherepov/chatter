@@ -16,6 +16,7 @@ import { SubagentContext, SubagentResult, SubagentIteration } from './types.js';
 import { setMaxListeners } from 'events';
 import { getSubagent, RegisteredSubagent } from './registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../../i18n/index.js';
+import type { MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../../types.js';
 
 // These will be set by initSubagentRunner() at startup to avoid circular imports.
 let _runCompletion: typeof import('../ai.js').runCompletion;
@@ -23,6 +24,7 @@ let _runTool: typeof import('../ai.js').runTool;
 let _throwIfAborted: typeof import('../ai.js').throwIfAborted;
 let _withAbort: typeof import('../ai.js').withAbort;
 let _toolDefinitions: typeof import('../ai.js').toolDefinitions;
+let _normalizeTokenUsage: (rawUsage: any) => NormalizedTokenUsage;
 
 type RunCompletionFn = (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: any, signal?: AbortSignal, reasoningLevel?: any) => Promise<any>;
 type RunToolFn = (user: any, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (payload: Record<string, unknown>) => Promise<any>, generatedImages?: any[], displayStateSink?: any, desktopActionSink?: any, mapUpdateSink?: any, activeMacros?: any[], signal?: AbortSignal) => Promise<string>;
@@ -37,12 +39,14 @@ export function initSubagentRunner(deps: {
   throwIfAborted: (signal?: AbortSignal) => void;
   withAbort: <T>(promise: Promise<T>, signal?: AbortSignal) => Promise<T>;
   toolDefinitions: readonly any[];
+  normalizeTokenUsage: (rawUsage: any) => NormalizedTokenUsage;
 }): void {
   _runCompletion = deps.runCompletion as any;
   _runTool = deps.runTool as any;
   _throwIfAborted = deps.throwIfAborted;
   _withAbort = deps.withAbort;
   _toolDefinitions = deps.toolDefinitions as any;
+  _normalizeTokenUsage = deps.normalizeTokenUsage;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +136,56 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   const agent: RegisteredSubagent = directAgent || getSubagent(agentName!);
   const resolvedAgentName = agent.name;
 
+  const usageCalls: TokenUsageCall[] = [];
+  const recordUsage = (completion: any) => {
+    const normalized = _normalizeTokenUsage(completion?.response?.usage);
+    if (normalized.total_tokens <= 0) return;
+    const call: TokenUsageCall = {
+      ...normalized,
+      model: completion?.usedModel || 'unknown',
+      provider: completion?.usedProvider || 'unknown',
+      uniqueId: completion?.usedUniqueId ?? null,
+    };
+    usageCalls.push(call);
+    ctx.onUsageCall?.(resolvedAgentName, call);
+  };
+  const trackedCompletion = async (payload: Record<string, unknown>) => {
+    const completion = await _runCompletion(mode, payload, manualModel, ctx.signal, reasoningLevel);
+    recordUsage(completion);
+    return completion;
+  };
+  const buildUsage = (): MessageUsage | null => {
+    if (usageCalls.length === 0) return null;
+    const aggregate = usageCalls.reduce<NormalizedTokenUsage>((sum, call) => ({
+      prompt_tokens: sum.prompt_tokens + call.prompt_tokens,
+      completion_tokens: sum.completion_tokens + call.completion_tokens,
+      total_tokens: sum.total_tokens + call.total_tokens,
+      cache_hit_tokens: sum.cache_hit_tokens + call.cache_hit_tokens,
+      cache_miss_tokens: sum.cache_miss_tokens + call.cache_miss_tokens,
+      reasoning_tokens: sum.reasoning_tokens + call.reasoning_tokens,
+    }), {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      cache_hit_tokens: 0,
+      cache_miss_tokens: 0,
+      reasoning_tokens: 0,
+    });
+    const latest = usageCalls[usageCalls.length - 1];
+    return {
+      latest: {
+        prompt_tokens: latest.prompt_tokens,
+        completion_tokens: latest.completion_tokens,
+        total_tokens: latest.total_tokens,
+        cache_hit_tokens: latest.cache_hit_tokens,
+        cache_miss_tokens: latest.cache_miss_tokens,
+        reasoning_tokens: latest.reasoning_tokens,
+      },
+      aggregate,
+      calls: usageCalls,
+    };
+  };
+
   // 2. Build tool list: own tools + shared tools from main agent
   const ownTools = agent.ownTools || [];
   const ownToolDefs = ownTools.map(t => t.definition);
@@ -192,7 +246,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       }
 
     const completion = await _withAbort(
-      _runCompletion(mode, requestPayload, manualModel, ctx.signal, reasoningLevel),
+      trackedCompletion(requestPayload),
       ctx.signal,
     );
 
@@ -205,6 +259,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         summary: 'Пустой ответ модели.',
         toolCallsHistory,
         iterations,
+        usage: buildUsage(),
       };
     }
 
@@ -246,6 +301,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         summary: content.slice(0, 500),
         toolCallsHistory,
         iterations,
+        usage: buildUsage(),
       };
     }
 
@@ -297,7 +353,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
               toolName,
               argsRaw,
               // aiCall — used by some tools like update_core_memory for sub-AI calls
-              (payload) => _runCompletion(mode, payload, manualModel, ctx.signal, reasoningLevel),
+              (payload) => trackedCompletion(payload),
               [],       // generatedImages
               undefined, // displayStateSink
               ctx.desktopActionSink, // desktopActionSink — enables HitL confirmations
@@ -359,6 +415,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     summary: 'Превышен лимит итераций.',
     toolCallsHistory,
     iterations,
+    usage: buildUsage(),
   };
   } catch (err: any) {
     // Soft abort: возвращаем partial-результат вместо throw,
@@ -375,6 +432,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         toolCallsHistory,
         iterations,
         aborted: true,
+        usage: buildUsage(),
       };
     }
     throw err;

@@ -11,7 +11,7 @@ import { createTask, deletePendingTask, getUserTaskById, listTasks } from './ser
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
-import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions } from './services/ai.js';
+import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey, listPublicRunbooks, getPublicRunbookById, createPublicRunbook, updatePublicRunbook, deletePublicRunbook } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
@@ -3260,7 +3260,7 @@ app.get('/internal/admin/users/:id/usage', internalAuth, (req, res) => {
     SELECT
       model_id,
       MAX(model_name) AS model_name,
-      MAX(route) AS route,
+      route,
       MAX(provider_name) AS provider_name,
       SUM(prompt_tokens) AS prompt_tokens,
       SUM(completion_tokens) AS completion_tokens,
@@ -3274,7 +3274,7 @@ app.get('/internal/admin/users/:id/usage', internalAuth, (req, res) => {
       COUNT(*) AS request_count
     FROM user_token_usage
     WHERE user_id = ? AND created_at >= ?
-    GROUP BY model_id
+    GROUP BY model_id, route
     ORDER BY SUM(charged_tokens) DESC
   `).all(userId, windowStart) as Array<{
     model_id: string | null;
@@ -4676,7 +4676,7 @@ const server = app.listen(PORT, () => {
     console.log('[backend-vector-memory] disabled (BACKEND_VECTOR_MEMORY_API_ENABLED != 1)');
   }
   startTaskScheduler();
-  initSubagentRunner({ runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions });
+  initSubagentRunner({ runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage });
 
   setImmediate(async () => {
     try {

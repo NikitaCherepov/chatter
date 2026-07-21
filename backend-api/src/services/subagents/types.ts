@@ -5,6 +5,8 @@
  * a restricted set of tools, and a single task delegated by the main Chatter agent.
  */
 
+import type { MessageUsage, TokenUsageCall } from '../../types.js';
+
 /** OpenAI-compatible tool definition shape. */
 export interface ToolDefinition {
   type: 'function';
@@ -52,6 +54,8 @@ export interface SubagentContext {
   /** Full runtime tool definitions from the main agent (executionTools), used to resolve shared tools
    *  that aren't in the static toolDefinitions array (e.g. serverOnlyTools, desktopOnlyTools). */
   runtimeToolDefs?: any[];
+  /** Reports every provider completion so the parent request can charge quota accurately. */
+  onUsageCall?: (agentName: string, usage: TokenUsageCall) => void;
 }
 
 /** Одна итерация агентского цикла субагента (аналог ToolIteration основного агента). */
@@ -78,6 +82,8 @@ export interface SubagentTraceEntry {
   aborted?: boolean;
   /** Итерации агентского цикла (аналог ToolIteration основного агента). */
   iterations: SubagentIteration[];
+  /** Exact provider usage of every completion made by this subagent. */
+  usage?: MessageUsage | null;
 }
 
 /** Result returned from a finished subagent run. */
@@ -92,6 +98,8 @@ export interface SubagentResult {
   iterations: SubagentIteration[];
   /** Present and `true` when the subagent was aborted mid-run (soft abort). */
   aborted?: boolean;
+  /** Exact provider usage of every completion made by this subagent. */
+  usage?: MessageUsage | null;
 }
 
 /** Mode selection for subagent AI calls. Set by user in settings, not by the model. */

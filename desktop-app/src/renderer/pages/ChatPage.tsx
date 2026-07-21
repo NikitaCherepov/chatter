@@ -450,6 +450,12 @@ const MessageItem = React.memo(function MessageItem({
                       <div className={s.toolCallLabel}>{t('chat.message.tools')} ({sa.tools.length})</div>
                       <pre className={s.toolCallArgs}>{sa.tools.join(', ')}</pre>
                       <div className={s.toolCallLabel}>{t('chat.message.completedTools')} ({totalToolCalls})</div>
+                      {showTokens && sa.usage?.aggregate && (
+                        <div className={s.toolCallLabel} title={t('chat.message.providerTokenUsage')}>
+                          {sa.usage.aggregate.total_tokens.toLocaleString(locale)} tk
+                          {sa.usage.calls?.[0]?.model ? ` · ${sa.usage.calls[0].model}` : ''}
+                        </div>
+                      )}
                       {sa.iterations?.map((iter, j) => (
                         <div key={j} style={{ marginTop: 4 }}>
                           {iter.content && (

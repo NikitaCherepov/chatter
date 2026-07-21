@@ -244,6 +244,7 @@ export type NormalizedTokenUsage = {
 export type TokenUsageCall = NormalizedTokenUsage & {
   model: string;
   provider: string;
+  uniqueId?: string | null;
 };
 
 export type MessageUsage = {
@@ -273,6 +274,7 @@ export type SubagentTrace = {
   answer: string;
   summary: string;
   aborted?: boolean;
+  usage?: MessageUsage | null;
   iterations: SubagentIteration[];
 };
 
