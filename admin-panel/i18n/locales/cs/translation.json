@@ -1,0 +1,719 @@
+{
+  "login": {
+    "subtitle": "Přihlášení do administrace",
+    "usernameLabel": "Uživatelské jméno",
+    "usernamePlaceholder": "Uživatelské jméno",
+    "passwordLabel": "Heslo",
+    "passwordPlaceholder": "Heslo",
+    "submitButton": "Přihlásit se",
+    "firstTimeHint": "Počáteční přihlašovací údaje zobrazil instalační program.",
+    "invalidCredentials": "Neplatné uživatelské jméno nebo heslo."
+  },
+  "overview": {
+    "componentStatus": "Stav komponent",
+    "updatesAfterApply": "Aktualizace po aplikování nastavení",
+    "refresh": "Obnovit",
+    "actionError": "Akce selhala: {{error}}",
+    "quickSetup": {
+      "title": "Rychlé nastavení",
+      "description": "Základní komponenty potřebné pro plnou funkčnost"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "Hlavní model",
+        "description": "Poskytovatel kompatibilní s OpenAI"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "Hlavní Telegram bot"
+      },
+      "notes": {
+        "title": "Poznámky webové aplikace",
+        "description": "Volitelná Telegram Mini App"
+      },
+      "voice": {
+        "title": "Hlas",
+        "description": "Rozpoznávání řeči a TTS pro Telegram"
+      }
+    },
+    "config": {
+      "title": "Konfigurace",
+      "description": "Aktuální stav připojení",
+      "keysSummary": "{{count}} ze 3 klíčů uloženo"
+    },
+    "serviceCard": {
+      "restart": "Restartovat {{name}}",
+      "stop": "Zastavit {{name}}",
+      "start": "Spustit {{name}}",
+      "running": "běží…",
+      "notRunning": "neběží"
+    }
+  },
+  "common": {
+    "saved": "uloženo",
+    "notSet": "nenastaveno",
+    "saving": "Používá se…",
+    "saveAndApply": "Uložit a použít",
+    "error": "Chyba",
+    "sectionReady": "Sekce připravena",
+    "savingSettings": "Ukládání nastavení a spouštění kontejnerů…",
+    "settingsApplied": "Nastavení použito.",
+    "changedRelogin": "Změněno. Přihlaste se znovu.",
+    "coefficientLoadError": "Nepodařilo se načíst koeficienty",
+    "coefficientSaved": "Koeficient uložen"
+  },
+  "ui": {
+    "search": "Hledat…",
+    "nothingFound": "Nic nenalezeno",
+    "auto": "automaticky"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "Řetězce záložních modelů PRO a LITE"
+    },
+    "pro": {
+      "description": "Pokud první model není k dispozici, Chatter automaticky zkusí další."
+    },
+    "lite": {
+      "description": "Rychlé modely pro jednoduché interní úkoly. Platí stejné pořadí záložních modelů.",
+      "emptyText": "Zatím nebyly přidány žádné LITE modely."
+    },
+    "vision": {
+      "subtitle": "Volitelný vyhrazený model; bez něj se použije první PRO model",
+      "fallbackModel": "Používá se PRO model",
+      "fallbackProvider": "Není nakonfigurován žádný vyhrazený poskytovatel Vision"
+    },
+    "manual": {
+      "title": "Ruční modely",
+      "subtitle": "Modely, které může uživatel vybrat místo Auto",
+      "catalog": "Katalog",
+      "fallbackHint": "Pokud ruční model selže, Chatter přejde na Auto.",
+      "emptyText": "Zatím nebyly přidány žádné ruční modely.",
+      "newModel": "Nový ruční model",
+      "modelNotSet": "Model není zadán",
+      "nameLabel": "Zobrazovaný název",
+      "namePlaceholder": "např. Claude Sonnet",
+      "uniqueIdLabel": "Jedinečné ID",
+      "descriptionLabel": "Stručný popis",
+      "descriptionPlaceholder": "K jakým úkolům je tento model vhodný",
+      "supportsVision": "Podporuje obrázky",
+      "adminOnly": "Pouze pro administrátory",
+      "remove": "Odebrat model",
+      "addModel": "+ Přidat ruční model"
+    },
+    "common": {
+      "emptyText": "Zatím nebyly přidány žádné modely.",
+      "nextModel": "další model",
+      "newModel": "Nový model",
+      "providerNotSet": "Poskytovatel není nastaven",
+      "moveUp": "Posunout nahoru",
+      "moveDown": "Posunout dolů",
+      "remove": "Odebrat",
+      "addModel": "+ Přidat model"
+    },
+    "providerFields": {
+      "baseUrl": "URL poskytovatele",
+      "modelName": "Název modelu",
+      "quotaId": "ID modelu pro sledování kvót",
+      "quotaIdHint": "Stabilní identifikátor používaný k vyhledání koeficientu. Pokud je prázdný, při uložení se vygeneruje automaticky.",
+      "coefficient": "Koeficient nákladů",
+      "coefficientHint": "0 = zdarma (bez využití kvóty), 1 = výchozí, 0,7 = levnější, 1,5 = dražší",
+      "apiKey": "API klíč",
+      "apiKeyHint": "Ponechte prázdné pro zachování stávajícího klíče",
+      "apiKeyPlaceholderExisting": "Ponechte prázdné pro zachování beze změny",
+      "apiKeyPlaceholderNew": "Vložte API klíč"
+    }
+  },
+  "integrations": {
+    "title": "Propojené schopnosti",
+    "subtitle": "Otevřete integraci pro konfiguraci klíčů a parametrů služby.",
+    "statusConfigured": "Připojeno",
+    "statusNotConfigured": "Nenakonfigurováno",
+    "back": "Zpět",
+    "modelsLink": {
+      "label": "Modely",
+      "description": "API kompatibilní s OpenAI"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "Vektorová paměť",
+        "group": "Paměť"
+      },
+      "web-search": {
+        "name": "Webové vyhledávání",
+        "description": "Prohledávat internet",
+        "group": "Internet"
+      },
+      "web-reader": {
+        "name": "Webový čtečka",
+        "description": "Číst a zpracovávat webové stránky",
+        "group": "Internet"
+      },
+      "cloud-tts": {
+        "name": "Cloud TTS",
+        "description": "Cloudové hlasy Cartesia",
+        "group": "Média"
+      },
+      "image-generation": {
+        "name": "Generování obrázků",
+        "description": "Generovat obrázky přes externí API",
+        "group": "Média"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "Vložit API klíč",
+      "hint": "Ponechte prázdné pro zachování stávajícího klíče",
+      "placeholderExisting": "Ponechte prázdné pro zachování beze změny"
+    },
+    "pinecone": {
+      "pageDescription": "Chatter vektorová paměť. Pinecone ukládá data a embedding model převádí text na vektory.",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "Vytvořte index v Pinecone a zadejte jeho název spolu s API klíčem.",
+      "apiKeyLabel": "API klíč Pinecone",
+      "indexNameLabel": "Název indexu",
+      "embedding": {
+        "sectionTitle": "Embedding model",
+        "sectionIntro": "Samostatné API kompatibilní s OpenAI, které převádí text na vektory pro Pinecone.",
+        "apiUrlLabel": "URL API",
+        "modelLabel": "Model",
+        "apiKeyLabel": "API klíč poskytovatele embeddingu"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "Prohledávejte internet pro aktuální informace prostřednictvím Tavily.",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "Používáno vyhledávacím nástrojem. Denní limity uživatelů jsou nastaveny samostatně.",
+      "apiUrlLabel": "URL API",
+      "apiKeyLabel": "Tavily API klíč"
+    },
+    "webReader": {
+      "pageDescription": "Otevřete a vyčistěte obsah webové stránky pomocí Browserless.",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "Backend používá Browserless BQL k otevření stránky a extrakci jejího textu.",
+      "apiUrlLabel": "URL Browserless",
+      "apiKeyLabel": "Token Browserless",
+      "tokenPlaceholder": "Vložte token Browserless"
+    },
+    "cloudTts": {
+      "pageDescription": "Cloud TTS a katalog hlasů Cartesia.",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "Klíč je uložen pouze na serveru a používán backendem pro výpis hlasů a generování zvuku.",
+      "apiKeyLabel": "API klíč Cartesia",
+      "modelLabel": "Model"
+    },
+    "imageGeneration": {
+      "pageTitle": "Generování obrázků",
+      "pageDescription": "V současnosti je podporován pouze OpenRouter. Modely GPT Image, Nano Banana a Grok se připojují prostřednictvím jeho jednotného Image API.",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "Vyhrazený klíč se používá pouze pro generování obrázků a je uložen na serveru.",
+      "apiUrlLabel": "URL API",
+      "apiUrlHint": "Jiní poskytovatelé zatím nejsou podporováni",
+      "apiKeyLabel": "API klíč OpenRouter",
+      "modelLabel": "Model",
+      "modelHint": "Zadejte slug modelu OpenRouter a zkontrolujte dostupné parametry",
+      "modelAvailable": "dostupný",
+      "resolutionLabel": "Maximální rozlišení",
+      "resolutionHint": "Parametr podporovaný vybraným modelem",
+      "qualityLabel": "Kvalita",
+      "qualityHint": "Vyšší kvalita znamená dražší generování",
+      "parametersHint": "Zkontrolujte model pro konfiguraci podporovaných parametrů.",
+      "checkButton": "Zkontrolovat",
+      "checking": "Kontroluji…",
+      "checkError": "Kontrola modelu selhala",
+      "capabilityResolution": "rozlišení",
+      "capabilityQuality": "kvalita",
+      "capabilityReferences": "reference",
+      "capabilitySupported": "podporováno",
+      "capabilityNotClaimed": "není deklarováno"
+    }
+  },
+  "services": {
+    "telegram": {
+      "title": "Telegram bot",
+      "description": "Hlavní rozhraní Chatter v Telegramu",
+      "enabled": "Služba povolena",
+      "tokenLabel": "Token Telegram bota",
+      "tokenHint": "Stejný token používá Webapp Notes pro ověření initData",
+      "tokenPlaceholder": "Ponechte prázdné pro zachování stávající hodnoty"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "Samostatná Telegram Mini App pro poznámky",
+      "enabled": "Služba povolena",
+      "urlLabel": "URL Mini App",
+      "urlHint": "Instalační program vytvoří adresu z IP serveru automaticky. Při ukládání nastavení je předána botovi",
+      "copyAddress": "Kopírovat adresu"
+    },
+    "voice": {
+      "title": "Hlas",
+      "description": "Rozpoznávání hlasu a TTS pro odpovědi Telegram bota",
+      "modeLabel": "Režim",
+      "modeOff": "Vypnuto",
+      "modeLocal": "Na tomto serveru",
+      "modeRemoteSoon": "Na jiném serveru (brzy)",
+      "apiUrlLabel": "URL API hlasu",
+      "tokenLabel": "Token hlasu",
+      "tokenHint": "Token je generován automaticky pro místní režim",
+      "tokenPlaceholder": "Ponechte prázdné, pokud nechcete měnit",
+      "notice": "Hlas je aktuálně používán pouze Telegram botem. První lokální spuštění může trvat několik minut: Docker stahuje obraz a modely."
+    },
+    "badge": {
+      "running": "běží",
+      "notRunning": "neběží"
+    }
+  },
+  "users": {
+    "list": {
+      "title": "Uživatelé",
+      "description": "Účty, přístup a aktivita klientů",
+      "totalUsers": "{{count}} uživatelů",
+      "onlineCount": "{{count}} online",
+      "refresh": "Obnovit",
+      "searchPlaceholder": "Jméno, ID, Telegram nebo e-mail",
+      "searchAriaLabel": "Hledat uživatele",
+      "statusLabel": "Stav",
+      "planLabel": "Plán",
+      "connectionLabel": "Připojení",
+      "noResults": "Žádní uživatelé neodpovídají zvoleným filtrům.",
+      "loading": "Načítání uživatelů...",
+      "loadError": "Nepodařilo se načíst uživatele: {{error}}",
+      "limited": "Zobrazujeme prvních 500 účtů.",
+      "userDefaultName": "Uživatel {{id}}",
+      "adminBadge": "Admin",
+      "desktopOnline": "Desktop připojen",
+      "desktopOffline": "Desktop není připojen",
+      "quotaTooltip": "{{used}} / {{quota}} podmíněných jednotek",
+      "tableHeaders": {
+        "user": "Uživatel",
+        "status": "Stav",
+        "plan": "Plán",
+        "quota": "Kvóta (týden)",
+        "messages": "Zprávy",
+        "lastMessage": "Poslední zpráva",
+        "created": "Vytvořeno"
+      },
+      "filter": {
+        "allStatuses": "Všechny stavy",
+        "active": "Aktivní",
+        "pending": "Čekající",
+        "blocked": "Blokováno",
+        "rejected": "Zamítnuto",
+        "allPlans": "Všechny plány",
+        "anyConnection": "Jakékoliv připojení",
+        "desktopOnline": "Desktop online",
+        "desktopOffline": "Desktop offline"
+      },
+      "status": {
+        "approved": "Aktivní",
+        "none": "Čeká na schválení",
+        "disapproved": "Zamítnuto",
+        "banned": "Blokováno"
+      }
+    },
+    "detail": {
+      "back": "← Uživatelé",
+      "refresh": "Obnovit",
+      "loading": "Načítání uživatele…",
+      "loadError": "Nepodařilo se načíst uživatele: {{error}}",
+      "description": "ID {{id}} · vytvořeno {{created}}",
+      "noAccount": "Nebyl vytvořen žádný účet pro přihlášení",
+      "onlineNow": "Právě online",
+      "notConnected": "Nepřipojeno",
+      "notBound": "Nepropojeno",
+      "bound": "Propojeno",
+      "telegramNotBound": "Telegram nepropojen",
+      "desktopOnline": "Desktop online",
+      "desktopOffline": "Desktop offline",
+      "roleLabel": "Role",
+      "roleUser": "Uživatel",
+      "roleAdmin": "Správce",
+      "statusLabel": "Stav",
+      "planLabel": "Plán",
+      "planForever": "navždy",
+      "planUntil": "do {{date}}",
+      "changeDuration": "Změnit dobu trvání",
+      "languageLabel": "Jazyk",
+      "languageNotSet": "Nenastaveno",
+      "preferredModelLabel": "Preferovaný model",
+      "preferredModelAuto": "Automaticky",
+      "reasoningLabel": "Uvažování",
+      "reasoningDefault": "Výchozí",
+      "lastDesktopKey": "Poslední klíč plochy",
+      "desktopKeyNotUsed": "Nepoužito",
+      "connections": {
+        "title": "Připojení",
+        "description": "Způsoby přihlášení a aktuální připojení k ploše",
+        "headers": {
+          "client": "Klient",
+          "account": "Účet",
+          "state": "Stav",
+          "activity": "Aktivita"
+        }
+      },
+      "usage": {
+        "title": "Využití",
+        "description": "Aktuální nahromaděné čítače bez obsahu konverzace",
+        "stats": {
+          "weeklyQuota": "Týdenní kvóta",
+          "quotaReset": "Reset kvóty",
+          "messages": "Zprávy",
+          "userRequests": "Požadavky uživatelů",
+          "assistantResponses": "Odpovědi asistenta",
+          "chats": "Chaty",
+          "searchToday": "Vyhledávání dnes",
+          "searchTotal": "Vyhledávání celkem",
+          "imagesToday": "Obrázky dnes",
+          "imagesTotal": "Obrázky celkem",
+          "messageLength": "Délka zprávy",
+          "lastMessage": "Poslední zpráva"
+        }
+      },
+      "contextLimits": {
+        "title": "Omezení kontextu",
+        "description": "Technické hodnoty již uložené pro účet",
+        "planLimit": "Limit plánu",
+        "selectedContext": "Vybraný kontext",
+        "documents": "Dokumenty",
+        "documentsAuto": "Automaticky"
+      },
+      "ban": {
+        "banned": "Uživatel je zablokován",
+        "blockAccount": "Zablokovat účet",
+        "banHint": "Blokování zruší aktuální relace uživatele",
+        "reasonPlaceholder": "Důvod (volitelný)",
+        "ban": "Blokovat",
+        "unban": "Odblokovat"
+      },
+      "actions": {
+        "savingRole": "Ukládání role…",
+        "roleSaved": "Role uložena",
+        "savingStatus": "Ukládání stavu…",
+        "statusSaved": "Stav uložen",
+        "savingPlan": "Ukládání plánu…",
+        "planSaved": "Plán a limity aktualizovány",
+        "banInProgress": "Probíhá blokování…",
+        "unbanInProgress": "Probíhá odblokování…",
+        "userUnbanned": "Uživatel odblokován, čeká na schválení",
+        "userBanned": "Uživatel zablokován",
+        "error": "Chyba: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Využití podle modelu",
+        "description": "Pro aktuální týdenní okno. Není ovlivněno smazáním chatu.",
+        "loading": "Načítání…",
+        "loadError": "Načtení selhalo: {{error}}",
+        "empty": "Zatím žádné požadavky v aktuálním okně.",
+        "conditionalUnits": "podmíněné jednotky",
+        "tableHeaders": {
+          "model": "Model",
+          "route": "Trasa",
+          "requests": "Požadavky",
+          "tokens": "Tokeny",
+          "cacheHit": "Zásah cache",
+          "charged": "Účtováno"
+        },
+        "free": "zdarma",
+        "aborted": "přerušeno",
+        "freeTooltip": "bezplatný model"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Paměť",
+        "schedulerCondition": "Plánovač"
+      }
+    },
+    "planDuration": {
+      "title": "Plán {{plan}}",
+      "freeHint": "Bezplatný plán je nastaven trvale.",
+      "durationHint": "Jak dlouho má být plán přiřazen?",
+      "durationLabel": "Doba trvání",
+      "durationDay": "1 den",
+      "durationWeek": "1 týden",
+      "durationMonth": "1 měsíc",
+      "durationYear": "1 rok",
+      "forever": "Navždy",
+      "cancel": "Zrušit",
+      "saving": "Ukládání…",
+      "assign": "Přiřadit"
+    }
+  },
+  "system": {
+    "dataFrom": "Data z Chatter Manager",
+    "updating": "Aktualizace dat…",
+    "refresh": "Obnovit",
+    "serverStatus": {
+      "title": "Stav serveru",
+      "description": "CPU, paměť, swap a místo na disku",
+      "cpu": "CPU",
+      "cores": "{{count}} jader",
+      "memory": "Paměť",
+      "available": "{{size}} k dispozici",
+      "swap": "Swap",
+      "swapNotConfigured": "Nenakonfigurováno",
+      "swapRecommended": "Swap je doporučen pro malé VPS",
+      "disk": "Disk",
+      "free": "{{size}} volno",
+      "server": "Server",
+      "system": "Systém",
+      "processor": "Procesor"
+    },
+    "storage": {
+      "database": "Databáze",
+      "uploads": "Nahrávání",
+      "backups": "Zálohy"
+    },
+    "chart": {
+      "last24h": "24h",
+      "last3days": "3 dny",
+      "last7days": "7 dní",
+      "loading": "Načítání metrik…",
+      "noData": "Zatím nejsou k dispozici žádná data metrik. Graf se zobrazí po první minutě."
+    },
+    "backups": {
+      "title": "Zálohy",
+      "description": "Databáze je vždy zahrnuta, mediální soubory jsou volitelné",
+      "tableHeaders": {
+        "date": "Datum",
+        "content": "Obsah",
+        "size": "Velikost",
+        "version": "Verze"
+      },
+      "db": "DB",
+      "dbAndFiles": "DB + soubory",
+      "configuration": "konfigurace",
+      "auto": "automaticky",
+      "download": "Stáhnout",
+      "restore": "Obnovit",
+      "delete": "Smazat",
+      "empty": "Zatím žádné zálohy.",
+      "includeUploads": "Zahrnout nahrané soubory",
+      "includeUploadsHint": "Fotografie, dokumenty a audio mohou výrazně zvětšit velikost archivu",
+      "includeConfig": "Zahrnout konfiguraci a tajemství",
+      "includeConfigHint": "API klíče a nastavení služeb. Tento archiv uchovávejte na bezpečném místě",
+      "importButton": "Importovat",
+      "importing": "Nahrávání {{percent}}%",
+      "verifying": "Ověřování…",
+      "createBackup": "Vytvořit zálohu",
+      "creating": "Vytváření…",
+      "creatingDb": "Vytváření snímku databáze…",
+      "creatingDbAndFiles": "Vytváření archivu databáze a souborů…",
+      "created": "Záloha vytvořena.",
+      "deleting": "Mazání zálohy…",
+      "deleteConfirm": "Smazat zálohu {{name}}?",
+      "deleted": "Záloha smazána.",
+      "uploading": "Nahrávání {{name}}: {{percent}}% ({{loaded}} z {{total}})",
+      "uploaded": "Soubor nahrán. Server kontroluje a importuje archiv…",
+      "imported": "Soubor importován. Nyní jej lze obnovit.",
+      "restoreConfirm": "Obnovit {{name}}? Služby budou krátce zastaveny a aktuální data budou automaticky zálohována.",
+      "restoring": "Kontrola archivu, vytváření bezpečnostní zálohy a obnova dat…",
+      "restored": "Data obnovena, služby běží.",
+      "restoreError": "Chyba obnovy: {{message}}"
+    },
+    "schedule": {
+      "title": "Automatické zálohy",
+      "description": "Správce je spouští sám, není potřeba samostatný cron",
+      "frequency": "Frekvence",
+      "off": "Vypnuto",
+      "daily": "Denně",
+      "weekly": "Týdně",
+      "keepCount": "Ponechat poslední kopie",
+      "includeFiles": "Zahrnout soubory",
+      "includeFilesHint": "Ve výchozím nastavení automatické zálohování ukládá pouze databázi",
+      "lastRun": "Poslední spuštění: {{time}}",
+      "neverRun": "Automatické zálohování ještě nebylo spuštěno",
+      "saving": "Ukládání…",
+      "saveSchedule": "Uložit plán",
+      "saved": "Plán uložen."
+    },
+    "update": {
+      "title": "Aktualizace serveru",
+      "description": "Kontrolují se pouze Docker obrazy serverových služeb. Desktop není ovlivněn.",
+      "checking": "Kontroluji…",
+      "check": "Zkontrolovat",
+      "checkFailed": "Kontrola selhala",
+      "unavailable": "Místně nedostupné",
+      "rebuild": "Obraz přestavěn",
+      "updateAvailable": "Dostupná aktualizace",
+      "upToDate": "Aktuální",
+      "installedBuild": "Nainstalovaná verze",
+      "latestBuild": "Nejnovější verze",
+      "updateDockerOnly": "Aktualizace je k dispozici pouze pro serverové instalace běžící na nejnovějších Docker obrazech.",
+      "checkHint": "„Zkontrolovat“ stáhne obrazy, ale nerestartuje služby.",
+      "updateButton": "Aktualizovat server",
+      "updating": "Aktualizace…",
+      "fetchingInfo": "Stahování informací o nových serverových obrazech…",
+      "found": "Nalezeny nové serverové obrazy.",
+      "alreadyFresh": "Server již používá aktuální obrazy.",
+      "checkError": "Chyba kontroly: {{message}}",
+      "starting": "Spouštění aktualizace…",
+      "updateError": "Chyba aktualizace: {{message}}",
+      "changes": {
+        "services": "Služby",
+        "changed": "Změněno: {{services}}",
+        "rebuiltFromSame": "Obrazy znovu sestaveny ze stejného commitu.",
+        "whatsNew": "Co je nového",
+        "autoBackup": "Před restartem bude automaticky vytvořena záloha databáze.",
+        "cancel": "Zrušit",
+        "updating": "Spouštění…",
+        "confirm": "Aktualizovat server"
+      },
+      "stages": {
+        "queued": "Aktualizace se spouští…",
+        "backup": "Vytváření zálohy databáze…",
+        "restarting": "Restartování serverových služeb. Panel se na krátkou dobu odpojí…",
+        "complete": "Server aktualizován.",
+        "failed": "Aktualizace selhala."
+      }
+    },
+    "error": "Chyba: {{message}}"
+  },
+  "logs": {
+    "title": "Protokoly služeb",
+    "description": "Živý výstup Docker Compose, pouze pro administrátory",
+    "serviceFilter": "Služba",
+    "allServices": "Všechny služby",
+    "lineCount": "Počet řádků",
+    "linesTemplate": "{{count}} řádků",
+    "textFilter": "Filtrovat podle textu",
+    "live": "Živě",
+    "connecting": "Připojování",
+    "resume": "Pokračovat",
+    "pause": "Pozastavit",
+    "clear": "Vymazat",
+    "download": "Stáhnout",
+    "waiting": "Čekání na řádky protokolu…",
+    "paused": "Výstup pozastaven",
+    "streamError": "Stream protokolu skončil chybou",
+    "noConnection": "Žádné připojení k proudu protokolů. Opakování…"
+  },
+  "accessKeys": {
+    "titleNew": "Nový klíč",
+    "newKeyDescription": "Jeden klíč lze použít pro více účtů a počítačů",
+    "nameLabel": "Název",
+    "namePlaceholder": "např. přátelé nebo rodina",
+    "serverUrlLabel": "URL backendu",
+    "createButton": "Vytvořit klíč",
+    "creating": "Vytváření…",
+    "copyLink": "Kopírovat odkaz",
+    "linkCopied": "Odkaz zkopírován.",
+    "issuedKeys": "Vydané klíče",
+    "issuedKeysDesc": "Statistiky se počítají podle účtů, které se přihlásily pomocí klíče",
+    "tableHeaders": {
+      "key": "Klíč",
+      "users": "Uživatelé",
+      "tokensWeek": "Tokeny za týden",
+      "lastUsed": "Naposledy použito"
+    },
+    "revoked": "odvoláno",
+    "revoke": "Odvolat",
+    "confirmRevoke": "Odvolat klíč «{{name}}»?",
+    "keyCreated": "Klíč vytvořen. Plná hodnota je nyní zobrazena pouze jednou.",
+    "keyRevoked": "Klíč zrušen. JWT vydané prostřednictvím něj již nejsou platné.",
+    "emptyState": "Zatím žádné klíče. Staré přihlášení zůstává k dispozici, dokud není vytvořen první klíč.",
+    "error": "Chyba: {{message}}"
+  },
+  "planLimits": {
+    "loadError": "Nepodařilo se načíst limity: {{message}}",
+    "saved": "Limity uloženy. Nová předplatná automaticky získají aktualizované hodnoty. Pro stávající uživatele klikněte na «Synchronizovat».",
+    "syncConfirm": "Aplikovat aktuální limity na všechny stávající uživatele? Tím se aktualizuje daily_web_search_limit, daily_image_gen_limit, max_context_tokens a weekly_tokens_quota.",
+    "syncing": "Probíhá synchronizace…",
+    "synced": "Limity synchronizovány pro všechny uživatele.",
+    "planTitle": "Plán: {{label}}",
+    "weeklyQuotaLabel": "Týdenní kvóta tokenů",
+    "weeklyQuotaHint": "~{{units}} podmíněných jednotek týdně. 0 = bez kvóty (pouze příznaky).",
+    "contextLimitLabel": "Limit kontextu (tokeny)",
+    "webSearchLabel": "Webové vyhledávání za den",
+    "imageGenLabel": "Generování obrázků za den",
+    "allowImageAttach": "Povolit přílohy obrázků",
+    "actions": {
+      "title": "Akce",
+      "description": "Aplikovat limity na všechny aktuální uživatele",
+      "saving": "Ukládání…",
+      "saveLimits": "Uložit limity",
+      "syncAll": "Synchronizovat pro všechny uživatele"
+    },
+    "plans": {
+      "free": {
+        "label": "Zdarma",
+        "hint": "Základní uživatelé bez předplatného"
+      },
+      "standart": {
+        "label": "Standard",
+        "hint": "Standardní předplatné"
+      },
+      "pro": {
+        "label": "Pro",
+        "hint": "Prémiové předplatné"
+      }
+    }
+  },
+  "nav": {
+    "overview": "Přehled",
+    "users": "Uživatelé",
+    "accessKeys": "Přístupové klíče",
+    "models": "Modely",
+    "limits": "Plány a limity",
+    "integrations": "Integrace",
+    "services": "Služby",
+    "system": "Systém",
+    "logs": "Protokoly",
+    "security": "Zabezpečení",
+    "settings": "Nastavení panelu",
+    "overviewTitle": "Přehled",
+    "overviewDesc": "Stav serveru a komponent Chatter",
+    "usersTitle": "Uživatelé",
+    "usersDesc": "Účty, role a vazby",
+    "accessKeysTitle": "Přístupové klíče",
+    "accessKeysDesc": "Desktopové přístupy k tomuto serveru",
+    "modelsTitle": "Modely",
+    "modelsDesc": "Poskytovatel a hlavní model",
+    "limitsTitle": "Plány a omezení",
+    "limitsDesc": "Globální pravidla a individuální omezení",
+    "integrationsTitle": "Integrace",
+    "integrationsDesc": "Externí API a možnosti Chatter",
+    "servicesTitle": "Služby",
+    "servicesDesc": "Telegram, Hlas a další komponenty",
+    "systemTitle": "Systém",
+    "systemDesc": "Server, monitorování a aktualizace",
+    "backups": "Zálohy",
+    "backupsTitle": "Zálohy",
+    "backupsDesc": "Vytvářet, importovat, obnovovat a plánovat",
+    "logsTitle": "Protokoly",
+    "logsDesc": "Události a chyby služeb",
+    "securityTitle": "Zabezpečení",
+    "securityDesc": "Přístup do administračního panelu",
+    "settingsTitle": "Nastavení panelu",
+    "settingsDesc": "Jazyk rozhraní a možnosti zobrazení",
+    "mainNav": "Hlavní navigace",
+    "logout": "Odhlásit se",
+    "serverHealthy": "Server je v pořádku",
+    "serverNeedsCheck": "Vyžaduje kontrolu"
+  },
+  "security": {
+    "adminData": "Administrátorská data",
+    "reLoginHint": "Po změně se budete muset znovu přihlásit",
+    "usernameLabel": "Uživatelské jméno",
+    "currentPassword": "Aktuální heslo",
+    "newPassword": "Nové heslo",
+    "passwordHint": "Alespoň 12 znaků",
+    "changeData": "Změnit údaje"
+  },
+  "settings": {
+    "languageTitle": "Jazyk rozhraní",
+    "languageDescription": "Jazyk používaný pro zobrazení administračního panelu",
+    "languageLabel": "Jazyk",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Francouzština",
+      "it": "Italština",
+      "ja": "Japonština",
+      "ko": "Korejština",
+      "pl": "Polština",
+      "pt-BR": "Portugalština (Brazílie)",
+      "zh-CN": "Čínština (zjednodušená)"
+    }
+  }
+}

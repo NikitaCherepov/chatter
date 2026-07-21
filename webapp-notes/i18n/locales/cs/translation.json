@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Moje poznámky",
+    "subtitle": "Otevřete, upravujte a ukládejte poznámky přímo ve WebApp."
+  },
+  "search": {
+    "placeholder": "Hledat v názvech a textu",
+    "submit": "Hledat",
+    "reset": "Resetovat",
+    "new": "Nová"
+  },
+  "list": {
+    "title": "Poznámky",
+    "total": "Celkem: {{count}}",
+    "empty": "Zatím žádné poznámky",
+    "delete": "Smazat",
+    "previous": "Zpět",
+    "next": "Další",
+    "page": "Stránka {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "Úprava #{{id}}",
+    "new": "Nová poznámka",
+    "close": "Zavřít",
+    "title": "Název",
+    "titlePlaceholder": "Krátký název (volitelný)",
+    "content": "Text poznámky",
+    "contentPlaceholder": "Napište svou poznámku sem...",
+    "saveChanges": "Uložit změny",
+    "create": "Vytvořit poznámku",
+    "cancel": "Zrušit",
+    "delete": "Smazat"
+  },
+  "common": {
+    "empty": "Prázdné"
+  },
+  "confirm": {
+    "delete": "Smazat poznámku #{{id}}?"
+  },
+  "validation": {
+    "contentRequired": "Text poznámky je povinný.",
+    "titleTooLong": "Název nesmí překročit {{max}} znaků.",
+    "contentTooLong": "Text nesmí překročit {{max}} znaků."
+  },
+  "errors": {
+    "title": "Chyba:",
+    "requestFailed": "Požadavek selhal (HTTP {{status}}).",
+    "initDataMissing": "Autorizační data Telegramu nebyla nalezena. Otevřete tuto stránku pomocí tlačítka WebApp v Telegramu.",
+    "api": {
+      "unauthorized": "Autorizace Telegramem selhala. Znovu otevřete WebApp z bota.",
+      "invalid_json_object": "Požadavek má neplatný formát.",
+      "invalid_title": "Název má neplatný formát.",
+      "invalid_content": "Text poznámky má neplatný formát.",
+      "invalid_content_length": "Délka textu poznámky je neplatná.",
+      "invalid_title_length": "Délka názvu je neplatná.",
+      "invalid_id": "ID poznámky je neplatné.",
+      "note_not_found": "Poznámka nebyla nalezena.",
+      "request_body_too_large": "Požadavek je příliš velký.",
+      "invalid_json": "Požadavek obsahuje neplatný JSON.",
+      "invalid_request_body": "Tělo požadavku je neplatné."
+    }
+  }
+}

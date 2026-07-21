@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "sync:languages": "node ../scripts/sync-languages.mjs",
+    "predev": "npm run sync:languages",
+    "prebuild": "npm run sync:languages",
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001"

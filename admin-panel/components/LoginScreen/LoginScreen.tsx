@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from '../../i18n';
+import { SUPPORTED_LANGUAGES, getLanguageDisplayName } from '../../i18n';
 import { Select, type SelectOption } from '../ui/Select/Select';
 import styles from './LoginScreen.module.css';
 
@@ -26,7 +26,7 @@ export function LoginScreen({
   const languageOptions = useMemo<SelectOption[]>(() => {
     return SUPPORTED_LANGUAGES.map((code) => ({
       value: code,
-      label: LANGUAGE_LABELS[code],
+      label: getLanguageDisplayName(code),
     }));
   }, []);
 

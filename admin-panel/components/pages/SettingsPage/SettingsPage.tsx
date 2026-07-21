@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from '../../../i18n';
+import { SUPPORTED_LANGUAGES, getLanguageDisplayName } from '../../../i18n';
 import { Card } from '../../ui/Card/Card';
 import { FormField } from '../../ui/FormField/FormField';
 import { Select, type SelectOption } from '../../ui/Select/Select';
@@ -15,7 +15,7 @@ export function SettingsPage() {
   const languageOptions = useMemo<SelectOption[]>(() => {
     return SUPPORTED_LANGUAGES.map((code) => ({
       value: code,
-      label: LANGUAGE_LABELS[code],
+      label: getLanguageDisplayName(code),
     }));
   }, []);
 

@@ -1,10 +1,10 @@
 import { createInstance } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from './languages';
+import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, getLanguageDisplayName } from './languages';
 import enTranslation from './locales/en/translation.json';
 
-export { LANGUAGE_LABELS, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE };
+export { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, getLanguageDisplayName };
 
 /**
  * Default language is statically imported so the initial render always has
