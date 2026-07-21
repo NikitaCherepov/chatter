@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './ServerUpdateModal.module.css';
 
@@ -12,7 +12,21 @@ export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameC
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const releaseNotes = useMemo(() => {
+    const available = Object.keys(changelog);
+    const lang = (i18n.language || 'en').replace('_', '-').toLowerCase();
+    const baseLang = lang.split('-')[0];
+
+    const match =
+      available.find((l) => l.toLowerCase() === lang) ??
+      available.find((l) => l.toLowerCase().startsWith(baseLang)) ??
+      'en';
+
+    const entries = changelog[match] ?? changelog['en'] ?? [];
+    return entries.map((entry) => `• ${entry}`).join('\n');
+  }, [changelog, i18n.language]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -29,8 +43,12 @@ export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameC
       <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="server-update-title">
         <h2 id="server-update-title">{t('system.update.title')}</h2>
         {rebuiltFromSameCommit && <p className={styles.notice}>{t('system.update.changes.rebuiltFromSame')}</p>}
-        <h3>{t('system.update.changes.whatsNew')}</h3>
-        <pre className={styles.changelog}>{JSON.stringify({ changes: changelog }, null, 2)}</pre>
+        {releaseNotes && (
+          <>
+            <h3>{t('system.update.changes.whatsNew')}</h3>
+            <div className={styles.changelog}>{releaseNotes}</div>
+          </>
+        )}
         <p>{t('system.update.changes.services')}: {changedServices.join(', ')}</p>
         <p>{t('system.update.changes.autoBackup')}</p>
         <div className={styles.actions}>

@@ -37,9 +37,10 @@
   border-radius: 7px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.55;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .actions {

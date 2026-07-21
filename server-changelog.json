@@ -7,6 +7,50 @@
     "en": [
       "Added one",
       "Added two"
+    ],
+    "cs": [
+      "Přidán jeden",
+      "Přidány dva"
+    ],
+    "de": [
+      "Eins hinzugefügt",
+      "Zwei hinzugefügt"
+    ],
+    "es": [
+      "Añadido uno",
+      "Añadido dos"
+    ],
+    "fr": [
+      "Ajouté un",
+      "Ajouté deux"
+    ],
+    "it": [
+      "Aggiunto uno",
+      "Aggiunti due"
+    ],
+    "ja": [
+      "1つ追加",
+      "2つ追加"
+    ],
+    "ko": [
+      "하나 추가됨",
+      "둘 추가됨"
+    ],
+    "pl": [
+      "Dodano jeden",
+      "Dodano dwa"
+    ],
+    "pt-BR": [
+      "Adicionado um",
+      "Adicionado dois"
+    ],
+    "tr": [
+      "Bir eklendi",
+      "İki eklendi"
+    ],
+    "zh-CN": [
+      "添加了一个",
+      "添加了两个"
     ]
   }
 }
