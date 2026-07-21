@@ -50,13 +50,12 @@
     },
     "updateStatus": {
       "title": "アップデート",
-      "description": "サーバーイメージの状態",
+      "description": "サーバーのアップデートを確認",
       "checking": "確認中...",
       "unavailable": "ローカルでは利用不可",
       "updateAvailable": "アップデートあり",
-      "rebuild": "イメージ再構築済み",
       "upToDate": "最新",
-      "goUpdate": "実行"
+      "goUpdate": "移動"
     }
   },
   "common": {

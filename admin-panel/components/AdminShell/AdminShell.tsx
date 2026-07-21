@@ -110,7 +110,7 @@ export function AdminShell({
               <button
                 type="button"
                 className={styles.updateBadge}
-                onClick={() => onSectionChange('system')}
+                onClick={() => onSectionChange('overview')}
                 title={t('nav.updateAvailable')}
               >
                 <span />

@@ -50,13 +50,12 @@
     },
     "updateStatus": {
       "title": "Mises à jour",
-      "description": "Statut de l'image serveur",
+      "description": "Vérifier les mises à jour du serveur",
       "checking": "Vérification...",
       "unavailable": "Indisponible localement",
       "updateAvailable": "Mise à jour disponible",
-      "rebuild": "Image reconstruite",
       "upToDate": "À jour",
-      "goUpdate": "Mettre à jour"
+      "goUpdate": "Aller"
     }
   },
   "common": {

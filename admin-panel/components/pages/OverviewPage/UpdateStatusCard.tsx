@@ -53,7 +53,7 @@ export function UpdateStatusCard() {
   }
 
   if (checking && !info) {
-    return <strong className={styles.updateBig}>{t('overview.updateStatus.checking')}</strong>;
+    return <strong className={styles.updateChecking}>{t('overview.updateStatus.checking')}</strong>;
   }
 
   if (!info?.supported) {
@@ -71,7 +71,7 @@ export function UpdateStatusCard() {
         <div className={styles.updateMiniInfo}>
           <span className={`${styles.updateDot} ${info.available ? styles.updateWarn : styles.updateOk}`} />
           <strong>{info.available
-            ? (info.rebuiltFromSameCommit ? t('overview.updateStatus.rebuild') : t('overview.updateStatus.updateAvailable'))
+            ? t('overview.updateStatus.updateAvailable')
             : t('overview.updateStatus.upToDate')}</strong>
         </div>
         {message && <small className={styles.updateMsg}>{message}</small>}

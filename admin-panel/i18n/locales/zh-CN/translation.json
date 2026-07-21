@@ -50,11 +50,10 @@
     },
     "updateStatus": {
       "title": "更新",
-      "description": "服务器镜像状态",
+      "description": "检查服务器更新",
       "checking": "检查中...",
       "unavailable": "本地不可用",
       "updateAvailable": "有可用更新",
-      "rebuild": "镜像已重建",
       "upToDate": "已是最新",
       "goUpdate": "前往"
     }

@@ -38,11 +38,10 @@
     },
     "updateStatus": {
       "title": "Updates",
-      "description": "Server image status",
+      "description": "Check for server updates",
       "checking": "Checking...",
       "unavailable": "Unavailable locally",
       "updateAvailable": "Update available",
-      "rebuild": "Image rebuilt",
       "upToDate": "Up to date",
       "goUpdate": "Go"
     },

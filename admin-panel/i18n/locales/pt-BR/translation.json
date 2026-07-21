@@ -50,11 +50,10 @@
     },
     "updateStatus": {
       "title": "Atualizações",
-      "description": "Status da imagem do servidor",
+      "description": "Verificar atualizações do servidor",
       "checking": "Verificando...",
       "unavailable": "Indisponível localmente",
       "updateAvailable": "Atualização disponível",
-      "rebuild": "Imagem reconstruída",
       "upToDate": "Atualizado",
       "goUpdate": "Ir"
     }

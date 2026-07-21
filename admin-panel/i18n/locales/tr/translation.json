@@ -50,11 +50,10 @@
     },
     "updateStatus": {
       "title": "Güncellemeler",
-      "description": "Sunucu imaj durumu",
+      "description": "Sunucu güncellemelerini kontrol et",
       "checking": "Kontrol ediliyor...",
       "unavailable": "Yerel olarak kullanılamıyor",
       "updateAvailable": "Güncelleme mevcut",
-      "rebuild": "İmaj yeniden oluşturuldu",
       "upToDate": "Güncel",
       "goUpdate": "Git"
     }

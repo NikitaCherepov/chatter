@@ -50,13 +50,12 @@
     },
     "updateStatus": {
       "title": "Aktualizacje",
-      "description": "Stan obrazu serwera",
+      "description": "Sprawdź aktualizacje serwera",
       "checking": "Sprawdzanie...",
-      "unavailable": "Niedostępny lokalnie",
+      "unavailable": "Niedostępne lokalnie",
       "updateAvailable": "Dostępna aktualizacja",
-      "rebuild": "Obraz przebudowany",
-      "upToDate": "Aktualny",
-      "goUpdate": "Aktualizuj"
+      "upToDate": "Aktualne",
+      "goUpdate": "Przejdź"
     }
   },
   "common": {
