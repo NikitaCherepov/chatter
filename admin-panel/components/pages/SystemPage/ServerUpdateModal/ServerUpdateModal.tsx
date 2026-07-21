@@ -50,6 +50,13 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [onCancel, updating]);
 
+  useEffect(() => {
+    if (operationStatus === 'complete') {
+      const timer = setTimeout(() => window.location.reload(), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [operationStatus]);
+
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={event => {
       if (event.target === event.currentTarget && !updating) onCancel();
@@ -78,8 +85,14 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
           </div>
         )}
         <div className={styles.actions}>
-          <button type="button" className="buttonSecondary" onClick={onCancel} disabled={updating}>{t('system.update.changes.cancel')}</button>
-          <button type="button" onClick={onConfirm} disabled={updating}>{updating ? t('system.update.changes.updating') : t('system.update.changes.confirm')}</button>
+          {showProgress ? (
+            <button type="button" onClick={onCancel}>{t('system.update.changes.cancel')}</button>
+          ) : (
+            <>
+              <button type="button" className="buttonSecondary" onClick={onCancel}>{t('system.update.changes.cancel')}</button>
+              <button type="button" onClick={onConfirm}>{t('system.update.changes.confirm')}</button>
+            </>
+          )}
         </div>
       </div>
     </div>

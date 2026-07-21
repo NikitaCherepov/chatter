@@ -7,7 +7,7 @@ export function useServerUpdate() {
   return useQuery({
     queryKey: ['server-update'],
     queryFn: () => serverUpdateService.getStatus(),
-    staleTime: 5 * 60_000,
+    staleTime: 1 * 60_000,
     refetchInterval: (query) => {
       const status = query.state.data?.operation.status;
       return status && activeStatuses.has(status) ? 2_000 : false;
