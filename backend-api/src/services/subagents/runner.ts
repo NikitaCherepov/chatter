@@ -220,13 +220,26 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   const mode = resolveMode(ctx);
   const maxLoops = agent.maxLoops;
   const debugRaw = process.env.DEBUG_AI_RAW_SUBAGENT === '1';
+  let quotaFinalizationIssued = false;
 
   try {
   for (let loop = 0; loop < maxLoops; loop++) {
     _throwIfAborted(ctx.signal);
 
+    const latestUsage = usageCalls[usageCalls.length - 1];
+    const finalizeForQuota = !quotaFinalizationIssued
+      && !!latestUsage
+      && !!ctx.shouldStopForQuota?.(latestUsage);
+    if (finalizeForQuota) {
+      quotaFinalizationIssued = true;
+      messages.push({
+        role: 'system',
+        content: 'The token quota has been exhausted. Do not call any more tools. Return the best partial result using only the information collected so far.',
+      });
+    }
+
     // Inject "wrap up" nudge near the limit
-    if (loop === maxLoops - 2) {
+    if (!finalizeForQuota && loop === maxLoops - 2) {
       messages.push({
         role: 'system',
         content: 'У тебя осталось 2 итерации. Заверши задачу и верни итоговый результат.',
@@ -240,7 +253,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         messages,
         max_tokens: 8192,
       };
-      if (allToolDefs.length > 0) {
+      if (!finalizeForQuota && allToolDefs.length > 0) {
         requestPayload.tools = allToolDefs;
         requestPayload.tool_choice = 'auto';
       }
@@ -290,9 +303,14 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     };
 
     // If no tool calls — we have the final answer
-    const toolCalls = message.tool_calls;
+    const toolCalls = finalizeForQuota ? undefined : message.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
-      const content = message.content || '';
+      const previousContent = messages
+        .slice(0, -1)
+        .filter(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.trim())
+        .map(m => m.content)
+        .pop() as string | undefined;
+      const content = message.content || previousContent || 'Token quota exhausted before the subagent could produce a final answer.';
       console.log(`[subagent:${resolvedAgentName}] === finished after ${loop + 1} loops, answer: ${content.slice(0, 500)}`);
       currentIteration.is_final = true;
       iterations.push(currentIteration);

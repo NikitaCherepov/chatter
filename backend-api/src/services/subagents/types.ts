@@ -56,6 +56,8 @@ export interface SubagentContext {
   runtimeToolDefs?: any[];
   /** Reports every provider completion so the parent request can charge quota accurately. */
   onUsageCall?: (agentName: string, usage: TokenUsageCall) => void;
+  /** Stops paid agent loops gracefully once this request reaches the user's quota. */
+  shouldStopForQuota?: (usage: TokenUsageCall) => boolean;
 }
 
 /** Одна итерация агентского цикла субагента (аналог ToolIteration основного агента). */

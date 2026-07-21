@@ -36,6 +36,19 @@ export const getCoefficient = (modelId: string | null | undefined): number => {
   return value === undefined ? 1.0 : value;
 };
 
+/** Calculates quota units without writing anything to the database. */
+export const calculateChargedTokens = (
+  totalTokens: number,
+  modelId: string | null | undefined,
+): { charged: number; coefficient: number; isFree: boolean } => {
+  const coefficient = getCoefficient(modelId);
+  return {
+    charged: Math.max(0, Math.round(Math.max(0, totalTokens || 0) * coefficient * 1000) / 1000),
+    coefficient,
+    isFree: coefficient === 0,
+  };
+};
+
 /** Upsert a coefficient for a model. */
 export const setCoefficient = (modelId: string, coefficient: number): void => {
   const safe = Number.isFinite(coefficient) && coefficient >= 0 ? coefficient : 1.0;
@@ -170,9 +183,7 @@ export type ChargeInput = {
  */
 export const chargeTokens = (input: ChargeInput): { charged: number; coefficient: number; isFree: boolean } => {
   try {
-    const coefficient = getCoefficient(input.modelId);
-    const charged = Math.max(0, Math.round(input.totalTokens * coefficient * 1000) / 1000);
-    const isFree = coefficient === 0;
+    const { charged, coefficient, isFree } = calculateChargedTokens(input.totalTokens, input.modelId);
     const now = getNowUnix();
 
     db.prepare(`

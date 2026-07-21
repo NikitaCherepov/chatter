@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
-import { checkQuota, chargeTokens } from './token-quota.js';
+import { calculateChargedTokens, checkQuota, chargeTokens } from './token-quota.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -3029,7 +3029,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
 
@@ -5386,6 +5386,7 @@ Respond in the user's language. Be detailed and precise.`
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
           onUsageCall: subagentExtra?.onSubagentUsageCall,
+          shouldStopForQuota: subagentExtra?.shouldStopForQuota,
           runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
       });
@@ -5485,6 +5486,7 @@ Respond in the user's language. Be detailed and precise.`
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
           onSubagentTrace: subagentExtra?.onSubagentTrace,
           onUsageCall: subagentExtra?.onSubagentUsageCall,
+          shouldStopForQuota: subagentExtra?.shouldStopForQuota,
           runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
       });
@@ -5676,9 +5678,14 @@ export const sendMessageThroughAi = async (
   if (!user) throw new Error('user_not_found');
   if (user.status !== 'approved' && user.is_admin !== 1) throw new Error('user_not_approved');
 
+  const preferredModelId = options?.preferredModel || user.preferred_model || null;
+  const selectedMainModelIsFree = preferredModelId
+    ? calculateChargedTokens(0, preferredModelId).isFree
+    : false;
+
   // Weekly token quota check (admin bypasses). Lazily advances the rolling window.
   const quotaCheck = checkQuota(userId, user.is_admin === 1);
-  if (!quotaCheck.ok) {
+  if (!quotaCheck.ok && !selectedMainModelIsFree) {
     const err = new Error('quota_exceeded') as Error & { code?: string; quota?: number; used?: number; resetsAt?: number };
     err.code = 'quota_exceeded';
     err.quota = quotaCheck.quota;
@@ -5703,7 +5710,6 @@ export const sendMessageThroughAi = async (
   const userTextForHistory = options?.persistUserText?.trim() || text;
 
   // Резолв preferred model: из options (явный запрос) или из профиля юзера
-  const preferredModelId = options?.preferredModel || user.preferred_model || null;
   const isAdmin = user.is_admin === 1;
   let manualModel = preferredModelId ? resolveManualModel(preferredModelId, isAdmin) : undefined;
   const selectedManualModelName = manualModel?.name || null;
@@ -5813,6 +5819,20 @@ export const sendMessageThroughAi = async (
     });
     totalTokens += normalized.total_tokens;
     return normalized;
+  };
+  const shouldStopForQuota = (latestUsage: TokenUsageCall): boolean => {
+    if (isAdmin || quotaCheck.quota <= 0) return false;
+    const latestCharge = calculateChargedTokens(
+      latestUsage.total_tokens,
+      latestUsage.uniqueId || latestUsage.model,
+    );
+    // A free model must remain usable even when paid quota is exhausted.
+    if (latestCharge.isFree) return false;
+
+    const requestCharge = [...usageCalls, ...subagentUsageCalls].reduce((total, call) => (
+      total + calculateChargedTokens(call.total_tokens, call.uniqueId || call.model).charged
+    ), 0);
+    return quotaCheck.used + requestCharge >= quotaCheck.quota;
   };
 
   /**
@@ -6320,25 +6340,41 @@ PRO
   const mapUpdateSink: { value: MapUpdatePayload | null } = { value: null };
   let modelFallbackNotice: string | null = null;
   let modelFallbackNoticeSent = false;
+  let quotaFinalizationIssued = false;
 
   while (loop < effectiveMaxLoops) {
     loop += 1;
 
+    const latestUsage = usageCalls[usageCalls.length - 1];
+    const finalizeForQuota = !quotaFinalizationIssued
+      && !!latestUsage
+      && shouldStopForQuota(latestUsage);
+    if (finalizeForQuota) {
+      quotaFinalizationIssued = true;
+      currentMessages.push({
+        role: 'system',
+        content: 'The token quota has been exhausted. Do not call any more tools. Return the best final answer using only the information collected so far.',
+      });
+    }
+
     // Hint when approaching limit — nudge the model to wrap up
-    if (loop === effectiveMaxLoops - 1) {
+    if (!finalizeForQuota && loop === effectiveMaxLoops - 1) {
       currentMessages.push({
         role: 'system',
         content: `Внимание: остался один вызов инструмента. После него лимит будет исчерпан. Вызови последний инструмент если нужно, а затем ОБЯЗАТЕЛЬНО сформулируй итоговый ответ пользователю, подведя результаты всех вызовов.`
       });
     }
-    const completion = await runCompletion(executionMode, {
+    const completionPayload: Record<string, unknown> = {
       messages: currentMessages,
-      tools: executionTools,
-      tool_choice: 'auto',
       max_tokens: 16384,
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
-    }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
+    };
+    if (!finalizeForQuota) {
+      completionPayload.tools = executionTools;
+      completionPayload.tool_choice = 'auto';
+    }
+    const completion = await runCompletion(executionMode, completionPayload, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
     // Debug: log image sizes when present
     if (hasImages) {
       const imgSizes = images.map(img => ({ mimeType: img.mimeType, base64Len: img.base64.length, approxKB: Math.round(img.base64.length * 0.75 / 1024) }));
@@ -6387,6 +6423,9 @@ PRO
     const response = completion.response;
     recordCompletionUsage(completion);
     const message = response?.choices?.[0]?.message || {};
+    if (finalizeForQuota && message.tool_calls?.length) {
+      delete message.tool_calls;
+    }
     const stepReasoning = extractReasoning(message, response);
     if (stepReasoning) reasoningParts.push(stepReasoning);
     // Collect tool calls for UI display
@@ -6509,6 +6548,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           onSubagentUsageCall: (agentName: string, usage: TokenUsageCall) => {
             subagentUsageCalls.push({ ...usage, agentName });
           },
+          shouldStopForQuota,
           displayManifest: options?.displayManifest,
           currentDisplayState: options?.currentDisplayState,
           availableToolDefs: executionTools.filter(
