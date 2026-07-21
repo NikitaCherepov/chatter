@@ -47,6 +47,16 @@
       "start": "{{name}} starten",
       "running": "läuft…",
       "notRunning": "läuft nicht"
+    },
+    "updateStatus": {
+      "title": "Updates",
+      "description": "Server-Imagestatus",
+      "checking": "Prüfe...",
+      "unavailable": "Lokal nicht verfügbar",
+      "updateAvailable": "Update verfügbar",
+      "rebuild": "Image neu erstellt",
+      "upToDate": "Aktuell",
+      "goUpdate": "Los"
     }
   },
   "common": {
@@ -702,7 +712,8 @@
     "backupsDesc": "Erstellen, importieren, wiederherstellen und planen",
     "settings": "Panel-Einstellungen",
     "settingsTitle": "Panel-Einstellungen",
-    "settingsDesc": "Sprache der Benutzeroberfläche und Anzeigeoptionen"
+    "settingsDesc": "Sprache der Benutzeroberfläche und Anzeigeoptionen",
+    "updateAvailable": "Update verfügbar"
   },
   "security": {
     "adminData": "Admin-Daten",

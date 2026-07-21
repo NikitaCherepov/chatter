@@ -47,6 +47,16 @@
       "start": "Spustit {{name}}",
       "running": "běží…",
       "notRunning": "neběží"
+    },
+    "updateStatus": {
+      "title": "Aktualizace",
+      "description": "Stav obrazu serveru",
+      "checking": "Kontroluji...",
+      "unavailable": "Místně nedostupné",
+      "updateAvailable": "Aktualizace k dispozici",
+      "rebuild": "Obraz přestavěn",
+      "upToDate": "Aktuální",
+      "goUpdate": "Provést"
     }
   },
   "common": {
@@ -687,7 +697,8 @@
     "mainNav": "Hlavní navigace",
     "logout": "Odhlásit se",
     "serverHealthy": "Server je v pořádku",
-    "serverNeedsCheck": "Vyžaduje kontrolu"
+    "serverNeedsCheck": "Vyžaduje kontrolu",
+    "updateAvailable": "Aktualizace k dispozici"
   },
   "security": {
     "adminData": "Administrátorská data",

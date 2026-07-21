@@ -47,6 +47,16 @@
       "start": "{{name}} を開始",
       "running": "実行中…",
       "notRunning": "未実行"
+    },
+    "updateStatus": {
+      "title": "アップデート",
+      "description": "サーバーイメージの状態",
+      "checking": "確認中...",
+      "unavailable": "ローカルでは利用不可",
+      "updateAvailable": "アップデートあり",
+      "rebuild": "イメージ再構築済み",
+      "upToDate": "最新",
+      "goUpdate": "実行"
     }
   },
   "common": {
@@ -702,7 +712,8 @@
     "backupsDesc": "作成、インポート、復元、スケジュール",
     "settings": "パネル設定",
     "settingsTitle": "パネル設定",
-    "settingsDesc": "インターフェース言語と表示オプション"
+    "settingsDesc": "インターフェース言語と表示オプション",
+    "updateAvailable": "アップデートあり"
   },
   "security": {
     "adminData": "管理者データ",

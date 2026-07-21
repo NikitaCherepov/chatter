@@ -9,7 +9,6 @@ import type { MetricsRange } from '../../../lib/services/systemService';
 import { ServerMetrics } from './ServerMetrics';
 import { MetricsChart } from './MetricsChart';
 import { RangeSelector } from './RangeSelector';
-import { ServerUpdatePanel } from './ServerUpdatePanel';
 import { formatBytes } from './types';
 import styles from './SystemPage.module.css';
 
@@ -65,7 +64,6 @@ export function SystemPage() {
           </div>
         </>
       )}
-      <ServerUpdatePanel />
       {infoQuery.error && <p className={styles.state}>{t('system.error', { message: infoQuery.error instanceof Error ? infoQuery.error.message : String(infoQuery.error) })}</p>}
     </div>
   );

@@ -47,6 +47,16 @@
       "start": "Avvia {{name}}",
       "running": "in esecuzione…",
       "notRunning": "non in esecuzione"
+    },
+    "updateStatus": {
+      "title": "Aggiornamenti",
+      "description": "Stato dell'immagine del server",
+      "checking": "Controllo in corso...",
+      "unavailable": "Non disponibile localmente",
+      "updateAvailable": "Aggiornamento disponibile",
+      "rebuild": "Immagine ricostruita",
+      "upToDate": "Aggiornato",
+      "goUpdate": "Vai"
     }
   },
   "common": {
@@ -702,7 +712,8 @@
     "backupsDesc": "Crea, importa, ripristina e pianifica",
     "settings": "Impostazioni Pannello",
     "settingsTitle": "Impostazioni Pannello",
-    "settingsDesc": "Lingua dell'interfaccia e opzioni di visualizzazione"
+    "settingsDesc": "Lingua dell'interfaccia e opzioni di visualizzazione",
+    "updateAvailable": "Aggiornamento disponibile"
   },
   "security": {
     "adminData": "Dati amministratore",

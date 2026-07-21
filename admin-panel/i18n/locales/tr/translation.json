@@ -47,6 +47,16 @@
       "start": "{{name}}'i başlat",
       "running": "çalışıyor…",
       "notRunning": "çalışmıyor"
+    },
+    "updateStatus": {
+      "title": "Güncellemeler",
+      "description": "Sunucu imaj durumu",
+      "checking": "Kontrol ediliyor...",
+      "unavailable": "Yerel olarak kullanılamıyor",
+      "updateAvailable": "Güncelleme mevcut",
+      "rebuild": "İmaj yeniden oluşturuldu",
+      "upToDate": "Güncel",
+      "goUpdate": "Git"
     }
   },
   "common": {
@@ -687,7 +697,8 @@
     "mainNav": "Ana navigasyon",
     "logout": "Çıkış yap",
     "serverHealthy": "Sunucu sağlıklı",
-    "serverNeedsCheck": "Kontrol edilmesi gerekiyor"
+    "serverNeedsCheck": "Kontrol edilmesi gerekiyor",
+    "updateAvailable": "Güncelleme mevcut"
   },
   "security": {
     "adminData": "Yönetici verileri",

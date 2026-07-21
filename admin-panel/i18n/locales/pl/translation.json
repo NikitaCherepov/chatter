@@ -47,6 +47,16 @@
       "start": "Uruchom {{name}}",
       "running": "uruchomiony…",
       "notRunning": "nie uruchomiony"
+    },
+    "updateStatus": {
+      "title": "Aktualizacje",
+      "description": "Stan obrazu serwera",
+      "checking": "Sprawdzanie...",
+      "unavailable": "Niedostępny lokalnie",
+      "updateAvailable": "Dostępna aktualizacja",
+      "rebuild": "Obraz przebudowany",
+      "upToDate": "Aktualny",
+      "goUpdate": "Aktualizuj"
     }
   },
   "common": {
@@ -702,7 +712,8 @@
     "backupsDesc": "Twórz, importuj, przywracaj i planuj",
     "settings": "Ustawienia panelu",
     "settingsTitle": "Ustawienia panelu",
-    "settingsDesc": "Język interfejsu i opcje wyświetlania"
+    "settingsDesc": "Język interfejsu i opcje wyświetlania",
+    "updateAvailable": "Dostępna aktualizacja"
   },
   "security": {
     "adminData": "Dane administratora",

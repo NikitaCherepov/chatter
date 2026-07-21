@@ -36,6 +36,16 @@
         "description": "Распознавание и озвучка для Telegram"
       }
     },
+    "updateStatus": {
+      "title": "Обновления",
+      "description": "Состояние серверных образов",
+      "checking": "Проверяем…",
+      "unavailable": "Недоступно локально",
+      "updateAvailable": "Доступно обновление",
+      "rebuild": "Образ пересобран",
+      "upToDate": "Обновлений нет",
+      "goUpdate": "Перейти"
+    },
     "config": {
       "title": "Конфигурация",
       "description": "Текущее состояние подключений",
@@ -678,7 +688,8 @@
     "mainNav": "Основная навигация",
     "logout": "Выйти",
     "serverHealthy": "Сервер работает",
-    "serverNeedsCheck": "Нужна проверка"
+    "serverNeedsCheck": "Нужна проверка",
+    "updateAvailable": "Доступно обновление"
   },
   "security": {
     "adminData": "Данные администратора",

@@ -172,6 +172,32 @@
 .serverProblem span {
   background: var(--color-warning);
 }
+.headerStatus {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.updateBadge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-warning);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.updateBadge span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-warning);
+}
+.updateBadge:hover {
+  text-decoration: underline;
+}
 .content {
   height: calc(100vh - 64px);
   overflow-y: auto;

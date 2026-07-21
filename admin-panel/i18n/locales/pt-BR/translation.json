@@ -47,6 +47,16 @@
       "start": "Iniciar {{name}}",
       "running": "em execução…",
       "notRunning": "não está em execução"
+    },
+    "updateStatus": {
+      "title": "Atualizações",
+      "description": "Status da imagem do servidor",
+      "checking": "Verificando...",
+      "unavailable": "Indisponível localmente",
+      "updateAvailable": "Atualização disponível",
+      "rebuild": "Imagem reconstruída",
+      "upToDate": "Atualizado",
+      "goUpdate": "Ir"
     }
   },
   "common": {
@@ -702,7 +712,8 @@
     "backupsDesc": "Criar, importar, restaurar e agendar",
     "settings": "Configurações do Painel",
     "settingsTitle": "Configurações do Painel",
-    "settingsDesc": "Idioma da interface e opções de exibição"
+    "settingsDesc": "Idioma da interface e opções de exibição",
+    "updateAvailable": "Atualização disponível"
   },
   "security": {
     "adminData": "Dados do administrador",

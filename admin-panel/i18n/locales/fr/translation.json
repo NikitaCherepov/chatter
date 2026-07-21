@@ -47,6 +47,16 @@
       "start": "Démarrer {{name}}",
       "running": "en cours…",
       "notRunning": "pas en cours"
+    },
+    "updateStatus": {
+      "title": "Mises à jour",
+      "description": "Statut de l'image serveur",
+      "checking": "Vérification...",
+      "unavailable": "Indisponible localement",
+      "updateAvailable": "Mise à jour disponible",
+      "rebuild": "Image reconstruite",
+      "upToDate": "À jour",
+      "goUpdate": "Mettre à jour"
     }
   },
   "common": {
@@ -702,7 +712,8 @@
     "backupsDesc": "Créer, importer, restaurer et planifier",
     "settings": "Paramètres du panneau",
     "settingsTitle": "Paramètres du panneau",
-    "settingsDesc": "Langue de l'interface et options d'affichage"
+    "settingsDesc": "Langue de l'interface et options d'affichage",
+    "updateAvailable": "Mise à jour disponible"
   },
   "security": {
     "adminData": "Données d'administration",

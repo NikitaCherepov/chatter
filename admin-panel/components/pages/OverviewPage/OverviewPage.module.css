@@ -216,6 +216,46 @@
   background: var(--accent);
   transition: width 0.2s;
 }
+.updateMini {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.updateMiniInfo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.updateMini strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.updateDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+.updateOk { background: var(--color-success); }
+.updateWarn { background: var(--color-warning); }
+.updateOff { background: var(--border-medium); }
+.updateMini button {
+  align-self: flex-start;
+}
+.updateBig {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.updateMsg {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.updateActions {
+  display: flex;
+  gap: 8px;
+}
 @media (max-width: 1000px) {
   .statusGrid {
     grid-template-columns: repeat(2, 1fr);

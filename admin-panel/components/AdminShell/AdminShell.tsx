@@ -3,6 +3,7 @@ import type { Service } from '../../lib/types';
 import { useTranslation } from 'react-i18next';
 import { Brand } from '../Brand/Brand';
 import { Icon, type IconName } from '../icons/icons';
+import { useServerUpdate } from '../../lib/hooks/useServerUpdate';
 import styles from './AdminShell.module.css';
 
 export type AdminSection =
@@ -38,6 +39,8 @@ export function AdminShell({
   onLogout,
 }: Props) {
   const { t } = useTranslation();
+  const updateQuery = useServerUpdate();
+  const updateAvailable = updateQuery.data?.supported && updateQuery.data.available;
 
   const primaryItems: NavItem[] = [
     { id: 'overview', label: t('nav.overview'), icon: 'overview' },
@@ -102,11 +105,24 @@ export function AdminShell({
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
-          <div
-            className={`${styles.serverStatus} ${healthy ? styles.serverHealthy : styles.serverProblem}`}
-          >
-            <span />
-            {healthy ? t('nav.serverHealthy') : t('nav.serverNeedsCheck')}
+          <div className={styles.headerStatus}>
+            {updateAvailable && (
+              <button
+                type="button"
+                className={styles.updateBadge}
+                onClick={() => onSectionChange('system')}
+                title={t('nav.updateAvailable')}
+              >
+                <span />
+                {t('nav.updateAvailable')}
+              </button>
+            )}
+            <div
+              className={`${styles.serverStatus} ${healthy ? styles.serverHealthy : styles.serverProblem}`}
+            >
+              <span />
+              {healthy ? t('nav.serverHealthy') : t('nav.serverNeedsCheck')}
+            </div>
           </div>
         </header>
         <div className={styles.content}>{children}</div>

@@ -47,6 +47,16 @@
       "start": "启动 {{name}}",
       "running": "运行中…",
       "notRunning": "未运行"
+    },
+    "updateStatus": {
+      "title": "更新",
+      "description": "服务器镜像状态",
+      "checking": "检查中...",
+      "unavailable": "本地不可用",
+      "updateAvailable": "有可用更新",
+      "rebuild": "镜像已重建",
+      "upToDate": "已是最新",
+      "goUpdate": "前往"
     }
   },
   "common": {
@@ -702,7 +712,8 @@
     "backupsDesc": "创建、导入、恢复和计划",
     "settings": "面板设置",
     "settingsTitle": "面板设置",
-    "settingsDesc": "界面语言和显示选项"
+    "settingsDesc": "界面语言和显示选项",
+    "updateAvailable": "有可用更新"
   },
   "security": {
     "adminData": "管理员数据",

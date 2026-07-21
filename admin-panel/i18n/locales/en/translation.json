@@ -36,6 +36,16 @@
         "description": "Speech recognition and TTS for Telegram"
       }
     },
+    "updateStatus": {
+      "title": "Updates",
+      "description": "Server image status",
+      "checking": "Checking...",
+      "unavailable": "Unavailable locally",
+      "updateAvailable": "Update available",
+      "rebuild": "Image rebuilt",
+      "upToDate": "Up to date",
+      "goUpdate": "Go"
+    },
     "config": {
       "title": "Configuration",
       "description": "Current connection status",
@@ -678,7 +688,8 @@
     "mainNav": "Main navigation",
     "logout": "Log out",
     "serverHealthy": "Server is healthy",
-    "serverNeedsCheck": "Needs checking"
+    "serverNeedsCheck": "Needs checking",
+    "updateAvailable": "Update available"
   },
   "security": {
     "adminData": "Admin data",

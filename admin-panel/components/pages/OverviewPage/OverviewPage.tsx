@@ -5,6 +5,7 @@ import type { Service, Settings } from '../../../lib/types';
 import { api } from '../../../lib/api';
 import { Icon } from '../../icons/icons';
 import { Card } from '../../ui/Card/Card';
+import { UpdateStatusCard } from './UpdateStatusCard';
 import styles from './OverviewPage.module.css';
 
 const serviceNames: Record<string, string> = {
@@ -29,11 +30,6 @@ export function OverviewPage({
   const [actionError, setActionError] = useState('');
   const { t } = useTranslation();
   const serviceMap = new Map(services.map((service) => [service.service, service]));
-  const configured = [
-    settings.hasAiApiKey,
-    settings.hasTelegramToken,
-    settings.hasVoiceToken,
-  ].filter(Boolean).length;
 
   async function controlService(service: string, action: 'start' | 'stop' | 'restart') {
     setBusyService(service);
@@ -109,12 +105,9 @@ export function OverviewPage({
             />
           </div>
         </Card>
-        <Card title={t('overview.config.title')} description={t('overview.config.description')}>
+        <Card title={t('overview.updateStatus.title')} description={t('overview.updateStatus.description')}>
           <div className={styles.summary}>
-            <strong>{t('overview.config.keysSummary', { count: configured })}</strong>
-            <div className={styles.progress}>
-              <span style={{ width: `${(configured / 3) * 100}%` }} />
-            </div>
+            <UpdateStatusCard />
           </div>
         </Card>
       </div>
