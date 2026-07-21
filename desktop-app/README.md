@@ -15,6 +15,43 @@ npm run dev
 npm run build
 ```
 
+## Server Connection and Content Security Policy
+
+The Desktop server-access key, account JWT, and Content Security Policy (CSP) solve different problems:
+
+- The server-access key proves that this Desktop installation may use a particular self-hosted Chatter server.
+- The account JWT authenticates the user after login.
+- CSP limits what the Electron renderer is technically allowed to load or contact if renderer content is compromised.
+
+The pairing flow is owned by the Electron main process, not by an unrestricted renderer request:
+
+1. The renderer parses the `chatter://` link and sends the server URL and access key through the narrow preload API.
+2. The main process accepts only HTTP(S) URLs without embedded credentials, query strings, or fragments.
+3. The main process validates the access key through `/api/v1/server-access/validate` with a 15-second timeout.
+4. Only the canonical server origin is persisted in Electron's `userData/trusted-server.json`. The access key is not written to that file.
+5. The window reloads once when the trusted origin changes. The next main document receives a CSP that allows HTTP and WebSocket traffic only to that origin.
+
+On upgrade, an existing renderer-side connection is validated once and migrated automatically. Clearing or changing the server clears the trusted main-process origin and reloads the renderer.
+
+The packaged CSP permits:
+
+- bundled scripts and styles;
+- inline styles required by the current React UI, but not inline scripts or `eval`;
+- API, media, images, and WebSocket traffic from the selected Chatter server;
+- the fixed Google Fonts hosts and the fixed Carto, ArcGIS, and OpenStreetMap tile hosts;
+- local `data:`/`blob:` images, media, fonts, and workers where required.
+
+Frames, plugins/objects, arbitrary base URLs, arbitrary form targets, third-party scripts, and arbitrary network origins are denied. Development-only Vite and localhost sources are added only when the application is not packaged.
+
+Relevant files:
+
+- `src/main/main.ts` — URL normalization, server-key validation, trusted-origin persistence, and CSP header generation.
+- `src/main/preload.ts` — narrow `authorizeServer` and `clearTrustedServer` IPC bridge.
+- `src/renderer/lib/api.ts` — pairing-link parsing and renderer connection persistence.
+- `src/renderer/lib/auth.tsx` — automatic migration of connections created before the CSP implementation.
+
+If an embedded browser is added later, it must use a separate `WebContentsView` and a separate Electron session/partition. Do not render arbitrary websites inside the Chatter renderer or relax the Chatter CSP for them.
+
 ## Voice, Whisper, Wake Word
 
 The voice scenario in the desktop app mainly lives in the Electron main process and in the `ChatPage` renderer page.

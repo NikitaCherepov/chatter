@@ -8,6 +8,8 @@ declare global {
       appVersion: string;
       getSystemLanguages: () => Promise<string[]>;
       setTitleBarOverlay: (colors: { color: string; symbolColor: string }) => Promise<void>;
+      authorizeServer: (server: string, key: string, forceValidation?: boolean) => Promise<{ apiBase: string; reloadRequired: boolean }>;
+      clearTrustedServer: () => Promise<{ reloadRequired: boolean }>;
       onAvatarState: (callback: (payload: unknown) => void) => () => void;
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;

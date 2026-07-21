@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, session, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
@@ -1407,6 +1407,139 @@ function formatDesktopReleaseNotes(value: unknown): string {
     .join('\n\n');
 }
 
+type TrustedServer = {
+  origin: string;
+};
+
+let trustedServerOrigin: string | null = null;
+
+function normalizeServerUrl(rawServer: unknown): { apiBase: string; origin: string } {
+  if (typeof rawServer !== 'string' || rawServer.length > 2048) {
+    throw new Error('invalid_server_url');
+  }
+
+  const url = new URL(rawServer.trim());
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error('invalid_server_url');
+  }
+
+  return {
+    apiBase: url.toString().replace(/\/+$/, ''),
+    origin: url.origin,
+  };
+}
+
+function getTrustedServerPath(): string {
+  return path.join(app.getPath('userData'), 'trusted-server.json');
+}
+
+function loadTrustedServerOrigin(): void {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(getTrustedServerPath(), 'utf8')) as TrustedServer;
+    trustedServerOrigin = normalizeServerUrl(parsed.origin).origin;
+  } catch {
+    trustedServerOrigin = null;
+  }
+}
+
+function saveTrustedServerOrigin(origin: string): void {
+  fs.writeFileSync(getTrustedServerPath(), JSON.stringify({ origin } satisfies TrustedServer), {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+}
+
+function serverCspSources(): string[] {
+  if (!trustedServerOrigin) return [];
+  const httpUrl = new URL(trustedServerOrigin);
+  const websocketUrl = new URL(trustedServerOrigin);
+  websocketUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  return [httpUrl.origin, websocketUrl.origin];
+}
+
+function setupContentSecurityPolicy(): void {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    if (details.resourceType !== 'mainFrame') {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+
+    const developmentSources = app.isPackaged
+      ? []
+      : [
+          'http://127.0.0.1:5173',
+          'http://localhost:5173',
+          'ws://127.0.0.1:5173',
+          'ws://localhost:5173',
+          'http://127.0.0.1:3050',
+          'ws://127.0.0.1:3050',
+        ];
+    const connectSources = ["'self'", ...serverCspSources(), ...developmentSources];
+    const scriptSources = ["'self'", ...(!app.isPackaged ? ["'unsafe-eval'"] : [])];
+    const imageSources = [
+      "'self'",
+      'data:',
+      'blob:',
+      ...serverCspSources().filter((source) => source.startsWith('http')),
+      'https://*.basemaps.cartocdn.com',
+      'https://server.arcgisonline.com',
+      'https://*.tile.openstreetmap.org',
+    ];
+    const policy = [
+      "default-src 'self'",
+      `script-src ${scriptSources.join(' ')}`,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      `img-src ${imageSources.join(' ')}`,
+      `media-src ${["'self'", 'data:', 'blob:', ...serverCspSources().filter((source) => source.startsWith('http'))].join(' ')}`,
+      `connect-src ${connectSources.join(' ')}`,
+      "worker-src 'self' blob:",
+      "object-src 'none'",
+      "frame-src 'none'",
+      "base-uri 'none'",
+      "form-action 'self'",
+    ].join('; ');
+
+    const responseHeaders = { ...details.responseHeaders };
+    for (const header of Object.keys(responseHeaders)) {
+      if (header.toLowerCase() === 'content-security-policy') delete responseHeaders[header];
+    }
+    responseHeaders['Content-Security-Policy'] = [policy];
+    callback({ responseHeaders });
+  });
+}
+
+ipcMain.handle('security:authorize-server', async (event, rawServer: unknown, rawKey: unknown, forceValidation = false) => {
+  assertTrustedIpcSender(event);
+  const { apiBase, origin } = normalizeServerUrl(rawServer);
+  if (!forceValidation && origin === trustedServerOrigin) {
+    return { apiBase, reloadRequired: false };
+  }
+  if (typeof rawKey !== 'string' || !rawKey.trim() || rawKey.length > 4096) {
+    throw new Error('invalid_server_access_key');
+  }
+
+  const response = await fetch(`${apiBase}/api/v1/server-access/validate`, {
+    headers: { 'X-Chatter-Server-Key': rawKey.trim() },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error('invalid_server_access_key');
+
+  const reloadRequired = origin !== trustedServerOrigin;
+  trustedServerOrigin = origin;
+  saveTrustedServerOrigin(origin);
+  return { apiBase, reloadRequired };
+});
+
+ipcMain.handle('security:clear-server', (event) => {
+  assertTrustedIpcSender(event);
+  trustedServerOrigin = null;
+  try {
+    fs.rmSync(getTrustedServerPath(), { force: true });
+  } catch {}
+  return { reloadRequired: true };
+});
+
 function setupGithubDesktopUpdater() {
   const enabled = app.isPackaged;
   const logPath = path.join(app.getPath('userData'), 'updater.log');
@@ -1496,6 +1629,8 @@ function setupGithubDesktopUpdater() {
 }
 
 app.whenReady().then(() => {
+  loadTrustedServerOrigin();
+  setupContentSecurityPolicy();
   if (process.platform !== 'darwin') {
     Menu.setApplicationMenu(null);
   }

@@ -24,7 +24,11 @@ export function AuthPage() {
     setError('');
     setLoading(true);
     try {
-      await configureServerConnection(connectionLink);
+      const result = await configureServerConnection(connectionLink);
+      if (result.reloadRequired) {
+        window.location.reload();
+        return;
+      }
       setConnected(true);
     } catch (err: any) {
       setError(err?.message || t('auth.error.generic'));
@@ -121,7 +125,7 @@ export function AuthPage() {
             {mode === 'login' ? t('auth.actions.signUp') : t('auth.actions.signIn')}
           </a>
         </p>
-        <p className={s.switchText}><a href="#" className={s.link} onClick={(e) => { e.preventDefault(); clearServerConnection(); setConnected(false); setError(''); }}>{t('auth.connection.change')}</a></p>
+        <p className={s.switchText}><a href="#" className={s.link} onClick={async (e) => { e.preventDefault(); await clearServerConnection(); window.location.reload(); }}>{t('auth.connection.change')}</a></p>
         </>}
       </div>
     </div>

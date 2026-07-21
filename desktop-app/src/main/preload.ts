@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTitleBarOverlay: (colors: { color: string; symbolColor: string }) =>
     ipcRenderer.invoke('window:set-title-bar-overlay', colors),
 
+  authorizeServer: (server: string, key: string, forceValidation = false) =>
+    ipcRenderer.invoke('security:authorize-server', server, key, forceValidation),
+
+  clearTrustedServer: () =>
+    ipcRenderer.invoke('security:clear-server'),
+
   // PixelAvatar: listen for avatar state pushes from main process
   onAvatarState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

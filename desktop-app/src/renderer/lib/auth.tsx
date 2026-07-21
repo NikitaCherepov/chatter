@@ -19,16 +19,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    const tokens = api.loadTokens();
-    if (tokens?.access_token) {
-      api.fetchMe()
+    let disposed = false;
+
+    const initialize = async () => {
+      try {
+        if (await api.ensureServerSecurityPolicy()) {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        // Keep the saved connection visible so the user can replace it on the auth screen.
+      }
+
+      if (disposed) return;
+      const tokens = api.loadTokens();
+      if (tokens?.access_token) {
+        api.fetchMe()
         .then((user) => {
+          if (disposed) return;
           setUser(user);
           localStorage.setItem('chatter_user', JSON.stringify(user));
           // Initialize WebSocket after successful auth
           api.initWebSocket();
         })
         .catch((error) => {
+          if (disposed) return;
           if (error instanceof api.ApiError && error.status === 401) {
             api.clearTokens();
             localStorage.removeItem('chatter_user');
@@ -41,13 +56,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try { setUser(JSON.parse(stored)); } catch {}
           }
         })
-        .finally(() => setInitialized(true));
-    } else {
-      setInitialized(true);
-    }
+        .finally(() => { if (!disposed) setInitialized(true); });
+      } else {
+        setInitialized(true);
+      }
+    };
+
+    void initialize();
 
     // Close WebSocket on unmount
     return () => {
+      disposed = true;
       api.closeWebSocket();
     };
   }, []);

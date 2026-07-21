@@ -19,17 +19,27 @@ export async function configureServerConnection(connectionLink: string) {
   const key = `${parsed.searchParams.get('key') || ''}`.trim();
   const serverUrl = new URL(server);
   if (!['http:', 'https:'].includes(serverUrl.protocol) || !key) throw new Error('invalid_connection_link');
-  const response = await fetch(`${server}/api/v1/server-access/validate`, {
-    headers: { 'X-Chatter-Server-Key': key },
-  });
-  if (!response.ok) throw new Error('invalid_server_access_key');
-  const connection = { apiBase: server, key };
+  const authorization = await window.electronAPI.authorizeServer(server, key, true);
+  const connection = { apiBase: authorization.apiBase, key };
   localStorage.setItem(CONNECTION_KEY, JSON.stringify(connection));
-  API_BASE = server;
-  return connection;
+  API_BASE = authorization.apiBase;
+  return { connection, reloadRequired: authorization.reloadRequired };
 }
 
-export function clearServerConnection() {
+export async function ensureServerSecurityPolicy(): Promise<boolean> {
+  const connection = loadServerConnection();
+  if (!connection) return false;
+  const authorization = await window.electronAPI.authorizeServer(connection.apiBase, connection.key);
+  if (authorization.apiBase !== connection.apiBase) {
+    const normalized = { ...connection, apiBase: authorization.apiBase };
+    localStorage.setItem(CONNECTION_KEY, JSON.stringify(normalized));
+    API_BASE = authorization.apiBase;
+  }
+  return authorization.reloadRequired;
+}
+
+export async function clearServerConnection() {
+  await window.electronAPI.clearTrustedServer();
   localStorage.removeItem(CONNECTION_KEY);
   clearTokens();
   API_BASE = DEFAULT_API_BASE;
