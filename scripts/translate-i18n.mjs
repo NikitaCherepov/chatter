@@ -397,9 +397,10 @@ function readLanguagesFromTsFile(languagesFile) {
   const content = fs.readFileSync(resolved, 'utf8');
 
   // Pattern A: static array  →  SUPPORTED_LANGUAGES = ['ru', 'en', ...] as const
+  // or SUPPORTED_LANGUAGES = ["ru", "en", ...] as const
   let match = content.match(/SUPPORTED_LANGUAGES\s*=\s*\[([\s\S]*?)\]\s*(as\s*const)?/);
   if (match) {
-    const strings = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const strings = [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1]);
     if (strings.length > 0) return strings;
   }
 

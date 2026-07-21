@@ -1,0 +1,63 @@
+{
+  "header": {
+    "title": "Notlarım",
+    "subtitle": "WebApp'te notları doğrudan açın, düzenleyin ve kaydedin."
+  },
+  "search": {
+    "placeholder": "Başlıkları ve metni ara",
+    "submit": "Ara",
+    "reset": "Sıfırla",
+    "new": "Yeni"
+  },
+  "list": {
+    "title": "Notlar",
+    "total": "Toplam: {{count}}",
+    "empty": "Henüz not yok",
+    "delete": "Sil",
+    "previous": "Geri",
+    "next": "İleri",
+    "page": "Sayfa {{page}}/{{totalPages}}"
+  },
+  "editor": {
+    "editing": "#{{id}} düzenleniyor",
+    "new": "Yeni not",
+    "close": "Kapat",
+    "title": "Başlık",
+    "titlePlaceholder": "Kısa başlık (isteğe bağlı)",
+    "content": "Not metni",
+    "contentPlaceholder": "Notunuzu buraya yazın...",
+    "saveChanges": "Değişiklikleri kaydet",
+    "create": "Not oluştur",
+    "cancel": "İptal",
+    "delete": "Sil"
+  },
+  "common": {
+    "empty": "Boş"
+  },
+  "confirm": {
+    "delete": "#{{id}} notu silinsin mi?"
+  },
+  "validation": {
+    "contentRequired": "Not metni gereklidir.",
+    "titleTooLong": "Başlık {{max}} karakteri geçmemelidir.",
+    "contentTooLong": "Metin {{max}} karakteri geçmemelidir."
+  },
+  "errors": {
+    "title": "Hata:",
+    "requestFailed": "İstek başarısız oldu (HTTP {{status}}).",
+    "initDataMissing": "Telegram yetkilendirme verisi bulunamadı. Bu sayfayı Telegram'daki WebApp düğmesini kullanarak açın.",
+    "api": {
+      "unauthorized": "Telegram yetkilendirmesi başarısız oldu. WebApp'i bottan yeniden açın.",
+      "invalid_json_object": "İstek geçersiz bir formata sahip.",
+      "invalid_title": "Başlık geçersiz bir formata sahip.",
+      "invalid_content": "Not metni geçersiz bir formata sahip.",
+      "invalid_content_length": "Not metni uzunluğu geçersiz.",
+      "invalid_title_length": "Başlık uzunluğu geçersiz.",
+      "invalid_id": "Not kimliği geçersiz.",
+      "note_not_found": "Not bulunamadı.",
+      "request_body_too_large": "İstek çok büyük.",
+      "invalid_json": "İstek geçersiz JSON içeriyor.",
+      "invalid_request_body": "İstek gövdesi geçersiz."
+    }
+  }
+}
