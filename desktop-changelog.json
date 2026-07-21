@@ -47,6 +47,10 @@
     "tr": [
       "Masaüstü güncellemeleri artık herkese açık GitHub Releases kullanıyor.",
       "Farklı indirmeler, NSIS blok haritaları aracılığıyla desteklenmektedir."
+    ],
+    "cs": [
+      "Desktopové aktualizace nyní používají veřejná vydání na GitHubu.",
+      "Diferenciální stahování je podporováno pomocí blokových map NSIS."
     ]
   }
 }

@@ -30,13 +30,14 @@ const projectRoot = path.resolve(__dirname, '..');
 const SOURCE = path.join(projectRoot, 'shared/languages.ts');
 
 // Projects that consume the shared language list.
-// Desktop app is intentionally excluded — it ships offline to users and
-// keeps its own copy at desktop-app/src/renderer/i18n/languages.ts.
+// Desktop app extras (LanguagePreference, isLanguagePreference) live in
+// languages-desktop.ts so they survive the sync.
 const TARGETS = [
   'i18n/languages.ts',                                        // Telegram bot
   'admin-panel/i18n/languages.ts',                            // admin panel (Next.js)
   'backend-api/src/i18n/languages.ts',                        // backend API
   'webapp-notes/i18n/languages.ts',                           // webapp notes (Next.js)
+  'desktop-app/src/renderer/i18n/languages.ts',               // desktop app (Electron)
 ];
 
 const checkOnly = process.argv.includes('--check');

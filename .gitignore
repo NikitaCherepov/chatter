@@ -28,3 +28,4 @@ desktop-app/models/
 desktop-app/.venv-wakeword/
 desktop-app/*.spec
 *.exe
+*.tsbuildinfo

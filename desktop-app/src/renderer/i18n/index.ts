@@ -4,13 +4,15 @@ import enTranslation from './locales/en/translation.json';
 import {
   DEFAULT_LANGUAGE,
   getLanguageDisplayName,
-  isLanguagePreference,
   normalizeSupportedLanguage,
-  SUPPORTED_LANGUAGE_CODES,
   SUPPORTED_LANGUAGES,
-  type LanguagePreference,
   type SupportedLanguage,
 } from './languages';
+import {
+  isLanguagePreference,
+  SUPPORTED_LANGUAGE_CODES,
+  type LanguagePreference,
+} from './languages-desktop';
 
 export {
   DEFAULT_LANGUAGE,
