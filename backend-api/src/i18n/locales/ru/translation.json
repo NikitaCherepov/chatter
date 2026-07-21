@@ -1,4 +1,7 @@
 {
+  "chat": {
+    "defaultTitle": "Чат {{number}}"
+  },
   "toolStatus": {
     "search_web": "Поиск в интернете...",
     "list_mail_accounts": "📧 Проверяю подключённые почтовые ящики...",

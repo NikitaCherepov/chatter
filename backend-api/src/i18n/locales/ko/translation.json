@@ -71,5 +71,8 @@
       "list_devops_servers": "[{{agent}}] 서버 목록 가져오는 중...",
       "runningTool": "[{{agent}}] {{tool}} 실행 중..."
     }
+  },
+  "chat": {
+    "defaultTitle": "채팅 {{number}}"
   }
 }

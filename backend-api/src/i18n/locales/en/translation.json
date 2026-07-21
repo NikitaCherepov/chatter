@@ -1,4 +1,7 @@
 {
+  "chat": {
+    "defaultTitle": "Chat {{number}}"
+  },
   "toolStatus": {
     "search_web": "Searching the web...",
     "list_mail_accounts": "📧 Checking connected email accounts...",

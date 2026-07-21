@@ -71,5 +71,8 @@
       "list_devops_servers": "[{{agent}}] Obtendo lista de servidores...",
       "runningTool": "[{{agent}}] Executando {{tool}}..."
     }
+  },
+  "chat": {
+    "defaultTitle": "Chat {{number}}"
   }
 }

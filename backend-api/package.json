@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx src/server.ts",
-    "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/i18n/locales','dist/i18n/locales',{ recursive: true })\"",
     "start": "node dist/server.js"
   },
   "dependencies": {

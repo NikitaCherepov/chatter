@@ -395,11 +395,24 @@ function readLanguagesFromTsFile(languagesFile) {
   const resolved = path.resolve(projectRoot, languagesFile);
   if (!fs.existsSync(resolved)) throw new Error(`Languages file does not exist: ${resolved}`);
   const content = fs.readFileSync(resolved, 'utf8');
-  const match = content.match(/SUPPORTED_LANGUAGES\s*=\s*\[([\s\S]*?)\]/);
-  if (!match) throw new Error(`Could not find SUPPORTED_LANGUAGES array in ${resolved}`);
-  const strings = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  if (strings.length === 0) throw new Error(`SUPPORTED_LANGUAGES array is empty in ${resolved}`);
-  return strings;
+
+  // Pattern A: static array  →  SUPPORTED_LANGUAGES = ['ru', 'en', ...] as const
+  let match = content.match(/SUPPORTED_LANGUAGES\s*=\s*\[([\s\S]*?)\]\s*(as\s*const)?/);
+  if (match) {
+    const strings = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    if (strings.length > 0) return strings;
+  }
+
+  // Pattern B: LANGUAGE_CONFIG keys  →  LANGUAGE_CONFIG = { ru: {...}, en: {...} } as const
+  match = content.match(/LANGUAGE_CONFIG\s*=\s*\{([\s\S]*?)\}\s*as\s*const/);
+  if (match) {
+    const strings = [...match[1].matchAll(/['"]?([\w-]+)['"]?\s*:/g)]
+      .map((m) => m[1])
+      .filter((s) => s.length >= 2 && s !== 'undefined' && s !== 'null');
+    if (strings.length > 0) return strings;
+  }
+
+  throw new Error(`Could not parse languages from ${resolved} — expected a SUPPORTED_LANGUAGES array or LANGUAGE_CONFIG object.`);
 }
 
 function listLocaleCatalogsFromLanguages(localesRoot, languages) {

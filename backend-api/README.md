@@ -21,7 +21,9 @@ npm run logs:api
 
 ## Backend Localization
 
-Tool status messages are translated once in `backend-api` and sent to Desktop and Telegram as ready-to-display text. Clients do not translate tool status keys themselves.
+Tool status messages and automatic chat titles are translated once in `backend-api` and sent to Desktop and Telegram as ready-to-display text. Clients do not translate tool status keys themselves.
+
+The supported language list lives in a single file — [`src/i18n/languages.ts`](./src/i18n/languages.ts) — picked up automatically by i18next, the `/languages` API endpoint, and the translation script. Per-language strings (including the default chat title `chat.defaultTitle`) live in the JSON catalogs, not in code.
 
 Translation resources live in `src/i18n/locales/<locale>/translation.json`. English is the source locale and the fallback for missing translations.
 
@@ -46,6 +48,11 @@ When adding an ordinary tool, add its English key to the backend catalog; no map
 npm run i18n:translate:api
 npm run i18n:translate:api:all
 ```
+
+### Adding a new language
+
+1. Add the language code to `SUPPORTED_LANGUAGES` in [`src/i18n/languages.ts`](./src/i18n/languages.ts) — this registers it everywhere (i18next, `/languages` endpoint, translation script).
+2. Run `npm run i18n:translate:api -- --to <code>` — the script creates `src/i18n/locales/<code>/translation.json` and fills it (including `chat.defaultTitle`).
 
 ## ENV (minimum)
 

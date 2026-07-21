@@ -13,7 +13,8 @@ import {
   resolveAccountId,
   resolveTelegramAccountForUpsert,
 } from './accounts.js';
-import { formatAutomaticChatTitle, normalizeSupportedLanguage } from '../i18n/languages.js';
+import { normalizeSupportedLanguage } from '../i18n/languages.js';
+import { formatAutomaticChatTitle } from '../i18n/index.js';
 import { getPlanLimits, getDefaultUserPlanLimits, loadPlanLimitsFromDb } from './plan-limits.js';
 
 export const getRawUserById = (userId: number) => db
@@ -145,12 +146,12 @@ export const createUserChat = (userId: number, title: string) => {
  * it is stripped before re-prefixing with index+1. Anything else in the title
  * (including non-numeric bracketed fragments) is kept verbatim.
  */
-const buildForkTitle = (origTitle: string): string => {
+const buildForkTitle = (origTitle: string, language: unknown): string => {
   const trimmed = (origTitle || '').trim();
   const m = trimmed.match(/^\[(\d+)\]\s*(.*)$/);
   const nextIndex = m ? Number(m[1]) + 1 : 2;
   const rest = m ? m[2] : trimmed;
-  const baseTitle = rest || `Чат ${Math.floor(Date.now() / 1000)}`;
+  const baseTitle = rest || formatAutomaticChatTitle(language, Math.floor(Date.now() / 1000));
   return `[${nextIndex}] ${baseTitle}`.slice(0, 120);
 };
 
@@ -193,9 +194,10 @@ export const forkChat = (
   if (!anchor) return null;
 
   // Resolve title.
+  const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
   const title = (customTitle && customTitle.trim())
     ? customTitle.trim().slice(0, 120)
-    : buildForkTitle(sourceChat.title);
+    : buildForkTitle(sourceChat.title, userLanguage);
 
   // Lazily import to avoid a circular dependency at module load time
   // (matches the pattern used in deleteMessageAttachment).
@@ -1019,6 +1021,7 @@ export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMe
     LIMIT ?
   `).all(userId, rowLimit) as Array<{ id: number; images: string; created_at: string; chat_id: number; chat_title: string | null }>;
 
+  const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
   const items: ChatMediaItem[] = [];
   for (const row of rows) {
     try {
@@ -1031,7 +1034,7 @@ export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMe
             type: img.type,
             created_at: toUnix(row.created_at),
             chat_id: row.chat_id,
-            chat_title: row.chat_title || `Чат ${row.chat_id}`,
+            chat_title: row.chat_title || formatAutomaticChatTitle(userLanguage, row.chat_id),
           });
         }
       }
@@ -1839,6 +1842,7 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
   if (safeQuery.length < 3) return [];
 
   const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
 
   // Use MATCH with prefix search (trailing *) for partial word matches
   const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
@@ -1871,7 +1875,7 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
     const snip = snippetStmt.get(userId, hit.chat_id, ftsQuery) as { snippet: string } | undefined;
     results.push({
       chat_id: hit.chat_id,
-      chat_title: chat.title || 'Чат',
+      chat_title: chat.title || formatAutomaticChatTitle(userLanguage, hit.chat_id),
       created_at: toUnix(chat.created_at),
       snippet: snip?.snippet || '',
       rank: hit.best_rank,

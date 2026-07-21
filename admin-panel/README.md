@@ -53,7 +53,7 @@ Path conventions in current code:
 
 ## Internationalization (i18n)
 
-All UI text lives in translation dictionaries; no hardcoded strings appear in components. The panel supports 11 languages: `ru`, `en`, `de`, `es`, `fr`, `it`, `ja`, `ko`, `pl`, `pt-BR`, `zh-CN`.
+All UI text lives in translation dictionaries; no hardcoded strings appear in components. The supported language list lives in a single file — [`i18n/languages.ts`](./i18n/languages.ts) — picked up automatically by the language selector, i18next config, and the translation script.
 
 ### How it works
 
@@ -63,7 +63,8 @@ All UI text lives in translation dictionaries; no hardcoded strings appear in co
 
 ```
 admin-panel/i18n/
-  index.ts                  # i18next init + all locale imports
+  languages.ts              # Single source of truth: SUPPORTED_LANGUAGES + labels
+  index.ts                  # i18next init + dynamic locale imports
   locales/
     ru/translation.json     # Source dictionary (Russian)
     en/translation.json     # English
@@ -101,9 +102,8 @@ The script requires an `.env.i18n` file with `I18N_TRANSLATE_API_KEY` (OpenAI or
 
 ### Adding a new language
 
-1. Create `admin-panel/i18n/locales/<code>/translation.json` with `{}`.
-2. Import it and register it in [`i18n/index.ts`](./i18n/index.ts) (follow the existing import pattern).
-3. Run `npm run i18n:translate:admin -- --to <code>` to fill the catalog.
+1. Add the language code and native label to [`i18n/languages.ts`](./i18n/languages.ts) — this is the only place to register a language.
+2. Run `npm run i18n:translate:admin -- --to <code>` — the script creates `admin-panel/i18n/locales/<code>/translation.json` and fills the catalog.
 
 ## Configuration and Secrets
 
