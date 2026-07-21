@@ -49,8 +49,8 @@ i18n
     fallbackLng: 'en',
     supportedLngs: SUPPORTED_LANGUAGES,
     detection: {
-      order: ['navigator'],
-      caches: [],
+      order: ['localStorage', 'navigator'],
+      caches: ['localStorage'],
     },
     load: 'currentOnly',
     initAsync: false,

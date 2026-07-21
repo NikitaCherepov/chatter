@@ -649,6 +649,7 @@
     "system": "Система",
     "logs": "Логи",
     "security": "Безопасность",
+    "settings": "Настройки панели",
     "overviewTitle": "Обзор",
     "overviewDesc": "Состояние сервера и компонентов Chatter",
     "usersTitle": "Пользователи",
@@ -672,6 +673,8 @@
     "logsDesc": "События и ошибки сервисов",
     "securityTitle": "Безопасность",
     "securityDesc": "Доступ к панели управления",
+    "settingsTitle": "Настройки панели",
+    "settingsDesc": "Язык интерфейса и параметры отображения",
     "mainNav": "Основная навигация",
     "logout": "Выйти",
     "serverHealthy": "Сервер работает",
@@ -685,5 +688,23 @@
     "newPassword": "Новый пароль",
     "passwordHint": "Минимум 12 символов",
     "changeData": "Сменить данные"
+  },
+  "settings": {
+    "languageTitle": "Язык интерфейса",
+    "languageDescription": "Язык, на котором отображается панель управления",
+    "languageLabel": "Язык",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Français",
+      "it": "Italiano",
+      "ja": "日本語",
+      "ko": "한국어",
+      "pl": "Polski",
+      "pt-BR": "Português (Brasil)",
+      "zh-CN": "中文（简体）"
+    }
   }
 }

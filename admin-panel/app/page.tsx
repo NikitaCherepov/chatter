@@ -17,6 +17,7 @@ import { UserDetailPage } from '../components/pages/UserDetailPage/UserDetailPag
 import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { AccessKeysPage } from '../components/pages/AccessKeysPage/AccessKeysPage';
 import { PlanLimitsPage } from '../components/pages/PlanLimitsPage/PlanLimitsPage';
+import { SettingsPage } from '../components/pages/SettingsPage/SettingsPage';
 import { api, ApiError } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
@@ -250,6 +251,7 @@ export default function Home() {
           onSubmit={changeAccount}
         />
       )}
+      {section === 'settings' && <SettingsPage />}
     </AdminShell>
   );
 }

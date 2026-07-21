@@ -699,7 +699,10 @@
     "serverNeedsCheck": "Wymaga sprawdzenia",
     "backups": "Kopie zapasowe",
     "backupsTitle": "Kopie zapasowe",
-    "backupsDesc": "Twórz, importuj, przywracaj i planuj"
+    "backupsDesc": "Twórz, importuj, przywracaj i planuj",
+    "settings": "Ustawienia panelu",
+    "settingsTitle": "Ustawienia panelu",
+    "settingsDesc": "Język interfejsu i opcje wyświetlania"
   },
   "security": {
     "adminData": "Dane administratora",
@@ -714,5 +717,23 @@
     "search": "Szukaj…",
     "nothingFound": "Nic nie znaleziono",
     "auto": "auto"
+  },
+  "settings": {
+    "languageTitle": "Język interfejsu",
+    "languageDescription": "Język używany do wyświetlania panelu administracyjnego",
+    "languageLabel": "Język",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Francuski",
+      "it": "Włoski",
+      "ja": "Japoński",
+      "ko": "Koreański",
+      "pl": "Polski",
+      "pt-BR": "Portugalski (Brazylia)",
+      "zh-CN": "Chiński (uproszczony)"
+    }
   }
 }

@@ -699,7 +699,10 @@
     "serverNeedsCheck": "확인 필요",
     "backups": "백업",
     "backupsTitle": "백업",
-    "backupsDesc": "생성, 가져오기, 복원 및 예약"
+    "backupsDesc": "생성, 가져오기, 복원 및 예약",
+    "settings": "패널 설정",
+    "settingsTitle": "패널 설정",
+    "settingsDesc": "인터페이스 언어 및 표시 옵션"
   },
   "security": {
     "adminData": "관리자 데이터",
@@ -714,5 +717,23 @@
     "search": "검색…",
     "nothingFound": "결과 없음",
     "auto": "자동"
+  },
+  "settings": {
+    "languageTitle": "인터페이스 언어",
+    "languageDescription": "관리 패널 표시에 사용되는 언어",
+    "languageLabel": "언어",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "프랑스어",
+      "it": "이탈리아어",
+      "ja": "일본어",
+      "ko": "한국어",
+      "pl": "폴란드어",
+      "pt-BR": "포르투갈어(브라질)",
+      "zh-CN": "중국어(간체)"
+    }
   }
 }

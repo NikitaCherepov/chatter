@@ -699,7 +699,10 @@
     "serverNeedsCheck": "需要检查",
     "backups": "备份",
     "backupsTitle": "备份",
-    "backupsDesc": "创建、导入、恢复和计划"
+    "backupsDesc": "创建、导入、恢复和计划",
+    "settings": "面板设置",
+    "settingsTitle": "面板设置",
+    "settingsDesc": "界面语言和显示选项"
   },
   "security": {
     "adminData": "管理员数据",
@@ -714,5 +717,23 @@
     "search": "搜索…",
     "nothingFound": "未找到任何内容",
     "auto": "自动"
+  },
+  "settings": {
+    "languageTitle": "界面语言",
+    "languageDescription": "用于显示管理面板的语言",
+    "languageLabel": "语言",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Français",
+      "it": "Italiano",
+      "ja": "日本語",
+      "ko": "한국어",
+      "pl": "Polski",
+      "pt-BR": "Português (Brasil)",
+      "zh-CN": "中文（简体）"
+    }
   }
 }

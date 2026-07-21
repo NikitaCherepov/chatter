@@ -699,7 +699,10 @@
     "serverNeedsCheck": "Precisa de verificação",
     "backups": "Backups",
     "backupsTitle": "Backups",
-    "backupsDesc": "Criar, importar, restaurar e agendar"
+    "backupsDesc": "Criar, importar, restaurar e agendar",
+    "settings": "Configurações do Painel",
+    "settingsTitle": "Configurações do Painel",
+    "settingsDesc": "Idioma da interface e opções de exibição"
   },
   "security": {
     "adminData": "Dados do administrador",
@@ -714,5 +717,23 @@
     "search": "Pesquisar…",
     "nothingFound": "Nada encontrado",
     "auto": "auto"
+  },
+  "settings": {
+    "languageTitle": "Idioma da interface",
+    "languageDescription": "Idioma usado para exibir o painel de administração",
+    "languageLabel": "Idioma",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Francês",
+      "it": "Italiano",
+      "ja": "Japonês",
+      "ko": "Coreano",
+      "pl": "Polonês",
+      "pt-BR": "Português (Brasil)",
+      "zh-CN": "Chinês (Simplificado)"
+    }
   }
 }

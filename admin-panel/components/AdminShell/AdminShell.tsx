@@ -16,7 +16,8 @@ export type AdminSection =
   | 'system'
   | 'backups'
   | 'logs'
-  | 'security';
+  | 'security'
+  | 'settings';
 type NavItem = { id: AdminSection; label: string; icon: IconName };
 
 type Props = {
@@ -53,6 +54,7 @@ export function AdminShell({
     { id: 'backups', label: t('nav.backups'), icon: 'backups' },
     { id: 'logs', label: t('nav.logs'), icon: 'logs' },
     { id: 'security', label: t('nav.security'), icon: 'security' },
+    { id: 'settings', label: t('nav.settings'), icon: 'settings' },
   ];
 
   const titles: Record<AdminSection, [string, string]> = {
@@ -67,6 +69,7 @@ export function AdminShell({
     backups: [t('nav.backupsTitle'), t('nav.backupsDesc')],
     logs: [t('nav.logsTitle'), t('nav.logsDesc')],
     security: [t('nav.securityTitle'), t('nav.securityDesc')],
+    settings: [t('nav.settingsTitle'), t('nav.settingsDesc')],
   };
 
   const backend = services.find((service) => service.service === 'backend');

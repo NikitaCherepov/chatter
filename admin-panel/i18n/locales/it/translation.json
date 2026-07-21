@@ -699,7 +699,10 @@
     "serverNeedsCheck": "Necessita di controllo",
     "backups": "Backup",
     "backupsTitle": "Backup",
-    "backupsDesc": "Crea, importa, ripristina e pianifica"
+    "backupsDesc": "Crea, importa, ripristina e pianifica",
+    "settings": "Impostazioni Pannello",
+    "settingsTitle": "Impostazioni Pannello",
+    "settingsDesc": "Lingua dell'interfaccia e opzioni di visualizzazione"
   },
   "security": {
     "adminData": "Dati amministratore",
@@ -714,5 +717,23 @@
     "search": "Cerca…",
     "nothingFound": "Nessun risultato",
     "auto": "auto"
+  },
+  "settings": {
+    "languageTitle": "Lingua dell'interfaccia",
+    "languageDescription": "Lingua utilizzata per visualizzare il pannello di amministrazione",
+    "languageLabel": "Lingua",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Francese",
+      "it": "Italiano",
+      "ja": "Giapponese",
+      "ko": "Coreano",
+      "pl": "Polacco",
+      "pt-BR": "Portoghese (Brasile)",
+      "zh-CN": "Cinese (semplificato)"
+    }
   }
 }

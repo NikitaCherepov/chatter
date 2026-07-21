@@ -699,7 +699,10 @@
     "serverNeedsCheck": "確認が必要です",
     "backups": "バックアップ",
     "backupsTitle": "バックアップ",
-    "backupsDesc": "作成、インポート、復元、スケジュール"
+    "backupsDesc": "作成、インポート、復元、スケジュール",
+    "settings": "パネル設定",
+    "settingsTitle": "パネル設定",
+    "settingsDesc": "インターフェース言語と表示オプション"
   },
   "security": {
     "adminData": "管理者データ",
@@ -714,5 +717,23 @@
     "search": "検索…",
     "nothingFound": "見つかりませんでした",
     "auto": "自動"
+  },
+  "settings": {
+    "languageTitle": "インターフェース言語",
+    "languageDescription": "管理パネルの表示に使用する言語",
+    "languageLabel": "言語",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Français",
+      "it": "Italiano",
+      "ja": "日本語",
+      "ko": "한국어",
+      "pl": "Polski",
+      "pt-BR": "Português (Brasil)",
+      "zh-CN": "中文（简体）"
+    }
   }
 }

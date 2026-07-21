@@ -1,5 +1,7 @@
-import type { FormEvent } from 'react';
+import { type FormEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES } from '../../i18n';
+import { Select, type SelectOption } from '../ui/Select/Select';
 import styles from './LoginScreen.module.css';
 
 type Props = {
@@ -19,7 +21,22 @@ export function LoginScreen({
   onPasswordChange,
   onSubmit,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const languageOptions = useMemo<SelectOption[]>(() => {
+    return SUPPORTED_LANGUAGES.map((code) => ({
+      value: code,
+      label: t(`settings.languageOptions.${code}`),
+    }));
+  }, [t]);
+
+  const handleLanguageChange = useCallback(
+    (code: string) => {
+      i18n.changeLanguage(code);
+      document.documentElement.lang = code;
+    },
+    [i18n],
+  );
 
   return (
     <main className={styles.container}>
@@ -64,6 +81,17 @@ export function LoginScreen({
             {t('login.submitButton')}
           </button>
         </form>
+        <div className={styles.langRow}>
+          <Select
+            options={languageOptions}
+            value={i18n.language}
+            onChange={handleLanguageChange}
+            searchable
+            maxVisibleItems={3}
+            searchPlaceholder={t('ui.search')}
+            emptyText={t('ui.nothingFound')}
+          />
+        </div>
         <div className={styles.divider} />
         <p className={styles.hint}>{t('login.firstTimeHint')}</p>
       </section>

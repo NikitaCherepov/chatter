@@ -73,6 +73,9 @@
   font-size: 13px;
   text-align: center;
 }
+.langRow {
+  margin: 6px 0 0;
+}
 .divider {
   height: 1px;
   margin: 24px 0 16px;

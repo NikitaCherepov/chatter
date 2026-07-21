@@ -699,7 +699,10 @@
     "serverNeedsCheck": "Requiere revisión",
     "backups": "Copias de seguridad",
     "backupsTitle": "Copias de seguridad",
-    "backupsDesc": "Crear, importar, restaurar y programar"
+    "backupsDesc": "Crear, importar, restaurar y programar",
+    "settings": "Configuración del Panel",
+    "settingsTitle": "Configuración del Panel",
+    "settingsDesc": "Idioma de la interfaz y opciones de visualización"
   },
   "security": {
     "adminData": "Datos de administración",
@@ -714,5 +717,23 @@
     "search": "Buscar…",
     "nothingFound": "No se encontró nada",
     "auto": "automático"
+  },
+  "settings": {
+    "languageTitle": "Idioma de la interfaz",
+    "languageDescription": "Idioma utilizado para mostrar el panel de administración",
+    "languageLabel": "Idioma",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Francés",
+      "it": "Italiano",
+      "ja": "Japonés",
+      "ko": "Coreano",
+      "pl": "Polaco",
+      "pt-BR": "Portugués (Brasil)",
+      "zh-CN": "Chino (simplificado)"
+    }
   }
 }

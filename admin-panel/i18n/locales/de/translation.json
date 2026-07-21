@@ -699,7 +699,10 @@
     "serverNeedsCheck": "Muss überprüft werden",
     "backups": "Backups",
     "backupsTitle": "Backups",
-    "backupsDesc": "Erstellen, importieren, wiederherstellen und planen"
+    "backupsDesc": "Erstellen, importieren, wiederherstellen und planen",
+    "settings": "Panel-Einstellungen",
+    "settingsTitle": "Panel-Einstellungen",
+    "settingsDesc": "Sprache der Benutzeroberfläche und Anzeigeoptionen"
   },
   "security": {
     "adminData": "Admin-Daten",
@@ -714,5 +717,23 @@
     "search": "Suchen…",
     "nothingFound": "Nichts gefunden",
     "auto": "auto"
+  },
+  "settings": {
+    "languageTitle": "Sprache der Benutzeroberfläche",
+    "languageDescription": "Sprache, die für die Anzeige des Admin-Panels verwendet wird",
+    "languageLabel": "Sprache",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Französisch",
+      "it": "Italienisch",
+      "ja": "Japanisch",
+      "ko": "Koreanisch",
+      "pl": "Polnisch",
+      "pt-BR": "Portugiesisch (Brasilien)",
+      "zh-CN": "Chinesisch (Vereinfacht)"
+    }
   }
 }

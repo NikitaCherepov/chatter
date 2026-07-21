@@ -699,7 +699,10 @@
     "serverNeedsCheck": "Nécessite une vérification",
     "backups": "Sauvegardes",
     "backupsTitle": "Sauvegardes",
-    "backupsDesc": "Créer, importer, restaurer et planifier"
+    "backupsDesc": "Créer, importer, restaurer et planifier",
+    "settings": "Paramètres du panneau",
+    "settingsTitle": "Paramètres du panneau",
+    "settingsDesc": "Langue de l'interface et options d'affichage"
   },
   "security": {
     "adminData": "Données d'administration",
@@ -714,5 +717,23 @@
     "search": "Rechercher…",
     "nothingFound": "Aucun résultat",
     "auto": "auto"
+  },
+  "settings": {
+    "languageTitle": "Langue de l'interface",
+    "languageDescription": "Langue utilisée pour afficher le panneau d'administration",
+    "languageLabel": "Langue",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Français",
+      "it": "Italien",
+      "ja": "Japonais",
+      "ko": "Coréen",
+      "pl": "Polonais",
+      "pt-BR": "Portugais (Brésil)",
+      "zh-CN": "Chinois (simplifié)"
+    }
   }
 }

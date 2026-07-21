@@ -649,6 +649,7 @@
     "system": "System",
     "logs": "Logs",
     "security": "Security",
+    "settings": "Panel Settings",
     "overviewTitle": "Overview",
     "overviewDesc": "Chatter server and component status",
     "usersTitle": "Users",
@@ -672,6 +673,8 @@
     "logsDesc": "Service events and errors",
     "securityTitle": "Security",
     "securityDesc": "Admin panel access",
+    "settingsTitle": "Panel Settings",
+    "settingsDesc": "Interface language and display options",
     "mainNav": "Main navigation",
     "logout": "Log out",
     "serverHealthy": "Server is healthy",
@@ -685,5 +688,23 @@
     "newPassword": "New password",
     "passwordHint": "At least 12 characters",
     "changeData": "Change data"
+  },
+  "settings": {
+    "languageTitle": "Interface language",
+    "languageDescription": "Language used to display the admin panel",
+    "languageLabel": "Language",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Français",
+      "it": "Italiano",
+      "ja": "日本語",
+      "ko": "한국어",
+      "pl": "Polski",
+      "pt-BR": "Português (Brasil)",
+      "zh-CN": "中文（简体）"
+    }
   }
 }
