@@ -19,6 +19,7 @@ Options:
   --from <locale>        Source locale (default: ru; en with --all)
   --to <locale>          Target locale (default: en)
   --locales <directory>  Locale catalogs root (default: i18n/locales)
+  --languages <file>     Read locale list from a TS file (e.g. i18n/languages.ts)
   --changelog <file>     Translate changes arrays inside one changelog JSON
   --source <file>        Source JSON path
   --target <file>        Target JSON path
@@ -33,7 +34,10 @@ Options:
 
 The target file is created when absent. Existing translations and extra target
 keys are preserved unless --force is used. Empty target strings count as missing.
-In --all mode, locale directories are scanned automatically and processed one by one.`);
+In --all mode, locale directories are scanned automatically and processed one by one.
+When --languages is provided, the locale list is read from that TS file
+(SUPPORTED_LANGUAGES array) instead of scanned from the filesystem.
+Missing target directories are created automatically.`);
 }
 
 function parseArgs(argv) {
@@ -42,6 +46,7 @@ function parseArgs(argv) {
     from: '',
     to: '',
     locales: '',
+    languages: '',
     changelog: '',
     source: '',
     target: '',
@@ -69,6 +74,7 @@ function parseArgs(argv) {
       case '--from': args.from = takeValue(); break;
       case '--to': args.to = takeValue(); break;
       case '--locales': args.locales = takeValue(); break;
+      case '--languages': args.languages = takeValue(); break;
       case '--changelog': args.changelog = takeValue(); break;
       case '--source': args.source = takeValue(); break;
       case '--target': args.target = takeValue(); break;
@@ -385,6 +391,24 @@ function chunk(items, size) {
   return result;
 }
 
+function readLanguagesFromTsFile(languagesFile) {
+  const resolved = path.resolve(projectRoot, languagesFile);
+  if (!fs.existsSync(resolved)) throw new Error(`Languages file does not exist: ${resolved}`);
+  const content = fs.readFileSync(resolved, 'utf8');
+  const match = content.match(/SUPPORTED_LANGUAGES\s*=\s*\[([\s\S]*?)\]/);
+  if (!match) throw new Error(`Could not find SUPPORTED_LANGUAGES array in ${resolved}`);
+  const strings = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  if (strings.length === 0) throw new Error(`SUPPORTED_LANGUAGES array is empty in ${resolved}`);
+  return strings;
+}
+
+function listLocaleCatalogsFromLanguages(localesRoot, languages) {
+  return languages.map((locale) => ({
+    locale,
+    file: path.resolve(projectRoot, path.join(localesRoot, locale, 'translation.json')),
+  }));
+}
+
 function listLocaleCatalogs(localesRoot) {
   if (!fs.existsSync(localesRoot)) throw new Error(`Locales directory does not exist: ${localesRoot}`);
   return fs.readdirSync(localesRoot, { withFileTypes: true })
@@ -551,13 +575,35 @@ async function main() {
   const envFile = path.resolve(projectRoot, args.env || '.env.i18n');
   loadEnvFile(envFile);
 
+  const languages = args.languages ? readLanguagesFromTsFile(args.languages) : null;
+  if (languages) console.log(`Languages from ${args.languages}: ${languages.join(', ')}`);
+
+  const getTargetLocales = (all) => {
+    if (all && languages) return languages;
+    if (all) return listLocaleCatalogs(localesRoot).map((entry) => entry.locale);
+    return [targetLocale];
+  };
+
+  const getTargets = (all, srcLocale) => {
+    if (all && languages) {
+      return listLocaleCatalogsFromLanguages(localesRoot, languages)
+        .filter((entry) => entry.locale.toLowerCase() !== srcLocale.toLowerCase());
+    }
+    if (all) {
+      return listLocaleCatalogs(localesRoot)
+        .filter((entry) => entry.locale.toLowerCase() !== srcLocale.toLowerCase());
+    }
+    return [{
+      locale: targetLocale,
+      file: path.resolve(projectRoot, args.target || path.join(localesRoot, targetLocale, 'translation.json')),
+    }];
+  };
+
   if (args.changelog) {
     if (args.source || args.target) {
       throw new Error('--changelog cannot be combined with --source or --target');
     }
-    const targetLocales = args.all
-      ? listLocaleCatalogs(localesRoot).map((entry) => entry.locale)
-      : [targetLocale];
+    const targetLocales = getTargetLocales(args.all);
     await translateChangelog({
       args,
       file: path.resolve(projectRoot, args.changelog),
@@ -575,12 +621,7 @@ async function main() {
   const sourceEntries = flattenStrings(source);
   console.log(`Source: ${path.relative(projectRoot, sourceFile)} (${sourceEntries.length} strings)`);
 
-  const targets = args.all
-    ? listLocaleCatalogs(localesRoot).filter((entry) => entry.locale.toLowerCase() !== sourceLocale.toLowerCase())
-    : [{
-        locale: targetLocale,
-        file: path.resolve(projectRoot, args.target || path.join(localesRoot, targetLocale, 'translation.json')),
-      }];
+  const targets = getTargets(args.all, sourceLocale);
   if (targets.length === 0) throw new Error('No target locale catalogs found');
   if (targets.some((target) => path.resolve(target.file) === path.resolve(sourceFile))) {
     throw new Error('Source and target catalogs must be different files');

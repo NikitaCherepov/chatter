@@ -1,0 +1,719 @@
+{
+  "login": {
+    "subtitle": "Yönetici paneli girişi",
+    "usernameLabel": "Kullanıcı adı",
+    "usernamePlaceholder": "Kullanıcı adı",
+    "passwordLabel": "Parola",
+    "passwordPlaceholder": "Parola",
+    "submitButton": "Oturum aç",
+    "firstTimeHint": "İlk kimlik bilgileri yükleyici tarafından gösterildi.",
+    "invalidCredentials": "Geçersiz kullanıcı adı veya parola."
+  },
+  "overview": {
+    "componentStatus": "Bileşen durumu",
+    "updatesAfterApply": "Ayarlar uygulandıktan sonra güncellemeler",
+    "refresh": "Yenile",
+    "actionError": "İşlem başarısız: {{error}}",
+    "quickSetup": {
+      "title": "Hızlı Kurulum",
+      "description": "Tam işlevsellik için gerekli temel bileşenler"
+    },
+    "setupRows": {
+      "mainModel": {
+        "title": "Ana Model",
+        "description": "OpenAI uyumlu sağlayıcı"
+      },
+      "telegram": {
+        "title": "Telegram",
+        "description": "Ana Telegram botu"
+      },
+      "notes": {
+        "title": "Webapp Notları",
+        "description": "İsteğe bağlı Telegram Mini Uygulama"
+      },
+      "voice": {
+        "title": "Ses",
+        "description": "Telegram için konuşma tanıma ve metin okuma"
+      }
+    },
+    "config": {
+      "title": "Yapılandırma",
+      "description": "Mevcut bağlantı durumu",
+      "keysSummary": "3 temel anahtardan {{count}} tanesi kaydedildi"
+    },
+    "serviceCard": {
+      "restart": "{{name}}'i yeniden başlat",
+      "stop": "{{name}}'i durdur",
+      "start": "{{name}}'i başlat",
+      "running": "çalışıyor…",
+      "notRunning": "çalışmıyor"
+    }
+  },
+  "common": {
+    "saved": "kaydedildi",
+    "notSet": "ayarlanmadı",
+    "saving": "Uygulanıyor…",
+    "saveAndApply": "Kaydet ve uygula",
+    "error": "Hata",
+    "sectionReady": "Bölüm hazır",
+    "savingSettings": "Ayarlar kaydediliyor ve konteynerler başlatılıyor…",
+    "settingsApplied": "Ayarlar uygulandı.",
+    "changedRelogin": "Değişti. Tekrar giriş yapın.",
+    "coefficientLoadError": "Katsayılar yüklenemedi",
+    "coefficientSaved": "Katsayı kaydedildi"
+  },
+  "ui": {
+    "search": "Ara…",
+    "nothingFound": "Hiçbir şey bulunamadı",
+    "auto": "otomatik"
+  },
+  "models": {
+    "auto": {
+      "subtitle": "PRO ve LITE yedekleme zincirleri"
+    },
+    "pro": {
+      "description": "İlk model kullanılamazsa, Chatter otomatik olarak bir sonrakini dener."
+    },
+    "lite": {
+      "description": "Basit dahili görevler için hızlı modeller. Aynı yedekleme sırası geçerlidir.",
+      "emptyText": "Henüz hiçbir LITE modeli eklenmedi."
+    },
+    "vision": {
+      "subtitle": "İsteğe bağlı özel model; yoksa ilk PRO model kullanılır",
+      "fallbackModel": "PRO model kullanılıyor",
+      "fallbackProvider": "Özel Görüntü sağlayıcı yapılandırılmamış"
+    },
+    "manual": {
+      "title": "Manuel Modeller",
+      "subtitle": "Kullanıcının Otomatik yerine seçebileceği modeller",
+      "catalog": "Katalog",
+      "fallbackHint": "Manuel bir model hata verirse, Chatter Otomatik'e döner.",
+      "emptyText": "Henüz manuel model eklenmedi.",
+      "newModel": "Yeni manuel model",
+      "modelNotSet": "Model belirtilmedi",
+      "nameLabel": "Görünen ad",
+      "namePlaceholder": "ör. Claude Sonnet",
+      "uniqueIdLabel": "Benzersiz Kimlik",
+      "descriptionLabel": "Kısa açıklama",
+      "descriptionPlaceholder": "Bu modelin hangi görevler için uygun olduğu",
+      "supportsVision": "Görselleri destekler",
+      "adminOnly": "Yalnızca yöneticiler",
+      "remove": "Modeli kaldır",
+      "addModel": "+ Manuel model ekle"
+    },
+    "common": {
+      "emptyText": "Henüz model eklenmedi.",
+      "nextModel": "sonraki model",
+      "newModel": "Yeni model",
+      "providerNotSet": "Sağlayıcı ayarlanmamış",
+      "moveUp": "Yukarı taşı",
+      "moveDown": "Aşağı taşı",
+      "remove": "Kaldır",
+      "addModel": "+ Model ekle"
+    },
+    "providerFields": {
+      "baseUrl": "Sağlayıcı URL'si",
+      "modelName": "Model adı",
+      "quotaId": "Kota takibi için model kimliği",
+      "quotaIdHint": "Katsayıyı aramak için kullanılan sabit tanımlayıcı. Boş bırakılırsa, kaydedildiğinde otomatik olarak oluşturulur.",
+      "coefficient": "Maliyet katsayısı",
+      "coefficientHint": "0 = ücretsiz (kota kullanımı yok), 1 = varsayılan, 0.7 = daha ucuz, 1.5 = daha pahalı",
+      "apiKey": "API anahtarı",
+      "apiKeyHint": "Mevcut anahtarı korumak için boş bırakın",
+      "apiKeyPlaceholderExisting": "Değiştirmeden bırakmak için boş bırakın",
+      "apiKeyPlaceholderNew": "API anahtarını yapıştırın"
+    }
+  },
+  "integrations": {
+    "title": "Bağlı yetenekler",
+    "subtitle": "Anahtarları ve hizmet parametrelerini yapılandırmak için bir entegrasyon açın.",
+    "statusConfigured": "Bağlandı",
+    "statusNotConfigured": "Yapılandırılmadı",
+    "back": "Geri",
+    "modelsLink": {
+      "label": "Modeller",
+      "description": "OpenAI uyumlu API"
+    },
+    "items": {
+      "pinecone": {
+        "name": "Pinecone",
+        "description": "Vektör belleği",
+        "group": "Bellek"
+      },
+      "web-search": {
+        "name": "Web Arama",
+        "description": "İnternette arama yap",
+        "group": "İnternet"
+      },
+      "web-reader": {
+        "name": "Web Okuyucu",
+        "description": "Web sayfalarını oku ve işle",
+        "group": "İnternet"
+      },
+      "cloud-tts": {
+        "name": "Bulut TTS",
+        "description": "Cartesia bulut sesleri",
+        "group": "Medya"
+      },
+      "image-generation": {
+        "name": "Görüntü Oluşturma",
+        "description": "Harici API ile görüntü oluştur",
+        "group": "Medya"
+      }
+    },
+    "secretField": {
+      "placeholderNew": "API anahtarını yapıştır",
+      "hint": "Mevcut anahtarı korumak için boş bırakın",
+      "placeholderExisting": "Değiştirmeden bırakmak için boş bırakın"
+    },
+    "pinecone": {
+      "pageDescription": "Chatter vektör belleği. Pinecone verileri depolar ve yerleştirme modeli metni vektörlere dönüştürür.",
+      "sectionTitle": "Pinecone",
+      "sectionIntro": "Pinecone'da bir dizin oluşturun ve adını API anahtarıyla birlikte sağlayın.",
+      "apiKeyLabel": "Pinecone API anahtarı",
+      "indexNameLabel": "Dizin adı",
+      "embedding": {
+        "sectionTitle": "Yerleştirme modeli",
+        "sectionIntro": "Pinecone için metni vektörlere dönüştüren ayrı bir OpenAI uyumlu API.",
+        "apiUrlLabel": "API URL'si",
+        "modelLabel": "Model",
+        "apiKeyLabel": "Yerleştirme sağlayıcı API anahtarı"
+      }
+    },
+    "webSearch": {
+      "pageDescription": "Tavily aracılığıyla güncel bilgiler için internette arama yapın.",
+      "sectionTitle": "Tavily",
+      "sectionIntro": "Arama aracı tarafından kullanılır. Günlük kullanıcı limitleri ayrı olarak yapılandırılır.",
+      "apiUrlLabel": "API URL'si",
+      "apiKeyLabel": "Tavily API anahtarı"
+    },
+    "webReader": {
+      "pageDescription": "Browserless ile web sayfası içeriğini açın ve temizleyin.",
+      "sectionTitle": "Browserless",
+      "sectionIntro": "Arka uç, bir sayfayı açmak ve metnini çıkarmak için Browserless BQL kullanır.",
+      "apiUrlLabel": "Browserless URL'si",
+      "apiKeyLabel": "Browserless token",
+      "tokenPlaceholder": "Browserless token'ı yapıştırın"
+    },
+    "cloudTts": {
+      "pageDescription": "Cloud TTS ve Cartesia ses kataloğu.",
+      "sectionTitle": "Cartesia",
+      "sectionIntro": "Anahtar yalnızca sunucu tarafında saklanır ve ses listeleme ile ses oluşturma için arka uç tarafından kullanılır.",
+      "apiKeyLabel": "Cartesia API anahtarı",
+      "modelLabel": "Model"
+    },
+    "imageGeneration": {
+      "pageTitle": "Görüntü Oluşturma",
+      "pageDescription": "Şu anda yalnızca OpenRouter desteklenmektedir. GPT Image, Nano Banana ve Grok modelleri, birleşik Image API'si üzerinden bağlanır.",
+      "sectionTitle": "OpenRouter",
+      "sectionIntro": "Özel bir anahtar yalnızca görüntü oluşturma için kullanılır ve sunucuda saklanır.",
+      "apiUrlLabel": "API URL",
+      "apiUrlHint": "Diğer sağlayıcılar henüz desteklenmiyor",
+      "apiKeyLabel": "OpenRouter API anahtarı",
+      "modelLabel": "Model",
+      "modelHint": "OpenRouter model slug'ını girin ve mevcut parametreleri kontrol edin",
+      "modelAvailable": "mevcut",
+      "resolutionLabel": "Maksimum çözünürlük",
+      "resolutionHint": "Seçilen model tarafından desteklenen parametre",
+      "qualityLabel": "Kalite",
+      "qualityHint": "Daha yüksek kalite, daha pahalı üretim anlamına gelir",
+      "parametersHint": "Desteklenen parametreleri yapılandırmak için modeli kontrol edin.",
+      "checkButton": "Kontrol Et",
+      "checking": "Kontrol ediliyor…",
+      "checkError": "Model kontrol edilemedi",
+      "capabilityResolution": "çözünürlük",
+      "capabilityQuality": "kalite",
+      "capabilityReferences": "referanslar",
+      "capabilitySupported": "destekleniyor",
+      "capabilityNotClaimed": "belirtilmemiş"
+    }
+  },
+  "services": {
+    "telegram": {
+      "title": "Telegram botu",
+      "description": "Telegram'da ana Chatter arayüzü",
+      "enabled": "Hizmet etkin",
+      "tokenLabel": "Telegram bot tokeni",
+      "tokenHint": "Aynı token, Webapp Notes tarafından initData doğrulaması için kullanılır",
+      "tokenPlaceholder": "Değiştirmeden bırakmak için boş bırakın"
+    },
+    "notes": {
+      "title": "Webapp Notes",
+      "description": "Notlar için bağımsız Telegram Mini Uygulaması",
+      "enabled": "Hizmet etkin",
+      "urlLabel": "Mini Uygulama URL'si",
+      "urlHint": "Yükleyici, sunucu IP'sinden otomatik olarak bir adres oluşturur. Ayarlar kaydedilirken bot'a iletilir",
+      "copyAddress": "Adresi kopyala"
+    },
+    "voice": {
+      "title": "Ses",
+      "description": "Telegram bot yanıtları için ses tanıma ve metin okuma",
+      "modeLabel": "Mod",
+      "modeOff": "Devre dışı",
+      "modeLocal": "Bu sunucuda",
+      "modeRemoteSoon": "Başka bir sunucuda (yakında)",
+      "apiUrlLabel": "Ses API URL'si",
+      "tokenLabel": "Ses token'ı",
+      "tokenHint": "Token yerel mod için otomatik oluşturulur",
+      "tokenPlaceholder": "Değiştirmemek için boş bırakın",
+      "notice": "Ses şu anda yalnızca Telegram botu tarafından kullanılıyor. İlk yerel başlatma birkaç dakika sürebilir: Docker görüntüyü ve modelleri indirir."
+    },
+    "badge": {
+      "running": "çalışıyor",
+      "notRunning": "çalışmıyor"
+    }
+  },
+  "users": {
+    "list": {
+      "title": "Kullanıcılar",
+      "description": "Hesaplar, erişim ve istemci etkinliği",
+      "totalUsers": "{{count}} kullanıcı",
+      "onlineCount": "{{count}} çevrimiçi",
+      "refresh": "Yenile",
+      "searchPlaceholder": "Ad, ID, Telegram veya e-posta",
+      "searchAriaLabel": "Kullanıcıları ara",
+      "statusLabel": "Durum",
+      "planLabel": "Plan",
+      "connectionLabel": "Bağlantı",
+      "noResults": "Seçilen filtrelerle eşleşen kullanıcı yok.",
+      "loading": "Kullanıcılar yükleniyor...",
+      "loadError": "Kullanıcılar yüklenemedi: {{error}}",
+      "limited": "İlk 500 hesap gösteriliyor.",
+      "userDefaultName": "Kullanıcı {{id}}",
+      "adminBadge": "Yönetici",
+      "desktopOnline": "Masaüstü bağlı",
+      "desktopOffline": "Masaüstü bağlı değil",
+      "quotaTooltip": "{{used}} / {{quota}} koşullu birim",
+      "tableHeaders": {
+        "user": "Kullanıcı",
+        "status": "Durum",
+        "plan": "Plan",
+        "quota": "Kota (hafta)",
+        "messages": "Mesajlar",
+        "lastMessage": "Son mesaj",
+        "created": "Oluşturulma"
+      },
+      "filter": {
+        "allStatuses": "Tüm durumlar",
+        "active": "Aktif",
+        "pending": "Beklemede",
+        "blocked": "Engellenmiş",
+        "rejected": "Reddedilmiş",
+        "allPlans": "Tüm planlar",
+        "anyConnection": "Herhangi bir bağlantı",
+        "desktopOnline": "Masaüstü çevrimiçi",
+        "desktopOffline": "Masaüstü çevrimdışı"
+      },
+      "status": {
+        "approved": "Aktif",
+        "none": "Beklemede",
+        "disapproved": "Reddedildi",
+        "banned": "Engellendi"
+      }
+    },
+    "detail": {
+      "back": "← Kullanıcılar",
+      "refresh": "Yenile",
+      "loading": "Kullanıcı yükleniyor…",
+      "loadError": "Kullanıcı yüklenemedi: {{error}}",
+      "description": "ID {{id}} · oluşturulma {{created}}",
+      "noAccount": "Giriş hesabı oluşturulmamış",
+      "onlineNow": "Çevrimiçi",
+      "notConnected": "Bağlı değil",
+      "notBound": "Bağlanmamış",
+      "bound": "Bağlı",
+      "telegramNotBound": "Telegram bağlı değil",
+      "desktopOnline": "Masaüstü çevrimiçi",
+      "desktopOffline": "Masaüstü çevrimdışı",
+      "roleLabel": "Rol",
+      "roleUser": "Kullanıcı",
+      "roleAdmin": "Yönetici",
+      "statusLabel": "Durum",
+      "planLabel": "Plan",
+      "planForever": "sonsuza kadar",
+      "planUntil": "{{date}} tarihine kadar",
+      "changeDuration": "Süreyi değiştir",
+      "languageLabel": "Dil",
+      "languageNotSet": "Ayarlanmamış",
+      "preferredModelLabel": "Tercih edilen model",
+      "preferredModelAuto": "Otomatik",
+      "reasoningLabel": "Muhakeme",
+      "reasoningDefault": "Varsayılan",
+      "lastDesktopKey": "Son Masaüstü anahtarı",
+      "desktopKeyNotUsed": "Kullanılmadı",
+      "connections": {
+        "title": "Bağlantılar",
+        "description": "Giriş yöntemleri ve mevcut Masaüstü bağlantısı",
+        "headers": {
+          "client": "İstemci",
+          "account": "Hesap",
+          "state": "Durum",
+          "activity": "Etkinlik"
+        }
+      },
+      "usage": {
+        "title": "Kullanım",
+        "description": "Konuşma içeriği olmadan mevcut birikmiş sayaçlar",
+        "stats": {
+          "weeklyQuota": "Haftalık kota",
+          "quotaReset": "Kota sıfırlama",
+          "messages": "Mesajlar",
+          "userRequests": "Kullanıcı istekleri",
+          "assistantResponses": "Asistan yanıtları",
+          "chats": "Sohbetler",
+          "searchToday": "Bugünkü arama",
+          "searchTotal": "Toplam arama",
+          "imagesToday": "Bugünkü görseller",
+          "imagesTotal": "Toplam görseller",
+          "messageLength": "Mesaj uzunluğu",
+          "lastMessage": "Son mesaj"
+        }
+      },
+      "contextLimits": {
+        "title": "Bağlam sınırları",
+        "description": "Hesap için zaten depolanmış teknik değerler",
+        "planLimit": "Plan sınırı",
+        "selectedContext": "Seçilen bağlam",
+        "documents": "Belgeler",
+        "documentsAuto": "Otomatik"
+      },
+      "ban": {
+        "banned": "Kullanıcı yasaklandı",
+        "blockAccount": "Hesabı bloke et",
+        "banHint": "Engelleme, kullanıcının mevcut oturumlarını iptal eder",
+        "reasonPlaceholder": "Sebep (isteğe bağlı)",
+        "ban": "Engelle",
+        "unban": "Engeli Kaldır"
+      },
+      "actions": {
+        "savingRole": "Rol kaydediliyor…",
+        "roleSaved": "Rol kaydedildi",
+        "savingStatus": "Durum kaydediliyor…",
+        "statusSaved": "Durum kaydedildi",
+        "savingPlan": "Plan kaydediliyor…",
+        "planSaved": "Plan ve limitler güncellendi",
+        "banInProgress": "Yasaklanıyor…",
+        "unbanInProgress": "Yasak kaldırılıyor…",
+        "userUnbanned": "Kullanıcının yasağı kaldırıldı ve onay bekliyor",
+        "userBanned": "Kullanıcı yasaklandı",
+        "error": "Hata: {{error}}"
+      },
+      "modelUsage": {
+        "title": "Modele göre kullanım",
+        "description": "Geçerli haftalık pencere için. Sohbet silme işleminden etkilenmez.",
+        "loading": "Yükleniyor…",
+        "loadError": "Yüklenemedi: {{error}}",
+        "empty": "Henüz geçerli pencerede istek yok.",
+        "conditionalUnits": "koşullu birimler",
+        "tableHeaders": {
+          "model": "Model",
+          "route": "Rota",
+          "requests": "İstekler",
+          "tokens": "Tokenlar",
+          "cacheHit": "Önbellek isabeti",
+          "charged": "Ücretlendirilen"
+        },
+        "free": "ücretsiz",
+        "aborted": "iptal edildi",
+        "freeTooltip": "ücretsiz model"
+      },
+      "contextBreakdown": {
+        "memoryMerge": "Bellek",
+        "schedulerCondition": "Zamanlayıcı"
+      }
+    },
+    "planDuration": {
+      "title": "Plan {{plan}}",
+      "freeHint": "Ücretsiz plan kalıcı olarak ayarlanmıştır.",
+      "durationHint": "Plan ne kadar süreyle atanmalı?",
+      "durationLabel": "Süre",
+      "durationDay": "1 gün",
+      "durationWeek": "1 hafta",
+      "durationMonth": "1 ay",
+      "durationYear": "1 yıl",
+      "forever": "Sonsuza kadar",
+      "cancel": "İptal",
+      "saving": "Kaydediliyor…",
+      "assign": "Ata"
+    }
+  },
+  "system": {
+    "dataFrom": "Chatter Manager'dan veriler",
+    "updating": "Veriler güncelleniyor…",
+    "refresh": "Yenile",
+    "serverStatus": {
+      "title": "Sunucu Durumu",
+      "description": "CPU, bellek, takas ve disk alanı",
+      "cpu": "CPU",
+      "cores": "{{count}} çekirdek",
+      "memory": "Bellek",
+      "available": "{{size}} kullanılabilir",
+      "swap": "Takas",
+      "swapNotConfigured": "Yapılandırılmamış",
+      "swapRecommended": "Küçük VPS için takas önerilir",
+      "disk": "Disk",
+      "free": "{{size}} boş",
+      "server": "Sunucu",
+      "system": "Sistem",
+      "processor": "İşlemci"
+    },
+    "storage": {
+      "database": "Veritabanı",
+      "uploads": "Yüklemeler",
+      "backups": "Yedekler"
+    },
+    "chart": {
+      "last24h": "24s",
+      "last3days": "3 gün",
+      "last7days": "7 gün",
+      "loading": "Metrikler yükleniyor…",
+      "noData": "Henüz metrik verisi yok. Grafik ilk dakikadan sonra görünecek."
+    },
+    "backups": {
+      "title": "Yedekler",
+      "description": "Veritabanı her zaman dahildir, medya dosyaları isteğe bağlıdır",
+      "tableHeaders": {
+        "date": "Tarih",
+        "content": "İçerik",
+        "size": "Boyut",
+        "version": "Sürüm"
+      },
+      "db": "VT",
+      "dbAndFiles": "VT + dosyalar",
+      "configuration": "yapılandırma",
+      "auto": "otomatik",
+      "download": "İndir",
+      "restore": "Geri Yükle",
+      "delete": "Sil",
+      "empty": "Henüz yedek yok.",
+      "includeUploads": "Yüklenen dosyaları dahil et",
+      "includeUploadsHint": "Fotoğraflar, belgeler ve ses dosyaları arşiv boyutunu önemli ölçüde artırabilir",
+      "includeConfig": "Yapılandırma ve sırları dahil et",
+      "includeConfigHint": "API anahtarları ve hizmet ayarları. Bu arşivi güvenli bir yerde saklayın",
+      "importButton": "İçe Aktar",
+      "importing": "Yükleniyor {{percent}}%",
+      "verifying": "Doğrulanıyor…",
+      "createBackup": "Yedek oluştur",
+      "creating": "Oluşturuluyor…",
+      "creatingDb": "Veritabanı anlık görüntüsü oluşturuluyor…",
+      "creatingDbAndFiles": "Veritabanı ve dosya arşivi oluşturuluyor…",
+      "created": "Yedek oluşturuldu.",
+      "deleting": "Yedek siliniyor…",
+      "deleteConfirm": "{{name}} yedeği silinsin mi?",
+      "deleted": "Yedek silindi.",
+      "uploading": "{{name}} yükleniyor: %{{percent}} ({{loaded}} / {{total}})",
+      "uploaded": "Dosya yüklendi. Sunucu arşivi kontrol ediyor ve içe aktarıyor…",
+      "imported": "Dosya içe aktarıldı. Artık geri yüklenebilir.",
+      "restoreConfirm": "{{name}} geri yüklensin mi? Hizmetler kısa süreliğine durdurulacak ve mevcut veriler otomatik olarak yedeklenecek.",
+      "restoring": "Arşiv kontrol ediliyor, güvenlik yedeklemesi oluşturuluyor ve veriler geri yükleniyor…",
+      "restored": "Veriler geri yüklendi, hizmetler çalışıyor.",
+      "restoreError": "Geri yükleme hatası: {{message}}"
+    },
+    "schedule": {
+      "title": "Otomatik Yedeklemeler",
+      "description": "Yönetici bunları kendi başına çalıştırır, ayrı bir cron gerekmez",
+      "frequency": "Sıklık",
+      "off": "Kapalı",
+      "daily": "Günlük",
+      "weekly": "Haftalık",
+      "keepCount": "Son kopyaları sakla",
+      "includeFiles": "Dosyaları dahil et",
+      "includeFilesHint": "Varsayılan olarak, otomatik yedekleme yalnızca veritabanını kaydeder",
+      "lastRun": "Son çalıştırma: {{time}}",
+      "neverRun": "Otomatik yedeklemeler henüz çalıştırılmadı",
+      "saving": "Kaydediliyor…",
+      "saveSchedule": "Zamanlamayı kaydet",
+      "saved": "Zamanlama kaydedildi."
+    },
+    "update": {
+      "title": "Sunucu Güncellemesi",
+      "description": "Yalnızca sunucu hizmetlerinin Docker görüntüleri kontrol edilir. Masaüstü etkilenmez.",
+      "checking": "Kontrol ediliyor…",
+      "check": "Kontrol et",
+      "checkFailed": "Kontrol başarısız",
+      "unavailable": "Yerel olarak kullanılamıyor",
+      "rebuild": "Görüntü yeniden oluşturuldu",
+      "updateAvailable": "Güncelleme mevcut",
+      "upToDate": "Güncel",
+      "installedBuild": "Yüklü sürüm",
+      "latestBuild": "En son sürüm",
+      "updateDockerOnly": "Güncelleme yalnızca en son Docker görüntülerini kullanan sunucu kurulumları için kullanılabilir.",
+      "checkHint": "“Kontrol et” görüntüleri indirir ancak hizmetleri yeniden başlatmaz.",
+      "updateButton": "Sunucuyu güncelle",
+      "updating": "Güncelleniyor…",
+      "fetchingInfo": "Yeni sunucu görüntüleri hakkında bilgi indiriliyor…",
+      "found": "Yeni sunucu görüntüleri bulundu.",
+      "alreadyFresh": "Sunucu zaten en yeni görüntüleri kullanıyor.",
+      "checkError": "Kontrol hatası: {{message}}",
+      "starting": "Güncelleme başlatılıyor…",
+      "updateError": "Güncelleme hatası: {{message}}",
+      "changes": {
+        "services": "Hizmetler",
+        "changed": "Değişen: {{services}}",
+        "rebuiltFromSame": "Aynı commit'ten yeniden oluşturulan görüntüler.",
+        "whatsNew": "Yenilikler",
+        "autoBackup": "Yeniden başlatmadan önce otomatik olarak bir veritabanı yedeklemesi oluşturulacaktır.",
+        "cancel": "İptal",
+        "updating": "Başlatılıyor…",
+        "confirm": "Sunucuyu güncelle"
+      },
+      "stages": {
+        "queued": "Güncelleme başlatılıyor…",
+        "backup": "Veritabanı yedeklemesi oluşturuluyor…",
+        "restarting": "Sunucu hizmetleri yeniden başlatılıyor. Panel kısa süreliğine bağlantıyı kesecek…",
+        "complete": "Sunucu güncellendi.",
+        "failed": "Güncelleme başarısız oldu."
+      }
+    },
+    "error": "Hata: {{message}}"
+  },
+  "logs": {
+    "title": "Hizmet Günlükleri",
+    "description": "Canlı Docker Compose çıktısı, yalnızca yönetici",
+    "serviceFilter": "Hizmet",
+    "allServices": "Tüm hizmetler",
+    "lineCount": "Satır sayısı",
+    "linesTemplate": "{{count}} satır",
+    "textFilter": "Metne göre filtrele",
+    "live": "Canlı",
+    "connecting": "Bağlanıyor",
+    "resume": "Devam",
+    "pause": "Duraklat",
+    "clear": "Temizle",
+    "download": "İndir",
+    "waiting": "Günlük satırları bekleniyor…",
+    "paused": "Çıktı duraklatıldı",
+    "streamError": "Günlük akışı bir hatayla sonlandı",
+    "noConnection": "Günlük akışına bağlantı yok. Yeniden deneniyor…"
+  },
+  "accessKeys": {
+    "titleNew": "Yeni anahtar",
+    "newKeyDescription": "Bir anahtar birden fazla hesap ve bilgisayar tarafından kullanılabilir",
+    "nameLabel": "Ad",
+    "namePlaceholder": "ör. arkadaşlar veya aile",
+    "serverUrlLabel": "Arka uç URL'si",
+    "createButton": "Anahtar oluştur",
+    "creating": "Oluşturuluyor…",
+    "copyLink": "Bağlantıyı kopyala",
+    "linkCopied": "Bağlantı kopyalandı.",
+    "issuedKeys": "Verilen anahtarlar",
+    "issuedKeysDesc": "İstatistikler, bir anahtar aracılığıyla giriş yapmış hesaplara göre sayılır",
+    "tableHeaders": {
+      "key": "Anahtar",
+      "users": "Kullanıcılar",
+      "tokensWeek": "Haftalık token",
+      "lastUsed": "Son kullanım"
+    },
+    "revoked": "iptal edildi",
+    "revoke": "İptal Et",
+    "confirmRevoke": "«{{name}}» anahtarı iptal edilsin mi?",
+    "keyCreated": "Anahtar oluşturuldu. Tam değer yalnızca şimdi gösterilir.",
+    "keyRevoked": "Anahtar iptal edildi. Bu anahtar aracılığıyla verilen JWT'ler artık geçerli değil.",
+    "emptyState": "Henüz anahtar yok. İlk anahtar oluşturulana kadar eski giriş kullanılabilir.",
+    "error": "Hata: {{message}}"
+  },
+  "planLimits": {
+    "loadError": "Limitler yüklenemedi: {{message}}",
+    "saved": "Limitler kaydedildi. Yeni abonelikler güncellenmiş değerleri otomatik olarak alacak. Mevcut kullanıcılar için «Senkronize Et»e tıklayın.",
+    "syncConfirm": "Mevcut limitler tüm mevcut kullanıcılara uygulansın mı? Bu, daily_web_search_limit, daily_image_gen_limit, max_context_tokens ve weekly_tokens_quota değerlerini günceller.",
+    "syncing": "Senkronize ediliyor…",
+    "synced": "Tüm kullanıcılar için limitler senkronize edildi.",
+    "planTitle": "Plan: {{label}}",
+    "weeklyQuotaLabel": "Haftalık token kotası",
+    "weeklyQuotaHint": "~{{units}} koşullu birim/hafta. 0 = kota yok (yalnızca bayraklar).",
+    "contextLimitLabel": "Bağlam sınırı (token)",
+    "webSearchLabel": "Günlük web araması",
+    "imageGenLabel": "Günlük görsel oluşturma",
+    "allowImageAttach": "Görsel eklemeye izin ver",
+    "actions": {
+      "title": "İşlemler",
+      "description": "Tüm mevcut kullanıcılara sınırlamaları uygula",
+      "saving": "Kaydediliyor…",
+      "saveLimits": "Sınırlamaları kaydet",
+      "syncAll": "Tüm kullanıcılarla senkronize et"
+    },
+    "plans": {
+      "free": {
+        "label": "Ücretsiz",
+        "hint": "Aboneliği olmayan temel kullanıcılar"
+      },
+      "standart": {
+        "label": "Standart",
+        "hint": "Standart abonelik"
+      },
+      "pro": {
+        "label": "Pro",
+        "hint": "Premium abonelik"
+      }
+    }
+  },
+  "nav": {
+    "overview": "Genel Bakış",
+    "users": "Kullanıcılar",
+    "accessKeys": "Erişim Anahtarları",
+    "models": "Modeller",
+    "limits": "Planlar ve Limitler",
+    "integrations": "Entegrasyonlar",
+    "services": "Hizmetler",
+    "system": "Sistem",
+    "logs": "Günlükler",
+    "security": "Güvenlik",
+    "settings": "Panel Ayarları",
+    "overviewTitle": "Genel Bakış",
+    "overviewDesc": "Chatter sunucu ve bileşen durumu",
+    "usersTitle": "Kullanıcılar",
+    "usersDesc": "Hesaplar, roller ve bağlamalar",
+    "accessKeysTitle": "Erişim Anahtarları",
+    "accessKeysDesc": "Bu sunucuya masaüstü geçişleri",
+    "modelsTitle": "Modeller",
+    "modelsDesc": "Sağlayıcı ve ana model",
+    "limitsTitle": "Planlar ve Limitler",
+    "limitsDesc": "Genel kurallar ve bireysel kısıtlamalar",
+    "integrationsTitle": "Entegrasyonlar",
+    "integrationsDesc": "Harici API'ler ve Chatter yetenekleri",
+    "servicesTitle": "Hizmetler",
+    "servicesDesc": "Telegram, Ses ve ek bileşenler",
+    "systemTitle": "Sistem",
+    "systemDesc": "Sunucu, izleme ve güncellemeler",
+    "backups": "Yedekler",
+    "backupsTitle": "Yedekler",
+    "backupsDesc": "Oluştur, içe aktar, geri yükle ve zamanla",
+    "logsTitle": "Günlükler",
+    "logsDesc": "Hizmet olayları ve hataları",
+    "securityTitle": "Güvenlik",
+    "securityDesc": "Yönetici paneline erişim",
+    "settingsTitle": "Panel Ayarları",
+    "settingsDesc": "Arayüz dili ve görüntüleme seçenekleri",
+    "mainNav": "Ana navigasyon",
+    "logout": "Çıkış yap",
+    "serverHealthy": "Sunucu sağlıklı",
+    "serverNeedsCheck": "Kontrol edilmesi gerekiyor"
+  },
+  "security": {
+    "adminData": "Yönetici verileri",
+    "reLoginHint": "Değişiklikten sonra tekrar giriş yapmanız gerekecek",
+    "usernameLabel": "Kullanıcı adı",
+    "currentPassword": "Mevcut şifre",
+    "newPassword": "Yeni şifre",
+    "passwordHint": "En az 12 karakter",
+    "changeData": "Verileri değiştir"
+  },
+  "settings": {
+    "languageTitle": "Arayüz dili",
+    "languageDescription": "Yönetim panelini görüntülemek için kullanılan dil",
+    "languageLabel": "Dil",
+    "languageOptions": {
+      "ru": "Русский",
+      "en": "English",
+      "de": "Deutsch",
+      "es": "Español",
+      "fr": "Fransızca",
+      "it": "İtalyanca",
+      "ja": "Japonca",
+      "ko": "Korece",
+      "pl": "Lehçe",
+      "pt-BR": "Portekizce (Brezilya)",
+      "zh-CN": "Çince (Basitleştirilmiş)"
+    }
+  }
+}
