@@ -1,104 +1,72 @@
 import { createInstance } from 'i18next';
-import deTranslation from './locales/de/translation.json';
+import fs from 'node:fs';
+import path from 'node:path';
 import enTranslation from './locales/en/translation.json';
-import esTranslation from './locales/es/translation.json';
-import frTranslation from './locales/fr/translation.json';
-import itTranslation from './locales/it/translation.json';
-import jaTranslation from './locales/ja/translation.json';
-import koTranslation from './locales/ko/translation.json';
-import plTranslation from './locales/pl/translation.json';
-import ptBrTranslation from './locales/pt-BR/translation.json';
-import ruTranslation from './locales/ru/translation.json';
-import zhCnTranslation from './locales/zh-CN/translation.json';
+import {
+  DEFAULT_LANGUAGE,
+  normalizeSupportedLanguage,
+  SUPPORTED_LANGUAGES,
+} from './languages';
 
-export const SUPPORTED_LANGUAGES = [
-    'ru',
-    'en',
-    'de',
-    'es',
-    'fr',
-    'it',
-    'ja',
-    'ko',
-    'pl',
-    'pt-BR',
-    'zh-CN'
-] as const;
-
-export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
+export { DEFAULT_LANGUAGE, normalizeSupportedLanguage, SUPPORTED_LANGUAGES };
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 export type BotTranslateOptions = Record<string, unknown>;
 export type BotTranslate = (key: string, options?: BotTranslateOptions) => string;
 
-export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
-
-const SUPPORTED_LANGUAGE_BY_CODE = new Map<string, SupportedLanguage>(
-    SUPPORTED_LANGUAGES.map(language => [language.toLowerCase(), language])
-);
-
-export const normalizeSupportedLanguage = (value: unknown): SupportedLanguage | null => {
-    if (typeof value !== 'string') return null;
-    const normalized = value.trim().toLowerCase().replace(/_/g, '-');
-    if (!normalized) return null;
-
-    const exact = SUPPORTED_LANGUAGE_BY_CODE.get(normalized);
-    if (exact) return exact;
-
-    if (normalized === 'pt' || normalized.startsWith('pt-')) return 'pt-BR';
-    if (
-        normalized === 'zh'
-        || normalized === 'zh-hans'
-        || normalized.startsWith('zh-hans-')
-        || normalized === 'zh-sg'
-        || normalized.startsWith('zh-sg-')
-    ) {
-        return 'zh-CN';
-    }
-
-    return SUPPORTED_LANGUAGE_BY_CODE.get(normalized.split('-')[0]) ?? null;
+// English is statically imported so the bot always has a working bundle.
+// Other locales are read from disk synchronously at startup — works both
+// under tsx (src) and the compiled bundle (dist), where tsc does NOT copy
+// .json files next to .js.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const resources: any = {
+  en: { translation: enTranslation },
 };
+
+const localesRoot = path.resolve(__dirname, 'locales');
+
+for (const lang of SUPPORTED_LANGUAGES) {
+  if (lang === DEFAULT_LANGUAGE) continue;
+  const file = path.join(localesRoot, lang, 'translation.json');
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    resources[lang] = { translation: JSON.parse(raw) };
+  } catch (error) {
+    // Most often: translation file not yet generated.  Log so a typo in
+    // the path or a malformed JSON does not disappear silently.
+    console.warn(`[i18n] Failed to load locale "${lang}": ${(error as Error).message}`);
+  }
+}
 
 const botI18n = createInstance();
 
 const botI18nReady = botI18n.init({
-    resources: {
-        de: { translation: deTranslation },
-        en: { translation: enTranslation },
-        es: { translation: esTranslation },
-        fr: { translation: frTranslation },
-        it: { translation: itTranslation },
-        ja: { translation: jaTranslation },
-        ko: { translation: koTranslation },
-        pl: { translation: plTranslation },
-        'pt-BR': { translation: ptBrTranslation },
-        ru: { translation: ruTranslation },
-        'zh-CN': { translation: zhCnTranslation }
-    },
-    lng: DEFAULT_LANGUAGE,
-    fallbackLng: DEFAULT_LANGUAGE,
-    supportedLngs: SUPPORTED_LANGUAGES,
-    load: 'currentOnly',
-    initAsync: false,
-    interpolation: {
-        escapeValue: false
-    }
+  resources,
+  lng: DEFAULT_LANGUAGE,
+  fallbackLng: DEFAULT_LANGUAGE,
+  supportedLngs: SUPPORTED_LANGUAGES,
+  load: 'currentOnly',
+  initAsync: false,
+  interpolation: {
+    escapeValue: false,
+  },
 });
 
 export const ensureBotI18nReady = () => botI18nReady;
 
 export const translateBot = (
-    language: unknown,
-    key: string,
-    options: BotTranslateOptions = {}
+  language: unknown,
+  key: string,
+  options: BotTranslateOptions = {},
 ): string => {
-    const result = botI18n.t(key, {
-        ...options,
-        lng: normalizeSupportedLanguage(language) ?? DEFAULT_LANGUAGE
-    } as never);
-    return typeof result === 'string' ? result : String(result);
+  const result = botI18n.t(key, {
+    ...options,
+    lng: normalizeSupportedLanguage(language) ?? DEFAULT_LANGUAGE,
+  } as never);
+  return typeof result === 'string' ? result : String(result);
 };
 
 export const createBotTranslator = (
-    getLanguage: () => unknown
+  getLanguage: () => unknown,
 ): BotTranslate => (key, options) => translateBot(getLanguage(), key, options);
 
 export default botI18n;
