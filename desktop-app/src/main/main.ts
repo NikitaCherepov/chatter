@@ -1485,7 +1485,10 @@ function setupContentSecurityPolicy(): void {
           'ws://127.0.0.1:3050',
         ];
     const connectSources = ["'self'", ...serverCspSources(), ...developmentSources];
-    const scriptSources = ["'self'", ...(!app.isPackaged ? ["'unsafe-eval'"] : [])];
+    const scriptSources = [
+      "'self'",
+      ...(!app.isPackaged ? ["'unsafe-eval'", "'unsafe-inline'"] : []),
+    ];
     const imageSources = [
       "'self'",
       'data:',
