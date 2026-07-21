@@ -1,15 +1,15 @@
 .stack {
   display: flex;
-  max-width: 1120px;
+  max-width: var(--content-max);
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-4);
 }
 .toolbar {
   display: flex;
   min-height: 38px;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: var(--sp-5);
 }
 .toolbar > div {
   display: flex;
@@ -18,16 +18,16 @@
 }
 .toolbar strong {
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .toolbar span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .toolbar button {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-1);
 }
 .toolbar svg {
   width: 14px;
@@ -36,14 +36,15 @@
 .statusGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--sp-3);
 }
 .statusCard {
   position: relative;
   min-width: 0;
-  padding: 14px;
+  min-height: 92px;
+  padding: var(--sp-4);
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
 }
 .cardControls {
@@ -58,7 +59,7 @@
   overflow: hidden;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--sp-1);
   opacity: 0;
   transition: width .15s, opacity .15s;
 }
@@ -79,34 +80,34 @@
   padding: 0;
   place-items: center;
   border: 1px solid var(--border-input);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .actionError {
-  padding: 9px 11px;
-  border-radius: 6px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--color-error) 9%, var(--bg-primary));
   color: var(--color-error);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .statusHeading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-2);
 }
 .statusHeading strong {
   color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .statusCard p {
   overflow: hidden;
-  margin: 6px 0 0;
+  margin: var(--sp-1) 0 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -127,8 +128,8 @@
 }
 .columns {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.75fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: var(--sp-4);
 }
 .checklist {
   display: flex;
@@ -138,9 +139,10 @@
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 17px;
   align-items: center;
-  gap: 11px;
+  gap: var(--sp-3);
   width: 100%;
-  padding: 11px 0;
+  min-height: 66px;
+  padding: var(--sp-3) 0;
   border: 0;
   border-bottom: 1px solid var(--border-light);
   border-radius: 0;
@@ -163,12 +165,12 @@
   gap: 2px;
 }
 .setupRow strong {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .setupRow small {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .setupRow > svg {
   width: 15px;
@@ -182,7 +184,14 @@
   border: 1px solid var(--border-medium);
   border-radius: 50%;
   color: white;
-  font-size: 11px;
+}
+.check svg {
+  width: 12px;
+  height: 10px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .checkReady {
   border-color: var(--color-success);
@@ -191,20 +200,20 @@
 .summary {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--sp-1);
 }
 .summary strong {
   color: var(--text-primary);
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
 }
 .summary > span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .progress {
   height: 5px;
-  margin-top: 12px;
+  margin-top: var(--sp-3);
   overflow: hidden;
   border-radius: 3px;
   background: var(--bg-input);
@@ -219,17 +228,17 @@
 .updateMini {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-2);
 }
 .updateMiniInfo {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--sp-2);
 }
 .updateMini strong {
   color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .updateDot {
   width: 8px;
@@ -245,16 +254,16 @@
 }
 .summary .updateChecking {
   color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
 }
 .updateMsg {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .updateActions {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 @media (max-width: 1000px) {
   .statusGrid {

@@ -1,42 +1,44 @@
 .stack {
   display: flex;
-  max-width: 1120px;
+  max-width: var(--content-max);
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-3);
 }
 .intro {
   display: flex;
+  min-height: 68px;
   align-items: center;
   justify-content: space-between;
-  padding: 17px 18px;
+  padding: var(--sp-4) var(--sp-5);
   border: 1px solid var(--border-light);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
 }
 .intro h2 {
-  margin: 0 0 4px;
+  margin: 0 0 3px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
 }
 .intro p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--sp-2);
 }
 .card {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   min-height: 80px;
-  padding: 13px;
+  padding: var(--sp-3);
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
   color: var(--text-secondary);
   text-align: left;
@@ -57,11 +59,11 @@ button.card:hover {
   width: 38px;
   height: 38px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-input);
   color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
   text-transform: uppercase;
 }
 .info {
@@ -73,18 +75,18 @@ button.card:hover {
 }
 .info small {
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 .info strong {
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .info em {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -93,38 +95,38 @@ button.card:hover {
   opacity: 0.78;
 }
 .soon {
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 2px var(--sp-1);
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: var(--fs-xs);
 }
 .detailPage {
   display: flex;
-  max-width: 1120px;
+  max-width: var(--content-max);
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-3);
 }
 .detailHeader {
   display: flex;
   min-height: 72px;
   align-items: center;
-  gap: 13px;
-  padding: 14px 18px;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--border-light);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
 }
 .detailHeader h2 {
   margin: 0 0 3px;
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .detailHeader p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .backButton {
   display: grid;
@@ -144,48 +146,48 @@ button.card:hover {
 .detailCard {
   overflow: hidden;
   border: 1px solid var(--border-light);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
 }
 .fieldSection {
   display: grid;
   grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
-  gap: 26px;
-  padding: 18px;
+  gap: var(--sp-6);
+  padding: var(--sp-4);
 }
 .fieldSection + .fieldSection {
   border-top: 1px solid var(--border-light);
 }
 .sectionTitle h3 {
-  margin: 0 0 4px;
+  margin: 0 0 var(--sp-1);
   color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .sectionTitle p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
 }
 .fields {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-3);
 }
 .inputWithAction {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .checkButton {
   min-width: 92px;
-  padding: 0 12px;
+  padding: 0 var(--sp-3);
   border: 1px solid var(--border-input);
   background: var(--bg-input);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .checkButton:hover:not(:disabled) {
   border-color: var(--border-medium);
@@ -201,7 +203,7 @@ button.card:hover {
 }
 .checkDetails,
 .checkError {
-  font-size: 9px;
+  font-size: var(--fs-xs);
   line-height: 1.45;
 }
 .checkError {
@@ -210,12 +212,12 @@ button.card:hover {
 .parametersHint {
   margin: 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .twoColumns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--sp-3);
 }
 @media (max-width: 900px) {
   .grid {

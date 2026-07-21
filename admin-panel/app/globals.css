@@ -2,6 +2,10 @@
 
 :root {
   color-scheme: light;
+
+  /* ─────────────────────────────────────
+   * Colors
+   * ───────────────────────────────────── */
   --bg-primary: #ffffff;
   --bg-secondary: #dfe6ef;
   --bg-input: #dfe6ef;
@@ -25,6 +29,69 @@
   --scrollbar-thumb: #8eaac2;
   --scrollbar-hover: #6d90ad;
   --shadow-card: 0 1px 3px rgba(8, 15, 29, 0.08), 0 8px 24px rgba(8, 15, 29, 0.05);
+
+  /* ─────────────────────────────────────
+   * Typography scale (1rem = 16px)
+   * ───────────────────────────────────── */
+  --fs-xs: 0.8125rem; /* 13px — badges, labels, metadata */
+  --fs-sm: 0.875rem;  /* 14px — captions, hints, meta  */
+  --fs-base: 1rem;    /* 16px — body text, inputs      */
+  --fs-md: 1.125rem;  /* 18px — subheadings, card titles */
+  --fs-lg: 1.25rem;   /* 20px — section headings       */
+  --fs-xl: 1.5rem;    /* 24px — page titles            */
+  --fs-2xl: 1.875rem; /* 30px — hero / display         */
+
+  /* ─────────────────────────────────────
+   * Font weights
+   * ───────────────────────────────────── */
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ─────────────────────────────────────
+   * Spacing scale
+   * ───────────────────────────────────── */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* ─────────────────────────────────────
+   * Control heights
+   * ───────────────────────────────────── */
+  --ctrl-h-sm: 34px;
+  --ctrl-h: 40px;
+  --ctrl-h-lg: 44px;
+
+  /* Shared page geometry */
+  --sidebar-width: 260px;
+  --content-max: 1440px;
+
+  /* ─────────────────────────────────────
+   * Border radius
+   * ───────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+
+  /* ─────────────────────────────────────
+   * Line heights
+   * ───────────────────────────────────── */
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.625;
+}
+
+html {
+  font-size: 16px;
 }
 
 *,
@@ -49,8 +116,8 @@ body {
     'Segoe UI',
     Roboto,
     sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
   -webkit-font-smoothing: antialiased;
 }
 button,
@@ -60,13 +127,14 @@ textarea {
   font: inherit;
 }
 button {
-  padding: 9px 16px;
+  min-height: var(--ctrl-h);
+  padding: var(--sp-2) var(--sp-4);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
   cursor: pointer;
   transition:
     opacity 0.15s,
@@ -90,14 +158,14 @@ input,
 select,
 textarea {
   width: 100%;
-  min-height: 36px;
-  padding: 8px 12px;
+  min-height: var(--ctrl-h);
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border-input);
-  border-radius: 6px;
+  border-radius: var(--radius);
   outline: none;
   background: var(--bg-input);
   color: var(--text-body);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   transition: border-color 0.1s;
 }
 input::placeholder,
@@ -117,14 +185,14 @@ select {
   color: var(--text-primary);
 }
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--scrollbar-thumb);
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -151,22 +219,26 @@ select {
   background: var(--bg-primary);
   color: var(--text-secondary);
 }
+.buttonPrimary,
+.buttonSecondary {
+  white-space: nowrap;
+}
 .emptyInline {
   display: flex;
   min-height: 100px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-1);
   text-align: center;
 }
 .emptyInline strong {
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .emptyInline span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 @keyframes spin {
   to {

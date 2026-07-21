@@ -1,14 +1,18 @@
 .wrap {
   display: inline-flex;
+  min-height: 0;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
-.wrap input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+.wrap:hover {
+  opacity: 1;
 }
 .control {
   width: 34px;
@@ -32,16 +36,23 @@
     transform 0.15s,
     background-color 0.15s;
 }
-.wrap input:checked + .control {
+.wrap[aria-checked='true'] .control {
   border-color: var(--accent);
   background: var(--accent);
 }
-.wrap input:checked + .control::after {
+.wrap[aria-checked='true'] .control::after {
   transform: translateX(15px);
   background: white;
 }
+.wrap:focus-visible {
+  outline: none;
+}
+.wrap:focus-visible .control {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+}
 .label {
   color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
 }

@@ -1,35 +1,35 @@
 .stack {
   display: flex;
-  max-width: 1280px;
+  max-width: var(--content-max);
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-3);
 }
 .summary {
   display: flex;
-  min-height: 36px;
+  min-height: var(--ctrl-h);
   align-items: center;
-  gap: 18px;
+  gap: var(--sp-4);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-sm);
 }
 .summary span {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-1);
 }
 .summary button {
   margin-left: auto;
 }
 .filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(145px, 190px));
-  gap: 9px;
-  margin-bottom: 14px;
+  grid-template-columns: minmax(320px, 2fr) repeat(3, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
 }
 .tableWrap {
   overflow-x: auto;
   border: 1px solid var(--border-light);
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
 }
 .table {
   width: 100%;
@@ -38,11 +38,11 @@
   table-layout: fixed;
 }
 .table th {
-  padding: 10px 12px;
+  padding: var(--sp-3) var(--sp-4);
   background: var(--bg-secondary);
   color: var(--text-hint);
-  font-size: 9px;
-  font-weight: 500;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
   text-align: left;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -63,11 +63,11 @@
   width: 14%;
 }
 .table td {
-  height: 54px;
-  padding: 9px 12px;
+  height: 64px;
+  padding: var(--sp-3) var(--sp-4);
   border-top: 1px solid var(--border-light);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--fs-sm);
   vertical-align: middle;
 }
 .table tbody tr:hover {
@@ -77,7 +77,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 9px;
+  gap: var(--sp-2);
 }
 .userCell > div {
   display: flex;
@@ -98,8 +98,8 @@
   border-radius: 0;
   background: transparent;
   color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-semibold);
   text-align: left;
 }
 .userLink:hover {
@@ -108,7 +108,7 @@
 }
 .userCell span {
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: var(--fs-xs);
 }
 .onlineDot,
 .offlineDot {
@@ -129,7 +129,7 @@
 .badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: var(--sp-1);
 }
 .badge,
 .adminBadge,
@@ -137,12 +137,12 @@
   display: inline-flex;
   align-items: center;
   min-height: 21px;
-  padding: 3px 7px;
-  border-radius: 4px;
+  padding: 3px var(--sp-1);
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
 }
 .status_approved {
   color: var(--color-success);
@@ -168,10 +168,10 @@
 }
 .error,
 .notice {
-  margin-bottom: 12px;
-  padding: 9px 11px;
-  border-radius: 6px;
-  font-size: 10px;
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius);
+  font-size: var(--fs-xs);
 }
 .error {
   background: color-mix(in srgb, var(--color-error) 9%, var(--bg-primary));
@@ -182,9 +182,9 @@
   color: var(--text-muted);
 }
 .empty {
-  padding: 32px;
+  padding: var(--sp-8);
   color: var(--text-hint);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-align: center;
 }
 @media (max-width: 1050px) {
@@ -196,7 +196,7 @@
 .quotaCell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   min-width: 100px;
 }
 
@@ -219,7 +219,7 @@
 }
 
 .quotaLabel {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-hint);
   min-width: 32px;
   text-align: right;

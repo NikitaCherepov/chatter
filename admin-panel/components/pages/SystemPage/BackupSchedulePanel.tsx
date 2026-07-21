@@ -49,11 +49,13 @@ export function BackupSchedulePanel({
           checked={schedule.includeUploads}
           onChange={(checked) => onChange({ includeUploads: checked })}
           disabled={schedule.frequency === 'off'}
+          label={(
+            <span className={styles.scheduleCopy}>
+              <strong>{t('system.schedule.includeFiles')}</strong>
+              <small>{t('system.schedule.includeFilesHint')}</small>
+            </span>
+          )}
         />
-        <span>
-          <strong>{t('system.schedule.includeFiles')}</strong>
-          <small>{t('system.schedule.includeFilesHint')}</small>
-        </span>
       </div>
       <div className={styles.scheduleAction}>
         <span>

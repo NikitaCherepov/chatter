@@ -166,7 +166,11 @@ function SetupRow({
   return (
     <button type="button" className={styles.setupRow} onClick={onClick}>
       <span className={`${styles.check} ${ready ? styles.checkReady : ''}`}>
-        {ready ? '✓' : ''}
+        {ready && (
+          <svg viewBox="0 0 12 10" fill="none" aria-hidden="true">
+            <path d="M1 5 4.25 8.25 11 1.5" />
+          </svg>
+        )}
       </span>
       <span>
         <strong>{title}</strong>

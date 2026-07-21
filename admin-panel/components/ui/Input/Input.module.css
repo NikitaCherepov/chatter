@@ -1,14 +1,14 @@
 .input {
   width: 100%;
-  min-height: 36px;
-  padding: 8px 12px;
+  min-height: var(--ctrl-h);
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border-input);
-  border-radius: 6px;
+  border-radius: var(--radius);
   outline: none;
   background: var(--bg-input);
   color: var(--text-body);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   transition: border-color 0.1s;
 }
 

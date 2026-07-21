@@ -1,24 +1,24 @@
 .row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
 }
 
 .toggleRow {
   display: flex;
-  gap: 16px;
-  margin-top: 8px;
+  gap: var(--sp-4);
+  margin-top: var(--sp-2);
 }
 
 .actions {
   display: flex;
-  gap: 12px;
+  gap: var(--sp-3);
   flex-wrap: wrap;
 }
 
 .state {
-  margin-top: 12px;
-  font-size: 12px;
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }

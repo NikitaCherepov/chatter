@@ -8,9 +8,9 @@
 }
 .card {
   width: 380px;
-  padding: 40px 36px;
+  padding: var(--sp-10) var(--sp-8);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: var(--bg-primary);
   box-shadow: var(--shadow-card);
 }
@@ -18,35 +18,35 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-1);
 }
 .title {
   margin: 0;
   color: var(--text-primary);
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
 }
 .subtitle {
-  margin: 8px 0 28px;
+  margin: var(--sp-2) 0 var(--sp-8);
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   text-align: center;
 }
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-3);
 }
 .input {
-  min-height: auto;
-  padding: 11px 14px;
+  min-height: var(--ctrl-h-lg);
+  padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--border-input);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   outline: none;
   background: var(--bg-input);
   color: var(--text-body);
-  font-size: 14px;
+  font-size: var(--fs-base);
   transition: border-color 0.15s;
 }
 .input:focus {
@@ -56,34 +56,34 @@
   color: var(--text-hint);
 }
 .button {
-  margin-top: 4px;
-  padding: 11px;
+  margin-top: var(--sp-1);
+  padding: var(--sp-3);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
   cursor: pointer;
   transition: opacity 0.15s;
 }
 .error {
-  padding: 4px 0;
+  padding: var(--sp-1) 0;
   color: var(--color-error);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   text-align: center;
 }
 .langRow {
-  margin: 6px 0 0;
+  margin: var(--sp-1) 0 0;
 }
 .divider {
   height: 1px;
-  margin: 24px 0 16px;
+  margin: var(--sp-6) 0 var(--sp-4);
   background: var(--border-light);
 }
 .hint {
   margin: 0;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   text-align: center;
 }

@@ -22,7 +22,7 @@ type Props = {
  */
 export function Checkbox({ checked, onChange, label, disabled }: Props) {
   return (
-    <label className={styles.wrap}>
+    <label className={`${styles.wrap} ${disabled ? styles.disabled : ''}`}>
       <input
         type="checkbox"
         className={styles.checkbox}
@@ -30,6 +30,11 @@ export function Checkbox({ checked, onChange, label, disabled }: Props) {
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
+      <span className={styles.box} aria-hidden="true">
+        <svg viewBox="0 0 12 10" fill="none">
+          <path d="M1 5 4.25 8.25 11 1.5" />
+        </svg>
+      </span>
       {label != null && label !== false && <span className={styles.label}>{label}</span>}
     </label>
   );

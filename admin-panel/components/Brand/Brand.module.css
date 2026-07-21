@@ -1,19 +1,19 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--sp-2);
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
 }
 .mark {
   display: grid;
   width: 24px;
   height: 24px;
   place-items: center;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1;
 }

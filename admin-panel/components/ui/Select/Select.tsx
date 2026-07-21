@@ -35,6 +35,8 @@ type Props = {
   disabled?: boolean;
   searchable?: boolean;
   maxVisibleItems?: number;
+  className?: string;
+  'aria-label'?: string;
 };
 
 /**
@@ -57,6 +59,8 @@ export function Select({
   disabled = false,
   searchable = false,
   maxVisibleItems = 8,
+  className = '',
+  'aria-label': ariaLabel,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -114,7 +118,7 @@ export function Select({
   };
 
   return (
-    <div className={styles.root} ref={rootRef}>
+    <div className={`${styles.root} ${className}`} ref={rootRef}>
       <button
         className={styles.trigger}
         onClick={() => {
@@ -122,6 +126,7 @@ export function Select({
         }}
         disabled={disabled}
         type="button"
+        aria-label={ariaLabel}
       >
         {!value ? (
           <span className={styles.triggerPlaceholder}>{placeholder}</span>

@@ -1,53 +1,53 @@
-.stack { display: flex; max-width: 1120px; flex-direction: column; gap: 14px; }
+.stack { display: flex; max-width: var(--content-max); flex-direction: column; gap: var(--sp-4); }
 .toolbar { display: flex; min-height: 36px; align-items: center; justify-content: space-between; }
-.loading { padding: 30px; color: var(--text-muted); font-size: 11px; }
-.online, .offline { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 8px; border-radius: 4px; background: var(--bg-secondary); font-size: 9px; font-weight: 600; }
+.loading { padding: var(--sp-8); color: var(--text-muted); font-size: var(--fs-sm); }
+.online, .offline { display: inline-flex; align-items: center; min-height: 23px; padding: 3px var(--sp-2); border-radius: var(--radius-sm); background: var(--bg-secondary); font-size: var(--fs-xs); font-weight: var(--fw-semibold); }
 .online { color: var(--color-success); }
 .offline { color: var(--text-hint); }
-.accountGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.accountGrid > div, .accountGrid > label { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
-.accountGrid span { color: var(--text-hint); font-size: 9px; }
-.accountGrid strong { overflow: hidden; color: var(--text-secondary); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.accountGrid { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: var(--sp-5) var(--sp-6); }
+.accountGrid > div, .accountGrid > label { display: flex; min-width: 0; flex-direction: column; gap: var(--sp-1); }
+.accountGrid span { color: var(--text-hint); font-size: var(--fs-xs); }
+.accountGrid strong { overflow: hidden; color: var(--text-secondary); font-size: var(--fs-sm); font-weight: var(--fw-semibold); text-overflow: ellipsis; white-space: nowrap; }
 .accountGrid select,
-.accountGrid > div > div { max-width: 220px; }
-.accountGrid small { min-height: 13px; color: var(--text-muted); font-size: 8px; }
-.accountGrid .durationButton { align-self: flex-start; min-height: 0; padding: 0; background: transparent; color: var(--text-muted); font-size: 8px; text-decoration: underline; }
-.banBar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, 300px) auto; align-items: center; gap: 10px; margin-top: 17px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+.accountGrid > div > div { max-width: none; }
+.accountGrid small { min-height: 13px; color: var(--text-muted); font-size: var(--fs-xs); }
+.accountGrid .durationButton { align-self: flex-start; min-height: 0; padding: 0; background: transparent; color: var(--text-muted); font-size: var(--fs-xs); text-decoration: underline; }
+.banBar { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(260px, 360px) auto; align-items: center; gap: var(--sp-3); margin-top: var(--sp-6); padding-top: var(--sp-5); border-top: 1px solid var(--border-light); }
 .banBar > div { display: flex; flex-direction: column; gap: 2px; }
-.banBar strong { color: var(--text-secondary); font-size: 10px; }
-.banBar span { color: var(--text-hint); font-size: 9px; }
+.banBar strong { color: var(--text-secondary); font-size: var(--fs-sm); }
+.banBar span { color: var(--text-hint); font-size: var(--fs-xs); }
 .dangerButton { background: var(--color-error); }
-.actionState { min-height: 14px; margin: 8px 0 0; color: var(--text-muted); font-size: 9px; }
-.connectionTable { overflow: hidden; border: 1px solid var(--border-light); border-radius: 7px; }
-.connectionHeader, .connectionRow { display: grid; grid-template-columns: .7fr 1.4fr 1fr .8fr; align-items: center; gap: 12px; padding: 10px 12px; }
-.connectionHeader { background: var(--bg-secondary); color: var(--text-hint); font-size: 9px; text-transform: uppercase; }
-.connectionRow { min-height: 47px; border-top: 1px solid var(--border-light); color: var(--text-muted); font-size: 10px; }
-.connectionRow strong { color: var(--text-primary); font-size: 10px; }
+.actionState { min-height: 14px; margin: var(--sp-2) 0 0; color: var(--text-muted); font-size: var(--fs-xs); }
+.connectionTable { overflow: hidden; border: 1px solid var(--border-light); border-radius: var(--radius); }
+.connectionHeader, .connectionRow { display: grid; grid-template-columns: .7fr 1.4fr 1fr .8fr; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-4); }
+.connectionHeader { background: var(--bg-secondary); color: var(--text-hint); font-size: var(--fs-xs); text-transform: uppercase; }
+.connectionRow { min-height: 56px; border-top: 1px solid var(--border-light); color: var(--text-muted); font-size: var(--fs-sm); }
+.connectionRow strong { color: var(--text-primary); font-size: var(--fs-sm); }
 .connectionRow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.connectionState { display: flex; align-items: center; gap: 7px; }
+.connectionState { display: flex; align-items: center; gap: var(--sp-1); }
 .dotOnline, .dotOffline, .dotLinked { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
 .dotOnline { background: var(--color-success); }
 .dotOffline { background: var(--color-error); opacity: .7; }
 .dotLinked { background: var(--color-info); }
-.statsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
-.statsGrid > div { display: flex; min-width: 0; min-height: 68px; justify-content: center; flex-direction: column; padding: 11px 13px; border: 1px solid var(--border-light); border-radius: 7px; background: var(--bg-secondary); }
-.statsGrid span { color: var(--text-hint); font-size: 9px; }
-.statsGrid strong { overflow: hidden; margin-top: 5px; color: var(--text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.statsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); }
+.statsGrid > div { display: flex; min-width: 0; min-height: 68px; justify-content: center; flex-direction: column; padding: var(--sp-3); border: 1px solid var(--border-light); border-radius: var(--radius); background: var(--bg-secondary); }
+.statsGrid span { color: var(--text-hint); font-size: var(--fs-xs); }
+.statsGrid strong { overflow: hidden; margin-top: var(--sp-1); color: var(--text-primary); font-size: var(--fs-sm); text-overflow: ellipsis; white-space: nowrap; }
 
-.usageRow { display: grid; grid-template-columns: 160px 1fr; gap: 24px; align-items: flex-start; }
-.usageDonut { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.usageRow { display: grid; grid-template-columns: 160px 1fr; gap: var(--sp-6); align-items: flex-start; }
+.usageDonut { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
 .usageDonutCaption { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.usageDonutCaption strong { color: var(--text-primary); font-size: 11px; }
-.usageDonutCaption small { color: var(--text-hint); font-size: 9px; }
+.usageDonutCaption strong { color: var(--text-primary); font-size: var(--fs-sm); }
+.usageDonutCaption small { color: var(--text-hint); font-size: var(--fs-xs); }
 .donut { display: block; }
-.donutText { font-size: 22px; font-weight: 600; }
+.donutText { font-size: var(--fs-md); font-weight: var(--fw-semibold); }
 
 .usageTableWrap { overflow-x: auto; }
-.usageTable { width: 100%; border-collapse: collapse; font-size: 11px; }
-.usageTable th, .usageTable td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border-light); }
-.usageTable th { color: var(--text-hint); font-size: 9px; text-transform: uppercase; }
-.usageTable td strong { color: var(--text-primary); font-size: 11px; }
-.usageTable td small { display: block; color: var(--text-muted); font-size: 9px; }
+.usageTable { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.usageTable th, .usageTable td { padding: var(--sp-1) var(--sp-2); text-align: left; border-bottom: 1px solid var(--border-light); }
+.usageTable th { color: var(--text-hint); font-size: var(--fs-xs); text-transform: uppercase; }
+.usageTable td strong { color: var(--text-primary); font-size: var(--fs-sm); }
+.usageTable td small { display: block; color: var(--text-muted); font-size: var(--fs-xs); }
 
-.error { color: var(--color-error); font-size: 10px; padding: 12px 0; }
+.error { color: var(--color-error); font-size: var(--fs-xs); padding: var(--sp-3) 0; }
 @media (max-width: 1000px) { .accountGrid, .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .banBar { grid-template-columns: 1fr 1fr; } .banBar > div { grid-column: 1 / -1; } .connectionHeader { display: none; } .connectionRow { grid-template-columns: 1fr 1.5fr; } }

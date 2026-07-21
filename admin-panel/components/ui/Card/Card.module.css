@@ -1,29 +1,29 @@
 .card {
   border: 1px solid var(--border-light);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
 }
 .header {
   display: flex;
-  min-height: 61px;
+  min-height: 68px;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 14px 18px;
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
   border-bottom: 1px solid var(--border-light);
 }
 .header h2 {
   margin: 0 0 3px;
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
 }
 .header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-sm);
   line-height: 1.45;
 }
 .body {
-  padding: 18px;
+  padding: var(--sp-5);
 }

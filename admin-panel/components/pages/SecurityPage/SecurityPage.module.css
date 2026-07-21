@@ -5,10 +5,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--sp-4);
   padding-top: 2px;
 }
 .actions span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }

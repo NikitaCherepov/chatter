@@ -25,12 +25,18 @@ export function BackupsPanel({ backups, creating, restoring, importing, importPr
     <div className={styles.backupContent}>
       <div className={styles.backupToolbar}>
         <div className={styles.mediaOption}>
-          <Checkbox checked={includeUploads} onChange={onIncludeUploadsChange} />
-          <span><strong>{t('system.backups.includeUploads')}</strong><small>{t('system.backups.includeUploadsHint')}</small></span>
+          <Checkbox
+            checked={includeUploads}
+            onChange={onIncludeUploadsChange}
+            label={<span className={styles.optionCopy}><strong>{t('system.backups.includeUploads')}</strong><small>{t('system.backups.includeUploadsHint')}</small></span>}
+          />
         </div>
         <div className={styles.mediaOption}>
-          <Checkbox checked={includeConfiguration} onChange={onIncludeConfigurationChange} />
-          <span><strong>{t('system.backups.includeConfig')}</strong><small>{t('system.backups.includeConfigHint')}</small></span>
+          <Checkbox
+            checked={includeConfiguration}
+            onChange={onIncludeConfigurationChange}
+            label={<span className={styles.optionCopy}><strong>{t('system.backups.includeConfig')}</strong><small>{t('system.backups.includeConfigHint')}</small></span>}
+          />
         </div>
         <div className={styles.primaryActions}>
           <label className={`buttonSecondary ${styles.importButton}`}><input type="file" accept=".db,.sqlite,.sqlite3,.tar.gz,.tgz" disabled={creating || restoring || importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImport(file); event.target.value = ''; }} />{importing ? (importProgress === 100 ? t('system.backups.verifying') : t('system.backups.importing', { percent: importProgress ?? 0 })) : t('system.backups.importButton')}</label>

@@ -1,7 +1,7 @@
 .section {
   overflow: hidden;
   border: 1px solid var(--border-light);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
 }
 .section > summary {
@@ -9,7 +9,7 @@
   min-height: 64px;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
+  padding: var(--sp-3) var(--sp-4);
   cursor: pointer;
   list-style: none;
 }
@@ -20,8 +20,8 @@
 .section > summary::after {
   content: '+';
   color: var(--text-muted);
-  font-size: 18px;
-  font-weight: 400;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-normal);
 }
 .section[open] > summary::after {
   content: '−';
@@ -33,19 +33,19 @@
 }
 .section > summary strong {
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .section > summary small {
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 400;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-normal);
 }
 .sectionBody {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
   border-top: 1px solid var(--border-light);
 }
 .modelList,
@@ -53,25 +53,25 @@
 .modelBody {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-3);
 }
 .listHeading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
+  gap: var(--sp-5);
 }
 .listHeading h3 {
   margin: 0 0 3px;
   color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .listHeading p,
 .empty {
   margin: 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
 }
 .divider {
@@ -87,10 +87,10 @@
 .nextLabel {
   position: relative;
   align-self: flex-start;
-  margin: 5px 0 5px 18px;
-  padding-left: 12px;
+  margin: var(--sp-1) 0 var(--sp-1) var(--sp-4);
+  padding-left: var(--sp-3);
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: var(--fs-xs);
 }
 .nextLabel::before {
   position: absolute;
@@ -104,15 +104,15 @@
 .modelCard,
 .singleModel {
   border: 1px solid var(--border-light);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--bg-bubble);
 }
 .modelCard > summary {
   display: flex;
   min-height: 58px;
   align-items: center;
-  gap: 12px;
-  padding: 11px 13px;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-3);
   cursor: pointer;
   list-style: none;
 }
@@ -120,7 +120,7 @@
   margin-left: 3px;
   color: var(--text-hint);
   content: '⌄';
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .modelCard[open] > summary::after {
   transform: rotate(180deg);
@@ -132,11 +132,11 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--border-medium);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
 }
 .modelTitle {
   display: flex;
@@ -148,40 +148,40 @@
 .modelTitle strong {
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .modelTitle span {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--fs-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .modelBody {
-  padding: 14px;
+  padding: var(--sp-3);
   border-top: 1px solid var(--border-light);
   background: var(--bg-primary);
 }
 .singleModel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
 }
 .twoColumns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--sp-3);
 }
 .modelActions,
 .toggleRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .modelActions .dangerButton {
   margin-left: auto;
@@ -192,9 +192,9 @@
   color: var(--color-error);
 }
 .empty {
-  padding: 16px;
+  padding: var(--sp-4);
   border: 1px dashed var(--border-medium);
-  border-radius: 7px;
+  border-radius: var(--radius);
   text-align: center;
 }
 @media (max-width: 900px) {

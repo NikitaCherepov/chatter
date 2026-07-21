@@ -35,12 +35,10 @@ export function LogToolbar({
     <div className={styles.toolbar}>
       <div className={styles.filters}>
         <Select
+          className={styles.serviceFilter}
           value={service}
           onChange={(value) => onServiceChange(value as LogService)}
           aria-label={t('logs.serviceFilter')}
-          searchable
-          searchPlaceholder={t('ui.search')}
-          emptyText={t('ui.nothingFound')}
           options={[
             { value: 'all', label: t('logs.allServices') },
             { value: 'backend', label: 'Backend' },
@@ -52,6 +50,7 @@ export function LogToolbar({
           ]}
         />
         <Select
+          className={styles.tailFilter}
           value={String(tail)}
           onChange={(value) => onTailChange(Number(value))}
           aria-label={t('logs.lineCount')}

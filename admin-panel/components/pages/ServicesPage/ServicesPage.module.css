@@ -1,10 +1,10 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-1);
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
 }
 .badge > span {
   width: 6px;
@@ -21,11 +21,11 @@
 .urlRow {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .copyButton {
-  width: 36px;
-  min-width: 36px;
+  width: var(--ctrl-h);
+  min-width: var(--ctrl-h);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -36,11 +36,11 @@
   height: 15px;
 }
 .notice {
-  padding: 10px 12px;
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid color-mix(in srgb, var(--color-info) 25%, var(--border-light));
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--color-info) 6%, var(--bg-primary));
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
 }

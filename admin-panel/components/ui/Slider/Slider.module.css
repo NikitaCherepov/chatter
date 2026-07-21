@@ -3,17 +3,17 @@
   display: grid;
   grid-template-columns: 130px 1fr;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .rowCompact {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-1);
 }
 
 .label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-primary);
   white-space: nowrap;
 }
@@ -21,7 +21,7 @@
 .slider {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   min-width: 0;
 }
 
@@ -68,7 +68,7 @@
 }
 
 .value {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   min-width: 36px;
   text-align: left;

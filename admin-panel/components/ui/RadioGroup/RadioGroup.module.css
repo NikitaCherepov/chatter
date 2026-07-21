@@ -3,7 +3,7 @@
   --rg-hover: #d2e3fc;
   --rg-accent: #1a73e8;
   --rg-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  --rg-radius: 8px;
+  --rg-radius: var(--radius-lg);
   --rg-size: 30px;
 
   position: relative;
@@ -42,11 +42,11 @@
 
 .dropdown {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + var(--sp-1));
   left: 0;
   z-index: 1100;
   min-width: 120px;
-  padding: 6px 10px;
+  padding: var(--sp-1) var(--sp-2);
   background-color: var(--rg-bg);
   border-radius: var(--rg-radius);
   box-shadow: var(--rg-shadow);
@@ -67,8 +67,8 @@
 .option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
   cursor: pointer;
   user-select: none;
 }
@@ -104,8 +104,8 @@
 }
 
 .optionLabel {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
   color: var(--rg-accent);
   white-space: nowrap;
 }

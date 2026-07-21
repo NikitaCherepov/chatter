@@ -10,14 +10,16 @@ export function Toggle({
   label: string;
 }) {
   return (
-    <label className={styles.wrap}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-      />
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      className={styles.wrap}
+      onClick={() => onChange(!checked)}
+    >
       <span className={styles.control} />
       <span className={styles.label}>{label}</span>
-    </label>
+    </button>
   );
 }
