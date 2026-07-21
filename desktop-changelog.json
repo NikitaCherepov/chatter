@@ -43,6 +43,10 @@
     "zh-CN": [
       "桌面更新现在使用公共 GitHub Releases。",
       "通过 NSIS 块映射支持差异下载。"
+    ],
+    "tr": [
+      "Masaüstü güncellemeleri artık herkese açık GitHub Releases kullanıyor.",
+      "Farklı indirmeler, NSIS blok haritaları aracılığıyla desteklenmektedir."
     ]
   }
 }

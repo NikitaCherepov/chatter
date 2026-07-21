@@ -1,62 +1,56 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import deTranslation from './locales/de/translation.json';
 import enTranslation from './locales/en/translation.json';
-import esTranslation from './locales/es/translation.json';
-import frTranslation from './locales/fr/translation.json';
-import itTranslation from './locales/it/translation.json';
-import jaTranslation from './locales/ja/translation.json';
-import koTranslation from './locales/ko/translation.json';
-import plTranslation from './locales/pl/translation.json';
-import ptBrTranslation from './locales/pt-BR/translation.json';
-import ruTranslation from './locales/ru/translation.json';
-import zhCnTranslation from './locales/zh-CN/translation.json';
+import {
+  DEFAULT_LANGUAGE,
+  getLanguageDisplayName,
+  isLanguagePreference,
+  normalizeSupportedLanguage,
+  SUPPORTED_LANGUAGE_CODES,
+  SUPPORTED_LANGUAGES,
+  type LanguagePreference,
+  type SupportedLanguage,
+} from './languages';
 
-export const SUPPORTED_LANGUAGE_OPTIONS = [
-  { value: 'ru', label: 'Русский' },
-  { value: 'en', label: 'English' },
-  { value: 'de', label: 'Deutsch' },
-  { value: 'es', label: 'Español' },
-  { value: 'fr', label: 'Français' },
-  { value: 'it', label: 'Italiano' },
-  { value: 'ja', label: '日本語' },
-  { value: 'ko', label: '한국어' },
-  { value: 'pl', label: 'Polski' },
-  { value: 'pt-BR', label: 'Português (Brasil)' },
-  { value: 'zh-CN', label: '简体中文' },
-] as const;
-
-export type SupportedLanguage = typeof SUPPORTED_LANGUAGE_OPTIONS[number]['value'];
-export type LanguagePreference = 'system' | SupportedLanguage;
+export {
+  DEFAULT_LANGUAGE,
+  getLanguageDisplayName,
+  isLanguagePreference,
+  normalizeSupportedLanguage,
+  SUPPORTED_LANGUAGE_CODES,
+  SUPPORTED_LANGUAGES,
+  type LanguagePreference,
+  type SupportedLanguage,
+};
 
 const LANGUAGE_PREFERENCE_STORAGE_KEY = 'chatter_language_preference';
-const SUPPORTED_LANGUAGE_CODES: SupportedLanguage[] = SUPPORTED_LANGUAGE_OPTIONS.map(({ value }) => value);
-const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>(SUPPORTED_LANGUAGE_CODES);
-const SUPPORTED_LANGUAGE_BY_NORMALIZED_CODE = new Map<string, SupportedLanguage>(
-  SUPPORTED_LANGUAGE_CODES.map((language) => [language.toLowerCase(), language]),
-);
-let detectedSystemLanguage: SupportedLanguage = 'en';
+let detectedSystemLanguage: SupportedLanguage = DEFAULT_LANGUAGE;
 
-const resources = {
-  de: { translation: deTranslation },
-  en: { translation: enTranslation },
-  es: { translation: esTranslation },
-  fr: { translation: frTranslation },
-  it: { translation: itTranslation },
-  ja: { translation: jaTranslation },
-  ko: { translation: koTranslation },
-  pl: { translation: plTranslation },
-  'pt-BR': { translation: ptBrTranslation },
-  ru: { translation: ruTranslation },
-  'zh-CN': { translation: zhCnTranslation },
-} as const;
+/**
+ * Default language is statically imported so the initial render always has
+ * translations ready.  All other languages are loaded asynchronously —
+ * the bundler resolves `import()` paths at build time.
+ *
+ * Adding a language is one step: append its code to `languages.ts`.
+ * The translation JSON is discovered automatically via the dynamic import.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const resources: any = {
+  [DEFAULT_LANGUAGE]: { translation: enTranslation },
+};
 
-export function getLanguageDisplayName(language: SupportedLanguage): string {
-  return SUPPORTED_LANGUAGE_OPTIONS.find(({ value }) => value === language)?.label ?? language;
-}
-
-export function isLanguagePreference(value: string): value is LanguagePreference {
-  return value === 'system' || SUPPORTED_LANGUAGES.has(value as SupportedLanguage);
+async function loadRemainingLocales(): Promise<void> {
+  const tasks = SUPPORTED_LANGUAGE_CODES
+    .filter((lang) => lang !== DEFAULT_LANGUAGE)
+    .map(async (lang) => {
+      try {
+        const mod = await import(`./locales/${lang}/translation.json`);
+        i18n.addResourceBundle(lang, 'translation', (mod as { default?: unknown }).default ?? mod, true, true);
+      } catch {
+        // Translation file not yet generated — user sees fallbackLng until then.
+      }
+    });
+  await Promise.all(tasks);
 }
 
 export function getLanguagePreference(): LanguagePreference {
@@ -67,29 +61,6 @@ export function getLanguagePreference(): LanguagePreference {
     // Fall back to system language when storage is unavailable.
   }
   return 'system';
-}
-
-function normalizeSupportedLanguage(language: string): SupportedLanguage | null {
-  const normalized = language.trim().toLowerCase().replace(/_/g, '-');
-  const exactMatch = SUPPORTED_LANGUAGE_BY_NORMALIZED_CODE.get(normalized);
-  if (exactMatch) return exactMatch;
-
-  const baseLanguage = normalized.split('-')[0];
-  const baseMatch = SUPPORTED_LANGUAGE_BY_NORMALIZED_CODE.get(baseLanguage);
-  if (baseMatch) return baseMatch;
-
-  if (normalized === 'pt') return 'pt-BR';
-  if (
-    normalized === 'zh'
-    || normalized === 'zh-hans'
-    || normalized.startsWith('zh-hans-')
-    || normalized === 'zh-sg'
-    || normalized.startsWith('zh-sg-')
-  ) {
-    return 'zh-CN';
-  }
-
-  return null;
 }
 
 async function getSystemLanguages(): Promise<string[]> {
@@ -114,7 +85,7 @@ async function detectSystemLanguage(): Promise<SupportedLanguage> {
     }
   }
 
-  detectedSystemLanguage = 'en';
+  detectedSystemLanguage = DEFAULT_LANGUAGE;
   return detectedSystemLanguage;
 }
 
@@ -130,7 +101,7 @@ async function resolveLanguagePreference(
 }
 
 function syncDocumentLanguage(language: string): void {
-  const supported = normalizeSupportedLanguage(language) ?? 'en';
+  const supported = normalizeSupportedLanguage(language) ?? DEFAULT_LANGUAGE;
   document.documentElement.lang = supported;
 }
 
@@ -145,7 +116,7 @@ export async function initializeI18n() {
       .init({
         resources,
         lng: language,
-        fallbackLng: 'en',
+        fallbackLng: DEFAULT_LANGUAGE,
         supportedLngs: SUPPORTED_LANGUAGE_CODES,
         load: 'currentOnly',
         interpolation: {
@@ -154,6 +125,7 @@ export async function initializeI18n() {
       });
 
     i18n.on('languageChanged', syncDocumentLanguage);
+    void loadRemainingLocales();
   } else {
     await i18n.changeLanguage(language);
   }

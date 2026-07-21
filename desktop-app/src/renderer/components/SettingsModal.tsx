@@ -17,7 +17,7 @@ import {
   getLanguagePreference,
   isLanguagePreference,
   setLanguagePreference,
-  SUPPORTED_LANGUAGE_OPTIONS,
+  SUPPORTED_LANGUAGES,
   type LanguagePreference,
 } from '../i18n';
 import Slider from './Slider';
@@ -146,7 +146,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
 
   const recognitionLanguageOptions = useMemo<SelectOption[]>(() => [
     { value: 'auto', label: t('settings.voice.recognitionAuto') },
-    ...SUPPORTED_LANGUAGE_OPTIONS,
+    ...SUPPORTED_LANGUAGES.map((language) => ({ value: language, label: getLanguageDisplayName(language) })),
   ], [i18n.language, t]);
 
   // Refresh local voices and backend-provided cloud TTS options when voice settings open.
@@ -233,7 +233,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
     const currentSystemLanguage = getLanguageDisplayName(getDetectedSystemLanguage());
     return [
       { value: 'system', label: t('settings.language.systemWithLanguage', { language: currentSystemLanguage }) },
-      ...SUPPORTED_LANGUAGE_OPTIONS,
+      ...SUPPORTED_LANGUAGES.map((language) => ({ value: language, label: getLanguageDisplayName(language) })),
     ];
   }, [i18n.language, t]);
   const [subagentModel, setSubagentModelState] = useState<string | null>(null);
