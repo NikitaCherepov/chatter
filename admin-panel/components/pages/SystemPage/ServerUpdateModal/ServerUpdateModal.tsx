@@ -4,15 +4,29 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './ServerUpdateModal.module.css';
 
-export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameCommit, updating, onCancel, onConfirm }: {
+export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameCommit, updating, operationStatus, operationMessage, onCancel, onConfirm }: {
   changelog: Record<string, string[]>;
   changedServices: string[];
   rebuiltFromSameCommit: boolean;
   updating: boolean;
+  operationStatus: string;
+  operationMessage: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const { t, i18n } = useTranslation();
+
+  const stageProgress: Record<string, number> = {
+    queued: 10,
+    backup: 40,
+    restarting: 75,
+    complete: 100,
+    failed: 100,
+  };
+  const stageKey = operationStatus ? `system.update.stages.${operationStatus}` : null;
+  const showProgress = updating || operationStatus === 'complete' || operationStatus === 'failed';
+  const progressPercent = stageProgress[operationStatus] ?? 0;
+  const failed = operationStatus === 'failed';
 
   const releaseNotes = useMemo(() => {
     const available = Object.keys(changelog);
@@ -51,6 +65,19 @@ export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameC
         )}
         <p>{t('system.update.changes.services')}: {changedServices.join(', ')}</p>
         <p>{t('system.update.changes.autoBackup')}</p>
+        {showProgress && stageKey && (
+          <div className={styles.progressSection}>
+            <div className={styles.progressBar}>
+              <div
+                className={`${styles.progressFill} ${failed ? styles.progressFillError : ''}`}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div className={styles.progressText}>
+              {t(stageKey)}{operationMessage && failed ? ` ${operationMessage}` : ''}
+            </div>
+          </div>
+        )}
         <div className={styles.actions}>
           <button type="button" className="buttonSecondary" onClick={onCancel} disabled={updating}>{t('system.update.changes.cancel')}</button>
           <button type="button" onClick={onConfirm} disabled={updating}>{updating ? t('system.update.changes.updating') : t('system.update.changes.confirm')}</button>

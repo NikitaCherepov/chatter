@@ -42,8 +42,6 @@ export function UpdateStatusCard() {
     setMessage(t('system.update.starting'));
     try {
       await serverUpdateService.apply();
-      setConfirming(false);
-      setMessage('');
       await queryClient.invalidateQueries({ queryKey: ['server-update'] });
     } catch (err) {
       setMessage(t('system.update.updateError', { message: err instanceof Error ? err.message : String(err) }));
@@ -92,6 +90,8 @@ export function UpdateStatusCard() {
           changedServices={info.changedServices}
           rebuiltFromSameCommit={info.rebuiltFromSameCommit}
           updating={updateInProgress}
+          operationStatus={info.operation.status}
+          operationMessage={info.operation.message}
           onCancel={() => setConfirming(false)}
           onConfirm={() => void apply()}
         />
