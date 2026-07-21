@@ -87,7 +87,6 @@ export function UpdateStatusCard() {
       {confirming && info && (
         <ServerUpdateModal
           changelog={info.changelog}
-          changedServices={info.changedServices}
           rebuiltFromSameCommit={info.rebuiltFromSameCommit}
           updating={updateInProgress}
           operationStatus={info.operation.status}

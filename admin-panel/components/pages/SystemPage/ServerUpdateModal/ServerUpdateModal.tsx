@@ -4,9 +4,8 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './ServerUpdateModal.module.css';
 
-export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameCommit, updating, operationStatus, operationMessage, onCancel, onConfirm }: {
+export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, operationStatus, operationMessage, onCancel, onConfirm }: {
   changelog: Record<string, string[]>;
-  changedServices: string[];
   rebuiltFromSameCommit: boolean;
   updating: boolean;
   operationStatus: string;
@@ -63,7 +62,6 @@ export function ServerUpdateModal({ changelog, changedServices, rebuiltFromSameC
             <div className={styles.changelog}>{releaseNotes}</div>
           </>
         )}
-        <p>{t('system.update.changes.services')}: {changedServices.join(', ')}</p>
         <p>{t('system.update.changes.autoBackup')}</p>
         {showProgress && stageKey && (
           <div className={styles.progressSection}>

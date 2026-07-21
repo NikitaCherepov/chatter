@@ -243,7 +243,7 @@
 .updateMini button {
   align-self: flex-start;
 }
-.updateChecking {
+.summary .updateChecking {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
