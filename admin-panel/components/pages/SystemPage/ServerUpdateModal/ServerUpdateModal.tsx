@@ -22,8 +22,9 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
     complete: 100,
     failed: 100,
   };
-  const stageKey = operationStatus ? `system.update.stages.${operationStatus}` : null;
-  const showProgress = updating || operationStatus === 'complete' || operationStatus === 'failed';
+  const activeStatuses = new Set(['queued', 'backup', 'restarting', 'complete', 'failed']);
+  const stageKey = operationStatus && activeStatuses.has(operationStatus) ? `system.update.stages.${operationStatus}` : null;
+  const showProgress = updating;
   const progressPercent = stageProgress[operationStatus] ?? 0;
   const failed = operationStatus === 'failed';
 
