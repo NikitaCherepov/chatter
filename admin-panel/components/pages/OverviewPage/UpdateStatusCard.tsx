@@ -40,7 +40,7 @@ export function UpdateStatusCard() {
     setRefreshing(true);
     setMessage(t('system.update.fetchingInfo'));
     try {
-      const fresh = await serverUpdateService.refresh();
+      const fresh = await serverUpdateService.forceRefresh();
       queryClient.setQueryData(['server-update'], fresh);
       setMessage(fresh?.available ? t('system.update.found') : t('system.update.alreadyFresh'));
     } catch (err) {

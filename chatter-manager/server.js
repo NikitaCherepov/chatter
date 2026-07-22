@@ -767,7 +767,7 @@ function shortImageHash(image) {
   return image.id.replace(/^sha256:/, '').slice(0, 12) || '—';
 }
 
-async function getServerUpdateInfo({ pull = false } = {}) {
+async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
   const result = {
     supported: serverUpdatesSupported(),
     installedHash: '—',
@@ -784,7 +784,7 @@ async function getServerUpdateInfo({ pull = false } = {}) {
   const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
   if (pull) {
     const now = Date.now();
-    if (now - lastPullTime >= PULL_COOLDOWN_MS) {
+    if (forcePull || now - lastPullTime >= PULL_COOLDOWN_MS) {
       await runDocker(composeArgs(...profileArgs, 'pull', ...selection.services), 60 * 60 * 1000);
       lastPullTime = now;
     }
@@ -1718,7 +1718,10 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && pathname === '/api/server-update') {
     if (url.searchParams.get('refresh') === '1' && serverUpdateInProgress()) return sendJson(res, 409, { error: 'server_update_is_in_progress' });
     try {
-      return sendJson(res, 200, await getServerUpdateInfo({ pull: url.searchParams.get('refresh') === '1' }));
+      return sendJson(res, 200, await getServerUpdateInfo({
+        pull: url.searchParams.get('refresh') === '1',
+        forcePull: url.searchParams.get('force') === '1',
+      }));
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'server_update_check_failed' });
     }

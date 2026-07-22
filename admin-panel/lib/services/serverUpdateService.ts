@@ -22,5 +22,6 @@ export type ServerUpdateInfo = {
 export const serverUpdateService = {
   getStatus: () => api<ServerUpdateInfo>('/api/server-update'),
   refresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1'),
+  forceRefresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1&force=1'),
   apply: () => api('/api/server-update', { method: 'POST', body: '{}' }),
 };
