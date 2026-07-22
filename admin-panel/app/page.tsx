@@ -18,6 +18,7 @@ import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { AccessKeysPage } from '../components/pages/AccessKeysPage/AccessKeysPage';
 import { PlanLimitsPage } from '../components/pages/PlanLimitsPage/PlanLimitsPage';
 import { SettingsPage } from '../components/pages/SettingsPage/SettingsPage';
+import { PromptsPage } from '../components/pages/PromptsPage/PromptsPage';
 import { api, ApiError } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
@@ -252,6 +253,7 @@ export default function Home() {
         />
       )}
       {section === 'settings' && <SettingsPage />}
+      {section === 'prompts' && <PromptsPage />}
     </AdminShell>
   );
 }

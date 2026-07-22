@@ -686,6 +686,9 @@
     "settingsDesc": "Язык интерфейса и параметры отображения",
     "mainNav": "Основная навигация",
     "logout": "Выйти",
+    "prompts": "Промпты",
+    "promptsTitle": "Системные промпты",
+    "promptsDesc": "Пресеты, доступные всем пользователям сервера",
     "serverHealthy": "Сервер работает",
     "serverNeedsCheck": "Нужна проверка",
     "updateAvailable": "Доступно обновление"
@@ -716,5 +719,28 @@
       "pt-BR": "Português (Brasil)",
       "zh-CN": "中文（简体）"
     }
+  },
+  "prompts": {
+    "listTitle": "Системные промпты",
+    "listHint": "Пресеты, которые выбирают пользователи. Дефолтный применяется, если юзер ничего не выбрал.",
+    "newPrompt": "Новый промпт",
+    "nameLabel": "Название",
+    "namePlaceholder": "Например, Чаттер",
+    "descriptionLabel": "Описание",
+    "descriptionPlaceholder": "Кратко — для чего этот промпт",
+    "contentLabel": "Содержимое",
+    "contentPlaceholder": "Системный промпт",
+    "isDefault": "Дефолтный",
+    "setDefault": "Сделать дефолтным",
+    "deletePrompt": "Удалить",
+    "deleteConfirm": "Удалить промпт «{{name}}»? Пользователи, выбравшие его, вернутся к дефолтному.",
+    "cannotDeleteDefault": "Нельзя удалить дефолтный промпт. Сначала назначьте другой.",
+    "cannotDeleteLast": "Нельзя удалить последний промпт.",
+    "createSuccess": "Промпт создан",
+    "updateSuccess": "Промпт обновлён",
+    "deleteSuccess": "Промпт удалён",
+    "defaultSet": "Дефолтный промпт изменён",
+    "emptyList": "Промптов пока нет.",
+    "defaultBadge": "default"
   }
 }

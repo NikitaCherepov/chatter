@@ -684,6 +684,9 @@
     "securityDesc": "Admin panel access",
     "settingsTitle": "Panel Settings",
     "settingsDesc": "Interface language and display options",
+    "prompts": "Prompts",
+    "promptsTitle": "System Prompts",
+    "promptsDesc": "Presets available to all server users",
     "mainNav": "Main navigation",
     "logout": "Log out",
     "serverHealthy": "Server is healthy",
@@ -716,5 +719,28 @@
       "pt-BR": "Português (Brasil)",
       "zh-CN": "中文（简体）"
     }
+  },
+  "prompts": {
+    "listTitle": "System Prompts",
+    "listHint": "Presets users can choose from. The default is applied when a user hasn't selected one.",
+    "newPrompt": "New Prompt",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Chatter",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Brief — what this prompt is for",
+    "contentLabel": "Content",
+    "contentPlaceholder": "System prompt",
+    "isDefault": "Default",
+    "setDefault": "Set as default",
+    "deletePrompt": "Delete",
+    "deleteConfirm": "Delete prompt \"{{name}}\"? Users who selected it will revert to the default.",
+    "cannotDeleteDefault": "Cannot delete the default prompt. Set another one as default first.",
+    "cannotDeleteLast": "Cannot delete the last prompt.",
+    "createSuccess": "Prompt created",
+    "updateSuccess": "Prompt updated",
+    "deleteSuccess": "Prompt deleted",
+    "defaultSet": "Default prompt changed",
+    "emptyList": "No prompts yet.",
+    "defaultBadge": "default"
   }
 }

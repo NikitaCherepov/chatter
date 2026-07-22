@@ -803,6 +803,17 @@ async function getServerUpdateInfo({ pull = false } = {}) {
   result.changelog = manager?.latest?.changelog || {};
   result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
   result.available = result.changedServices.length > 0;
+  // A completed operation belongs to the images that are currently running.
+  // If newer image digests are available, including a rebuild of the same
+  // commit, do not present that old terminal state as a newly finished update.
+  if (result.available && result.operation.status === 'complete') {
+    result.operation = {
+      status: 'idle',
+      targetHash: '',
+      message: '',
+      updatedAt: null,
+    };
+  }
   result.rebuiltFromSameCommit = result.available
     && result.installedHash !== '—'
     && result.installedHash === result.latestHash;
@@ -1804,7 +1815,54 @@ async function handleRequest(req, res) {
     }
   }
 
+  // ── Prompts (global presets) ──────────────────────────────────────────
+
+  if (req.method === 'GET' && pathname === '/api/prompts') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/prompts'));
+  }
+  if (req.method === 'POST' && pathname === '/api/prompts') {
+    const body = await readJson(req);
+    return sendJson(res, 201, await backendInternalRequest('/internal/prompts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }));
+  }
+  const promptIdMatch = pathname.match(/^\/api\/prompts\/(\d+)$/);
+
+  if (promptIdMatch) {
+    const pid = promptIdMatch[1];
+    if (req.method === 'GET') {
+      return sendJson(res, 200, await backendInternalRequest(`/internal/prompts/${pid}`));
+    }
+    if (req.method === 'DELETE') {
+      return sendJson(res, 200, await backendInternalRequest(`/internal/prompts/${pid}`, { method: 'DELETE' }));
+    }
+  }
+  const promptFieldMatch = pathname.match(/^\/api\/prompts\/(\d+)\/(name|description|content|default)$/);
+
+  if (req.method === 'PUT' && promptFieldMatch) {
+    const pid = promptFieldMatch[1];
+    const field = promptFieldMatch[2];
+    const body = await readJson(req);
+    const endpoint = field === 'default' ? `/internal/prompts/${pid}/default` : `/internal/prompts/${pid}/${field}`;
+    return sendJson(res, 200, await backendInternalRequest(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }));
+  }
+  if (req.method === 'POST' && pathname === '/api/prompts/reset-users') {
+    const body = await readJson(req);
+    return sendJson(res, 200, await backendInternalRequest('/internal/prompts/reset-users', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }));
+  }
+
+
+
+
   const userDetailMatch = pathname.match(/^\/api\/users\/(\d+)$/);
+
   if (req.method === 'GET' && userDetailMatch) {
     return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users-overview/${userDetailMatch[1]}`));
   }
