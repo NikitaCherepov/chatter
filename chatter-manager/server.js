@@ -815,6 +815,14 @@ async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
 async function launchServerUpdateHelper(targetHash, selection) {
   const managerImage = imageReference('chatter-manager');
   const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  const listContainersCommand = [
+    'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
+    '--project-directory', '"$HOST_PROJECT_DIR"',
+    '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
+    '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
+    ...profileArgs,
+    'ps', '-a', '-q', ...selection.services
+  ].join(' ');
   // Stop the running services BEFORE recreating them. Otherwise the backend
   // keeps chatter.db open and the recreation step fails with "database is
   // being used by another connection" on servers with slow I/O. The helper
@@ -846,13 +854,19 @@ report_failure() {
 }
 trap report_failure EXIT
 sleep 2
+OLD_IMAGE_IDS=""
+for CONTAINER_ID in $(${listContainersCommand}); do
+  IMAGE_ID="$(docker inspect --format '{{.Image}}' "$CONTAINER_ID")"
+  OLD_IMAGE_IDS="$OLD_IMAGE_IDS $IMAGE_ID"
+done
 ${stopCommand}
 ${composeCommand}
-# Updating a mutable tag such as "latest" leaves the previous image dangling.
-# Remove only untagged images that are not referenced by any container. Cleanup
-# is best-effort: a prune failure must not turn a successful server update into
-# a failed one.
-docker image prune --force >/dev/null 2>&1 || true
+# Remove only the previous images used by this Chatter installation. Docker
+# refuses to remove an image that is still used by any container, so shared or
+# unchanged images remain safe. Cleanup is best-effort.
+for IMAGE_ID in $OLD_IMAGE_IDS; do
+  docker image rm "$IMAGE_ID" >/dev/null 2>&1 || true
+done
 printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"`;
   await runDocker([
     'run', '--detach', '--rm', '--name', `chatter-server-updater-${Date.now()}`,
