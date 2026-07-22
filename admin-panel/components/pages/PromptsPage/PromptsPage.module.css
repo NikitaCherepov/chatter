@@ -60,19 +60,11 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-sm);
-  background: var(--bg-bubble);
-  color: var(--text-muted);
+  margin-left: var(--sp-2);
   font-size: var(--fs-xs);
-  font-weight: var(--fw-medium);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.badgeDefault {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+  color: var(--color-success);
 }
 .promptActions {
   display: flex;

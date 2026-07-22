@@ -157,7 +157,7 @@ export function PromptsPage() {
               <span>
                 <strong>
                   {p.name}
-                  {p.is_default ? <span className={`${styles.badge} ${styles.badgeDefault}`}>{t('prompts.defaultBadge')}</span> : null}
+                  {p.is_default ? <span className={styles.badge}>{t('prompts.defaultBadge')}</span> : null}
                 </strong>
                 <small>{p.description || '\u00A0'}</small>
               </span>
