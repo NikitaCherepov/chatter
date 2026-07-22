@@ -11,6 +11,7 @@ import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal } from '../components/AttachModal';
 import { RejectWithComment } from '../components/RejectWithComment';
+import { FileEditDiff } from '../components/FileEditDiff/FileEditDiff';
 import type { ImageItem, DocumentItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
 import Slider from '../components/Slider';
@@ -3574,27 +3575,10 @@ export function ChatPage() {
                   <div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.file_path}</code>
                   </div>
-                  {conf.old_content_preview && (
-                    <div style={{ fontSize: '12px', marginTop: '6px' }}>
-                      <div style={{ color: '#e74c3c', marginBottom: '2px', fontWeight: 600 }}>{t('chat.file.removingLines', { start: conf.start_line, end: conf.end_line })}</div>
-                      <div style={{ padding: '8px', background: 'rgba(231, 76, 60, 0.08)', borderRadius: '6px', borderLeft: '3px solid #e74c3c', maxHeight: '150px', overflow: 'auto' }}>
-                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.old_content_preview.slice(0, 1000)}</pre>
-                      </div>
-                    </div>
-                  )}
-                  {conf.new_content_preview && (
-                    <div style={{ fontSize: '12px', marginTop: '6px' }}>
-                      <div style={{ color: '#27ae60', marginBottom: '2px', fontWeight: 600 }}>{t('chat.file.added')}</div>
-                      <div style={{ padding: '8px', background: 'rgba(39, 174, 96, 0.08)', borderRadius: '6px', borderLeft: '3px solid #27ae60', maxHeight: '150px', overflow: 'auto' }}>
-                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.new_content_preview.slice(0, 1000)}</pre>
-                      </div>
-                    </div>
-                  )}
-                  {!conf.new_content_preview && conf.old_content_preview && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', fontStyle: 'italic' }}>
-                      {t('chat.file.emptyReplacement')}
-                    </div>
-                  )}
+                  <FileEditDiff
+                    oldContent={conf.old_content_preview || ''}
+                    newContent={conf.new_content_preview || ''}
+                  />
                   <div className={s.suggestMacroActions}>
                     <button
                       className={s.suggestMacroSaveBtn}

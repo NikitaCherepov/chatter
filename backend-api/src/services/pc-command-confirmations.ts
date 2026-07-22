@@ -16,7 +16,7 @@ type ExecutePayload = {
 
 type FileActionPayload = {
   ipcType: 'read_file' | 'write_file' | 'edit_file_lines' | 'search_file_keywords';
-  ipcPayload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean; content?: string; mode?: 'overwrite' | 'append'; end_line?: number; new_content?: string; query?: string; max_matches?: number };
+  ipcPayload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean; content?: string; mode?: 'overwrite' | 'append'; end_line?: number; new_content?: string; expected_content?: string; expected_file_version?: string; query?: string; max_matches?: number };
 };
 
 type WebcamCapturePayload = {

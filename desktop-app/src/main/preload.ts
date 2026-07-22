@@ -99,7 +99,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('write-file', payload),
 
   // File Action: edit file lines (surgical splice)
-  editFileLines: (payload: { file_path: string; start_line: number; end_line: number; new_content: string }) =>
+  editFileLines: (payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) =>
     ipcRenderer.invoke('edit-file-lines', payload),
 
   // Visual Control: capture all monitors

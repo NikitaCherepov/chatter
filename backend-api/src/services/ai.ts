@@ -31,10 +31,16 @@ const TOOL_RESULT_PREVIEW_MAX = 250;
 const SCREENSHOT_MAX_WIDTH = 1920;
 const SCREENSHOT_MAX_HEIGHT = 1080;
 const SCREENSHOT_QUALITY = 80;
-const PC_COMMAND_OUTPUT_MAX = 15_000;
+const PC_COMMAND_OUTPUT_MAX = 60_000;
 // Лимит на сохраняемый полный результат инструмента в trace (для отправки в AI-контекст).
 // Всё что длиннее — обрезается с пометкой, чтобы tool_calls_json не разрастался бесконечно.
-const TOOL_RESULT_FULL_MAX = 40_000;
+const TOOL_RESULT_FULL_MAX = 80_000;
+
+const limitPcCommandOutput = (output: string): string => {
+  if (output.length <= PC_COMMAND_OUTPUT_MAX) return output;
+  const omitted = output.length - PC_COMMAND_OUTPUT_MAX;
+  return `[...output prefix truncated: ${omitted} characters omitted...]\n${output.slice(-PC_COMMAND_OUTPUT_MAX)}`;
+};
 
 /**
  * Одна итерация агентского цикла (один runCompletion + последующие tool calls).
@@ -2311,9 +2317,13 @@ const buildEditFileLinesTool = () => {
           new_content: {
             type: 'string',
             description: 'Новый текст для вставки вместо старых строк. Пустая строка = удаление строк.'
+          },
+          expected_content: {
+            type: 'string',
+            description: 'The exact current content of the replaced lines from the latest read_file result, without line-number prefixes. Use an empty string for an insertion that removes no lines.'
           }
         },
-        required: ['file_path', 'start_line', 'end_line', 'new_content']
+        required: ['file_path', 'start_line', 'end_line', 'new_content', 'expected_content']
       }
     }
   };
@@ -4337,14 +4347,14 @@ Respond in the user's language. Be detailed and precise.`
     if (autoOk) {
       // Execute immediately via WS IPC
       try {
-        const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: [command], background }, 60000, signal);
+        const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: [command], background }, 150000, signal);
         // result is a string (stdout/stderr joined by \n---\n)
         const output = typeof result === 'string' ? result : JSON.stringify(result);
         return JSON.stringify({
           status: 'success',
           command,
           background,
-          output: output.slice(-PC_COMMAND_OUTPUT_MAX),
+          output: limitPcCommandOutput(output),
         });
       } catch (err: any) {
         return JSON.stringify({ status: 'error', message: `Ошибка выполнения: ${err?.message || String(err)}`, command });
@@ -4422,7 +4432,7 @@ Respond in the user's language. Be detailed and precise.`
         status: 'success',
         command,
         background,
-        output: output.slice(-PC_COMMAND_OUTPUT_MAX),
+        output: limitPcCommandOutput(output),
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
@@ -4772,8 +4782,10 @@ Respond in the user's language. Be detailed and precise.`
     const startLine = parseLineNumber(parsed.start_line);
     const endLine = parseLineNumber(parsed.end_line);
     const newContent: string = typeof parsed.new_content === 'string' ? parsed.new_content : '';
+    const expectedContent: string | null = typeof parsed.expected_content === 'string' ? parsed.expected_content : null;
 
     if (startLine < 1) return JSON.stringify({ status: 'error', message: 'start_line должен быть >= 1' });
+    if (expectedContent === null) return JSON.stringify({ status: 'error', message: 'expected_content is required. Read the target lines again with read_file first.' });
     if (endLine < 0) return JSON.stringify({ status: 'error', message: 'end_line должен быть >= 0' });
     if (endLine !== 0 && endLine < startLine - 1) {
       return JSON.stringify({ status: 'error', message: 'end_line должен быть >= start_line - 1 (для вставки укажи end_line = start_line - 1)' });
@@ -4794,6 +4806,7 @@ Respond in the user's language. Be detailed and precise.`
     // pagination cap, so reading from line 1 would make large-file edits look
     // out of bounds even when the target lines exist.
     let oldLinesPreview = '';
+    let expectedFileVersion = '';
     try {
       const previewLineCount = endLine >= startLine
         ? Math.max(1, Math.min(endLine - startLine + 1, 2000))
@@ -4805,12 +4818,25 @@ Respond in the user's language. Be detailed and precise.`
       const totalLines = typeof readResult === 'object' && readResult !== null && typeof (readResult as any).total_lines === 'number'
         ? Math.floor((readResult as any).total_lines)
         : startLine + (previewContent ? previewContent.split('\n').length : 0) - 1;
+      expectedFileVersion = typeof readResult === 'object' && readResult !== null && typeof (readResult as any).file_version === 'string'
+        ? (readResult as any).file_version
+        : '';
 
       if (startLine > totalLines + 1) {
         return JSON.stringify({ status: 'error', message: `start_line (${startLine}) выходит за пределы файла (всего строк: ${totalLines}).` });
       }
 
       oldLinesPreview = endLine >= startLine ? previewContent : '';
+      const normalizedOldContent = oldLinesPreview.replace(/\r\n/g, '\n');
+      if (normalizedOldContent !== expectedContent.replace(/\r\n/g, '\n')) {
+        return JSON.stringify({ status: 'error', message: 'The file changed after it was last read. Read the target lines again and prepare a new edit.', file_path: filePath });
+      }
+      if (!expectedFileVersion) {
+        return JSON.stringify({ status: 'error', message: 'The desktop app did not return a file version. Update the desktop app before editing.', file_path: filePath });
+      }
+      if (endLine >= startLine && normalizedOldContent === newContent.replace(/\r\n/g, '\n')) {
+        return JSON.stringify({ status: 'info', message: 'No changes were made because the replacement matches the current content.', file_path: filePath });
+      }
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Не удалось прочитать файл для diff: ${err?.message || String(err)}`, file_path: filePath });
     }
@@ -4828,15 +4854,12 @@ Respond in the user's language. Be detailed and precise.`
         userId: user.id,
         kind: 'file_action',
         label: `edit lines ${startLine}-${endLine}: ${filePath}`,
-        payload: { ipcType: 'edit_file_lines', ipcPayload: { file_path: filePath, start_line: startLine, end_line: endLine, new_content: newContent } },
+        payload: { ipcType: 'edit_file_lines', ipcPayload: { file_path: filePath, start_line: startLine, end_line: endLine, new_content: newContent, expected_content: expectedContent, expected_file_version: expectedFileVersion } },
         resolve,
         reject,
         createdAt: Date.now()
       });
     });
-
-    const newContentPreview = newContent.slice(0, 2000);
-    const oldLinesPreviewTruncated = oldLinesPreview.slice(0, 2000);
 
     const confirmationAction: DesktopActionPayload = {
       action: 'edit_file_lines_confirmation',
@@ -4845,8 +4868,8 @@ Respond in the user's language. Be detailed and precise.`
         file_path: filePath,
         start_line: startLine,
         end_line: endLine,
-        old_content_preview: oldLinesPreviewTruncated,
-        new_content_preview: newContentPreview,
+        old_content_preview: oldLinesPreview,
+        new_content_preview: newContent,
       }
     };
 

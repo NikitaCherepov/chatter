@@ -68,7 +68,7 @@ function _isAbortError(err: any): boolean {
 }
 
 /** Лимит на сохраняемый полный результат инструмента в trace (аналог TOOL_RESULT_FULL_MAX в ai.ts). */
-const SUBAGENT_TOOL_RESULT_MAX = 40_000;
+const SUBAGENT_TOOL_RESULT_MAX = 80_000;
 
 function truncateToolResult(content: string): string {
   if (content.length > SUBAGENT_TOOL_RESULT_MAX) {

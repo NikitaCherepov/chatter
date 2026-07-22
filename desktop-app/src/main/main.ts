@@ -649,7 +649,7 @@ function createWindow() {
         console.log('[execute-commands] cmd start', {
           cmd,
           execCmd,
-          timeoutMs: 30000,
+          timeoutMs: 120000,
           background,
         });
         if (background) {
@@ -670,8 +670,8 @@ function createWindow() {
         }
         const { stdout, stderr } = await execAsync(execCmd, {
           encoding: 'utf-8',
-          timeout: 30000,
-          maxBuffer: 1024 * 1024,
+          timeout: 120000,
+          maxBuffer: 4 * 1024 * 1024,
           windowsHide: true,
         });
         console.log('[execute-commands] cmd done', {
@@ -682,7 +682,10 @@ function createWindow() {
           stdoutPreview: stdout ? stdout.slice(0, 300) : undefined,
           stderrPreview: stderr ? stderr.slice(0, 300) : undefined,
         });
-        results.push(stdout || stderr || '[no output]');
+        results.push([
+          stdout ? `[stdout]\n${stdout}` : '',
+          stderr ? `[stderr]\n${stderr}` : '',
+        ].filter(Boolean).join('\n') || '[no output]');
       } catch (err: any) {
         console.error('[execute-commands] cmd error', {
           cmd,
@@ -693,7 +696,14 @@ function createWindow() {
           stdoutPreview: typeof err?.stdout === 'string' ? err.stdout.slice(0, 300) : undefined,
           stderrPreview: typeof err?.stderr === 'string' ? err.stderr.slice(0, 300) : undefined,
         });
-        results.push(`[error] ${err?.message || String(err)}`);
+        const errorStdout = typeof err?.stdout === 'string' ? err.stdout : '';
+        const errorStderr = typeof err?.stderr === 'string' ? err.stderr : '';
+        results.push([
+          `[error] command failed${err?.code !== undefined ? ` (exit ${err.code})` : ''}`,
+          errorStdout ? `[stdout]\n${errorStdout}` : '',
+          errorStderr ? `[stderr]\n${errorStderr}` : '',
+          !errorStdout && !errorStderr ? (err?.message || String(err)) : '',
+        ].filter(Boolean).join('\n'));
       }
     }
 
@@ -999,6 +1009,7 @@ function createWindow() {
         encoding: 'utf-8',
         format: 'docx',
         line_numbers: showLineNumbers,
+        file_version: `${stat.size}:${stat.mtimeMs}`,
       };
     }
 
@@ -1036,6 +1047,7 @@ function createWindow() {
       total_lines: totalLines,
       encoding: 'utf-8',
       line_numbers: showLineNumbers,
+      file_version: `${stat.size}:${stat.mtimeMs}`,
     };
   });
 
@@ -1169,7 +1181,7 @@ function createWindow() {
 
   // ── File Action: edit file lines (surgical splice) ──
 
-  ipcMain.handle('edit-file-lines', async (event, payload: { file_path: string; start_line: number; end_line: number; new_content: string }) => {
+  ipcMain.handle('edit-file-lines', async (event, payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) => {
     assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
@@ -1177,15 +1189,26 @@ function createWindow() {
     const startLine = typeof payload?.start_line === 'number' ? Math.floor(payload.start_line) : 0;
     const endLine = typeof payload?.end_line === 'number' ? Math.floor(payload.end_line) : 0;
     const newContent = typeof payload?.new_content === 'string' ? payload.new_content : '';
+    const expectedContent = typeof payload?.expected_content === 'string' ? payload.expected_content : null;
+    const expectedFileVersion = typeof payload?.expected_file_version === 'string' ? payload.expected_file_version : '';
 
     if (startLine < 1) throw new Error('start_line must be >= 1');
+    if (expectedContent === null || !expectedFileVersion) throw new Error('file_edit_snapshot_required');
 
     const resolved = path.resolve(filePath);
+    const initialStat = await fs.promises.stat(resolved);
+    const currentFileVersion = `${initialStat.size}:${initialStat.mtimeMs}`;
+    if (currentFileVersion !== expectedFileVersion) throw new Error('file_changed_since_preview');
 
     // Read entire file and split into lines
     const rawData = await fs.promises.readFile(resolved, 'utf-8');
-    const lines = rawData.split('\n');
+    const eol = rawData.includes('\r\n') ? '\r\n' : '\n';
+    const lines = rawData.split(/\r?\n/);
     const totalLinesBefore = lines.length;
+    const statAfterRead = await fs.promises.stat(resolved);
+    if (`${statAfterRead.size}:${statAfterRead.mtimeMs}` !== currentFileVersion) {
+      throw new Error('file_changed_since_preview');
+    }
 
     // Bounds check
     if (startLine > lines.length + 1) {
@@ -1195,15 +1218,20 @@ function createWindow() {
     // Convert 1-indexed line numbers to 0-indexed array positions
     const startIndex = startLine - 1;
     const deleteCount = endLine >= startLine ? endLine - startLine + 1 : 0;
+    if (endLine > lines.length) throw new Error(`end_line (${endLine}) exceeds file length (${lines.length})`);
+    const actualContent = deleteCount > 0 ? lines.slice(startIndex, startIndex + deleteCount).join('\n') : '';
+    if (actualContent !== expectedContent.replace(/\r\n/g, '\n')) {
+      throw new Error('file_changed_since_preview');
+    }
 
     // Split new content into lines
-    const newLines = newContent ? newContent.split('\n') : [];
+    const newLines = newContent ? newContent.split(/\r?\n/) : [];
 
     // Splice: remove old lines, insert new ones
     lines.splice(startIndex, deleteCount, ...newLines);
 
     // Write back
-    await fs.promises.writeFile(resolved, lines.join('\n'), { encoding: 'utf-8' });
+    await fs.promises.writeFile(resolved, lines.join(eol), { encoding: 'utf-8' });
 
     const totalLinesAfter = lines.length;
     return {
