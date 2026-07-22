@@ -1496,6 +1496,16 @@ const withUserRequestLock = async <T>(
     }
 };
 
+const runUserRequestInBackground = (
+    ctx: any,
+    action: () => Promise<unknown>,
+    waitForTurn = false
+) => {
+    void withUserRequestLock(ctx, action, waitForTurn).catch((error) => {
+        console.error('[tg] Background user request failed:', formatSafeError(error));
+    });
+};
+
 // ── Documents (attachments) support for Telegram ──────────────────────────
 // Same whitelist as desktop / backend SUPPORTED_EXTENSIONS.
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set([
@@ -6645,7 +6655,7 @@ bot.on('text', async (ctx) => {
         return;
     }
 
-    await withUserRequestLock(ctx, () => processUserTextThroughAi(ctx, userText));
+    runUserRequestInBackground(ctx, () => processUserTextThroughAi(ctx, userText));
 });
 
 // ── Document (file attachment) handler ──
@@ -6654,7 +6664,7 @@ bot.on('document', async (ctx) => {
         await processUserDocumentThroughAi(ctx);
         return;
     }
-    await withUserRequestLock(ctx, () => processUserDocumentThroughAi(ctx));
+    runUserRequestInBackground(ctx, () => processUserDocumentThroughAi(ctx));
 });
 
 const processUserVoiceThroughAi = async (ctx: any) => {
@@ -6763,7 +6773,7 @@ const processUserVoiceThroughAi = async (ctx: any) => {
 };
 
 bot.on('voice', async (ctx) => {
-    await withUserRequestLock(ctx, () => processUserVoiceThroughAi(ctx));
+    runUserRequestInBackground(ctx, () => processUserVoiceThroughAi(ctx));
 });
 
 bot.on('photo', async (ctx) => {
@@ -6771,7 +6781,7 @@ bot.on('photo', async (ctx) => {
         await processUserPhotoThroughAi(ctx);
         return;
     }
-    await withUserRequestLock(ctx, () => processUserPhotoThroughAi(ctx));
+    runUserRequestInBackground(ctx, () => processUserPhotoThroughAi(ctx));
 });
 
 
