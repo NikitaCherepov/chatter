@@ -259,7 +259,8 @@
       "enabled": "服务已启用",
       "tokenLabel": "Telegram 机器人令牌",
       "tokenHint": "Webapp Notes 使用相同的令牌进行 initData 验证",
-      "tokenPlaceholder": "留空以保持原样"
+      "tokenPlaceholder": "留空以保持原样",
+      "richStreaming": "实时富媒体流式响应（美观但存在缺陷）"
     },
     "notes": {
       "title": "Webapp Notes",

@@ -259,7 +259,8 @@
       "enabled": "Dienst aktiviert",
       "tokenLabel": "Telegram-Bot-Token",
       "tokenHint": "Dasselbe Token wird von Webapp Notes für die initData-Validierung verwendet",
-      "tokenPlaceholder": "Leer lassen, um unverändert zu lassen"
+      "tokenPlaceholder": "Leer lassen, um unverändert zu lassen",
+      "richStreaming": "Live-Streaming von Antworten (hübsch, aber fehlerhaft)"
     },
     "notes": {
       "title": "Webapp Notes",

@@ -245,7 +245,8 @@
       "enabled": "Služba povolena",
       "tokenLabel": "Token Telegram bota",
       "tokenHint": "Stejný token používá Webapp Notes pro ověření initData",
-      "tokenPlaceholder": "Ponechte prázdné pro zachování stávající hodnoty"
+      "tokenPlaceholder": "Ponechte prázdné pro zachování stávající hodnoty",
+      "richStreaming": "Živé bohaté streamování odpovědí (pěkné, ale chybové)"
     },
     "notes": {
       "title": "Webapp Notes",

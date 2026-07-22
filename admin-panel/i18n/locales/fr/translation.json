@@ -259,7 +259,8 @@
       "enabled": "Service activé",
       "tokenLabel": "Jeton du bot Telegram",
       "tokenHint": "Le même jeton est utilisé par Webapp Notes pour la validation initData",
-      "tokenPlaceholder": "Laisser vide pour conserver inchangé"
+      "tokenPlaceholder": "Laisser vide pour conserver inchangé",
+      "richStreaming": "Streaming riche en direct des réponses (joli mais bogué)"
     },
     "notes": {
       "title": "Webapp Notes",

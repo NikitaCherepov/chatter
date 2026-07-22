@@ -242,6 +242,7 @@
       "title": "Telegram bot",
       "description": "Main Chatter interface in Telegram",
       "enabled": "Service enabled",
+      "richStreaming": "Live rich streaming of responses (pretty but buggy)",
       "tokenLabel": "Telegram bot token",
       "tokenHint": "The same token is used by Webapp Notes for initData validation",
       "tokenPlaceholder": "Leave empty to keep unchanged"

@@ -244,7 +244,8 @@
       "enabled": "Hizmet etkin",
       "tokenLabel": "Telegram bot tokeni",
       "tokenHint": "Aynı token, Webapp Notes tarafından initData doğrulaması için kullanılır",
-      "tokenPlaceholder": "Değiştirmeden bırakmak için boş bırakın"
+      "tokenPlaceholder": "Değiştirmeden bırakmak için boş bırakın",
+      "richStreaming": "Yanıtların canlı zengin akışı (güzel ama hatalı)"
     },
     "notes": {
       "title": "Webapp Notes",

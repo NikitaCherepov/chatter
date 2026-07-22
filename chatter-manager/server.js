@@ -169,6 +169,7 @@ writeEnv(COMPOSE_RUNTIME_ENV_FILE, {
 
 const defaultSettings = () => ({
   telegramEnabled: false,
+  telegramRichStreaming: true,
   notesEnabled: false,
   notesUrl: process.env.CHATTER_PUBLIC_URL
     ? `${process.env.CHATTER_PUBLIC_URL.replace(/\/+$/, '')}/notes`
@@ -205,6 +206,7 @@ function publicSettings() {
   const providerModels = getProviderModels(backendEnv);
   return {
     ...loadSettings(),
+    telegramRichStreaming: telegramEnv.TG_USE_RICH_STREAMING !== '0',
     hasTelegramToken: Boolean(telegramEnv.TELEGRAM_TOKEN),
     hasAiApiKey: providerModels.proModels.some(model => Boolean(model.apiKey)),
     hasVoiceToken: Boolean(backendEnv.VOICE_TRANSCRIBE_TOKEN || parseEnv(VOICE_ENV_FILE).VOICE_TRANSCRIBE_TOKEN),
@@ -444,6 +446,9 @@ function saveSettings(input) {
   const existingProviderModels = getProviderModels(backendEnv);
   const existingManualModels = parseManualModels(backendEnv.MODELS_MANUAL);
   const telegramEnabled = Boolean(input.telegramEnabled);
+  const telegramRichStreaming = typeof input.telegramRichStreaming === 'boolean'
+    ? input.telegramRichStreaming
+    : telegramEnv.TG_USE_RICH_STREAMING !== '0';
   const notesEnabled = Boolean(input.notesEnabled);
   const telegramToken = `${input.telegramToken || ''}`.trim() || telegramEnv.TELEGRAM_TOKEN || '';
   const legacyAiApiKey = `${input.aiApiKey || ''}`.trim() || backendEnv.TIMEWEB_API_KEY || '';
@@ -603,7 +608,7 @@ function saveSettings(input) {
     TELEGRAM_TOKEN: telegramToken,
     BACKEND_INTERNAL_TOKEN: internalToken,
     NOTES_WEBAPP_URL: notesUrl,
-    TG_USE_RICH_STREAMING: telegramEnv.TG_USE_RICH_STREAMING || '1'
+    TG_USE_RICH_STREAMING: telegramRichStreaming ? '1' : '0'
   });
   Object.assign(voiceEnv, {
     VOICE_TRANSCRIBE_TOKEN: voiceToken,
@@ -619,6 +624,7 @@ function saveSettings(input) {
   writeEnv(VOICE_ENV_FILE, voiceEnv);
   const settings = {
     telegramEnabled,
+    telegramRichStreaming,
     notesEnabled,
     notesUrl,
     aiBaseUrl: proModels[0]?.baseUrl || legacyAiBaseUrl,

@@ -259,7 +259,8 @@
       "enabled": "Usługa włączona",
       "tokenLabel": "Token bota Telegram",
       "tokenHint": "Ten sam token jest używany przez Webapp Notes do walidacji initData",
-      "tokenPlaceholder": "Pozostaw puste, aby zachować bez zmian"
+      "tokenPlaceholder": "Pozostaw puste, aby zachować bez zmian",
+      "richStreaming": "Bogate strumieniowanie na żywo odpowiedzi (ładne, ale błędliwe)"
     },
     "notes": {
       "title": "Webapp Notes",

@@ -54,6 +54,13 @@ export function ServicesPage({
             }
             label={t('services.telegram.enabled')}
           />
+          <Toggle
+            checked={settings.telegramRichStreaming}
+            onChange={(telegramRichStreaming) =>
+              setSettings((current) => ({ ...current, telegramRichStreaming }))
+            }
+            label={t('services.telegram.richStreaming')}
+          />
           <FormField
             label={t('services.telegram.tokenLabel')}
             state={<SecretState configured={settings.hasTelegramToken} />}

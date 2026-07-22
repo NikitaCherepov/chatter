@@ -259,7 +259,8 @@
       "enabled": "サービス有効",
       "tokenLabel": "Telegramボットトークン",
       "tokenHint": "同じトークンがWebapp NotesのinitData検証に使用されます",
-      "tokenPlaceholder": "変更しない場合は空のままにしてください"
+      "tokenPlaceholder": "変更しない場合は空のままにしてください",
+      "richStreaming": "応答のリッチライブストリーミング（見た目は良いがバグあり）"
     },
     "notes": {
       "title": "Webapp Notes",

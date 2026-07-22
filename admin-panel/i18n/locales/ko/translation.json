@@ -259,7 +259,8 @@
       "enabled": "서비스 활성화",
       "tokenLabel": "텔레그램 봇 토큰",
       "tokenHint": "Webapp Notes에서 initData 검증에 동일한 토큰이 사용됩니다",
-      "tokenPlaceholder": "변경하지 않으려면 비워 두세요"
+      "tokenPlaceholder": "변경하지 않으려면 비워 두세요",
+      "richStreaming": "응답의 라이브 리치 스트리밍 (예쁘지만 버그 있음)"
     },
     "notes": {
       "title": "Webapp Notes",

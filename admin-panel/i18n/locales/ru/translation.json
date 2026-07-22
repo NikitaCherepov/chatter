@@ -242,6 +242,7 @@
       "title": "Telegram-бот",
       "description": "Основной интерфейс Chatter в Telegram",
       "enabled": "Сервис включён",
+      "richStreaming": "Красивый стриминг ответов в реальном времени (красиво, но забагованно)",
       "tokenLabel": "Токен Telegram-бота",
       "tokenHint": "Этот же токен используется Webapp Notes для проверки initData",
       "tokenPlaceholder": "Оставь пустым, чтобы не менять"

@@ -23,7 +23,7 @@ import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 
 dotenv.config();
 
-const FALLBACK_ANSWER = 'Слушай, чет я завис. Попробуй еще раз?';
+const FALLBACK_ANSWER = `Hey, I'm stuck. Try again?`;
 const MAX_TOOL_LOOPS = 80;
 const MAX_TOOL_LOOPS_VOICE = 10;
 const MAX_PARALLEL_SPAWN_SUBAGENTS = 3;
@@ -32,8 +32,8 @@ const SCREENSHOT_MAX_WIDTH = 1920;
 const SCREENSHOT_MAX_HEIGHT = 1080;
 const SCREENSHOT_QUALITY = 80;
 const PC_COMMAND_OUTPUT_MAX = 60_000;
-// Лимит на сохраняемый полный результат инструмента в trace (для отправки в AI-контекст).
-// Всё что длиннее — обрезается с пометкой, чтобы tool_calls_json не разрастался бесконечно.
+// Limit on the saved full tool result инструмента в trace (для отправки в AI-контекст).
+// Everything longer is truncated с пометкой, чтобы tool_calls_json не разрастался бесконечно.
 const TOOL_RESULT_FULL_MAX = 80_000;
 
 type FileReadSnapshot = {
@@ -105,26 +105,26 @@ const limitPcCommandOutput = (output: string): string => {
 };
 
 /**
- * Одна итерация агентского цикла (один runCompletion + последующие tool calls).
- * Используется для сохранения полного trace в tool_calls_json,
- * чтобы getHistoryForAi() могла развернуть его в корректную последовательность
+ * One iteration of the agent loop (один runCompletion + последующие tool calls).
+ * Used to save the full trace в tool_calls_json,
+ * so that getHistoryForAi() can expand его в корректную последовательность
  * assistant(tool_calls) → tool(results) → assistant(tool_calls) → ...
  *
- * Поле `step` служит маркером нового формата: старые записи (плоский массив без step)
- * обрабатываются как fallback для обратной совместимости.
+ * The `step` field serves as a marker of the new format: старые записи (плоский массив без step)
+ * are handled as fallback для обратной совместимости.
  */
 export type ToolIteration = {
   step: number;
-  /** Текст, который модель сгенерила на этой итерации (intermediate content). Может быть "". */
+  /** Text that the model generated на этой итерации (intermediate content). Может быть "". */
   content: string;
   tool_calls: Array<{ id?: string; name: string; arguments: any }>;
-  /** Полные результаты runTool для каждого tool_call этой итерации. */
+  /** Full runTool results для каждого tool_call этой итерации. */
   results: Array<{ id?: string; name: string; content: string }>;
-  /** true у финальной итерации без tool_calls (только текстовый ответ). */
+  /** true for the final iteration без tool_calls (только текстовый ответ). */
   is_final?: boolean;
 };
 
-// Реестр активных генераций для остановки по userId
+// Registry of active generations для остановки по userId
 export const activeGenerations = new Map<number, AbortController>();
 export const activeHitlWaits = new Set<number>();
 const MAX_PENDING_TASKS_PER_USER = 10;
@@ -318,10 +318,10 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
 
 const VISION_PROVIDERS = parseVisionProviders();
 
-// ── MODELS_MANUAL: ручной выбор модели пользователем ──────────────────────────
-// Формат env: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only;...
-// supports_vision: опционально, "1" или "0" (по умолчанию "0")
-// admin_only: опционально, "1" или "0" (по умолчанию "0")
+// ── MODELS_MANUAL: manual model selection by user ──────────────────────────
+// Env format: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only;...
+// supports_vision: optional, "1" or "0" (default "0")
+// admin_only: optional, "1" or "0" (default "0")
 const parseManualModelFlag = (value: unknown): boolean => {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
   return normalized === '1' || normalized === 'true';
@@ -379,8 +379,8 @@ export const getAutoVisionSupport = () => ({
 const ALL_REASONING_LEVELS: ReasoningLevel[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
 /**
- * Определяет доступные уровни reasoning по baseURL провайдера.
- * Возвращает null если reasoning control не поддерживается (ползунок скрыт).
+ * Determines available reasoning levels по baseURL провайдера.
+ * Returns null if reasoning control не поддерживается (ползунок скрыт).
  */
 export const getReasoningLevelsForBaseURL = (baseURL: string): ReasoningLevel[] | null => {
   const url = (baseURL || '').toLowerCase();
@@ -397,12 +397,12 @@ export const getReasoningLevelsForBaseURL = (baseURL: string): ReasoningLevel[] 
     return ['none', 'high']; // только thinking enabled/disabled
   }
 
-  return null; // неизвестный провайдер — ползунок не показываем
+  return null; // unknown provider — slider не показываем
 };
 
 /**
- * Доступные уровни в auto-режиме (когда провайдер заранее неизвестен).
- * Показываем все — адаптер на месте разберётся.
+ * Available levels in auto mode (когда провайдер заранее неизвестен).
+ * Show all — the adapter на месте разберётся.
  */
 export const getAutoReasoningLevels = (): ReasoningLevel[] => ALL_REASONING_LEVELS;
 
@@ -415,7 +415,7 @@ const PRO_MODEL_SUPPORTS_VISION = process.env.TIMEWEB_MODEL_SUPPORTS_VISION === 
 const LITE_MODEL_SUPPORTS_VISION = process.env.TIMEWEB_LITE_MODEL_SUPPORTS_VISION === '1' || process.env.TIMEWEB_LITE_MODEL_SUPPORTS_VISION?.toLowerCase() === 'true';
 
 /**
- * Определяет, поддерживает ли текущая модель нативный vision (приём изображений).
+ * Определяет, whether the current model supports native vision (приём изображений).
  * - manual-модель: проверяет флаг supportsVision из MODELS_MANUAL
  * - auto: проверяет env-флаг PRO_MODEL_SUPPORTS_VISION / LITE_MODEL_SUPPORTS_VISION
  */
@@ -594,7 +594,7 @@ export type ReasoningLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'x
 
 /**
  * Per-model generation settings (temperature, penalties, etc.).
- * Применяются только для ручных моделей. Каждое поле опционально.
+ * Applied only to manual models. Каждое поле опционально.
  */
 export type ModelSettings = {
   temperature?: number | null;
@@ -607,8 +607,8 @@ export type ModelSettings = {
 };
 
 /**
- * Параметры, которые поддерживает каждый провайдер.
- * Параметры не из списка для данного провайдера отбрасываются.
+ * Parameters that each provider supports каждый провайдер.
+ * Parameters not in the list для данного провайдера отбрасываются.
  */
 const PROVIDER_SUPPORTED_PARAMS: Record<string, Set<string>> = {
   openrouter: new Set(['temperature', 'top_p', 'top_k', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'max_tokens']),
@@ -624,8 +624,8 @@ const getProviderSupportedParams = (baseURL: string): Set<string> => {
 };
 
 /**
- * Мёрджит per-model settings в requestBody, фильтруя по поддержке провайдера.
- * null/undefined значения пропускаются (используется серверный дефолт).
+ * Merges per-model settings в requestBody, фильтруя по поддержке провайдера.
+ * null/undefined values are skipped (server default is used).
  */
 const applyModelSettingsToBody = (
   requestBody: Record<string, unknown>,
@@ -645,9 +645,9 @@ const applyModelSettingsToBody = (
 };
 
 /**
- * Адаптирует requestBody под конкретного провайдера перед отправкой.
- * Только OpenRouter и DeepSeek direct получают специальные параметры.
- * Все остальные провайдеры — текущая логика без изменений.
+ * Adapts requestBody for конкретного провайдера перед отправкой.
+ * Only OpenRouter and DeepSeek direct получают специальные параметры.
+ * All other providers — текущая логика без изменений.
  */
 const adaptRequestBodyForProvider = (
   requestBody: Record<string, unknown>,
@@ -699,12 +699,12 @@ const adaptRequestBodyForProvider = (
     return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
 
-  // ── Все остальные провайдеры: не трогаем reasoning, но применяем model settings ──
+  // ── All other providers: не трогаем reasoning, но применяем model settings ──
   return modelSettings ? applyModelSettingsToBody(requestBody, baseURL, modelSettings) : requestBody;
 };
 
 /**
- * Опциональные колбеки для токен-стриминга.
+ * Optional callbacks for token streaming.
  * Если хотя бы один передан — createCompletionWithModelFallback включает stream:true
  * и прокидывает токены в колбеки, одновременно собирая assembled-сообщение для возврата.
  */
@@ -716,16 +716,16 @@ export type StreamCallbacks = {
 };
 
 /**
- * Частота flush-а накопленных токенов в колбеки (мс).
- * ~20 FPS — баланс между плавностью печати и нагрузкой на WS/React.
+ * Flush interval of buffered tokens в колбеки (мс).
+ * ~20 FPS — balance between printing smoothness и нагрузкой на WS/React.
  */
 const STREAM_FLUSH_INTERVAL_MS = 50;
 
 /**
- * Превращает стрим от OpenAI-совместимого API в собранное assistant-сообщение,
+ * Converts stream from OpenAI-совместимого API в собранное assistant-сообщение,
  * одновременно прокидывая токены в колбеки (оттроттленно по времени).
  *
- * Возвращает объект того же формата, что client.chat.completions.create() —
+ * Returns an object of the same format as client.chat.completions.create() —
  * { choices: [{ message }] }, чтобы вызывающий код ничего не заметил.
  *
  * Поддерживает:
@@ -743,7 +743,7 @@ const streamAndAssemble = async (
 ): Promise<{ choices: Array<{ message: any }>; usage?: any }> => {
   const wantCallbacks = !!(callbacks?.onToken || callbacks?.onReasoningToken);
 
-  // ── Без колбеков — обычный стрим, только собираем сообщение ──
+  // ── Without callbacks — regular stream, только собираем сообщение ──
   // Это полезно для совместимости (например, если хочешь stream:true без пуша в WS)
   // Но сейчас мы вызываем streamAndAssemble только когда есть колбеки.
 
@@ -772,7 +772,7 @@ const streamAndAssemble = async (
       sdkSignal ? { signal: sdkSignal } : {}
     );
 
-  // Буферы для throttle
+  // Buffers for throttle
   let textBuffer = '';
   let reasoningBuffer = '';
   let flushTimer: NodeJS.Timeout | null = null;
@@ -783,7 +783,7 @@ const streamAndAssemble = async (
     flushTimer = null;
     const now = Date.now();
     if (textBuffer && callbacks?.onToken) {
-      // Минимальный интервал между flush-ами, кроме финального
+      // Minimum interval между flush-ами, кроме финального
       if (final || now - lastTextFlush >= STREAM_FLUSH_INTERVAL_MS) {
         callbacks.onToken(textBuffer);
         textBuffer = '';
@@ -804,7 +804,7 @@ const streamAndAssemble = async (
     flushTimer = setTimeout(() => flush(false), STREAM_FLUSH_INTERVAL_MS);
   };
 
-  // Собираем сообщение
+  // Assemble the message
   const assembledMessage: any = {
     role: 'assistant',
     content: '',
@@ -812,12 +812,12 @@ const streamAndAssemble = async (
     tool_calls: [] as any[],
   };
   let finalUsage: any = undefined;
-  // Временное хранилище для tool_calls по index
+  // Temporary storage for tool_calls по index
   const toolCallMap = new Map<number, { id?: string; type: 'function'; function: { name: string; arguments: string } }>();
 
   try {
     for await (const chunk of stream as any) {
-      // Ручная проверка abort (дополнительно к SDK-abort, для надёжности)
+      // Manual abort check (additional to SDK-abort, for reliability)
       if (signal?.aborted) {
         const err = new Error('Aborted');
         err.name = 'AbortError';
@@ -833,7 +833,7 @@ const streamAndAssemble = async (
       const delta = choice.delta;
       if (!delta) continue;
 
-      // 1. Контент
+      // 1. Content
       if (typeof delta.content === 'string' && delta.content) {
         assembledMessage.content += delta.content;
         if (callbacks?.onToken) {
@@ -852,7 +852,7 @@ const streamAndAssemble = async (
         }
       }
 
-      // 3. Tool calls — собираем по index
+      // 3. Tool calls — collect by index
       if (Array.isArray(delta.tool_calls)) {
         for (const tc of delta.tool_calls) {
           const idx = typeof tc.index === 'number' ? tc.index : 0;
@@ -868,14 +868,14 @@ const streamAndAssemble = async (
       }
     }
 
-    // Финальный flush — отправляем всё что накопилось
+    // Final flush — flush everything accumulated
     if (flushTimer) {
       clearTimeout(flushTimer);
       flushTimer = null;
     }
     flush(true);
   } catch (err: any) {
-    // Гарантируем flush перед пробросом ошибки, чтобы юзер увидел то что уже сгенерировалось
+    // Flush before error propagation, чтобы юзер увидел то что уже сгенерировалось
     if (flushTimer) {
       clearTimeout(flushTimer);
       flushTimer = null;
@@ -884,13 +884,13 @@ const streamAndAssemble = async (
     throw err;
   }
 
-  // Собираем tool_calls в массив по порядку index
+  // Collect tool_calls into array по порядку index
   if (toolCallMap.size > 0) {
     const sortedIndices = Array.from(toolCallMap.keys()).sort((a, b) => a - b);
     assembledMessage.tool_calls = sortedIndices.map(i => toolCallMap.get(i)!);
   }
 
-  // Если content пустой — null (некоторые провайдеры требуют именно null, не пустую строку)
+  // If content is empty — null (некоторые провайдеры требуют именно null, не пустую строку)
   if (!assembledMessage.content && assembledMessage.tool_calls.length > 0) {
     assembledMessage.content = null;
   }
@@ -939,7 +939,7 @@ const createCompletionWithModelFallback = async (
             max_tokens: providerRequestBody.max_tokens,
           });
         }
-        // Если есть streamCallbacks — стримим и собираем, иначе обычный запрос
+        // If streamCallbacks exist — stream и собираем, иначе обычный запрос
         const response = streamCallbacks
           ? await streamAndAssemble(client, providerRequestBody, model, streamCallbacks, signal)
           : await (() => {
@@ -1103,8 +1103,8 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string): Prom
   return content.trim();
 };
 
-// Сборка system prompt вынесена в system-prompt.ts (используется также в chats.ts
-// для подсчёта токенов — без циклической зависимости).
+// System prompt assembly extracted to system-prompt.ts (also used in chats.ts
+// for token counting — without circular dependency).
 import { buildSystemPrompt } from './system-prompt.js';
 
 const isLitePlan = (plan: UserPlan) => plan === 'free' || plan === 'standart';
@@ -1226,12 +1226,12 @@ const runSetUserTimezone = async (userId: number, args: SetTimezoneArgs) => {
   }
 
   if (resolvedOffset === null) {
-    return 'Не удалось определить часовой пояс. Попроси пользователя указать смещение явно, например: UTC+7.';
+    return 'Could not determine a timezone. Ask the user to specify the offset explicitly, e.g.: UTC+7.';
   }
 
   setUserTimezone(userId, resolvedOffset);
   const sign = resolvedOffset >= 0 ? '+' : '';
-  return `Часовой пояс пользователя установлен: UTC${sign}${resolvedOffset}.`;
+  return `User timezone set: UTC${sign}${resolvedOffset}.`;
 };
 
 const ALLOWED_DICE_SIDES = new Set([4, 6, 8, 10, 12, 20, 100]);
@@ -1258,7 +1258,7 @@ const rollDiceExpression = (count: number, sides: number, modifier: number) => {
 
 const formatRollLine = (roll: { rolls: number[]; rollsSum: number; modifier: number; total: number }) => {
   const modifierText = roll.modifier === 0 ? '' : roll.modifier > 0 ? ` + ${roll.modifier}` : ` - ${Math.abs(roll.modifier)}`;
-  return `броски [${roll.rolls.join(', ')}] => ${roll.rollsSum}${modifierText} = ${roll.total}`;
+  return `rolls [${roll.rolls.join(', ')}] => ${roll.rollsSum}${modifierText} = ${roll.total}`;
 };
 
 const getUserTimePayload = (timezoneOffset: number) => {
@@ -1270,11 +1270,12 @@ const getUserTimePayload = (timezoneOffset: number) => {
     local_time: localTime.toISOString().replace('T', ' ').slice(0, 19),
     timezone_offset: timezoneOffset,
     timezone_label: `UTC${sign}${timezoneOffset}`,
-    scheduling_hint: 'Для schedule_task предпочитай local_time (HH:MM) или delay_seconds.'
+    scheduling_hint: 'For schedule_task prefer local_time (HH:MM) or delay_seconds.'
   };
 };
 
-/** Промпт для Dice Roll Mode. Держим в конце system prompt, потому что значение меняется каждый запрос. */
+/** Prompt for Dice Roll Mode. Kept at the end of system prompt, because value changes per request. */
+//TODO PUT THESE AT THE END OF MESSAGE, IT FUCKING MESSING WITH CACHING
 const buildDiceRollPrompt = (diceRoll: number) => `
 [DICE ROLL MODE: ACTIVE]
 The user rolled a d20 dice for this specific message.
@@ -1293,11 +1294,11 @@ CRITICAL SYSTEM RULE: Regardless of the roll result (even on a 1), if a tool cal
 
 const runRandomRoll = (parsed: Record<string, any>) => {
   const rollType = `${parsed.roll_type || ''}`;
-  if (rollType !== 'coin' && rollType !== 'dice') return 'Ошибка инструмента: roll_type должен быть coin или dice.';
-  if (rollType === 'coin') return `Монетка: ${Math.random() < 0.5 ? 'Орёл' : 'Решка'}.`;
+  if (rollType !== 'coin' && rollType !== 'dice') return 'Tool error: roll_type must be coin or dice.';
+  if (rollType === 'coin') return `Coin: ${Math.random() < 0.5 ? 'Heads' : 'Tails'}.`;
 
   const parsedDice = parseDiceNotation(`${parsed.dice_notation || ''}`);
-  if (!parsedDice) return 'Ошибка инструмента: некорректная нотация кубиков. Пример: 2d20+5.';
+  if (!parsedDice) return 'Tool error: invalid dice notation. Example: 2d20+5.';
 
   const mode = parsed.mode && ['normal', 'advantage', 'disadvantage'].includes(parsed.mode)
     ? parsed.mode
@@ -1305,7 +1306,7 @@ const runRandomRoll = (parsed: Record<string, any>) => {
 
   if (mode === 'normal') {
     const roll = rollDiceExpression(parsedDice.count, parsedDice.sides, parsedDice.modifier);
-    return `Кубики ${parsedDice.normalized}: ${formatRollLine(roll)}.`;
+    return `Dice ${parsedDice.normalized}: ${formatRollLine(roll)}.`;
   }
 
   const first = rollDiceExpression(parsedDice.count, parsedDice.sides, parsedDice.modifier);
@@ -1314,8 +1315,8 @@ const runRandomRoll = (parsed: Record<string, any>) => {
   const chosen = pickMax
     ? (first.total >= second.total ? first : second)
     : (first.total <= second.total ? first : second);
-  const modeText = pickMax ? 'преимущество' : 'помеха';
-  return `Кубики ${parsedDice.normalized} (${modeText}):\n1) ${formatRollLine(first)}\n2) ${formatRollLine(second)}\nИтог: ${chosen.total}.`;
+  const modeText = pickMax ? 'advantage' : 'disadvantage';
+  return `Dice ${parsedDice.normalized} (${modeText}):\n1) ${formatRollLine(first)}\n2) ${formatRollLine(second)}\nResult: ${chosen.total}.`;
 };
 
 const getIsoWeekday = (date: Date) => {
@@ -1340,7 +1341,7 @@ const computeExecuteAtFromLocalTime = (
   recurrenceWeekday: number | null
 ) => {
   const parsed = parseLocalTime(localTime);
-  if (!parsed) throw new Error('Некорректный local_time. Ожидаю формат HH:MM, например 02:07.');
+  if (!parsed) throw new Error('Invalid local_time. Expected HH:MM format, e.g. 02:07.');
 
   const nowUnix = Math.floor(Date.now() / 1000);
   const localNow = new Date((nowUnix + timezoneOffset * 3600) * 1000);
@@ -1349,7 +1350,7 @@ const computeExecuteAtFromLocalTime = (
 
   if (recurrenceType === 'weekly') {
     if (!recurrenceWeekday || recurrenceWeekday < 1 || recurrenceWeekday > 7) {
-      throw new Error('Для weekly укажи recurrence_weekday от 1 до 7 (1=понедельник).');
+      throw new Error('For weekly specify recurrence_weekday from 1 to 7 (1=Monday).');
     }
     const currentWeekday = getIsoWeekday(targetLocal);
     let deltaDays = (recurrenceWeekday - currentWeekday + 7) % 7;
@@ -1372,12 +1373,12 @@ const computeExecuteAtFromScheduleArgs = (
     return computeExecuteAtFromLocalTime(parsed.local_time, timezoneOffset, recurrenceType, recurrenceWeekday);
   }
   if (typeof parsed.delay_seconds === 'number') {
-    if (!Number.isFinite(parsed.delay_seconds) || parsed.delay_seconds < 0) throw new Error('Некорректный delay_seconds (ожидаю число >= 0).');
+    if (!Number.isFinite(parsed.delay_seconds) || parsed.delay_seconds < 0) throw new Error('Invalid delay_seconds (expecting a number >= 0).');
     return Math.floor(Date.now() / 1000) + Math.floor(parsed.delay_seconds);
   }
   const executeAt = Number(parsed.execute_at);
   if (Number.isFinite(executeAt) && executeAt > 0) return Math.floor(executeAt);
-  throw new Error('Не указано время задачи. Передай local_time (HH:MM), delay_seconds или execute_at.');
+  throw new Error('Task time not specified. Pass local_time (HH:MM), delay_seconds, or execute_at.');
 };
 
 const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
@@ -1390,8 +1391,8 @@ const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
 const checkWebSearchLimit = (user: UserRecord) => {
   const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
   const count = Math.max(0, Math.floor(Number(user.daily_web_search_count || 0)));
-  if (limit <= 0) return { allowed: false, count, limit, reason: 'По твоему плану web-поиск отключен на сегодня.' };
-  if (count >= limit) return { allowed: false, count, limit, reason: `Лимит web-поиска на сегодня исчерпан (${count}/${limit}).` };
+  if (limit <= 0) return { allowed: false, count, limit, reason: 'Web search is disabled for today under your plan.' };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Web search limit exhausted for today (${count}/${limit}).` };
   return { allowed: true, count, limit, reason: '' };
 };
 
@@ -1407,7 +1408,7 @@ const incrementUserWebSearchUsage = (userId: number, count = 1) => {
 };
 
 const runWebSearch = async (query: string, signal?: AbortSignal) => {
-  if (!TAVILY_API_KEY) return 'Ошибка инструмента: поисковый сервис временно недоступен.';
+  if (!TAVILY_API_KEY) return 'Tool error: search service temporarily unavailable.';
 
   try {
     throwIfAborted(signal);
@@ -1438,61 +1439,61 @@ const runWebSearch = async (query: string, signal?: AbortSignal) => {
     const results = Array.isArray(data.results) ? data.results : [];
 
     if (!results.length) {
-      return `По запросу "${query}" ничего не найдено.`;
+      return `No results found for query "${query}".`;
     }
 
-    let resultText = data.answer ? `Сводка: ${data.answer}\n\n` : '';
-    resultText += results.map((item, index) => `${index + 1}. ${item.title || 'Без названия'}\n${item.content || ''}\nИсточник: ${item.url || '-'}`).join('\n\n');
+    let resultText = data.answer ? `Summary: ${data.answer}\n\n` : '';
+    resultText += results.map((item, index) => `${index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}`).join('\n\n');
     return resultText;
   } catch (err) {
     if (isAbortError(err)) throw err;
-    return 'Ошибка инструмента: поисковый сервис временно недоступен.';
+    return 'Tool error: search service temporarily unavailable.';
   }
 };
 
-const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: number, emptyText = 'Задач не найдено.') => {
+const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: number, emptyText = 'No tasks found.') => {
   if (!tasks.length) return emptyText;
   return tasks.map((t) => {
     const when = formatUnixForTimezone(t.execute_at, t.timezone_offset ?? timezoneOffset);
     const notifyText = (t.notify_mode === 'on_match' || t.notify_mode === 'on_condition')
-      ? `${t.notify_mode}: ${t.notify_condition || '(пусто)'}`
+      ? `${t.notify_mode}: ${t.notify_condition || '(empty)'}`
       : t.notify_mode;
-    return `#${t.id} | ${t.task_type} | ${t.status}\nКогда: ${when.local} (${when.tzLabel})\nКогда (UTC): ${when.utc} UTC\nРасписание: ${t.recurrence_type}\nУведомления: ${notifyText}\nДанные: ${t.payload.slice(0, 180)}`;
+    return `#${t.id} | ${t.task_type} | ${t.status}\nWhen: ${when.local} (${when.tzLabel})\nWhen (UTC): ${when.utc} UTC\nSchedule: ${t.recurrence_type}\nNotifications: ${notifyText}\nData: ${t.payload.slice(0, 180)}`;
   }).join('\n\n');
 };
 
 const runSaveNoteTool = (user: UserRecord, contentRaw: string, titleRaw = '') => {
   const created = createNote(user.id, `${titleRaw || ''}`, `${contentRaw || ''}`);
   if (!created.ok) {
-    if (created.error === 'content_too_long') return 'Ошибка: текст заметки превышает технический лимит.';
-    if (created.error === 'title_too_long') return 'Ошибка: заголовок слишком длинный (макс 120 символов).';
-    return `Ошибка: ${created.error}`;
+    if (created.error === 'content_too_long') return 'Error: note text exceeds the technical limit.';
+    if (created.error === 'title_too_long') return 'Error: title is too long (max 120 characters).';
+    return `Error: ${created.error}`;
   }
-  return `Заметка сохранена: #${created.id}`;
+  return `Note saved: #${created.id}`;
 };
 const runListNotesTool = (userId: number, queryRaw = '', limitRaw?: number, offsetRaw?: number) => {
   const limit = Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : 20;
   const offset = Number.isFinite(Number(offsetRaw)) ? Number(offsetRaw) : 0;
   const notes = listNotes(userId, limit, offset, `${queryRaw || ''}`);
-  if (!notes.length) return 'Заметок не найдено.';
-  return notes.map(n => `#${n.id} | ${n.title || '(без заголовка)'}\n${n.content}`).join('\n\n');
+  if (!notes.length) return 'No notes found.';
+  return notes.map(n => `#${n.id} | ${n.title || '(no title)'}\n${n.content}`).join('\n\n');
 };
 
 const runReadNoteTool = (userId: number, noteIdRaw?: number) => {
   const noteId = Number(noteIdRaw);
-  if (!Number.isFinite(noteId) || noteId <= 0) return 'Ошибка: note_id должен быть положительным числом.';
+  if (!Number.isFinite(noteId) || noteId <= 0) return 'Error: note_id must be a positive number.';
   const note = getNoteById(userId, Math.floor(noteId));
-  if (!note) return `Заметка #${Math.floor(noteId)} не найдена.`;
-  return `#${note.id}\nЗаголовок: ${note.title || '(без заголовка)'}\nСоздано: ${new Date(note.created_at * 1000).toISOString()}\nОбновлено: ${new Date(note.updated_at * 1000).toISOString()}\n\n${note.content}`;
+  if (!note) return `Note #${Math.floor(noteId)} not found.`;
+  return `#${note.id}\nTitle: ${note.title || '(no title)'}\nCreated: ${new Date(note.created_at * 1000).toISOString()}\nUpdated: ${new Date(note.updated_at * 1000).toISOString()}\n\n${note.content}`;
 };
 
 const runDeleteNoteTool = (userId: number, noteIdRaw?: number) => {
   const noteId = Number(noteIdRaw);
-  if (!Number.isFinite(noteId) || noteId <= 0) return 'Ошибка: note_id должен быть положительным числом.';
+  if (!Number.isFinite(noteId) || noteId <= 0) return 'Error: note_id must be a positive number.';
   const ok = deleteNote(userId, Math.floor(noteId));
-  if (!ok) return `Заметка #${Math.floor(noteId)} не найдена.`;
+  if (!ok) return `Note #${Math.floor(noteId)} not found.`;
   const updated = runListNotesTool(userId, '', 20, 0);
-  return `Заметка #${Math.floor(noteId)} удалена.\n\nОбновлённый список:\n${updated}`;
+  return `Note #${Math.floor(noteId)} deleted.\n\nUpdated list:\n${updated}`;
 };
 
 const getRejectionComment = (err: any): string | undefined => {
@@ -1521,7 +1522,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'get_user_time',
-      description: 'Возвращает текущее Unix-время и локальное время пользователя. Используй, когда нужно узнать текущую дату/время или перед планированием задач.',
+      description: 'Returns the current Unix time and local time of the user. Use when you need to know the current date/time or before scheduling tasks.',
       parameters: {
         type: 'object',
         properties: {}
@@ -1532,7 +1533,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'get_avatar_state',
-      description: 'Возвращает текущее состояние пиксельного аватара и доступные mood/reaction значения. Используй, когда нужно узнать состояние аватара перед изменением или синхронизацией.',
+      description: 'Returns the current state of the pixel avatar and available mood/reaction values. Use when you need to know the avatar state before changing or syncing.',
       parameters: {
         type: 'object',
         properties: {}
@@ -1543,11 +1544,11 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'search_web',
-      description: 'Поиск актуальной/проверяемой информации в интернете. Используй, когда нужны свежие данные или факты из сети. После вызова опирайся на результаты поиска в ответе.',
+      description: 'Search for current/verifiable information on the internet. Use when fresh data or facts from the web are needed. After calling, rely on search results in your response.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Поисковый запрос' }
+          query: { type: 'string', description: 'Search query' }
         },
         required: ['query']
       }
@@ -1557,11 +1558,11 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_webpage',
-      description: 'Читает и очищает текст веб-страницы через backend-читалку (Browserless). Используй, когда нужно извлечь содержание конкретной страницы по URL.',
+      description: 'Reads and cleans webpage text through a backend reader (Browserless). Use when you need to extract the content of a specific page by URL.',
       parameters: {
         type: 'object',
         properties: {
-          url: { type: 'string', description: 'Полный URL страницы (http/https).' }
+          url: { type: 'string', description: 'Full page URL (http/https).' }
         },
         required: ['url']
       }
@@ -1571,7 +1572,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'get_smart_devices',
-      description: 'Возвращает список всех устройств умного дома пользователя с их ID, названиями, комнатами и возможностями. ВЫЗЫВАЙ ПЕРВЫМ, если не знаешь точный device_id устройства.',
+      description: 'Returns a list of all user smart home devices with their IDs, names, rooms, and capabilities. CALL FIRST if you do not know the exact device_id of the device.',
       parameters: {
         type: 'object',
         properties: {}
@@ -1582,26 +1583,26 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'control_smart_home',
-      description: 'Управляет устройством умного дома по его device_id. Сначала вызови get_smart_devices, чтобы получить ID нужного устройства.',
+      description: 'Controls a smart home device by its device_id. First call get_smart_devices to get the ID of the needed device.',
       parameters: {
         type: 'object',
         properties: {
           device_id: {
             type: 'string',
-            description: 'ID устройства, полученный из get_smart_devices (например, "yandex_group_d3866e23-..." или "yandex_device_65b9c366-...").'
+            description: 'Device ID obtained from get_smart_devices (e.g. "yandex_group_d3866e23-..." or "yandex_device_65b9c366-...").'
           },
           action: {
             type: 'string',
             enum: ['on', 'off', 'set_color', 'set_brightness'],
-            description: 'on - включить, off - выключить, set_color - изменить цвет, set_brightness - изменить яркость.'
+            description: 'on - turn on, off - turn off, set_color - change color, set_brightness - change brightness.'
           },
           color: {
             type: 'string',
-            description: 'Цвет в формате #RRGGBB или имя цвета (красный, синий и т.д.). Только для set_color.'
+            description: 'Color in #RRGGBB format or color name (red, blue, etc.). Only for set_color.'
           },
           brightness: {
             type: 'number',
-            description: 'Уровень яркости от 1 до 100. Используется только с action=set_brightness.'
+            description: 'Brightness level from 1 to 100. Used only with action=set_brightness.'
           }
         },
         required: ['device_id', 'action']
@@ -1612,21 +1613,21 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'schedule_task',
-      description: 'Создает задачу по времени (одноразовую или по расписанию): напоминания, отложенные команды умного дома, запуск AI-инструкций. Для времени предпочитай local_time (HH:MM) или delay_seconds, не вычисляй Unix timestamp вручную.',
+      description: 'Creates a timed task (one-time or recurring): reminders, delayed smart home commands, AI instruction execution. For timing prefer local_time (HH:MM) or delay_seconds, do not calculate Unix timestamps manually.',
       parameters: {
         type: 'object',
         properties: {
-          local_time: { type: 'string', description: 'Локальное время пользователя в формате HH:MM, например 02:07.' },
-          delay_seconds: { type: 'number', description: 'Задержка в секундах от текущего момента, например 60.' },
-          execute_at: { type: 'number', description: 'Legacy-поле: Unix timestamp в секундах. Используй только если local_time/delay_seconds не подходят.' },
-          task_type: { type: 'string', enum: ['message', 'smart_home', 'ai_instruction'], description: 'message - напоминание, smart_home - команда умного дома, ai_instruction - запуск AI-инструкции по расписанию (поиск в интернете, проверка почты, анализ данных и т.д. — AI сам вызовет нужные инструменты).' },
-          payload: { type: 'string', description: 'Для message: текст напоминания. Для smart_home: JSON-строка вида {"device_id":"yandex_group_...","action":"on"|"off"|"set_color"|"set_brightness","color":"#RRGGBB","brightness":50}. Для ai_instruction: текст инструкции, которую AI выполнит по расписанию.' },
-          target_chat_id: { type: 'number', description: 'ID чата, в который будет сохранён и отправлен результат задачи (только для ai_instruction). Если не указан — используется активный чат.' },
-          create_new_chat: { type: 'boolean', description: 'Создать новый чат для результата задачи (только для ai_instruction). Если true — будет создан новый чат. target_chat_id игнорируется.' },
-          recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Тип расписания: once - один раз, daily - каждый день, weekly - каждую неделю.' },
-          recurrence_weekday: { type: 'number', description: 'День недели для weekly: 1=понедельник ... 7=воскресенье.' },
-          notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'Режим уведомлений: always - всегда писать о результате, never - никогда не писать, on_match - писать только если результат содержит notify_condition как подстроку, on_condition - ИИ проверит условие notify_condition и решит, отправлять уведомление или нет.' },
-          notify_condition: { type: 'string', description: 'Условие для notify_mode=on_match/on_condition. Для on_match: короткая строка/ключевое слово. Для on_condition: осмысленное условие ("есть важные письма от X", "найдены тревожные новости", и т.д.).' }
+          local_time: { type: 'string', description: 'User local time in HH:MM format, e.g. 02:07.' },
+          delay_seconds: { type: 'number', description: 'Delay in seconds from now, e.g. 60.' },
+          execute_at: { type: 'number', description: 'Legacy field: Unix timestamp in seconds. Use only if local_time/delay_seconds are not suitable.' },
+          task_type: { type: 'string', enum: ['message', 'smart_home', 'ai_instruction'], description: 'message - reminder, smart_home - smart home command, ai_instruction - schedule AI instruction execution (web search, email check, data analysis, etc. — AI will call the needed tools itself).' },
+          payload: { type: 'string', description: 'For message: reminder text. For smart_home: JSON string like {"device_id":"yandex_group_...","action":"on"|"off"|"set_color"|"set_brightness","color":"#RRGGBB","brightness":50}. For ai_instruction: instruction text that the AI will execute on schedule.' },
+          target_chat_id: { type: 'number', description: 'Chat ID where the task result will be saved and sent (ai_instruction only). If not specified — the active chat is used.' },
+          create_new_chat: { type: 'boolean', description: 'Create a new chat for the task result (ai_instruction only). If true — a new chat will be created. target_chat_id is ignored.' },
+          recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },
+          recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'Notification mode: always - always report the result, never - never report, on_match - report only if result contains notify_condition as substring, on_condition - AI will check the notify_condition and decide whether to send a notification.' },
+          notify_condition: { type: 'string', description: 'Condition for notify_mode=on_match/on_condition. For on_match: a short string/keyword. For on_condition: a meaningful condition ("there are important emails from X", "alarming news found", etc.).' }
         },
         required: ['task_type', 'payload']
       }
@@ -1636,14 +1637,14 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'set_user_timezone',
-      description: 'Устанавливает часовой пояс пользователя. Передай timezone_offset напрямую или location/city/country для автоопределения по локации.',
+      description: 'Sets the user timezone. Pass timezone_offset directly or location/city/country for auto-detection by location.',
       parameters: {
         type: 'object',
         properties: {
-          timezone_offset: { type: 'number', description: 'Смещение от UTC (целое число от -12 до +14). Если известно — передай его.' },
-          location: { type: 'string', description: 'Локация в свободной форме, например: "Город, Страна".' },
-          city: { type: 'string', description: 'Город пользователя, если отдельно.' },
-          country: { type: 'string', description: 'Страна пользователя, если отдельно.' }
+          timezone_offset: { type: 'number', description: 'UTC offset (integer from -12 to +14). If known — pass it.' },
+          location: { type: 'string', description: 'Free-form location, e.g.: "City, Country".' },
+          city: { type: 'string', description: 'User city, if specified separately.' },
+          country: { type: 'string', description: 'User country, if specified separately.' }
         }
       }
     }
@@ -1652,12 +1653,12 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'get_my_tasks',
-      description: 'Возвращает список задач текущего пользователя. Никогда не запрашивай задачи другого пользователя.',
+      description: 'Returns the current user task list. Never request tasks of another user.',
       parameters: {
         type: 'object',
         properties: {
-          status: { type: 'string', enum: ['pending', 'done', 'error', 'all'], description: 'Фильтр по статусу задач.' },
-          limit: { type: 'number', description: 'Сколько задач вернуть, от 1 до 50.' }
+          status: { type: 'string', enum: ['pending', 'done', 'error', 'all'], description: 'Filter by task status.' },
+          limit: { type: 'number', description: 'How many tasks to return, from 1 to 50.' }
         }
       }
     }
@@ -1666,11 +1667,11 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'delete_my_task',
-      description: 'Удаляет ОДНУ активную задачу текущего пользователя по точному ID (для отмены конкретного напоминания/задачи) и возвращает обновлённый список.',
+      description: 'Deletes ONE active task of the current user by exact ID (to cancel a specific reminder/task) and returns the updated list.',
       parameters: {
         type: 'object',
         properties: {
-          task_id: { type: 'number', description: 'ID задачи для удаления.' }
+          task_id: { type: 'number', description: 'Task ID to delete.' }
         },
         required: ['task_id']
       }
@@ -1680,7 +1681,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'list_mail_accounts',
-      description: 'Показывает подключённые почтовые аккаунты пользователя, их ID, названия и адреса. Используй для выбора конкретного ящика.',
+      description: 'Shows the user connected mail accounts, their IDs, names, and addresses. Use to select a specific mailbox.',
       parameters: { type: 'object', properties: {} }
     }
   },
@@ -1688,17 +1689,17 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'check_emails',
-      description: 'Ищет письма в почте пользователя: последние входящие, поиск по отправителю/теме/ключевому слову, фильтр по датам, пагинация. Если пользователь явно указывает yandex/google — передавай provider.',
+      description: 'Searches user emails: latest inbox, search by sender/subject/keyword, date filter, pagination. If the user explicitly specifies yandex/google — pass provider.',
       parameters: {
         type: 'object',
         properties: {
-          mail_account_id: { type: 'number', description: 'ID конкретного почтового аккаунта.' },
-          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Провайдер. При нескольких ящиках одного провайдера используй mail_account_id.' },
-          search_query: { type: 'string', description: 'Поисковая строка (имя, домен, тема, ключевое слово).' },
-          date_from: { type: 'string', description: 'Начальная дата (включительно) в формате YYYY-MM-DD.' },
-          date_to: { type: 'string', description: 'Конечная дата (включительно) в формате YYYY-MM-DD.' },
-          limit: { type: 'number', description: 'Количество результатов (1–50). Если не указано, backend использует 10.' },
-          offset: { type: 'number', description: 'Сдвиг для пагинации. Пример: сначала offset=0, потом offset=10 для следующих 10 писем.' }
+          mail_account_id: { type: 'number', description: 'ID of a specific mail account.' },
+          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Provider. If multiple mailboxes of the same provider, use mail_account_id.' },
+          search_query: { type: 'string', description: 'Search string (name, domain, subject, keyword).' },
+          date_from: { type: 'string', description: 'Start date (inclusive) in YYYY-MM-DD format.' },
+          date_to: { type: 'string', description: 'End date (inclusive) in YYYY-MM-DD format.' },
+          limit: { type: 'number', description: 'Number of results (1–50). Default: 10.' },
+          offset: { type: 'number', description: 'Pagination offset. Example: first offset=0, then offset=10 for the next 10 emails.' }
         }
       }
     }
@@ -1707,14 +1708,14 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_email_content',
-      description: 'Читает содержимое конкретного письма. После check_emails передавай точный message_uid из результата; subject_part используй только как запасной вариант.',
+      description: 'Reads the content of a specific email. After check_emails pass the exact message_uid from the result; use subject_part only as a fallback.',
       parameters: {
         type: 'object',
         properties: {
-          mail_account_id: { type: 'number', description: 'ID конкретного почтового аккаунта.' },
-          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Запасной выбор по провайдеру.' },
-          message_uid: { type: 'number', description: 'Точный uid письма из результата check_emails. Предпочтительный способ.' },
-          subject_part: { type: 'string', description: 'Часть темы письма для запасного поиска, если uid недоступен.' }
+          mail_account_id: { type: 'number', description: 'ID of a specific mail account.' },
+          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Fallback provider selection.' },
+          message_uid: { type: 'number', description: 'Exact email uid from the check_emails result. Preferred method.' },
+          subject_part: { type: 'string', description: 'Part of the email subject for fallback search if uid is unavailable.' }
         }
       }
     }
@@ -1723,15 +1724,15 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'send_email',
-      description: 'Отправляет письмо от имени пользователя. Используй, когда пользователь явно просит отправить email. Если пользователь явно указывает yandex/google — передавай provider.',
+      description: 'Sends an email on behalf of the user. Use when the user explicitly asks to send an email. If the user explicitly specifies yandex/google — pass provider.',
       parameters: {
         type: 'object',
         properties: {
-          mail_account_id: { type: 'number', description: 'ID конкретного почтового аккаунта.' },
-          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Запасной выбор по провайдеру.' },
-          to: { type: 'string', description: 'Email получателя.' },
-          subject: { type: 'string', description: 'Тема письма.' },
-          body: { type: 'string', description: 'Текст письма. Можно передавать HTML-разметку (<b>, <h1>, <ul>, <a> и т.д.) для красивого письма.' }
+          mail_account_id: { type: 'number', description: 'ID of a specific mail account.' },
+          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Fallback provider selection.' },
+          to: { type: 'string', description: 'Recipient email.' },
+          subject: { type: 'string', description: 'Email subject.' },
+          body: { type: 'string', description: 'Email body. Can pass HTML markup (<b>, <h1>, <ul>, <a>, etc.) for a nicely formatted email.' }
         },
         required: ['to', 'subject', 'body']
       }
@@ -1741,12 +1742,12 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'save_note',
-      description: 'Сохраняет запись в личную записную книжку пользователя. Используй, когда пользователь просит "запиши"/"сохрани в заметки". Это заметки, а не долговременная память.',
+      description: 'Saves a note to the user\'s personal notebook. Use when the user asks "write this down"/"save as note". These are notes, not long-term memory.',
       parameters: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Короткий заголовок заметки (необязательно).' },
-          content: { type: 'string', description: 'Текст заметки, который нужно сохранить.' }
+          title: { type: 'string', description: 'Short note title (optional).' },
+          content: { type: 'string', description: 'Note text to save.' }
         },
         required: ['content']
       }
@@ -1756,13 +1757,13 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'list_my_notes',
-      description: 'Показывает заметки пользователя из записной книжки. Поддерживает поиск и пагинацию.',
+      description: 'Shows user notes from the notebook. Supports search and pagination.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Поисковая строка по заголовку и тексту.' },
-          limit: { type: 'number', description: 'Сколько заметок вернуть за запрос (1..50).' },
-          offset: { type: 'number', description: 'Сдвиг для пагинации. Пример: 0, затем 10.' }
+          query: { type: 'string', description: 'Search string by title and text.' },
+          limit: { type: 'number', description: 'How many notes to return per request (1..50).' },
+          offset: { type: 'number', description: 'Pagination offset. Example: 0, then 10.' }
         }
       }
     }
@@ -1771,11 +1772,11 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_note',
-      description: 'Читает одну заметку пользователя целиком по точному ID.',
+      description: 'Reads one user note in full by exact ID.',
       parameters: {
         type: 'object',
         properties: {
-          note_id: { type: 'number', description: 'ID заметки.' }
+          note_id: { type: 'number', description: 'Note ID.' }
         },
         required: ['note_id']
       }
@@ -1785,11 +1786,11 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'delete_note',
-      description: 'Удаляет одну заметку пользователя по точному ID и возвращает обновлённый список.',
+      description: 'Deletes one user note by exact ID and returns the updated list.',
       parameters: {
         type: 'object',
         properties: {
-          note_id: { type: 'number', description: 'ID заметки для удаления.' }
+          note_id: { type: 'number', description: 'Note ID to delete.' }
         },
         required: ['note_id']
       }
@@ -1799,12 +1800,12 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'update_core_memory',
-      description: 'Статический профиль (паспорт) пользователя. Используй ТОЛЬКО для неизменных, сухих фактов: ФИО,, возраст, город проживания, работа/стек, состав семьи, статус отношений, друзья, здоровье, глобальные цели. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО сохранять сюда истории, сюжеты, переменчивые драмы или подробные детали отношений — для любых событий и "биографического лора" используй СТРОГО save_to_cold_memory.',
+      description: 'Static user profile (passport). Use ONLY for immutable, dry facts: full name, age, city, job/stack, family, relationship status, friends, health, global goals. STRICTLY FORBIDDEN to save stories, plots, volatile drama, or detailed relationship dynamics here — for any events or "biographical lore" use save_to_cold_memory STRICTLY.',
       parameters: {
         type: 'object',
         properties: {
-          new_fact: { type: 'string', description: 'Новый анкетный факт, кратко.' },
-          explicit_request: { type: 'boolean', description: 'true, если пользователь явно попросил "запомни".' }
+          new_fact: { type: 'string', description: 'New profile fact, concise.' },
+          explicit_request: { type: 'boolean', description: 'true if the user explicitly asked to "remember this".' }
         },
         required: ['new_fact']
       }
@@ -1814,12 +1815,12 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'search_cold_memory',
-      description: 'Поиск по векторному архиву. Обязателен при любых вопросах о прошлом. Каждый результат содержит точный chunk_id, который можно дословно передать в delete_from_cold_memory.',
+      description: 'Search the vector archive. Must be used for any questions about the past. Each result contains an exact chunk_id which can be passed verbatim to delete_from_cold_memory.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Смысловой запрос для поиска.' },
-          top_k: { type: 'number', description: 'Количество фрагментов (3-8, обычно 5).' }
+          query: { type: 'string', description: 'Semantic search query.' },
+          top_k: { type: 'number', description: 'Number of fragments (3-8, typically 5).' }
         },
         required: ['query']
       }
@@ -1829,12 +1830,12 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'save_to_cold_memory',
-      description: 'Сохранение данных в архив. Используй для фиксации важных фактов, и идей.',
+      description: 'Save data to archive. Use to record important facts and ideas.',
       parameters: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: 'Текст: плотный, без местоимений. Используй конкретные имена, названия и детали, чтобы текст был понятен сам по себе.' },
-          source: { type: 'string', description: 'Специфичный заголовок/тег (напр. "D&D: Билд Локадина", "Прогулка и арест полицией с Катей"). Дата должна быть ВСЕГДА! Текущая или ту, которую указал {{user}}' }
+          text: { type: 'string', description: 'Text: dense, no pronouns. Use specific names, titles and details so the text is self-contained.' },
+          source: { type: 'string', description: 'Specific title/tag (e.g. "D&D: Paladin Build", "Walk and arrest with Katya"). Date MUST ALWAYS be included! Current date or the one specified by {{user}}.' }
         },
         required: ['text', 'source']
       }
@@ -1844,11 +1845,11 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'delete_from_cold_memory',
-      description: 'Удаление всей архивной записи по точному chunk_id. Сначала обязательно выполни search_cold_memory, затем дословно скопируй полный chunk_id из результата: не сокращай и не конструируй его самостоятельно.',
+      description: 'Delete an entire archive entry by exact chunk_id. Always run search_cold_memory first, then copy the full chunk_id verbatim from the result: do not truncate or construct it yourself.',
       parameters: {
         type: 'object',
         properties: {
-          chunk_id: { type: 'string', description: 'Полный точный chunk_id из результатов search_cold_memory (например: fact_123_ab12cd_chunk_0).' }
+          chunk_id: { type: 'string', description: 'Full exact chunk_id from search_cold_memory results (e.g. fact_123_ab12cd_chunk_0).' }
         },
         required: ['chunk_id']
       }
@@ -1858,13 +1859,13 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'random_roll',
-      description: 'Случайный бросок: монетка или кубики (d4,d6,d8,d10,d12,d20,d100). Используй для запросов "подбрось монетку/брось кубик/случайный результат". Для кубиков поддерживает обычный режим, преимущество и помеху.',
+      description: 'Random roll: coin flip or dice (d4,d6,d8,d10,d12,d20,d100). Use for "flip a coin/roll a die/random result" requests. For dice, supports normal, advantage, and disadvantage.',
       parameters: {
         type: 'object',
         properties: {
-          roll_type: { type: 'string', enum: ['coin', 'dice'], description: 'coin - монетка, dice - кубики.' },
-          dice_notation: { type: 'string', description: 'Нотация кубиков, например: 1d20, 2d6+3, 2д20 + 5.' },
-          mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'], description: 'Режим для dice: обычный, с преимуществом, с помехой.' }
+          roll_type: { type: 'string', enum: ['coin', 'dice'], description: 'coin - coin flip, dice - dice roll.' },
+          dice_notation: { type: 'string', description: 'Dice notation, e.g.: 1d20, 2d6+3, 2d20 + 5.' },
+          mode: { type: 'string', enum: ['normal', 'advantage', 'disadvantage'], description: 'Dice mode: normal, advantage, disadvantage.' }
         },
         required: ['roll_type']
       }
@@ -1874,18 +1875,18 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'generate_image',
-      description: 'Генерация изображения по текстовому описанию. Вызывай ТОЛЬКО если пользователь напрямую попросил "нарисуй", "создай изображение", "сгенерируй картинку" и т.п. Если пользователь пишет на русском — переведи промпт на английский для лучшего качества, но ответь пользователю на русском. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО писать JSON с action/actioninput/dalle в текст ответа — используй ТОЛЬКО tool call. Поддерживает image-to-image: если пользователь прикрепил фото и просит изменить/отредактировать — укажи image_url.',
+      description: 'Generate an image from a text description. Call ONLY if the user directly asks to "draw", "create an image", "generate a picture", etc. If the user writes in a non-English language — translate the prompt to English for better quality, but respond to the user in their language. STRICTLY FORBIDDEN to write JSON with action/actioninput/dalle in the response text — use ONLY the tool call. Supports image-to-image: if the user attached a photo and asks to edit/modify it — include image_url.',
       parameters: {
         type: 'object',
         properties: {
           prompt: {
             type: 'string',
-            description: 'Детальное описание того, что нужно изобразить или как изменить прикреплённое изображение (на английском языке для лучшего качества генерации).'
+            description: 'Detailed description of what to depict or how to modify the attached image (in English for best generation quality).'
           },
           image_url: {
             type: 'array',
             items: { type: 'string' },
-            description: 'URL(ы) картинок из маркеров [Attached image N: URL] в текущем сообщении или истории чата. Используй для image-to-image генерации (редактирование/модификация прикреплённого фото).'
+            description: 'Image URL(s) from [Attached image N: URL] markers in the current message or chat history. Use for image-to-image generation (editing/modifying the attached photo).'
           }
         },
         required: ['prompt']
@@ -1896,13 +1897,13 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'create_pixel_image',
-      description: 'Создаёт изображение (PNG) из массива пикселей. Принимает 2D массив hex-цветов (#RRGGBB). Размер: 16x16 или 32x32. Используй когда пользователь просит нарисовать пиксельную иконку, пиксель-арт, эмодзи или подобное небольшое изображение, заданное попиксельно. НЕ возвращай массив в текст ответа — просто вызови tool.',
+      description: 'Creates a PNG image from a pixel array. Accepts a 2D array of hex colors (#RRGGBB). Size: 16x16 or 32x32. Use when the user asks to draw a pixel icon, pixel art, emoji, or similar small image defined pixel by pixel. Do NOT return the array in the response text — just call the tool.',
       parameters: {
         type: 'object',
         properties: {
           pixels: {
             type: 'array',
-            description: 'Двумерный массив hex-цветов. Каждый элемент — строка вида "#RRGGBB" (например "#FF6600"). Внешний массив — строки (Y), внутренний — колонки (X). Размер 16x16 или 32x32.',
+            description: '2D array of hex colors. Each element is a string like "#RRGGBB" (e.g. "#FF6600"). Outer array = rows (Y), inner array = columns (X). Size 16x16 or 32x32.',
             items: {
               type: 'array',
               items: { type: 'string' }
@@ -1910,7 +1911,7 @@ export const toolDefinitions = [
           },
           set_as_avatar: {
             type: 'boolean',
-            description: 'Если true — поставить созданную картинку в пиксельный аватар (mode=media). По умолчанию false.'
+            description: 'If true — set the created image as the pixel avatar (mode=media). Default is false.'
           }
         },
         required: ['pixels']
@@ -1921,14 +1922,14 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'get_exchange_rates',
-      description: 'Получить актуальный курс валют ЦБ РФ (доллар, евро, юань и т.д.) и динамику изменения по сравнению с предыдущим днём. Используй когда пользователь спрашивает про курс валют, конвертацию, стоимость доллара/евро и т.п.',
+      description: 'Get current Central Bank exchange rates (dollar, euro, yuan, etc.) and daily change dynamics. Use when the user asks about exchange rates, conversion, dollar/euro value, etc.',
       parameters: {
         type: 'object',
         properties: {
           currency_codes: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Массив трехбуквенных кодов валют: USD, EUR, CNY, KZT и т.д. Если пользователь не указал конкретную валюту — верни USD и EUR.'
+            description: 'Array of three-letter currency codes: USD, EUR, CNY, KZT, etc. If the user did not specify a currency — return USD and EUR.'
           }
         }
       }
@@ -1944,19 +1945,19 @@ const buildDisplayStateTool = (manifest?: { moods?: string[]; reactions?: string
     type: 'function' as const,
     function: {
       name: 'set_display_state',
-      description: 'Управление пиксельным аватаром на экране пользователя. Используй для эмоциональных реакций (удивление, радость, грусть и т.д.), смены базового настроения или включения медиа-режима (заставка lofi и т.п.). Вызывай проактивно, когда это уместно по контексту разговора.',
+      description: 'Controls the pixel avatar on the user\'s screen. Use for emotional reactions (surprise, joy, sadness, etc.), changing base mood, or switching to media mode (lofi screensaver, etc.). Call proactively when appropriate to the conversation context.',
       parameters: {
         type: 'object',
         properties: {
           mode: {
             type: 'string',
             enum: ['face', 'media'],
-            description: 'face — обычный режим аватара (настроение + реакции). media — показать произвольное изображение/GIF по ссылке вместо лица.'
+            description: 'face — normal avatar mode (mood + reactions). media — show an arbitrary image/GIF from a URL instead of the face.'
           },
           base_mood: {
             type: 'string',
             enum: moods,
-            description: `Базовое настроение аватара. Доступные: ${moods.join(', ')}. Работает только при mode=face.`
+            description: `Base avatar mood. Available: ${moods.join(', ')}. Works only with mode=face.`
           },
           reactions: {
             type: 'array',
@@ -1965,22 +1966,22 @@ const buildDisplayStateTool = (manifest?: { moods?: string[]; reactions?: string
               ...(reactions.length ? { enum: reactions } : {})
             },
             description: reactions.length
-              ? `Очередь временных анимаций-реакций. Доступные: ${reactions.join(', ')}. Проигрываются по порядку, затем аватар возвращается к base_mood.`
-              : 'Очередь временных анимаций-реакций. Сейчас нет доступных реакций.'
+              ? `Queue of temporary reaction animations. Available: ${reactions.join(', ')}. Played in order, then the avatar returns to base_mood.`
+              : 'Queue of temporary reaction animations. No reactions currently available.'
           },
           media_url: {
             type: 'string',
-            description: 'Прямая ссылка на изображение/GIF для mode=media. Игнорируется при mode=face.'
+            description: 'Direct URL to an image/GIF for mode=media. Ignored in mode=face.'
           },
           loop_reaction: {
             type: 'string',
             description: reactions.length
-              ? `Запустить зацикленную реакцию, которая играет бесконечно пока не будет остановлена. Доступные: ${reactions.join(', ')}.`
-              : 'Запустить зацикленную реакцию. Сейчас нет доступных реакций.'
+              ? `Start a looping reaction that plays indefinitely until stopped. Available: ${reactions.join(', ')}.`
+              : 'Start a looping reaction. No reactions currently available.'
           },
           clear_loop: {
             type: 'boolean',
-            description: 'Остановить текущую зацикленную реакцию (loop_reaction). Передай true чтобы остановить.'
+            description: 'Stop the current looping reaction (loop_reaction). Pass true to stop.'
           }
         }
       }
@@ -1994,36 +1995,36 @@ const buildDesktopActionTool = () => {
     type: 'function' as const,
     function: {
       name: 'desktop_action',
-      description: `Управление интерфейсом десктопного приложения Chatter. Позволяет открывать/закрывать виджеты, создавать черновики заметок, открывать конкретные записи, читать текущее состояние виджетов.
-Используй когда:
-- Пользователь просит создать черновик заметки (не сразу сохранить, а открыть для редактирования) — action=set_widget_data, target=notebook, value={title,content}
-- Нужно открыть блокнот чтобы показать что-то — action=open_widget, target=notebook
-- Нужно открыть конкретную запись в блокноте — action=open_note, target=notebook, value={note_id}
-- Нужно прочитать что сейчас написано в открытом черновике — action=read_widget_state, target=notebook
-- Нужно открыть/закрыть панель инструментов — action=toggle_panel
-- Нужно закрыть конкретный виджет — action=close_widget, target=notebook
-- Нужно открыть задачи — action=open_widget, target=tasks`,
+      description: `Controls the Chatter desktop app interface. Allows opening/closing widgets, creating note drafts, opening specific entries, reading current widget state.
+Use when:
+- User asks to create a note draft (not save immediately, but open for editing) — action=set_widget_data, target=notebook, value={title,content}
+- Need to open the notebook to show something — action=open_widget, target=notebook
+- Need to open a specific notebook entry — action=open_note, target=notebook, value={note_id}
+- Need to read what's currently in the open draft — action=read_widget_state, target=notebook
+- Need to open/close the tools panel — action=toggle_panel
+- Need to close a specific widget — action=close_widget, target=notebook
+- Need to open tasks — action=open_widget, target=tasks`,
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
             enum: ['open_widget', 'close_widget', 'set_widget_data', 'open_note', 'read_widget_state', 'toggle_panel'],
-            description: 'Тип действия. open_widget — открыть виджет, close_widget — закрыть, set_widget_data — передать данные в виджет (например текст черновика), open_note — открыть конкретную запись в блокноте по ID, read_widget_state — прочитать текущее состояние виджета, toggle_panel — открыть/закрыть панель инструментов.'
+            description: 'Action type. open_widget — open a widget, close_widget — close, set_widget_data — send data to a widget (e.g. draft text), open_note — open a specific notebook entry by ID, read_widget_state — read current widget state, toggle_panel — open/close the tools panel.'
           },
           target: {
             type: 'string',
             enum: ['notebook', 'tasks'],
-            description: 'Целевой виджет. notebook — блокнот/заметки, tasks — задачи.'
+            description: 'Target widget. notebook — notebook/notes, tasks — tasks.'
           },
           value: {
             type: 'object',
             properties: {
-              title: { type: 'string', description: 'Заголовок (для блокнота)' },
-              content: { type: 'string', description: 'Текст содержимого (для блокнота)' },
-              note_id: { type: 'number', description: 'ID записи для открытия (используется с action=open_note).' }
+              title: { type: 'string', description: 'Title (for notebook)' },
+              content: { type: 'string', description: 'Content text (for notebook)' },
+              note_id: { type: 'number', description: 'Entry ID to open (used with action=open_note).' }
             },
-            description: 'Данные для передачи в виджет. Используется с action=set_widget_data или action=open_note.'
+            description: 'Data to send to the widget. Used with action=set_widget_data or action=open_note.'
           }
         },
         required: ['action']
@@ -2038,7 +2039,7 @@ const buildListMyMacrosTool = () => {
     type: 'function' as const,
     function: {
       name: 'list_my_macros',
-      description: `Показывает список макросов пользователя (наборов консольных команд). Вызывай когда пользователь просит выполнить макрос, спрашивает какие макросы есть, или когда нужно выяснить есть ли подходящий макрос для задачи. После получения списка используй execute_macro для запуска конкретного макроса.`,
+      description: `Shows the user\'s macro list (sets of console commands). Call when the user asks to run a macro, asks what macros are available, or when you need to check if there\'s a suitable macro for a task. After getting the list, use execute_macro to run a specific macro.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -2054,17 +2055,17 @@ const buildExecuteMacroTool = () => {
     type: 'function' as const,
     function: {
       name: 'execute_macro',
-      description: `Запускает пользовательский макрос (набор консольных команд) по его названию или идентификатору. Макрос выполняется на стороне десктоп-клиента. Используй, когда пользователь просит выполнить ранее сохранённый макрос или серию команд.`,
+      description: `Runs a user macro (set of console commands) by its name or identifier. The macro executes on the desktop client. Use when the user asks to run a previously saved macro or a series of commands.`,
       parameters: {
         type: 'object',
         properties: {
           macro_id: {
             type: 'number',
-            description: 'Идентификатор макроса (если известен).'
+            description: 'Macro identifier (if known).'
           },
           macro_name: {
             type: 'string',
-            description: 'Название макроса для поиска.'
+            description: 'Macro name to search for.'
           }
         },
         required: []
@@ -2079,13 +2080,13 @@ const buildExploreFsTool = () => {
     type: 'function' as const,
     function: {
       name: 'explore_fs',
-      description: `Читает содержимое директории на компьютере пользователя. Возвращает список файлов и папок с информацией о размере. Используй когда нужно узнать структуру каталога, найти файл или помочь пользователю с навигацией по файловой системе. Работает только в режиме чтения (ls).`,
+      description: `Reads the contents of a directory on the user\'s PC. Returns a list of files and folders with size info. Use when you need to explore a directory structure, find a file, or help the user navigate the file system. Works in read-only mode (ls).`,
       parameters: {
         type: 'object',
         properties: {
           target_path: {
             type: 'string',
-            description: 'Абсолютный путь к директории для чтения (например, "C:\\Users" или "/home/user").'
+            description: 'Absolute path to the directory to read (e.g. "C:\\Users" or "/home/user").'
           }
         },
         required: ['target_path']
@@ -2100,22 +2101,22 @@ const buildSuggestMacroTool = () => {
     type: 'function' as const,
     function: {
       name: 'suggest_macro',
-      description: `Предлагает пользователю сохранить новый макрос (набор команд). Используй когда помогаешь пользователю составить скрипт/серию команд и хочешь предложить сохранить это как макрос для повторного использования.`,
+      description: `Suggests that the user save a new macro (set of commands). Use when helping the user compose a script/series of commands and you want to offer saving it as a macro for reuse.`,
       parameters: {
         type: 'object',
         properties: {
           title: {
             type: 'string',
-            description: 'Предлагаемое название макроса (короткое, до 5 слов).'
+            description: 'Suggested macro name (short, up to 5 words).'
           },
           description: {
             type: 'string',
-            description: 'Описание макроса (1-2 предложения).'
+            description: 'Macro description (1-2 sentences).'
           },
           commands: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Массив команд макроса.'
+            description: 'Array of macro commands.'
           }
         },
         required: ['title', 'commands']
@@ -2131,7 +2132,7 @@ const buildListDevopsServersTool = () => {
     type: 'function' as const,
     function: {
       name: 'list_devops_servers',
-      description: `Показывает список серверов пользователя (id, name, host, username). Используй, когда пользователь упоминает сервер или просит выполнить команду на удалённом сервере.`,
+      description: `Shows the user\'s server list (id, name, host, username). Use when the user mentions a server or asks to run a command on a remote server.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -2146,23 +2147,23 @@ const buildExecuteSshCommandTool = () => {
     type: 'function' as const,
     function: {
       name: 'execute_ssh_command',
-      description: `Выполняет команду на удалённом сервере через SSH. Бэкенд подключается к серверу, выполняет команду и возвращает stdout/stderr.
-Используй когда пользователь просит:
-- Выполнить команду на сервере (ls, pm2 status, systemctl status, df -h и т.д.)
-- Проверить состояние сервера или сервисов
-- Посмотреть логи, процессы, дисковое пространство
+      description: `Runs a command on a remote server via SSH. The backend connects to the server, executes the command, and returns stdout/stderr.
+Use when the user asks to:
+- Run a command on the server (ls, pm2 status, systemctl status, df -h, etc.)
+- Check server or service status
+- View logs, processes, disk space
 
-Важно: если команда неизвестна или может быть опасной — пользователь должен подтвердить выполнение на десктопе.`,
+Important: if the command is unknown or potentially dangerous — the user must confirm execution on the desktop.`,
       parameters: {
         type: 'object',
         properties: {
           server_id: {
             type: 'number',
-            description: 'ID сервера (получи из list_devops_servers если не известен).'
+            description: 'Server ID (get from list_devops_servers if not known).'
           },
           command: {
             type: 'string',
-            description: 'Команда для выполнения на сервере (например "ls -la /var/log" или "pm2 status").'
+            description: 'Command to run on the server (e.g. "ls -la /var/log" or "pm2 status").'
           }
         },
         required: ['server_id', 'command']
@@ -2177,19 +2178,19 @@ const buildExecutePcCommandTool = () => {
     type: 'function' as const,
     function: {
       name: 'execute_pc_command',
-      description: `Выполняет команду на компьютере пользователя (не на сервере!). Команда запускается через терминал/консоль на ПК пользователя.
-Используй когда:
-- Пользователь просит выполнить что-то локально на его компьютере (открыть программу, посмотреть файлы, запустить скрипт)
-- Нужно узнать информацию о системе (ipconfig, systeminfo, tasklist, dir и т.д.)
-- Пользователь просит помочь с файлами на его ПК
+      description: `Runs a command on the user's PC (not on a server!). The command runs through the terminal/console on the user's PC.
+Use when:
+- User asks to run something locally on their computer (open a program, view files, run a script)
+- Need to get system info (ipconfig, systeminfo, tasklist, dir, etc.)
+- User asks for help with files on their PC
 
-Важно: неизвестные или потенциально опасные команды требуют подтверждения пользователя на десктопе.`,
+Important: unknown or potentially dangerous commands require user confirmation on the desktop.`,
       parameters: {
         type: 'object',
         properties: {
           command: {
             type: 'string',
-            description: 'Команда для выполнения на ПК пользователя (например "dir C:\\Users", "tasklist", "ipconfig").'
+            description: 'Command to run on the user\'s PC (e.g. "dir C:\\Users", "tasklist", "ipconfig").'
           },
           background: {
             type: 'boolean',
@@ -2208,37 +2209,45 @@ const buildReadFileTool = () => {
     type: 'function' as const,
     function: {
       name: 'read_file',
-      description: `Читает содержимое файла на компьютере пользователя нативно через Node.js fs (в обход терминала, без проблем с кодировками).
-Поддерживает текстовые файлы (.txt, .md, .log, .json, .js, .ts, .py, .yaml, .xml и т.д.) и документы Word (.docx).
-Для .docx текст извлекается через mammoth — возвращается чистый текст без форматирования.
-Используй когда:
-- Нужно прочитать содержимое файла (код, конфиг, лог, текст, Word-документ)
-- Пользователь просит показать или проанализировать файл
-- Нужно прочитать часть большого файла (постранично)
-- Нужно узнать точные номера строк перед использованием edit_file_lines
+      description: `Reads a file on the user's PC natively via Node.js fs (bypassing terminal, no encoding issues).
+Supports text files (.txt, .md, .log, .json, .js, .ts, .py, .yaml, .xml, etc.) and Word documents (.docx).
+For .docx, text is extracted via mammoth — returns clean text without formatting.
+Use when:
+- Need to read file contents (code, config, log, text, Word document)
+- User asks to show or analyze a file
+- Need to read part of a large file (paginated)
+- Need to know exact line numbers before using edit_file_lines
 
 Returns UTF-8 text together with the starting line, total line count, and snapshot_id. Pass that snapshot_id to edit_file_lines.
-Поддерживает пагинацию: если файл большой, читай его частями через start_line/max_lines.
+Supports pagination: if the file is large, read it in parts via offset/limit (or the legacy start_line/max_lines aliases).
 
-ВАЖНО для edit_file_lines: Перед редактированием ВСЕГДА вызывай read_file с line_numbers=true и нужным start_line/max_lines, чтобы увидеть точные номера строк. Это исключит ошибки при указании start_line/end_line в edit_file_lines.`,
+IMPORTANT for edit_file_lines: Before editing, ALWAYS call read_file with line_numbers=true and the needed offset/limit to see exact line numbers. This prevents errors when specifying start_line/end_line in edit_file_lines.`,
       parameters: {
         type: 'object',
         properties: {
           file_path: {
             type: 'string',
-            description: 'Полный путь к файлу на ПК пользователя (например "C:\\\\Users\\\\user\\\\file.txt" или "/home/user/file.txt").'
+            description: 'Full path to the file on the user\'s PC (e.g. "C:\\\\Users\\\\user\\\\file.txt" or "/home/user/file.txt").'
           },
           start_line: {
             type: 'number',
-            description: 'С какой строки начинать чтение (нумерация с 1). По умолчанию 1. Используй для чтения конкретного фрагмента файла.'
+            description: 'Legacy alias of offset. Which line to start reading from (1-based). Default is 1.'
           },
           max_lines: {
             type: 'number',
-            description: 'Сколько строк прочитать (по умолчанию 500, максимум 2000). Чтобы прочитать строки 10–25: start_line=10, max_lines=16.'
+            description: 'Legacy alias of limit. How many lines to read (default 500, max 2000).'
+          },
+          offset: {
+            type: 'number',
+            description: 'Which line to start reading from (1-based). Default is 1. To continue a paginated read, pass next_offset from the previous result.'
+          },
+          limit: {
+            type: 'number',
+            description: 'How many lines to read (default 500, max 2000). To read lines 10–25: offset=10, limit=16.'
           },
           line_numbers: {
             type: 'boolean',
-            description: 'Если true — каждая строка в контенте будет иметь префикс с номером строки (формат: "     1\\tсодержимое"). Обязательно используй true перед edit_file_lines, чтобы увидеть точные номера строк. По умолчанию false.'
+            description: 'If true — each line in the content will have a line number prefix (format: "     1\\tcontent"). Always use true before edit_file_lines to see exact line numbers. Default is false.'
           }
         },
         required: ['file_path']
@@ -2253,23 +2262,23 @@ const buildSearchFileKeywordsTool = () => {
     type: 'function' as const,
     function: {
       name: 'search_file_keywords',
-      description: `Ищет ключевые слова или фразы в конкретном файле на компьютере пользователя и возвращает только строки с совпадениями и их номерами.
-Используй, когда файл слишком большой, чтобы читать его целиком через read_file, или когда нужно быстро найти место в логе/коде/тексте.
-Поиск регистронезависимый. Для чтения контекста вокруг найденных строк после этого используй read_file со start_line/max_lines.`,
+      description: `Searches for keywords or phrases in a specific file on the user's PC and returns only matching lines with their line numbers.
+Use when the file is too large to read entirely via read_file, or when you need to quickly locate something in a log/code/text.
+Search is case-insensitive. To read context around found lines afterward, use read_file with start_line/max_lines.`,
       parameters: {
         type: 'object',
         properties: {
           file_path: {
             type: 'string',
-            description: 'Полный путь к файлу на ПК пользователя.'
+            description: 'Full path to the file on the user\'s PC.'
           },
           query: {
             type: 'string',
-            description: 'Ключевое слово или фраза для поиска.'
+            description: 'Keyword or phrase to search for.'
           },
           max_matches: {
             type: 'number',
-            description: 'Максимум совпадений вернуть (по умолчанию 100, максимум 500).'
+            description: 'Maximum matches to return (default 100, max 500).'
           }
         },
         required: ['file_path', 'query']
@@ -2284,18 +2293,18 @@ const buildGetFileInfoTool = () => {
     type: 'function' as const,
     function: {
       name: 'get_file_info',
-      description: `Возвращает метаданные файла или папки на компьютере пользователя без чтения содержимого: существует ли путь, тип, размер в байтах, даты изменения/создания, расширение.
-Используй перед read_file/search_file_keywords, когда нужно понять размер файла или проверить путь без загрузки содержимого.`,
+      description: `Returns metadata for a file or folder on the user's PC without reading content: whether the path exists, type, size in bytes, modification/creation dates, extension.
+Use before read_file/search_file_keywords when you need to check file size or verify a path without loading content.`,
       parameters: {
         type: 'object',
         properties: {
           file_path: {
             type: 'string',
-            description: 'Полный путь к файлу или папке на ПК пользователя.'
+            description: 'Full path to the file or folder on the user\'s PC.'
           },
           include_line_count: {
             type: 'boolean',
-            description: 'Если true и путь указывает на файл, дополнительно посчитать количество строк. Это читает файл построчно, поэтому используй только когда число строк действительно нужно.'
+            description: 'If true and the path points to a file, additionally count the number of lines. This reads the file line by line, so use only when line count is truly needed.'
           }
         },
         required: ['file_path']
@@ -2310,31 +2319,31 @@ const buildWriteFileTool = () => {
     type: 'function' as const,
     function: {
       name: 'write_file',
-      description: `Записывает содержимое в файл на компьютере пользователя нативно через Node.js fs (в обход терминала, без лимитов длины команды).
-Поддерживает запись в .docx — создаёт валидный Word-документ из переданного текста (каждая строка = отдельный абзац).
-ВНИМАНИЕ: Для файлов .docx поддерживается ТОЛЬКО режим 'overwrite'. Если нужно дописать текст в существующий .docx, сначала полностью прочитай его через read_file, добавь нужный текст и вызови write_file с режимом 'overwrite'.
-Используй когда:
-- Нужно создать или перезаписать файл (код, конфиг, текст, Word-документ)
-- Пользователь просит сохранить что-то в файл
-- Нужно дописать данные в конец существующего текстового файла (mode: append)
+      description: `Writes content to a file on the user's PC natively via Node.js fs (bypassing terminal, no command length limits).
+Supports .docx writing — creates a valid Word document from the provided text (each line = separate paragraph).
+WARNING: For .docx files, ONLY 'overwrite' mode is supported. If you need to append text to an existing .docx, first read it entirely via read_file, add the needed text, and call write_file with 'overwrite' mode.
+Use when:
+- Need to create or overwrite a file (code, config, text, Word document)
+- User asks to save something to a file
+- Need to append data to the end of an existing text file (mode: append)
 
-Всегда требует подтверждения пользователя (HitL-карточка).
-Запись в системные директории (C:\\Windows, /etc, /usr, /bin) заблокирована.`,
+Always requires user confirmation (HitL card).
+Writing to system directories (C:\\Windows, /etc, /usr, /bin) is blocked.`,
       parameters: {
         type: 'object',
         properties: {
           file_path: {
             type: 'string',
-            description: 'Полный путь к файлу на ПК пользователя (например "C:\\\\Users\\\\user\\\\new_file.txt" или "/home/user/script.sh").'
+            description: 'Full path to the file on the user\'s PC (e.g. "C:\\\\Users\\\\user\\\\new_file.txt" or "/home/user/script.sh").'
           },
           content: {
             type: 'string',
-            description: 'Содержимое для записи в файл (UTF-8 текст).'
+            description: 'Content to write to the file (UTF-8 text).'
           },
           mode: {
             type: 'string',
             enum: ['overwrite', 'append'],
-            description: 'Режим записи: "overwrite" (перезаписать файл целиком, по умолчанию) или "append" (дописать в конец).'
+            description: 'Write mode: "overwrite" (replace entire file, default) or "append" (append to the end).'
           }
         },
         required: ['file_path', 'content']
@@ -2349,36 +2358,36 @@ const buildEditFileLinesTool = () => {
     type: 'function' as const,
     function: {
       name: 'edit_file_lines',
-      description: `Точечно заменяет строки в файле на новый текст. Работает как хирургический скальпель — не перезаписывает файл целиком.
-Поддерживает текстовые файлы (.txt, .md, .log, .json, .js, .ts, .py и т.д.). Для .docx используй read_file + write_file (overwrite).
+      description: `Surgically replaces lines in a file with new text. Works like a scalpel — does not overwrite the entire file.
+Supports text files (.txt, .md, .log, .json, .js, .ts, .py, etc.). For .docx use read_file + write_file (overwrite).
 
-ВАЖНО: Сначала ВСЕГДА используй read_file (с start_line и max_lines), чтобы узнать точные номера строк. Нумерация строк начинается с 1.
+IMPORTANT: ALWAYS use read_file first (with start_line and max_lines) to find exact line numbers. Line numbering starts at 1.
 
-Сценарии:
-- Заменить строки 10-15 на новый текст: start_line=10, end_line=15, new_content="новый текст"
-- Заменить одну строку 568: start_line=568, end_line=568, new_content="новая строка"
-- Вставить текст после строки 5 (без удаления): start_line=6, end_line=5, new_content="вставленный текст"
-- Удалить строки 20-30: start_line=20, end_line=30, new_content=""
+Scenarios:
+- Replace lines 10-15 with new text: start_line=10, end_line=15, new_content="new text"
+- Replace a single line 568: start_line=568, end_line=568, new_content="new line"
+- Insert text after line 5 (without deleting): start_line=6, end_line=5, new_content="inserted text"
+- Delete lines 20-30: start_line=20, end_line=30, new_content=""
 
-Всегда требует подтверждения пользователя (HitL-карточка с diff-превью).`,
+Always requires user confirmation (HitL card with diff preview).`,
       parameters: {
         type: 'object',
         properties: {
           file_path: {
             type: 'string',
-            description: 'Полный путь к файлу на ПК пользователя.'
+            description: 'Full path to the file on the user\'s PC.'
           },
           start_line: {
             type: 'number',
-            description: 'Номер строки, с которой начать замену (включительно, нумерация с 1).'
+            description: 'Line number to start replacing from (inclusive, 1-based).'
           },
           end_line: {
             type: 'number',
-            description: 'Номер строки, на которой закончить замену (включительно). Чтобы вставить текст без удаления, укажи end_line = start_line - 1.'
+            description: 'Line number to end replacing at (inclusive). To insert text without deleting, set end_line = start_line - 1.'
           },
           new_content: {
             type: 'string',
-            description: 'Новый текст для вставки вместо старых строк. Пустая строка = удаление строк.'
+            description: 'New text to insert in place of old lines. Empty string = delete lines.'
           },
           snapshot_id: {
             type: 'string',
@@ -2397,25 +2406,25 @@ const buildCaptureWebcamTool = () => {
     type: 'function' as const,
     function: {
       name: 'capture_webcam',
-      description: `Делает фото с веб-камеры пользователя и отправляет его vision-модели для анализа.
-Используй когда:
-- Пользователь просит сфотографировать комнату / проверить камеру
-- Нужно увидеть, что происходит в помещении
-- Нужно проверить, кто дома
+      description: `Takes a photo with the user's webcam and sends it to a vision model for analysis.
+Use when:
+- User asks to take a photo of the room / check the camera
+- Need to see what's happening in the room
+- Need to check who's home
 
-В параметре purpose укажи чёткую задачу для vision-модели.
-В ответ получишь текстовое описание того, что видит камера.
-Если камера не найдена — верни ошибку.`,
+In the purpose parameter, specify a clear task for the vision model.
+You'll receive a text description of what the camera sees.
+If the camera is not found — return an error.`,
       parameters: {
         type: 'object',
         properties: {
           purpose: {
             type: 'string',
-            description: 'Задача для vision-модели. Например: "Опиши что видит камера" или "Есть ли кто-то в комнате" или "Что стоит на столе".'
+            description: 'Task for the vision model. E.g.: "Describe what the camera sees" or "Is there anyone in the room" or "What is on the table".'
           },
           camera_name: {
             type: 'string',
-            description: 'Имя камеры в системе (опционально). Если не указано — используется камера по умолчанию.'
+            description: 'Camera name in the system (optional). If not specified — the default camera is used.'
           }
         },
         required: ['purpose']
@@ -2431,21 +2440,21 @@ const buildDescribeImageTool = () => {
     type: 'function' as const,
     function: {
       name: 'describe_image',
-      description: 'Анализирует указанное изображение с помощью vision-модели. Поддерживает пользовательские фото и картинки из истории чата.',
+      description: 'Analyzes the specified image using a vision model. Supports user photos and images from chat history.',
       parameters: {
         type: 'object',
         properties: {
           question: {
             type: 'string',
-            description: 'Конкретная задача или вопрос (например: "Опиши изображение", "Прочитай текст").'
+            description: 'Specific task or question (e.g.: "Describe the image", "Read the text").'
           },
           image_url: {
             type: 'string',
-            description: 'URL картинки из маркеров [Attached image N: URL]. Оставь пустым для анализа картинок из текущего сообщения пользователя.'
+            description: 'Image URL from [Attached image N: URL] markers. Leave empty to analyze images from the current user message.'
           },
           image_index: {
             type: 'number',
-            description: 'Индекс картинки (с 0) в текущем сообщении. Игнорируется, если указан image_url.'
+            description: 'Image index (0-based) in the current message. Ignored if image_url is provided.'
           }
         },
         required: ['question']
@@ -2460,7 +2469,7 @@ const buildListMonitorsTool = () => {
     type: 'function' as const,
     function: {
       name: 'list_monitors',
-      description: 'Возвращает список подключенных мониторов (ID, имя, разрешение). Всегда вызывай этот инструмент ПЕРЕД capture_screen.',
+      description: 'Returns a list of connected monitors (ID, name, resolution). Always call this tool BEFORE capture_screen.',
       parameters: {
         type: 'object',
         properties: {},
@@ -2476,17 +2485,17 @@ const buildCaptureScreenTool = () => {
     type: 'function' as const,
     function: {
       name: 'capture_screen',
-      description: 'Делает скриншот экрана и анализирует его. Возвращает описание или нормализованные координаты (0.0-1.0) для execute_visual_click.',
+      description: 'Takes a screenshot and analyzes it. Returns a description or normalized coordinates (0.0-1.0) for execute_visual_click.',
       parameters: {
         type: 'object',
         properties: {
           purpose: {
             type: 'string',
-            description: 'Задача для vision-модели (например: "Найди кнопку X", "Опиши открытые окна").'
+            description: 'Task for the vision model (e.g.: "Find button X", "Describe open windows").'
           },
           display_id: {
             type: 'string',
-            description: 'ID целевого монитора (получи через list_monitors). Оставь пустым ТОЛЬКО если пользователь прямо попросил посмотреть на ВСЕ мониторы.'
+            description: 'Target monitor ID (get via list_monitors). Leave empty ONLY if the user explicitly asked to look at ALL monitors.'
           }
         },
         required: ['purpose']
@@ -2501,39 +2510,39 @@ const buildExecuteVisualClickTool = () => {
     type: 'function' as const,
     function: {
       name: 'execute_visual_click',
-      description: `Кликает мышкой по указанной точке на экране пользователя. Координаты — нормализованные (0.0–1.0), где (0,0) — левый верхний угол монитора, (1,1) — правый нижний.
-Сначала вызови capture_screen чтобы получить display_id и скриншоты, затем определи точку клика по скриншоту и вызови этот инструмент.
-Требует подтверждения пользователя (через Telegram inline-кнопки).
+      description: `Clicks the mouse at a specified point on the user's screen. Coordinates are normalized (0.0–1.0), where (0,0) is the top-left corner of the monitor and (1,1) is the bottom-right.
+First call capture_screen to get display_id and screenshots, then determine the click point from the screenshot and call this tool.
+Requires user confirmation (via Telegram inline buttons).
 
-Параметры:
-- display_id: ID монитора из capture_screen
-- x: нормализованная X координата (0.0–1.0)
-- y: нормализованная Y координата (0.0–1.0)
-- button: "left" (по умолчанию) или "right"
-- reason: короткое объяснение зачем клик (показывается пользователю в карточке подтверждения)`,
+Parameters:
+- display_id: monitor ID from capture_screen
+- x: normalized X coordinate (0.0–1.0)
+- y: normalized Y coordinate (0.0–1.0)
+- button: "left" (default) or "right"
+- reason: short explanation of why this click (shown to user in confirmation card)`,
       parameters: {
         type: 'object',
         properties: {
           display_id: {
             type: 'string',
-            description: 'ID монитора (из ответа capture_screen).'
+            description: 'Monitor ID (from capture_screen response).'
           },
           x: {
             type: 'number',
-            description: 'Нормализованная X координата клика (0.0 = левый край, 1.0 = правый край).'
+            description: 'Normalized X coordinate of the click (0.0 = left edge, 1.0 = right edge).'
           },
           y: {
             type: 'number',
-            description: 'Нормализованная Y координата клика (0.0 = верх, 1.0 = низ).'
+            description: 'Normalized Y coordinate of the click (0.0 = top, 1.0 = bottom).'
           },
           button: {
             type: 'string',
             enum: ['left', 'right'],
-            description: 'Кнопка мыши: left или right. По умолчанию left.'
+            description: 'Mouse button: left or right. Default is left.'
           },
           reason: {
             type: 'string',
-            description: 'Короткое объяснение зачем этот клик (показывается пользователю для подтверждения). Например: "Нажать кнопку Сохранить".'
+            description: 'Short explanation of why this click (shown to user for confirmation). E.g.: "Click the Save button".'
           }
         },
         required: ['display_id', 'x', 'y']
@@ -2547,7 +2556,7 @@ const buildListRunbooksTool = () => {
     type: 'function' as const,
     function: {
       name: 'list_devops_runbooks',
-      description: `Показывает список сохранённых инструкций (runbooks) пользователя. Runbook — это пошаговое руководство для типовых DevOps-задач. Используй перед выполнением сложных операций, чтобы проверить нет ли готовой инструкции.`,
+      description: `Shows the user's saved runbook list. A runbook is a step-by-step guide for typical DevOps tasks. Use before performing complex operations to check if there's a ready-made guide.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -2562,13 +2571,13 @@ const buildReadRunbookTool = () => {
     type: 'function' as const,
     function: {
       name: 'read_devops_runbook',
-      description: `Читает содержимое конкретного runbook (инструкции). Возвращает пошаговое руководство в Markdown. Следуй инструкции шаг за шагом, вызывая execute_ssh_command для каждого шага.`,
+      description: `Reads the contents of a specific runbook. Returns a step-by-step guide in Markdown. Follow the guide step by step, calling execute_ssh_command for each step.`,
       parameters: {
         type: 'object',
         properties: {
           runbook_id: {
             type: 'number',
-            description: 'ID runbook (получи из list_devops_runbooks).'
+            description: 'Runbook ID (get from list_devops_runbooks).'
           }
         },
         required: ['runbook_id']
@@ -2582,22 +2591,22 @@ const buildSuggestRunbookTool = () => {
     type: 'function' as const,
     function: {
       name: 'suggest_devops_runbook',
-      description: `Предлагает пользователю сохранить DevOps-инструкцию (runbook). Используй когда составил план действий на сервере — последовательность команд для типовой задачи. Пользователь может сохранить её и привязать к серверу.`,
+      description: `Suggests that the user save a DevOps runbook. Use when you've composed an action plan on the server — a sequence of commands for a typical task. The user can save it and link it to a server.`,
       parameters: {
         type: 'object',
         properties: {
           title: {
             type: 'string',
-            description: 'Название инструкции (короткое, до 5 слов).'
+            description: 'Runbook name (short, up to 5 words).'
           },
           content: {
             type: 'string',
-            description: 'Текст инструкции в Markdown с пошаговым описанием.'
+            description: 'Runbook text in Markdown with step-by-step description.'
           },
           commands: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Массив shell-команд из инструкции.'
+            description: 'Array of shell commands from the runbook.'
           }
         },
         required: ['title', 'content', 'commands']
@@ -2611,21 +2620,21 @@ const buildInstallSshPublicKeyTool = () => {
     type: 'function' as const,
     function: {
       name: 'install_ssh_public_key',
-      description: `Устанавливает SSH-публичный ключ в authorized_keys указанного пользователя на сервере. Создаёт .ssh директорию, добавляет ключ, выставляет правильные права. Если key_id не указан — используется ключ по умолчанию для этого сервера.`,
+      description: `Installs an SSH public key into authorized_keys of the specified user on the server. Creates the .ssh directory, adds the key, sets correct permissions. If key_id is not specified — the default key for this server is used.`,
       parameters: {
         type: 'object',
         properties: {
           server_id: {
             type: 'number',
-            description: 'ID сервера (из list_devops_servers).'
+            description: 'Server ID (from list_devops_servers).'
           },
           key_id: {
             type: 'number',
-            description: 'ID SSH-ключа для установки (опционально, по умолчанию берётся с сервера).'
+            description: 'SSH key ID for installation (optional, defaults to the server\'s key).'
           },
           target_user: {
             type: 'string',
-            description: 'Имя пользователя на сервере, которому устанавливается ключ (например "root", "deploy").'
+            description: 'Username on the server to install the key for (e.g. "root", "deploy").'
           }
         },
         required: ['server_id', 'target_user']
@@ -2639,37 +2648,37 @@ const buildSuggestServerCredsUpdateTool = () => {
     type: 'function' as const,
     function: {
       name: 'suggest_server_creds_update',
-      description: `Предлагает пользователю обновить учётные данные для подключения к серверу. Используй когда:
-- Бот создал нового пользователя на сервере и хочет переключиться на него
-- SSH-ключ установлен на нового пользователя, и нужно заходить по ключу вместо пароля
-- Старый пользователь (например root) заблокирован, и нужно переключиться
-Бот описывает предлагаемые изменения, пользователь подтверждает через HitL.`,
+      description: `Suggests that the user update server connection credentials. Use when:
+- The bot created a new user on the server and wants to switch to it
+- An SSH key is installed for the new user, and login should use the key instead of password
+- The old user (e.g. root) is locked, and a switch is needed
+The bot describes the proposed changes; the user confirms via HitL.`,
       parameters: {
         type: 'object',
         properties: {
           server_id: {
             type: 'number',
-            description: 'ID сервера (из list_devops_servers).'
+            description: 'Server ID (from list_devops_servers).'
           },
           new_username: {
             type: 'string',
-            description: 'Новый пользователь для SSH-подключения.'
+            description: 'New username for SSH connection.'
           },
           reason: {
             type: 'string',
-            description: 'Причина смены (например: "Создан новый пользователь deployer, root заблокирован").'
+            description: 'Reason for the change (e.g.: "New deployer user created, root is locked").'
           },
           use_ssh_key: {
             type: 'boolean',
-            description: 'Если true — включить вход по SSH-ключу (дефолтному ключу сервера), а не по паролю. Старое имя параметра, совместимо с use_ssh_key_for_login.'
+            description: 'If true — enable SSH key login (using the server\'s default key) instead of password. Legacy parameter name, compatible with use_ssh_key_for_login.'
           },
           use_ssh_key_for_login: {
             type: 'boolean',
-            description: 'Если true — включить вход по SSH-ключу. Если false — оставить вход по паролю, но default SSH key останется выбранным для установки.'
+            description: 'If true — enable SSH key login. If false — keep password login, but the default SSH key remains selected for installation.'
           },
           remove_password: {
             type: 'boolean',
-            description: 'Если true — удалить сохранённый пароль (оставить только SSH-ключ для входа).'
+            description: 'If true — remove the saved password (keep only SSH key for login).'
           }
         },
         required: ['server_id', 'new_username', 'reason']
@@ -2683,29 +2692,29 @@ const buildCreateServerUserTool = () => {
     type: 'function' as const,
     function: {
       name: 'create_server_user',
-      description: `Создаёт нового пользователя на удалённом сервере с sudo-правами. Использует sudo_password сервера как пароль для нового пользователя; если sudo_password не сохранён — пользователь введёт его в карточке подтверждения. NOPASSWD не включается по умолчанию: передавай nopasswd_sudo=true только если пользователь явно попросил sudo без пароля.`,
+      description: `Creates a new user on a remote server with sudo rights. Uses the server\'s sudo_password as the new user\'s password; if sudo_password is not saved — the user will enter it in the confirmation card. NOPASSWD is not enabled by default: pass nopasswd_sudo=true only if the user explicitly asked for passwordless sudo.`,
       parameters: {
         type: 'object',
         properties: {
           server_id: {
             type: 'number',
-            description: 'ID сервера (из list_devops_servers).'
+            description: 'Server ID (from list_devops_servers).'
           },
           username: {
             type: 'string',
-            description: 'Имя нового пользователя (например "deployer", "admin").'
+            description: 'New username (e.g. "deployer", "admin").'
           },
           install_ssh_key: {
             type: 'boolean',
-            description: 'Установить дефолтный SSH-ключ сервера в authorized_keys нового пользователя (по умолчанию true).'
+            description: 'Install the server\'s default SSH key into the new user\'s authorized_keys (default true).'
           },
           key_id: {
             type: 'number',
-            description: 'ID SSH-ключа для установки (опционально, по умолчанию берётся ключ сервера).'
+            description: 'SSH key ID for installation (optional, defaults to the server\'s key).'
           },
           nopasswd_sudo: {
             type: 'boolean',
-            description: 'Если true — добавить sudoers правило NOPASSWD для нового пользователя. По умолчанию false.'
+            description: 'If true — add a NOPASSWD sudoers rule for the new user. Default is false.'
           }
         },
         required: ['server_id', 'username']
@@ -2719,17 +2728,17 @@ const buildChangeServerUserPasswordTool = () => {
     type: 'function' as const,
     function: {
       name: 'change_server_user_password',
-      description: `Меняет пароль существующего Linux-пользователя на сервере. Пароль НЕ передаётся ботом в аргументах: пользователь вводит новый пароль в карточке подтверждения. Используй, когда пользователь просит сменить/задать пароль существующему пользователю.`,
+      description: `Changes the password of an existing Linux user on the server. The password is NOT passed by the bot in arguments: the user enters the new password in the confirmation card. Use when the user asks to change/set a password for an existing user.`,
       parameters: {
         type: 'object',
         properties: {
           server_id: {
             type: 'number',
-            description: 'ID сервера (из list_devops_servers).'
+            description: 'Server ID (from list_devops_servers).'
           },
           username: {
             type: 'string',
-            description: 'Имя существующего пользователя, которому нужно сменить пароль.'
+            description: 'Name of the existing user whose password needs to be changed.'
           }
         },
         required: ['server_id', 'username']
@@ -2744,30 +2753,30 @@ const buildMapControlTool = () => {
     type: 'function' as const,
     function: {
       name: 'map_control',
-      description: `Управление картой в десктопном приложении. Показывает место на карте или прокладывает маршрут между двумя точками.
-Используй когда:
-- Пользователь просит показать место на карте — action=show_place, query="Город, улица"
-- Пользователь просит проложить маршрут — action=draw_route, from_query="откуда", to_query="куда"
-Важно: НЕ угадывай координаты сам. Передавай текстовые адреса — бэкенд сам геокодирует.`,
+      description: `Controls the map in the desktop app. Shows a place on the map or draws a route between two points.
+Use when:
+- User asks to show a place on the map — action=show_place, query="City, street"
+- User asks to draw a route — action=draw_route, from_query="from", to_query="to"
+Important: DO NOT guess coordinates yourself. Pass text addresses — the backend geocodes them.`,
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
             enum: ['show_place', 'draw_route'],
-            description: 'Показать точку на карте или проложить маршрут.'
+            description: 'Show a point on the map or draw a route.'
           },
           query: {
             type: 'string',
-            description: 'Название или адрес места (для action=show_place). Например "Москва, Красная площадь".'
+            description: 'Place name or address (for action=show_place). E.g. "Moscow, Red Square".'
           },
           from_query: {
             type: 'string',
-            description: 'Адрес точки отправления (для action=draw_route).'
+            description: 'Origin address (for action=draw_route).'
           },
           to_query: {
             type: 'string',
-            description: 'Адрес точки назначения (для action=draw_route).'
+            description: 'Destination address (for action=draw_route).'
           }
         },
         required: ['action']
@@ -2782,7 +2791,7 @@ const buildGetMapPinsTool = () => {
     type: 'function' as const,
     function: {
       name: 'get_map_pins',
-      description: `Получить список сохранённых меток пользователя на карте. Возвращает массив меток с координатами и названиями. Используй, когда пользователь спрашивает про свои сохранённые места, точки, локации.`,
+      description: `Gets the list of the user's saved map pins. Returns an array of pins with coordinates and names. Use when the user asks about their saved places, points, locations.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -2798,33 +2807,33 @@ const buildFindTransitRouteTool = () => {
     type: 'function' as const,
     function: {
       name: 'find_transit_route',
-      description: `Поиск маршрутов общественного транспорта (автобусы, маршрутки, троллейбусы, трамваи) между двумя точками. Находит маршруты OSM через Overpass API.
-Используй когда:
-- Пользователь спрашивает как добраться на общественном транспорте
-- Нужно найти автобус/маршрутку от точки А до точки Б
-Важно: передавай точные координаты (lat, lon) обеих точек. Если пользователь дал адреса — сначала геокодируй через map_control(show_place) или используй уже известные координаты.`,
+      description: `Searches for public transit routes (buses, minibuses, trolleybuses, trams) between two points. Finds OSM routes via Overpass API.
+Use when:
+- User asks how to get somewhere by public transport
+- Need to find a bus/minibus from point A to point B
+Important: pass exact coordinates (lat, lon) for both points. If the user provides addresses — geocode first via map_control(show_place) or use already known coordinates.`,
       parameters: {
         type: 'object',
         properties: {
           from_lat: {
             type: 'number',
-            description: 'Широта точки отправления (например 56.4977)',
+            description: 'Origin latitude (e.g. 56.4977)',
           },
           from_lon: {
             type: 'number',
-            description: 'Долгота точки отправления (например 84.9744)',
+            description: 'Origin longitude (e.g. 84.9744)',
           },
           to_lat: {
             type: 'number',
-            description: 'Широта точки назначения',
+            description: 'Destination latitude',
           },
           to_lon: {
             type: 'number',
-            description: 'Долгота точки назначения',
+            description: 'Destination longitude',
           },
           radius_meters: {
             type: 'integer',
-            description: 'Радиус поиска маршрутов в метрах. По умолчанию 500. Если точка на окраине/за городом — используй 1000-1500.',
+            description: 'Route search radius in meters. Default 500. If the point is on the outskirts/outside the city — use 1000-1500.',
           },
         },
         required: ['from_lat', 'from_lon', 'to_lat', 'to_lon'] as string[],
@@ -2839,29 +2848,29 @@ const buildSearchNearbyTool = () => {
     type: 'function' as const,
     function: {
       name: 'search_nearby',
-      description: `Поиск заведений, организаций и объектов рядом с указанной точкой. Находит любые POI (Points of Interest) по названию через OpenStreetMap: рестораны, аптеки, магазины, заправки, банки, аэропорты и т.д.
-Используй когда:
-- Пользователь спрашивает "найди все KFC рядом", "где ближайшая аптека", "покажи заправки в радиусе 2км"
-- Нужно найти конкретную сеть или тип заведения по названию
-Важно: query — это текст для поиска по названию (KFC, Аптека, Вкусно и точка). Для поиска по типу (аптеки вообще) тоже используй название — "Аптека".`,
+      description: `Searches for venues, organizations, and objects near a specified point. Finds any POI (Points of Interest) by name via OpenStreetMap: restaurants, pharmacies, shops, gas stations, banks, airports, etc.
+Use when:
+- User asks "find all KFCs nearby", "where is the nearest pharmacy", "show gas stations within 2 km"
+- Need to find a specific chain or type of venue by name
+Important: query is the text to search by name (KFC, Pharmacy, etc.). To search by type (pharmacies in general), also use the name — "Pharmacy".`,
       parameters: {
         type: 'object',
         properties: {
           latitude: {
             type: 'number',
-            description: 'Широта центра поиска',
+            description: 'Latitude of search center',
           },
           longitude: {
             type: 'number',
-            description: 'Долгота центра поиска',
+            description: 'Longitude of search center',
           },
           query: {
             type: 'string',
-            description: 'Что искать по названию. Например: "KFC", "Аэропорт", "Аптека", "Вкусно и точка", "Сбербанк".',
+            description: 'What to search for by name. E.g.: "KFC", "Airport", "Pharmacy", "McDonald\'s", "Sberbank".',
           },
           radius_meters: {
             type: 'integer',
-            description: 'Радиус поиска в метрах. Для городских заведений: 2000-5000. Для крупных объектов за городом (аэропорты): 50000.',
+            description: 'Search radius in meters. For city venues: 2000-5000. For large objects outside the city (airports): 50000.',
           },
         },
         required: ['latitude', 'longitude', 'query'] as string[],
@@ -2871,25 +2880,25 @@ const buildSearchNearbyTool = () => {
 };
 
 const LITE_ROUTER_INSTRUCTIONS = `
-Ты — быстрый ассистент-диспетчер.
-Твоя главная задача: управление устройствами, быстрый web-поиск, установка часового пояса, случайные броски и короткие бытовые ответы.
+You are a fast dispatcher assistant.
+Your main task: smart home control, quick web search, timezone setup, random rolls, and short everyday responses.
 
-ПРАВИЛО ЭСКАЛАЦИИ:
-если запрос сложный (творчество, глубокий анализ, длинная структурированная расшифровка, программирование, большой текст, почта, заметки, память, планирование, многошаговая задача),
-ты ОБЯЗАН немедленно вызвать инструмент escalate_to_pro и передать исходный запрос пользователя в original_query.
+ESCALATION RULE:
+if the request is complex (creative work, deep analysis, long structured transcription, programming, large text, email, notes, memory, planning, multi-step task),
+you MUST immediately call the escalate_to_pro tool and pass the user's original query in original_query.
 `;
 
 const ESCALATE_TO_PRO_TOOL = {
   type: 'function',
   function: {
     name: 'escalate_to_pro',
-    description: 'Используй ТОЛЬКО если запрос требует глубокого анализа, творческого мышления, сложного структурирования, написания кода или длинного рассказа. Передай исходный запрос пользователя.',
+    description: 'Use ONLY if the request requires deep analysis, creative thinking, complex structuring, code writing, or a long narrative. Pass the user\'s original query.',
     parameters: {
       type: 'object',
       properties: {
         original_query: {
           type: 'string',
-          description: 'Изначальный запрос пользователя для передачи в старшую модель.'
+          description: 'Original user query for passing to the senior model.'
         }
       },
       required: ['original_query']
@@ -2906,27 +2915,27 @@ const buildInvokeSubagentTool = () => {
     function: {
       name: 'invoke_subagent',
       description:
-        'Передай задачу специализированному агенту (субагенту). Субагент имеет свой промпт, ' +
-        'набор инструментов и ограничения. Используй для узкоспециализированных задач, ' +
-        'где нужна экспертиза конкретного агента.\n\n' +
-        'ВАЖНО: Сначала выполни общие задачи сам (установка ПО, создание юзеров, настройка сервера), ' +
-        'затем вызови субагента для специфичной части.\n\n' +
-        'Доступные субагенты:\n' + buildSubagentListDescription(),
+        'Delegate the task to a specialized subagent. The subagent has its own prompt, ' +
+        'a set of tools and constraints. Use for highly specialized tasks ' +
+        'where a specific agent\'s expertise is needed.\\n\\n' +
+        'IMPORTANT: First complete the general tasks yourself (software installation, user creation, server setup), ' +
+        'then call the subagent for the specific part.\\n\\n' +
+        'Available subagents:\n' + buildSubagentListDescription(),
       parameters: {
         type: 'object',
         properties: {
           agent: {
             type: 'string',
-            description: 'Имя субагента',
+            description: 'Subagent name',
             enum: names,
           },
           task: {
             type: 'string',
-            description: 'Чёткое описание задачи для субагента',
+            description: 'Clear task description for the subagent',
           },
           context: {
             type: 'object',
-            description: 'Дополнительные данные для субагента (JSON-объект с контекстом)',
+            description: 'Additional data for the subagent (JSON object with context)',
           },
         },
         required: ['agent', 'task'],
@@ -2957,30 +2966,30 @@ const buildSpawnSubagentTool = (availableToolDefs?: any[]): any => {
     function: {
       name: 'spawn_subagent',
       description:
-        'Создай и запусти нового субагента «на лету» с твоим собственным системным промптом, ' +
-        'опциональным набором инструментов и лимитом итераций. Субагент выполнит узкую задачу и вернёт результат.\n\n' +
-        'Используй когда: задача требует специализированного подхода, отдельного анализа или конкретного набора инструментов, ' +
-        'и нет готового субагента в реестре. Субагент НЕ может вызывать других субагентов.\n\n' +
-        `Доступные инструменты для передачи субагенту: ${availableToolNames.join(', ')}`,
+        'Create and launch a new subagent on the fly with your own system prompt, ' +
+        'optional toolset and iteration limit. The subagent will complete a narrow task and return the result.\n\n' +
+        'Use when: the task requires a specialized approach, separate analysis, or a specific set of tools, ' +
+        'and no ready subagent exists in the registry. The subagent CANNOT call other subagents.\n\n' +
+        `Available tools to pass to the subagent: ${availableToolNames.join(', ')}`,
       parameters: {
         type: 'object',
         properties: {
           task: {
             type: 'string',
-            description: 'Чёткое описание задачи для субагента',
+            description: 'Clear task description for the subagent',
           },
           system_prompt: {
             type: 'string',
-            description: 'Системный промпт субагента — его роль, инструкции, ограничения. Если опустить — будет использован дефолтный промпт общего ассистента.',
+            description: 'Subagent system prompt — its role, instructions, constraints. If omitted — the default general assistant prompt will be used.',
           },
           tools: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Опциональный массив имён инструментов которые субагент может использовать. Если не указан или пустой, субагент работает без инструментов.',
+            description: 'Optional array of tool names the subagent can use. If not specified or empty, the subagent works without tools.',
           },
           max_loops: {
             type: 'number',
-            description: 'Максимум итераций цикла субагента (1–50, по умолчанию 20)',
+            description: 'Maximum loop iterations for the subagent (1–50, default 20)',
           },
         },
         required: ['task'],
@@ -2995,7 +3004,7 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
 export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null, streamCallbacks?: StreamCallbacks): Promise<CompletionMeta & { manualFallback?: boolean }> => {
-  // Если юзер выбрал конкретную модель — шлём напрямую, игнорируя mode
+  // If the user selected a specific model — send directly, ignoring mode
   if (manualModel) {
     try {
       const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks, [manualModel.id]);
@@ -3011,9 +3020,9 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
     } catch (err: any) {
       if (isAbortError(err)) throw err;
       console.warn(`[ai] manual model "${manualModel.apiModelName}" failed, falling back to auto`, err?.message || err);
-      // Не бросаем ошибку — fallback на обычный роутинг
-      // Продолжаем выполнение ниже как будто manualModel не задан
-      // При fallback на auto — modelSettings не применяются (только для ручной модели)
+      // Don't throw — fallback to normal routing
+      // Continue execution below as if manualModel was not set
+      // When falling back to auto — modelSettings are not applied (only for manual model)
       // При fallback на auto — стримКолбеки тоже не пробрасываем (см. ниже)
     }
   }
@@ -3089,7 +3098,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
   };
 };
 
-const hasSchedulingIntent = (text: string) => /\b(напомн|напоминани|таймер|по\s+расписанию|отложи|позже|завтра|послезавтра|ежедневно|еженедельно|кажд(ый|ую|ое|ые)|every\s+day|every\s+week)\b/i.test(text)
+const hasSchedulingIntent = (text: string) => /\b(напомн|напоминани|таймер|по\s+расписанию|отложи|позже|tomorrow|day after|daily|weekly|every day|every week|кажд(ый|ую|ое|ые)|every\s+day|every\s+week)\b/i.test(text)
   || /\bв\s*\d{1,2}:\d{2}\b/i.test(text)
   || /через\s+[^.,!?]{0,24}\b(секунд|секунду|секунды|сек|минут|минуту|минута|мин|час|часа|часов|ч|день|дня|дней|сутк|недел|месяц|месяца|месяцев)\b/i.test(text);
 
@@ -3120,7 +3129,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'search_web') {
     const query = `${parsed.query || ''}`.trim();
-    if (!query) return 'Ошибка инструмента: пустой поисковый запрос.';
+    if (!query) return 'Tool error: empty search query.';
     const webLimit = checkWebSearchLimit(user);
     if (!webLimit.allowed) return webLimit.reason;
     incrementUserWebSearchUsage(user.id, 1);
@@ -3129,11 +3138,11 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'read_webpage') {
     const url = `${parsed.url || ''}`.trim();
-    if (!url) return 'Ошибка инструмента: пустой URL.';
+    if (!url) return 'Tool error: empty URL.';
     try {
       return await getCleanTextFromUrl(url);
     } catch (err: any) {
-      return `Ошибка инструмента read_webpage: ${err?.message || String(err)}`;
+      return `Tool error read_webpage: ${err?.message || String(err)}`;
     }
   }
 
@@ -3149,16 +3158,16 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'get_my_tasks') {
     const status = ['pending', 'done', 'error', 'all'].includes(`${parsed.status || ''}`) ? parsed.status : 'pending';
     const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 20;
-    return formatTasksList(listTasks(user.id, limit, status), timezoneOffset, 'Задач не найдено.');
+    return formatTasksList(listTasks(user.id, limit, status), timezoneOffset, 'No tasks found.');
   }
 
   if (toolName === 'schedule_task') {
-    if (user.timezone_confirmed !== 1) return 'Ошибка планирования: часовой пояс пользователя не настроен. Попроси пользователя назвать город/страну или указать UTC-смещение, затем вызови set_user_timezone.';
+    if (user.timezone_confirmed !== 1) return 'Scheduling error: timezone is not configured. Ask the user to name a city/country or specify a UTC offset, then call set_user_timezone.';
 
     const taskType = `${parsed.task_type || ''}` as TaskType;
-    if (!['message', 'smart_home', 'ai_instruction'].includes(taskType)) return 'Ошибка: Некорректный task_type';
+    if (!['message', 'smart_home', 'ai_instruction'].includes(taskType)) return 'Error: Invalid task_type';
     let payload = `${parsed.payload || ''}`.trim();
-    if (!payload) return 'Ошибка: payload_required';
+    if (!payload) return 'Error: payload_required';
 
     // Для ai_instruction: упаковываем target_chat_id / create_new_chat в payload JSON
     if (taskType === 'ai_instruction') {
@@ -3181,18 +3190,18 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     const recurrenceType = `${parsed.recurrence_type || 'once'}` as TaskRecurrenceType;
-    if (!['once', 'daily', 'weekly'].includes(recurrenceType)) return 'Ошибка: Некорректный recurrence_type';
+    if (!['once', 'daily', 'weekly'].includes(recurrenceType)) return 'Error: Invalid recurrence_type';
 
     const recurrenceWeekday = Number.isFinite(Number(parsed.recurrence_weekday)) ? Math.floor(Number(parsed.recurrence_weekday)) : null;
-    if (recurrenceType === 'weekly' && (!recurrenceWeekday || recurrenceWeekday < 1 || recurrenceWeekday > 7)) return 'Ошибка: Для weekly укажи recurrence_weekday от 1 до 7 (1=понедельник).';
+    if (recurrenceType === 'weekly' && (!recurrenceWeekday || recurrenceWeekday < 1 || recurrenceWeekday > 7)) return 'Error: For weekly, specify recurrence_weekday from 1 to 7 (1=Monday).';
 
     const notifyMode = `${parsed.notify_mode || 'always'}` as TaskNotifyMode;
-    if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return 'Ошибка: Некорректный notify_mode';
+    if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return 'Error: Invalid notify_mode';
     const notifyCondition = parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim();
-    if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return 'Ошибка: Для notify_mode=on_match/on_condition укажи notify_condition.';
+    if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return 'Error: For notify_mode=on_match/on_condition, specify notify_condition.';
 
     if (getPendingTaskCount(user.id) >= MAX_PENDING_TASKS_PER_USER) {
-      return `Лимит активных задач: ${MAX_PENDING_TASKS_PER_USER}. Удали лишние через delete_my_task или /task_delete <id>.`;
+      return `Active task limit: ${MAX_PENDING_TASKS_PER_USER}. Remove extras via delete_my_task or /task_delete <id>.`;
     }
 
     if (taskType === 'smart_home') payload = JSON.stringify(JSON.parse(payload) as SmartHomeArgs);
@@ -3201,23 +3210,23 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     createTask(user.id, executeAt, taskType, payload, recurrenceType, recurrenceType === 'weekly' ? recurrenceWeekday : null, timezoneOffset, notifyMode, (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null);
     const planned = formatUnixForTimezone(executeAt, timezoneOffset);
     const notifyInfo = (notifyMode === 'on_match' || notifyMode === 'on_condition') ? `${notifyMode} (${notifyCondition})` : notifyMode;
-    return `Успешно запланировано. Следующий запуск: ${planned.local} (${planned.tzLabel}). UTC-время: ${planned.utc}. Тип расписания: ${recurrenceType}. Режим уведомлений: ${notifyInfo}.`;
+    return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Notification mode: ${notifyInfo}.`;
   }
 
   if (toolName === 'delete_my_task') {
     const taskId = Number(parsed.task_id);
-    if (!Number.isFinite(taskId) || taskId <= 0) return 'Ошибка: Некорректный task_id';
+    if (!Number.isFinite(taskId) || taskId <= 0) return 'Error: Invalid task_id';
 
     const normalizedTaskId = Math.floor(taskId);
     const task = getTaskByUserAndId(user.id, normalizedTaskId);
-    if (!task) return `Ошибка инструмента delete_my_task: Задача #${normalizedTaskId} не найдена.`;
-    if (task.status !== 'pending') return `Ошибка инструмента delete_my_task: Задача #${normalizedTaskId} уже не активна (status: ${task.status}).`;
+    if (!task) return `Tool error delete_my_task: Task #${normalizedTaskId} not found.`;
+    if (task.status !== 'pending') return `Tool error delete_my_task: Task #${normalizedTaskId} is no longer active (status: ${task.status}).`;
 
     const ok = deletePendingTask(user.id, normalizedTaskId);
-    if (!ok) return `Ошибка инструмента delete_my_task: Не удалось удалить задачу #${normalizedTaskId}.`;
+    if (!ok) return `Tool error delete_my_task: Failed to delete task #${normalizedTaskId}.`;
 
     const updated = listTasks(user.id, 20, 'pending');
-    return `Задача #${normalizedTaskId} удалена.\n\nОбновлённый список активных задач (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n${formatTasksList(updated, timezoneOffset, 'Активных задач больше нет.')}`;
+    return `Task #${normalizedTaskId} deleted.\n\nUpdated active task list (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n${formatTasksList(updated, timezoneOffset, 'No more active tasks.')}`;
   }
 
   if (toolName === 'list_mail_accounts') {
@@ -3251,7 +3260,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const mailAccountId = Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined;
 
     // Basic validation before asking user
-    if (!to || !subject || !body) return JSON.stringify({ status: 'error', message: 'Нужны to, subject и body.' });
+    if (!to || !subject || !body) return JSON.stringify({ status: 'error', message: 'to, subject and body are required.' });
 
     // Determine sender address for preview — same logic as runEmailSend uses
     let fromAddress = '';
@@ -3289,7 +3298,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       emailSent = true;
     }
     if (!emailSent) {
-      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение отправки письма невозможно.' });
+      return JSON.stringify({ status: 'error', message: 'No client is connected. Email confirmation impossible.' });
     }
 
     // Auto-reject in scheduler mode
@@ -3313,43 +3322,43 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           createdAt: Date.now()
         });
       });
-      return typeof result === 'string' ? result : JSON.stringify({ status: 'success', message: 'Письмо отправлено.', to, subject });
+      return typeof result === 'string' ? result : JSON.stringify({ status: 'success', message: 'Email sent.', to, subject });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил отправку письма.', to, subject }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected sending the email.', to, subject }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', to, subject });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', to, subject });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка подтверждения: ${err?.message || String(err)}`, to, subject });
+      return JSON.stringify({ status: 'error', message: `Confirmation error: ${err?.message || String(err)}`, to, subject });
     }
   }
   if (toolName === 'search_cold_memory') {
     const query = typeof parsed.query === 'string' ? parsed.query : '';
     const topK = Number.isFinite(Number(parsed.top_k)) ? Number(parsed.top_k) : 5;
     const result = await VectorMemoryService.search(user.id, query, topK);
-    if (!result.matches.length) return `По запросу "${query}" в памяти ничего не найдено.`;
+    if (!result.matches.length) return `No results found in memory for query "${query}".`;
     const matchesWithIds = result.matches
-      .map(match => `[chunk_id: ${match.chunk_id}]\n[Источник: ${match.source || 'unknown'}]\n${match.text}`)
+      .map(match => `[chunk_id: ${match.chunk_id}]\n[Source: ${match.source || 'unknown'}]\n${match.text}`)
       .join('\n\n---\n\n');
-    return `Найдено в архиве:\n${matchesWithIds}`;
+    return `Found in archive:\n${matchesWithIds}`;
   }
   if (toolName === 'save_to_cold_memory') {
     const textToSave = typeof parsed.text === 'string' ? parsed.text : '';
     const source = typeof parsed.source === 'string' ? parsed.source : 'manual';
     const result = await VectorMemoryService.saveFactBatched(user.id, textToSave, source);
-    return `Успешно сохранено в архив (${result.chunks_saved} фрагментов).`;
+    return `Successfully saved to archive (${result.chunks_saved} fragments).`;
   }
   if (toolName === 'delete_from_cold_memory') {
     const chunkId = typeof parsed.chunk_id === 'string' ? parsed.chunk_id : '';
     const result = await VectorMemoryService.deleteChunk(user.id, chunkId);
-    return `Запись [${result.record_id}] успешно удалена из памяти (${result.chunks_deleted} фрагментов).`;
+    return `Record [${result.record_id}] successfully deleted from memory (${result.chunks_deleted} fragments).`;
   }
   if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
 
   if (toolName === 'generate_image') {
     const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
-    if (!prompt) return 'Ошибка: пустой промпт для генерации изображения.';
+    if (!prompt) return 'Error: empty prompt for image generation.';
 
     // Collect reference images by URL(s) from chat history or current message
     let selectedImages: Array<{ base64: string; mimeType: string }> = [];
@@ -3377,7 +3386,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     selectedImages = selectedImages.slice(0, 3);
 
     const result = await runImageGeneration(user.id, prompt, selectedImages.length > 0 ? selectedImages : undefined);
-    if (!result.ok) return `Ошибка генерации изображения: ${(result as any).error || 'unknown'}`;
+    if (!result.ok) return `Image generation error: ${(result as any).error || 'unknown'}`;
     // base64 НЕ возвращаем в tool_content — он сохраняется в массив generatedImages
     // LLM получает текстовую заглушку, чтобы не забивать контекст мегабайтами base64
     if (Array.isArray(generatedImages)) {
@@ -3392,7 +3401,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
       generatedImages.push({ image_base64: result.image_base64, image_url: imageUrl, prompt_used: result.prompt_used });
     }
-    return JSON.stringify({ status: 'success', message: 'Изображение успешно сгенерировано и будет отправлено пользователю. Опиши результат своими словами.' });
+    return JSON.stringify({ status: 'success', message: 'Image generated successfully and will be sent to the user. Describe the result in your own words.' });
   }
 
   if (toolName === 'create_pixel_image') {
@@ -3409,10 +3418,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         displayStateSink.value = { mode: 'media', media_url: result.original.url };
       }
 
-      return JSON.stringify({ status: 'success', message: 'Пиксель-арт изображение создано и будет отправлено пользователю. Опиши результат своими словами.' });
+      return JSON.stringify({ status: 'success', message: 'Pixel art image created and will be sent to the user. Describe the result in your own words.' });
     } catch (err) {
       console.error('[create_pixel_image] error:', err);
-      return `Ошибка создания пиксель-арт: ${err instanceof Error ? err.message : 'unknown'}`;
+      return `Pixel art creation error: ${err instanceof Error ? err.message : 'unknown'}`;
     }
   }
 
@@ -3425,7 +3434,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (typeof parsed.loop_reaction === 'string' && parsed.loop_reaction.trim()) state.loop_reaction = parsed.loop_reaction.trim();
     if (parsed.clear_loop === true) state.clear_loop = true;
     if (displayStateSink) displayStateSink.value = state;
-    return JSON.stringify({ status: 'success', message: 'Состояние аватара обновлено.' });
+    return JSON.stringify({ status: 'success', message: 'Avatar state updated.' });
   }
 
   if (toolName === 'map_control') {
@@ -3440,7 +3449,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           headers: { 'User-Agent': 'ChatterBot/1.0' },
         });
         const geoData = await geoRes.json() as any[];
-        if (!geoData.length) return JSON.stringify({ status: 'error', message: `Не удалось найти место: ${query}` });
+        if (!geoData.length) return JSON.stringify({ status: 'error', message: `Could not find place: ${query}` });
         const lat = parseFloat(geoData[0].lat);
         const lng = parseFloat(geoData[0].lon);
         if (mapUpdateSink) mapUpdateSink.value = { action: 'show_place', lat, lng, label: query };
@@ -3456,8 +3465,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fromQuery)}&format=json&limit=1`, { headers: { 'User-Agent': 'ChatterBot/1.0' } }).then(r => r.json()).then(d => d as any[]),
           fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(toQuery)}&format=json&limit=1`, { headers: { 'User-Agent': 'ChatterBot/1.0' } }).then(r => r.json()).then(d => d as any[]),
         ]);
-        if (!fromRes.length) return JSON.stringify({ status: 'error', message: `Не удалось найти: ${fromQuery}` });
-        if (!toRes.length) return JSON.stringify({ status: 'error', message: `Не удалось найти: ${toQuery}` });
+        if (!fromRes.length) return JSON.stringify({ status: 'error', message: `Could not find: ${fromQuery}` });
+        if (!toRes.length) return JSON.stringify({ status: 'error', message: `Could not find: ${toQuery}` });
 
         const fromLat = parseFloat(fromRes[0].lat);
         const fromLng = parseFloat(fromRes[0].lon);
@@ -3468,7 +3477,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         const routeUrl = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?geometries=geojson`;
         const routeRes = await fetch(routeUrl);
         const routeData = await routeRes.json() as any;
-        if (!routeData.routes?.length) return JSON.stringify({ status: 'error', message: 'Не удалось построить маршрут' });
+        if (!routeData.routes?.length) return JSON.stringify({ status: 'error', message: 'Could not build route' });
 
         // Convert [lng,lat] → [lat,lng] for Leaflet
         const coords: [number, number][] = routeData.routes[0].geometry.coordinates.map(
@@ -3494,7 +3503,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'get_map_pins') {
     const pins = listMapPinsForBot(user.id);
-    if (pins.length === 0) return JSON.stringify({ status: 'success', pins: [], message: 'У пользователя нет сохранённых меток.' });
+    if (pins.length === 0) return JSON.stringify({ status: 'success', pins: [], message: 'User has no saved pins.' });
     return JSON.stringify({ status: 'success', pins, count: pins.length });
   }
 
@@ -3505,7 +3514,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const toLon = typeof parsed.to_lon === 'number' ? parsed.to_lon : NaN;
 
     if ([fromLat, fromLon, toLat, toLon].some(isNaN)) {
-      return JSON.stringify({ status: 'error', message: 'from_lat, from_lon, to_lat, to_lon — обязательные числовые координаты' });
+      return JSON.stringify({ status: 'error', message: 'from_lat, from_lon, to_lat, to_lon — required numeric coordinates' });
     }
 
     const radius = typeof parsed.radius_meters === 'number' ? parsed.radius_meters : 500;
@@ -3516,7 +3525,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       if (variants.length === 0) {
         return JSON.stringify({
           status: 'success',
-          message: 'Общественный транспорт не найден в этом районе. Попробуйте указать более точные координаты, увеличить радиус или другой район.',
+          message: 'No public transport found in this area. Try specifying more precise coordinates, increasing the radius, or a different area.',
           variants: [],
         });
       }
@@ -3558,10 +3567,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         status: 'success',
         variantsFound: variants.length,
         variants: descriptions,
-        message: `Найдено ${variants.length} маршрут(ов). Лучший: ${best.routeName} — идти пешком ${best.totalWalkingMeters}м, ехать ${best.stopsToRideCount} остановок от "${best.pickupStop.name}" до "${best.dropoffStop.name}".`,
+        message: `Found ${variants.length} route(s). Best: ${best.routeName} — walk ${best.totalWalkingMeters}m, ride ${best.stopsToRideCount} stops from "${best.pickupStop.name}" to "${best.dropoffStop.name}".`,
       });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка поиска транспорта: ${err?.message || String(err)}` });
+      return JSON.stringify({ status: 'error', message: `Transit search error: ${err?.message || String(err)}` });
     }
   }
 
@@ -3572,10 +3581,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const radius = typeof parsed.radius_meters === 'number' ? parsed.radius_meters : 3000;
 
     if (isNaN(lat) || isNaN(lng)) {
-      return JSON.stringify({ status: 'error', message: 'latitude и longitude — обязательные числовые координаты' });
+      return JSON.stringify({ status: 'error', message: 'latitude and longitude — required numeric coordinates' });
     }
     if (!query) {
-      return JSON.stringify({ status: 'error', message: 'query — обязательный параметр (что искать)' });
+      return JSON.stringify({ status: 'error', message: 'query — required parameter (what to search for)' });
     }
 
     try {
@@ -3584,7 +3593,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       if (places.length === 0) {
         return JSON.stringify({
           status: 'success',
-          message: `Ничего не найдено по запросу "${query}" в радиусе ${radius}м. Попробуйте увеличить радиус или изменить запрос.`,
+          message: `Nothing found for "${query}" within ${radius}m radius. Try increasing the radius or changing the query.`,
           places: [],
         });
       }
@@ -3617,10 +3626,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         radius,
         placesFound: places.length,
         places: descriptions,
-        message: `Найдено ${places.length} объектов по запросу "${query}".`,
+        message: `Found ${places.length} places for "${query}".`,
       });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка поиска: ${err?.message || String(err)}` });
+      return JSON.stringify({ status: 'error', message: `Search error: ${err?.message || String(err)}` });
     }
   }
 
@@ -3628,7 +3637,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'list_my_macros') {
     if (!activeMacros || activeMacros.length === 0) {
-      return JSON.stringify({ macros: [], message: 'У пользователя нет активных макросов.' });
+      return JSON.stringify({ macros: [], message: 'User has no active macros.' });
     }
     return JSON.stringify({
       macros: activeMacros.map(m => ({
@@ -3637,7 +3646,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         description: m.description || '',
         commands: m.commands,
       })),
-      message: `Найдено ${activeMacros.length} макросов. Используй execute_macro чтобы запустить нужный.`
+      message: `Found ${activeMacros.length} macros. Use execute_macro to run the desired one.`
     });
   }
 
@@ -3646,7 +3655,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const macroName: string | undefined = typeof parsed.macro_name === 'string' ? parsed.macro_name : undefined;
 
     if (!macroId && !macroName) {
-      return JSON.stringify({ status: 'error', message: 'macro_id или macro_name обязателен' });
+      return JSON.stringify({ status: 'error', message: 'macro_id or macro_name is required' });
     }
 
     // Find the macro to include its commands in the payload
@@ -3656,7 +3665,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
 
     if (!matchedMacro) {
-      return JSON.stringify({ status: 'error', message: `Макрос не найден${macroId ? ` (id=${macroId})` : macroName ? ` (${macroName})` : ''}` });
+      return JSON.stringify({ status: 'error', message: `Macro not found${macroId ? ` (id=${macroId})` : macroName ? ` (${macroName})` : ''}` });
     }
 
     // If macro requires output — must have desktop online via WS
@@ -3670,7 +3679,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           return JSON.stringify({ status: 'error', message: err.message, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
         }
       } else {
-        return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Невозможно выполнить макрос с возвратом вывода — попроси пользователя запустить приложение на ПК.', macro_id: matchedMacro.id, macro_name: matchedMacro.title });
+        return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Cannot execute macro with output return — ask the user to launch the desktop app.', macro_id: matchedMacro.id, macro_name: matchedMacro.title });
       }
     }
 
@@ -3681,18 +3690,18 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Макрос "${matchedMacro.title}" отправлен на выполнение.`, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
+    return JSON.stringify({ status: 'success', message: `Macro "${matchedMacro.title}" sent for execution.`, macro_id: matchedMacro.id, macro_name: matchedMacro.title });
   }
 
   if (toolName === 'explore_fs') {
     const targetPath: string = typeof parsed.target_path === 'string' ? parsed.target_path : '';
-    if (!targetPath) return JSON.stringify({ status: 'error', message: 'target_path обязателен' });
+    if (!targetPath) return JSON.stringify({ status: 'error', message: 'target_path is required' });
 
     // Check if user has enabled fs scan
     const { getPcCommandsSettings } = await import('./pc-commands.js');
     const pcSettings = getPcCommandsSettings(user.id);
     if (!pcSettings.fs_scan_enabled) {
-      return JSON.stringify({ status: 'error', message: 'Чтение файловой системы отключено в настройках "Управление ПК". Попроси пользователя включить галочку "Разрешить ИИ сканировать файловую систему".' });
+      return JSON.stringify({ status: 'error', message: 'File system scanning is disabled in "PC Control" settings. Ask the user to enable the "Allow AI to scan file system" checkbox.' });
     }
 
     // If desktop is connected via WS — wait for result
@@ -3709,22 +3718,22 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const payload: DesktopActionPayload = { action: 'execute_macro', target: '__explore_fs__', value: { target_path: targetPath } };
     if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Запрос на чтение директории "${targetPath}" отправлен. Результат чтения будет доступен после подключения десктопа через WebSocket.`, target_path: targetPath });
+    return JSON.stringify({ status: 'success', message: `Directory read request for "${targetPath}" sent. The read result will be available once the desktop connects via WebSocket.`, target_path: targetPath });
   }
 
   if (toolName === 'get_file_info') {
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
-    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path is required' });
     const includeLineCount = parsed.include_line_count === true;
 
     const { getPcCommandsSettings } = await import('./pc-commands.js');
     const pcSettings = getPcCommandsSettings(user.id);
     if (!pcSettings.fs_scan_enabled) {
-      return JSON.stringify({ status: 'error', message: 'Чтение файловой системы отключено в настройках "Управление ПК". Попроси пользователя включить галочку "Разрешить ИИ сканировать файловую систему".' });
+      return JSON.stringify({ status: 'error', message: 'File system scanning is disabled in "PC Control" settings. Ask the user to enable the "Allow AI to scan file system" checkbox.' });
     }
 
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Получение информации о файле невозможно — попроси пользователя запустить приложение.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Cannot get file info — ask the user to launch the app.' });
     }
 
     try {
@@ -3739,7 +3748,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'list_monitors') {
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline.' });
     }
     try {
       const result = await sendIpcToDesktop(user.id, 'capture_screen', {}, 15000, signal);
@@ -3751,7 +3760,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }));
       return JSON.stringify({ status: 'success', monitors });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка получения мониторов: ${err.message}` });
+      return JSON.stringify({ status: 'error', message: `Monitor retrieval error: ${err.message}` });
     }
   }
 
@@ -3759,26 +3768,26 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'capture_screen') {
     const purpose: string = typeof parsed.purpose === 'string' ? parsed.purpose.trim() : '';
-    if (!purpose) return JSON.stringify({ status: 'error', message: 'purpose обязателен — укажи что найти или описать на экране.' });
+    if (!purpose) return JSON.stringify({ status: 'error', message: 'purpose is required — specify what to find or describe on the screen.' });
 
     const requestedDisplayId: string = typeof parsed.display_id === 'string' ? parsed.display_id.trim() : '';
 
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Скриншот невозможен — попроси пользователя запустить приложение.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Screenshot is impossible — ask the user to launch the app.' });
     }
     try {
       // 1. Capture screenshots from desktop
       const result = await sendIpcToDesktop(user.id, 'capture_screen', {}, 30000, signal);
       let displays: any[] = result.displays || [];
       if (displays.length === 0) {
-        return JSON.stringify({ status: 'error', message: 'Не удалось получить скриншоты мониторов.' });
+        return JSON.stringify({ status: 'error', message: 'Failed to capture monitor screenshots.' });
       }
 
       // Filter by display_id if specified
       if (requestedDisplayId) {
         const filtered = displays.filter((d: any) => d.display_id === requestedDisplayId);
         if (filtered.length === 0) {
-          return JSON.stringify({ status: 'error', message: `Монитор с display_id="${requestedDisplayId}" не найден. Доступные: ${displays.map((d: any) => d.display_id).join(', ')}` });
+          return JSON.stringify({ status: 'error', message: `Monitor with display_id="${requestedDisplayId}" not found. Available: ${displays.map((d: any) => d.display_id).join(', ')}` });
         }
         displays = filtered;
       }
@@ -3806,7 +3815,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
               generatedImages.push({
                 image_base64: compressedB64,
                 image_url: saved.url,
-                prompt_used: `Скриншот экрана: ${disp.name || disp.display_id}`,
+                prompt_used: `Screen screenshot: ${disp.name || disp.display_id}`,
               });
             } catch (err) {
               console.error('[capture_screen] failed to save screenshot:', err);
@@ -3818,7 +3827,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
 
       if (captures.length === 0) {
-        return JSON.stringify({ status: 'error', message: 'Не удалось обработать скриншоты.' });
+        return JSON.stringify({ status: 'error', message: 'Failed to process screenshots.' });
       }
 
       // 3. Send each screenshot to vision model with purpose
@@ -3828,10 +3837,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           const visionMessages = [
             {
               role: 'system',
-              content: `Ты — vision-аналитик. Проанализируй скриншот экрана пользователя и выполни задачу.
-Если нужно найти элемент — верни координаты в нормализованном виде (0.0–1.0), где (0,0) левый верхний угол, (1,1) правый нижний.
-Формат ответа для координат: {"display_id": "...", "x": 0.5, "y": 0.5, "description": "..."}
-Если задача — описание, верни подробный текстовый ответ.`
+              content: `You are a vision analyst. Analyze the user's screen screenshot and complete the task.
+If you need to find an element — return coordinates in normalized form (0.0–1.0), where (0,0) is the top-left corner and (1,1) is the bottom-right.
+Response format for coordinates: {"display_id": "...", "x": 0.5, "y": 0.5, "description": "..."}
+If the task is a description, return a detailed text response.`
             },
             {
               role: 'user',
@@ -3850,7 +3859,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
           visionResults.push({ display_id: cap.display_id, name: cap.name, result: visionText });
         } catch (err: any) {
-          visionResults.push({ display_id: cap.display_id, name: cap.name, result: `Ошибка vision: ${err.message}` });
+          visionResults.push({ display_id: cap.display_id, name: cap.name, result: `Vision error: ${err.message}` });
         }
       }
 
@@ -3865,10 +3874,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         status: 'success',
         displays: displayInfo,
         vision_results: visionResults,
-        message: `Скриншоты сделаны и проанализированы. Используй координаты из vision_results для execute_visual_click если нужен клик.`,
+        message: `Screenshots taken and analyzed. Use coordinates from vision_results for execute_visual_click if a click is needed.`,
       });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка скриншота: ${err.message}` });
+      return JSON.stringify({ status: 'error', message: `Screenshot error: ${err.message}` });
     }
   }
 
@@ -3876,11 +3885,11 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   // ── Visual Control: capture webcam photo (always HitL) ──────────────────────
 
   if (toolName === 'capture_webcam') {
-    const purpose: string = typeof parsed.purpose === 'string' ? parsed.purpose.trim() : 'Опиши что видит камера';
+    const purpose: string = typeof parsed.purpose === 'string' ? parsed.purpose.trim() : 'Describe what the camera sees';
     const cameraName: string | undefined = typeof parsed.camera_name === 'string' ? parsed.camera_name.trim() || undefined : undefined;
 
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Захват с веб-камеры невозможен — попроси пользователя запустить приложение.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Webcam capture is impossible — ask the user to launch the app.' });
     }
 
     // Auto-reject in scheduler mode
@@ -3895,7 +3904,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       registerPendingPcConfirmation(confirmationId, {
         userId: user.id,
         kind: 'webcam_capture',
-        label: `Фото с веб-камеры: ${purpose}`,
+        label: `Webcam photo: ${purpose}`,
         payload: { ipcType: 'capture_webcam', ipcPayload: { camera_name: cameraName, purpose } },
         resolve,
         reject,
@@ -3938,7 +3947,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     if (!sent) {
       deletePendingPcConfirmation(confirmationId);
-      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.' });
+      return JSON.stringify({ status: 'error', message: 'Failed to deliver confirmation. No client is available.' });
     }
 
     try {
@@ -3948,7 +3957,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       const captureResult = await sendIpcToDesktop(user.id, 'capture_webcam', { camera_name: cameraName }, 30000, signal);
 
       if (!captureResult?.screenshot_base64) {
-        return JSON.stringify({ status: 'error', message: captureResult?.error || 'Не удалось сделать фото с веб-камеры. Камера может быть занята или отключена.' });
+        return JSON.stringify({ status: 'error', message: captureResult?.error || 'Failed to take a webcam photo. The camera may be busy or disconnected.' });
       }
 
       // Compress via sharp → JPEG
@@ -3970,7 +3979,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           generatedImages.push({
             image_base64: compressedB64,
             image_url: saved.url,
-            prompt_used: `Фото с веб-камеры: ${captureResult.camera || 'default'}`,
+            prompt_used: `Webcam photo: ${captureResult.camera || 'default'}`,
           });
         } catch (err) {
           console.error('[capture_webcam] failed to save webcam photo:', err);
@@ -3981,7 +3990,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       const visionMessages = [
         {
           role: 'system',
-          content: `Ты — vision-аналитик. Проанализируй фото с веб-камеры пользователя и выполни задачу. Опиши подробно что видишь на изображении: объекты, людей, освещение, обстановку.`
+          content: `You are a vision analyst. Analyze the user's webcam photo and complete the task. Describe in detail what you see in the image: objects, people, lighting, environment.`
         },
         {
           role: 'user',
@@ -4003,16 +4012,16 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         status: 'success',
         camera: captureResult.camera || 'default',
         vision_result: visionText,
-        message: `Фото с веб-камеры сделано и проанализировано.`,
+        message: `Webcam photo taken and analyzed.`,
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил захват с веб-камеры.' }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected webcam capture.' }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).' });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).' });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка захвата с веб-камеры: ${err?.message || String(err)}` });
+      return JSON.stringify({ status: 'error', message: `Webcam capture error: ${err?.message || String(err)}` });
     }
   }
 
@@ -4024,7 +4033,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const imageIndex: number | undefined = typeof parsed.image_index === 'number' ? Math.floor(parsed.image_index) : undefined;
     const imageUrl: string | undefined = typeof parsed.image_url === 'string' ? parsed.image_url.trim() || undefined : undefined;
 
-    if (!question) return JSON.stringify({ status: 'error', message: 'question обязателен — укажи что нужно узнать об изображении.' });
+    if (!question) return JSON.stringify({ status: 'error', message: 'question is required — specify what you need to know about the image.' });
 
     try {
       // Collect images to analyze.
@@ -4037,11 +4046,11 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         const { resolveImageFile, filenameFromUrl } = await import('./image-storage.js');
         const filename = filenameFromUrl(imageUrl);
         if (!filename) {
-          return JSON.stringify({ status: 'error', message: `Некорректный URL изображения: ${imageUrl}` });
+          return JSON.stringify({ status: 'error', message: `Invalid image URL: ${imageUrl}` });
         }
         const filepath = resolveImageFile(filename);
         if (!filepath) {
-          return JSON.stringify({ status: 'error', message: `Файл изображения не найден: ${imageUrl}` });
+          return JSON.stringify({ status: 'error', message: `Image file not found: ${imageUrl}` });
         }
         const fs = await import('node:fs');
         const nodePath = await import('node:path');
@@ -4057,7 +4066,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
 
       if (imagesToAnalyze.length === 0) {
-        return JSON.stringify({ status: 'error', message: 'Изображение недоступно. Возможно, оно было удалено или ещё не сохранено.' });
+        return JSON.stringify({ status: 'error', message: 'Image is unavailable. It may have been deleted or not yet saved.' });
       }
 
       const visionMessages = [
@@ -4091,7 +4100,7 @@ Respond in the user's language. Be detailed and precise.`
         vision_result: visionText,
       });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка анализа изображения: ${err?.message || String(err)}` });
+      return JSON.stringify({ status: 'error', message: `Image analysis error: ${err?.message || String(err)}` });
     }
   }
 
@@ -4104,18 +4113,18 @@ Respond in the user's language. Be detailed and precise.`
     const clickX: number = typeof parsed.x === 'number' ? parsed.x : NaN;
     const clickY: number = typeof parsed.y === 'number' ? parsed.y : NaN;
     const clickButton: string = parsed.button === 'right' ? 'right' : 'left';
-    const reason: string = typeof parsed.reason === 'string' ? parsed.reason : 'Клик по экрану';
+    const reason: string = typeof parsed.reason === 'string' ? parsed.reason : 'Screen click';
 
-    if (!displayId) return JSON.stringify({ status: 'error', message: 'display_id обязателен. Сначала вызови capture_screen.' });
-    if (!Number.isFinite(clickX) || !Number.isFinite(clickY)) return JSON.stringify({ status: 'error', message: 'x и y обязательны (0.0–1.0)' });
+    if (!displayId) return JSON.stringify({ status: 'error', message: 'display_id is required. Call capture_screen first.' });
+    if (!Number.isFinite(clickX) || !Number.isFinite(clickY)) return JSON.stringify({ status: 'error', message: 'x and y are required (0.0–1.0)' });
 
     // Validate ranges
     if (clickX < 0 || clickX > 1 || clickY < 0 || clickY > 1) {
-      return JSON.stringify({ status: 'error', message: 'Координаты должны быть в диапазоне 0.0–1.0' });
+      return JSON.stringify({ status: 'error', message: 'Coordinates must be in range 0.0–1.0' });
     }
 
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Клик невозможен.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Click is impossible.' });
     }
 
     // Needs user confirmation — HitL
@@ -4215,20 +4224,20 @@ Respond in the user's language. Be detailed and precise.`
 
     if (!sent) {
       deletePendingVisualClick(confirmationId);
-      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.' });
+      return JSON.stringify({ status: 'error', message: 'Failed to deliver confirmation. No client is available.' });
     }
 
     try {
       const result = await waitForHitlConfirmation(user.id, confirmationPromise);
-      return JSON.stringify({ status: 'success', message: `Клик выполнен: ${reason}`, x: result.x, y: result.y, button: result.button });
+      return JSON.stringify({ status: 'success', message: `Click performed: ${reason}`, x: result.x, y: result.y, button: result.button });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил клик.' }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected the click.' }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (60 секунд).' });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (60 seconds).' });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка: ${err?.message || String(err)}` });
+      return JSON.stringify({ status: 'error', message: `Error: ${err?.message || String(err)}` });
     }
   }
 
@@ -4238,7 +4247,7 @@ Respond in the user's language. Be detailed and precise.`
     const commands: string[] = Array.isArray(parsed.commands) ? parsed.commands.filter((c: unknown) => typeof c === 'string') : [];
 
     if (!title || commands.length === 0) {
-      return JSON.stringify({ status: 'error', message: 'title и commands обязательны' });
+      return JSON.stringify({ status: 'error', message: 'title and commands are required' });
     }
 
     const payload: DesktopActionPayload = {
@@ -4247,7 +4256,7 @@ Respond in the user's language. Be detailed and precise.`
     };
     if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Предложение макроса "${title}" отправлено.`, title, commands });
+    return JSON.stringify({ status: 'success', message: `Macro suggestion "${title}" sent.`, title, commands });
   }
 
   // ── DevOps: list servers ────────────────────────────────────────────────────
@@ -4257,7 +4266,7 @@ Respond in the user's language. Be detailed and precise.`
     const servers = listServers(user.id);
     const sshKeys = listSshKeys(user.id);
     if (servers.length === 0) {
-      return JSON.stringify({ status: 'info', message: 'У пользователя нет добавленных серверов. Попроси его добавить сервер в настройках (вкладка "Серверы").' });
+      return JSON.stringify({ status: 'info', message: 'User has no servers added. Ask them to add a server in settings ("Servers" tab).' });
     }
     return JSON.stringify({
       status: 'success',
@@ -4272,12 +4281,12 @@ Respond in the user's language. Be detailed and precise.`
     const serverId: number | undefined = typeof parsed.server_id === 'number' ? parsed.server_id : undefined;
     const command: string = typeof parsed.command === 'string' ? parsed.command.trim() : '';
 
-    if (!serverId) return JSON.stringify({ status: 'error', message: 'server_id обязателен' });
-    if (!command) return JSON.stringify({ status: 'error', message: 'command обязательна' });
+    if (!serverId) return JSON.stringify({ status: 'error', message: 'server_id is required' });
+    if (!command) return JSON.stringify({ status: 'error', message: 'command is required' });
 
     const { getServerById, isAutoApproved, serverHasSudoPassword } = await import('./devops.js');
     const server = getServerById(user.id, serverId);
-    if (!server) return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден. Вызови list_devops_servers для списка доступных.` });
+    if (!server) return JSON.stringify({ status: 'error', message: `Server with id=${serverId} not found. Call list_devops_servers for the list of available servers.` });
 
     // Check if command is auto-approved: by policy or by server-level auto_approve_all flag
     const autoOk = server.auto_approve_all || isAutoApproved(user.id, serverId, command);
@@ -4299,7 +4308,7 @@ Respond in the user's language. Be detailed and precise.`
           exit_code: result.exitCode
         });
       } catch (err: any) {
-        return JSON.stringify({ status: 'error', message: `SSH ошибка: ${err?.message || String(err)}`, server: server.name, command });
+        return JSON.stringify({ status: 'error', message: `SSH error: ${err?.message || String(err)}`, server: server.name, command });
       }
     }
 
@@ -4326,7 +4335,7 @@ Respond in the user's language. Be detailed and precise.`
       devopsSent = true;
     }
     if (!devopsSent) {
-      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение команды невозможно.' });
+      return JSON.stringify({ status: 'error', message: 'No client is connected. Command confirmation impossible.' });
     }
 
     // Wait for user response via WS → POST /api/v1/devops/approve
@@ -4353,12 +4362,12 @@ Respond in the user's language. Be detailed and precise.`
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', server: server.name, command }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected command execution.', server: server.name, command }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, command });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', server: server.name, command });
       }
-      return JSON.stringify({ status: 'error', message: `SSH ошибка: ${err?.message || String(err)}`, server: server.name, command });
+      return JSON.stringify({ status: 'error', message: `SSH error: ${err?.message || String(err)}`, server: server.name, command });
     }
   }
 
@@ -4367,7 +4376,7 @@ Respond in the user's language. Be detailed and precise.`
   if (toolName === 'execute_pc_command') {
     const command: string = typeof parsed.command === 'string' ? parsed.command.trim() : '';
     const background = parsed.background === true;
-    if (!command) return JSON.stringify({ status: 'error', message: 'command обязательна' });
+    if (!command) return JSON.stringify({ status: 'error', message: 'command is required' });
 
     // Block dangerous commands (Linux + Windows)
     const dangerousPcPatterns = [
@@ -4385,12 +4394,12 @@ Respond in the user's language. Be detailed and precise.`
       /\brmdir\s+\/s\s+\/q/i,
     ];
     if (dangerousPcPatterns.some(p => p.test(command))) {
-      return JSON.stringify({ status: 'error', message: 'Команда заблокирована как потенциально опасная. Это ограничение безопасности, его нельзя обойти.' });
+      return JSON.stringify({ status: 'error', message: 'Command blocked as potentially dangerous. This is a security restriction and cannot be bypassed.' });
     }
 
     // Desktop must be online
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Выполнение команды на ПК невозможно — попроси пользователя запустить приложение.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Cannot execute command on PC — ask the user to launch the app.' });
     }
 
     // Check auto-approve: settings + policies
@@ -4419,7 +4428,7 @@ Respond in the user's language. Be detailed and precise.`
           output: limitPcCommandOutput(output),
         });
       } catch (err: any) {
-        return JSON.stringify({ status: 'error', message: `Ошибка выполнения: ${err?.message || String(err)}`, command });
+        return JSON.stringify({ status: 'error', message: `Execution error: ${err?.message || String(err)}`, command });
       }
     }
 
@@ -4481,7 +4490,7 @@ Respond in the user's language. Be detailed and precise.`
       deletePendingPcConfirmation(confirmationId);
       return JSON.stringify({
         status: 'error',
-        message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.',
+        message: 'Failed to deliver confirmation. No client is available.',
         command,
       });
     }
@@ -4498,12 +4507,12 @@ Respond in the user's language. Be detailed and precise.`
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил выполнение команды.', command }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected command execution.', command }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', command });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', command });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка выполнения: ${err?.message || String(err)}`, command });
+      return JSON.stringify({ status: 'error', message: `Execution error: ${err?.message || String(err)}`, command });
     }
   }
 
@@ -4511,27 +4520,35 @@ Respond in the user's language. Be detailed and precise.`
 
   if (toolName === 'read_file') {
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
-    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path is required' });
 
-    const startLine = typeof parsed.start_line === 'number' && parsed.start_line > 0 ? Math.floor(parsed.start_line) : 1;
-    const maxLines = typeof parsed.max_lines === 'number' && parsed.max_lines > 0 ? Math.min(Math.floor(parsed.max_lines), 2000) : 500;
+    const requestedStartLine = typeof parsed.offset === 'number' ? parsed.offset : parsed.start_line;
+    const requestedMaxLines = typeof parsed.limit === 'number' ? parsed.limit : parsed.max_lines;
+    const startLine = typeof requestedStartLine === 'number' && requestedStartLine > 0 ? Math.floor(requestedStartLine) : 1;
+    const maxLines = typeof requestedMaxLines === 'number' && requestedMaxLines > 0 ? Math.min(Math.floor(requestedMaxLines), 2000) : 500;
     const lineNumbers = parsed.line_numbers === true;
     const buildReadSuccess = async (result: unknown) => {
       const normalizedResult = typeof result === 'object' && result !== null
         ? result as Record<string, unknown>
         : { content: typeof result === 'string' ? result : JSON.stringify(result) };
       const snapshotId = await addFileReadSnapshot(user.id, filePath, startLine, result);
+      const readLines = Number(normalizedResult.read_lines);
+      const totalLines = Number(normalizedResult.total_lines);
+      const nextOffset = Number.isFinite(readLines) && Number.isFinite(totalLines) && startLine + readLines <= totalLines
+        ? startLine + readLines
+        : null;
       return JSON.stringify({
         status: 'success',
         file_path: filePath,
         ...normalizedResult,
+        next_offset: nextOffset,
         ...(snapshotId ? { snapshot_id: snapshotId } : {}),
       });
     };
 
     // Desktop must be online
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Чтение файла невозможно — попроси пользователя запустить приложение.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Cannot read file — ask the user to launch the app.' });
     }
 
     // Check if reads without confirmation are allowed
@@ -4544,7 +4561,7 @@ Respond in the user's language. Be detailed and precise.`
         const result = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: startLine, max_lines: maxLines, line_numbers: lineNumbers }, 30000, signal);
         return await buildReadSuccess(result);
       } catch (err: any) {
-        return JSON.stringify({ status: 'error', message: `Ошибка чтения файла: ${err?.message || String(err)}`, file_path: filePath });
+        return JSON.stringify({ status: 'error', message: `File read error: ${err?.message || String(err)}`, file_path: filePath });
       }
     }
 
@@ -4596,7 +4613,7 @@ Respond in the user's language. Be detailed and precise.`
 
     if (!sent) {
       deletePendingPcConfirmation(confirmationId);
-      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+      return JSON.stringify({ status: 'error', message: 'Failed to deliver confirmation. No client is available.', file_path: filePath });
     }
 
     try {
@@ -4604,12 +4621,12 @@ Respond in the user's language. Be detailed and precise.`
       return await buildReadSuccess(result);
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил чтение файла.', file_path: filePath }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected file read.', file_path: filePath }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', file_path: filePath });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка чтения файла: ${err?.message || String(err)}`, file_path: filePath });
+      return JSON.stringify({ status: 'error', message: `File read error: ${err?.message || String(err)}`, file_path: filePath });
     }
   }
 
@@ -4618,13 +4635,13 @@ Respond in the user's language. Be detailed and precise.`
   if (toolName === 'search_file_keywords') {
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
     const query: string = typeof parsed.query === 'string' ? parsed.query.trim() : '';
-    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
-    if (!query) return JSON.stringify({ status: 'error', message: 'query обязателен' });
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path is required' });
+    if (!query) return JSON.stringify({ status: 'error', message: 'query is required' });
 
     const maxMatches = typeof parsed.max_matches === 'number' && parsed.max_matches > 0 ? Math.min(Math.floor(parsed.max_matches), 500) : 100;
 
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Поиск по файлу невозможен — попроси пользователя запустить приложение.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Cannot search file — ask the user to launch the app.' });
     }
 
     const { getPcCommandsSettings } = await import('./pc-commands.js');
@@ -4641,7 +4658,7 @@ Respond in the user's language. Be detailed and precise.`
           ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
         });
       } catch (err: any) {
-        return JSON.stringify({ status: 'error', message: `Ошибка поиска по файлу: ${err?.message || String(err)}`, file_path: filePath, query });
+        return JSON.stringify({ status: 'error', message: `File search error: ${err?.message || String(err)}`, file_path: filePath, query });
       }
     }
 
@@ -4668,7 +4685,7 @@ Respond in the user's language. Be detailed and precise.`
         action_type: 'read',
         file_path: filePath,
         max_lines: maxMatches,
-        content_preview: `Поиск: ${query}`,
+        content_preview: `Search: ${query}`,
       }
     };
 
@@ -4689,7 +4706,7 @@ Respond in the user's language. Be detailed and precise.`
 
     if (!sent) {
       deletePendingPcConfirmation(confirmationId);
-      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+      return JSON.stringify({ status: 'error', message: 'Failed to deliver confirmation. No client is available.', file_path: filePath });
     }
 
     try {
@@ -4702,12 +4719,12 @@ Respond in the user's language. Be detailed and precise.`
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил поиск по файлу.', file_path: filePath, query }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected file search.', file_path: filePath, query }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath, query });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', file_path: filePath, query });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка поиска по файлу: ${err?.message || String(err)}`, file_path: filePath, query });
+      return JSON.stringify({ status: 'error', message: `File search error: ${err?.message || String(err)}`, file_path: filePath, query });
     }
   }
 
@@ -4715,7 +4732,7 @@ Respond in the user's language. Be detailed and precise.`
 
   if (toolName === 'write_file') {
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
-    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path is required' });
 
     const content: string = typeof parsed.content === 'string' ? parsed.content : '';
     const mode: 'overwrite' | 'append' = parsed.mode === 'append' ? 'append' : 'overwrite';
@@ -4723,7 +4740,7 @@ Respond in the user's language. Be detailed and precise.`
     // Size limit: 5 MB
     const WRITE_FILE_MAX_SIZE = 5 * 1024 * 1024;
     if (Buffer.byteLength(content, 'utf-8') > WRITE_FILE_MAX_SIZE) {
-      return JSON.stringify({ status: 'error', message: `Контент слишком большой (лимит 5 МБ). Используй меньший объём данных.`, file_path: filePath });
+      return JSON.stringify({ status: 'error', message: `Content is too large (5 MB limit). Use a smaller data size.`, file_path: filePath });
     }
 
     // Block writes to system directories
@@ -4741,12 +4758,12 @@ Respond in the user's language. Be detailed and precise.`
       /^\/sys[\\/]/i,
     ];
     if (blockedPathPatterns.some(p => p.test(filePath))) {
-      return JSON.stringify({ status: 'error', message: 'Запись в системные директории заблокирована. Это ограничение безопасности, его нельзя обойти.', file_path: filePath });
+      return JSON.stringify({ status: 'error', message: 'Writing to system directories is blocked. This is a security restriction and cannot be bypassed.', file_path: filePath });
     }
 
     // Desktop must be online
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Запись файла невозможна — попроси пользователя запустить приложение.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Cannot write file — ask the user to launch the app.' });
     }
 
     // Auto-reject in scheduler mode
@@ -4812,7 +4829,7 @@ Respond in the user's language. Be detailed and precise.`
 
     if (!sent) {
       deletePendingPcConfirmation(confirmationId);
-      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+      return JSON.stringify({ status: 'error', message: 'Failed to deliver confirmation. No client is available.', file_path: filePath });
     }
 
     try {
@@ -4822,16 +4839,16 @@ Respond in the user's language. Be detailed and precise.`
         file_path: filePath,
         mode,
         ...(typeof result === 'object' && result !== null ? result : {}),
-        message: `Файл ${mode === 'append' ? 'обновлён (добавлено в конец)' : 'записан'}: ${filePath}`,
+        message: `File ${mode === 'append' ? 'updated (appended)' : 'written'}: ${filePath}`,
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил запись файла.', file_path: filePath }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected file write.', file_path: filePath }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', file_path: filePath });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка записи файла: ${err?.message || String(err)}`, file_path: filePath });
+      return JSON.stringify({ status: 'error', message: `File write error: ${err?.message || String(err)}`, file_path: filePath });
     }
   }
 
@@ -4839,7 +4856,7 @@ Respond in the user's language. Be detailed and precise.`
 
   if (toolName === 'edit_file_lines') {
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
-    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path обязателен' });
+    if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path is required' });
 
     const parseLineNumber = (value: unknown) => {
       const parsedValue = typeof value === 'number' ? value : Number(`${value ?? ''}`.trim());
@@ -4850,22 +4867,22 @@ Respond in the user's language. Be detailed and precise.`
     const newContent: string = typeof parsed.new_content === 'string' ? parsed.new_content : '';
     const snapshotId = typeof parsed.snapshot_id === 'string' ? parsed.snapshot_id.trim() : '';
 
-    if (startLine < 1) return JSON.stringify({ status: 'error', message: 'start_line должен быть >= 1' });
+    if (startLine < 1) return JSON.stringify({ status: 'error', message: 'start_line must be >= 1' });
     if (!snapshotId) return JSON.stringify({ status: 'error', message: 'snapshot_id is required. Read the target lines again with read_file first.' });
-    if (endLine < 0) return JSON.stringify({ status: 'error', message: 'end_line должен быть >= 0' });
+    if (endLine < 0) return JSON.stringify({ status: 'error', message: 'end_line must be >= 0' });
     if (endLine !== 0 && endLine < startLine - 1) {
-      return JSON.stringify({ status: 'error', message: 'end_line должен быть >= start_line - 1 (для вставки укажи end_line = start_line - 1)' });
+      return JSON.stringify({ status: 'error', message: 'end_line must be >= start_line - 1 (to insert, set end_line = start_line - 1)' });
     }
 
     // Block .docx — use read_file + write_file instead
     const ext = filePath.toLowerCase().split('.').pop();
     if (ext === 'docx') {
-      return JSON.stringify({ status: 'error', message: 'edit_file_lines не поддерживает .docx. Используй read_file + write_file (overwrite).' });
+      return JSON.stringify({ status: 'error', message: 'edit_file_lines does not support .docx. Use read_file + write_file (overwrite).' });
     }
 
     // Desktop must be online
     if (!isDesktopOnline(user.id)) {
-      return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Редактирование файла невозможно.' });
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. File editing is impossible.' });
     }
 
     pruneFileReadSnapshots();
@@ -4901,7 +4918,7 @@ Respond in the user's language. Be detailed and precise.`
         : '';
 
       if (startLine > totalLines + 1) {
-        return JSON.stringify({ status: 'error', message: `start_line (${startLine}) выходит за пределы файла (всего строк: ${totalLines}).` });
+        return JSON.stringify({ status: 'error', message: `start_line (${startLine}) is out of bounds for the file (total lines: ${totalLines}).` });
       }
 
       oldLinesPreview = endLine >= startLine ? previewContent : '';
@@ -4919,7 +4936,7 @@ Respond in the user's language. Be detailed and precise.`
         return JSON.stringify({ status: 'info', message: 'No changes were made because the replacement matches the current content.', file_path: filePath });
       }
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Не удалось прочитать файл для diff: ${err?.message || String(err)}`, file_path: filePath });
+      return JSON.stringify({ status: 'error', message: `Could not read file for diff: ${err?.message || String(err)}`, file_path: filePath });
     }
 
     fileReadSnapshots.delete(snapshotId);
@@ -4983,7 +5000,7 @@ Respond in the user's language. Be detailed and precise.`
 
     if (!sent) {
       deletePendingPcConfirmation(confirmationId);
-      return JSON.stringify({ status: 'error', message: 'Не удалось доставить подтверждение. Ни один клиент не доступен.', file_path: filePath });
+      return JSON.stringify({ status: 'error', message: 'Failed to deliver confirmation. No client is available.', file_path: filePath });
     }
 
     try {
@@ -4992,16 +5009,16 @@ Respond in the user's language. Be detailed and precise.`
         status: 'success',
         file_path: filePath,
         ...(typeof result === 'object' && result !== null ? result : {}),
-        message: `Строки ${startLine}-${endLine} заменены в файле: ${filePath}`,
+        message: `Lines ${startLine}-${endLine} replaced in file: ${filePath}`,
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил редактирование файла.', file_path: filePath }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected file editing.', file_path: filePath }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', file_path: filePath });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', file_path: filePath });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка редактирования файла: ${err?.message || String(err)}`, file_path: filePath });
+      return JSON.stringify({ status: 'error', message: `File edit error: ${err?.message || String(err)}`, file_path: filePath });
     }
   }
 
@@ -5011,7 +5028,7 @@ Respond in the user's language. Be detailed and precise.`
     const { listRunbooks } = await import('./devops.js');
     const runbooks = listRunbooks(user.id);
     if (runbooks.length === 0) {
-      return JSON.stringify({ status: 'info', message: 'У пользователя нет сохранённых инструкций (runbooks).' });
+      return JSON.stringify({ status: 'info', message: 'User has no saved instructions (runbooks) (runbooks).' });
     }
     return JSON.stringify({
       status: 'success',
@@ -5023,11 +5040,11 @@ Respond in the user's language. Be detailed and precise.`
 
   if (toolName === 'read_devops_runbook') {
     const runbookId: number | undefined = typeof parsed.runbook_id === 'number' ? parsed.runbook_id : undefined;
-    if (!runbookId) return JSON.stringify({ status: 'error', message: 'runbook_id обязателен' });
+    if (!runbookId) return JSON.stringify({ status: 'error', message: 'runbook_id is required' });
 
     const { getRunbookById } = await import('./devops.js');
     const runbook = getRunbookById(user.id, runbookId);
-    if (!runbook) return JSON.stringify({ status: 'error', message: `Runbook с id=${runbookId} не найден.` });
+    if (!runbook) return JSON.stringify({ status: 'error', message: `Runbook with id=${runbookId} not found.` });
 
     return JSON.stringify({
       status: 'success',
@@ -5045,7 +5062,7 @@ Respond in the user's language. Be detailed and precise.`
     const commands: string[] = Array.isArray(parsed.commands) ? parsed.commands.filter((c: unknown) => typeof c === 'string') : [];
 
     if (!title || !content) {
-      return JSON.stringify({ status: 'error', message: 'title и content обязательны' });
+      return JSON.stringify({ status: 'error', message: 'title and content are required' });
     }
 
     const payload: DesktopActionPayload = {
@@ -5054,7 +5071,7 @@ Respond in the user's language. Be detailed and precise.`
     };
     if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Предложение инструкции "${title}" отправлено.` });
+    return JSON.stringify({ status: 'success', message: `Runbook suggestion "${title}" sent.` });
   }
 
   // ── DevOps: install SSH public key ───────────────────────────────────────────
@@ -5065,30 +5082,30 @@ Respond in the user's language. Be detailed and precise.`
     const targetUser: string = typeof parsed.target_user === 'string' ? parsed.target_user.trim() : '';
 
     if (!serverId || !targetUser) {
-      return JSON.stringify({ status: 'error', message: 'server_id и target_user обязательны' });
+      return JSON.stringify({ status: 'error', message: 'server_id and target_user are required' });
     }
 
     // Validate target_user (no shell injection)
     if (!/^[a-zA-Z0-9._-]+$/.test(targetUser)) {
-      return JSON.stringify({ status: 'error', message: 'target_user содержит недопустимые символы' });
+      return JSON.stringify({ status: 'error', message: 'target_user contains invalid characters' });
     }
 
     const { getSshPublicKey, buildInstallKeyScript, getServerById } = await import('./devops.js');
 
     const server = getServerById(user.id, serverId);
     if (!server) {
-      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+      return JSON.stringify({ status: 'error', message: `Server with id=${serverId} not found.` });
     }
 
     // Resolve key_id: explicit > server default
     const keyId = explicitKeyId ?? server.default_ssh_key_id;
     if (!keyId) {
-      return JSON.stringify({ status: 'error', message: `У сервера "${server.name}" нет ключа по умолчанию. Укажи key_id или настрой default в настройках сервера.` });
+      return JSON.stringify({ status: 'error', message: `Server "${server.name}" has no default key. Specify key_id or configure default in server settings.` });
     }
 
     const publicKey = getSshPublicKey(user.id, keyId);
     if (!publicKey) {
-      return JSON.stringify({ status: 'error', message: `SSH-ключ с id=${keyId} не найден.` });
+      return JSON.stringify({ status: 'error', message: `SSH key with id=${keyId} not found.` });
     }
 
     // Build the install script
@@ -5100,12 +5117,12 @@ Respond in the user's language. Be detailed and precise.`
       const result = await execSshCommand(user.id, serverId, script);
       return JSON.stringify({
         status: 'success',
-        message: `SSH-ключ установлен для пользователя ${targetUser} на сервере ${server.name}`,
+        message: `SSH key installed for user ${targetUser} on server ${server.name}`,
         exitCode: result.exitCode,
         stderr: result.stderr || undefined,
       });
     } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Ошибка установки ключа: ${err.message}` });
+      return JSON.stringify({ status: 'error', message: `Key installation error: ${err.message}` });
     }
   }
 
@@ -5119,16 +5136,16 @@ Respond in the user's language. Be detailed and precise.`
     const nopasswdSudo: boolean = parsed.nopasswd_sudo === true;
 
     if (!serverId || !username) {
-      return JSON.stringify({ status: 'error', message: 'server_id и username обязательны' });
+      return JSON.stringify({ status: 'error', message: 'server_id and username are required' });
     }
     if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
-      return JSON.stringify({ status: 'error', message: 'username содержит недопустимые символы' });
+      return JSON.stringify({ status: 'error', message: 'username contains invalid characters' });
     }
 
     const { getServerById, getSshPublicKey, serverHasSudoPassword } = await import('./devops.js');
     const server = getServerById(user.id, serverId);
     if (!server) {
-      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+      return JSON.stringify({ status: 'error', message: `Server with id=${serverId} not found.` });
     }
 
     let publicKey: string | undefined;
@@ -5136,11 +5153,11 @@ Respond in the user's language. Be detailed and precise.`
     if (installSshKey) {
       keyId = explicitKeyId ?? server.default_ssh_key_id;
       if (!keyId) {
-        return JSON.stringify({ status: 'error', message: `У сервера "${server.name}" нет SSH-ключа по умолчанию. Укажи key_id или вызови tool с install_ssh_key=false.` });
+        return JSON.stringify({ status: 'error', message: `Server "${server.name}" has no default SSH key. Specify key_id or call the tool with install_ssh_key=false.` });
       }
       const resolvedPublicKey = getSshPublicKey(user.id, keyId);
       if (!resolvedPublicKey) {
-        return JSON.stringify({ status: 'error', message: `SSH-ключ с id=${keyId} не найден.` });
+        return JSON.stringify({ status: 'error', message: `SSH key with id=${keyId} not found.` });
       }
       publicKey = resolvedPublicKey;
     }
@@ -5183,7 +5200,7 @@ Respond in the user's language. Be detailed and precise.`
       createUserSent = true;
     }
     if (!createUserSent) {
-      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
+      return JSON.stringify({ status: 'error', message: 'No client is connected. Confirmation impossible.' });
     }
 
     // Auto-reject in scheduler mode
@@ -5216,7 +5233,7 @@ Respond in the user's language. Be detailed and precise.`
 
       return JSON.stringify({
         status: 'success',
-        message: `Пользователь ${username} создан на сервере ${server.name}.`,
+        message: `User ${username} created on server ${server.name}.`,
         server: server.name,
         username,
         sudo_group: result.sudoGroup,
@@ -5225,12 +5242,12 @@ Respond in the user's language. Be detailed and precise.`
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил создание server user.', server: server.name, username }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected server user creation.', server: server.name, username }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, username });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', server: server.name, username });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка создания пользователя: ${err?.message || String(err)}`, server: server.name, username });
+      return JSON.stringify({ status: 'error', message: `User creation error: ${err?.message || String(err)}`, server: server.name, username });
     }
   }
 
@@ -5241,16 +5258,16 @@ Respond in the user's language. Be detailed and precise.`
     const username: string = typeof parsed.username === 'string' ? parsed.username.trim() : '';
 
     if (!serverId || !username) {
-      return JSON.stringify({ status: 'error', message: 'server_id и username обязательны' });
+      return JSON.stringify({ status: 'error', message: 'server_id and username are required' });
     }
     if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
-      return JSON.stringify({ status: 'error', message: 'username содержит недопустимые символы' });
+      return JSON.stringify({ status: 'error', message: 'username contains invalid characters' });
     }
 
     const { getServerById, serverHasSudoPassword } = await import('./devops.js');
     const server = getServerById(user.id, serverId);
     if (!server) {
-      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+      return JSON.stringify({ status: 'error', message: `Server with id=${serverId} not found.` });
     }
 
     const needsSudoPasswordPrompt = server.username !== 'root' && !serverHasSudoPassword(user.id, serverId);
@@ -5288,7 +5305,7 @@ Respond in the user's language. Be detailed and precise.`
       changePwdSent = true;
     }
     if (!changePwdSent) {
-      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
+      return JSON.stringify({ status: 'error', message: 'No client is connected. Confirmation impossible.' });
     }
 
     // Auto-reject in scheduler mode
@@ -5319,19 +5336,19 @@ Respond in the user's language. Be detailed and precise.`
 
       return JSON.stringify({
         status: 'success',
-        message: `Пароль пользователя ${username} изменён на сервере ${server.name}.`,
+        message: `Password for user ${username} changed on server ${server.name}.`,
         server: server.name,
         username,
         changed: result.changed === true
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил смену пароля.', server: server.name, username }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected password change.', server: server.name, username }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name, username });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', server: server.name, username });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка смены пароля: ${err?.message || String(err)}`, server: server.name, username });
+      return JSON.stringify({ status: 'error', message: `Password change error: ${err?.message || String(err)}`, server: server.name, username });
     }
   }
 
@@ -5345,13 +5362,13 @@ Respond in the user's language. Be detailed and precise.`
     const removePassword: boolean = parsed.remove_password === true;
 
     if (!serverId || !newUsername || !reason) {
-      return JSON.stringify({ status: 'error', message: 'server_id, new_username и reason обязательны' });
+      return JSON.stringify({ status: 'error', message: 'server_id, new_username and reason are required' });
     }
 
     const { getServerById } = await import('./devops.js');
     const server = getServerById(user.id, serverId);
     if (!server) {
-      return JSON.stringify({ status: 'error', message: `Сервер с id=${serverId} не найден.` });
+      return JSON.stringify({ status: 'error', message: `Server with id=${serverId} not found.` });
     }
 
     const payload: DesktopActionPayload = {
@@ -5389,7 +5406,7 @@ Respond in the user's language. Be detailed and precise.`
       credsSent = true;
     }
     if (!credsSent) {
-      return JSON.stringify({ status: 'error', message: 'Ни один клиент не подключён. Подтверждение невозможно.' });
+      return JSON.stringify({ status: 'error', message: 'No client is connected. Confirmation impossible.' });
     }
 
     // Auto-reject in scheduler mode
@@ -5418,15 +5435,15 @@ Respond in the user's language. Be detailed and precise.`
         });
       });
 
-      return JSON.stringify({ status: 'success', message: `Credentials для "${server.name}" обновлены.`, result });
+      return JSON.stringify({ status: 'success', message: `Credentials for "${server.name}" updated.`, result });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил обновление credentials.', server: server.name }, err));
+        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected credentials update.', server: server.name }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Время ожидания подтверждения истекло (5 минут).', server: server.name });
+        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', server: server.name });
       }
-      return JSON.stringify({ status: 'error', message: `Ошибка обновления credentials: ${err?.message || String(err)}`, server: server.name });
+      return JSON.stringify({ status: 'error', message: `Credentials update error: ${err?.message || String(err)}`, server: server.name });
     }
   }
 
@@ -5443,7 +5460,7 @@ Respond in the user's language. Be detailed and precise.`
 
     if (desktopActionSink) desktopActionSink.value = payload;
 
-    return JSON.stringify({ status: 'success', message: `Команда ${action} выполнена.`, target });
+    return JSON.stringify({ status: 'success', message: `Command ${action} executed.`, target });
   }
 
   if (toolName === 'get_exchange_rates') {
@@ -5453,13 +5470,13 @@ Respond in the user's language. Be detailed and precise.`
     const requestedCodes = codes.length > 0 ? codes.map((c: string) => c.toUpperCase().trim()) : ['USD', 'EUR'];
     const rows = getCurrencyRates(requestedCodes);
     if (rows.length === 0) {
-      return 'Курсы валют пока недоступны. Данные ещё не загружены с ЦБ РФ — попробуй позже.';
+      return 'Exchange rates are not yet available. Data has not been loaded from the Central Bank yet — try later.';
     }
     const lines = rows.map(formatRateForAi);
     const missingCodes = requestedCodes.filter(c => !rows.some(r => r.code === c));
-    const parts = [`Курсы ЦБ РФ на сегодня:`, ...lines];
+    const parts = [`CBR exchange rates for today:`, ...lines];
     if (missingCodes.length > 0) {
-      parts.push(`Валюта не найдена: ${missingCodes.join(', ')}`);
+      parts.push(`Currency not found: ${missingCodes.join(', ')}`);
     }
     return parts.join('\n');
   }
@@ -5470,8 +5487,8 @@ Respond in the user's language. Be detailed and precise.`
     const task: string = typeof parsed.task === 'string' ? parsed.task.trim() : '';
     const contextData = parsed.context ?? undefined;
 
-    if (!agentName) return JSON.stringify({ status: 'error', message: 'agent (имя субагента) обязательно' });
-    if (!task) return JSON.stringify({ status: 'error', message: 'task (описание задачи) обязательно' });
+    if (!agentName) return JSON.stringify({ status: 'error', message: 'agent (subagent name) is required' });
+    if (!task) return JSON.stringify({ status: 'error', message: 'task (task description) is required' });
 
     try {
       const { runSubagent } = await import('./subagents/runner.js');
@@ -5522,7 +5539,7 @@ Respond in the user's language. Be detailed and precise.`
       console.warn('[ai] invoke_subagent error:', err?.message || err);
       return JSON.stringify({
         status: 'error',
-        message: `Ошибка субагента ${agentName}: ${err?.message || String(err)}`,
+        message: `Subagent error ${agentName}: ${err?.message || String(err)}`,
       });
     }
   }
@@ -5538,10 +5555,10 @@ Respond in the user's language. Be detailed and precise.`
       ? Math.min(Math.max(1, Math.floor(parsed.max_loops)), 50)
       : 20;
 
-    if (!task) return JSON.stringify({ status: 'error', message: 'task (описание задачи) обязательно' });
+    if (!task) return JSON.stringify({ status: 'error', message: 'task (task description) is required' });
 
-    // Если бот не передал промпт — используем дефолтный
-    const effectivePrompt = systemPrompt || 'Ты специализированный AI-ассистент. Выполни поставленную задачу, используя предоставленные тебе инструменты. Действуй последовательно и эффективно.';
+    // If the bot didn't provide a prompt — use the default
+    const effectivePrompt = systemPrompt || 'You are a specialized AI assistant. Complete the assigned task using the tools provided to you. Act sequentially and efficiently.';
 
     // Validate tools against the known tool set — reject unknown names early.
     // Use availableToolDefs (full runtime set) if provided, otherwise fall back to toolDefinitions.
@@ -5561,7 +5578,7 @@ Respond in the user's language. Be detailed and precise.`
     if (requestedTools.length > 0 && validTools.length === 0) {
       return JSON.stringify({
         status: 'error',
-        message: `Ни один из запрошенных инструментов не существует. Неизвестные: ${rejectedTools.join(', ')}`,
+        message: `None of the requested tools exist. Unknown: ${rejectedTools.join(', ')}`,
       });
     }
 
@@ -5646,12 +5663,12 @@ Respond in the user's language. Be detailed and precise.`
       console.warn('[ai] spawn_subagent error:', err?.message || err);
       return JSON.stringify({
         status: 'error',
-        message: `Ошибка ad-hoc субагента: ${err?.message || String(err)}`,
+        message: `Ad-hoc subagent error: ${err?.message || String(err)}`,
       });
     }
   }
 
-  return `Ошибка: неизвестный инструмент ${toolName}`;
+  return `Error: unknown tool ${toolName}`;
 };
 
 const getToolUserMessage = (language: unknown, toolName: string, argsRaw: string) => {
@@ -5805,7 +5822,7 @@ export const sendMessageThroughAi = async (
   const requestedRegenerateFromHistory = Boolean(options?.regenerateFromHistory);
   let text = (inputText || '').trim();
   if (!text && !hasImages) throw new Error('empty_text');
-  if (!text) text = hasImages ? (images.length === 1 ? 'Что на этой картинке?' : `Что на этих ${images.length} картинках?`) : '';
+  if (!text) text = hasImages ? (images.length === 1 ? 'What is in this picture?' : `What is in these ${images.length} pictures?`) : '';
   // Фото форсирует PRO-маршрут (минуя LITE-роутер), но не переключает модель на vision-pro/lite.
   // Если основная модель поддерживает vision — фото пойдёт напрямую. Если нет — будет доступен tool describe_image.
   const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!') || hasImages;
@@ -5822,7 +5839,7 @@ export const sendMessageThroughAi = async (
   if (preferredModelId && !manualModel) {
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
-  // Проверяем, поддерживает ли текущая модель нативный vision
+  // Проверяем, whether the current model supports native vision
   const currentModelSupportsVision = modelSupportsVision(manualModel, user.plan || 'free');
   const subagentModelId = user.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null;
   const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId, isAdmin) : undefined;
@@ -5835,8 +5852,8 @@ export const sendMessageThroughAi = async (
   const reasoningLevel: ReasoningLevel | null = options?.reasoningLevel ?? (user as any).reasoning_level ?? null;
   const subagentReasoningLevel: ReasoningLevel | null = ((user as any).subagent_reasoning_level || null) as ReasoningLevel | null;
 
-  // Резолв model settings: per-model настройки генерации (temperature, penalties, etc.).
-  // Применяются только для ручной модели (preferred_model). В lite-режиме и при fallback на auto — игнорируются.
+  // Resolve model settings: per-model generation settings (temperature, penalties, etc.).
+  // Applied only for manual model (preferred_model). In lite mode and when falling back to auto — ignored.
   let resolvedModelSettings: ModelSettings | null = null;
   if (preferredModelId) {
     try {
@@ -5848,7 +5865,7 @@ export const sendMessageThroughAi = async (
         }
       }
     } catch {
-      // broken JSON — игнорируем, используем серверные дефолты
+      // broken JSON — ignore, use server defaults
     }
   }
 
@@ -5859,7 +5876,7 @@ export const sendMessageThroughAi = async (
     if (activeHitlWaits.has(userId)) {
       const waitingChatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
       return {
-        reply_text: 'Я жду твоего ответа на карточку подтверждения выше. Нажми «Разрешить», «Отклонить» или «Отклонить с комментарием» — и я продолжу тот запрос.',
+        reply_text: 'I am waiting for your response to the confirmation card above. Press "Allow", "Deny", or "Deny with comment" — and I will continue that request.',
         chat_id: waitingChatId,
         message_id: 0,
         usage: {
@@ -6017,7 +6034,7 @@ export const sendMessageThroughAi = async (
     }
   };
 
-  // ── Soft-abort buffers: объявляем ВНЕ try, чтобы catch имел к ним доступ ──
+  // ── Soft-abort buffers: declared OUTSIDE try, чтобы catch имел к ним доступ ──
   let answer = FALLBACK_ANSWER;
   let fullDbHistory = '';
   let finalAnswer = '';
@@ -6034,8 +6051,8 @@ export const sendMessageThroughAi = async (
   let chargeAborted = false;
   let chargeDone = false;
 
-  // Subagent traces — полные trace ad-hoc субагентов для отдельного UI-блока.
-  // Не уходят в AI-контекст, только для отображения в сообщении.
+  // Subagent traces — full trace ad-hoc субагентов для отдельного UI-блока.
+  // Not sent to AI context, только для отображения в сообщении.
   const subagentTraces: Array<{
     task: string;
     system_prompt: string;
@@ -6111,15 +6128,15 @@ export const sendMessageThroughAi = async (
   }
   const isRegeneratingFromHistory = Boolean(regenerateUserText);
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
-  const dynamicContextToolHint = `\n\n[ДИНАМИЧЕСКИЙ КОНТЕКСТ]\nТекущее время пользователя доступно через tool get_user_time. Не угадывай текущую дату/время: вызывай get_user_time, когда это важно для ответа или планирования.\nТекущее состояние пиксельного аватара доступно через tool get_avatar_state. Для изменения эмоций используй set_display_state.`;
+  const dynamicContextToolHint = `\n\n[DYNAMIC CONTEXT]\nCurrent user time is available via the get_user_time tool. Do not guess current date/time: call get_user_time when it matters for answering or scheduling.\nCurrent pixel avatar state is available via the get_avatar_state tool. To change emotions, use set_display_state.`;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
   const promptUser = user;
-  const voicePromptHint = options?.isVoice ? `\n\nСТРОГО, ОБЯЗАТЕЛЬНО СЕЙЧАС, ОБЯЗАТЕЛЬНО!!! соблюдай:\n1. Отвечай МАКСИМАЛЬНО кратко. МАКСИМАЛЬНО КРАТКО и естественно, как в устном диалоге.\n2. НИКАКИХ длинных списков, Markdown-таблиц или блоков кода, если только об этом не попросили напрямую.\n3. Используй разговорный стиль. МАКСИМАЛЬНО краткий, УДОБНЫЙ к прослушиванию и содержательный. 4. Замена символов словами: Заменяй любые технические знаки, аббревиатуры и единицы измерения их полными словесными названиями. 
-   - Запрещено: "%", "°C", "м/с", "км/ч", "$", "руб."
-   - Обязательно писать: "процентов", "градусов Цельсия", "метров в секунду", "километров в час", "долларов", "рублей".` : '';
+  const voicePromptHint = options?.isVoice ? `\n\nSTRICTLY, MANDATORY RIGHT NOW, OBLIGATORY!!! follow:\n1. Answer as BRIEFLY as possible. as BRIEF and natural as possible, like in spoken dialogue.\n2. NO long lists, Markdown tables or code blocks, unless directly asked.\n3. Use conversational style. as BRIEF and COMFORTABLE as possible for listening and substantive. 4. Replace symbols with words: Replace any technical symbols, abbreviations and units of measurement with their full verbal names.
+   - Forbidden: "%", "°C", "m/s", "km/h", "$", "rub."
+   - Must write: "percent", "degrees Celsius", "meters per second", "kilometers per hour", "dollars", "rubles".` : '';
   const pinnedMacros = options?.activeMacros?.filter(m => m.pinned) ?? [];
   const pinnedHint = pinnedMacros.length > 0
-    ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
+    ? `\n\n[PINNED MACROS]\nUser has frequently used macros: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. If the user's request clearly matches the purpose of one of them — call list_my_macros to check details, then execute_macro to run it.`
     : '';
 
   // ── Feature flags → disabled tools ──
@@ -6131,7 +6148,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('save_note');
     disabledToolSet.add('delete_note');
   }
-  // Команды на ПК: отключает только execute_pc_command
+  // PC commands: disables only execute_pc_command
   if (flags?.disable_pc_commands) {
     disabledToolSet.add('execute_pc_command');
     disabledToolSet.add('get_file_info');
@@ -6144,7 +6161,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('execute_visual_click');
     disabledToolSet.add('capture_webcam');
   }
-  // Лайт: отключает опасное, оставляет read-only
+  // Lite: disables dangerous, оставляет read-only
   if (flags?.disable_pc_control_lite) {
     disabledToolSet.add('execute_ssh_command');
     disabledToolSet.add('list_devops_servers');
@@ -6162,9 +6179,9 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('schedule_task');
     disabledToolSet.add('delete_my_task');
   }
-  // Полная блокировка: всё десктопное + управление
+  // Full block: all desktop + control
   if (flags?.disable_pc_control_full) {
-    // Всё из лайта
+    // Everything from lite
     disabledToolSet.add('execute_ssh_command');
     disabledToolSet.add('execute_pc_command');
     disabledToolSet.add('get_file_info');
@@ -6183,7 +6200,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('send_email');
     disabledToolSet.add('schedule_task');
     disabledToolSet.add('delete_my_task');
-    // Плюс read-only десктоп
+    // Plus read-only desktop
     disabledToolSet.add('control_smart_home');
     disabledToolSet.add('get_smart_devices');
     disabledToolSet.add('list_mail_accounts');
@@ -6239,9 +6256,9 @@ export const sendMessageThroughAi = async (
   const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
 
   // ── Dice Roll Mode (d20 roleplay) ──
-  // Бэкенд кидает кубик и сразу пушит результат клиентам через onDiceRoll
-  // (клиент останавливает анимацию на значении). В AiSendResult.dice_roll
-  // результат дублируется для восстановления в done-событии.
+  // Backend rolls the dice and immediately pushes the result to clients via onDiceRoll
+  // (client stops the animation at the value). In AiSendResult.dice_roll
+  // result is duplicated for recovery in the done event.
   let dicePromptHint = '';
   if (options?.diceRollMode) {
     const force = options?.diceRollForceValue;
@@ -6251,11 +6268,11 @@ export const sendMessageThroughAi = async (
       diceRollValue = Math.floor(Math.random() * 20) + 1; // 1..20
     }
     dicePromptHint = buildDiceRollPrompt(diceRollValue);
-    // Отправляем результат сразу — клиент зафиксирует значение и остановит анимацию.
+    // Send the result immediately — client will lock the value and stop the animation.
     try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || 'Пользователь', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${dicePromptHint}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || 'User', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${dicePromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.
@@ -6295,23 +6312,23 @@ export const sendMessageThroughAi = async (
   let executionSystemPrompt = proSystemPrompt;
 
 if (!forceProRoute && !isRegeneratingFromHistory && LITE_ROUTER_ENABLED && !manualModel) {
-  const routerPrompt = `Ты — маршрутизатор запросов. Твоя цель — определить категорию запроса. ВСЁ, что не укладывается в тип запроса, или он выбивается из твоих доступных категорий, перенаправляй в PRO. Даже если это ругань или простая беседа.
-Верни ТОЛЬКО ОДНО СЛОВО из списка ниже.
+  const routerPrompt = `You are a request router. Your goal is to determine the request category. ANYTHING that doesn't fit the request type, or falls outside your available categories, redirect to PRO. Even if it's profanity or simple conversation.
+Return ONLY ONE WORD from the list below.
 
-[ПРОСТЫЕ КАТЕГОРИИ - не требуют истории чата]:
-- SMART_HOME (управление светом, розетками)
-- TIMEZONE (установить часовой пояс)
-- RANDOM (бросить кубик, монетку)
+[SIMPLE CATEGORIES - do not require chat history]:
+- SMART_HOME (controlling lights, outlets)
+- TIMEZONE (set timezone)
+- RANDOM (roll dice, coin flip)
 
-[СЛОЖНАЯ КАТЕГОРИЯ]:
-- PRO (любой сложный вопрос, любая простая беседа, программирование, анализ, почта (email), расписания, работа с памятью, заметки/блокнот, длинные беседы)
+[COMPLEX CATEGORY]:
+- PRO (any complex question, any simple conversation, programming, analysis, email, scheduling, memory work, notes/notebook, long conversations)
 
-[ПРИМЕРЫ СТРОГОГО ВЫВОДА]:
-Запрос: Включи свет на кухне
+[STRICT OUTPUT EXAMPLES]:
+Request: Turn on the kitchen light
 SMART_HOME
-Запрос: Подбрось монетку
+Request: Flip a coin
 RANDOM
-Запрос: Включи свет через 10 минут
+Request: Turn on the light in 10 minutes
 PRO
 Запрос: Да пошел ты
 PRO
@@ -6320,9 +6337,9 @@ PRO
 Запрос: Напиши код на TS
 PRO
 
-ВАЖНО: если в запросе есть отложенное/регулярное действие по времени ("через ...", "завтра", "в 10:30", "напомни", "каждый день"), выбирай ТОЛЬКО PRO, даже если там есть погода/поиск.
+IMPORTANT: if the request has a delayed/scheduled action ("через ...", "завтра", "в 10:30", "напомни", "каждый день"), choose ONLY PRO, even if there is weather/search.
 
-Запрос пользователя: "${text}"`;
+User request: "${text}"`;
 
   type CheapRoute = 'SMART_HOME' | 'QUICK_SEARCH' | 'TIMEZONE' | 'RANDOM' | 'PRO';
 
@@ -6410,7 +6427,7 @@ PRO
 
   // Append regeneration hint to the current request (not saved to DB).
   if (options?.regenerateHint) {
-    const hintText = `\n\n[УКАЗАНИЕ ДЛЯ ПЕРЕГЕНЕРАЦИИ: "${options.regenerateHint}"]`;
+    const hintText = `\n\n[REGENERATION HINT: "${options.regenerateHint}"]`;
     if (typeof userMessageContent === 'string') {
       userMessageContent += hintText;
     } else if (Array.isArray(userMessageContent)) {
@@ -6467,7 +6484,7 @@ PRO
     if (!finalizeForQuota && loop === effectiveMaxLoops - 1) {
       currentMessages.push({
         role: 'system',
-        content: `Внимание: остался один вызов инструмента. После него лимит будет исчерпан. Вызови последний инструмент если нужно, а затем ОБЯЗАТЕЛЬНО сформулируй итоговый ответ пользователю, подведя результаты всех вызовов.`
+        content: `Warning: one tool call remaining. After that the limit will be exhausted. Call the last tool if needed, then MUST formulate the final answer to the user, summarizing the results of all calls.`
       });
     }
     const completionPayload: Record<string, unknown> = {
@@ -6509,17 +6526,17 @@ PRO
       modelFallbackNoticeSent = true;
       const parts: string[] = [];
       if (completion.failedProviders?.length) {
-        parts.push(`Провайдер(ы) ${completion.failedProviders.join(', ')} не ответил(и).`);
+        parts.push(`Provider(s) ${completion.failedProviders.join(', ')} did not respond.`);
       }
       if (completion.failedModels?.length) {
-        parts.push(`Модель(и) ${completion.failedModels.join(', ')} были недоступны.`);
+        parts.push(`Model(s) ${completion.failedModels.join(', ')} were unavailable.`);
       }
-      parts.push(`Ответ получен от ${completion.usedProvider}/${completion.usedModel}.`);
+      parts.push(`Response received from ${completion.usedProvider}/${completion.usedModel}.`);
       modelFallbackNotice = `⚙️ ${parts.join(' ')}`;
     }
     if (completion.manualFallback && !modelFallbackNoticeSent) {
       modelFallbackNoticeSent = true;
-      modelFallbackNotice = `⚙️ Выбранная модель недоступна. Ответ получен автоматически от ${completion.usedProvider}/${completion.usedModel}.`;
+      modelFallbackNotice = `⚙️ Selected model is unavailable. Response received automatically from ${completion.usedProvider}/${completion.usedModel}.`;
       // Не пытаться снова стучаться в упавшую модель в последующих итерациях
       manualModel = undefined;
     }
@@ -6567,8 +6584,8 @@ PRO
       }
     }
 
-    // Создаём запись итерации для trace (наполнится results ниже в цикле tool_calls).
-    // Используем оригинальные tool_call объекты из message — в том же порядке, как их вернула модель.
+    // Create iteration record for trace (will be filled with results below in tool_calls loop).
+    // Use the original tool_call objects from message — in the same order as the model returned them.
     const currentIteration: ToolIteration = {
       step: loop,
       content: stepContent,
@@ -6589,7 +6606,7 @@ PRO
     if (!message.tool_calls?.length) {
       const finishReason = response?.choices?.[0]?.finish_reason;
 
-      // Формируем ответ на выход из функции
+      // Form response на выход из функции
       if (fullDbHistory) {
         // Всегда возвращаем полный текст (включая промежуточные шаги).
         // Раньше при наличии finalAnswer возвращался только последний кусок,
@@ -6630,7 +6647,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
   let toolContent = '';
   try {
     if (disabledToolSet.has(toolName)) {
-      toolContent = `Инструмент "${toolName}" отключён текущими настройками ограничений.`;
+      toolContent = `Tool "${toolName}" is disabled by current restriction settings.`;
     } else {
     toolContent = await withAbort(
       runTool(
@@ -6684,7 +6701,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     }
   } catch (err: any) {
     if (isAbortError(err)) throw err;
-    toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
+    toolContent = `Tool error ${toolName}: ${err?.message || String(err)}`;
   }
 
   return { toolCall, toolName, toolContent };
@@ -6700,10 +6717,10 @@ const applyExecutedToolCall = (executed: ExecutedToolCall) => {
     if (historyEntry) historyEntry.result_preview = resultPreview;
   }
 
-  // Сохраняем полный результат инструмента в trace итерации (для корректного разворота
-  // в getHistoryForAi). Ограничиваем TOOL_RESULT_FULL_MAX, чтобы tool_calls_json не разрастался.
+  // Save the full tool result in the iteration trace (for correct unwinding
+  // in getHistoryForAi). Limit to TOOL_RESULT_FULL_MAX so tool_calls_json doesn't bloat.
   const fullResultContent = toolContent.length > TOOL_RESULT_FULL_MAX
-    ? toolContent.slice(0, TOOL_RESULT_FULL_MAX) + `\n\n[...результат обрезан, всего ${toolContent.length} символов]`
+    ? toolContent.slice(0, TOOL_RESULT_FULL_MAX) + `\\n\\n[...result truncated, total ${toolContent.length} characters]`
     : toolContent;
   currentIteration.results.push({ id: toolCall.id, name: toolName, content: fullResultContent });
 
@@ -6805,7 +6822,7 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
     applyExecutedToolCall(result);
   } catch (err: any) {
     if (isAbortError(err)) break;
-    const toolContent = `Ошибка инструмента ${toolName}: ${err?.message || String(err)}`;
+    const toolContent = `Tool error ${toolName}: ${err?.message || String(err)}`;
     applyExecutedToolCall({ toolCall, toolName, toolContent });
   }
 }
@@ -6818,14 +6835,14 @@ if (escalatedToPro) {
 // Если были прерваны во время tool_calls — фиксируем partial-итерацию в trace
 // и переходим к soft-save вместо throw (артефакты сохраняются).
 if (abortController.signal.aborted) {
-  // Сохраняем даже неполную итерацию — там могут быть уже выполненные tool_results
+  // Save even incomplete iteration — it may contain already executed tool_results
   if (currentIteration.tool_calls.length > 0 || currentIteration.results.length > 0) {
     iterations.push(currentIteration);
   }
   break;
 }
 
-// Итерация полностью выполнена (все tool_calls обработаны, не прервана, не эскалирована) —
+// Iteration fully completed (all tool_calls processed, not interrupted, not escalated) —
 // фиксируем её в trace.
 iterations.push(currentIteration);
   }
@@ -6836,7 +6853,7 @@ iterations.push(currentIteration);
   if (loop >= effectiveMaxLoops && !finalAnswer) {
     currentMessages.push({
       role: 'system',
-      content: 'Лимит вызовов инструментов исчерпан. НЕ вызывай больше инструменты. Сформулируй финальный ответ пользователю прямо сейчас на основе имеющихся данных.'
+      content: 'Tool call limit exhausted. Do NOT call any more tools. Formulate the final answer to the user right now based on available data.'
     });
 
     // --- Sanitary block: clean up last assistant message ---
@@ -6899,16 +6916,16 @@ iterations.push(currentIteration);
   assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))
     : null;
-  // Сохраняем в БД полную историю, даже если она ушла через коллбэк
+  // Save full history to DB, даже если она ушла через коллбэк
   const textToSave = fullDbHistory || answer;
   const reasoningContent = reasoningParts.length > 0 ? reasoningParts.join('\n\n').trim() : null;
   // Collect generated image URLs for assistant message
   const assistantMessageImages = generatedImages.length > 0
     ? generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const }))
     : null;
-  // В БД сохраняем НОВЫЙ формат: массив итераций с полными результатами.
-  // getHistoryForAi() разворачивает его в корректную последовательность сообщений для API.
-  // Старый плоский формат (без `step`) поддерживается как fallback при чтении.
+  // Store NEW format in DB: array of iterations with full results.
+  // getHistoryForAi() unfolds it into a correct message sequence for the API.
+  // Old flat format (without 'step') is supported as fallback when reading.
   const tcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
   const subagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
   const aggregateUsage = sumTokenUsage(usageCalls);
@@ -7003,14 +7020,14 @@ iterations.push(currentIteration);
   };
   } catch (err: any) {
     if (isAbortError(err)) {
-      // Генерация остановлена пользователем — soft abort.
+      // Generation stopped by user — soft abort.
       // Сохраняем всё что бот успел сделать (tool_calls, промежуточный текст, reasoning)
       // как обычное assistant-сообщение с пометкой aborted: true.
       console.log(`[AI] Generation aborted by user ${userId} (soft-save)`);
 
       const abortedAnswer = answer && answer !== FALLBACK_ANSWER
-        ? answer + '\n\n_⏹ Генерация остановлена пользователем_'
-        : (toolUserMessages.length > 0 ? '_⏹ Генерация остановлена пользователем_' : '');
+        ? answer + '\n\n_⏹ Generation stopped by user_'
+        : (toolUserMessages.length > 0 ? '_⏹ Generation stopped by user_' : '');
       const abortedDbText = fullDbHistory || abortedAnswer;
       const abortedReasoning = reasoningParts.length > 0 ? reasoningParts.join('\n\n').trim() : null;
       const abortedTcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
@@ -7029,7 +7046,7 @@ iterations.push(currentIteration);
         try {
           abortedMessageId = await appendChatMessage(
             userId, chatId, 'assistant',
-            abortedDbText || '_Генерация остановлена_',
+            abortedDbText || '_Generation stopped_',
             assistantTelegramChatId, null, null,
             abortedReasoning, abortedTcJson, null, abortedSubagentsJson,
             {
@@ -7097,14 +7114,14 @@ export const generateAdminOutreach = async (targetUserId: number, adminInstructi
   const instruction = adminInstruction.trim();
   if (!instruction) throw new Error('empty_instruction');
 
-  const aiTask = `[СИСТЕМНОЕ ЗАДАНИЕ ОТ АДМИНА]: Администратор просит передать этому пользователю информацию.
-Твоя задача: взять "мысль админа" и написать сообщение от своего лица, строго сохраняя свой текущий характер и стиль.
-НЕ пиши "Админ просил передать", просто вплети эту мысль в разговор от себя. НЕ выдавай админа.
-Если нужно — используй инструменты (поиск, архив, заметки).
+  const aiTask = `[SYSTEM TASK FROM ADMIN]: The administrator asks to convey information to this user.
+Your task: take the "admin's thought" and write a message in your own voice, strictly maintaining your current character and style.
+Do NOT write "Admin asked me to tell you", just weave this thought into the conversation naturally. Do NOT expose the admin.
+If needed — use tools (search, archive, notes).
 
-ВАЖНО: Если в мысли админа есть просьба сгенерировать/нарисовать картинку — используй инструмент generate_image. НЕ пиши JSON вручную в текст сообщения, НЕ выводи никакие технические данные (action, actioninput, dalle и т.д.). Просто вызови tool и результат отправится автоматически.
+IMPORTANT: If the admin's thought contains a request to generate/draw an image — use the generate_image tool. Do NOT write JSON manually in the response text, Do NOT output any technical data (action, actioninput, dalle, etc.). Just call the tool and the result will be sent automatically.
 
-Мысль админа: "${instruction}"`;
+Admin's thought: "${instruction}"`;
 
   const result = await sendMessageThroughAi(targetUserId, aiTask, undefined, {
     forcePro: true,

@@ -259,7 +259,8 @@
       "enabled": "Servizio abilitato",
       "tokenLabel": "Token del bot Telegram",
       "tokenHint": "Lo stesso token viene utilizzato da Webapp Notes per la convalida di initData",
-      "tokenPlaceholder": "Lascia vuoto per mantenere invariato"
+      "tokenPlaceholder": "Lascia vuoto per mantenere invariato",
+      "richStreaming": "Streaming ricco in tempo reale delle risposte (carino ma instabile)"
     },
     "notes": {
       "title": "Webapp Notes",

@@ -58,6 +58,7 @@ export type ImageGenerationSettings = {
 
 export type Settings = {
   telegramEnabled: boolean;
+  telegramRichStreaming: boolean;
   notesEnabled: boolean;
   notesUrl: string;
   aiBaseUrl: string;
@@ -82,6 +83,7 @@ export type Service = { service: string; state: string; health: string; status: 
 
 export const emptySettings: Settings = {
   telegramEnabled: false,
+  telegramRichStreaming: true,
   notesEnabled: false,
   notesUrl: '',
   aiBaseUrl: 'https://openrouter.ai/api/v1',
