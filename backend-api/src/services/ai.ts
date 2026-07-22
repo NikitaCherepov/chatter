@@ -36,6 +36,68 @@ const PC_COMMAND_OUTPUT_MAX = 60_000;
 // Всё что длиннее — обрезается с пометкой, чтобы tool_calls_json не разрастался бесконечно.
 const TOOL_RESULT_FULL_MAX = 80_000;
 
+type FileReadSnapshot = {
+  userId: number;
+  filePathKey: string;
+  fileVersion: string;
+  startLine: number;
+  endLine: number;
+  createdAt: number;
+};
+
+const FILE_READ_SNAPSHOT_TTL_MS = 15 * 60 * 1000;
+const FILE_READ_SNAPSHOT_MAX = 500;
+const fileReadSnapshots = new Map<string, FileReadSnapshot>();
+
+const filePathSnapshotKey = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, '/');
+  return /^[a-z]:\//i.test(normalized) ? normalized.toLowerCase() : normalized;
+};
+
+const pruneFileReadSnapshots = () => {
+  const expiresBefore = Date.now() - FILE_READ_SNAPSHOT_TTL_MS;
+  for (const [id, snapshot] of fileReadSnapshots) {
+    if (snapshot.createdAt < expiresBefore) fileReadSnapshots.delete(id);
+  }
+  while (fileReadSnapshots.size >= FILE_READ_SNAPSHOT_MAX) {
+    const oldestId = fileReadSnapshots.keys().next().value as string | undefined;
+    if (!oldestId) break;
+    fileReadSnapshots.delete(oldestId);
+  }
+};
+
+const addFileReadSnapshot = async (
+  userId: number,
+  filePath: string,
+  fallbackStartLine: number,
+  result: unknown,
+): Promise<string | null> => {
+  if (!result || typeof result !== 'object') return null;
+  const value = result as Record<string, unknown>;
+  const fileVersion = typeof value.file_version === 'string' ? value.file_version : '';
+  if (!fileVersion) return null;
+
+  const startLine = Number.isFinite(Number(value.start_line))
+    ? Math.max(1, Math.floor(Number(value.start_line)))
+    : fallbackStartLine;
+  const readLines = Number.isFinite(Number(value.read_lines))
+    ? Math.max(0, Math.floor(Number(value.read_lines)))
+    : 0;
+  const { randomUUID } = await import('node:crypto');
+  const snapshotId = randomUUID();
+
+  pruneFileReadSnapshots();
+  fileReadSnapshots.set(snapshotId, {
+    userId,
+    filePathKey: filePathSnapshotKey(filePath),
+    fileVersion,
+    startLine,
+    endLine: startLine + readLines - 1,
+    createdAt: Date.now(),
+  });
+  return snapshotId;
+};
+
 const limitPcCommandOutput = (output: string): string => {
   if (output.length <= PC_COMMAND_OUTPUT_MAX) return output;
   const omitted = output.length - PC_COMMAND_OUTPUT_MAX;
@@ -2155,7 +2217,7 @@ const buildReadFileTool = () => {
 - Нужно прочитать часть большого файла (постранично)
 - Нужно узнать точные номера строк перед использованием edit_file_lines
 
-Возвращает UTF-8 текст с указанием номера начальной строки и общего количества строк.
+Returns UTF-8 text together with the starting line, total line count, and snapshot_id. Pass that snapshot_id to edit_file_lines.
 Поддерживает пагинацию: если файл большой, читай его частями через start_line/max_lines.
 
 ВАЖНО для edit_file_lines: Перед редактированием ВСЕГДА вызывай read_file с line_numbers=true и нужным start_line/max_lines, чтобы увидеть точные номера строк. Это исключит ошибки при указании start_line/end_line в edit_file_lines.`,
@@ -2318,12 +2380,12 @@ const buildEditFileLinesTool = () => {
             type: 'string',
             description: 'Новый текст для вставки вместо старых строк. Пустая строка = удаление строк.'
           },
-          expected_content: {
+          snapshot_id: {
             type: 'string',
-            description: 'The exact current content of the replaced lines from the latest read_file result, without line-number prefixes. Use an empty string for an insertion that removes no lines.'
+            description: 'The snapshot_id returned by the latest read_file call for this file and line range.'
           }
         },
-        required: ['file_path', 'start_line', 'end_line', 'new_content', 'expected_content']
+        required: ['file_path', 'start_line', 'end_line', 'new_content', 'snapshot_id']
       }
     }
   };
@@ -4454,6 +4516,18 @@ Respond in the user's language. Be detailed and precise.`
     const startLine = typeof parsed.start_line === 'number' && parsed.start_line > 0 ? Math.floor(parsed.start_line) : 1;
     const maxLines = typeof parsed.max_lines === 'number' && parsed.max_lines > 0 ? Math.min(Math.floor(parsed.max_lines), 2000) : 500;
     const lineNumbers = parsed.line_numbers === true;
+    const buildReadSuccess = async (result: unknown) => {
+      const normalizedResult = typeof result === 'object' && result !== null
+        ? result as Record<string, unknown>
+        : { content: typeof result === 'string' ? result : JSON.stringify(result) };
+      const snapshotId = await addFileReadSnapshot(user.id, filePath, startLine, result);
+      return JSON.stringify({
+        status: 'success',
+        file_path: filePath,
+        ...normalizedResult,
+        ...(snapshotId ? { snapshot_id: snapshotId } : {}),
+      });
+    };
 
     // Desktop must be online
     if (!isDesktopOnline(user.id)) {
@@ -4468,11 +4542,7 @@ Respond in the user's language. Be detailed and precise.`
       // Execute immediately via WS IPC
       try {
         const result = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: startLine, max_lines: maxLines, line_numbers: lineNumbers }, 30000, signal);
-        return JSON.stringify({
-          status: 'success',
-          file_path: filePath,
-          ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
-        });
+        return await buildReadSuccess(result);
       } catch (err: any) {
         return JSON.stringify({ status: 'error', message: `Ошибка чтения файла: ${err?.message || String(err)}`, file_path: filePath });
       }
@@ -4531,11 +4601,7 @@ Respond in the user's language. Be detailed and precise.`
 
     try {
       const result = await waitForHitlConfirmation(user.id, confirmationPromise);
-      return JSON.stringify({
-        status: 'success',
-        file_path: filePath,
-        ...(typeof result === 'object' && result !== null ? result : { content: typeof result === 'string' ? result : JSON.stringify(result) }),
-      });
+      return await buildReadSuccess(result);
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
         return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'Пользователь отклонил чтение файла.', file_path: filePath }, err));
@@ -4782,10 +4848,10 @@ Respond in the user's language. Be detailed and precise.`
     const startLine = parseLineNumber(parsed.start_line);
     const endLine = parseLineNumber(parsed.end_line);
     const newContent: string = typeof parsed.new_content === 'string' ? parsed.new_content : '';
-    const expectedContent: string | null = typeof parsed.expected_content === 'string' ? parsed.expected_content : null;
+    const snapshotId = typeof parsed.snapshot_id === 'string' ? parsed.snapshot_id.trim() : '';
 
     if (startLine < 1) return JSON.stringify({ status: 'error', message: 'start_line должен быть >= 1' });
-    if (expectedContent === null) return JSON.stringify({ status: 'error', message: 'expected_content is required. Read the target lines again with read_file first.' });
+    if (!snapshotId) return JSON.stringify({ status: 'error', message: 'snapshot_id is required. Read the target lines again with read_file first.' });
     if (endLine < 0) return JSON.stringify({ status: 'error', message: 'end_line должен быть >= 0' });
     if (endLine !== 0 && endLine < startLine - 1) {
       return JSON.stringify({ status: 'error', message: 'end_line должен быть >= start_line - 1 (для вставки укажи end_line = start_line - 1)' });
@@ -4800,6 +4866,18 @@ Respond in the user's language. Be detailed and precise.`
     // Desktop must be online
     if (!isDesktopOnline(user.id)) {
       return JSON.stringify({ status: 'error', message: 'Десктоп-клиент не в сети. Редактирование файла невозможно.' });
+    }
+
+    pruneFileReadSnapshots();
+    const snapshot = fileReadSnapshots.get(snapshotId);
+    if (!snapshot || snapshot.userId !== user.id || snapshot.filePathKey !== filePathSnapshotKey(filePath)) {
+      return JSON.stringify({ status: 'error', message: 'The file snapshot is missing, expired, or belongs to another file. Read the target lines again.', file_path: filePath });
+    }
+    const rangeIsCovered = endLine >= startLine
+      ? startLine >= snapshot.startLine && endLine <= snapshot.endLine
+      : startLine >= snapshot.startLine && startLine <= snapshot.endLine + 1;
+    if (!rangeIsCovered) {
+      return JSON.stringify({ status: 'error', message: 'The requested edit range is outside the lines covered by the snapshot. Read that range again.', file_path: filePath });
     }
 
     // Pre-read only the affected range for diff preview. read_file has a
@@ -4828,18 +4906,23 @@ Respond in the user's language. Be detailed and precise.`
 
       oldLinesPreview = endLine >= startLine ? previewContent : '';
       const normalizedOldContent = oldLinesPreview.replace(/\r\n/g, '\n');
-      if (normalizedOldContent !== expectedContent.replace(/\r\n/g, '\n')) {
-        return JSON.stringify({ status: 'error', message: 'The file changed after it was last read. Read the target lines again and prepare a new edit.', file_path: filePath });
-      }
       if (!expectedFileVersion) {
+        fileReadSnapshots.delete(snapshotId);
         return JSON.stringify({ status: 'error', message: 'The desktop app did not return a file version. Update the desktop app before editing.', file_path: filePath });
       }
+      if (expectedFileVersion !== snapshot.fileVersion) {
+        fileReadSnapshots.delete(snapshotId);
+        return JSON.stringify({ status: 'error', message: 'The file changed after it was last read. Read the target lines again and prepare a new edit.', file_path: filePath });
+      }
       if (endLine >= startLine && normalizedOldContent === newContent.replace(/\r\n/g, '\n')) {
+        fileReadSnapshots.delete(snapshotId);
         return JSON.stringify({ status: 'info', message: 'No changes were made because the replacement matches the current content.', file_path: filePath });
       }
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Не удалось прочитать файл для diff: ${err?.message || String(err)}`, file_path: filePath });
     }
+
+    fileReadSnapshots.delete(snapshotId);
 
     // Auto-reject in scheduler mode
     if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. File edit confirmation was automatically rejected.', file_path: filePath });
@@ -4854,7 +4937,7 @@ Respond in the user's language. Be detailed and precise.`
         userId: user.id,
         kind: 'file_action',
         label: `edit lines ${startLine}-${endLine}: ${filePath}`,
-        payload: { ipcType: 'edit_file_lines', ipcPayload: { file_path: filePath, start_line: startLine, end_line: endLine, new_content: newContent, expected_content: expectedContent, expected_file_version: expectedFileVersion } },
+        payload: { ipcType: 'edit_file_lines', ipcPayload: { file_path: filePath, start_line: startLine, end_line: endLine, new_content: newContent, expected_content: oldLinesPreview, expected_file_version: expectedFileVersion } },
         resolve,
         reject,
         createdAt: Date.now()
