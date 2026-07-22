@@ -33,6 +33,7 @@ declare global {
       writeFile: (payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => Promise<any>;
       grantSessionWriteFolder: (filePath: string) => Promise<{ canceled: boolean; folder?: string }>;
       canAutoWrite: (filePath: string) => Promise<boolean>;
+      grantDetectedSessionWriteFolder: (filePath: string) => Promise<{ granted: boolean; folder?: string; reason?: string }>;
       editFileLines: (payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) => Promise<any>;
       readSshKeys: () => Promise<{ name: string; filename: string; publicKey?: string; privateKey?: string }[]>;
       updateCheck: () => Promise<{

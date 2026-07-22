@@ -400,7 +400,8 @@
       "writingTitle": "Escribiendo archivo{{append}}",
       "sizeValue": "Tamaño: {{size}} KB",
       "lineRange": "Líneas {{start}}–{{end}}",
-      "allowFolderSession": "Permitir carpeta para la sesión"
+      "allowFolderSession": "Permitir carpeta para la sesión",
+      "allowFolderSessionHint": "Elija una carpeta y apruebe automáticamente futuras escrituras y ediciones de archivos dentro de ella hasta que se cierre la aplicación"
     },
     "webcam": {
       "title": "Foto desde cámara web",

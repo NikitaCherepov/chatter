@@ -535,6 +535,8 @@
     "reviewFailed": "Could not review the command: {{error}}\n\n⬆️ The confirmation buttons above remain active.",
     "pcPromptMarkdown": "🔐 PC command confirmation\n\n`{{command}}`\n\nAllow execution?", "pcPrompt": "🔐 PC command confirmation\n\n{{command}}\n\nAllow execution?",
     "totalLines": "\nTotal lines: {{count}}", "fileReadMarkdown": "✅ File read.{{lines}}\n\n```\n{{content}}\n```", "fileRead": "✅ File read.{{lines}}\n\n{{content}}", "fileWritten": "✅ File written.",
+    "workspaceAllowed": "Project folder allowed for this session: {{folder}}",
+    "workspaceNotAllowed": "The file operation completed, but no Git project root was found. Folder access was not enabled.",
     "clickDoneAt": "✅ Click completed ({{x}}, {{y}})", "clickDone": "✅ Click completed.", "clickError": "⚠️ Click error: {{error}}",
     "sshDoneMarkdown": "✅ SSH completed.\n\n```\n{{output}}\n```", "sshDone": "✅ SSH completed.\n\n{{output}}", "sshError": "⚠️ SSH error: {{error}}",
     "sshAlwaysDoneMarkdown": "🔓 Always allowed and SSH completed.\n\n```\n{{output}}\n```", "sshAlwaysDone": "🔓 Always allowed and SSH completed.\n\n{{output}}",
@@ -576,7 +578,7 @@
     "sizeLine": "\nSize: {{size}} KB",
     "allowWriteQuestion": "Allow writing?",
     "allowReadQuestion": "Allow reading?",
-    "buttons": { "write": "✅ Write", "read": "✅ Read" }
+    "buttons": { "write": "✅ Write", "read": "✅ Read", "allowFolderSession": "📁 Allow project folder for session" }
   },
   "generated": {
     "freePlanButton": "FREE ({{value}}k tokens, web {{free}})",

@@ -667,7 +667,9 @@
       "review": "❓ Revisar",
       "reject": "❌ Rechazar",
       "rejectWithComment": "💬 Rechazar con comentario"
-    }
+    },
+    "workspaceAllowed": "Carpeta del proyecto permitida para esta sesión: {{folder}}",
+    "workspaceNotAllowed": "La operación de archivo se completó, pero no se encontró la raíz del proyecto Git. No se habilitó el acceso a la carpeta."
   },
   "fileConfirmation": {
     "writeTitle": "Escribir archivo",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "¿Permitir lectura?",
     "buttons": {
       "write": "✅ Escribir",
-      "read": "✅ Leer"
+      "read": "✅ Leer",
+      "allowFolderSession": "📁 Permitir carpeta del proyecto para la sesión"
     }
   },
   "generated": {

@@ -667,7 +667,9 @@
       "review": "❓ 確認",
       "reject": "❌ 拒否",
       "rejectWithComment": "💬 コメント付きで拒否"
-    }
+    },
+    "workspaceAllowed": "このセッションで許可されたプロジェクトフォルダ: {{folder}}",
+    "workspaceNotAllowed": "ファイル操作は完了しましたが、Gitプロジェクトルートが見つかりませんでした。フォルダアクセスは有効になりませんでした。"
   },
   "fileConfirmation": {
     "writeTitle": "ファイル書き込み",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "読み取りを許可しますか？",
     "buttons": {
       "write": "✅ 書き込み",
-      "read": "✅ 読み取り"
+      "read": "✅ 読み取り",
+      "allowFolderSession": "📁 セッションでプロジェクトフォルダを許可"
     }
   },
   "generated": {

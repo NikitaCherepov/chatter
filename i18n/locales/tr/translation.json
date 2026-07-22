@@ -667,7 +667,9 @@
       "review": "❓ İncele",
       "reject": "❌ Reddet",
       "rejectWithComment": "💬 Yorumla reddet"
-    }
+    },
+    "workspaceAllowed": "Bu oturum için proje klasörüne izin verildi: {{folder}}",
+    "workspaceNotAllowed": "Dosya işlemi tamamlandı, ancak Git proje kökü bulunamadı. Klasör erişimi etkinleştirilmedi."
   },
   "ai": {
     "fallbackAnswer": "Bir anlığına takıldım. Lütfen tekrar deneyin.",
@@ -708,7 +710,8 @@
     "allowReadQuestion": "Okumaya izin verilsin mi?",
     "buttons": {
       "write": "✅ Yaz",
-      "read": "✅ Oku"
+      "read": "✅ Oku",
+      "allowFolderSession": "📁 Oturum için proje klasörüne izin ver"
     }
   },
   "generated": {

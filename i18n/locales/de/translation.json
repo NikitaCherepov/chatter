@@ -667,7 +667,9 @@
       "review": "❓ Überprüfen",
       "reject": "❌ Ablehnen",
       "rejectWithComment": "💬 Mit Kommentar ablehnen"
-    }
+    },
+    "workspaceAllowed": "Projektordner für diese Sitzung erlaubt: {{folder}}",
+    "workspaceNotAllowed": "Der Dateivorgang wurde abgeschlossen, aber es wurde kein Git-Projektstammverzeichnis gefunden. Der Ordnerzugriff wurde nicht aktiviert."
   },
   "fileConfirmation": {
     "writeTitle": "Datei schreiben",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "Lesen erlauben?",
     "buttons": {
       "write": "✅ Schreiben",
-      "read": "✅ Lesen"
+      "read": "✅ Lesen",
+      "allowFolderSession": "📁 Projektordner für Sitzung erlauben"
     }
   },
   "generated": {

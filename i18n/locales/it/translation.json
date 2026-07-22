@@ -667,7 +667,9 @@
       "review": "❓ Rivedi",
       "reject": "❌ Rifiuta",
       "rejectWithComment": "💬 Rifiuta con commento"
-    }
+    },
+    "workspaceAllowed": "Cartella di progetto consentita per questa sessione: {{folder}}",
+    "workspaceNotAllowed": "L'operazione sul file è stata completata, ma non è stata trovata una radice del progetto Git. L'accesso alla cartella non è stato abilitato."
   },
   "fileConfirmation": {
     "writeTitle": "Scrivi file",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "Consentire la lettura?",
     "buttons": {
       "write": "✅ Scrivi",
-      "read": "✅ Leggi"
+      "read": "✅ Leggi",
+      "allowFolderSession": "📁 Consenti cartella di progetto per la sessione"
     }
   },
   "generated": {

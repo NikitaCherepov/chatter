@@ -4448,6 +4448,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
 app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     const confirmationId = `${req.body?.confirmation_id || ''}`;
     const approved = req.body?.approved === true;
+    const allowWorkspaceSession = req.body?.allow_workspace_session === true;
     const userId = resolveInternalAccountId(req.body?.user_id);
     const rejectionComment = req.body?.rejection_comment;
 
@@ -4468,13 +4469,36 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     return res.json({ ok: true, status: 'rejected' });
   }
 
+  if (allowWorkspaceSession && (
+    pending.kind !== 'file_action'
+    || !['write_file', 'edit_file_lines'].includes(pending.payload.ipcType)
+  )) {
+    return res.status(400).json({ error: 'workspace_session_not_available_for_action' });
+  }
+
   try {
     deletePendingPcConfirmation(confirmationId);
     const { sendIpcToDesktop } = await import('./ws-clients.js');
+    let workspace: unknown;
+    if (allowWorkspaceSession) {
+      try {
+        const filePath = 'file_path' in pending.payload.ipcPayload
+          ? pending.payload.ipcPayload.file_path
+          : '';
+        workspace = await sendIpcToDesktop(
+          pending.userId,
+          'grant_session_write_workspace',
+          { file_path: filePath },
+          15000,
+        );
+      } catch (error: any) {
+        workspace = { granted: false, reason: error?.message || 'workspace_grant_failed' };
+      }
+    }
     const ipcTimeout = pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
     const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout);
     pending.resolve(result);
-    return res.json({ ok: true, status: 'executed', result });
+    return res.json({ ok: true, status: 'executed', result, workspace });
   } catch (err: any) {
     pending.reject(err);
     return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });

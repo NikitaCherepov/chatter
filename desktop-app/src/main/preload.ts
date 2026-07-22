@@ -104,6 +104,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   canAutoWrite: (filePath: string) =>
     ipcRenderer.invoke('workspace:can-auto-write', filePath),
 
+  grantDetectedSessionWriteFolder: (filePath: string) =>
+    ipcRenderer.invoke('workspace:grant-detected-session-write-folder', filePath),
+
   // File Action: edit file lines (surgical splice)
   editFileLines: (payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) =>
     ipcRenderer.invoke('edit-file-lines', payload),

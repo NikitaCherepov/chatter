@@ -1062,6 +1062,12 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         newContentLength: typeof payload?.new_content === 'string' ? payload.new_content.length : 0,
       });
       result = await (window as any).electronAPI?.editFileLines(payload);
+    } else if (ipc_type === 'grant_session_write_workspace') {
+      console.log('[ipc] renderer grant detected workspace', {
+        requestId: request_id,
+        filePath: payload?.file_path,
+      });
+      result = await (window as any).electronAPI?.grantDetectedSessionWriteFolder(payload?.file_path);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }

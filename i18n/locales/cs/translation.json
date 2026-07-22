@@ -667,7 +667,9 @@
       "review": "❓ Zkontrolovat",
       "reject": "❌ Zamítnout",
       "rejectWithComment": "💬 Zamítnout s komentářem"
-    }
+    },
+    "workspaceAllowed": "Složka projektu povolena pro tuto relaci: {{folder}}",
+    "workspaceNotAllowed": "Operace se souborem byla dokončena, ale nebyl nalezen kořenový adresář Git projektu. Přístup ke složce nebyl povolen."
   },
   "ai": {
     "fallbackAnswer": "Na chvíli jsem zasekl. Zkuste to prosím znovu.",
@@ -708,7 +710,8 @@
     "allowReadQuestion": "Povolit čtení?",
     "buttons": {
       "write": "✅ Zapsat",
-      "read": "✅ Přečíst"
+      "read": "✅ Přečíst",
+      "allowFolderSession": "📁 Povolit složku projektu pro relaci"
     }
   },
   "generated": {

@@ -667,7 +667,9 @@
       "review": "❓ Examiner",
       "reject": "❌ Rejeter",
       "rejectWithComment": "💬 Rejeter avec commentaire"
-    }
+    },
+    "workspaceAllowed": "Dossier de projet autorisé pour cette session : {{folder}}",
+    "workspaceNotAllowed": "L'opération sur le fichier est terminée, mais aucune racine de projet Git n'a été trouvée. L'accès au dossier n'a pas été activé."
   },
   "fileConfirmation": {
     "writeTitle": "Écrire le fichier",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "Autoriser la lecture ?",
     "buttons": {
       "write": "✅ Écrire",
-      "read": "✅ Lire"
+      "read": "✅ Lire",
+      "allowFolderSession": "📁 Autoriser le dossier du projet pour la session"
     }
   },
   "generated": {

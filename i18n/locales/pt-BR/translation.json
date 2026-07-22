@@ -667,7 +667,9 @@
       "review": "❓ Revisar",
       "reject": "❌ Rejeitar",
       "rejectWithComment": "💬 Rejeitar com comentário"
-    }
+    },
+    "workspaceAllowed": "Pasta do projeto permitida para esta sessão: {{folder}}",
+    "workspaceNotAllowed": "A operação de arquivo foi concluída, mas nenhuma raiz de projeto Git foi encontrada. O acesso à pasta não foi ativado."
   },
   "fileConfirmation": {
     "writeTitle": "Gravar arquivo",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "Permitir leitura?",
     "buttons": {
       "write": "✅ Gravar",
-      "read": "✅ Ler"
+      "read": "✅ Ler",
+      "allowFolderSession": "📁 Permitir pasta do projeto para a sessão"
     }
   },
   "generated": {

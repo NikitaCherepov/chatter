@@ -667,7 +667,9 @@
       "review": "❓ 审核",
       "reject": "❌ 拒绝",
       "rejectWithComment": "💬 拒绝并添加评论"
-    }
+    },
+    "workspaceAllowed": "此会话允许的项目文件夹：{{folder}}",
+    "workspaceNotAllowed": "文件操作已完成，但未找到 Git 项目根目录。文件夹访问未启用。"
   },
   "fileConfirmation": {
     "writeTitle": "写入文件",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "允许读取？",
     "buttons": {
       "write": "✅ 写入",
-      "read": "✅ 读取"
+      "read": "✅ 读取",
+      "allowFolderSession": "📁 允许会话的项目文件夹"
     }
   },
   "generated": {

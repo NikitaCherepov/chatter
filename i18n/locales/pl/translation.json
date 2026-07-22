@@ -667,7 +667,9 @@
       "review": "❓ Przegląd",
       "reject": "❌ Odrzuć",
       "rejectWithComment": "💬 Odrzuć z komentarzem"
-    }
+    },
+    "workspaceAllowed": "Folder projektu dozwolony dla tej sesji: {{folder}}",
+    "workspaceNotAllowed": "Operacja na pliku zakończona, ale nie znaleziono katalogu głównego projektu Git. Dostęp do folderu nie został włączony."
   },
   "fileConfirmation": {
     "writeTitle": "Zapisz plik",
@@ -678,7 +680,8 @@
     "allowReadQuestion": "Zezwolić na odczyt?",
     "buttons": {
       "write": "✅ Zapisz",
-      "read": "✅ Odczytaj"
+      "read": "✅ Odczytaj",
+      "allowFolderSession": "📁 Zezwól na folder projektu dla sesji"
     }
   },
   "generated": {

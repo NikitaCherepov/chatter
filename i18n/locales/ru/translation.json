@@ -535,6 +535,8 @@
     "reviewFailed": "Не удалось проверить команду: {{error}}\n\n⬆️ Кнопки подтверждения выше остаются активными.",
     "pcPromptMarkdown": "🔐 Подтверждение команды на ПК\n\n`{{command}}`\n\nРазрешить выполнение?", "pcPrompt": "🔐 Подтверждение команды на ПК\n\n{{command}}\n\nРазрешить выполнение?",
     "totalLines": "\nВсего строк: {{count}}", "fileReadMarkdown": "✅ Файл прочитан.{{lines}}\n\n```\n{{content}}\n```", "fileRead": "✅ Файл прочитан.{{lines}}\n\n{{content}}", "fileWritten": "✅ Файл записан.",
+    "workspaceAllowed": "Папка проекта разрешена на эту сессию: {{folder}}",
+    "workspaceNotAllowed": "Операция с файлом выполнена, но корень Git-проекта не найден. Доступ к папке не включён.",
     "clickDoneAt": "✅ Клик выполнен ({{x}}, {{y}})", "clickDone": "✅ Клик выполнен.", "clickError": "⚠️ Ошибка клика: {{error}}",
     "sshDoneMarkdown": "✅ SSH выполнен.\n\n```\n{{output}}\n```", "sshDone": "✅ SSH выполнен.\n\n{{output}}", "sshError": "⚠️ Ошибка SSH: {{error}}",
     "sshAlwaysDoneMarkdown": "🔓 Разрешено всегда, SSH выполнен.\n\n```\n{{output}}\n```", "sshAlwaysDone": "🔓 Разрешено всегда, SSH выполнен.\n\n{{output}}",
@@ -576,7 +578,7 @@
     "sizeLine": "\nРазмер: {{size}} КБ",
     "allowWriteQuestion": "Разрешить запись?",
     "allowReadQuestion": "Разрешить чтение?",
-    "buttons": { "write": "✅ Записать", "read": "✅ Прочитать" }
+    "buttons": { "write": "✅ Записать", "read": "✅ Прочитать", "allowFolderSession": "📁 Разрешить папку проекта на сессию" }
   },
   "generated": {
     "freePlanButton": "FREE ({{value}}k tokens, web {{free}})",

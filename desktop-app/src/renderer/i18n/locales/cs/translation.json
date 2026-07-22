@@ -680,7 +680,8 @@
       "writingTitle": "Zápis souboru{{append}}",
       "sizeValue": "Velikost: {{size}} KB",
       "lineRange": "Řádky {{start}}–{{end}}",
-      "allowFolderSession": "Povolit složku pro relaci"
+      "allowFolderSession": "Povolit složku pro relaci",
+      "allowFolderSessionHint": "Vyberte složku a automaticky schvalte budoucí zápisy a úpravy souborů v ní, dokud není aplikace zavřena"
     },
     "webcam": {
       "title": "Fotografie z webkamery",

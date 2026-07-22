@@ -98,16 +98,20 @@ function isSensitiveAutoWritePath(filePath: string): boolean {
   return false;
 }
 
-function findSuggestedWorkspaceFolder(filePath: string): string {
+function findGitWorkspaceFolder(filePath: string): string | null {
   let current = resolvePathThroughExistingAncestor(path.dirname(path.resolve(filePath)));
-  const fallback = current;
 
   while (true) {
     if (fs.existsSync(path.join(current, '.git'))) return current;
     const parent = path.dirname(current);
-    if (parent === current) return fallback;
+    if (parent === current) return null;
     current = parent;
   }
+}
+
+function findSuggestedWorkspaceFolder(filePath: string): string {
+  return findGitWorkspaceFolder(filePath)
+    ?? resolvePathThroughExistingAncestor(path.dirname(path.resolve(filePath)));
 }
 
 function grantSessionWriteFolder(folderPath: string): string {
@@ -1272,6 +1276,14 @@ function createWindow() {
   ipcMain.handle('workspace:can-auto-write', (event, filePath: string) => {
     assertTrustedIpcSender(event);
     return typeof filePath === 'string' && canAutoWriteFile(filePath.trim());
+  });
+
+  ipcMain.handle('workspace:grant-detected-session-write-folder', (event, filePath: string) => {
+    assertTrustedIpcSender(event);
+    if (typeof filePath !== 'string' || !filePath.trim()) throw new Error('file_path_required');
+    const gitRoot = findGitWorkspaceFolder(filePath.trim());
+    if (!gitRoot) return { granted: false, reason: 'git_root_not_found' };
+    return { granted: true, folder: grantSessionWriteFolder(gitRoot) };
   });
 
   ipcMain.handle('edit-file-lines', async (event, payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) => {

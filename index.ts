@@ -4923,7 +4923,7 @@ bot.action(/^pcconfirm:always_cancel:(.+)$/, async (ctx) => {
 
 // ── File Action Confirmation (Telegram inline buttons) ────────────────────
 
-bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
+bot.action(/^fileconfirm:(allow|workspace|reject|reject_comment):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const confirmationId = ctx.match[2];
     const userId = ctx.state.accountId;
@@ -4949,13 +4949,13 @@ bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
         return;
     }
 
-    // action === 'allow'
+    const allowWorkspaceSession = action === 'workspace';
     await ctx.answerCbQuery(ctx.t('confirmations.executing'));
     (async () => {
         try {
             const resp = await axios.post(
                 `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
-                { confirmation_id: confirmationId, approved: true, user_id: userId },
+                { confirmation_id: confirmationId, approved: true, user_id: userId, allow_workspace_session: allowWorkspaceSession },
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
             );
             const result = resp.data?.result;
@@ -4967,7 +4967,14 @@ bot.action(/^fileconfirm:(allow|reject|reject_comment):(.+)$/, async (ctx) => {
                     ctx.editMessageText(ctx.t('confirmations.fileRead', { lines: linesInfo, content: contentPreview })).catch(() => {});
                 });
             } else {
-                await ctx.editMessageText(ctx.t('confirmations.fileWritten')).catch(() => {});
+                let successText = ctx.t('confirmations.fileWritten');
+                if (allowWorkspaceSession) {
+                    const workspace = resp.data?.workspace;
+                    successText += workspace?.granted && workspace?.folder
+                        ? `\n\n${ctx.t('confirmations.workspaceAllowed', { folder: workspace.folder })}`
+                        : `\n\n${ctx.t('confirmations.workspaceNotAllowed')}`;
+                }
+                await ctx.editMessageText(successText).catch(() => {});
             }
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
@@ -5953,17 +5960,23 @@ const processUserTextThroughAi = async (
                     }
                     msgText += `\n\n${confirmationQuestion}`;
 
-                    const keyboard = Markup.inlineKeyboard([
+                    const keyboardRows = [
                         [
                             Markup.button.callback(ctx.t(isWrite
                                 ? 'fileConfirmation.buttons.write'
                                 : 'fileConfirmation.buttons.read'), `fileconfirm:allow:${confirmationId}`),
                             Markup.button.callback(ctx.t('admin.buttons.reject'), `fileconfirm:reject:${confirmationId}`),
                         ],
-                        [
-                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `fileconfirm:reject_comment:${confirmationId}`),
-                        ]
+                    ];
+                    if (isWrite) {
+                        keyboardRows.push([
+                            Markup.button.callback(ctx.t('fileConfirmation.buttons.allowFolderSession'), `fileconfirm:workspace:${confirmationId}`),
+                        ]);
+                    }
+                    keyboardRows.push([
+                        Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `fileconfirm:reject_comment:${confirmationId}`),
                     ]);
+                    const keyboard = Markup.inlineKeyboard(keyboardRows);
                     console.log('[tg][desktop_action] file_action_confirmation', {
                         confirmationId,
                         actionType,
@@ -6005,6 +6018,9 @@ const processUserTextThroughAi = async (
                         [
                             Markup.button.callback(ctx.t('generated.applyButton'), `fileconfirm:allow:${confirmationId}`),
                             Markup.button.callback(ctx.t('admin.buttons.reject'), `fileconfirm:reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback(ctx.t('fileConfirmation.buttons.allowFolderSession'), `fileconfirm:workspace:${confirmationId}`),
                         ],
                         [
                             Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `fileconfirm:reject_comment:${confirmationId}`),

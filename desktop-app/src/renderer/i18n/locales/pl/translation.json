@@ -680,7 +680,8 @@
       "writingTitle": "Zapisywanie pliku{{append}}",
       "sizeValue": "Rozmiar: {{size}} KB",
       "lineRange": "Linie {{start}}–{{end}}",
-      "allowFolderSession": "Zezwól na folder dla sesji"
+      "allowFolderSession": "Zezwól na folder dla sesji",
+      "allowFolderSessionHint": "Wybierz folder i automatycznie zatwierdzaj przyszłe zapisy i edycje plików w nim, dopóki aplikacja nie zostanie zamknięta"
     },
     "webcam": {
       "title": "Zdjęcie z kamery internetowej",
