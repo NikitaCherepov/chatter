@@ -680,8 +680,7 @@
       "writingTitle": "Dosya yazılıyor{{append}}",
       "sizeValue": "Boyut: {{size}} KB",
       "lineRange": "{{start}}–{{end}} satırları",
-      "allowFolderSession": "Oturum için klasöre izin ver",
-      "allowFolderSessionHint": "Uygulama kapanana kadar bu klasördeki gelecekteki dosya yazma ve düzenlemelerini otomatik olarak onayla"
+      "allowFolderSession": "Oturum için klasöre izin ver"
     },
     "webcam": {
       "title": "Web kamerası fotoğrafı",

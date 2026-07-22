@@ -400,8 +400,7 @@
       "writingTitle": "ファイル書き込み{{append}}",
       "sizeValue": "サイズ: {{size}} KB",
       "lineRange": "行 {{start}}–{{end}}",
-      "allowFolderSession": "セッションでフォルダを許可",
-      "allowFolderSessionHint": "アプリを閉じるまで、このフォルダへの今後のファイル書き込みと編集を自動的に承認します"
+      "allowFolderSession": "セッションでフォルダを許可"
     },
     "webcam": {
       "title": "ウェブカメラ写真",

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, session, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, session, shell, type OpenDialogOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
@@ -98,10 +98,20 @@ function isSensitiveAutoWritePath(filePath: string): boolean {
   return false;
 }
 
-function grantSessionWriteFolder(filePath: string): string {
-  const folder = normalizePathForComparison(
-    resolvePathThroughExistingAncestor(path.dirname(path.resolve(filePath))),
-  );
+function findSuggestedWorkspaceFolder(filePath: string): string {
+  let current = resolvePathThroughExistingAncestor(path.dirname(path.resolve(filePath)));
+  const fallback = current;
+
+  while (true) {
+    if (fs.existsSync(path.join(current, '.git'))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return fallback;
+    current = parent;
+  }
+}
+
+function grantSessionWriteFolder(folderPath: string): string {
+  const folder = normalizePathForComparison(resolvePathThroughExistingAncestor(folderPath));
   sessionWriteFolders.add(folder);
   return folder;
 }
@@ -1244,10 +1254,19 @@ function createWindow() {
 
   // ── File Action: edit file lines (surgical splice) ──
 
-  ipcMain.handle('workspace:grant-session-write-folder', (event, filePath: string) => {
+  ipcMain.handle('workspace:grant-session-write-folder', async (event, filePath: string) => {
     assertTrustedIpcSender(event);
     if (typeof filePath !== 'string' || !filePath.trim()) throw new Error('file_path_required');
-    return { folder: grantSessionWriteFolder(filePath.trim()) };
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options: OpenDialogOptions = {
+      defaultPath: findSuggestedWorkspaceFolder(filePath.trim()),
+      properties: ['openDirectory'],
+    };
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths[0]) return { canceled: true };
+    return { canceled: false, folder: grantSessionWriteFolder(result.filePaths[0]) };
   });
 
   ipcMain.handle('workspace:can-auto-write', (event, filePath: string) => {

@@ -31,7 +31,7 @@ declare global {
       readFile: (payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => Promise<any>;
       searchFileKeywords: (payload: { file_path: string; query: string; max_matches?: number }) => Promise<any>;
       writeFile: (payload: { file_path: string; content: string; mode?: 'overwrite' | 'append' }) => Promise<any>;
-      grantSessionWriteFolder: (filePath: string) => Promise<{ folder: string }>;
+      grantSessionWriteFolder: (filePath: string) => Promise<{ canceled: boolean; folder?: string }>;
       canAutoWrite: (filePath: string) => Promise<boolean>;
       editFileLines: (payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) => Promise<any>;
       readSshKeys: () => Promise<{ name: string; filename: string; publicKey?: string; privateKey?: string }[]>;

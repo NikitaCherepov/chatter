@@ -3600,13 +3600,14 @@ export function ChatPage() {
                         title={t('chat.file.allowFolderSessionHint')}
                         onClick={async () => {
                           try {
-                            const { folder } = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                            const selection = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                            if (selection.canceled || !selection.folder) return;
                             await api.apiFetch('/api/v1/pc-commands/approve', {
                               method: 'POST',
                               body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                             });
                             autoApprovedFileIdsRef.current.add(conf.confirmation_id);
-                            toast.success(t('chat.toasts.folderAllowedSession', { folder }));
+                            toast.success(t('chat.toasts.folderAllowedSession', { folder: selection.folder }));
                             setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                           } catch {
                             toast.error(t('chat.toasts.commandExecutionFailed'));
@@ -3684,13 +3685,14 @@ export function ChatPage() {
                       title={t('chat.file.allowFolderSessionHint')}
                       onClick={async () => {
                         try {
-                          const { folder } = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                          const selection = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                          if (selection.canceled || !selection.folder) return;
                           await api.apiFetch('/api/v1/pc-commands/approve', {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
                           autoApprovedFileIdsRef.current.add(conf.confirmation_id);
-                          toast.success(t('chat.toasts.folderAllowedSession', { folder }));
+                          toast.success(t('chat.toasts.folderAllowedSession', { folder: selection.folder }));
                           setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
                         } catch {
                           toast.error(t('chat.toasts.commandExecutionFailed'));

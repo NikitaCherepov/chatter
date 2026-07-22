@@ -400,8 +400,7 @@
       "writingTitle": "Datei schreiben{{append}}",
       "sizeValue": "Größe: {{size}} KB",
       "lineRange": "Zeilen {{start}}–{{end}}",
-      "allowFolderSession": "Ordner für Sitzung zulassen",
-      "allowFolderSessionHint": "Zukünftige Dateischreib- und Bearbeitungsvorgänge in diesem Ordner automatisch genehmigen, bis die App geschlossen wird"
+      "allowFolderSession": "Ordner für Sitzung zulassen"
     },
     "webcam": {
       "title": "Webcam-Foto",

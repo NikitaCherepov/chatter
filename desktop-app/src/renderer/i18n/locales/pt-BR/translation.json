@@ -400,8 +400,7 @@
       "writingTitle": "Escrevendo arquivo{{append}}",
       "sizeValue": "Tamanho: {{size}} KB",
       "lineRange": "Linhas {{start}}–{{end}}",
-      "allowFolderSession": "Permitir pasta para a sessão",
-      "allowFolderSessionHint": "Aprovar automaticamente futuras gravações e edições de arquivos nesta pasta até que o aplicativo seja fechado"
+      "allowFolderSession": "Permitir pasta para a sessão"
     },
     "webcam": {
       "title": "Foto da webcam",

@@ -401,7 +401,7 @@
       "sizeValue": "Size: {{size}} KB",
       "lineRange": "Lines {{start}}–{{end}}",
       "allowFolderSession": "Allow folder for session",
-      "allowFolderSessionHint": "Automatically approve future file writes and edits in this folder until the app is closed"
+      "allowFolderSessionHint": "Choose a folder and automatically approve future file writes and edits inside it until the app is closed"
     },
     "webcam": {
       "title": "Webcam photo",

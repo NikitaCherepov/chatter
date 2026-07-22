@@ -400,8 +400,7 @@
       "writingTitle": "Écriture du fichier{{append}}",
       "sizeValue": "Taille : {{size}} Ko",
       "lineRange": "Lignes {{start}}–{{end}}",
-      "allowFolderSession": "Autoriser le dossier pour la session",
-      "allowFolderSessionHint": "Approuver automatiquement les futures écritures et modifications de fichiers dans ce dossier jusqu'à la fermeture de l'application"
+      "allowFolderSession": "Autoriser le dossier pour la session"
     },
     "webcam": {
       "title": "Photo depuis la webcam",

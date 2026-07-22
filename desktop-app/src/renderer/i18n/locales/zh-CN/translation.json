@@ -400,8 +400,7 @@
       "writingTitle": "正在写入文件{{append}}",
       "sizeValue": "大小：{{size}} KB",
       "lineRange": "行 {{start}}–{{end}}",
-      "allowFolderSession": "允许会话使用文件夹",
-      "allowFolderSessionHint": "自动批准此文件夹中未来的文件写入和编辑，直到应用关闭"
+      "allowFolderSession": "允许会话使用文件夹"
     },
     "webcam": {
       "title": "网络摄像头照片",

@@ -680,8 +680,7 @@
       "writingTitle": "Scrittura file{{append}}",
       "sizeValue": "Dimensione: {{size}} KB",
       "lineRange": "Righe {{start}}–{{end}}",
-      "allowFolderSession": "Consenti cartella per sessione",
-      "allowFolderSessionHint": "Approva automaticamente future scritture e modifiche di file in questa cartella fino alla chiusura dell'app"
+      "allowFolderSession": "Consenti cartella per sessione"
     },
     "webcam": {
       "title": "Foto dalla webcam",

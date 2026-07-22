@@ -680,8 +680,7 @@
       "writingTitle": "파일 쓰기{{append}}",
       "sizeValue": "크기: {{size}} KB",
       "lineRange": "줄 {{start}}–{{end}}",
-      "allowFolderSession": "세션에 폴더 허용",
-      "allowFolderSessionHint": "앱이 닫힐 때까지 이 폴더의 향후 파일 쓰기 및 편집을 자동으로 승인합니다"
+      "allowFolderSession": "세션에 폴더 허용"
     },
     "webcam": {
       "title": "웹캠 사진",
