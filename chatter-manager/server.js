@@ -848,6 +848,11 @@ trap report_failure EXIT
 sleep 2
 ${stopCommand}
 ${composeCommand}
+# Updating a mutable tag such as "latest" leaves the previous image dangling.
+# Remove only untagged images that are not referenced by any container. Cleanup
+# is best-effort: a prune failure must not turn a successful server update into
+# a failed one.
+docker image prune --force >/dev/null 2>&1 || true
 printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"`;
   await runDocker([
     'run', '--detach', '--rm', '--name', `chatter-server-updater-${Date.now()}`,
