@@ -399,7 +399,9 @@
       "removingLines": "Removing lines {{start}}–{{end}}:",
       "writingTitle": "Writing file{{append}}",
       "sizeValue": "Size: {{size}} KB",
-      "lineRange": "Lines {{start}}–{{end}}"
+      "lineRange": "Lines {{start}}–{{end}}",
+      "allowFolderSession": "Allow folder for session",
+      "allowFolderSessionHint": "Automatically approve future file writes and edits in this folder until the app is closed"
     },
     "webcam": {
       "title": "Webcam photo",
@@ -478,6 +480,7 @@
       "fileWritten": "File written",
       "fileRead": "File read",
       "linesReplaced": "Lines replaced",
+      "folderAllowedSession": "Folder allowed for this session: {{folder}}",
       "photoCaptured": "Photo captured",
       "captureFailed": "Capture failed",
       "emailSent": "Email sent",

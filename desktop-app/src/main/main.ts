@@ -49,6 +49,69 @@ type VideoConversionJob = { cancel: () => void };
 const activeVideoConversions = new Map<string, VideoConversionJob>();
 const activeVideoOutputPaths = new Set<string>();
 
+const sessionWriteFolders = new Set<string>();
+const blockedAutoWriteExtensions = new Set([
+  '.bat', '.cmd', '.com', '.exe', '.msi', '.ps1', '.reg', '.scr', '.sys',
+  '.vbe', '.vbs', '.wsf', '.wsh', '.sh', '.bash', '.zsh', '.fish',
+  '.desktop', '.service', '.socket', '.timer', '.dll',
+]);
+
+function normalizePathForComparison(filePath: string): string {
+  const normalized = path.normalize(filePath);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function resolvePathThroughExistingAncestor(filePath: string): string {
+  const absolute = path.resolve(filePath);
+  let existing = absolute;
+
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) break;
+    existing = parent;
+  }
+
+  const canonicalExisting = fs.existsSync(existing)
+    ? fs.realpathSync.native(existing)
+    : existing;
+  return path.resolve(canonicalExisting, path.relative(existing, absolute));
+}
+
+function isPathInsideFolder(folderPath: string, targetPath: string): boolean {
+  const relative = path.relative(folderPath, targetPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function isSensitiveAutoWritePath(filePath: string): boolean {
+  const resolved = normalizePathForComparison(path.resolve(filePath));
+  const basename = path.basename(resolved).toLowerCase();
+  const extension = path.extname(basename).toLowerCase();
+  const segments = resolved.split(path.sep);
+
+  if (blockedAutoWriteExtensions.has(extension)) return true;
+  if (basename === '.env' || basename.startsWith('.env.')) return true;
+  if (basename === 'package.json' || basename.endsWith('-lock.json')) return true;
+  if (basename === 'pnpm-lock.yaml' || basename === 'yarn.lock') return true;
+  if (basename === 'dockerfile' || basename.startsWith('docker-compose.')) return true;
+  if (segments.includes('.git')) return true;
+  if (segments.includes('.github') && segments.includes('workflows')) return true;
+  return false;
+}
+
+function grantSessionWriteFolder(filePath: string): string {
+  const folder = normalizePathForComparison(
+    resolvePathThroughExistingAncestor(path.dirname(path.resolve(filePath))),
+  );
+  sessionWriteFolders.add(folder);
+  return folder;
+}
+
+function canAutoWriteFile(filePath: string): boolean {
+  if (!filePath || isSensitiveAutoWritePath(filePath)) return false;
+  const target = normalizePathForComparison(resolvePathThroughExistingAncestor(filePath));
+  return [...sessionWriteFolders].some((folder) => isPathInsideFolder(folder, target));
+}
+
 function outputPathKey(filePath: string): string {
   return process.platform === 'win32' ? filePath.toLowerCase() : filePath;
 }
@@ -1180,6 +1243,17 @@ function createWindow() {
   });
 
   // ── File Action: edit file lines (surgical splice) ──
+
+  ipcMain.handle('workspace:grant-session-write-folder', (event, filePath: string) => {
+    assertTrustedIpcSender(event);
+    if (typeof filePath !== 'string' || !filePath.trim()) throw new Error('file_path_required');
+    return { folder: grantSessionWriteFolder(filePath.trim()) };
+  });
+
+  ipcMain.handle('workspace:can-auto-write', (event, filePath: string) => {
+    assertTrustedIpcSender(event);
+    return typeof filePath === 'string' && canAutoWriteFile(filePath.trim());
+  });
 
   ipcMain.handle('edit-file-lines', async (event, payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) => {
     assertTrustedIpcSender(event);

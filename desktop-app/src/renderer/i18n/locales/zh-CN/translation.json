@@ -399,7 +399,9 @@
       "removingLines": "正在删除（行 {{start}}–{{end}}）：",
       "writingTitle": "正在写入文件{{append}}",
       "sizeValue": "大小：{{size}} KB",
-      "lineRange": "行 {{start}}–{{end}}"
+      "lineRange": "行 {{start}}–{{end}}",
+      "allowFolderSession": "允许会话使用文件夹",
+      "allowFolderSessionHint": "自动批准此文件夹中未来的文件写入和编辑，直到应用关闭"
     },
     "webcam": {
       "title": "网络摄像头照片",
@@ -486,7 +488,8 @@
       "runbookSaveFailed": "操作手册保存失败",
       "commandsReviewFailed": "命令审核失败",
       "credentialsUpdateFailed": "凭据更新失败",
-      "enterNewPassword": "输入新密码"
+      "enterNewPassword": "输入新密码",
+      "folderAllowedSession": "已为此会话允许文件夹：{{folder}}"
     },
     "image": {
       "generatedAlt": "生成的图像",

@@ -698,7 +698,10 @@
     "logout": "Odhlásit se",
     "serverHealthy": "Server je v pořádku",
     "serverNeedsCheck": "Vyžaduje kontrolu",
-    "updateAvailable": "Aktualizace k dispozici"
+    "updateAvailable": "Aktualizace k dispozici",
+    "prompts": "Výzvy",
+    "promptsTitle": "Systémové výzvy",
+    "promptsDesc": "Předvolby dostupné všem uživatelům serveru"
   },
   "security": {
     "adminData": "Administrátorská data",
@@ -726,5 +729,28 @@
       "pt-BR": "Portugalština (Brazílie)",
       "zh-CN": "Čínština (zjednodušená)"
     }
+  },
+  "prompts": {
+    "listTitle": "Systémové výzvy",
+    "listHint": "Předvolby, ze kterých si uživatelé mohou vybrat. Výchozí se použije, pokud uživatel žádnou nevybral.",
+    "newPrompt": "Nová výzva",
+    "nameLabel": "Název",
+    "namePlaceholder": "např. Povídálek",
+    "descriptionLabel": "Popis",
+    "descriptionPlaceholder": "Stručně – k čemu tato výzva slouží",
+    "contentLabel": "Obsah",
+    "contentPlaceholder": "Systémový prompt",
+    "isDefault": "Výchozí",
+    "setDefault": "Nastavit jako výchozí",
+    "deletePrompt": "Smazat",
+    "deleteConfirm": "Smazat prompt \"{{name}}\"? Uživatelé, kteří jej vybrali, se vrátí k výchozímu.",
+    "cannotDeleteDefault": "Nelze smazat výchozí prompt. Nejprve nastavte jiný jako výchozí.",
+    "cannotDeleteLast": "Nelze smazat poslední prompt.",
+    "createSuccess": "Prompt vytvořen",
+    "updateSuccess": "Prompt aktualizován",
+    "deleteSuccess": "Výzva smazána",
+    "defaultSet": "Výchozí výzva změněna",
+    "emptyList": "Zatím žádné výzvy.",
+    "defaultBadge": "výchozí"
   }
 }

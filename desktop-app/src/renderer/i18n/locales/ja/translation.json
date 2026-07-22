@@ -399,7 +399,9 @@
       "removingLines": "削除中 (行 {{start}}–{{end}}):",
       "writingTitle": "ファイル書き込み{{append}}",
       "sizeValue": "サイズ: {{size}} KB",
-      "lineRange": "行 {{start}}–{{end}}"
+      "lineRange": "行 {{start}}–{{end}}",
+      "allowFolderSession": "セッションでフォルダを許可",
+      "allowFolderSessionHint": "アプリを閉じるまで、このフォルダへの今後のファイル書き込みと編集を自動的に承認します"
     },
     "webcam": {
       "title": "ウェブカメラ写真",
@@ -486,7 +488,8 @@
       "runbookSaveFailed": "手順書の保存に失敗しました",
       "commandsReviewFailed": "コマンドの確認に失敗しました",
       "credentialsUpdateFailed": "認証情報の更新に失敗しました",
-      "enterNewPassword": "新しいパスワードを入力してください"
+      "enterNewPassword": "新しいパスワードを入力してください",
+      "folderAllowedSession": "このセッションで許可されたフォルダ: {{folder}}"
     },
     "image": {
       "generatedAlt": "生成された画像",

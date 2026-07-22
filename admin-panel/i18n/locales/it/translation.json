@@ -712,7 +712,10 @@
     "settings": "Impostazioni Pannello",
     "settingsTitle": "Impostazioni Pannello",
     "settingsDesc": "Lingua dell'interfaccia e opzioni di visualizzazione",
-    "updateAvailable": "Aggiornamento disponibile"
+    "updateAvailable": "Aggiornamento disponibile",
+    "prompts": "Prompt",
+    "promptsTitle": "Prompt di sistema",
+    "promptsDesc": "Preset disponibili per tutti gli utenti del server"
   },
   "security": {
     "adminData": "Dati amministratore",
@@ -745,5 +748,28 @@
       "pt-BR": "Portoghese (Brasile)",
       "zh-CN": "Cinese (semplificato)"
     }
+  },
+  "prompts": {
+    "listTitle": "Prompt di sistema",
+    "listHint": "Preset tra cui gli utenti possono scegliere. Quello predefinito viene applicato se un utente non ne ha selezionato uno.",
+    "newPrompt": "Nuovo prompt",
+    "nameLabel": "Nome",
+    "namePlaceholder": "es. Chatter",
+    "descriptionLabel": "Descrizione",
+    "descriptionPlaceholder": "Breve — a cosa serve questo prompt",
+    "contentLabel": "Contenuto",
+    "contentPlaceholder": "Prompt di sistema",
+    "isDefault": "Predefinito",
+    "setDefault": "Imposta come predefinito",
+    "deletePrompt": "Elimina",
+    "deleteConfirm": "Eliminare il prompt \"{{name}}\"? Gli utenti che lo hanno selezionato torneranno al predefinito.",
+    "cannotDeleteDefault": "Impossibile eliminare il prompt predefinito. Impostane un altro come predefinito prima.",
+    "cannotDeleteLast": "Impossibile eliminare l'ultimo prompt.",
+    "createSuccess": "Prompt creato",
+    "updateSuccess": "Prompt aggiornato",
+    "deleteSuccess": "Prompt eliminato",
+    "defaultSet": "Prompt predefinito cambiato",
+    "emptyList": "Ancora nessun prompt.",
+    "defaultBadge": "predefinito"
   }
 }

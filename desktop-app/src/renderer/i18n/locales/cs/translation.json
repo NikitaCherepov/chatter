@@ -679,7 +679,9 @@
       "removingLines": "Odstraňování řádků {{start}}–{{end}}:",
       "writingTitle": "Zápis souboru{{append}}",
       "sizeValue": "Velikost: {{size}} KB",
-      "lineRange": "Řádky {{start}}–{{end}}"
+      "lineRange": "Řádky {{start}}–{{end}}",
+      "allowFolderSession": "Povolit složku pro relaci",
+      "allowFolderSessionHint": "Automaticky schválit budoucí zápisy a úpravy souborů v této složce až do zavření aplikace"
     },
     "webcam": {
       "title": "Fotografie z webkamery",
@@ -766,7 +768,8 @@
       "runbookSaveFailed": "Runbook se nepodařilo uložit",
       "commandsReviewFailed": "Příkazy se nepodařilo zkontrolovat",
       "credentialsUpdateFailed": "Přihlašovací údaje se nepodařilo aktualizovat",
-      "enterNewPassword": "Zadejte nové heslo"
+      "enterNewPassword": "Zadejte nové heslo",
+      "folderAllowedSession": "Složka povolena pro tuto relaci: {{folder}}"
     },
     "image": {
       "generatedAlt": "Vygenerovaný obrázek",

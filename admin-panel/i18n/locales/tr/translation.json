@@ -697,7 +697,10 @@
     "logout": "Çıkış yap",
     "serverHealthy": "Sunucu sağlıklı",
     "serverNeedsCheck": "Kontrol edilmesi gerekiyor",
-    "updateAvailable": "Güncelleme mevcut"
+    "updateAvailable": "Güncelleme mevcut",
+    "prompts": "İstemler",
+    "promptsTitle": "Sistem İstemleri",
+    "promptsDesc": "Tüm sunucu kullanıcılarına açık ön ayarlar"
   },
   "security": {
     "adminData": "Yönetici verileri",
@@ -725,5 +728,28 @@
       "pt-BR": "Portekizce (Brezilya)",
       "zh-CN": "Çince (Basitleştirilmiş)"
     }
+  },
+  "prompts": {
+    "listTitle": "Sistem İstemleri",
+    "listHint": "Kullanıcıların seçebileceği ön ayarlar. Kullanıcı birini seçmediğinde varsayılan uygulanır.",
+    "newPrompt": "Yeni İstem",
+    "nameLabel": "Ad",
+    "namePlaceholder": "örn. Sohbetçi",
+    "descriptionLabel": "Açıklama",
+    "descriptionPlaceholder": "Kısa — bu istemin ne için olduğu",
+    "contentLabel": "İçerik",
+    "contentPlaceholder": "Sistem istemi",
+    "isDefault": "Varsayılan",
+    "setDefault": "Varsayılan yap",
+    "deletePrompt": "Sil",
+    "deleteConfirm": "\"{{name}}\" istemi silinsin mi? Bunu seçen kullanıcılar varsayılana dönecek.",
+    "cannotDeleteDefault": "Varsayılan istem silinemez. Önce başka birini varsayılan yapın.",
+    "cannotDeleteLast": "Son istem silinemez.",
+    "createSuccess": "İstem oluşturuldu",
+    "updateSuccess": "İstem güncellendi",
+    "deleteSuccess": "İstem silindi",
+    "defaultSet": "Varsayılan istem değiştirildi",
+    "emptyList": "Henüz istem yok.",
+    "defaultBadge": "varsayılan"
   }
 }

@@ -679,7 +679,9 @@
       "removingLines": "Usuwane (linie {{start}}–{{end}}):",
       "writingTitle": "Zapisywanie pliku{{append}}",
       "sizeValue": "Rozmiar: {{size}} KB",
-      "lineRange": "Linie {{start}}–{{end}}"
+      "lineRange": "Linie {{start}}–{{end}}",
+      "allowFolderSession": "Zezwól na folder dla sesji",
+      "allowFolderSessionHint": "Automatycznie zatwierdzaj przyszłe zapisy i edycje plików w tym folderze do zamknięcia aplikacji"
     },
     "webcam": {
       "title": "Zdjęcie z kamery internetowej",
@@ -766,7 +768,8 @@
       "runbookSaveFailed": "Nie udało się zapisać instrukcji",
       "commandsReviewFailed": "Nie udało się sprawdzić poleceń",
       "credentialsUpdateFailed": "Błąd aktualizacji danych logowania",
-      "enterNewPassword": "Wprowadź nowe hasło"
+      "enterNewPassword": "Wprowadź nowe hasło",
+      "folderAllowedSession": "Folder dozwolony dla tej sesji: {{folder}}"
     },
     "image": {
       "generatedAlt": "Wygenerowany obraz",

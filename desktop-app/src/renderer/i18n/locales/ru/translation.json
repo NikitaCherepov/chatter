@@ -399,7 +399,9 @@
       "removingLines": "Удаляется (строки {{start}}–{{end}}):",
       "writingTitle": "Запись файла{{append}}",
       "sizeValue": "Размер: {{size}} КБ",
-      "lineRange": "Строки {{start}}–{{end}}"
+      "lineRange": "Строки {{start}}–{{end}}",
+      "allowFolderSession": "Разрешить папку на эту сессию",
+      "allowFolderSessionHint": "Автоматически подтверждать запись и редактирование файлов в этой папке до закрытия приложения"
     },
     "webcam": {
       "title": "Фото с веб-камеры",
@@ -478,6 +480,7 @@
       "fileWritten": "Файл записан",
       "fileRead": "Файл прочитан",
       "linesReplaced": "Строки заменены",
+      "folderAllowedSession": "Папка разрешена на эту сессию: {{folder}}",
       "photoCaptured": "Фото сделано",
       "captureFailed": "Ошибка захвата",
       "emailSent": "Письмо отправлено",

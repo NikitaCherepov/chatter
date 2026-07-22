@@ -679,7 +679,9 @@
       "removingLines": "삭제 중 (줄 {{start}}–{{end}}):",
       "writingTitle": "파일 쓰기{{append}}",
       "sizeValue": "크기: {{size}} KB",
-      "lineRange": "줄 {{start}}–{{end}}"
+      "lineRange": "줄 {{start}}–{{end}}",
+      "allowFolderSession": "세션에 폴더 허용",
+      "allowFolderSessionHint": "앱이 닫힐 때까지 이 폴더의 향후 파일 쓰기 및 편집을 자동으로 승인합니다"
     },
     "webcam": {
       "title": "웹캠 사진",
@@ -766,7 +768,8 @@
       "runbookSaveFailed": "런북 저장 실패",
       "commandsReviewFailed": "명령 검토 실패",
       "credentialsUpdateFailed": "자격 증명 업데이트 오류",
-      "enterNewPassword": "새 비밀번호 입력"
+      "enterNewPassword": "새 비밀번호 입력",
+      "folderAllowedSession": "이 세션에 허용된 폴더: {{folder}}"
     },
     "image": {
       "generatedAlt": "생성된 이미지",

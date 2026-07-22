@@ -712,7 +712,10 @@
     "settings": "Configurações do Painel",
     "settingsTitle": "Configurações do Painel",
     "settingsDesc": "Idioma da interface e opções de exibição",
-    "updateAvailable": "Atualização disponível"
+    "updateAvailable": "Atualização disponível",
+    "prompts": "Prompts",
+    "promptsTitle": "Prompts do Sistema",
+    "promptsDesc": "Predefinições disponíveis para todos os usuários do servidor"
   },
   "security": {
     "adminData": "Dados do administrador",
@@ -745,5 +748,28 @@
       "pt-BR": "Português (Brasil)",
       "zh-CN": "Chinês (Simplificado)"
     }
+  },
+  "prompts": {
+    "listTitle": "Prompts do Sistema",
+    "listHint": "Predefinições que os usuários podem escolher. O padrão é aplicado quando um usuário não selecionou nenhum.",
+    "newPrompt": "Novo Prompt",
+    "nameLabel": "Nome",
+    "namePlaceholder": "ex.: Chatter",
+    "descriptionLabel": "Descrição",
+    "descriptionPlaceholder": "Breve — para que serve este prompt",
+    "contentLabel": "Conteúdo",
+    "contentPlaceholder": "Prompt do sistema",
+    "isDefault": "Padrão",
+    "setDefault": "Definir como padrão",
+    "deletePrompt": "Excluir",
+    "deleteConfirm": "Excluir prompt \"{{name}}\"? Os usuários que o selecionaram voltarão ao padrão.",
+    "cannotDeleteDefault": "Não é possível excluir o prompt padrão. Defina outro como padrão primeiro.",
+    "cannotDeleteLast": "Não é possível excluir o último prompt.",
+    "createSuccess": "Prompt criado",
+    "updateSuccess": "Prompt atualizado",
+    "deleteSuccess": "Prompt excluído",
+    "defaultSet": "Prompt padrão alterado",
+    "emptyList": "Nenhum prompt ainda.",
+    "defaultBadge": "padrão"
   }
 }

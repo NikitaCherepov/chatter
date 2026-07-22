@@ -399,7 +399,9 @@
       "removingLines": "Eliminando (líneas {{start}}–{{end}}):",
       "writingTitle": "Escribiendo archivo{{append}}",
       "sizeValue": "Tamaño: {{size}} KB",
-      "lineRange": "Líneas {{start}}–{{end}}"
+      "lineRange": "Líneas {{start}}–{{end}}",
+      "allowFolderSession": "Permitir carpeta para la sesión",
+      "allowFolderSessionHint": "Aprobar automáticamente futuras escrituras y ediciones de archivos en esta carpeta hasta que se cierre la aplicación"
     },
     "webcam": {
       "title": "Foto desde cámara web",
@@ -486,7 +488,8 @@
       "runbookSaveFailed": "No se pudo guardar la instrucción",
       "commandsReviewFailed": "No se pudieron revisar los comandos",
       "credentialsUpdateFailed": "Error al actualizar las credenciales",
-      "enterNewPassword": "Ingrese la nueva contraseña"
+      "enterNewPassword": "Ingrese la nueva contraseña",
+      "folderAllowedSession": "Carpeta permitida para esta sesión: {{folder}}"
     },
     "image": {
       "generatedAlt": "Imagen generada",

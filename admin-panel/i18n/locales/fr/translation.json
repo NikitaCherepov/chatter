@@ -712,7 +712,10 @@
     "settings": "Paramètres du panneau",
     "settingsTitle": "Paramètres du panneau",
     "settingsDesc": "Langue de l'interface et options d'affichage",
-    "updateAvailable": "Mise à jour disponible"
+    "updateAvailable": "Mise à jour disponible",
+    "prompts": "Invites",
+    "promptsTitle": "Invites système",
+    "promptsDesc": "Préréglages disponibles pour tous les utilisateurs du serveur"
   },
   "security": {
     "adminData": "Données d'administration",
@@ -745,5 +748,28 @@
       "pt-BR": "Portugais (Brésil)",
       "zh-CN": "Chinois (simplifié)"
     }
+  },
+  "prompts": {
+    "listTitle": "Invites système",
+    "listHint": "Préréglages parmi lesquels les utilisateurs peuvent choisir. La valeur par défaut est appliquée lorsqu'un utilisateur n'en a pas sélectionné.",
+    "newPrompt": "Nouvelle invite",
+    "nameLabel": "Nom",
+    "namePlaceholder": "ex. Bavard",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Brève — à quoi sert cette invite",
+    "contentLabel": "Contenu",
+    "contentPlaceholder": "Invite système",
+    "isDefault": "Par défaut",
+    "setDefault": "Définir par défaut",
+    "deletePrompt": "Supprimer",
+    "deleteConfirm": "Supprimer l'invite \"{{name}}\" ? Les utilisateurs qui l'ont sélectionnée reviendront à l'invite par défaut.",
+    "cannotDeleteDefault": "Impossible de supprimer l'invite par défaut. Définissez-en une autre comme défaut d'abord.",
+    "cannotDeleteLast": "Impossible de supprimer la dernière invite.",
+    "createSuccess": "Invite créée",
+    "updateSuccess": "Invite mise à jour",
+    "deleteSuccess": "Invite supprimée",
+    "defaultSet": "Invite par défaut modifiée",
+    "emptyList": "Aucune invite pour l'instant.",
+    "defaultBadge": "par défaut"
   }
 }

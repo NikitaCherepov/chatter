@@ -712,7 +712,10 @@
     "settings": "面板设置",
     "settingsTitle": "面板设置",
     "settingsDesc": "界面语言和显示选项",
-    "updateAvailable": "有可用更新"
+    "updateAvailable": "有可用更新",
+    "prompts": "提示词",
+    "promptsTitle": "系统提示词",
+    "promptsDesc": "所有服务器用户可用的预设"
   },
   "security": {
     "adminData": "管理员数据",
@@ -745,5 +748,28 @@
       "pt-BR": "Português (Brasil)",
       "zh-CN": "中文（简体）"
     }
+  },
+  "prompts": {
+    "listTitle": "系统提示词",
+    "listHint": "用户可选择的预设。当用户未选择时，默认应用。",
+    "newPrompt": "新建提示词",
+    "nameLabel": "名称",
+    "namePlaceholder": "例如：闲聊者",
+    "descriptionLabel": "描述",
+    "descriptionPlaceholder": "简要说明——此提示词的用途",
+    "contentLabel": "内容",
+    "contentPlaceholder": "系统提示",
+    "isDefault": "默认",
+    "setDefault": "设为默认",
+    "deletePrompt": "删除",
+    "deleteConfirm": "删除提示\"{{name}}\"? 选择它的用户将恢复为默认提示。",
+    "cannotDeleteDefault": "无法删除默认提示。请先设置另一个为默认。",
+    "cannotDeleteLast": "无法删除最后一个提示。",
+    "createSuccess": "提示已创建",
+    "updateSuccess": "提示已更新",
+    "deleteSuccess": "提示已删除",
+    "defaultSet": "默认提示已更改",
+    "emptyList": "暂无提示。",
+    "defaultBadge": "默认"
   }
 }

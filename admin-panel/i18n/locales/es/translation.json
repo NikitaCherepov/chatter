@@ -712,7 +712,10 @@
     "settings": "Configuración del Panel",
     "settingsTitle": "Configuración del Panel",
     "settingsDesc": "Idioma de la interfaz y opciones de visualización",
-    "updateAvailable": "Actualización disponible"
+    "updateAvailable": "Actualización disponible",
+    "prompts": "Indicaciones",
+    "promptsTitle": "Indicaciones del sistema",
+    "promptsDesc": "Ajustes predefinidos disponibles para todos los usuarios del servidor"
   },
   "security": {
     "adminData": "Datos de administración",
@@ -745,5 +748,28 @@
       "pt-BR": "Portugués (Brasil)",
       "zh-CN": "Chino (simplificado)"
     }
+  },
+  "prompts": {
+    "listTitle": "Indicaciones del sistema",
+    "listHint": "Ajustes predefinidos que los usuarios pueden elegir. El predeterminado se aplica cuando un usuario no ha seleccionado uno.",
+    "newPrompt": "Nueva indicación",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "p. ej. Charlatán",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Breve: para qué sirve esta indicación",
+    "contentLabel": "Contenido",
+    "contentPlaceholder": "Prompt del sistema",
+    "isDefault": "Predeterminado",
+    "setDefault": "Establecer como predeterminado",
+    "deletePrompt": "Eliminar",
+    "deleteConfirm": "¿Eliminar el prompt \"{{name}}\"? Los usuarios que lo hayan seleccionado volverán al predeterminado.",
+    "cannotDeleteDefault": "No se puede eliminar el prompt predeterminado. Establezca otro como predeterminado primero.",
+    "cannotDeleteLast": "No se puede eliminar el último prompt.",
+    "createSuccess": "Prompt creado",
+    "updateSuccess": "Prompt actualizado",
+    "deleteSuccess": "Prompt eliminado",
+    "defaultSet": "Prompt predeterminado cambiado",
+    "emptyList": "Aún no hay prompts.",
+    "defaultBadge": "predeterminado"
   }
 }

@@ -399,7 +399,9 @@
       "removingLines": "Entfernen (Zeilen {{start}}–{{end}}):",
       "writingTitle": "Datei schreiben{{append}}",
       "sizeValue": "Größe: {{size}} KB",
-      "lineRange": "Zeilen {{start}}–{{end}}"
+      "lineRange": "Zeilen {{start}}–{{end}}",
+      "allowFolderSession": "Ordner für Sitzung zulassen",
+      "allowFolderSessionHint": "Zukünftige Dateischreib- und Bearbeitungsvorgänge in diesem Ordner automatisch genehmigen, bis die App geschlossen wird"
     },
     "webcam": {
       "title": "Webcam-Foto",
@@ -486,7 +488,8 @@
       "runbookSaveFailed": "Runbook konnte nicht gespeichert werden",
       "commandsReviewFailed": "Befehlsprüfung fehlgeschlagen",
       "credentialsUpdateFailed": "Fehler beim Aktualisieren der Anmeldedaten",
-      "enterNewPassword": "Neues Passwort eingeben"
+      "enterNewPassword": "Neues Passwort eingeben",
+      "folderAllowedSession": "Ordner für diese Sitzung zugelassen: {{folder}}"
     },
     "image": {
       "generatedAlt": "Generiertes Bild",

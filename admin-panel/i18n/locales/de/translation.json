@@ -712,7 +712,10 @@
     "settings": "Panel-Einstellungen",
     "settingsTitle": "Panel-Einstellungen",
     "settingsDesc": "Sprache der Benutzeroberfläche und Anzeigeoptionen",
-    "updateAvailable": "Update verfügbar"
+    "updateAvailable": "Update verfügbar",
+    "prompts": "Prompts",
+    "promptsTitle": "System-Prompts",
+    "promptsDesc": "Voreinstellungen, die allen Serverbenutzern zur Verfügung stehen"
   },
   "security": {
     "adminData": "Admin-Daten",
@@ -745,5 +748,28 @@
       "pt-BR": "Portugiesisch (Brasilien)",
       "zh-CN": "Chinesisch (Vereinfacht)"
     }
+  },
+  "prompts": {
+    "listTitle": "System-Prompts",
+    "listHint": "Voreinstellungen, aus denen Benutzer wählen können. Die Standardeinstellung wird angewendet, wenn ein Benutzer keine ausgewählt hat.",
+    "newPrompt": "Neuer Prompt",
+    "nameLabel": "Name",
+    "namePlaceholder": "z.B. Plauderer",
+    "descriptionLabel": "Beschreibung",
+    "descriptionPlaceholder": "Kurz — wofür dieser Prompt gedacht ist",
+    "contentLabel": "Inhalt",
+    "contentPlaceholder": "System-Prompt",
+    "isDefault": "Standard",
+    "setDefault": "Als Standard festlegen",
+    "deletePrompt": "Löschen",
+    "deleteConfirm": "Prompt \"{{name}}\" löschen? Benutzer, die ihn ausgewählt haben, werden auf den Standard zurückgesetzt.",
+    "cannotDeleteDefault": "Der Standard-Prompt kann nicht gelöscht werden. Legen Sie zuerst einen anderen als Standard fest.",
+    "cannotDeleteLast": "Der letzte Prompt kann nicht gelöscht werden.",
+    "createSuccess": "Prompt erstellt",
+    "updateSuccess": "Prompt aktualisiert",
+    "deleteSuccess": "Prompt gelöscht",
+    "defaultSet": "Standard-Prompt geändert",
+    "emptyList": "Noch keine Prompts.",
+    "defaultBadge": "Standard"
   }
 }

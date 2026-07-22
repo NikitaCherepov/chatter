@@ -679,7 +679,9 @@
       "removingLines": "{{start}}–{{end}} satırları kaldırılıyor:",
       "writingTitle": "Dosya yazılıyor{{append}}",
       "sizeValue": "Boyut: {{size}} KB",
-      "lineRange": "{{start}}–{{end}} satırları"
+      "lineRange": "{{start}}–{{end}} satırları",
+      "allowFolderSession": "Oturum için klasöre izin ver",
+      "allowFolderSessionHint": "Uygulama kapanana kadar bu klasördeki gelecekteki dosya yazma ve düzenlemelerini otomatik olarak onayla"
     },
     "webcam": {
       "title": "Web kamerası fotoğrafı",
@@ -766,7 +768,8 @@
       "runbookSaveFailed": "Runbook kaydedilemedi",
       "commandsReviewFailed": "Komutlar incelenemedi",
       "credentialsUpdateFailed": "Kimlik bilgileri güncellenemedi",
-      "enterNewPassword": "Yeni bir şifre girin"
+      "enterNewPassword": "Yeni bir şifre girin",
+      "folderAllowedSession": "Bu oturum için klasöre izin verildi: {{folder}}"
     },
     "image": {
       "generatedAlt": "Oluşturulan görsel",

@@ -712,7 +712,10 @@
     "settings": "パネル設定",
     "settingsTitle": "パネル設定",
     "settingsDesc": "インターフェース言語と表示オプション",
-    "updateAvailable": "アップデートあり"
+    "updateAvailable": "アップデートあり",
+    "prompts": "プロンプト",
+    "promptsTitle": "システムプロンプト",
+    "promptsDesc": "全サーバーユーザーが利用可能なプリセット"
   },
   "security": {
     "adminData": "管理者データ",
@@ -745,5 +748,28 @@
       "pt-BR": "Português (Brasil)",
       "zh-CN": "中文（简体）"
     }
+  },
+  "prompts": {
+    "listTitle": "システムプロンプト",
+    "listHint": "ユーザーが選択できるプリセット。未選択時はデフォルトが適用されます。",
+    "newPrompt": "新規プロンプト",
+    "nameLabel": "名前",
+    "namePlaceholder": "例：チャッター",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "簡潔に — このプロンプトの用途",
+    "contentLabel": "コンテンツ",
+    "contentPlaceholder": "システムプロンプト",
+    "isDefault": "デフォルト",
+    "setDefault": "デフォルトに設定",
+    "deletePrompt": "削除",
+    "deleteConfirm": "プロンプト「{{name}}」を削除しますか？選択していたユーザーはデフォルトに戻ります。",
+    "cannotDeleteDefault": "デフォルトのプロンプトは削除できません。先に別のプロンプトをデフォルトに設定してください。",
+    "cannotDeleteLast": "最後のプロンプトは削除できません。",
+    "createSuccess": "プロンプトを作成しました",
+    "updateSuccess": "プロンプトを更新しました",
+    "deleteSuccess": "プロンプトを削除しました",
+    "defaultSet": "デフォルトのプロンプトを変更しました",
+    "emptyList": "まだプロンプトがありません。",
+    "defaultBadge": "デフォルト"
   }
 }

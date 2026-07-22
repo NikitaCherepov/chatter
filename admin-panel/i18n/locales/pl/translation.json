@@ -712,7 +712,10 @@
     "settings": "Ustawienia panelu",
     "settingsTitle": "Ustawienia panelu",
     "settingsDesc": "Język interfejsu i opcje wyświetlania",
-    "updateAvailable": "Dostępna aktualizacja"
+    "updateAvailable": "Dostępna aktualizacja",
+    "prompts": "Podpowiedzi",
+    "promptsTitle": "Podpowiedzi systemowe",
+    "promptsDesc": "Ustawienia wstępne dostępne dla wszystkich użytkowników serwera"
   },
   "security": {
     "adminData": "Dane administratora",
@@ -745,5 +748,28 @@
       "pt-BR": "Portugalski (Brazylia)",
       "zh-CN": "Chiński (uproszczony)"
     }
+  },
+  "prompts": {
+    "listTitle": "Podpowiedzi systemowe",
+    "listHint": "Ustawienia wstępne, z których użytkownicy mogą wybierać. Domyślne jest stosowane, gdy użytkownik nie wybrał żadnego.",
+    "newPrompt": "Nowa podpowiedź",
+    "nameLabel": "Nazwa",
+    "namePlaceholder": "np. Gaduła",
+    "descriptionLabel": "Opis",
+    "descriptionPlaceholder": "Krótko — do czego służy ta podpowiedź",
+    "contentLabel": "Treść",
+    "contentPlaceholder": "Prompt systemowy",
+    "isDefault": "Domyślny",
+    "setDefault": "Ustaw jako domyślny",
+    "deletePrompt": "Usuń",
+    "deleteConfirm": "Usunąć prompt \"{{name}}\"? Użytkownicy, którzy go wybrali, zostaną przywróceni do domyślnego.",
+    "cannotDeleteDefault": "Nie można usunąć domyślnego promptu. Najpierw ustaw inny jako domyślny.",
+    "cannotDeleteLast": "Nie można usunąć ostatniego promptu.",
+    "createSuccess": "Prompt utworzony",
+    "updateSuccess": "Prompt zaktualizowany",
+    "deleteSuccess": "Prompt usunięty",
+    "defaultSet": "Domyślny prompt zmieniony",
+    "emptyList": "Brak promptów.",
+    "defaultBadge": "domyślny"
   }
 }

@@ -399,7 +399,9 @@
       "removingLines": "Suppression (lignes {{start}}–{{end}}) :",
       "writingTitle": "Écriture du fichier{{append}}",
       "sizeValue": "Taille : {{size}} Ko",
-      "lineRange": "Lignes {{start}}–{{end}}"
+      "lineRange": "Lignes {{start}}–{{end}}",
+      "allowFolderSession": "Autoriser le dossier pour la session",
+      "allowFolderSessionHint": "Approuver automatiquement les futures écritures et modifications de fichiers dans ce dossier jusqu'à la fermeture de l'application"
     },
     "webcam": {
       "title": "Photo depuis la webcam",
@@ -486,7 +488,8 @@
       "runbookSaveFailed": "Échec de l'enregistrement de la procédure",
       "commandsReviewFailed": "Échec de la vérification des commandes",
       "credentialsUpdateFailed": "Échec de la mise à jour des identifiants",
-      "enterNewPassword": "Entrez un nouveau mot de passe"
+      "enterNewPassword": "Entrez un nouveau mot de passe",
+      "folderAllowedSession": "Dossier autorisé pour cette session : {{folder}}"
     },
     "image": {
       "generatedAlt": "Image générée",

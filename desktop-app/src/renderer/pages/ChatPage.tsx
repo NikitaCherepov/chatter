@@ -704,6 +704,8 @@ export function ChatPage() {
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
   const [editFileLinesConfirmations, setEditFileLinesConfirmations] = useState<Array<{ confirmation_id: string; file_path: string; start_line: number; end_line: number; old_content_preview?: string; new_content_preview?: string }>>([]);
+  const autoApprovingFileIdsRef = useRef(new Set<string>());
+  const autoApprovedFileIdsRef = useRef(new Set<string>());
   const [webcamCaptureConfirmations, setWebcamCaptureConfirmations] = useState<Array<{ confirmation_id: string; purpose: string; camera_name: string }>>([]);
   const [emailConfirmations, setEmailConfirmations] = useState<Array<{ confirmation_id: string; from: string; to: string; subject: string; body: string }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
@@ -1036,6 +1038,42 @@ export function ChatPage() {
     if (action.action === 'file_action_confirmation' && action.value) {
       const val = action.value as { confirmation_id?: string; action_type?: 'read' | 'write'; file_path?: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number };
       if (val.confirmation_id && val.file_path && val.action_type) {
+        if (val.action_type === 'write') {
+          const confirmationId = val.confirmation_id;
+          if (autoApprovedFileIdsRef.current.has(confirmationId) || autoApprovingFileIdsRef.current.has(confirmationId)) return;
+          autoApprovingFileIdsRef.current.add(confirmationId);
+          void (async () => {
+            try {
+              if (await window.electronAPI.canAutoWrite(val.file_path!)) {
+                await api.apiFetch('/api/v1/pc-commands/approve', {
+                  method: 'POST',
+                  body: JSON.stringify({ confirmation_id: confirmationId, approved: true }),
+                });
+                autoApprovedFileIdsRef.current.add(confirmationId);
+                return;
+              }
+            } catch {
+              // Fall back to the normal confirmation card.
+            } finally {
+              autoApprovingFileIdsRef.current.delete(confirmationId);
+            }
+
+            setFileActionConfirmations(prev => {
+              if (prev.some(c => c.confirmation_id === confirmationId)) return prev;
+              return [...prev, {
+                confirmation_id: confirmationId,
+                action_type: val.action_type!,
+                file_path: val.file_path!,
+                mode: val.mode,
+                size_bytes: val.size_bytes,
+                content_preview: val.content_preview,
+                start_line: val.start_line,
+                max_lines: val.max_lines,
+              }];
+            });
+          })();
+          return;
+        }
         setFileActionConfirmations(prev => {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
           return [...prev, {
@@ -1054,17 +1092,37 @@ export function ChatPage() {
     if (action.action === 'edit_file_lines_confirmation' && action.value) {
       const val = action.value as { confirmation_id?: string; file_path?: string; start_line?: number; end_line?: number; old_content_preview?: string; new_content_preview?: string };
       if (val.confirmation_id && val.file_path) {
-        setEditFileLinesConfirmations(prev => {
-          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
-          return [...prev, {
-            confirmation_id: val.confirmation_id!,
-            file_path: val.file_path!,
-            start_line: val.start_line ?? 0,
-            end_line: val.end_line ?? 0,
-            old_content_preview: val.old_content_preview,
-            new_content_preview: val.new_content_preview,
-          }];
-        });
+        const confirmationId = val.confirmation_id;
+        if (autoApprovedFileIdsRef.current.has(confirmationId) || autoApprovingFileIdsRef.current.has(confirmationId)) return;
+        autoApprovingFileIdsRef.current.add(confirmationId);
+        void (async () => {
+          try {
+            if (await window.electronAPI.canAutoWrite(val.file_path!)) {
+              await api.apiFetch('/api/v1/pc-commands/approve', {
+                method: 'POST',
+                body: JSON.stringify({ confirmation_id: confirmationId, approved: true }),
+              });
+              autoApprovedFileIdsRef.current.add(confirmationId);
+              return;
+            }
+          } catch {
+            // Fall back to the normal confirmation card.
+          } finally {
+            autoApprovingFileIdsRef.current.delete(confirmationId);
+          }
+
+          setEditFileLinesConfirmations(prev => {
+            if (prev.some(c => c.confirmation_id === confirmationId)) return prev;
+            return [...prev, {
+              confirmation_id: confirmationId,
+              file_path: val.file_path!,
+              start_line: val.start_line ?? 0,
+              end_line: val.end_line ?? 0,
+              old_content_preview: val.old_content_preview,
+              new_content_preview: val.new_content_preview,
+            }];
+          });
+        })();
       }
     }
 
@@ -3535,6 +3593,29 @@ export function ChatPage() {
                     >
                       {conf.action_type === 'write' ? t('chat.file.write') : t('chat.file.read')}
                     </button>
+                    {conf.action_type === 'write' && (
+                      <button
+                        className={s.suggestMacroSaveBtn}
+                        style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                        title={t('chat.file.allowFolderSessionHint')}
+                        onClick={async () => {
+                          try {
+                            const { folder } = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                            await api.apiFetch('/api/v1/pc-commands/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                            });
+                            autoApprovedFileIdsRef.current.add(conf.confirmation_id);
+                            toast.success(t('chat.toasts.folderAllowedSession', { folder }));
+                            setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                          } catch {
+                            toast.error(t('chat.toasts.commandExecutionFailed'));
+                          }
+                        }}
+                      >
+                        {t('chat.file.allowFolderSession')}
+                      </button>
+                    )}
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
                       onReject={async (comment) => {
@@ -3596,6 +3677,27 @@ export function ChatPage() {
                       }}
                     >
                       {t('common.apply')}
+                    </button>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                      title={t('chat.file.allowFolderSessionHint')}
+                      onClick={async () => {
+                        try {
+                          const { folder } = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          autoApprovedFileIdsRef.current.add(conf.confirmation_id);
+                          toast.success(t('chat.toasts.folderAllowedSession', { folder }));
+                          setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                        } catch {
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
+                        }
+                      }}
+                    >
+                      {t('chat.file.allowFolderSession')}
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}

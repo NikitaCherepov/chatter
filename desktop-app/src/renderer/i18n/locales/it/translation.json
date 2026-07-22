@@ -679,7 +679,9 @@
       "removingLines": "Rimozione (righe {{start}}–{{end}}):",
       "writingTitle": "Scrittura file{{append}}",
       "sizeValue": "Dimensione: {{size}} KB",
-      "lineRange": "Righe {{start}}–{{end}}"
+      "lineRange": "Righe {{start}}–{{end}}",
+      "allowFolderSession": "Consenti cartella per sessione",
+      "allowFolderSessionHint": "Approva automaticamente future scritture e modifiche di file in questa cartella fino alla chiusura dell'app"
     },
     "webcam": {
       "title": "Foto dalla webcam",
@@ -766,7 +768,8 @@
       "runbookSaveFailed": "Salvataggio runbook fallito",
       "commandsReviewFailed": "Revisione comandi fallita",
       "credentialsUpdateFailed": "Aggiornamento credenziali fallito",
-      "enterNewPassword": "Inserisci nuova password"
+      "enterNewPassword": "Inserisci nuova password",
+      "folderAllowedSession": "Cartella consentita per questa sessione: {{folder}}"
     },
     "image": {
       "generatedAlt": "Immagine generata",
