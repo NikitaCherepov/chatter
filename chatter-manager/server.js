@@ -795,7 +795,12 @@ async function getServerUpdateInfo({ pull = false } = {}) {
       inspectRunningService(service, selection.profiles),
       inspectImage(imageReference(service))
     ]);
-    return { service, running, latest, changed: Boolean(running && latest.id && running.id !== latest.id) };
+    const changed = Boolean(running && latest.id && (
+      running.revision && latest.revision
+        ? running.revision !== latest.revision
+        : running.id !== latest.id
+    ));
+    return { service, running, latest, changed };
   }));
   const manager = comparisons.find(item => item.service === 'chatter-manager');
   result.installedHash = shortImageHash(manager?.running);
@@ -803,20 +808,7 @@ async function getServerUpdateInfo({ pull = false } = {}) {
   result.changelog = manager?.latest?.changelog || {};
   result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
   result.available = result.changedServices.length > 0;
-  // A completed operation belongs to the images that are currently running.
-  // If newer image digests are available, including a rebuild of the same
-  // commit, do not present that old terminal state as a newly finished update.
-  if (result.available && result.operation.status === 'complete') {
-    result.operation = {
-      status: 'idle',
-      targetHash: '',
-      message: '',
-      updatedAt: null,
-    };
-  }
-  result.rebuiltFromSameCommit = result.available
-    && result.installedHash !== '—'
-    && result.installedHash === result.latestHash;
+  result.rebuiltFromSameCommit = false;
   return result;
 }
 

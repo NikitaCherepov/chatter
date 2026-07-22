@@ -19,7 +19,20 @@ export function UpdateStatusCard() {
   const [message, setMessage] = useState('');
 
   const activeStatuses = useMemo(() => new Set(['queued', 'backup', 'restarting']), []);
-  const updating = info ? activeStatuses.has(info.operation.status) : false;
+  const operationMatchesLatest = Boolean(
+    info?.operation.targetHash
+      && info.operation.targetHash === info.latestHash,
+  );
+  const updating = Boolean(
+    info
+      && operationMatchesLatest
+      && activeStatuses.has(info.operation.status),
+  );
+  const operationStatus = !info || !operationMatchesLatest
+    ? 'idle'
+    : info.operation.status === 'complete' && info.available
+      ? 'idle'
+      : info.operation.status;
   const busy = checking || refreshing;
   const updateInProgress = updating || applying;
 
@@ -102,9 +115,9 @@ export function UpdateStatusCard() {
       {confirming && info && (
         <ServerUpdateModal
           changelog={info.changelog}
-          rebuiltFromSameCommit={info.rebuiltFromSameCommit}
+          rebuiltFromSameCommit={false}
           updating={updateInProgress}
-          operationStatus={applyError ? 'failed' : info.operation.status}
+          operationStatus={applyError ? 'failed' : operationStatus}
           operationMessage={applyError || info.operation.message}
           onCancel={() => setConfirming(false)}
           onConfirm={() => void apply()}
