@@ -933,9 +933,9 @@ const createCompletionWithModelFallback = async (
   const failedModels: string[] = [];
   let lastError: unknown = null;
 
-  for (const model of modelChain) {
-    const modelIndex = modelChain.indexOf(model);
-    const currentUniqueId = modelIndex >= 0 ? (uniqueIds[modelIndex] || null) : null;
+  for (let modelIndex = 0; modelIndex < modelChain.length; modelIndex += 1) {
+    const model = modelChain[modelIndex];
+    const currentUniqueId = uniqueIds[modelIndex] || null;
     const override = currentUniqueId ? getModelOverride(currentUniqueId) : null;
     const openRouterSlug = override?.openrouter_provider_slug ?? null;
 
@@ -980,7 +980,7 @@ const createCompletionWithModelFallback = async (
           typeof responseObj?.usage?.cost === 'number' && Number.isFinite(responseObj.usage.cost)
             ? responseObj.usage.cost : null;
 
-        const uniqueIdUsed = modelIndex >= 0 ? (uniqueIds[modelIndex] || null) : null;
+        const uniqueIdUsed = uniqueIds[modelIndex] || null;
         return {
           response,
           modelUsed: model,
