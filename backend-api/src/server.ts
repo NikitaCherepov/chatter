@@ -2595,7 +2595,7 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
       COUNT(cm.id) AS message_count,
       MAX(cm.created_at) AS last_message_at,
       (
-        SELECT COALESCE(SUM(utu.actual_cost_usd), SUM(utu.estimated_cost_usd), 0)
+        SELECT SUM(COALESCE(utu.actual_cost_usd, utu.estimated_cost_usd, 0))
         FROM user_token_usage utu
         WHERE utu.user_id = u.id
       ) AS total_cost_usd
@@ -2728,7 +2728,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
   };
   const chatCount = Number((db.prepare('SELECT COUNT(*) AS count FROM user_chats WHERE user_id = ?').get(userId) as { count: number }).count) || 0;
   const totalCostRow = db.prepare(`
-    SELECT COALESCE(SUM(actual_cost_usd), SUM(estimated_cost_usd), 0) AS total_cost_usd
+    SELECT SUM(COALESCE(actual_cost_usd, estimated_cost_usd, 0)) AS total_cost_usd
     FROM user_token_usage
     WHERE user_id = ?
   `).get(userId) as { total_cost_usd: number | null };
