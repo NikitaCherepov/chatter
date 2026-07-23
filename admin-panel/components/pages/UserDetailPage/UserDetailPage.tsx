@@ -354,8 +354,9 @@ function formatTokens(value: number) {
 
 function formatCostUsd(usd: number | null | undefined): string {
   if (usd === null || usd === undefined || !Number.isFinite(usd)) return '—';
-  // No rounding — show full precision for per-model costs.
-  return `$${String(usd)}`;
+  if (usd === 0) return '$0';
+  if (usd < 0.000001) return `$${usd.toFixed(8)}`;
+  return `$${usd.toFixed(6)}`;
 }
 
 /** Prefer actual_cost_usd (real OpenRouter cost); fall back to estimated. */
