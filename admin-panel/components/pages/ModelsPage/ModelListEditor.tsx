@@ -5,6 +5,9 @@ import {
   DEEPSEEK_PRESET_MODELS,
   XIAOMI_PRESET_MODELS,
   formatPricesHint,
+  formatPricesRangeHint,
+  minModelPrices,
+  maxModelPrices,
   type ModelPrices,
 } from '../../../lib/presetModels';
 import { api } from '../../../lib/api';
@@ -124,47 +127,84 @@ type OrEndpoint = {
 };
 
 type ModelEndpointsResult = {
-  /** SelectOption list for the upstream provider dropdown.
-   *  Always starts with "Auto" (empty value). */
   options: SelectOption[];
-  /** Map of tag → prices for instant lookup when the user picks a provider. */
-  pricesByTag: Map<string, ModelPrices | null>;
-  /** Base model price (first endpoint), used for Auto routing. */
+  /** Map of base slug → prices. */
+  pricesBySlug: Map<string, ModelPrices | null>;
   basePrices: ModelPrices | null;
 };
 
+// ── Providers name cache ─────────────────────────────────────────────────────
+
+let _providerNames: Map<string, string> | null = null;
+let _providerNamesAt = 0;
+const PROVIDER_NAMES_TTL_MS = 30 * 60 * 1000;
+
+async function loadProviderNames(): Promise<Map<string, string>> {
+  if (_providerNames && Date.now() - _providerNamesAt < PROVIDER_NAMES_TTL_MS) {
+    return _providerNames;
+  }
+  try {
+    const data = await api<{ data?: Array<{ slug?: string; name?: string }> }>('/api/openrouter/providers');
+    const map = new Map<string, string>();
+    for (const item of data?.data || []) {
+      if (item.slug && item.name) map.set(item.slug, item.name);
+    }
+    _providerNames = map;
+    _providerNamesAt = Date.now();
+    return map;
+  } catch {
+    return _providerNames ?? new Map();
+  }
+}
+
 /**
- * Fetch /endpoints for a model and build:
- *   - the list of available upstream providers (dynamic per model),
- *   - a price map for each tag,
- *   - a base price (first endpoint) for Auto routing.
+ * Fetch /endpoints for a model.
+ * Groups endpoints by base slug (tag.split('/')[0]) and resolves
+ * display names via /api/openrouter/providers.
  */
 async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResult | null> {
   const slashIdx = modelId.indexOf('/');
   if (slashIdx <= 0) return null;
   const author = encodeURIComponent(modelId.slice(0, slashIdx));
   const slug = encodeURIComponent(modelId.slice(slashIdx + 1));
-  try {
-    const data = await api<{ data?: { endpoints?: OrEndpoint[] } }>(
-      `/api/openrouter/models/${author}/${slug}/endpoints`
-    );
-    const endpoints = data?.data?.endpoints || [];
-    const options: SelectOption[] = [];
-    const pricesByTag = new Map<string, ModelPrices | null>();
-    let basePrices: ModelPrices | null = null;
-    for (const ep of endpoints) {
-      const tag = ep.tag || '';
-      if (!tag) continue;
-      const label = ep.provider_name || ep.name || tag;
-      const prices = ep.pricing ? pricingToModelPrices(ep.pricing) : null;
-      pricesByTag.set(tag, prices);
-      if (basePrices === null) basePrices = prices;
-      options.push({ value: tag, label, hint: formatPricesHint(prices) });
-    }
-    return { options, pricesByTag, basePrices };
-  } catch {
-    return null;
+
+  const [endpointsResp, providers] = await Promise.all([
+    api<{ data?: { endpoints?: OrEndpoint[] } }>(`/api/openrouter/models/${author}/${slug}/endpoints`),
+    loadProviderNames(),
+  ]);
+
+  const endpoints = endpointsResp?.data?.endpoints || [];
+
+  // Group by base slug (tag.split('/')[0]).
+  type Entry = { baseSlug: string; prices: ModelPrices };
+  const baseGroups = new Map<string, Entry[]>();
+  for (const ep of endpoints) {
+    const tag = ep.tag || '';
+    const baseSlug = tag.split('/')[0];
+    if (!baseSlug) continue;
+    const prices = ep.pricing ? pricingToModelPrices(ep.pricing) : null;
+    if (!prices) continue;
+    const list = baseGroups.get(baseSlug) || [];
+    list.push({ baseSlug, prices });
+    baseGroups.set(baseSlug, list);
   }
+
+  const options: SelectOption[] = [];
+  const pricesBySlug = new Map<string, ModelPrices | null>();
+  let basePrices: ModelPrices | null = null;
+  for (const [baseSlug, entries] of baseGroups) {
+    const allPrices = entries.map(e => e.prices);
+    const minP = minModelPrices(allPrices);
+    const maxP = maxModelPrices(allPrices);
+    pricesBySlug.set(baseSlug, maxP);
+    if (basePrices === null) basePrices = maxP;
+    const hint = (minP && maxP && entries.length > 1)
+      ? formatPricesRangeHint(minP, maxP)
+      : formatPricesHint(maxP);
+    const label = providers.get(baseSlug) || baseSlug;
+    options.push({ value: baseSlug, label, hint });
+  }
+  return { options, pricesBySlug, basePrices };
 }
 
 // ── ProviderModelFields ──────────────────────────────────────────────────────
@@ -312,12 +352,12 @@ export function ProviderModelFields({
       await applyAutoPrices(base, 'auto');
       return;
     }
-    const cached = endpointsCacheRef.current?.pricesByTag.get(slug) ?? null;
+    const cached = endpointsCacheRef.current?.pricesBySlug.get(slug) ?? null;
     // If we somehow don't have endpoints cached, fetch them now.
     if (!endpointsCacheRef.current && model.model) {
       await loadEndpoints(model.model);
     }
-    const mp = endpointsCacheRef.current?.pricesByTag.get(slug) ?? cached;
+    const mp = endpointsCacheRef.current?.pricesBySlug.get(slug) ?? cached;
     await applyAutoPrices(mp, 'endpoint');
   };
 
@@ -328,7 +368,7 @@ export function ProviderModelFields({
       const endpoints = await loadEndpoints(model.model);
       if (!endpoints) return;
       if (prices.orSlug) {
-        const mp = endpoints.pricesByTag.get(prices.orSlug) ?? null;
+        const mp = endpoints.pricesBySlug.get(prices.orSlug) ?? null;
         await applyAutoPrices(mp, 'endpoint');
       } else {
         await applyAutoPrices(endpoints.basePrices, 'auto');

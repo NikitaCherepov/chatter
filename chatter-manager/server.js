@@ -2062,6 +2062,16 @@ async function handleRequest(req, res) {
     return sendJson(res, 201, { ok: true, backup: await backupPromise });
   }
 
+  // ── OpenRouter providers proxy ─────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/openrouter/providers') {
+    try {
+      const data = await openRouterFetch('/providers');
+      return sendJson(res, 200, data);
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'openrouter_providers_failed' });
+    }
+  }
+
   // ── OpenRouter model search proxy ─────────────────────────────────────────
   if (req.method === 'GET' && pathname === '/api/openrouter/models') {
     const query = `${url.searchParams.get('q') || ''}`.trim();

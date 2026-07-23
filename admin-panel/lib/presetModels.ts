@@ -91,3 +91,45 @@ export const formatPricesHint = (mp: ModelPrices | null): string => {
     : '—';
   return `in $${inP} / out $${outP} / cache $${cacheP} per 1M`;
 };
+
+/**
+ * Min across an array of ModelPrices (per field).
+ */
+export const minModelPrices = (list: ModelPrices[]): ModelPrices | null => {
+  if (list.length === 0) return null;
+  const input = list.reduce((a, b) => Math.min(a, b.inputPricePerMillion ?? Infinity), Infinity);
+  const output = list.reduce((a, b) => Math.min(a, b.outputPricePerMillion ?? Infinity), Infinity);
+  const cache = list.reduce((a, b) => Math.min(a, b.cacheReadPricePerMillion ?? Infinity), Infinity);
+  return {
+    inputPricePerMillion: Number.isFinite(input) ? input : null,
+    outputPricePerMillion: Number.isFinite(output) ? output : null,
+    cacheReadPricePerMillion: Number.isFinite(cache) ? cache : null,
+  };
+};
+
+/**
+ * Max across an array of ModelPrices (per field).
+ */
+export const maxModelPrices = (list: ModelPrices[]): ModelPrices | null => {
+  if (list.length === 0) return null;
+  const input = list.reduce((a, b) => Math.max(a, b.inputPricePerMillion ?? -Infinity), -Infinity);
+  const output = list.reduce((a, b) => Math.max(a, b.outputPricePerMillion ?? -Infinity), -Infinity);
+  const cache = list.reduce((a, b) => Math.max(a, b.cacheReadPricePerMillion ?? -Infinity), -Infinity);
+  return {
+    inputPricePerMillion: Number.isFinite(input) ? input : null,
+    outputPricePerMillion: Number.isFinite(output) ? output : null,
+    cacheReadPricePerMillion: Number.isFinite(cache) ? cache : null,
+  };
+};
+
+/**
+ * Format price range as "in $min-max / out $min-max / cache $min-max per 1M".
+ */
+export const formatPricesRangeHint = (min: ModelPrices, max: ModelPrices): string => {
+  const inRange = formatPriceShort(min.inputPricePerMillion) + '-' + formatPriceShort(max.inputPricePerMillion);
+  const outRange = formatPriceShort(min.outputPricePerMillion) + '-' + formatPriceShort(max.outputPricePerMillion);
+  const cacheRange = (min.cacheReadPricePerMillion !== null && max.cacheReadPricePerMillion !== null)
+    ? formatPriceShort(min.cacheReadPricePerMillion) + '-' + formatPriceShort(max.cacheReadPricePerMillion)
+    : '—';
+  return `in $${inRange} / out $${outRange} / cache $${cacheRange} per 1M`;
+};
