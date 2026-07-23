@@ -1314,8 +1314,7 @@ const getUserTimePayload = (timezoneOffset: number) => {
   };
 };
 
-/** Prompt for Dice Roll Mode. Kept at the end of system prompt, because value changes per request. */
-//TODO PUT THESE AT THE END OF MESSAGE, IT FUCKING MESSING WITH CACHING
+/** Prompt for Dice Roll Mode. Kept at the end of messages, because value changes per request. */
 const buildDiceRollPrompt = (diceRoll: number) => `
 [DICE ROLL MODE: ACTIVE]
 The user rolled a d20 dice for this specific message.
@@ -6334,7 +6333,7 @@ export const sendMessageThroughAi = async (
     try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || 'User', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}${dicePromptHint}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || 'User', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.
@@ -6372,7 +6371,7 @@ export const sendMessageThroughAi = async (
 
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
-
+//LEGACY
 if (!forceProRoute && !isRegeneratingFromHistory && LITE_ROUTER_ENABLED && !manualModel) {
   const routerPrompt = `You are a request router. Your goal is to determine the request category. ANYTHING that doesn't fit the request type, or falls outside your available categories, redirect to PRO. Even if it's profanity or simple conversation.
 Return ONLY ONE WORD from the list below.
@@ -6469,9 +6468,9 @@ User request: "${text}"`;
   }
 }
 
-  // userMessageContent: фото вставляются как image_url ТОЛЬКО если модель поддерживает vision нативно.
-  // Маркеры с URL фото добавляются ВСЕГДА (и для vision, и для non-vision),
-  // чтобы модель могла передать URL в generate_image / describe_image.
+  // userMessageContent: images are inserted as image_url ONLY if the model natively supports vision.
+  // URL markers are added ALWAYS (for both vision and non-vision models)
+  // so the model can pass URLs to generate_image / describe_image.
   const imageUrls = options?.userImages?.length ? options.userImages.map(i => i.url) : [];
   const imageMarker = hasImages
     ? imageUrls.map((url, i) => `[Attached image ${i + 1}: ${url}]`).join('\n')
@@ -6508,6 +6507,16 @@ User request: "${text}"`;
       } else if (Array.isArray(userMessageContent)) {
         userMessageContent = [...userMessageContent, { type: 'text', text: '\n\n' + attText }];
       }
+    }
+  }
+
+  // Append Dice Roll Mode hint into the last user message (not system prompt)
+  // to preserve caching.
+  if (dicePromptHint) {
+    if (typeof userMessageContent === 'string') {
+      userMessageContent += '\n\n' + dicePromptHint;
+    } else if (Array.isArray(userMessageContent)) {
+      userMessageContent = [...userMessageContent, { type: 'text', text: '\n\n' + dicePromptHint }];
     }
   }
 

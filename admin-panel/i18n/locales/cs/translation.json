@@ -70,7 +70,8 @@
     "settingsApplied": "Nastavení použito.",
     "changedRelogin": "Změněno. Přihlaste se znovu.",
     "coefficientLoadError": "Nepodařilo se načíst koeficienty",
-    "coefficientSaved": "Koeficient uložen"
+    "coefficientSaved": "Koeficient uložen",
+    "cancel": "Zrušit"
   },
   "ui": {
     "search": "Hledat…",
@@ -733,7 +734,30 @@
     "currentPassword": "Aktuální heslo",
     "newPassword": "Nové heslo",
     "passwordHint": "Alespoň 12 znaků",
-    "changeData": "Změnit údaje"
+    "changeData": "Změnit údaje",
+    "apiKeys": "API klíče",
+    "apiKeysDescription": "Uložené klíče poskytovatelů. Při konfiguraci modelů vybírejte ze seznamu.",
+    "apiKeyName": "Název",
+    "apiKeyNamePlaceholder": "Můj klíč OpenRouter",
+    "apiKeyValue": "Klíč",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Vytvořit",
+    "apiKeyDelete": "Smazat",
+    "apiKeyCreated": "Klíč vytvořen",
+    "apiKeyDeleted": "Klíč smazán",
+    "apiKeyNoKeys": "Žádné uložené klíče",
+    "apiKeySelect": "API klíč",
+    "apiKeySelectPlaceholder": "Vyberte klíč",
+    "apiKeyCreateNew": "Vytvořit nový…",
+    "apiKeyExistingKey": "Aktuální klíč z prostředí",
+    "apiKeyDeleteTitle": "Smazat klíč",
+    "apiKeyDeleteUsedBy": "Tento klíč používají modely:",
+    "apiKeyDeleteAction": "Co s těmito modely?",
+    "apiKeyDeleteReplace": "Nahradit jiným klíčem",
+    "apiKeyDeleteNullify": "Smazat bez náhrady",
+    "apiKeyDeleteSelectReplacement": "Nový klíč pro modely",
+    "apiKeyDeleteConfirm": "Smazat",
+    "apiKeyNotUsed": "Tento klíč není používán žádným modelem. Lze bezpečně smazat."
   },
   "settings": {
     "languageTitle": "Jazyk rozhraní",

@@ -69,7 +69,8 @@
     "settingsApplied": "Einstellungen übernommen.",
     "changedRelogin": "Geändert. Bitte erneut anmelden.",
     "coefficientLoadError": "Fehler beim Laden der Koeffizienten",
-    "coefficientSaved": "Koeffizient gespeichert"
+    "coefficientSaved": "Koeffizient gespeichert",
+    "cancel": "Abbrechen"
   },
   "models": {
     "auto": {
@@ -747,7 +748,30 @@
     "currentPassword": "Aktuelles Passwort",
     "newPassword": "Neues Passwort",
     "passwordHint": "Mindestens 12 Zeichen",
-    "changeData": "Daten ändern"
+    "changeData": "Daten ändern",
+    "apiKeys": "API-Schlüssel",
+    "apiKeysDescription": "Gespeicherte Anbieterschlüssel. Wählen Sie aus der Liste bei der Modellkonfiguration aus.",
+    "apiKeyName": "Name",
+    "apiKeyNamePlaceholder": "Mein OpenRouter-Schlüssel",
+    "apiKeyValue": "Schlüssel",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Erstellen",
+    "apiKeyDelete": "Löschen",
+    "apiKeyCreated": "Schlüssel erstellt",
+    "apiKeyDeleted": "Schlüssel gelöscht",
+    "apiKeyNoKeys": "Keine gespeicherten Schlüssel",
+    "apiKeySelect": "API-Schlüssel",
+    "apiKeySelectPlaceholder": "Schlüssel auswählen",
+    "apiKeyCreateNew": "Neu erstellen…",
+    "apiKeyExistingKey": "Aktueller Schlüssel aus Umgebung",
+    "apiKeyDeleteTitle": "Schlüssel löschen",
+    "apiKeyDeleteUsedBy": "Dieser Schlüssel wird von Modellen verwendet:",
+    "apiKeyDeleteAction": "Was soll mit diesen Modellen geschehen?",
+    "apiKeyDeleteReplace": "Durch anderen Schlüssel ersetzen",
+    "apiKeyDeleteNullify": "Ohne Ersatz löschen",
+    "apiKeyDeleteSelectReplacement": "Neuer Schlüssel für Modelle",
+    "apiKeyDeleteConfirm": "Löschen",
+    "apiKeyNotUsed": "Dieser Schlüssel wird von keinem Modell verwendet. Kann bedenkenlos gelöscht werden."
   },
   "ui": {
     "search": "Suchen…",

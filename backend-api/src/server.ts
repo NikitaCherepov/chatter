@@ -1056,6 +1056,15 @@ app.put('/api/v1/user/language', (req: AuthedRequest, res) => {
   return res.json({ ok: true, language });
 });
 
+app.put('/api/v1/user/name', (req: AuthedRequest, res) => {
+  const name = `${req.body?.name || ''}`.trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const userId = resolveAccountId(req.authUserId!);
+  const result = db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, name });
+});
+
 // Revoke every access/refresh token previously issued to this account.
 app.post('/api/v1/auth/logout', (req: AuthedRequest, res) => {
   revokeUserAuthTokens(req.authUserId!);

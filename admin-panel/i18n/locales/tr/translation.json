@@ -69,7 +69,8 @@
     "settingsApplied": "Ayarlar uygulandı.",
     "changedRelogin": "Değişti. Tekrar giriş yapın.",
     "coefficientLoadError": "Katsayılar yüklenemedi",
-    "coefficientSaved": "Katsayı kaydedildi"
+    "coefficientSaved": "Katsayı kaydedildi",
+    "cancel": "İptal"
   },
   "ui": {
     "search": "Ara…",
@@ -732,7 +733,30 @@
     "currentPassword": "Mevcut şifre",
     "newPassword": "Yeni şifre",
     "passwordHint": "En az 12 karakter",
-    "changeData": "Verileri değiştir"
+    "changeData": "Verileri değiştir",
+    "apiKeys": "API Anahtarları",
+    "apiKeysDescription": "Kaydedilmiş sağlayıcı anahtarları. Modelleri yapılandırırken listeden seçin.",
+    "apiKeyName": "Ad",
+    "apiKeyNamePlaceholder": "OpenRouter anahtarım",
+    "apiKeyValue": "Anahtar",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Oluştur",
+    "apiKeyDelete": "Sil",
+    "apiKeyCreated": "Anahtar oluşturuldu",
+    "apiKeyDeleted": "Anahtar silindi",
+    "apiKeyNoKeys": "Kayıtlı anahtar yok",
+    "apiKeySelect": "API Anahtarı",
+    "apiKeySelectPlaceholder": "Bir anahtar seçin",
+    "apiKeyCreateNew": "Yeni oluştur…",
+    "apiKeyExistingKey": "Ortamdan mevcut anahtar",
+    "apiKeyDeleteTitle": "Anahtarı sil",
+    "apiKeyDeleteUsedBy": "Bu anahtar modeller tarafından kullanılıyor:",
+    "apiKeyDeleteAction": "Bu modeller için ne yapılsın?",
+    "apiKeyDeleteReplace": "Başka bir anahtarla değiştir",
+    "apiKeyDeleteNullify": "Değiştirmeden sil",
+    "apiKeyDeleteSelectReplacement": "Modeller için yeni anahtar",
+    "apiKeyDeleteConfirm": "Sil",
+    "apiKeyNotUsed": "Bu anahtar hiçbir model tarafından kullanılmıyor. Silmek güvenli."
   },
   "settings": {
     "languageTitle": "Arayüz dili",

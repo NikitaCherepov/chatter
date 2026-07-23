@@ -69,7 +69,8 @@
     "settingsApplied": "Ustawienia zastosowane.",
     "changedRelogin": "Zmieniono. Zaloguj się ponownie.",
     "coefficientLoadError": "Nie udało się załadować współczynników",
-    "coefficientSaved": "Współczynnik zapisany"
+    "coefficientSaved": "Współczynnik zapisany",
+    "cancel": "Anuluj"
   },
   "models": {
     "auto": {
@@ -747,7 +748,30 @@
     "currentPassword": "Aktualne hasło",
     "newPassword": "Nowe hasło",
     "passwordHint": "Co najmniej 12 znaków",
-    "changeData": "Zmień dane"
+    "changeData": "Zmień dane",
+    "apiKeys": "Klucze API",
+    "apiKeysDescription": "Zapisane klucze dostawców. Wybierz z listy podczas konfigurowania modeli.",
+    "apiKeyName": "Nazwa",
+    "apiKeyNamePlaceholder": "Mój klucz OpenRouter",
+    "apiKeyValue": "Klucz",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Utwórz",
+    "apiKeyDelete": "Usuń",
+    "apiKeyCreated": "Klucz utworzony",
+    "apiKeyDeleted": "Klucz usunięty",
+    "apiKeyNoKeys": "Brak zapisanych kluczy",
+    "apiKeySelect": "Klucz API",
+    "apiKeySelectPlaceholder": "Wybierz klucz",
+    "apiKeyCreateNew": "Utwórz nowy…",
+    "apiKeyExistingKey": "Bieżący klucz z env",
+    "apiKeyDeleteTitle": "Usuń klucz",
+    "apiKeyDeleteUsedBy": "Ten klucz jest używany przez modele:",
+    "apiKeyDeleteAction": "Co zrobić z tymi modelami?",
+    "apiKeyDeleteReplace": "Zastąp innym kluczem",
+    "apiKeyDeleteNullify": "Usuń bez zastępowania",
+    "apiKeyDeleteSelectReplacement": "Nowy klucz dla modeli",
+    "apiKeyDeleteConfirm": "Usuń",
+    "apiKeyNotUsed": "Ten klucz nie jest używany przez żaden model. Można bezpiecznie usunąć."
   },
   "ui": {
     "search": "Szukaj…",

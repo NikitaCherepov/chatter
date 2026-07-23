@@ -646,6 +646,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
     if (!trimmed) return;
     setSaving(true);
     try {
+      await api.setUserName(trimmed);
       const updated = { ...user!, name: trimmed };
       setUser(updated);
       localStorage.setItem('chatter_user', JSON.stringify(updated));

@@ -69,7 +69,8 @@
     "settingsApplied": "설정이 적용되었습니다.",
     "changedRelogin": "변경되었습니다. 다시 로그인하세요.",
     "coefficientLoadError": "계수 로드 실패",
-    "coefficientSaved": "계수 저장됨"
+    "coefficientSaved": "계수 저장됨",
+    "cancel": "취소"
   },
   "models": {
     "auto": {
@@ -747,7 +748,30 @@
     "currentPassword": "현재 비밀번호",
     "newPassword": "새 비밀번호",
     "passwordHint": "최소 12자",
-    "changeData": "데이터 변경"
+    "changeData": "데이터 변경",
+    "apiKeys": "API 키",
+    "apiKeysDescription": "저장된 제공자 키입니다. 모델 구성 시 목록에서 선택하세요.",
+    "apiKeyName": "이름",
+    "apiKeyNamePlaceholder": "내 OpenRouter 키",
+    "apiKeyValue": "키",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "생성",
+    "apiKeyDelete": "삭제",
+    "apiKeyCreated": "키가 생성되었습니다",
+    "apiKeyDeleted": "키 삭제됨",
+    "apiKeyNoKeys": "저장된 키 없음",
+    "apiKeySelect": "API 키",
+    "apiKeySelectPlaceholder": "키 선택",
+    "apiKeyCreateNew": "새로 만들기…",
+    "apiKeyExistingKey": "환경 변수의 현재 키",
+    "apiKeyDeleteTitle": "키 삭제",
+    "apiKeyDeleteUsedBy": "이 키를 사용하는 모델:",
+    "apiKeyDeleteAction": "이 모델들을 어떻게 처리할까요?",
+    "apiKeyDeleteReplace": "다른 키로 교체",
+    "apiKeyDeleteNullify": "대체 없이 삭제",
+    "apiKeyDeleteSelectReplacement": "모델용 새 키",
+    "apiKeyDeleteConfirm": "삭제",
+    "apiKeyNotUsed": "이 키는 어떤 모델에서도 사용되지 않습니다. 삭제해도 안전합니다."
   },
   "ui": {
     "search": "검색…",

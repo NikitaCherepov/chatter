@@ -69,7 +69,8 @@
     "settingsApplied": "設定が適用されました。",
     "changedRelogin": "変更されました。再度ログインしてください。",
     "coefficientLoadError": "係数の読み込みに失敗しました",
-    "coefficientSaved": "係数が保存されました"
+    "coefficientSaved": "係数が保存されました",
+    "cancel": "キャンセル"
   },
   "models": {
     "auto": {
@@ -747,7 +748,30 @@
     "currentPassword": "現在のパスワード",
     "newPassword": "新しいパスワード",
     "passwordHint": "12文字以上",
-    "changeData": "データを変更"
+    "changeData": "データを変更",
+    "apiKeys": "APIキー",
+    "apiKeysDescription": "保存されたプロバイダーキー。モデル設定時にリストから選択します。",
+    "apiKeyName": "名前",
+    "apiKeyNamePlaceholder": "My OpenRouter key",
+    "apiKeyValue": "キー",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "作成",
+    "apiKeyDelete": "削除",
+    "apiKeyCreated": "キーを作成しました",
+    "apiKeyDeleted": "キーが削除されました",
+    "apiKeyNoKeys": "保存されたキーはありません",
+    "apiKeySelect": "APIキー",
+    "apiKeySelectPlaceholder": "キーを選択",
+    "apiKeyCreateNew": "新規作成…",
+    "apiKeyExistingKey": "環境変数からの現在のキー",
+    "apiKeyDeleteTitle": "キーの削除",
+    "apiKeyDeleteUsedBy": "このキーは以下のモデルで使用されています：",
+    "apiKeyDeleteAction": "これらのモデルをどうしますか？",
+    "apiKeyDeleteReplace": "別のキーに置き換え",
+    "apiKeyDeleteNullify": "置き換えずに削除",
+    "apiKeyDeleteSelectReplacement": "モデル用の新しいキー",
+    "apiKeyDeleteConfirm": "削除",
+    "apiKeyNotUsed": "このキーはどのモデルでも使用されていません。削除しても問題ありません。"
   },
   "ui": {
     "search": "検索…",

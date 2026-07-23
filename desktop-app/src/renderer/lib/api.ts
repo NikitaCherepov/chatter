@@ -1496,6 +1496,14 @@ export async function setUserLanguage(language: string): Promise<{ ok: boolean; 
   });
 }
 
+export async function setUserName(name: string): Promise<{ ok: boolean; name: string }> {
+  return apiFetch('/api/v1/user/name', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
 // ---------- Context Token Limit ----------
 
 export type ContextTokenLimit = {

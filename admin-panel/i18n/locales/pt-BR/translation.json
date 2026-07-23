@@ -69,7 +69,8 @@
     "settingsApplied": "Configurações aplicadas.",
     "changedRelogin": "Alterado. Faça login novamente.",
     "coefficientLoadError": "Falha ao carregar coeficientes",
-    "coefficientSaved": "Coeficiente salvo"
+    "coefficientSaved": "Coeficiente salvo",
+    "cancel": "Cancelar"
   },
   "models": {
     "auto": {
@@ -747,7 +748,30 @@
     "currentPassword": "Senha atual",
     "newPassword": "Nova senha",
     "passwordHint": "Pelo menos 12 caracteres",
-    "changeData": "Alterar dados"
+    "changeData": "Alterar dados",
+    "apiKeys": "Chaves de API",
+    "apiKeysDescription": "Chaves de provedor salvas. Selecione na lista ao configurar modelos.",
+    "apiKeyName": "Nome",
+    "apiKeyNamePlaceholder": "Minha chave OpenRouter",
+    "apiKeyValue": "Chave",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Criar",
+    "apiKeyDelete": "Excluir",
+    "apiKeyCreated": "Chave criada",
+    "apiKeyDeleted": "Chave excluída",
+    "apiKeyNoKeys": "Nenhuma chave salva",
+    "apiKeySelect": "Chave de API",
+    "apiKeySelectPlaceholder": "Selecione uma chave",
+    "apiKeyCreateNew": "Criar nova…",
+    "apiKeyExistingKey": "Chave atual do ambiente",
+    "apiKeyDeleteTitle": "Excluir chave",
+    "apiKeyDeleteUsedBy": "Esta chave é usada pelos modelos:",
+    "apiKeyDeleteAction": "O que fazer com esses modelos?",
+    "apiKeyDeleteReplace": "Substituir por outra chave",
+    "apiKeyDeleteNullify": "Excluir sem substituição",
+    "apiKeyDeleteSelectReplacement": "Nova chave para modelos",
+    "apiKeyDeleteConfirm": "Excluir",
+    "apiKeyNotUsed": "Esta chave não é usada por nenhum modelo. Seguro excluir."
   },
   "ui": {
     "search": "Pesquisar…",

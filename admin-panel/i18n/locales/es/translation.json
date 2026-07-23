@@ -69,7 +69,8 @@
     "settingsApplied": "Ajustes aplicados.",
     "changedRelogin": "Cambiado. Inicie sesión de nuevo.",
     "coefficientLoadError": "Error al cargar los coeficientes",
-    "coefficientSaved": "Coeficiente guardado"
+    "coefficientSaved": "Coeficiente guardado",
+    "cancel": "Cancelar"
   },
   "models": {
     "auto": {
@@ -747,7 +748,30 @@
     "currentPassword": "Contraseña actual",
     "newPassword": "Nueva contraseña",
     "passwordHint": "Al menos 12 caracteres",
-    "changeData": "Cambiar datos"
+    "changeData": "Cambiar datos",
+    "apiKeys": "Claves API",
+    "apiKeysDescription": "Claves de proveedor guardadas. Seleccione de la lista al configurar modelos.",
+    "apiKeyName": "Nombre",
+    "apiKeyNamePlaceholder": "Mi clave de OpenRouter",
+    "apiKeyValue": "Clave",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Crear",
+    "apiKeyDelete": "Eliminar",
+    "apiKeyCreated": "Clave creada",
+    "apiKeyDeleted": "Clave eliminada",
+    "apiKeyNoKeys": "No hay claves guardadas",
+    "apiKeySelect": "Clave API",
+    "apiKeySelectPlaceholder": "Selecciona una clave",
+    "apiKeyCreateNew": "Crear nueva…",
+    "apiKeyExistingKey": "Clave actual del entorno",
+    "apiKeyDeleteTitle": "Eliminar clave",
+    "apiKeyDeleteUsedBy": "Esta clave es usada por modelos:",
+    "apiKeyDeleteAction": "¿Qué hacer con estos modelos?",
+    "apiKeyDeleteReplace": "Reemplazar con otra clave",
+    "apiKeyDeleteNullify": "Eliminar sin reemplazo",
+    "apiKeyDeleteSelectReplacement": "Nueva clave para modelos",
+    "apiKeyDeleteConfirm": "Eliminar",
+    "apiKeyNotUsed": "Esta clave no la usa ningún modelo. Se puede eliminar sin problemas."
   },
   "ui": {
     "search": "Buscar…",

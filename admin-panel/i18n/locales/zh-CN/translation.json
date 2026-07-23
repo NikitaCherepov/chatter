@@ -69,7 +69,8 @@
     "settingsApplied": "设置已应用。",
     "changedRelogin": "已更改。请重新登录。",
     "coefficientLoadError": "加载系数失败",
-    "coefficientSaved": "系数已保存"
+    "coefficientSaved": "系数已保存",
+    "cancel": "取消"
   },
   "models": {
     "auto": {
@@ -747,7 +748,30 @@
     "currentPassword": "当前密码",
     "newPassword": "新密码",
     "passwordHint": "至少12个字符",
-    "changeData": "更改数据"
+    "changeData": "更改数据",
+    "apiKeys": "API 密钥",
+    "apiKeysDescription": "已保存的提供商密钥。配置模型时从列表中选择。",
+    "apiKeyName": "名称",
+    "apiKeyNamePlaceholder": "我的 OpenRouter 密钥",
+    "apiKeyValue": "密钥",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "创建",
+    "apiKeyDelete": "删除",
+    "apiKeyCreated": "密钥已创建",
+    "apiKeyDeleted": "密钥已删除",
+    "apiKeyNoKeys": "没有保存的密钥",
+    "apiKeySelect": "API 密钥",
+    "apiKeySelectPlaceholder": "选择一个密钥",
+    "apiKeyCreateNew": "新建…",
+    "apiKeyExistingKey": "当前来自环境的密钥",
+    "apiKeyDeleteTitle": "删除密钥",
+    "apiKeyDeleteUsedBy": "此密钥被以下模型使用：",
+    "apiKeyDeleteAction": "如何处理这些模型？",
+    "apiKeyDeleteReplace": "替换为另一个密钥",
+    "apiKeyDeleteNullify": "删除且不替换",
+    "apiKeyDeleteSelectReplacement": "为模型选择新密钥",
+    "apiKeyDeleteConfirm": "删除",
+    "apiKeyNotUsed": "此密钥未被任何模型使用，可以安全删除。"
   },
   "ui": {
     "search": "搜索…",
