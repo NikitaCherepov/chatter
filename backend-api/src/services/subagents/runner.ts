@@ -27,7 +27,31 @@ let _toolDefinitions: typeof import('../ai.js').toolDefinitions;
 let _normalizeTokenUsage: (rawUsage: any) => NormalizedTokenUsage;
 
 type RunCompletionFn = (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: any, signal?: AbortSignal, reasoningLevel?: any) => Promise<any>;
-type RunToolFn = (user: any, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (payload: Record<string, unknown>) => Promise<any>, generatedImages?: any[], displayStateSink?: any, desktopActionSink?: any, mapUpdateSink?: any, activeMacros?: any[], signal?: AbortSignal) => Promise<string>;
+type SubagentExtra = {
+  manualModel?: any;
+  subagentMode?: 'auto' | 'manual';
+  subagentReasoningLevel?: any;
+  onToolStatus?: (text: string) => Promise<void> | void;
+  onDesktopAction?: (action: any) => Promise<void> | void;
+  availableToolDefs?: any[];
+};
+
+type RunToolFn = (
+  user: any,
+  timezoneOffset: number,
+  toolName: string,
+  argsRaw: string,
+  aiCall: (payload: Record<string, unknown>) => Promise<any>,
+  generatedImages?: any[],
+  displayStateSink?: any,
+  desktopActionSink?: any,
+  mapUpdateSink?: any,
+  activeMacros?: any[],
+  signal?: AbortSignal,
+  subagentExtra?: SubagentExtra,
+  autoRejectHitl?: boolean,
+  userImages?: Array<{ base64: string; mimeType: string }>,
+) => Promise<string>;
 
 /**
  * Initialise the runner with references to the main ai.ts internals.
@@ -363,6 +387,11 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         // Pass the full canonical account record for plan checks and feature flags.
         const userRecord = ctx.user || { id: ctx.userId } as any;
 
+        // Snapshot desktopActionSink value BEFORE the call, so we can detect
+        // tools that still write their action into the sink (legacy branch
+        // without subagentExtra.onDesktopAction).
+        const sinkBefore = ctx.desktopActionSink?.value ?? null;
+
         try {
           toolContent = await _withAbort(
             _runTool(
@@ -374,10 +403,22 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
               (payload) => trackedCompletion(payload),
               [],       // generatedImages
               undefined, // displayStateSink
-              ctx.desktopActionSink, // desktopActionSink — enables HitL confirmations
+              ctx.desktopActionSink, // desktopActionSink — for tools that still write to it
               undefined, // mapUpdateSink
               undefined, // activeMacros
               ctx.signal,
+              // subagentExtra — forwards the internal context into runTool.
+              // Without it, edit_file_lines / pc_command and other HitL tools wait
+              // for confirmation inside _runTool while the confirmation card never
+              // reaches the client (no onDesktopAction) — a mutual deadlock.
+              {
+                manualModel: ctx.manualModel,
+                subagentMode: ctx.subagentMode,
+                subagentReasoningLevel: reasoningLevel,
+                onToolStatus: ctx.onToolStatus,
+                onDesktopAction: ctx.onDesktopAction,
+                availableToolDefs: ctx.runtimeToolDefs,
+              },
             ),
             ctx.signal,
           );
@@ -385,6 +426,15 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
           if (_isAbortError(err)) throw err;
           console.warn(`[subagent:${resolvedAgentName}] shared tool "${toolName}" error:`, err?.message || err);
           toolContent = JSON.stringify({ status: 'error', message: err?.message || String(err) });
+        }
+
+        // Dispatch the desktop action ONLY if the tool itself wrote it into the
+        // sink (legacy branch without subagentExtra.onDesktopAction). If the value
+        // is unchanged, the card has already been sent from inside _runTool via
+        // subagentExtra.onDesktopAction — re-sending would duplicate it in chat.
+        if (ctx.desktopActionSink?.value && ctx.desktopActionSink.value !== sinkBefore && ctx.onDesktopAction) {
+          await ctx.onDesktopAction(ctx.desktopActionSink.value);
+          ctx.desktopActionSink.value = null;
         }
       } else {
         toolContent = JSON.stringify({
