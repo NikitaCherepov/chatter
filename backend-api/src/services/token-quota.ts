@@ -408,7 +408,7 @@ export const chargeTokens = (input: ChargeInput): { charged: number; coefficient
         upstream_provider_slug,
         input_price_per_million, output_price_per_million, cache_read_price_per_million,
         estimated_cost_usd, actual_cost_usd, pricing_source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.userId,
       input.chatId ?? null,
