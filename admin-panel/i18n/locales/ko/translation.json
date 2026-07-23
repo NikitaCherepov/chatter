@@ -125,7 +125,25 @@
       "apiKey": "API 키",
       "apiKeyHint": "비워두면 현재 키를 유지합니다",
       "apiKeyPlaceholderExisting": "비워두면 변경되지 않습니다",
-      "apiKeyPlaceholderNew": "API 키 붙여넣기"
+      "apiKeyPlaceholderNew": "API 키 붙여넣기",
+      "providerKind": "API 제공자"
+    },
+    "billing": {
+      "customProvider": "사용자 정의",
+      "openrouterProvider": "OpenRouter 제공자",
+      "openrouterProviderHint": "\"자동\"은 OpenRouter가 엔드포인트를 선택합니다",
+      "autoRouting": "자동",
+      "inputPrice": "입력 $/1M",
+      "outputPrice": "출력 $/1M",
+      "cacheReadPrice": "캐시 $/1M",
+      "priceHint": "백만 토큰당 USD",
+      "cacheReadPriceHint": "비어 있으면 입력 가격으로 대체",
+      "pricingSource": "가격 출처",
+      "searchModelPlaceholder": "모델 선택…",
+      "searchModelHint": "2자 이상 입력 (예: deepseek)",
+      "noModelsFound": "모델을 찾을 수 없음",
+      "refreshPrices": "가격 새로고침",
+      "refreshing": "새로고치는 중…"
     }
   },
   "integrations": {

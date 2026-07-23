@@ -121,6 +121,7 @@
       "addModel": "+ Add model"
     },
     "providerFields": {
+      "providerKind": "API provider",
       "baseUrl": "Provider URL",
       "modelName": "Model name",
       "quotaId": "Model ID for quota tracking",
@@ -131,6 +132,25 @@
       "apiKeyHint": "Leave empty to keep the current key",
       "apiKeyPlaceholderExisting": "Leave empty to keep unchanged",
       "apiKeyPlaceholderNew": "Paste API key"
+    },
+    "billing": {
+      "customProvider": "Custom",
+      "openrouterProvider": "OpenRouter provider",
+      "openrouterProviderHint": "“Auto” lets OpenRouter choose the endpoint",
+      "autoRouting": "Auto",
+      "inputPrice": "Input $/1M",
+      "outputPrice": "Output $/1M",
+      "cacheReadPrice": "Cached $/1M",
+      "priceHint": "USD per 1 million tokens",
+      "cacheReadPriceHint": "If empty, falls back to input price",
+      "pricingSource": "Pricing source",
+      "searchModelPlaceholder": "Select model…",
+      "searchModelHint": "Type 2+ chars (e.g. deepseek)",
+      "noModelsFound": "No models found",
+      "refreshPrices": "Refresh prices",
+      "refreshing": "Refreshing…",
+      "customModel": "Other…",
+      "customModelHint": "specify manually"
     }
   },
   "integrations": {

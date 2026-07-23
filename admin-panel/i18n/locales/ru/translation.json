@@ -121,6 +121,7 @@
       "addModel": "+ Добавить модель"
     },
     "providerFields": {
+      "providerKind": "API-провайдер",
       "baseUrl": "Ссылка на провайдера",
       "modelName": "Название модели",
       "quotaId": "ID модели для учёта квоты",
@@ -131,6 +132,25 @@
       "apiKeyHint": "Оставь пустым, чтобы сохранить текущий ключ",
       "apiKeyPlaceholderExisting": "Оставь пустым, чтобы не менять",
       "apiKeyPlaceholderNew": "Вставь API-ключ"
+    },
+    "billing": {
+      "customProvider": "Другой",
+      "openrouterProvider": "OpenRouter-провайдер",
+      "openrouterProviderHint": "«Авто» — OpenRouter сам выбирает endpoint",
+      "autoRouting": "Авто",
+      "inputPrice": "Входящие $/1M",
+      "outputPrice": "Исходящие $/1M",
+      "cacheReadPrice": "Кэш $/1M",
+      "priceHint": "Долларов за 1 миллион токенов",
+      "cacheReadPriceHint": "Если пусто — используется входящая цена",
+      "pricingSource": "Источник цен",
+      "searchModelPlaceholder": "Выбрать модель…",
+      "searchModelHint": "Введи 2+ символа (напр. deepseek)",
+      "noModelsFound": "Модели не найдены",
+      "refreshPrices": "Обновить цены",
+      "refreshing": "Обновляю…",
+      "customModel": "Другая…",
+      "customModelHint": "указать вручную"
     }
   },
   "integrations": {

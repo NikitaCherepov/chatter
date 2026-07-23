@@ -125,7 +125,25 @@
       "apiKey": "APIキー",
       "apiKeyHint": "空欄のままにすると現在のキーを保持",
       "apiKeyPlaceholderExisting": "空欄のままにすると変更なし",
-      "apiKeyPlaceholderNew": "APIキーを貼り付け"
+      "apiKeyPlaceholderNew": "APIキーを貼り付け",
+      "providerKind": "APIプロバイダー"
+    },
+    "billing": {
+      "customProvider": "カスタム",
+      "openrouterProvider": "OpenRouterプロバイダー",
+      "openrouterProviderHint": "「自動」ではOpenRouterがエンドポイントを選択します",
+      "autoRouting": "自動",
+      "inputPrice": "入力 $/1M",
+      "outputPrice": "出力 $/1M",
+      "cacheReadPrice": "キャッシュ $/1M",
+      "priceHint": "100万トークンあたりのUSD",
+      "cacheReadPriceHint": "空の場合は入力価格にフォールバックします",
+      "pricingSource": "価格ソース",
+      "searchModelPlaceholder": "モデルを選択…",
+      "searchModelHint": "2文字以上入力（例：deepseek）",
+      "noModelsFound": "モデルが見つかりません",
+      "refreshPrices": "価格を更新",
+      "refreshing": "更新中…"
     }
   },
   "integrations": {

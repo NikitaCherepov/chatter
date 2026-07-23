@@ -125,7 +125,25 @@
       "apiKey": "Chiave API",
       "apiKeyHint": "Lascia vuoto per mantenere la chiave corrente",
       "apiKeyPlaceholderExisting": "Lascia vuoto per non modificare",
-      "apiKeyPlaceholderNew": "Incolla la chiave API"
+      "apiKeyPlaceholderNew": "Incolla la chiave API",
+      "providerKind": "Fornitore API"
+    },
+    "billing": {
+      "customProvider": "Personalizzato",
+      "openrouterProvider": "Fornitore OpenRouter",
+      "openrouterProviderHint": "“Auto” lascia che OpenRouter scelga l'endpoint",
+      "autoRouting": "Auto",
+      "inputPrice": "Input $/1M",
+      "outputPrice": "Output $/1M",
+      "cacheReadPrice": "Cache $/1M",
+      "priceHint": "USD per 1 milione di token",
+      "cacheReadPriceHint": "Se vuoto, utilizza il prezzo di input",
+      "pricingSource": "Fonte dei prezzi",
+      "searchModelPlaceholder": "Seleziona modello…",
+      "searchModelHint": "Digita 2+ caratteri (es. deepseek)",
+      "noModelsFound": "Nessun modello trovato",
+      "refreshPrices": "Aggiorna prezzi",
+      "refreshing": "Aggiornamento…"
     }
   },
   "integrations": {

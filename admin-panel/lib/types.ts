@@ -8,6 +8,20 @@ export type ProviderModelConfig = {
   uniqueId?: string;
 };
 
+export type ProviderKind = 'openrouter' | 'deepseek' | 'xiaomi' | 'custom' | null;
+export type PricingMode = 'auto' | 'manual' | null;
+
+export type ModelOverrideData = {
+  providerKind: ProviderKind;
+  openrouterProviderSlug: string | null;
+  pricingMode: PricingMode;
+  inputPricePerMillion: number | null;
+  outputPricePerMillion: number | null;
+  cacheReadPricePerMillion: number | null;
+  pricingSource: string | null;
+  pricingUpdatedAt: number | null;
+};
+
 export type ManualModelConfig = ProviderModelConfig & {
   name: string;
   description: string;
@@ -93,19 +107,11 @@ export const emptySettings: Settings = {
   hasTelegramToken: false,
   hasAiApiKey: false,
   hasVoiceToken: false,
-  proModels: [
-    {
-      id: 'pro-new-0',
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: '',
-      apiKey: '',
-      hasApiKey: false,
-    },
-  ],
+  proModels: [],
   liteModels: [],
   visionModel: {
     id: 'vision',
-    baseUrl: 'https://openrouter.ai/api/v1',
+    baseUrl: '',
     model: '',
     apiKey: '',
     hasApiKey: false,

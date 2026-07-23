@@ -19,8 +19,8 @@ type Props = {
 export function ModelsPage({ settings, setSettings, saving, saveState, onSave }: Props) {
   // One shared coefficient manager for PRO / LITE / Vision (Manual has its own
   // because its editor hydrates coefficient into ManualModelConfig).
-  const { getCoefficient, setCoefficient, saveCoefficient, state: coeffState } = useModelCoefficients();
-  const coefficientManager = { get: getCoefficient, set: setCoefficient, save: saveCoefficient };
+  const { getCoefficient, setCoefficient, saveCoefficient, getOverride, saveOverride, state: coeffState } = useModelCoefficients();
+  const coefficientManager = { get: getCoefficient, set: setCoefficient, save: saveCoefficient, getOverride, saveOverride };
   const { t } = useTranslation();
 
   const updateVision = (patch: Partial<ProviderModelConfig>) => {

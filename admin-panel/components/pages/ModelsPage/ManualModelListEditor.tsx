@@ -12,7 +12,7 @@ const newManualModel = (): ManualModelConfig => {
   return {
     id: `manual-new-${suffix}`,
     uniqueId: `manual-${suffix}`,
-    baseUrl: 'https://openrouter.ai/api/v1',
+    baseUrl: '',
     model: '',
     apiKey: '',
     hasApiKey: false,
@@ -33,8 +33,10 @@ export function ManualModelListEditor({
 }) {
   // Load coefficients once on first mount; inject server values into models
   // that have NOT been locally edited since.
-  const { getCoefficient, saveCoefficient, state: coeffState } = useModelCoefficients();
+  const { getCoefficient, saveCoefficient, getOverride, saveOverride, state: coeffState } = useModelCoefficients();
   const { t } = useTranslation();
+  // Billing-only manager for ProviderModelFields — manual editor handles coefficients separately.
+  const billingManager = { getOverride, saveOverride };
   const hydratedRef = useRef(false);
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export function ManualModelListEditor({
             </span>
           </summary>
           <div className={styles.modelBody}>
-            <ProviderModelFields model={model} onChange={(patch) => update(index, patch)} />
+            <ProviderModelFields model={model} onChange={(patch) => update(index, patch)} coefficientManager={billingManager} />
             <div className={styles.twoColumns}>
               <FormField label={t('models.manual.nameLabel')}>
                 <input value={model.name} onChange={(event) => update(index, { name: event.target.value })} placeholder={t('models.manual.namePlaceholder')} required />

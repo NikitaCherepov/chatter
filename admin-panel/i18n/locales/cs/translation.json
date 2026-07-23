@@ -131,7 +131,25 @@
       "apiKey": "API klíč",
       "apiKeyHint": "Ponechte prázdné pro zachování stávajícího klíče",
       "apiKeyPlaceholderExisting": "Ponechte prázdné pro zachování beze změny",
-      "apiKeyPlaceholderNew": "Vložte API klíč"
+      "apiKeyPlaceholderNew": "Vložte API klíč",
+      "providerKind": "Poskytovatel API"
+    },
+    "billing": {
+      "customProvider": "Vlastní",
+      "openrouterProvider": "Poskytovatel OpenRouter",
+      "openrouterProviderHint": "„Auto“ nechá OpenRouter vybrat koncový bod",
+      "autoRouting": "Auto",
+      "inputPrice": "Vstup $/1M",
+      "outputPrice": "Výstup $/1M",
+      "cacheReadPrice": "Cache $/1M",
+      "priceHint": "USD za 1 milion tokenů",
+      "cacheReadPriceHint": "Pokud je prázdné, použije se cena vstupu",
+      "pricingSource": "Zdroj cen",
+      "searchModelPlaceholder": "Vybrat model…",
+      "searchModelHint": "Zadejte 2+ znaky (např. deepseek)",
+      "noModelsFound": "Nenalezeny žádné modely",
+      "refreshPrices": "Obnovit ceny",
+      "refreshing": "Obnovuji…"
     }
   },
   "integrations": {

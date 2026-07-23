@@ -29,7 +29,8 @@ import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import { seedPlanLimitsIfEmpty, loadPlanLimitsFromDb, savePlanLimitsToDb, DEFAULT_PLAN_LIMITS, PLAN_IDS, type PlanLimits } from './services/plan-limits.js';
-import { refreshCoefficientCache, setCoefficient } from './services/token-quota.js';
+import { refreshCoefficientCache, setCoefficient, setModelProvider, getModelOverride, getOverrideMap } from './services/token-quota.js';
+import type { ProviderKind, PricingMode, ModelOverride } from './services/token-quota.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
@@ -3212,23 +3213,90 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
   return res.json({ ok: true, limits: next });
 });
 
-// ─── Model overrides (coefficients) ─────────────────────────────────────────
+// ─── Model overrides (coefficients + provider info) ─────────────────────────
 
 app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
-  const rows = db.prepare('SELECT model_id, coefficient, updated_at FROM model_overrides').all() as Array<{ model_id: string; coefficient: number; updated_at: number }>;
-  const map: Record<string, number> = {};
-  for (const row of rows) map[row.model_id] = row.coefficient;
-  return res.json({ coefficients: map });
+  const rows = db.prepare(`
+    SELECT model_id, coefficient, updated_at,
+           provider_kind, openrouter_provider_slug, pricing_mode,
+           input_price_per_million, output_price_per_million,
+           cache_read_price_per_million, pricing_source, pricing_updated_at
+    FROM model_overrides
+  `).all() as Array<ModelOverride>;
+  const coefficients: Record<string, number> = {};
+  const overrides: Record<string, {
+    providerKind: ProviderKind;
+    openrouterProviderSlug: string | null;
+    pricingMode: PricingMode;
+    inputPricePerMillion: number | null;
+    outputPricePerMillion: number | null;
+    cacheReadPricePerMillion: number | null;
+    pricingSource: string | null;
+    pricingUpdatedAt: number | null;
+  }> = {};
+  for (const row of rows) {
+    coefficients[row.model_id] = row.coefficient;
+    overrides[row.model_id] = {
+      providerKind: row.provider_kind,
+      openrouterProviderSlug: row.openrouter_provider_slug,
+      pricingMode: row.pricing_mode,
+      inputPricePerMillion: row.input_price_per_million,
+      outputPricePerMillion: row.output_price_per_million,
+      cacheReadPricePerMillion: row.cache_read_price_per_million,
+      pricingSource: row.pricing_source,
+      pricingUpdatedAt: row.pricing_updated_at,
+    };
+  }
+  return res.json({ coefficients, overrides });
 });
 
 app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) => {
   const modelId = `${req.params.modelId || ''}`.trim();
   if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
-  const body = req.body as { coefficient?: number } | null;
-  const raw = Number(body?.coefficient);
-  if (!Number.isFinite(raw) || raw < 0) return res.status(400).json({ error: 'bad_coefficient' });
-  setCoefficient(modelId, raw);
-  return res.json({ ok: true, model_id: modelId, coefficient: raw });
+  const body = req.body as {
+    coefficient?: number;
+    providerKind?: ProviderKind;
+    openrouterProviderSlug?: string | null;
+    pricingMode?: PricingMode;
+    inputPricePerMillion?: number | null;
+    outputPricePerMillion?: number | null;
+    cacheReadPricePerMillion?: number | null;
+    pricingSource?: string | null;
+  } | null;
+
+  // Handle coefficient-only mode (backward-compatible).
+  const rawCoeff = Number(body?.coefficient);
+  const hasCoeff = body && 'coefficient' in body && Number.isFinite(rawCoeff);
+
+  const hasProviderFields = body && (
+    'providerKind' in body
+    || 'openrouterProviderSlug' in body
+    || 'pricingMode' in body
+    || 'inputPricePerMillion' in body
+    || 'outputPricePerMillion' in body
+    || 'cacheReadPricePerMillion' in body
+    || 'pricingSource' in body
+  );
+
+  if (hasProviderFields) {
+    // Full override update
+    setModelProvider(modelId, {
+      providerKind: body?.providerKind,
+      openrouterProviderSlug: body?.openrouterProviderSlug,
+      pricingMode: body?.pricingMode,
+      inputPricePerMillion: body?.inputPricePerMillion,
+      outputPricePerMillion: body?.outputPricePerMillion,
+      cacheReadPricePerMillion: body?.cacheReadPricePerMillion,
+      pricingSource: body?.pricingSource,
+      coefficient: hasCoeff && rawCoeff >= 0 ? rawCoeff : null,
+    });
+    return res.json({ ok: true, model_id: modelId });
+  }
+
+  // Backward-compatible coefficient-only update
+  if (!hasCoeff || rawCoeff < 0) return res.status(400).json({ error: 'bad_coefficient' });
+  setCoefficient(modelId, rawCoeff);
+  return res.json({ ok: true, model_id: modelId, coefficient: rawCoeff });
 });
 
 app.delete('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) => {
@@ -3237,6 +3305,54 @@ app.delete('/internal/admin/model-coefficients/:modelId', internalAuth, (req, re
   db.prepare('DELETE FROM model_overrides WHERE model_id = ?').run(modelId);
   refreshCoefficientCache();
   return res.json({ ok: true });
+});
+
+// ─── Model billing info ─────────────────────────────────────────────────────
+
+app.get('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
+  const modelId = `${req.params.modelId || ''}`.trim();
+  if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
+  const override = getModelOverride(modelId);
+  if (!override) return res.status(404).json({ error: 'model_override_not_found' });
+  return res.json({
+    modelId: override.model_id,
+    coefficient: override.coefficient,
+    providerKind: override.provider_kind,
+    openrouterProviderSlug: override.openrouter_provider_slug,
+    pricingMode: override.pricing_mode,
+    inputPricePerMillion: override.input_price_per_million,
+    outputPricePerMillion: override.output_price_per_million,
+    cacheReadPricePerMillion: override.cache_read_price_per_million,
+    pricingSource: override.pricing_source,
+    pricingUpdatedAt: override.pricing_updated_at,
+  });
+});
+
+app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
+  const modelId = `${req.params.modelId || ''}`.trim();
+  if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
+  const body = req.body as {
+    providerKind?: ProviderKind;
+    openrouterProviderSlug?: string | null;
+    pricingMode?: PricingMode;
+    inputPricePerMillion?: number | null;
+    outputPricePerMillion?: number | null;
+    cacheReadPricePerMillion?: number | null;
+    coefficient?: number | null;
+  } | null;
+  if (!body) return res.status(400).json({ error: 'bad_body' });
+
+  setModelProvider(modelId, {
+    providerKind: body.providerKind,
+    openrouterProviderSlug: body.openrouterProviderSlug,
+    pricingMode: body.pricingMode || (body.inputPricePerMillion !== undefined ? 'manual' : undefined),
+    inputPricePerMillion: body.inputPricePerMillion,
+    outputPricePerMillion: body.outputPricePerMillion,
+    cacheReadPricePerMillion: body.cacheReadPricePerMillion,
+    pricingSource: body.pricingMode === 'auto' ? 'openrouter_auto' : 'manual',
+    coefficient: body.coefficient,
+  });
+  return res.json({ ok: true, model_id: modelId });
 });
 
 // ─── User usage (stats for admin UI) ────────────────────────────────────────

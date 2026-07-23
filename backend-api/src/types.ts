@@ -90,6 +90,10 @@ export type TokenUsageCall = NormalizedTokenUsage & {
   model: string;
   provider: string;
   uniqueId?: string | null;
+  /** Real upstream provider from API response (e.g. 'deepinfra', 'together'). */
+  upstreamProviderSlug?: string | null;
+  /** Actual cost returned by OpenRouter in usage.cost, if available. */
+  actualCostUsd?: number | null;
 };
 
 export type MessageUsage = {

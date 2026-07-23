@@ -125,7 +125,25 @@
       "apiKey": "API 密钥",
       "apiKeyHint": "留空以保留当前密钥",
       "apiKeyPlaceholderExisting": "留空以保持不变",
-      "apiKeyPlaceholderNew": "粘贴 API 密钥"
+      "apiKeyPlaceholderNew": "粘贴 API 密钥",
+      "providerKind": "API 提供商"
+    },
+    "billing": {
+      "customProvider": "自定义",
+      "openrouterProvider": "OpenRouter 提供商",
+      "openrouterProviderHint": "“自动”让 OpenRouter 选择端点",
+      "autoRouting": "自动",
+      "inputPrice": "输入 $/1M",
+      "outputPrice": "输出 $/1M",
+      "cacheReadPrice": "缓存 $/1M",
+      "priceHint": "每百万 token 的美元价格",
+      "cacheReadPriceHint": "如果为空，则回退到输入价格",
+      "pricingSource": "定价来源",
+      "searchModelPlaceholder": "选择模型…",
+      "searchModelHint": "输入2个以上字符（例如 deepseek）",
+      "noModelsFound": "未找到模型",
+      "refreshPrices": "刷新价格",
+      "refreshing": "刷新中…"
     }
   },
   "integrations": {

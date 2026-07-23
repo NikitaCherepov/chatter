@@ -37,6 +37,14 @@ type Props = {
   maxVisibleItems?: number;
   className?: string;
   'aria-label'?: string;
+  /**
+   * Optional callback fired when the user types into the search field.
+   * When provided, the parent owns the `options` (e.g. fetched from an API)
+   * and local filtering is disabled — options are shown as-is.
+   */
+  onSearchChange?: (search: string) => void;
+  /** Optional label to show for the current value when it is not in `options`. */
+  valueFallbackLabel?: string;
 };
 
 /**
@@ -61,26 +69,32 @@ export function Select({
   maxVisibleItems = 8,
   className = '',
   'aria-label': ariaLabel,
+  onSearchChange,
+  valueFallbackLabel,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // When `onSearchChange` is provided, the parent owns filtering — show options as-is.
   const filtered = useMemo(() => {
     if (!searchable) return options;
+    if (onSearchChange) return options;
     const q = search.toLowerCase().trim();
     if (!q) return options;
     return options.filter(
       (o) => o.label.toLowerCase().includes(q) || (o.hint?.toLowerCase().includes(q) ?? false)
     );
-  }, [search, options, searchable]);
+  }, [search, options, searchable, onSearchChange]);
 
   const selectedOption = useMemo(() => {
     return options.find((o) => o.value === value) ?? null;
   }, [value, options]);
 
-  const selectedLabel = selectedOption ? selectedOption.label : (placeholder ?? '');
+  const selectedLabel = selectedOption
+    ? selectedOption.label
+    : (valueFallbackLabel ?? (value ? value : placeholder ?? ''));
 
   // Close on outside click
   useEffect(() => {
@@ -89,23 +103,32 @@ export function Select({
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setIsOpen(false);
         setSearch('');
+        if (onSearchChange) onSearchChange('');
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [isOpen]);
+  }, [isOpen, onSearchChange]);
 
   // Focus search on open
   useEffect(() => {
     if (isOpen && searchable) {
       setTimeout(() => searchRef.current?.focus(), 0);
+      // Notify parent that search was reset (e.g. to load default options).
+      if (onSearchChange) onSearchChange('');
     }
   }, [isOpen, searchable]);
+
+  const handleSearchChange = (next: string) => {
+    setSearch(next);
+    if (onSearchChange) onSearchChange(next);
+  };
 
   const handleSelect = (val: string) => {
     onChange(val);
     setIsOpen(false);
     setSearch('');
+    if (onSearchChange) onSearchChange('');
   };
 
   const renderBadge = (badge: SelectBadge) => {
@@ -158,7 +181,7 @@ export function Select({
                 className={styles.searchInput}
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder={searchPlaceholder}
               />
             </div>

@@ -29,6 +29,46 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_BACKUP_UPLOAD_BYTES = Number.parseInt(process.env.MAX_BACKUP_UPLOAD_BYTES || `${20 * 1024 * 1024 * 1024}`, 10);
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+const OPENROUTER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache
+const openRouterCache = new Map();
+
+function openRouterCacheKey(url) {
+  return `GET:${url}`;
+}
+
+function openRouterCacheGet(url) {
+  const entry = openRouterCache.get(openRouterCacheKey(url));
+  if (!entry || Date.now() > entry.expiresAt) {
+    openRouterCache.delete(openRouterCacheKey(url));
+    return null;
+  }
+  return entry.data;
+}
+
+function openRouterCacheSet(url, data) {
+  openRouterCache.set(openRouterCacheKey(url), {
+    data,
+    expiresAt: Date.now() + OPENROUTER_CACHE_TTL_MS,
+  });
+}
+
+async function openRouterFetch(pathname) {
+  // OpenRouter Models/Endpoints APIs are public — no API key required.
+  // The per-model key (set in each model card) is never sent to the browser
+  // and is used only at runtime when proxying actual chat completions.
+  const cached = openRouterCacheGet(pathname);
+  if (cached) return cached;
+
+  const response = await fetch(`${OPENROUTER_BASE_URL}${pathname}`, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`OpenRouter API error (HTTP ${response.status})`);
+
+  const data = await response.json();
+  openRouterCacheSet(pathname, data);
+  return data;
+}
 const DATA_DIR = path.resolve(process.env.CHATTER_DATA_DIR || '/data');
 const DATABASE_FILE = path.join(DATA_DIR, 'chatter.db');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
@@ -2020,6 +2060,51 @@ async function handleRequest(req, res) {
     })
       .finally(() => { backupPromise = null; });
     return sendJson(res, 201, { ok: true, backup: await backupPromise });
+  }
+
+  // ── OpenRouter model search proxy ─────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/openrouter/models') {
+    const query = `${url.searchParams.get('q') || ''}`.trim();
+    if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
+    try {
+      const data = await openRouterFetch(`/models?q=${encodeURIComponent(query)}`);
+      return sendJson(res, 200, data);
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'openrouter_models_search_failed' });
+    }
+  }
+
+  // ── OpenRouter model provider endpoints ───────────────────────────────────
+  const orEndpointsMatch = pathname.match(/^\/api\/openrouter\/models\/([^/]+)\/([^/]+)\/endpoints$/);
+  if (req.method === 'GET' && orEndpointsMatch) {
+    const author = encodeURIComponent(orEndpointsMatch[1]);
+    const slug = encodeURIComponent(orEndpointsMatch[2]);
+    if (!author || !slug) return sendJson(res, 400, { error: 'invalid_model_slug' });
+    try {
+      const data = await openRouterFetch(`/models/${author}/${slug}/endpoints`);
+      return sendJson(res, 200, data);
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'openrouter_endpoints_failed' });
+    }
+  }
+
+  // ── OpenRouter model billing info proxy (admin panel billing setup) ──────
+  const orBillingMatch = pathname.match(/^\/api\/models\/([^/]+)\/billing$/);
+  if (orBillingMatch) {
+    const modelId = decodeURIComponent(orBillingMatch[1]);
+    const safePath = `/internal/admin/models/${encodeURIComponent(modelId)}/billing`;
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest(safePath));
+      } catch { return sendJson(res, 404, { error: 'model_override_not_found' }); }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      return sendJson(res, 200, await backendInternalRequest(safePath, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }));
+    }
   }
 
   if (req.method === 'POST' && pathname === '/api/image-model/check') {

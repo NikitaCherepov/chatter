@@ -130,7 +130,25 @@
       "apiKey": "API anahtarı",
       "apiKeyHint": "Mevcut anahtarı korumak için boş bırakın",
       "apiKeyPlaceholderExisting": "Değiştirmeden bırakmak için boş bırakın",
-      "apiKeyPlaceholderNew": "API anahtarını yapıştırın"
+      "apiKeyPlaceholderNew": "API anahtarını yapıştırın",
+      "providerKind": "API sağlayıcı"
+    },
+    "billing": {
+      "customProvider": "Özel",
+      "openrouterProvider": "OpenRouter sağlayıcı",
+      "openrouterProviderHint": "“Otomatik”, OpenRouter'ın uç noktayı seçmesini sağlar",
+      "autoRouting": "Otomatik",
+      "inputPrice": "Giriş $/1M",
+      "outputPrice": "Çıkış $/1M",
+      "cacheReadPrice": "Önbellek $/1M",
+      "priceHint": "1 milyon token başına USD",
+      "cacheReadPriceHint": "Boşsa, giriş fiyatına düşer",
+      "pricingSource": "Fiyatlandırma kaynağı",
+      "searchModelPlaceholder": "Model seçin…",
+      "searchModelHint": "2+ karakter yazın (örn. deepseek)",
+      "noModelsFound": "Model bulunamadı",
+      "refreshPrices": "Fiyatları yenile",
+      "refreshing": "Yenileniyor…"
     }
   },
   "integrations": {

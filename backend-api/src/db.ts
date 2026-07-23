@@ -588,9 +588,34 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS model_overrides (
     model_id TEXT PRIMARY KEY,
     coefficient REAL NOT NULL DEFAULT 1.0 CHECK (coefficient >= 0),
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    provider_kind TEXT,
+    openrouter_provider_slug TEXT,
+    pricing_mode TEXT,
+    input_price_per_million REAL,
+    output_price_per_million REAL,
+    cache_read_price_per_million REAL,
+    pricing_source TEXT,
+    pricing_updated_at INTEGER
   )
 `);
+
+// ── Migrations for model_overrides (add columns if missing) ──────────────────
+const hasModelOverrideColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(model_overrides)').all() as Array<{ name: string }>;
+  return columns.some(c => c.name === columnName);
+};
+const ensureModelOverrideColumn = (name: string, sql: string) => {
+  if (!hasModelOverrideColumn(name)) db.exec(sql);
+};
+ensureModelOverrideColumn('provider_kind', 'ALTER TABLE model_overrides ADD COLUMN provider_kind TEXT');
+ensureModelOverrideColumn('openrouter_provider_slug', 'ALTER TABLE model_overrides ADD COLUMN openrouter_provider_slug TEXT');
+ensureModelOverrideColumn('pricing_mode', 'ALTER TABLE model_overrides ADD COLUMN pricing_mode TEXT');
+ensureModelOverrideColumn('input_price_per_million', 'ALTER TABLE model_overrides ADD COLUMN input_price_per_million REAL');
+ensureModelOverrideColumn('output_price_per_million', 'ALTER TABLE model_overrides ADD COLUMN output_price_per_million REAL');
+ensureModelOverrideColumn('cache_read_price_per_million', 'ALTER TABLE model_overrides ADD COLUMN cache_read_price_per_million REAL');
+ensureModelOverrideColumn('pricing_source', 'ALTER TABLE model_overrides ADD COLUMN pricing_source TEXT');
+ensureModelOverrideColumn('pricing_updated_at', 'ALTER TABLE model_overrides ADD COLUMN pricing_updated_at INTEGER');
 
 // ── User token usage (immutable accounting ledger) ────────────────────────
 // Source of truth for cost / statistics. NOT affected by chat/message deletion.
@@ -615,13 +640,36 @@ db.exec(`
     total_tokens INTEGER NOT NULL DEFAULT 0,
     charged_tokens REAL NOT NULL DEFAULT 0,
     aborted INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    upstream_provider_slug TEXT,
+    input_price_per_million REAL,
+    output_price_per_million REAL,
+    cache_read_price_per_million REAL,
+    estimated_cost_usd REAL,
+    actual_cost_usd REAL,
+    pricing_source TEXT
   )
 `);
 
 db.exec("CREATE INDEX IF NOT EXISTS idx_utu_user_created ON user_token_usage(user_id, created_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_utu_user_model_created ON user_token_usage(user_id, model_id, created_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_utu_created_at ON user_token_usage(created_at)");
+
+// ── Migrations for user_token_usage (add columns if missing) ──────────────────
+const hasUtoColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(user_token_usage)').all() as Array<{ name: string }>;
+  return columns.some(c => c.name === columnName);
+};
+const ensureUtoColumn = (name: string, sql: string) => {
+  if (!hasUtoColumn(name)) db.exec(sql);
+};
+ensureUtoColumn('upstream_provider_slug', 'ALTER TABLE user_token_usage ADD COLUMN upstream_provider_slug TEXT');
+ensureUtoColumn('input_price_per_million', 'ALTER TABLE user_token_usage ADD COLUMN input_price_per_million REAL');
+ensureUtoColumn('output_price_per_million', 'ALTER TABLE user_token_usage ADD COLUMN output_price_per_million REAL');
+ensureUtoColumn('cache_read_price_per_million', 'ALTER TABLE user_token_usage ADD COLUMN cache_read_price_per_million REAL');
+ensureUtoColumn('estimated_cost_usd', 'ALTER TABLE user_token_usage ADD COLUMN estimated_cost_usd REAL');
+ensureUtoColumn('actual_cost_usd', 'ALTER TABLE user_token_usage ADD COLUMN actual_cost_usd REAL');
+ensureUtoColumn('pricing_source', 'ALTER TABLE user_token_usage ADD COLUMN pricing_source TEXT');
 
 // ── Drop legacy columns from upgraded databases ───────────────────────────
 // SQLite ≥ 3.35 supports ALTER TABLE DROP COLUMN. Wrapped in try/catch: if the

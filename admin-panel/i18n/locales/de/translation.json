@@ -125,7 +125,25 @@
       "apiKey": "API-Schlüssel",
       "apiKeyHint": "Leer lassen, um den aktuellen Schlüssel zu behalten",
       "apiKeyPlaceholderExisting": "Leer lassen, um unverändert zu lassen",
-      "apiKeyPlaceholderNew": "API-Schlüssel einfügen"
+      "apiKeyPlaceholderNew": "API-Schlüssel einfügen",
+      "providerKind": "API-Anbieter"
+    },
+    "billing": {
+      "customProvider": "Benutzerdefiniert",
+      "openrouterProvider": "OpenRouter-Anbieter",
+      "openrouterProviderHint": "„Auto“ lässt OpenRouter den Endpunkt wählen",
+      "autoRouting": "Auto",
+      "inputPrice": "Eingabe $/1M",
+      "outputPrice": "Ausgabe $/1M",
+      "cacheReadPrice": "Cache $/1M",
+      "priceHint": "USD pro 1 Million Token",
+      "cacheReadPriceHint": "Wenn leer, wird der Eingabepreis verwendet",
+      "pricingSource": "Preisquelle",
+      "searchModelPlaceholder": "Modell auswählen…",
+      "searchModelHint": "2+ Zeichen eingeben (z.B. deepseek)",
+      "noModelsFound": "Keine Modelle gefunden",
+      "refreshPrices": "Preise aktualisieren",
+      "refreshing": "Aktualisiere…"
     }
   },
   "integrations": {

@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
-import { calculateChargedTokens, checkQuota, chargeTokens } from './token-quota.js';
+import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride } from './token-quota.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -167,6 +167,10 @@ type CompletionMeta = {
   /** Stable identifier for the model that produced this completion (for cost accounting). */
   usedUniqueId?: string | null;
   baseURLUsed?: string;
+  /** Real upstream provider from API response (e.g. 'deepinfra', 'together'). */
+  upstreamProviderSlug?: string | null;
+  /** Actual cost returned by OpenRouter in usage.cost, if available. */
+  actualCostUsd?: number | null;
   failedModels?: string[];
   failedProviders?: string[];
 };
@@ -654,15 +658,23 @@ const adaptRequestBodyForProvider = (
   baseURL: string,
   model: string,
   level?: ReasoningLevel | null,
-  modelSettings?: ModelSettings | null
+  modelSettings?: ModelSettings | null,
+  openRouterProviderSlug?: string | null,
 ): Record<string, unknown> => {
   const url = (baseURL || '').toLowerCase();
 
-  // ── OpenRouter: reasoning.effort по стандартной шкале ──
+  // ── OpenRouter: reasoning.effort + optional provider routing ──
   if (url.includes('openrouter.ai')) {
     const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, ...body } = requestBody as any;
     if (level && level !== 'auto') {
       body.reasoning = { effort: level };
+    }
+    // If a specific upstream provider is configured, pin it.
+    if (openRouterProviderSlug) {
+      body.provider = {
+        only: [openRouterProviderSlug],
+        allow_fallbacks: false,
+      };
     }
     return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
@@ -922,10 +934,17 @@ const createCompletionWithModelFallback = async (
   let lastError: unknown = null;
 
   for (const model of modelChain) {
+    const modelIndex = modelChain.indexOf(model);
+    const currentUniqueId = modelIndex >= 0 ? (uniqueIds[modelIndex] || null) : null;
+    const override = currentUniqueId ? getModelOverride(currentUniqueId) : null;
+    const openRouterSlug = override?.openrouter_provider_slug ?? null;
+
     const attempts = RETRIES_PER_MODEL + 1;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const providerRequestBody = adaptRequestBodyForProvider(requestBody, baseURL, model, reasoningLevel, modelSettings);
+        const providerRequestBody = adaptRequestBodyForProvider(
+          requestBody, baseURL, model, reasoningLevel, modelSettings, openRouterSlug,
+        );
         if (modelSettings) {
           console.log('[ai][model-settings]', {
             provider: providerName,
@@ -950,9 +969,26 @@ const createCompletionWithModelFallback = async (
                 .create({ ...providerRequestBody, model } as any, sdkSignal ? { signal: sdkSignal } : {})
                 .finally(cleanup);
             })();
-        const modelIndex = modelChain.indexOf(model);
+
+        // Extract upstream provider from OpenRouter response.
+        const responseObj = response as any;
+        const upstreamProviderSlug: string | null =
+          typeof responseObj?.provider === 'string' ? responseObj.provider : null;
+
+        // Extract actual cost from OpenRouter usage.cost field.
+        const actualCostUsd: number | null =
+          typeof responseObj?.usage?.cost === 'number' && Number.isFinite(responseObj.usage.cost)
+            ? responseObj.usage.cost : null;
+
         const uniqueIdUsed = modelIndex >= 0 ? (uniqueIds[modelIndex] || null) : null;
-        return { response, modelUsed: model, uniqueIdUsed, failedModels };
+        return {
+          response,
+          modelUsed: model,
+          uniqueIdUsed,
+          failedModels,
+          upstreamProviderSlug,
+          actualCostUsd,
+        };
       } catch (err) {
         if (isAbortError(err)) throw err;
         lastError = err;
@@ -1009,6 +1045,8 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         uniqueIdUsed: completion.uniqueIdUsed,
         providerUsed: provider.name,
         baseURLUsed: provider.baseURL,
+        upstreamProviderSlug: completion.upstreamProviderSlug || null,
+        actualCostUsd: completion.actualCostUsd || null,
         failedProviders,
         failedModels
       };
@@ -1057,6 +1095,8 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         uniqueIdUsed: completion.uniqueIdUsed,
         providerUsed: provider.name,
         baseURLUsed: provider.baseURL,
+        upstreamProviderSlug: completion.upstreamProviderSlug || null,
+        actualCostUsd: completion.actualCostUsd || null,
         failedProviders,
         failedModels
       };
@@ -3014,6 +3054,8 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
         usedUniqueId: completion.uniqueIdUsed || manualModel.id,
         usedProvider: 'manual',
         baseURLUsed: manualModel.baseURL,
+        upstreamProviderSlug: completion.upstreamProviderSlug || null,
+        actualCostUsd: completion.actualCostUsd || null,
         failedModels: completion.failedModels,
         manualFallback: false,
       };
@@ -3048,6 +3090,8 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
           usedUniqueId: completion.uniqueIdUsed,
           usedProvider: provider.name,
           baseURLUsed: provider.baseURL,
+          upstreamProviderSlug: completion.upstreamProviderSlug || null,
+          actualCostUsd: completion.actualCostUsd || null,
           failedModels,
           failedProviders
         };
@@ -3070,6 +3114,8 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
         usedUniqueId: res.uniqueIdUsed,
         usedProvider: res.providerUsed,
         baseURLUsed: res.baseURLUsed,
+        upstreamProviderSlug: res.upstreamProviderSlug || null,
+        actualCostUsd: res.actualCostUsd || null,
         failedModels: res.failedModels,
         failedProviders: res.failedProviders
       };
@@ -3083,6 +3129,8 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
       usedUniqueId: res.uniqueIdUsed,
       usedProvider: 'pro-main',
       baseURLUsed: process.env.TIMEWEB_BASE_URL || '',
+      upstreamProviderSlug: res.upstreamProviderSlug || null,
+      actualCostUsd: res.actualCostUsd || null,
       failedModels: res.failedModels
     };
   }
@@ -3093,6 +3141,8 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
     usedUniqueId: res.uniqueIdUsed,
     usedProvider: res.providerUsed,
     baseURLUsed: res.baseURLUsed,
+    upstreamProviderSlug: res.upstreamProviderSlug || null,
+    actualCostUsd: res.actualCostUsd || null,
     failedModels: res.failedModels,
     failedProviders: res.failedProviders
   };
@@ -5931,7 +5981,7 @@ export const sendMessageThroughAi = async (
   let diceRollValue: number | null = null;
   const usageCalls: TokenUsageCall[] = [];
   const subagentUsageCalls: Array<TokenUsageCall & { agentName: string }> = [];
-  const recordCompletionUsage = (completion: Pick<CompletionMeta, 'response' | 'usedModel' | 'usedProvider' | 'usedUniqueId'>) => {
+  const recordCompletionUsage = (completion: Pick<CompletionMeta, 'response' | 'usedModel' | 'usedProvider' | 'usedUniqueId'> & { upstreamProviderSlug?: string | null; actualCostUsd?: number | null }) => {
     const normalized = normalizeTokenUsage(completion.response?.usage);
     if (normalized.total_tokens <= 0) return normalized;
     usageCalls.push({
@@ -5939,6 +5989,8 @@ export const sendMessageThroughAi = async (
       model: completion.usedModel || 'unknown',
       provider: completion.usedProvider || 'unknown',
       uniqueId: completion.usedUniqueId ?? null,
+      upstreamProviderSlug: (completion as any).upstreamProviderSlug ?? null,
+      actualCostUsd: (completion as any).actualCostUsd ?? null,
     });
     totalTokens += normalized.total_tokens;
     return normalized;
@@ -5960,46 +6012,54 @@ export const sendMessageThroughAi = async (
 
   /**
    * Charges weekly_tokens_used + inserts a user_token_usage row.
-   * Uses the FIRST model that started answering as the source of coefficient lookup.
-   *   - manual mode: model_id = manualModel.id
-   *   - auto mode: model_id = first usageCall.uniqueId (PRO/LITE/VISION) when present,
-   *     otherwise falls back to real API model name (usageCalls[0].model).
+   *
+   * Main agent calls are grouped by uniqueId+model+provider (same as subagents)
+   * so each distinct model gets its own row with its own coefficient and pricing.
+   *
    * Safe to call from finally/catch — never throws.
    */
   const chargeFromUsageCalls = (opts: { aborted?: boolean; assistantMessageId?: number }) => {
-    if (usageCalls.length > 0) {
-      const aggregate = sumTokenUsage(usageCalls);
-      if (aggregate.total_tokens > 0) {
-        // First call that produced tokens = "model that started answering".
-        const firstCall = usageCalls[0];
-        const route = manualModel
-          ? 'manual'
-          : (forceProRoute ? 'auto-pro' : 'auto-lite');
-        const coefficientKey = manualModel?.id
-          || firstCall.uniqueId
-          || usedUniqueId
-          || firstCall.model
-          || usedModel
-          || null;
-        const displayName = (manualModel?.name || usedModel || firstCall.model || null);
+    // Group main agent calls by uniqueId+model+provider for accurate accounting.
+    const mainGrouped = new Map<string, TokenUsageCall[]>();
+    for (const call of usageCalls) {
+      const key = JSON.stringify([call.uniqueId || call.model, call.provider]);
+      const group = mainGrouped.get(key) || [];
+      group.push(call);
+      mainGrouped.set(key, group);
+    }
+    for (const group of mainGrouped.values()) {
+      const aggregate = sumTokenUsage(group);
+      if (aggregate.total_tokens <= 0) continue;
+      const firstCall = group[0];
+      const route = manualModel
+        ? 'manual'
+        : (forceProRoute ? 'auto-pro' : 'auto-lite');
+      const coefficientKey = manualModel?.id
+        || firstCall.uniqueId
+        || usedUniqueId
+        || firstCall.model
+        || usedModel
+        || null;
+      const displayName = (manualModel?.name || usedModel || firstCall.model || null);
 
-        chargeTokens({
-          userId,
-          chatId: chatId > 0 ? chatId : null,
-          messageId: opts.assistantMessageId ?? null,
-          route,
-          modelId: coefficientKey,
-          modelName: displayName,
-          providerName: usedProvider || firstCall.provider || null,
-          promptTokens: aggregate.prompt_tokens,
-          completionTokens: aggregate.completion_tokens,
-          cacheHitTokens: aggregate.cache_hit_tokens,
-          cacheMissTokens: aggregate.cache_miss_tokens,
-          reasoningTokens: aggregate.reasoning_tokens,
-          totalTokens: aggregate.total_tokens,
-          aborted: opts?.aborted ?? false,
-        });
-      }
+      chargeTokens({
+        userId,
+        chatId: chatId > 0 ? chatId : null,
+        messageId: opts.assistantMessageId ?? null,
+        route,
+        modelId: coefficientKey,
+        modelName: displayName,
+        providerName: usedProvider || firstCall.provider || null,
+        promptTokens: aggregate.prompt_tokens,
+        completionTokens: aggregate.completion_tokens,
+        cacheHitTokens: aggregate.cache_hit_tokens,
+        cacheMissTokens: aggregate.cache_miss_tokens,
+        reasoningTokens: aggregate.reasoning_tokens,
+        totalTokens: aggregate.total_tokens,
+        aborted: opts?.aborted ?? false,
+        upstreamProviderSlug: firstCall.upstreamProviderSlug ?? null,
+        actualCostUsd: firstCall.actualCostUsd ?? null,
+      });
     }
 
     // Subagents may use a different model from the parent. Group their calls by
@@ -6030,6 +6090,8 @@ export const sendMessageThroughAi = async (
         reasoningTokens: aggregate.reasoning_tokens,
         totalTokens: aggregate.total_tokens,
         aborted: opts?.aborted ?? false,
+        upstreamProviderSlug: firstCall.upstreamProviderSlug ?? null,
+        actualCostUsd: firstCall.actualCostUsd ?? null,
       });
     }
   };
