@@ -34,8 +34,17 @@
 .table {
   width: 100%;
   min-width: 900px;
-  border-collapse: collapse;
-  table-layout: fixed;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1.5fr 1.5fr;
+}
+.table thead,
+.table tbody {
+  display: contents;
+}
+.table tr {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
 }
 .table th {
   padding: var(--sp-3) var(--sp-4);
@@ -46,31 +55,18 @@
   text-align: left;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-}
-.table th:first-child {
-  width: 28%;
-}
-.table th:nth-child(2) {
-  width: 17%;
-}
-.table th:nth-child(3),
-.table th:nth-child(4),
-.table th:nth-child(5) {
-  width: 9%;
-}
-.table th:nth-child(6),
-.table th:nth-child(7) {
-  width: 14%;
+  border-bottom: 1px solid var(--border-light);
 }
 .table td {
   height: 64px;
   padding: var(--sp-3) var(--sp-4);
-  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
   color: var(--text-secondary);
   font-size: var(--fs-sm);
-  vertical-align: middle;
+  display: flex;
+  align-items: center;
 }
-.table tbody tr:hover {
+.table tr:hover {
   background: var(--bg-bubble);
 }
 .userCell {
