@@ -19,6 +19,61 @@ npm run start:api
 npm run logs:api
 ```
 
+## Model Billing & Provider Routing
+
+Each model now carries an API-provider type (`openrouter` | `deepseek` | `xiaomi` | `custom`), an optional concrete OpenRouter upstream, and per-million token prices. This is layered on top of the existing coefficient system — coefficients and weekly quotas are **not** changed.
+
+### Schema
+
+`model_overrides` (extended):
+- `provider_kind`, `openrouter_provider_slug`, `pricing_mode` (`auto` | `manual`)
+- `input_price_per_million`, `output_price_per_million`, `cache_read_price_per_million`
+- `pricing_source`, `pricing_updated_at`
+
+`user_token_usage` (extended, immutable snapshot per request):
+- `upstream_provider_slug`, `input_price_per_million`, `output_price_per_million`, `cache_read_price_per_million`
+- `estimated_cost_usd`, `actual_cost_usd`, `pricing_source`
+
+Migrations are idempotent (`PRAGMA table_info` + `ALTER TABLE ADD COLUMN`), so old databases upgrade in place and the existing `coefficient` column keeps its meaning.
+
+### Cost snapshot
+
+Pricing is snapshotted at charge time from `model_overrides`, so changing a model's price later does **not** reprice historical rows. Estimated cost formula (see `services/token-quota.ts` → `calculateEstimatedCostUsd`):
+
+```
+uncachedInputCost = cacheMissTokens * inputPricePerMillion        / 1_000_000
+cachedInputCost   = cacheHitTokens  * cacheReadPricePerMillion    / 1_000_000
+outputCost        = completionTokens * outputPricePerMillion      / 1_000_000
+estimatedCost     = uncachedInputCost + cachedInputCost + outputCost
+```
+
+- `reasoning_tokens` are **not** added on top — they are already part of `completion_tokens`.
+- If `cache_read_price` is unknown, falls back to `input_price` and the row is flagged `estimated`.
+- `coefficient = 0` keeps zeroing weekly quota, but cost is still recorded.
+- If OpenRouter returns `usage.cost`, it is stored in `actual_cost_usd` alongside the estimate.
+
+### Usage accuracy
+
+Main-agent calls are grouped by `(uniqueId || model) + provider` (same as subagents) before charging, so each distinct model in a fallback chain gets its own `user_token_usage` row with its own coefficient and price snapshot. Subagents remain a separate collection with `route = 'subagent:<name>'`.
+
+### Runtime routing
+
+In `services/ai.ts` → `adaptRequestBodyForProvider`, the OpenRouter upstream is pinned only when a concrete slug is configured:
+
+```ts
+if (openRouterProviderSlug) {
+  body.provider = { only: [openRouterProviderSlug], allow_fallbacks: false };
+}
+```
+
+For Auto, `provider` is omitted entirely and OpenRouter chooses the endpoint itself. The model fallback loop in `createCompletionWithModelFallback` iterates by index (not `indexOf`), so duplicate models in the chain no longer pull the wrong override.
+
+### Internal endpoints
+
+- `GET /internal/admin/model-coefficients` — returns `{ coefficients, overrides }`.
+- `PUT /internal/admin/model-coefficients/:modelId` — backward-compatible: coefficient-only, or full provider/pricing update.
+- `GET/PUT /internal/admin/models/:modelId/billing` — read/write the provider + pricing override.
+
 ## Backend Localization
 
 Tool status messages and automatic chat titles are translated once in `backend-api` and sent to Desktop and Telegram as ready-to-display text. Clients do not translate tool status keys themselves.

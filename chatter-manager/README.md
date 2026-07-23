@@ -55,3 +55,24 @@ forwarding). This keeps backend's `/internal/*` surface trustable: every call
 has already been vetted by the manager. A pass-through proxy would lose that
 defence. See `admin-panel/README.md` for the same discussion from the UI side.
 
+### OpenRouter model & billing proxy
+
+These routes let the admin panel browse OpenRouter models and configure per-model
+pricing. The OpenRouter Models and Endpoints APIs are **public** — they require
+no `Authorization` header — so the manager calls them server-side and caches the
+JSON for 30 minutes.
+
+| Route | Method | Upstream | Purpose |
+|---|---|---|---|
+| `/api/openrouter/models?q=` | GET | `openrouter.ai/api/v1/models?q=` | Search models by id/name. Min 2 chars, returns 400 on shorter queries. |
+| `/api/openrouter/models/:author/:slug/endpoints` | GET | `openrouter.ai/api/v1/models/:author/:slug/endpoints` | List upstream providers for a model and their per-token pricing. |
+| `/api/models/:modelId/billing` | GET, PUT | `/internal/admin/models/:modelId/billing` | Read/write the provider-kind, OpenRouter slug, and $/1M prices stored in `model_overrides`. |
+
+Implementation notes:
+
+- The cache (`openRouterCache`, 30 min TTL) is keyed by `GET:<pathname>` and lives in process memory; it is not shared with other services.
+- `/api/models/:modelId/billing` is forwarded to backend-api via `backendInternalRequest()` with the manager's internal bearer token, exactly like other admin routes.
+- `:modelId` in the billing route is URL-decoded before forwarding, because ids can contain `:` and other characters that need percent-encoding.
+
+
+

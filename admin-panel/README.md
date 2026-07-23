@@ -39,6 +39,37 @@ Path conventions in current code:
 - Manager → Backend: `/internal/admin/<resource>` for admin-only operations, `/internal/<resource>` for general operations.
 - Direct backend routes under `/api/v1/*` (JWT-protected) are **not reachable from the browser** through chatter-manager. They exist for first-party clients (Desktop, Telegram bot) that authenticate with their own JWTs.
 
+## Model Billing & Provider Routing
+
+The Models page lets each model card carry an API-provider type, an optional concrete OpenRouter upstream, and per-million token prices. All of this lives inside the existing `ModelListEditor` / `ManualModelListEditor` cards — there is **no** separate billing tab or settings section.
+
+### Card fields
+
+- **API provider** — `OpenRouter` | `DeepSeek` | `Xiaomi` | `Custom`. Selecting one pins the URL (read-only for known providers; editable for `Custom`).
+- **Model** — for OpenRouter, an autocomplete that searches `/api/openrouter/models?q=` (debounced 400 ms, min 2 chars). For DeepSeek/Xiaomi, a preset dropdown with an **Other…** option that reveals a free-text input. For `Custom`, a plain text input.
+- **OpenRouter provider** — shown only when the API provider is `openrouter`. `Auto` lets OpenRouter pick the endpoint; picking a concrete upstream pins it via `provider.only` + `allow_fallbacks: false` at runtime.
+- **Input / Output / Cached $/1M** — for OpenRouter, auto-filled from the model's `/endpoints` response with a **Refresh prices** button. For other providers, manual entry. Source is labelled (`openrouter_auto`, `openrouter_endpoint`, `preset`, `manual`).
+
+### Shared override hook
+
+[`lib/useModelCoefficients.ts`](./lib/useModelCoefficients.ts) loads both `coefficients` and `overrides` maps from `/api/model-coefficients`. The override map is keyed by the stable `uniqueId`, so renaming a model or changing its URL does **not** break cost accounting. New helpers: `getOverride(uniqueId)`, `saveOverride(uniqueId, patch)`.
+
+### New UI components
+
+- [`components/ui/ModelInput/OpenRouterModelInput.tsx`](./components/ui/ModelInput/OpenRouterModelInput.tsx) — searchable OpenRouter model picker backed by the manager proxy.
+- [`components/ui/ModelInput/PresetModelInput.tsx`](./components/ui/ModelInput/PresetModelInput.tsx) — preset dropdown + custom mode for DeepSeek/Xiaomi. The custom toggle is local React state, so clicking **Other…** reliably reveals the free-text input.
+- [`components/ui/Select/Select.tsx`](./components/ui/Select/Select.tsx) — extended with `onSearchChange` (parent-owned filtering) and `valueFallbackLabel` (display a value not present in `options`).
+
+### Manager proxy endpoints
+
+In [`chatter-manager/server.js`](../chatter-manager/server.js):
+
+- `GET /api/openrouter/models?q=` — public OpenRouter Models API, cached 30 min, min 2 chars. **No API key is sent to the browser.**
+- `GET /api/openrouter/models/:author/:slug/endpoints` — upstream providers + per-endpoint pricing.
+- `GET/PUT /api/models/:modelId/billing` — forwards to `/internal/admin/models/:modelId/billing`.
+
+
+
 ## Implemented Pages
 
 - **Overview** — service health and start, stop, or restart controls.

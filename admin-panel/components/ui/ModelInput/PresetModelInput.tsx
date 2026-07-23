@@ -82,7 +82,7 @@ export function PresetModelInput({ value, presets, onSelect }: Props) {
         options={options}
         value={selectValue}
         onChange={handleChange}
-        placeholder={t('models.billing.searchModelPlaceholder') || 'Выбрать модель…'}
+        placeholder={t('models.billing.searchModelPlaceholder') || 'Choose model…'}
         valueFallbackLabel={customMode && value ? value : undefined}
       />
       {customMode && (
