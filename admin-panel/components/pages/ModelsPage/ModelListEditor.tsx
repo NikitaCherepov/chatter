@@ -203,24 +203,20 @@ export function ProviderModelFields({
   // Cache of (tag → prices) and base prices, fetched once per model.
   const endpointsCacheRef = useRef<ModelEndpointsResult | null>(null);
 
-  const lastSyncedIdRef = useRef<string | null>(null);
+  // Sync prices from override when data loads or model changes, unless user is editing.
   useEffect(() => {
     if (pricesTouched) return;
-    const id = model.uniqueId ?? null;
-    if (lastSyncedIdRef.current === id) return;
-    lastSyncedIdRef.current = id;
-    const o = coefficientManager?.getOverride?.(id);
-    if (o) {
-      setPrices({
-        input: o.inputPricePerMillion ?? null,
-        output: o.outputPricePerMillion ?? null,
-        cache: o.cacheReadPricePerMillion ?? null,
-        orSlug: o.openrouterProviderSlug ?? '',
-      });
-    } else {
-      setPrices({ input: null, output: null, cache: null, orSlug: '' });
-    }
-  }, [model.uniqueId, pricesTouched, coefficientManager]);
+    const nextInput = override?.inputPricePerMillion ?? null;
+    const nextOutput = override?.outputPricePerMillion ?? null;
+    const nextCache = override?.cacheReadPricePerMillion ?? null;
+    const nextSlug = override?.openrouterProviderSlug ?? '';
+    setPrices(prev => {
+      if (prev.input === nextInput && prev.output === nextOutput && prev.cache === nextCache && prev.orSlug === nextSlug) {
+        return prev;
+      }
+      return { input: nextInput, output: nextOutput, cache: nextCache, orSlug: nextSlug };
+    });
+  }, [override, pricesTouched]);
 
   const persistOverride = useCallback(async (patch: Partial<ModelOverrideData>) => {
     const id = model.uniqueId?.trim();
