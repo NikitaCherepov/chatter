@@ -143,7 +143,9 @@
       "searchModelHint": "Wpisz 2+ znaki (np. deepseek)",
       "noModelsFound": "Nie znaleziono modeli",
       "refreshPrices": "Odśwież ceny",
-      "refreshing": "Odświeżanie…"
+      "refreshing": "Odświeżanie…",
+      "customModel": "Inne…",
+      "customModelHint": "określ ręcznie"
     }
   },
   "integrations": {
@@ -334,7 +336,8 @@
         "quota": "Limit (tydzień)",
         "messages": "Wiadomości",
         "lastMessage": "Ostatnia wiadomość",
-        "created": "Utworzono"
+        "created": "Utworzono",
+        "totalCost": "Wydano"
       },
       "filter": {
         "allStatuses": "Wszystkie statusy",
@@ -454,7 +457,8 @@
           "requests": "Zapytania",
           "tokens": "Tokeny",
           "cacheHit": "Trafienie pamięci podręcznej",
-          "charged": "Naliczone"
+          "charged": "Naliczone",
+          "cost": "Koszt"
         },
         "free": "darmowy",
         "aborted": "przerwany",

@@ -223,7 +223,14 @@
       "diceMode": "Mode dé (d20)",
       "diceHelp": "Ajoute un dé d20 à côté du champ de saisie. Les réponses de l'IA dépendent de votre chance.",
       "contextLimitHelp": "Les anciens messages sont archivés lorsque le contexte dépasse la limite. En cas de dépassement, le contexte est réduit à 50%. Maximum pour le forfait : {{max}}k tokens.",
-      "attachmentLimitHelp": "Nombre de tokens du contexte pouvant être occupés par le contenu des documents joints. 0 = auto (90% de la limite de contexte). Maximum : {{max}}k tokens."
+      "attachmentLimitHelp": "Nombre de tokens du contexte pouvant être occupés par le contenu des documents joints. 0 = auto (90% de la limite de contexte). Maximum : {{max}}k tokens.",
+      "renderPerf": "Performance de rendu du chat",
+      "renderPerfLow": "Faible (PCs faibles)",
+      "renderPerfMedium": "Moyen (recommandé)",
+      "renderPerfHigh": "Élevé (PCs puissants)",
+      "renderPerfUltra": "Ultra",
+      "renderPerfHelp": "Nombre de caractères à afficher dans la liste du chat avant de masquer les messages plus anciens. Plus bas = défilement plus rapide.",
+      "renderPerfSaved": "Performance de rendu enregistrée. S'appliquera au prochain chat ouvert."
     },
     "toasts": {
       "saveSettingFailed": "Échec de l'enregistrement du paramètre",
@@ -359,7 +366,9 @@
       "short": "msg.",
       "loadOlderTitle": "Charger les messages plus anciens",
       "showMoreCount": "Afficher {{count}} msg. supplémentaires",
-      "hiddenTokens": " (~{{count}}k jetons)"
+      "hiddenTokens": " (~{{count}}k jetons)",
+      "loadMoreHint": "Afficher {{reveal}} de plus (sur {{count}} masqués)",
+      "loadOlderFromServer": "Charger {{count}} messages plus anciens"
     },
     "context": {
       "tooltip": "Messages : {{active}} (archive : {{archived}})\nJetons de prompt : {{promptTokens}}{{reasoning}}",

@@ -236,6 +236,13 @@
     "app": {
       "interfaceLanguage": "Interface language",
       "zoom": "Interface scale",
+      "renderPerf": "Chat rendering performance",
+      "renderPerfLow": "Low (weak PCs)",
+      "renderPerfMedium": "Medium (recommended)",
+      "renderPerfHigh": "High (powerful PCs)",
+      "renderPerfUltra": "Ultra",
+      "renderPerfHelp": "How many characters to render in the chat list before hiding older messages. Lower = faster scrolling.",
+      "renderPerfSaved": "Render performance saved. Will apply to the next opened chat.",
       "showTokens": "Show tokens",
       "subagentModel": "Subagent model:",
       "automaticSelection": "Automatic selection",
@@ -359,6 +366,8 @@
       "short": "msgs.",
       "loadOlderTitle": "Load older messages",
       "showMoreCount": "Show {{count}} more messages",
+      "loadMoreHint": "Show {{reveal}} more (of {{count}} hidden)",
+      "loadOlderFromServer": "Load {{count}} older messages",
       "hiddenTokens": " (~{{count}}k tokens)"
     },
     "context": {

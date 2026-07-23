@@ -223,7 +223,14 @@
       "diceMode": "Würfelmodus (d20)",
       "diceHelp": "Fügt einen d20-Würfel neben dem Eingabefeld hinzu. Die KI-Antworten hängen von Ihrem Glück ab.",
       "contextLimitHelp": "Alte Nachrichten werden archiviert, wenn der Kontext das Limit überschreitet. Bei Überschreitung wird der Kontext auf 50% reduziert. Maximum für den Tarif: {{max}}k Token.",
-      "attachmentLimitHelp": "Wie viele Token aus dem Kontext der Inhalt angehängter Dokumente belegen darf. 0 = Auto (90% des Kontextlimits). Maximum: {{max}}k Token."
+      "attachmentLimitHelp": "Wie viele Token aus dem Kontext der Inhalt angehängter Dokumente belegen darf. 0 = Auto (90% des Kontextlimits). Maximum: {{max}}k Token.",
+      "renderPerf": "Chat-Rendering-Leistung",
+      "renderPerfLow": "Niedrig (schwache PCs)",
+      "renderPerfMedium": "Mittel (empfohlen)",
+      "renderPerfHigh": "Hoch (leistungsstarke PCs)",
+      "renderPerfUltra": "Ultra",
+      "renderPerfHelp": "Wie viele Zeichen in der Chat-Liste gerendert werden, bevor ältere Nachrichten ausgeblendet werden. Niedriger = schnelleres Scrollen.",
+      "renderPerfSaved": "Rendering-Leistung gespeichert. Wird beim nächsten geöffneten Chat angewendet."
     },
     "toasts": {
       "saveSettingFailed": "Einstellung konnte nicht gespeichert werden",
@@ -359,7 +366,9 @@
       "short": "Nachr.",
       "loadOlderTitle": "Ältere Nachrichten laden",
       "showMoreCount": "Noch {{count}} Nachr. anzeigen",
-      "hiddenTokens": " (~{{count}}k Token)"
+      "hiddenTokens": " (~{{count}}k Token)",
+      "loadMoreHint": "Zeige {{reveal}} weitere (von {{count}} versteckten)",
+      "loadOlderFromServer": "Lade {{count}} ältere Nachrichten"
     },
     "context": {
       "tooltip": "Nachrichten: {{active}} (Archiv: {{archived}})\nPrompt-Token: {{promptTokens}}{{reasoning}}",

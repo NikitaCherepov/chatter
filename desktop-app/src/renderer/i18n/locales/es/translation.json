@@ -223,7 +223,14 @@
       "diceMode": "Modo de dado (d20)",
       "diceHelp": "Añade un dado d20 junto al campo de entrada. Las respuestas de la IA dependen de tu suerte.",
       "contextLimitHelp": "Los mensajes antiguos se archivan cuando el contexto supera el límite. Al excederse, el contexto se reduce al 50%. Máximo para el plan: {{max}}k tokens.",
-      "attachmentLimitHelp": "Cuántos tokens del contexto pueden ocupar los documentos adjuntos. 0 = auto (90% del límite de contexto). Máximo: {{max}}k tokens."
+      "attachmentLimitHelp": "Cuántos tokens del contexto pueden ocupar los documentos adjuntos. 0 = auto (90% del límite de contexto). Máximo: {{max}}k tokens.",
+      "renderPerf": "Rendimiento de renderizado del chat",
+      "renderPerfLow": "Bajo (PCs débiles)",
+      "renderPerfMedium": "Medio (recomendado)",
+      "renderPerfHigh": "Alto (PCs potentes)",
+      "renderPerfUltra": "Ultra",
+      "renderPerfHelp": "Cuántos caracteres renderizar en la lista de chat antes de ocultar mensajes antiguos. Menor = desplazamiento más rápido.",
+      "renderPerfSaved": "Rendimiento de renderizado guardado. Se aplicará al próximo chat abierto."
     },
     "toasts": {
       "saveSettingFailed": "No se pudo guardar la configuración",
@@ -359,7 +366,9 @@
       "short": "mens.",
       "loadOlderTitle": "Cargar mensajes antiguos",
       "showMoreCount": "Mostrar {{count}} mens. más",
-      "hiddenTokens": " (~{{count}}k tokens)"
+      "hiddenTokens": " (~{{count}}k tokens)",
+      "loadMoreHint": "Mostrar {{reveal}} más (de {{count}} ocultos)",
+      "loadOlderFromServer": "Cargar {{count}} mensajes anteriores"
     },
     "context": {
       "tooltip": "Mensajes: {{active}} (archivados: {{archived}})\nTokens de prompt: {{promptTokens}}{{reasoning}}",

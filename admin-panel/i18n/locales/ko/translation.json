@@ -143,7 +143,9 @@
       "searchModelHint": "2자 이상 입력 (예: deepseek)",
       "noModelsFound": "모델을 찾을 수 없음",
       "refreshPrices": "가격 새로고침",
-      "refreshing": "새로고치는 중…"
+      "refreshing": "새로고치는 중…",
+      "customModel": "기타…",
+      "customModelHint": "수동으로 지정"
     }
   },
   "integrations": {
@@ -334,7 +336,8 @@
         "quota": "할당량(주)",
         "messages": "메시지",
         "lastMessage": "마지막 메시지",
-        "created": "생성일"
+        "created": "생성일",
+        "totalCost": "사용 금액"
       },
       "filter": {
         "allStatuses": "모든 상태",
@@ -454,7 +457,8 @@
           "requests": "요청",
           "tokens": "토큰",
           "cacheHit": "캐시 적중",
-          "charged": "청구됨"
+          "charged": "청구됨",
+          "cost": "비용"
         },
         "free": "무료",
         "aborted": "중단됨",

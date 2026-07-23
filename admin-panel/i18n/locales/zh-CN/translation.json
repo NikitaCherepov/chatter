@@ -143,7 +143,9 @@
       "searchModelHint": "输入2个以上字符（例如 deepseek）",
       "noModelsFound": "未找到模型",
       "refreshPrices": "刷新价格",
-      "refreshing": "刷新中…"
+      "refreshing": "刷新中…",
+      "customModel": "其他…",
+      "customModelHint": "手动指定"
     }
   },
   "integrations": {
@@ -334,7 +336,8 @@
         "quota": "配额（周）",
         "messages": "消息数",
         "lastMessage": "最后消息",
-        "created": "创建时间"
+        "created": "创建时间",
+        "totalCost": "已花费"
       },
       "filter": {
         "allStatuses": "所有状态",
@@ -454,7 +457,8 @@
           "requests": "请求数",
           "tokens": "令牌",
           "cacheHit": "缓存命中",
-          "charged": "已计费"
+          "charged": "已计费",
+          "cost": "成本"
         },
         "free": "免费",
         "aborted": "已中止",

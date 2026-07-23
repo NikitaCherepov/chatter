@@ -223,7 +223,14 @@
       "diceMode": "ダイスモード (d20)",
       "diceHelp": "入力フィールドの横にd20ダイスを追加します。AIの応答は運に左右されます。",
       "contextLimitHelp": "コンテキストが制限を超えると、古いメッセージがアーカイブされます。超過時はコンテキストが50%に圧縮されます。プランの最大値: {{max}}kトークン。",
-      "attachmentLimitHelp": "添付ドキュメントの内容がコンテキストから消費できるトークン数。0 = 自動（コンテキスト制限の90%）。最大: {{max}}kトークン。"
+      "attachmentLimitHelp": "添付ドキュメントの内容がコンテキストから消費できるトークン数。0 = 自動（コンテキスト制限の90%）。最大: {{max}}kトークン。",
+      "renderPerf": "チャットレンダリングパフォーマンス",
+      "renderPerfLow": "低（低スペックPC）",
+      "renderPerfMedium": "中（推奨）",
+      "renderPerfHigh": "高（高性能PC）",
+      "renderPerfUltra": "ウルトラ",
+      "renderPerfHelp": "チャットリストで表示する文字数。古いメッセージは非表示になります。低いほどスクロールが速くなります。",
+      "renderPerfSaved": "レンダリングパフォーマンスを保存しました。次に開くチャットに適用されます。"
     },
     "toasts": {
       "saveSettingFailed": "設定の保存に失敗しました",
@@ -359,7 +366,9 @@
       "short": "メッセージ",
       "loadOlderTitle": "古いメッセージを読み込む",
       "showMoreCount": "さらに{{count}}件のメッセージを表示",
-      "hiddenTokens": " (~{{count}}k トークン)"
+      "hiddenTokens": " (~{{count}}k トークン)",
+      "loadMoreHint": "さらに{{reveal}}件表示（{{count}}件非表示中）",
+      "loadOlderFromServer": "古いメッセージを{{count}}件読み込む"
     },
     "context": {
       "tooltip": "メッセージ数: {{active}} (アーカイブ: {{archived}})\nプロンプトトークン: {{promptTokens}}{{reasoning}}",

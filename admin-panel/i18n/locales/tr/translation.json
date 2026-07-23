@@ -148,7 +148,9 @@
       "searchModelHint": "2+ karakter yazın (örn. deepseek)",
       "noModelsFound": "Model bulunamadı",
       "refreshPrices": "Fiyatları yenile",
-      "refreshing": "Yenileniyor…"
+      "refreshing": "Yenileniyor…",
+      "customModel": "Diğer…",
+      "customModelHint": "manuel olarak belirtin"
     }
   },
   "integrations": {
@@ -319,7 +321,8 @@
         "quota": "Kota (hafta)",
         "messages": "Mesajlar",
         "lastMessage": "Son mesaj",
-        "created": "Oluşturulma"
+        "created": "Oluşturulma",
+        "totalCost": "Harcanan"
       },
       "filter": {
         "allStatuses": "Tüm durumlar",
@@ -439,7 +442,8 @@
           "requests": "İstekler",
           "tokens": "Tokenlar",
           "cacheHit": "Önbellek isabeti",
-          "charged": "Ücretlendirilen"
+          "charged": "Ücretlendirilen",
+          "cost": "Maliyet"
         },
         "free": "ücretsiz",
         "aborted": "iptal edildi",

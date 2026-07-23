@@ -526,7 +526,14 @@
       "diceMode": "Režim kostky (d20)",
       "diceHelp": "Přidá d20 vedle pole pro zprávu. Odpovědi AI závisí na vašem štěstí.",
       "contextLimitHelp": "Starší zprávy jsou archivovány, když kontext překročí limit. Při překročení je kontext zmenšen na 50 %. Maximální plán: {{max}}k tokenů.",
-      "attachmentLimitHelp": "Kolik kontextových tokenů mohou použít připojené dokumenty. 0 = automaticky (90 % limitu kontextu). Maximum: {{max}}k tokenů."
+      "attachmentLimitHelp": "Kolik kontextových tokenů mohou použít připojené dokumenty. 0 = automaticky (90 % limitu kontextu). Maximum: {{max}}k tokenů.",
+      "renderPerf": "Výkon vykreslování chatu",
+      "renderPerfLow": "Nízký (slabé PC)",
+      "renderPerfMedium": "Střední (doporučeno)",
+      "renderPerfHigh": "Vysoký (výkonné PC)",
+      "renderPerfUltra": "Ultra",
+      "renderPerfHelp": "Kolik znaků vykreslit v seznamu chatu před skrytím starších zpráv. Nižší = rychlejší posouvání.",
+      "renderPerfSaved": "Výkon vykreslování uložen. Projeví se při příštím otevření chatu."
     },
     "toasts": {
       "saveSettingFailed": "Nepodařilo se uložit nastavení",
@@ -639,7 +646,9 @@
       "short": "zpr.",
       "loadOlderTitle": "Načíst starší zprávy",
       "showMoreCount": "Zobrazit {{count}} dalších zpráv",
-      "hiddenTokens": " (~{{count}}k tokenů)"
+      "hiddenTokens": " (~{{count}}k tokenů)",
+      "loadMoreHint": "Zobrazit {{reveal}} dalších (z {{count}} skrytých)",
+      "loadOlderFromServer": "Načíst {{count}} starších zpráv"
     },
     "context": {
       "tooltip": "Zprávy: {{active}} (archivováno: {{archived}})\nTokeny promptu: {{promptTokens}}{{reasoning}}",

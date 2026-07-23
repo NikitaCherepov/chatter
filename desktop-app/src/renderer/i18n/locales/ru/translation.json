@@ -213,6 +213,13 @@
     "app": {
       "interfaceLanguage": "Язык интерфейса",
       "zoom": "Масштаб интерфейса",
+      "renderPerf": "Производительность рендера чата",
+      "renderPerfLow": "Низкая (слабые ПК)",
+      "renderPerfMedium": "Средняя (рекомендуется)",
+      "renderPerfHigh": "Высокая (мощные ПК)",
+      "renderPerfUltra": "Ультра",
+      "renderPerfHelp": "Сколько символов рендерить в ленте чата до скрытия старых сообщений. Меньше = быстрее скроллинг.",
+      "renderPerfSaved": "Настройка сохранена. Применится к следующему открытому чату.",
       "showTokens": "Показывать токены",
       "subagentModel": "Модель субагентов:",
       "automaticSelection": "Автоматический выбор",
@@ -359,6 +366,8 @@
       "short": "сообщ.",
       "loadOlderTitle": "Загрузить старые сообщения",
       "showMoreCount": "Показать ещё {{count}} сообщ.",
+      "loadMoreHint": "Показать ещё {{reveal}} (из {{count}} скрытых)",
+      "loadOlderFromServer": "Загрузить {{count}} старых сообщений",
       "hiddenTokens": " (~{{count}}k токенов)"
     },
     "context": {

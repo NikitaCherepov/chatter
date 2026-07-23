@@ -526,7 +526,14 @@
       "diceMode": "Zar modu (d20)",
       "diceHelp": "Mesaj kutusunun yanına bir d20 ekler. AI yanıtları şansınıza bağlıdır.",
       "contextLimitHelp": "Bağlam sınırı aşıldığında eski mesajlar arşivlenir. Aşıldığında bağlam %50'ye daraltılır. Maksimum plan: {{max}}k token.",
-      "attachmentLimitHelp": "Eklenen belge içeriklerinin kullanabileceği bağlam token sayısı. 0 = otomatik (bağlam sınırının %90'ı). Maksimum: {{max}}k token."
+      "attachmentLimitHelp": "Eklenen belge içeriklerinin kullanabileceği bağlam token sayısı. 0 = otomatik (bağlam sınırının %90'ı). Maksimum: {{max}}k token.",
+      "renderPerf": "Sohbet işleme performansı",
+      "renderPerfLow": "Düşük (zayıf bilgisayarlar)",
+      "renderPerfMedium": "Orta (önerilen)",
+      "renderPerfHigh": "Yüksek (güçlü bilgisayarlar)",
+      "renderPerfUltra": "Ultra",
+      "renderPerfHelp": "Sohbet listesinde eski mesajları gizlemeden önce kaç karakterin işleneceği. Düşük = daha hızlı kaydırma.",
+      "renderPerfSaved": "İşleme performansı kaydedildi. Bir sonraki açılan sohbete uygulanacak."
     },
     "toasts": {
       "saveSettingFailed": "Ayar kaydedilemedi",
@@ -639,7 +646,9 @@
       "short": "msj.",
       "loadOlderTitle": "Daha eski mesajları yükle",
       "showMoreCount": "{{count}} tane daha mesaj göster",
-      "hiddenTokens": " (~{{count}}k token)"
+      "hiddenTokens": " (~{{count}}k token)",
+      "loadMoreHint": "{{reveal}} tane daha göster ({{count}} gizli)",
+      "loadOlderFromServer": "{{count}} eski mesaj yükle"
     },
     "context": {
       "tooltip": "Mesajlar: {{active}} (arşivlenen: {{archived}})\nPrompt tokenları: {{promptTokens}}{{reasoning}}",

@@ -223,7 +223,14 @@
       "diceMode": "骰子模式 (d20)",
       "diceHelp": "在输入框旁添加一个d20骰子。AI的回答取决于你的运气。",
       "contextLimitHelp": "当上下文超过限制时，旧消息会被归档。超过限制时，上下文会压缩至50%。套餐最大限制：{{max}}k tokens。",
-      "attachmentLimitHelp": "附件内容在上下文中可占用的token数。0 = 自动（上下文限制的90%）。最大限制：{{max}}k tokens。"
+      "attachmentLimitHelp": "附件内容在上下文中可占用的token数。0 = 自动（上下文限制的90%）。最大限制：{{max}}k tokens。",
+      "renderPerf": "聊天渲染性能",
+      "renderPerfLow": "低（弱性能电脑）",
+      "renderPerfMedium": "中（推荐）",
+      "renderPerfHigh": "高（高性能电脑）",
+      "renderPerfUltra": "极致",
+      "renderPerfHelp": "在聊天列表中隐藏较早消息前渲染的字符数。数值越低，滚动越快。",
+      "renderPerfSaved": "渲染性能已保存。将在下次打开的聊天中生效。"
     },
     "toasts": {
       "saveSettingFailed": "保存设置失败",
@@ -359,7 +366,9 @@
       "short": "条",
       "loadOlderTitle": "加载更早的消息",
       "showMoreCount": "显示更多 {{count}} 条",
-      "hiddenTokens": " (~{{count}}k 个令牌)"
+      "hiddenTokens": " (~{{count}}k 个令牌)",
+      "loadMoreHint": "显示{{reveal}}更多（共{{count}}条隐藏）",
+      "loadOlderFromServer": "加载{{count}}条更早的消息"
     },
     "context": {
       "tooltip": "消息数：{{active}}（存档：{{archived}}）\n提示令牌：{{promptTokens}}{{reasoning}}",

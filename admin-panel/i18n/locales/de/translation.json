@@ -143,7 +143,9 @@
       "searchModelHint": "2+ Zeichen eingeben (z.B. deepseek)",
       "noModelsFound": "Keine Modelle gefunden",
       "refreshPrices": "Preise aktualisieren",
-      "refreshing": "Aktualisiere…"
+      "refreshing": "Aktualisiere…",
+      "customModel": "Andere…",
+      "customModelHint": "manuell angeben"
     }
   },
   "integrations": {
@@ -334,7 +336,8 @@
         "quota": "Kontingent (Woche)",
         "messages": "Nachrichten",
         "lastMessage": "Letzte Nachricht",
-        "created": "Erstellt"
+        "created": "Erstellt",
+        "totalCost": "Ausgegeben"
       },
       "filter": {
         "allStatuses": "Alle Status",
@@ -454,7 +457,8 @@
           "requests": "Anfragen",
           "tokens": "Tokens",
           "cacheHit": "Cache-Treffer",
-          "charged": "Berechnet"
+          "charged": "Berechnet",
+          "cost": "Kosten"
         },
         "free": "kostenlos",
         "aborted": "abgebrochen",

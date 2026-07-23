@@ -503,7 +503,14 @@
       "diceMode": "Tryb kostki (d20)",
       "diceHelp": "Dodaje kostkę d20 obok pola wprowadzania. Odpowiedzi AI zależą od twojego szczęścia.",
       "contextLimitHelp": "Stare wiadomości są archiwizowane, gdy kontekst przekracza limit. Po przekroczeniu kontekst jest zwijany do 50%. Maksimum dla taryfy: {{max}}k tokenów.",
-      "attachmentLimitHelp": "Ile tokenów z kontekstu może zajmować zawartość załączonych dokumentów. 0 = auto (90% limitu kontekstu). Maksimum: {{max}}k tokenów."
+      "attachmentLimitHelp": "Ile tokenów z kontekstu może zajmować zawartość załączonych dokumentów. 0 = auto (90% limitu kontekstu). Maksimum: {{max}}k tokenów.",
+      "renderPerf": "Wydajność renderowania czatu",
+      "renderPerfLow": "Niska (słabe komputery)",
+      "renderPerfMedium": "Średnia (zalecana)",
+      "renderPerfHigh": "Wysoka (wydajne komputery)",
+      "renderPerfUltra": "Ultra",
+      "renderPerfHelp": "Ile znaków renderować na liście czatu przed ukryciem starszych wiadomości. Niższa wartość = szybsze przewijanie.",
+      "renderPerfSaved": "Wydajność renderowania zapisana. Zostanie zastosowana przy następnym otwarciu czatu."
     },
     "toasts": {
       "saveSettingFailed": "Nie udało się zapisać ustawienia",
@@ -639,7 +646,9 @@
       "short": "wiad.",
       "loadOlderTitle": "Załaduj starsze wiadomości",
       "showMoreCount": "Pokaż więcej {{count}} wiad.",
-      "hiddenTokens": " (~{{count}}k tokenów)"
+      "hiddenTokens": " (~{{count}}k tokenów)",
+      "loadMoreHint": "Pokaż {{reveal}} więcej (z {{count}} ukrytych)",
+      "loadOlderFromServer": "Załaduj {{count}} starszych wiadomości"
     },
     "context": {
       "tooltip": "Wiadomości: {{active}} (archiwum: {{archived}})\nTokeny promptu: {{promptTokens}}{{reasoning}}",

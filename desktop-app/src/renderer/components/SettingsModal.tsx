@@ -9,6 +9,7 @@ import { PromptSelector } from './PromptSelector';
 import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchRemoteTtsProviders, fetchPiperVoiceList } from '../lib/tts';
 import type { TtsSettings } from '../lib/tts';
 import { getSpeechRecognitionLanguage, setSpeechRecognitionLanguage, type SpeechRecognitionLanguage } from '../lib/speechRecognition';
+import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
 import {
@@ -229,6 +230,7 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
   const [languagePreference, setLanguagePreferenceState] = useState<LanguagePreference>(
     () => getLanguagePreference(),
   );
+  const [renderPerf, setRenderPerfState] = useState<RenderPerfLevel>(() => getRenderPerfLevel());
   const languageOptions = useMemo<SelectOption[]>(() => {
     const currentSystemLanguage = getLanguageDisplayName(getDetectedSystemLanguage());
     return [
@@ -368,6 +370,20 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
       }
       toast.error(t('settings.toasts.saveSettingFailed'));
     }
+  };
+
+  const renderPerfOptions = useMemo<SelectOption[]>(() => [
+    { value: 'low', label: t('settings.app.renderPerfLow') },
+    { value: 'medium', label: t('settings.app.renderPerfMedium') },
+    { value: 'high', label: t('settings.app.renderPerfHigh') },
+    { value: 'ultra', label: t('settings.app.renderPerfUltra') },
+  ], [t]);
+
+  const handleRenderPerfChange = (value: string) => {
+    if (value !== 'low' && value !== 'medium' && value !== 'high' && value !== 'ultra') return;
+    setRenderPerfState(value as RenderPerfLevel);
+    setRenderPerfLevel(value as RenderPerfLevel);
+    toast.success(t('settings.app.renderPerfSaved'));
   };
 
   const handleTelegramLinked = async () => {
@@ -1669,6 +1685,18 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
                   </button>
+                </div>
+              </div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.app.renderPerf')}</label>
+                <Select
+                  options={renderPerfOptions}
+                  value={renderPerf}
+                  onChange={handleRenderPerfChange}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  {t('settings.app.renderPerfHelp')}
                 </div>
               </div>
 

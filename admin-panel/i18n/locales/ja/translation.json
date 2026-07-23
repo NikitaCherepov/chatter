@@ -143,7 +143,9 @@
       "searchModelHint": "2文字以上入力（例：deepseek）",
       "noModelsFound": "モデルが見つかりません",
       "refreshPrices": "価格を更新",
-      "refreshing": "更新中…"
+      "refreshing": "更新中…",
+      "customModel": "その他…",
+      "customModelHint": "手動で指定"
     }
   },
   "integrations": {
@@ -334,7 +336,8 @@
         "quota": "クォータ（週）",
         "messages": "メッセージ",
         "lastMessage": "最終メッセージ",
-        "created": "作成日"
+        "created": "作成日",
+        "totalCost": "支出"
       },
       "filter": {
         "allStatuses": "すべてのステータス",
@@ -454,7 +457,8 @@
           "requests": "リクエスト",
           "tokens": "トークン",
           "cacheHit": "キャッシュヒット",
-          "charged": "課金"
+          "charged": "課金",
+          "cost": "コスト"
         },
         "free": "無料",
         "aborted": "中断",

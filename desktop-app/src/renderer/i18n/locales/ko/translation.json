@@ -503,7 +503,14 @@
       "diceMode": "주사위 모드 (d20)",
       "diceHelp": "입력창 옆에 d20 주사위를 추가합니다. AI 응답은 운에 따라 달라집니다.",
       "contextLimitHelp": "컨텍스트가 한도를 초과하면 오래된 메시지가 보관됩니다. 초과 시 컨텍스트가 50%로 축소됩니다. 요금제 최대: {{max}}k 토큰.",
-      "attachmentLimitHelp": "컨텍스트에서 첨부 문서 내용이 차지할 수 있는 토큰 수입니다. 0 = 자동 (컨텍스트 한도의 90%). 최대: {{max}}k 토큰."
+      "attachmentLimitHelp": "컨텍스트에서 첨부 문서 내용이 차지할 수 있는 토큰 수입니다. 0 = 자동 (컨텍스트 한도의 90%). 최대: {{max}}k 토큰.",
+      "renderPerf": "채팅 렌더링 성능",
+      "renderPerfLow": "낮음 (약한 PC)",
+      "renderPerfMedium": "중간 (권장)",
+      "renderPerfHigh": "높음 (강력한 PC)",
+      "renderPerfUltra": "울트라",
+      "renderPerfHelp": "채팅 목록에서 이전 메시지를 숨기기 전에 렌더링할 문자 수입니다. 낮을수록 스크롤이 빠릅니다.",
+      "renderPerfSaved": "렌더링 성능이 저장되었습니다. 다음에 열리는 채팅에 적용됩니다."
     },
     "toasts": {
       "saveSettingFailed": "설정을 저장하지 못했습니다",
@@ -639,7 +646,9 @@
       "short": "메시지",
       "loadOlderTitle": "이전 메시지 불러오기",
       "showMoreCount": "{{count}}개 더 보기",
-      "hiddenTokens": " (~{{count}}k 토큰)"
+      "hiddenTokens": " (~{{count}}k 토큰)",
+      "loadMoreHint": "{{reveal}}개 더 보기 ({{count}}개 숨김 중)",
+      "loadOlderFromServer": "이전 메시지 {{count}}개 불러오기"
     },
     "context": {
       "tooltip": "메시지: {{active}} (보관: {{archived}})\n프롬프트 토큰: {{promptTokens}}{{reasoning}}",

@@ -149,7 +149,9 @@
       "searchModelHint": "Zadejte 2+ znaky (např. deepseek)",
       "noModelsFound": "Nenalezeny žádné modely",
       "refreshPrices": "Obnovit ceny",
-      "refreshing": "Obnovuji…"
+      "refreshing": "Obnovuji…",
+      "customModel": "Jiné…",
+      "customModelHint": "zadat ručně"
     }
   },
   "integrations": {
@@ -320,7 +322,8 @@
         "quota": "Kvóta (týden)",
         "messages": "Zprávy",
         "lastMessage": "Poslední zpráva",
-        "created": "Vytvořeno"
+        "created": "Vytvořeno",
+        "totalCost": "Utraceno"
       },
       "filter": {
         "allStatuses": "Všechny stavy",
@@ -440,7 +443,8 @@
           "requests": "Požadavky",
           "tokens": "Tokeny",
           "cacheHit": "Zásah cache",
-          "charged": "Účtováno"
+          "charged": "Účtováno",
+          "cost": "Náklady"
         },
         "free": "zdarma",
         "aborted": "přerušeno",
