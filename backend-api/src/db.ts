@@ -617,6 +617,18 @@ ensureModelOverrideColumn('cache_read_price_per_million', 'ALTER TABLE model_ove
 ensureModelOverrideColumn('pricing_source', 'ALTER TABLE model_overrides ADD COLUMN pricing_source TEXT');
 ensureModelOverrideColumn('pricing_updated_at', 'ALTER TABLE model_overrides ADD COLUMN pricing_updated_at INTEGER');
 
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    key_encrypted TEXT NOT NULL,
+    key_prefix TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
 // ── User token usage (immutable accounting ledger) ────────────────────────
 // Source of truth for cost / statistics. NOT affected by chat/message deletion.
 // One row per AI response (manual or auto, including aborts).

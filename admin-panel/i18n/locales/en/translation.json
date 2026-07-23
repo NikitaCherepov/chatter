@@ -69,7 +69,8 @@
     "settingsApplied": "Settings applied.",
     "changedRelogin": "Changed. Log in again.",
     "coefficientLoadError": "Failed to load coefficients",
-    "coefficientSaved": "Coefficient saved"
+    "coefficientSaved": "Coefficient saved",
+    "cancel": "Cancel"
   },
   "ui": {
     "search": "Search…",
@@ -723,7 +724,22 @@
     "currentPassword": "Current password",
     "newPassword": "New password",
     "passwordHint": "At least 12 characters",
-    "changeData": "Change data"
+    "changeData": "Change data",
+    "apiKeys": "API Keys",
+    "apiKeysDescription": "Saved provider keys. Select from the list when configuring models.",
+    "apiKeyName": "Name",
+    "apiKeyNamePlaceholder": "My OpenRouter key",
+    "apiKeyValue": "Key",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Create",
+    "apiKeyDelete": "Delete",
+    "apiKeyCreated": "Key created",
+    "apiKeyDeleted": "Key deleted",
+    "apiKeyNoKeys": "No saved keys",
+    "apiKeySelect": "API Key",
+    "apiKeySelectPlaceholder": "Select a key",
+    "apiKeyCreateNew": "Create new…",
+    "apiKeyExistingKey": "Current key from env"
   },
   "settings": {
     "languageTitle": "Interface language",

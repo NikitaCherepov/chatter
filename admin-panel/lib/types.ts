@@ -95,6 +95,20 @@ export type Settings = {
 
 export type Service = { service: string; state: string; health: string; status: string };
 
+export type ApiKey = {
+  id: number;
+  name: string;
+  key_prefix: string;
+  created_at: string;
+  updated_at: string;
+};
+
+// When fetching a single key with the decrypted value:
+export type ApiKeyValue = ApiKey & {
+  key: string;
+};
+
+
 export const emptySettings: Settings = {
   telegramEnabled: false,
   telegramRichStreaming: true,

@@ -1,6 +1,9 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'node:crypto';
+import { getEncryptionKey } from './utils/encryption.js';
+
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
@@ -3366,6 +3369,65 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
   });
   return res.json({ ok: true, model_id: modelId });
 });
+
+// ─── API keys vault ──────────────────────────────────────────────────
+
+app.get('/internal/admin/api-keys', internalAuth, async (req, res) => {
+  try {
+    const keys = db.prepare('SELECT id, name, key_prefix, created_at, updated_at FROM api_keys ORDER BY id ASC').all();
+    res.json(keys);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'internal_error' });
+  }
+});
+
+app.get('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
+  try {
+    const row = db.prepare('SELECT * FROM api_keys WHERE id = ?').get(Number(req.params.id)) as any;
+    if (!row) return res.status(404).json({ error: 'api_key_not_found' });
+    const parts = row.key_encrypted.split('::');
+    const iv = Buffer.from(parts[0], 'hex');
+    const encryptedText = Buffer.from(parts[1], 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', getEncryptionKey(['ENCRYPTION_KEY']), iv);
+    const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]).toString('utf8');
+    res.json({ id: row.id, name: row.name, key: decrypted, key_prefix: row.key_prefix, created_at: row.created_at, updated_at: row.updated_at });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'internal_error' });
+  }
+});
+
+app.post('/internal/admin/api-keys', internalAuth, async (req, res) => {
+  try {
+    const { name, key } = req.body || {};
+    if (!name?.trim() || !key?.trim()) return res.status(400).json({ error: 'name_and_key_required' });
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', getEncryptionKey(['ENCRYPTION_KEY']), iv);
+    const encrypted = Buffer.concat([cipher.update(key.trim(), 'utf8'), cipher.final()]);
+    const key_encrypted = `${iv.toString('hex')}::${encrypted.toString('hex')}`;
+    const trimmed = key.trim();
+    const key_prefix = trimmed.length > 12
+      ? `${trimmed.slice(0, 7)}…${trimmed.slice(-4)}`
+      : trimmed.length > 4
+        ? `${trimmed.slice(0, 3)}…${trimmed.slice(-4)}`
+        : trimmed;
+    const result = db.prepare('INSERT INTO api_keys (name, key_encrypted, key_prefix) VALUES (?, ?, ?)').run(name.trim(), key_encrypted, key_prefix);
+    const created = db.prepare('SELECT id, name, key_prefix, created_at, updated_at FROM api_keys WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(created);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'internal_error' });
+  }
+});
+
+app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
+  try {
+    const result = db.prepare('DELETE FROM api_keys WHERE id = ?').run(Number(req.params.id));
+    if (result.changes === 0) return res.status(404).json({ error: 'api_key_not_found' });
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'internal_error' });
+  }
+});
+
 
 // ─── User usage (stats for admin UI) ────────────────────────────────────────
 

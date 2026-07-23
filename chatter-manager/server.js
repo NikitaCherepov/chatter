@@ -1837,6 +1837,35 @@ async function handleRequest(req, res) {
     }));
   }
 
+  // ── API keys ────────────────────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/api-keys') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/api-keys'));
+  }
+  if (req.method === 'POST' && pathname === '/api/api-keys') {
+    const body = await readJson(req);
+    const name = `${body.name || ''}`.trim();
+    const key = `${body.key || ''}`.trim();
+    if (!name || !key) return sendJson(res, 400, { error: 'name_and_key_required' });
+    return sendJson(res, 201, await backendInternalRequest('/internal/admin/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name, key }),
+    }));
+  }
+  if (req.method === 'GET' && pathname.startsWith('/api/api-keys/')) {
+    const keyId = decodeURIComponent(pathname.slice('/api/api-keys/'.length));
+    if (keyId && !keyId.includes('/')) {
+      try {
+        return sendJson(res, 200, await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(keyId)}`));
+      } catch { return sendJson(res, 404, { error: 'api_key_not_found' }); }
+    }
+  }
+  if (req.method === 'DELETE' && pathname.startsWith('/api/api-keys/')) {
+    const keyId = decodeURIComponent(pathname.slice('/api/api-keys/'.length));
+    if (keyId && !keyId.includes('/')) {
+      return sendJson(res, 200, await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' }));
+    }
+  }
+
   // ── Plan limits (token quotas per plan) ────────────────────────────────
   if (req.method === 'GET' && pathname === '/api/plan-limits') {
     return sendJson(res, 200, await backendInternalRequest('/internal/admin/plan-limits'));

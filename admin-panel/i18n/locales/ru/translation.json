@@ -69,7 +69,8 @@
     "settingsApplied": "Настройки применены.",
     "changedRelogin": "Изменено. Войди снова.",
     "coefficientLoadError": "Не удалось загрузить коэффициенты",
-    "coefficientSaved": "Коэффициент сохранён"
+    "coefficientSaved": "Коэффициент сохранён",
+    "cancel": "Отмена"
   },
   "ui": {
     "search": "Поиск…",
@@ -723,7 +724,22 @@
     "currentPassword": "Текущий пароль",
     "newPassword": "Новый пароль",
     "passwordHint": "Минимум 12 символов",
-    "changeData": "Сменить данные"
+    "changeData": "Сменить данные",
+    "apiKeys": "API-ключи",
+    "apiKeysDescription": "Сохранённые ключи провайдеров. Выбираешь из списка при настройке моделей.",
+    "apiKeyName": "Название",
+    "apiKeyNamePlaceholder": "Мой OpenRouter ключ",
+    "apiKeyValue": "Ключ",
+    "apiKeyValuePlaceholder": "sk-...",
+    "apiKeyCreate": "Создать",
+    "apiKeyDelete": "Удалить",
+    "apiKeyCreated": "Ключ создан",
+    "apiKeyDeleted": "Ключ удалён",
+    "apiKeyNoKeys": "Нет сохранённых ключей",
+    "apiKeySelect": "API-ключ",
+    "apiKeySelectPlaceholder": "Выбери ключ",
+    "apiKeyCreateNew": "Создать новый…",
+    "apiKeyExistingKey": "Текущий ключ из env"
   },
   "settings": {
     "languageTitle": "Язык интерфейса",

@@ -408,9 +408,10 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
               undefined, // activeMacros
               ctx.signal,
               // subagentExtra — forwards the internal context into runTool.
-              // Without it, edit_file_lines / pc_command and other HitL tools wait
-              // for confirmation inside _runTool while the confirmation card never
-              // reaches the client (no onDesktopAction) — a mutual deadlock.
+              // This routes the HitL confirmation card to the channel that
+              // launched the subagent (e.g. Telegram) via onDesktopAction, in
+              // addition to Desktop. Without it the card only goes through
+              // sendToDesktop(), so non-Desktop clients may never receive it.
               {
                 manualModel: ctx.manualModel,
                 subagentMode: ctx.subagentMode,

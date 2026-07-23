@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ModelOverrideData, ProviderKind, ProviderModelConfig } from '../../../lib/types';
+import type { ApiKey, ApiKeyValue, ModelOverrideData, ProviderKind, ProviderModelConfig } from '../../../lib/types';
 import {
   DEEPSEEK_PRESET_MODELS,
   XIAOMI_PRESET_MODELS,
@@ -218,6 +218,16 @@ export function ProviderModelFields({
   coefficientManager?: CoefficientManager;
 }) {
   const { t } = useTranslation();
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [showCreateKey, setShowCreateKey] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [selectedApiKeyId, setSelectedApiKeyId] = useState('');
+
+  useEffect(() => {
+    api<ApiKey[]>('/api/api-keys').then(setApiKeys).catch(() => {});
+  }, []);
+
   const override = coefficientManager?.getOverride?.(model.uniqueId);
   const providerKind: ProviderKind = override?.providerKind || resolveProviderKind(model.baseUrl);
 
@@ -505,14 +515,82 @@ export function ProviderModelFields({
         </>
       )}
 
-      {/* API key last */}
-      <FormField label={t('models.providerFields.apiKey')}
-        state={<SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />}
-        hint={model.hasApiKey ? t('models.providerFields.apiKeyHint') : undefined}>
-        <input type="password" value={model.apiKey} onChange={e => onChange({ apiKey: e.target.value })} autoComplete="off"
-          placeholder={model.hasApiKey ? t('models.providerFields.apiKeyPlaceholderExisting') : t('models.providerFields.apiKeyPlaceholderNew')}
-          required={required && !model.hasApiKey} />
-      </FormField>
+      {/* API key: select from saved keys or create new */}
+      {(() => {
+        const selectOptions: SelectOption[] = [
+          ...apiKeys.map((k) => ({
+            value: `key:${k.id}`,
+            label: k.name,
+            hint: k.key_prefix,
+          })),
+          { value: '__create__', label: t('security.apiKeyCreateNew') },
+          ...(model.hasApiKey ? [{ value: '__existing__', label: t('security.apiKeyExistingKey') }] : []),
+        ];
+
+        const handleSelectChange = (value: string) => {
+          if (value === '__create__') {
+            setShowCreateKey(true);
+          } else if (value === '__existing__') {
+            setSelectedApiKeyId('');
+          } else if (value.startsWith('key:')) {
+            const id = value.slice(4);
+            setSelectedApiKeyId(value);
+            api<ApiKeyValue>(`/api/api-keys/${id}`).then((keyData) => {
+              onChange({ apiKey: keyData.key });
+            }).catch(() => {});
+          }
+        };
+
+        const handleCreateKey = async () => {
+          if (!newKeyName || !newKeyValue) return;
+          try {
+            await api('/api/api-keys', {
+              method: 'POST',
+              body: JSON.stringify({ name: newKeyName, key: newKeyValue }),
+            });
+            setNewKeyName('');
+            setNewKeyValue('');
+            setShowCreateKey(false);
+            // Reload the list
+            api<ApiKey[]>('/api/api-keys').then(setApiKeys).catch(() => {});
+          } catch {
+            // error handled by api helper
+          }
+        };
+
+        if (showCreateKey) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+              <FormField label={t('security.apiKeyName')}>
+                <input value={newKeyName} onChange={e => setNewKeyName(e.target.value)}
+                  placeholder={t('security.apiKeyNamePlaceholder')} />
+              </FormField>
+              <FormField label={t('security.apiKeyValue')}>
+                <input type="password" value={newKeyValue} onChange={e => setNewKeyValue(e.target.value)}
+                  placeholder={t('security.apiKeyValuePlaceholder')} />
+              </FormField>
+              <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                <button type="button" onClick={handleCreateKey}>{t('security.apiKeyCreate')}</button>
+                <button type="button" className="buttonSecondary" onClick={() => setShowCreateKey(false)}>
+                  {t('common.cancel') || 'Cancel'}
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <FormField label={t('security.apiKeySelect')}
+            state={<SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />}>
+            <Select
+              options={selectOptions}
+              value={selectedApiKeyId}
+              onChange={handleSelectChange}
+              placeholder={t('security.apiKeySelectPlaceholder')}
+            />
+          </FormField>
+        );
+      })()}
     </div>
   );
 }
