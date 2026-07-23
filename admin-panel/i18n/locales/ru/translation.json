@@ -321,7 +321,8 @@
         "quota": "Квота (неделя)",
         "messages": "Сообщений",
         "lastMessage": "Последнее сообщение",
-        "created": "Создан"
+        "created": "Создан",
+        "totalCost": "Потрачено"
       },
       "filter": {
         "allStatuses": "Все статусы",
@@ -441,7 +442,8 @@
           "requests": "Запросов",
           "tokens": "Токенов",
           "cacheHit": "Cache hit",
-          "charged": "Списано"
+          "charged": "Списано",
+          "cost": "Цена"
         },
         "free": "free",
         "aborted": "прервано",

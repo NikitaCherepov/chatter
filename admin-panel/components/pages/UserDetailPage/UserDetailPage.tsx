@@ -343,11 +343,30 @@ type UsageByModelRow = {
   charged_tokens: number;
   free_requests: number;
   aborted_requests: number;
+  estimated_cost_usd: number | null;
+  actual_cost_usd: number | null;
   request_count: number;
 };
 
 function formatTokens(value: number) {
   return new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function formatCostUsd(usd: number | null | undefined): string {
+  if (usd === null || usd === undefined || !Number.isFinite(usd)) return '—';
+  // No rounding — show full precision for per-model costs.
+  return `$${String(usd)}`;
+}
+
+/** Prefer actual_cost_usd (real OpenRouter cost); fall back to estimated. */
+function rowCost(row: UsageByModelRow): number | null {
+  if (row.actual_cost_usd !== null && row.actual_cost_usd !== undefined && Number.isFinite(row.actual_cost_usd) && row.actual_cost_usd > 0) {
+    return row.actual_cost_usd;
+  }
+  if (row.estimated_cost_usd !== null && row.estimated_cost_usd !== undefined && Number.isFinite(row.estimated_cost_usd) && row.estimated_cost_usd > 0) {
+    return row.estimated_cost_usd;
+  }
+  return null;
 }
 
 function UsageDonut({ percent }: { percent: number }) {
@@ -426,6 +445,7 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
               <thead><tr>
                 <th>{t('users.detail.modelUsage.tableHeaders.model')}</th><th>{t('users.detail.modelUsage.tableHeaders.route')}</th><th>{t('users.detail.modelUsage.tableHeaders.requests')}</th>
                 <th>{t('users.detail.modelUsage.tableHeaders.tokens')}</th><th>{t('users.detail.modelUsage.tableHeaders.cacheHit')}</th><th>{t('users.detail.modelUsage.tableHeaders.charged')}</th>
+                <th>{t('users.detail.modelUsage.tableHeaders.cost')}</th>
               </tr></thead>
               <tbody>
                 {rows.map((row, idx) => (
@@ -436,6 +456,7 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
                     <td>{formatTokens(row.total_tokens)}</td>
                     <td>{formatTokens(row.cache_hit_tokens)}</td>
                     <td>{row.free_requests > 0 && row.charged_tokens === 0 ? <span title={t('users.detail.modelUsage.freeTooltip')}>{t('users.detail.modelUsage.free')}</span> : formatTokens(row.charged_tokens)}</td>
+                    <td>{formatCostUsd(rowCost(row))}</td>
                   </tr>
                 ))}
               </tbody>

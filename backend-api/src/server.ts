@@ -2581,7 +2581,12 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
       u.language,
       u.created_at,
       COUNT(cm.id) AS message_count,
-      MAX(cm.created_at) AS last_message_at
+      MAX(cm.created_at) AS last_message_at,
+      (
+        SELECT COALESCE(SUM(utu.actual_cost_usd), SUM(utu.estimated_cost_usd), 0)
+        FROM user_token_usage utu
+        WHERE utu.user_id = u.id
+      ) AS total_cost_usd
     FROM users u
     LEFT JOIN chat_messages cm ON cm.user_id = u.id
     GROUP BY u.id
@@ -2601,6 +2606,7 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
     created_at: string | null;
     message_count: number;
     last_message_at: string | null;
+    total_cost_usd: number | null;
   }>;
 
   const identitiesByAccount = new Map<number, Array<{
@@ -2709,6 +2715,11 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
     last_message_at: string | null;
   };
   const chatCount = Number((db.prepare('SELECT COUNT(*) AS count FROM user_chats WHERE user_id = ?').get(userId) as { count: number }).count) || 0;
+  const totalCostRow = db.prepare(`
+    SELECT COALESCE(SUM(actual_cost_usd), SUM(estimated_cost_usd), 0) AS total_cost_usd
+    FROM user_token_usage
+    WHERE user_id = ?
+  `).get(userId) as { total_cost_usd: number | null };
   const identities = db.prepare(`
     SELECT provider, provider_subject, username, created_at, updated_at
     FROM account_identities
@@ -2738,6 +2749,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
         last_message_at: messageStats.last_message_at,
       },
       chats_count: chatCount,
+      total_cost_usd: Number(totalCostRow.total_cost_usd) || 0,
       ban: getBanRecord(userId) || null,
       subscription,
       last_server_access_key: getLastServerAccessKeyForUser(userId),
@@ -3387,11 +3399,13 @@ app.get('/internal/admin/users/:id/usage', internalAuth, (req, res) => {
       SUM(charged_tokens) AS charged_tokens,
       SUM(CASE WHEN charged_tokens = 0 THEN 1 ELSE 0 END) AS free_requests,
       SUM(CASE WHEN aborted = 1 THEN 1 ELSE 0 END) AS aborted_requests,
+      SUM(estimated_cost_usd) AS estimated_cost_usd,
+      SUM(actual_cost_usd) AS actual_cost_usd,
       COUNT(*) AS request_count
     FROM user_token_usage
     WHERE user_id = ? AND created_at >= ?
     GROUP BY model_id, route
-    ORDER BY SUM(charged_tokens) DESC
+    ORDER BY SUM(COALESCE(actual_cost_usd, estimated_cost_usd, 0)) DESC
   `).all(userId, windowStart) as Array<{
     model_id: string | null;
     model_name: string | null;
@@ -3406,6 +3420,8 @@ app.get('/internal/admin/users/:id/usage', internalAuth, (req, res) => {
     charged_tokens: number;
     free_requests: number;
     aborted_requests: number;
+    estimated_cost_usd: number | null;
+    actual_cost_usd: number | null;
     request_count: number;
   }>;
 

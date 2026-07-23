@@ -23,6 +23,7 @@ type UserOverview = {
   created_at: string | null;
   message_count: number;
   last_message_at: string | null;
+  total_cost_usd: number | null;
   identities: Identity[];
   desktop: { online: boolean; connected_at: number | null; last_activity_at: number | null };
 };
@@ -38,6 +39,12 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat('ru', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(date);
+}
+
+function formatCost(usd: number | null | undefined): string {
+  if (usd === null || usd === undefined || !Number.isFinite(usd) || usd === 0) return '—';
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
 }
 
 function identityLabel(identity: Identity) {
@@ -178,7 +185,7 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
 
         <div className={styles.tableWrap}>
           <table className={styles.table}>
-            <thead><tr><th>{t('users.list.tableHeaders.user')}</th><th>{t('users.list.tableHeaders.status')}</th><th>{t('users.list.tableHeaders.plan')}</th><th>{t('users.list.tableHeaders.quota')}</th><th>{t('users.list.tableHeaders.messages')}</th><th>{t('users.list.tableHeaders.lastMessage')}</th><th>{t('users.list.tableHeaders.created')}</th></tr></thead>
+            <thead><tr><th>{t('users.list.tableHeaders.user')}</th><th>{t('users.list.tableHeaders.status')}</th><th>{t('users.list.tableHeaders.plan')}</th><th>{t('users.list.tableHeaders.quota')}</th><th>{t('users.list.tableHeaders.messages')}</th><th>{t('users.list.tableHeaders.totalCost')}</th><th>{t('users.list.tableHeaders.lastMessage')}</th><th>{t('users.list.tableHeaders.created')}</th></tr></thead>
             <tbody>
               {filteredUsers.map(user => {
                 const used = user.weekly_tokens_used || 0;
@@ -206,6 +213,7 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
                       )}
                     </td>
                     <td className={styles.number}>{user.message_count.toLocaleString('ru')}</td>
+                    <td className={styles.number}>{formatCost(user.total_cost_usd)}</td>
                     <td>{formatDate(user.last_message_at)}</td>
                     <td>{formatDate(user.created_at)}</td>
                   </tr>

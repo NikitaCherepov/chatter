@@ -321,7 +321,8 @@
         "quota": "Quota (week)",
         "messages": "Messages",
         "lastMessage": "Last message",
-        "created": "Created"
+        "created": "Created",
+        "totalCost": "Spent"
       },
       "filter": {
         "allStatuses": "All statuses",
@@ -441,7 +442,8 @@
           "requests": "Requests",
           "tokens": "Tokens",
           "cacheHit": "Cache hit",
-          "charged": "Charged"
+          "charged": "Charged",
+          "cost": "Cost"
         },
         "free": "free",
         "aborted": "aborted",
