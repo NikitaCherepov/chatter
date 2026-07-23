@@ -15,6 +15,8 @@ export type WsClient = {
   lastPingAt: number;
   lastPongAt: number;
   missedPongs: number;
+  /** True while we've asked the client to refresh its access token and are waiting for auth_refresh. */
+  authRefreshInFlight: boolean;
 };
 
 // Keyed by the single canonical account ID used by every client.

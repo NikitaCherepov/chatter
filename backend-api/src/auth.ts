@@ -43,6 +43,31 @@ const signPayload = (payload: TokenPayload) => {
 };
 
 export const verifyToken = (token: string, expectedType: 'access' | 'refresh') => {
+  const decoded = decodeToken(token, expectedType);
+  if (!decoded) return null;
+  return validateTokenPrincipal(decoded);
+};
+
+/**
+ * Same as verifyToken but ignores `exp`. Used for WebSocket connections:
+ * a token whose signature, type, version, principal and user status are
+ * still valid should not immediately kill the socket — we can ask the
+ * client to refresh instead. Real revocation (ban, version bump, sak
+ * revoked) is still enforced.
+ */
+export const verifyTokenIgnoreExpiry = (token: string, expectedType: 'access' | 'refresh') => {
+  const decoded = decodeVerifiedToken(token, expectedType);
+  if (!decoded) return null;
+  return validateTokenPrincipal(decoded);
+};
+
+/**
+ * Decode and cryptographically verify a JWT without checking `exp`.
+ * Useful for detecting "expired just now" cases and requesting a refresh
+ * from the client instead of dropping the WebSocket connection.
+ * Returns the decoded payload (with `exp`) or null if signature/type is invalid.
+ */
+export const decodeVerifiedToken = (token: string, expectedType: 'access' | 'refresh'): TokenPayload | null => {
   const [header, payload, signature] = token.split('.');
   if (!header || !payload || !signature) return null;
   const content = `${header}.${payload}`;
@@ -59,8 +84,19 @@ export const verifyToken = (token: string, expectedType: 'access' | 'refresh') =
     return null;
   }
   if (decoded.typ !== expectedType) return null;
-  if (!decoded.sub || !Number.isFinite(decoded.exp) || decoded.exp <= Math.floor(Date.now() / 1000)) return null;
+  if (!decoded.sub || !Number.isFinite(decoded.exp)) return null;
+  return decoded;
+};
 
+/** Decode JWT payload without any verification (for client-side timing inspection). */
+const decodeToken = (token: string, expectedType: 'access' | 'refresh'): TokenPayload | null => {
+  const decoded = decodeVerifiedToken(token, expectedType);
+  if (!decoded) return null;
+  if (decoded.exp <= Math.floor(Date.now() / 1000)) return null;
+  return decoded;
+};
+
+const validateTokenPrincipal = (decoded: TokenPayload): TokenPayload | null => {
   const principal = getAuthPrincipal(decoded.sub);
   if (!principal || (principal.status !== 'approved' && principal.is_admin !== 1)) return null;
   const tokenVersion = Number.isFinite(Number(decoded.ver)) ? Math.floor(Number(decoded.ver)) : 0;

@@ -7,7 +7,7 @@ import { getEncryptionKey } from './utils/encryption.js';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
-import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, type AuthedRequest } from './auth.js';
+import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
@@ -5012,6 +5012,7 @@ wss.on('connection', (ws, req) => {
     lastPingAt: 0,
     lastPongAt: now,
     missedPongs: 0,
+    authRefreshInFlight: false,
   };
   registerWsClient(client);
   console.log(`[ws] account ${accountId} connected, total: ${wsClients.size}`);
@@ -5023,11 +5024,16 @@ wss.on('connection', (ws, req) => {
       client.lastMessageAt = Date.now();
 
       // Allow an authenticated desktop to rotate the access token without
-      // dropping an in-progress stream. The new token must resolve to the
-      // same canonical account as the existing connection.
+      // dropping an in-progress stream. The new token MUST be fully valid
+      // (signature, exp, principal, version, sak) — strict verifyToken.
+      // A revoked/banned user must NOT be able to push a fresh token here.
       if (msg.type === 'auth_refresh') {
         const nextToken = typeof msg.token === 'string' ? msg.token.trim() : '';
-        const nextPayload = nextToken ? verifyToken(nextToken, 'access') : null;
+        if (!nextToken) {
+          ws.close(4001, 'invalid_refresh_token');
+          return;
+        }
+        const nextPayload = verifyToken(nextToken, 'access');
         if (!nextPayload || nextPayload.sub !== client.accountId) {
           ws.close(4001, 'invalid_refresh_token');
           return;
@@ -5035,12 +5041,37 @@ wss.on('connection', (ws, req) => {
         client.accessToken = nextToken;
         client.lastPongAt = Date.now();
         client.missedPongs = 0;
+        client.authRefreshInFlight = false;
         ws.send(JSON.stringify({ type: 'auth_refreshed' }));
         return;
       }
 
-      if (!verifyToken(client.accessToken, 'access')) {
+      // For any other message: if the access token is invalid (signature,
+      // version, user status, sak) → drop. If only `exp` is gone → ask for
+      // refresh. verifyTokenIgnoreExpiry enforces all principal-level checks.
+      const currentPayload = verifyTokenIgnoreExpiry(client.accessToken, 'access');
+      if (!currentPayload) {
         ws.close(4001, 'token_revoked');
+        return;
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (currentPayload.exp <= nowSec) {
+        // Token expired — request a refresh instead of dropping the socket.
+        // Allow `ping`/`pong` through so heartbeat doesn't break during the
+        // refresh round-trip.
+        if (msg.type === 'ping' || msg.type === 'pong') {
+          client.lastPongAt = Date.now();
+          client.missedPongs = 0;
+          if (msg.type === 'ping') {
+            try { ws.send(JSON.stringify({ type: 'pong' })); } catch { /* ignore */ }
+          }
+          return;
+        }
+        // Debounce: don't spam auth_refresh_required on every incoming message.
+        if (!client.authRefreshInFlight) {
+          client.authRefreshInFlight = true;
+          try { ws.send(JSON.stringify({ type: 'auth_refresh_required' })); } catch { /* ignore */ }
+        }
         return;
       }
 
@@ -5085,9 +5116,19 @@ setInterval(() => {
   for (const client of uniqueClients) {
     if (client.ws.readyState !== WebSocket.OPEN) continue;
 
-    if (!verifyToken(client.accessToken, 'access')) {
+    // If signature/version is invalid → revoke. If only expired → nudge refresh.
+    const payload = verifyTokenIgnoreExpiry(client.accessToken, 'access');
+    if (!payload) {
       client.ws.close(4001, 'token_revoked');
       continue;
+    }
+    if (payload.exp <= Math.floor(now / 1000)) {
+      // Ask the client to refresh instead of dropping the connection.
+      // Debounce: one nudge per refresh round-trip.
+      if (!client.authRefreshInFlight) {
+        client.authRefreshInFlight = true;
+        try { client.ws.send(JSON.stringify({ type: 'auth_refresh_required' })); } catch { /* ignore */ }
+      }
     }
 
     const lastPongAgeMs = now - client.lastPongAt;

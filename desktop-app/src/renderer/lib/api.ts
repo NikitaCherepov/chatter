@@ -729,6 +729,28 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           wsAuthRefreshAckTimer = null;
           scheduleWebSocketTokenRefresh(socket);
           break;
+        case 'auth_refresh_required':
+          // Server-side init: access token is about to expire (or just expired).
+          // Refresh proactively and send the new token without dropping the socket.
+          void refreshWebSocketAccessToken().then((refreshed) => {
+            if (ws !== socket || !refreshed) return;
+            const accessToken = loadTokens()?.access_token;
+            if (!accessToken || socket.readyState !== WebSocket.OPEN) {
+              reconnectWebSocket();
+              return;
+            }
+            try {
+              socket.send(JSON.stringify({ type: 'auth_refresh', token: accessToken }));
+              if (wsAuthRefreshAckTimer) clearTimeout(wsAuthRefreshAckTimer);
+              wsAuthRefreshAckTimer = setTimeout(() => {
+                wsAuthRefreshAckTimer = null;
+                if (ws === socket) reconnectWebSocket();
+              }, 10_000);
+            } catch {
+              reconnectWebSocket();
+            }
+          });
+          break;
         case 'execute_ipc':
           console.log('[ws] execute_ipc received', {
             requestId: msg.request_id,
