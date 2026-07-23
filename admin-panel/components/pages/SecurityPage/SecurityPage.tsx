@@ -5,6 +5,7 @@ import { Card } from '../../ui/Card/Card';
 import { FormField } from '../../ui/FormField/FormField';
 import { api } from '../../../lib/api';
 import type { ApiKey } from '../../../lib/types';
+import { DeleteKeyModal } from './DeleteKeyModal';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import styles from './SecurityPage.module.css';
 
@@ -37,6 +38,7 @@ export function SecurityPage({
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
   const [keyState, setKeyState] = useState('');
+  const [keyToDelete, setKeyToDelete] = useState<ApiKey | null>(null);
 
   const loadKeys = () => {
     api<ApiKey[]>('/api/api-keys').then(setApiKeys).catch(() => {});
@@ -64,10 +66,19 @@ export function SecurityPage({
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDeleteClick = (key: ApiKey) => {
+    setKeyToDelete(key);
+  };
+
+  const confirmDelete = async (replacementKeyId: number | null) => {
+    if (!keyToDelete) return;
     try {
-      await api(`/api/api-keys/${id}`, { method: 'DELETE' });
+      await api(`/api/api-keys/${keyToDelete.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ replacementKeyId }),
+      });
       setKeyState(t('security.apiKeyDeleted'));
+      setKeyToDelete(null);
       loadKeys();
     } catch {
       setKeyState(t('common.error'));
@@ -163,7 +174,7 @@ export function SecurityPage({
               <div key={key.id} className={styles.row}>
                 <span><strong>{key.name}</strong></span>
                 <span><code>{key.key_prefix}</code></span>
-                <button type="button" className={styles.deleteBtn} onClick={() => handleDelete(key.id)}>
+                <button type="button" className={styles.deleteBtn} onClick={() => handleDeleteClick(key)}>
                   {t('security.apiKeyDelete')}
                 </button>
               </div>
@@ -175,6 +186,15 @@ export function SecurityPage({
         )}
         {keyState && <p className={styles.state}>{keyState}</p>}
       </Card>
+
+      {keyToDelete && (
+        <DeleteKeyModal
+          keyToDelete={keyToDelete}
+          allKeys={apiKeys}
+          onConfirm={confirmDelete}
+          onCancel={() => setKeyToDelete(null)}
+        />
+      )}
     </div>
   );
 }

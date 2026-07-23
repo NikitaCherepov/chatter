@@ -21,6 +21,7 @@ export type ModelOverride = {
   cache_read_price_per_million: number | null;
   pricing_source: string | null;
   pricing_updated_at: number | null;
+  selected_api_key_id: number | null;
 };
 
 export type PricingSnapshot = {
@@ -41,7 +42,8 @@ const readAllOverrides = (): Map<string, ModelOverride> => {
     SELECT model_id, coefficient, updated_at,
            provider_kind, openrouter_provider_slug, pricing_mode,
            input_price_per_million, output_price_per_million,
-           cache_read_price_per_million, pricing_source, pricing_updated_at
+           cache_read_price_per_million, pricing_source, pricing_updated_at,
+           selected_api_key_id
     FROM model_overrides
   `).all() as Array<ModelOverride>;
   const map = new Map<string, ModelOverride>();
@@ -198,6 +200,7 @@ export const setModelProvider = (
     cacheReadPricePerMillion?: number | null;
     pricingSource?: string | null;
     coefficient?: number | null;
+    selectedApiKeyId?: number | null;
   }
 ): void => {
   const now = getNowUnix();
@@ -213,14 +216,16 @@ export const setModelProvider = (
   const coeff = params.coefficient !== undefined && params.coefficient !== null
     ? (Number.isFinite(params.coefficient) && params.coefficient >= 0 ? params.coefficient : 1.0)
     : existing?.coefficient ?? 1.0;
+  const selectedApiKeyId = params.selectedApiKeyId !== undefined ? params.selectedApiKeyId : existing?.selected_api_key_id ?? null;
 
   db.prepare(`
     INSERT INTO model_overrides (
       model_id, coefficient, updated_at,
       provider_kind, openrouter_provider_slug, pricing_mode,
       input_price_per_million, output_price_per_million,
-      cache_read_price_per_million, pricing_source, pricing_updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      cache_read_price_per_million, pricing_source, pricing_updated_at,
+      selected_api_key_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(model_id) DO UPDATE SET
       coefficient = excluded.coefficient,
       updated_at = excluded.updated_at,
@@ -231,7 +236,8 @@ export const setModelProvider = (
       output_price_per_million = excluded.output_price_per_million,
       cache_read_price_per_million = excluded.cache_read_price_per_million,
       pricing_source = excluded.pricing_source,
-      pricing_updated_at = excluded.pricing_updated_at
+      pricing_updated_at = excluded.pricing_updated_at,
+      selected_api_key_id = excluded.selected_api_key_id
   `).run(
     modelId, coeff, now,
     providerKind,
@@ -241,7 +247,8 @@ export const setModelProvider = (
     typeof outputPrice === 'number' && Number.isFinite(outputPrice) ? outputPrice : null,
     typeof cacheReadPrice === 'number' && Number.isFinite(cacheReadPrice) ? cacheReadPrice : null,
     pricingSource,
-    pricingSource ? now : null
+    pricingSource ? now : null,
+    selectedApiKeyId
   );
   refreshOverrideCache();
 };

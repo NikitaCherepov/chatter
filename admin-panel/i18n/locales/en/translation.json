@@ -739,7 +739,15 @@
     "apiKeySelect": "API Key",
     "apiKeySelectPlaceholder": "Select a key",
     "apiKeyCreateNew": "Create new…",
-    "apiKeyExistingKey": "Current key from env"
+    "apiKeyExistingKey": "Current key from env",
+    "apiKeyDeleteTitle": "Delete key",
+    "apiKeyDeleteUsedBy": "This key is used by models:",
+    "apiKeyDeleteAction": "What to do with these models?",
+    "apiKeyDeleteReplace": "Replace with another key",
+    "apiKeyDeleteNullify": "Delete without replacement",
+    "apiKeyDeleteSelectReplacement": "New key for models",
+    "apiKeyDeleteConfirm": "Delete",
+    "apiKeyNotUsed": "This key is not used by any model. Safe to delete."
   },
   "settings": {
     "languageTitle": "Interface language",

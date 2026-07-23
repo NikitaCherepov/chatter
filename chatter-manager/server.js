@@ -1852,17 +1852,28 @@ async function handleRequest(req, res) {
     }));
   }
   if (req.method === 'GET' && pathname.startsWith('/api/api-keys/')) {
-    const keyId = decodeURIComponent(pathname.slice('/api/api-keys/'.length));
-    if (keyId && !keyId.includes('/')) {
+    const rest = decodeURIComponent(pathname.slice('/api/api-keys/'.length));
+    if (rest.endsWith('/used-by')) {
+      const keyId = rest.replace('/used-by', '');
+      if (keyId && !keyId.includes('/')) {
+        try {
+          return sendJson(res, 200, await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(keyId)}/used-by`));
+        } catch { return sendJson(res, 404, { error: 'api_key_not_found' }); }
+      }
+    } else if (rest && !rest.includes('/')) {
       try {
-        return sendJson(res, 200, await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(keyId)}`));
+        return sendJson(res, 200, await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(rest)}`));
       } catch { return sendJson(res, 404, { error: 'api_key_not_found' }); }
     }
   }
   if (req.method === 'DELETE' && pathname.startsWith('/api/api-keys/')) {
     const keyId = decodeURIComponent(pathname.slice('/api/api-keys/'.length));
     if (keyId && !keyId.includes('/')) {
-      return sendJson(res, 200, await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' }));
+      const body = await readJson(req);
+      return sendJson(res, 200, await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(keyId)}`, {
+        method: 'DELETE',
+        body: JSON.stringify(body || {}),
+      }));
     }
   }
 

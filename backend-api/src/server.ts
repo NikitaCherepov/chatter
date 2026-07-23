@@ -3235,7 +3235,8 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
     SELECT model_id, coefficient, updated_at,
            provider_kind, openrouter_provider_slug, pricing_mode,
            input_price_per_million, output_price_per_million,
-           cache_read_price_per_million, pricing_source, pricing_updated_at
+           cache_read_price_per_million, pricing_source, pricing_updated_at,
+           selected_api_key_id
     FROM model_overrides
   `).all() as Array<ModelOverride>;
   const coefficients: Record<string, number> = {};
@@ -3248,6 +3249,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
     cacheReadPricePerMillion: number | null;
     pricingSource: string | null;
     pricingUpdatedAt: number | null;
+    selectedApiKeyId: number | null;
   }> = {};
   for (const row of rows) {
     coefficients[row.model_id] = row.coefficient;
@@ -3260,6 +3262,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
       cacheReadPricePerMillion: row.cache_read_price_per_million,
       pricingSource: row.pricing_source,
       pricingUpdatedAt: row.pricing_updated_at,
+      selectedApiKeyId: row.selected_api_key_id,
     };
   }
   return res.json({ coefficients, overrides });
@@ -3277,6 +3280,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     outputPricePerMillion?: number | null;
     cacheReadPricePerMillion?: number | null;
     pricingSource?: string | null;
+    selectedApiKeyId?: number | null;
   } | null;
 
   // Handle coefficient-only mode (backward-compatible).
@@ -3291,6 +3295,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     || 'outputPricePerMillion' in body
     || 'cacheReadPricePerMillion' in body
     || 'pricingSource' in body
+    || 'selectedApiKeyId' in body
   );
 
   if (hasProviderFields) {
@@ -3304,6 +3309,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
       cacheReadPricePerMillion: body?.cacheReadPricePerMillion,
       pricingSource: body?.pricingSource,
       coefficient: hasCoeff && rawCoeff >= 0 ? rawCoeff : null,
+      selectedApiKeyId: body?.selectedApiKeyId,
     });
     return res.json({ ok: true, model_id: modelId });
   }
@@ -3354,6 +3360,7 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     outputPricePerMillion?: number | null;
     cacheReadPricePerMillion?: number | null;
     coefficient?: number | null;
+    selectedApiKeyId?: number | null;
   } | null;
   if (!body) return res.status(400).json({ error: 'bad_body' });
 
@@ -3366,6 +3373,7 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     cacheReadPricePerMillion: body.cacheReadPricePerMillion,
     pricingSource: body.pricingMode === 'auto' ? 'openrouter_auto' : 'manual',
     coefficient: body.coefficient,
+    selectedApiKeyId: body.selectedApiKeyId,
   });
   return res.json({ ok: true, model_id: modelId });
 });
@@ -3418,10 +3426,54 @@ app.post('/internal/admin/api-keys', internalAuth, async (req, res) => {
   }
 });
 
+app.get('/internal/admin/api-keys/:id/used-by', internalAuth, async (req, res) => {
+  try {
+    const keyId = Number(req.params.id);
+    const models = db.prepare(
+      'SELECT model_id FROM model_overrides WHERE selected_api_key_id = ?'
+    ).all(keyId) as Array<{ model_id: string }>;
+    res.json({ models: models.map(m => m.model_id) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'internal_error' });
+  }
+});
+
 app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM api_keys WHERE id = ?').run(Number(req.params.id));
-    if (result.changes === 0) return res.status(404).json({ error: 'api_key_not_found' });
+    const keyId = Number(req.params.id);
+    const exists = db.prepare('SELECT id FROM api_keys WHERE id = ?').get(keyId);
+    if (!exists) return res.status(404).json({ error: 'api_key_not_found' });
+
+    const body = (req as any).body || {};
+    const replacementKeyId = body.replacementKeyId;
+
+    // Validate replacement key (must exist and not be the same key being deleted)
+    const replacementIdNum = replacementKeyId !== null && replacementKeyId !== undefined
+      ? Number(replacementKeyId)
+      : null;
+    if (replacementIdNum !== null) {
+      if (!Number.isFinite(replacementIdNum) || replacementIdNum <= 0) {
+        return res.status(400).json({ error: 'invalid_replacement_key_id' });
+      }
+      if (replacementIdNum === keyId) {
+        return res.status(400).json({ error: 'cannot_replace_with_self' });
+      }
+      const replacementExists = db.prepare('SELECT id FROM api_keys WHERE id = ?').get(replacementIdNum);
+      if (!replacementExists) {
+        return res.status(400).json({ error: 'replacement_key_not_found' });
+      }
+    }
+
+    // Atomic: reassign/nullify references and delete the key in a single tx
+    const tx = db.transaction(() => {
+      if (replacementIdNum === null) {
+        db.prepare('UPDATE model_overrides SET selected_api_key_id = NULL WHERE selected_api_key_id = ?').run(keyId);
+      } else {
+        db.prepare('UPDATE model_overrides SET selected_api_key_id = ? WHERE selected_api_key_id = ?').run(replacementIdNum, keyId);
+      }
+      db.prepare('DELETE FROM api_keys WHERE id = ?').run(keyId);
+    });
+    tx();
     res.json({ ok: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'internal_error' });

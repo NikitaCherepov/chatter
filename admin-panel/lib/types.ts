@@ -20,6 +20,7 @@ export type ModelOverrideData = {
   cacheReadPricePerMillion: number | null;
   pricingSource: string | null;
   pricingUpdatedAt: number | null;
+  selectedApiKeyId: number | null;
 };
 
 export type ManualModelConfig = ProviderModelConfig & {

@@ -30,7 +30,6 @@
   margin-bottom: var(--sp-3);
 }
 .table {
-  overflow: hidden;
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
   margin-top: var(--sp-3);

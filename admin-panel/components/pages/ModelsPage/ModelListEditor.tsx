@@ -229,6 +229,13 @@ export function ProviderModelFields({
   }, []);
 
   const override = coefficientManager?.getOverride?.(model.uniqueId);
+
+  // Sync selectedApiKeyId from override on load
+  useEffect(() => {
+    if (override?.selectedApiKeyId && !selectedApiKeyId) {
+      setSelectedApiKeyId(`key:${override.selectedApiKeyId}`);
+    }
+  }, [override?.selectedApiKeyId]);
   const providerKind: ProviderKind = override?.providerKind || resolveProviderKind(model.baseUrl);
 
   const providerKindOpts: SelectOption[] = [
@@ -532,9 +539,11 @@ export function ProviderModelFields({
             setShowCreateKey(true);
           } else if (value === '__existing__') {
             setSelectedApiKeyId('');
+            coefficientManager?.saveOverride?.(model.uniqueId || '', { selectedApiKeyId: null });
           } else if (value.startsWith('key:')) {
-            const id = value.slice(4);
+            const id = Number(value.slice(4));
             setSelectedApiKeyId(value);
+            coefficientManager?.saveOverride?.(model.uniqueId || '', { selectedApiKeyId: id });
             api<ApiKeyValue>(`/api/api-keys/${id}`).then((keyData) => {
               onChange({ apiKey: keyData.key });
             }).catch(() => {});

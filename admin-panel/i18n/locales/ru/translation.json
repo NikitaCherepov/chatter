@@ -739,7 +739,15 @@
     "apiKeySelect": "API-ключ",
     "apiKeySelectPlaceholder": "Выбери ключ",
     "apiKeyCreateNew": "Создать новый…",
-    "apiKeyExistingKey": "Текущий ключ из env"
+    "apiKeyExistingKey": "Текущий ключ из env",
+    "apiKeyDeleteTitle": "Удаление ключа",
+    "apiKeyDeleteUsedBy": "Этот ключ используют модели:",
+    "apiKeyDeleteAction": "Что сделать с этими моделями?",
+    "apiKeyDeleteReplace": "Заменить на другой ключ",
+    "apiKeyDeleteNullify": "Удалить без замены",
+    "apiKeyDeleteSelectReplacement": "Новый ключ для моделей",
+    "apiKeyDeleteConfirm": "Удалить",
+    "apiKeyNotUsed": "Этот ключ не используется ни одной моделью. Можно удалять."
   },
   "settings": {
     "languageTitle": "Язык интерфейса",

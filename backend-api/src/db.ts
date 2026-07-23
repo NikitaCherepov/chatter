@@ -616,6 +616,7 @@ ensureModelOverrideColumn('output_price_per_million', 'ALTER TABLE model_overrid
 ensureModelOverrideColumn('cache_read_price_per_million', 'ALTER TABLE model_overrides ADD COLUMN cache_read_price_per_million REAL');
 ensureModelOverrideColumn('pricing_source', 'ALTER TABLE model_overrides ADD COLUMN pricing_source TEXT');
 ensureModelOverrideColumn('pricing_updated_at', 'ALTER TABLE model_overrides ADD COLUMN pricing_updated_at INTEGER');
+ensureModelOverrideColumn('selected_api_key_id', 'ALTER TABLE model_overrides ADD COLUMN selected_api_key_id INTEGER');
 
 
 db.exec(`
