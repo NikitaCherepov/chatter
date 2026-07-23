@@ -733,7 +733,11 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           // Server-side init: access token is about to expire (or just expired).
           // Refresh proactively and send the new token without dropping the socket.
           void refreshWebSocketAccessToken().then((refreshed) => {
-            if (ws !== socket || !refreshed) return;
+            if (ws !== socket) return;
+            if (!refreshed) {
+              reconnectWebSocket();
+              return;
+            }
             const accessToken = loadTokens()?.access_token;
             if (!accessToken || socket.readyState !== WebSocket.OPEN) {
               reconnectWebSocket();
