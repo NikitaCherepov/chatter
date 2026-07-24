@@ -19,6 +19,9 @@ type UserOverview = {
   weekly_tokens_used: number;
   weekly_tokens_quota: number;
   weekly_window_started_at: number;
+  weekly_cost_used: number;
+  weekly_cost_quota: number;
+  quota_percent: number;
   language: string | null;
   created_at: string | null;
   message_count: number;
@@ -57,17 +60,6 @@ function identityLabel(identity: Identity) {
 
 function formatTokens(value: number) {
   return new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
-}
-
-function quotaPercent(used: number, quota: number): number {
-  if (!quota || quota <= 0) return 0;
-  return Math.min(100, Math.round((Number(used) || 0) / quota * 100));
-}
-
-function quotaLabel(used: number, quota: number): string {
-  if (!quota || quota <= 0) return '∞';
-  const percent = quotaPercent(used, quota);
-  return `${percent}%`;
 }
 
 export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => void }) {
@@ -188,9 +180,13 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
             <thead><tr><th>{t('users.list.tableHeaders.user')}</th><th>{t('users.list.tableHeaders.status')}</th><th>{t('users.list.tableHeaders.plan')}</th><th>{t('users.list.tableHeaders.quota')}</th><th>{t('users.list.tableHeaders.messages')}</th><th>{t('users.list.tableHeaders.totalCost')}</th><th>{t('users.list.tableHeaders.lastMessage')}</th><th>{t('users.list.tableHeaders.created')}</th></tr></thead>
             <tbody>
               {filteredUsers.map(user => {
-                const used = user.weekly_tokens_used || 0;
-                const quota = user.weekly_tokens_quota || 0;
-                const percent = quotaPercent(used, quota);
+                const tokenQuota = user.weekly_tokens_quota || 0;
+                const costQuota = user.weekly_cost_quota || 0;
+                const hasQuota = tokenQuota > 0 || costQuota > 0;
+                const percent = user.quota_percent || 0;
+                const tooltipParts: string[] = [];
+                if (tokenQuota > 0) tooltipParts.push(`${formatTokens(user.weekly_tokens_used)} / ${formatTokens(tokenQuota)} tokens`);
+                if (costQuota > 0) tooltipParts.push(`${formatCost(user.weekly_cost_used)} / ${formatCost(costQuota)}`);
                 return (
                   <tr key={user.id}>
                     <td><div className={styles.userCell}>
@@ -203,10 +199,10 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
                     </div></td>
                     <td><span className={styles.plan}>{planLabels[user.plan] || user.plan}</span></td>
                     <td>
-                      {quota > 0 ? (
-                        <div className={styles.quotaCell} title={t('users.list.quotaTooltip', { used: formatTokens(used), quota: formatTokens(quota) })}>
+                      {hasQuota ? (
+                        <div className={styles.quotaCell} title={tooltipParts.join(' · ')}>
                           <div className={styles.quotaBar}><div className={styles.quotaBarFill} style={{ width: `${percent}%` }} data-warn={percent >= 90 || undefined} /></div>
-                          <span className={styles.quotaLabel}>{quotaLabel(used, quota)}</span>
+                          <span className={styles.quotaLabel}>{percent}%</span>
                         </div>
                       ) : (
                         <span className={styles.muted}>∞</span>

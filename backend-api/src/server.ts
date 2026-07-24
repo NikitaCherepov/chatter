@@ -2590,6 +2590,8 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
       u.weekly_tokens_used,
       u.weekly_tokens_quota,
       u.weekly_window_started_at,
+      u.weekly_cost_used,
+      u.weekly_cost_quota,
       u.language,
       u.created_at,
       COUNT(cm.id) AS message_count,
@@ -2614,12 +2616,16 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
     weekly_tokens_used: number;
     weekly_tokens_quota: number;
     weekly_window_started_at: number;
+    weekly_cost_used: number;
+    weekly_cost_quota: number;
     language: string | null;
     created_at: string | null;
     message_count: number;
     last_message_at: string | null;
     total_cost_usd: number | null;
   }>;
+
+  const planLimitsMap = loadPlanLimitsFromDb();
 
   const identitiesByAccount = new Map<number, Array<{
     provider: string;
@@ -2660,11 +2666,20 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
         && client.ws.readyState === WebSocket.OPEN
         && now - client.lastPongAt <= WS_HEARTBEAT_GRACE_MS;
 
+      const planLimits = planLimitsMap[user.plan as keyof typeof planLimitsMap] ?? planLimitsMap.free;
+      const isBudget = planLimits.billing_mode === 'budget';
+      const quotaUsed = isBudget ? user.weekly_cost_used : user.weekly_tokens_used;
+      const quotaTotal = isBudget ? user.weekly_cost_quota : user.weekly_tokens_quota;
+      const quotaPercent = quotaTotal > 0
+        ? Math.min(100, Math.round((Number(quotaUsed) || 0) / quotaTotal * 100))
+        : 0;
+
       return {
         ...user,
         account_id: user.id,
         is_admin: user.is_admin === 1 || user.role === 'admin',
         message_count: Number(user.message_count) || 0,
+        quota_percent: quotaPercent,
         identities: identitiesByAccount.get(user.id) || [],
         desktop: {
           online: desktopOnline,

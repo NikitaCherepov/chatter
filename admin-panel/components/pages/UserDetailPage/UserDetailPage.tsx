@@ -480,22 +480,24 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal, costUsed, costQuota }
   return (
     <Card title={t('users.detail.modelUsage.title')} description={t('users.detail.modelUsage.description')} aside={resetAside}>
       <div className={styles.usageRow}>
-        <div className={styles.usageDonut}>
-          <UsageDonut percent={percent} />
-          <div className={styles.usageDonutCaption}>
-            <strong>{formatTokens(quotaUsed || 0)} / {quotaTotal > 0 ? formatTokens(quotaTotal) : '∞'}</strong>
-            <small>{t('users.detail.modelUsage.conditionalUnits')}</small>
-          </div>
-        </div>
-        {costQuota > 0 && (
+        <div className={styles.usageDonuts}>
           <div className={styles.usageDonut}>
-            <UsageDonut percent={Math.min(100, Math.round((costUsed || 0) / costQuota * 100))} />
+            <UsageDonut percent={percent} />
             <div className={styles.usageDonutCaption}>
-              <strong>{formatCostUsd(costUsed || 0)} / {formatCostUsd(costQuota)}</strong>
-              <small>{t('users.detail.modelUsage.weeklyCost')}</small>
+              <strong>{formatTokens(quotaUsed || 0)} / {quotaTotal > 0 ? formatTokens(quotaTotal) : '∞'}</strong>
+              <small>{t('users.detail.modelUsage.conditionalUnits')}</small>
             </div>
           </div>
-        )}
+          {costQuota > 0 && (
+            <div className={styles.usageDonut}>
+              <UsageDonut percent={Math.min(100, Math.round((costUsed || 0) / costQuota * 100))} />
+              <div className={styles.usageDonutCaption}>
+                <strong>{formatCostUsd(costUsed || 0)} / {formatCostUsd(costQuota)}</strong>
+                <small>{t('users.detail.modelUsage.weeklyCost')}</small>
+              </div>
+            </div>
+          )}
+        </div>
         <div className={styles.usageTableWrap}>
           {error && <div className={styles.error}>{t('users.detail.modelUsage.loadError', { error })}</div>}
           {!rows && !error && <div className={styles.loading}>{t('users.detail.modelUsage.loading')}</div>}
