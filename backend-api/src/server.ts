@@ -3482,6 +3482,7 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     cacheReadPricePerMillion?: number | null;
     coefficient?: number | null;
     selectedApiKeyId?: number | null;
+    isFree?: boolean | null;
   } | null;
   if (!body) return res.status(400).json({ error: 'bad_body' });
 
@@ -3495,6 +3496,7 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     pricingSource: body.pricingMode === 'auto' ? 'openrouter_auto' : 'manual',
     coefficient: body.coefficient,
     selectedApiKeyId: body.selectedApiKeyId,
+    isFree: body.isFree,
   });
   return res.json({ ok: true, model_id: modelId });
 });
