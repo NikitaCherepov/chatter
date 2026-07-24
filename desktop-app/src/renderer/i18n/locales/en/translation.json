@@ -362,7 +362,8 @@
     },
     "model": {
       "label": "Model:",
-      "automatic": "Automatic selection"
+      "automatic": "Automatic selection",
+      "freeBadge": "free"
     },
     "messages": {
       "loading": "Loading messages...",

@@ -2809,7 +2809,7 @@ export function ChatPage() {
                             label: m.name,
                             hint: m.description || undefined,
                             badge: m.is_free
-                              ? { text: 'Free', color: 'info' as const }
+                              ? { text: t('chat.model.freeBadge'), color: 'info' as const }
                               : m.supports_vision
                                 ? { text: 'Vision', color: 'success' as const }
                                 : undefined,
