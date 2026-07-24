@@ -2808,7 +2808,11 @@ export function ChatPage() {
                             value: m.id,
                             label: m.name,
                             hint: m.description || undefined,
-                            badge: m.supports_vision ? { text: 'Vision', color: 'success' as const } : undefined,
+                            badge: m.is_free
+                              ? { text: 'Free', color: 'info' as const }
+                              : m.supports_vision
+                                ? { text: 'Vision', color: 'success' as const }
+                                : undefined,
                           })),
                         ]}
                         value={preferredModel || ''}

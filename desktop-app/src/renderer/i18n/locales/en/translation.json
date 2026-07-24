@@ -1,10 +1,7 @@
 {
   "quota": {
     "title": "Quota Usage",
-    "tokens": "Tokens",
-    "weeklyCost": "Weekly Cost",
-    "resetsAt": "Resets:",
-    "budgetMode": "Budget billing"
+    "resetsAt": "Resets:"
   },
   "common": {
     "loading": "Loading...",

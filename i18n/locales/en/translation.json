@@ -150,6 +150,7 @@
     "callbackChanged": "Model: {{model}}",
     "changeError": "Failed to change the model",
     "cancelled": "Model selection cancelled.",
+    "freeBadge": "[free]",
     "buttons": {
       "cancel": "❌ Cancel"
     }

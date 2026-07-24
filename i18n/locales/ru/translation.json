@@ -150,6 +150,7 @@
     "callbackChanged": "Модель: {{model}}",
     "changeError": "Ошибка при смене модели",
     "cancelled": "Выбор модели отменён.",
+    "freeBadge": "[бесплатная]",
     "buttons": {
       "cancel": "❌ Отмена"
     }

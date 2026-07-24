@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
-import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd } from './token-quota.js';
+import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
@@ -367,6 +367,7 @@ export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   reasoning_levels: getReasoningLevelsForBaseURL(m.baseURL),
   supported_params: [...getProviderSupportedParams(m.baseURL)],
   supports_vision: m.supportsVision,
+  is_free: isModelFree(m.id),
 }));
 
 export const resolveManualModel = (modelId: string, isAdmin = false): ManualModelEntry | undefined => {

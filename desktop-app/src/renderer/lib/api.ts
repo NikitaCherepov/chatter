@@ -1354,6 +1354,7 @@ export type ModelCatalogEntry = {
   reasoning_levels?: ReasoningLevel[] | null;
   supported_params?: string[];
   supports_vision?: boolean;
+  is_free?: boolean;
 };
 
 export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; auto_reasoning_levels?: ReasoningLevel[]; auto_supports_vision?: { pro: boolean; lite: boolean } }> {

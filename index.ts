@@ -1251,7 +1251,7 @@ const runBackendUpdateCustomPrompt = async (userId: number, content: string) => 
     return response.data as { ok: boolean };
 };
 
-type ModelsCatalogEntry = { id: string; name: string; description: string };
+type ModelsCatalogEntry = { id: string; name: string; description: string; is_free?: boolean };
 
 const runBackendGetModels = async (userId: number) => {
     if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
@@ -2452,7 +2452,8 @@ const buildModelListKeyboard = (
     rows.push([Markup.button.callback(autoLabel, 'model:select:auto')]);
     // Модели из каталога
     for (const m of models) {
-        const label = m.id === currentModelId ? `✅ ${m.name}` : m.name;
+        const freeTag = m.is_free ? ` ${t('model.freeBadge')}` : '';
+        const label = m.id === currentModelId ? `✅ ${m.name}${freeTag}` : `${m.name}${freeTag}`;
         rows.push([Markup.button.callback(label, `model:select:${m.id}`)]);
     }
     rows.push([Markup.button.callback(t('model.buttons.cancel'), 'model:cancel')]);

@@ -12,14 +12,6 @@
   gap: 14px;
 }
 
-.donutsRow {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  gap: 32px;
-  flex-wrap: wrap;
-}
-
 .donutBlock {
   display: flex;
   flex-direction: column;
@@ -39,26 +31,26 @@
   position: absolute;
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--accent-icon);
 }
 
-.donutCaption {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-
-  strong {
-    color: var(--text-primary);
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  small {
-    color: var(--text-hint);
-    font-size: 11px;
-  }
-}
+// .donutCaption {
+//   display: flex;
+//   flex-direction: column;
+//   align-items: center;
+//   gap: 2px;
+//
+//   strong {
+//     color: var(--text-primary);
+//     font-size: 13px;
+//     font-weight: 600;
+//   }
+//
+//   small {
+//     color: var(--text-hint);
+//     font-size: 11px;
+//   }
+// }
 
 .resetInfo {
   display: flex;
@@ -75,16 +67,6 @@
 .resetValue {
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 500;
-}
-
-.billingModeBadge {
-  align-self: center;
-  padding: 3px 10px;
-  border-radius: 6px;
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-  font-size: 11px;
   font-weight: 500;
 }
 
@@ -108,25 +90,6 @@
   position: absolute;
   font-size: 9px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--accent-icon);
   pointer-events: none;
-}
-
-// Color tints for the compact label (the donut ring colors itself via SVG)
-.ok {
-  .compactLabel {
-    color: var(--color-success);
-  }
-}
-
-.warning {
-  .compactLabel {
-    color: var(--color-warning);
-  }
-}
-
-.danger {
-  .compactLabel {
-    color: var(--color-error);
-  }
 }

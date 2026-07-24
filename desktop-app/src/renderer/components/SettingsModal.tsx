@@ -961,7 +961,10 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
           {/* Right panel */}
           {section === 'account' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>{t('settings.sections.account')}</div>
+              <div className={s.panelTitle}>
+                {t('settings.sections.account')}
+                <span className={s.planBadge}>{(user?.plan || 'free').toUpperCase()}</span>
+              </div>
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('settings.account.name')}</label>
                 <input
