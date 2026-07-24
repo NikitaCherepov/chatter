@@ -17,11 +17,11 @@ type AccessKey = {
   weekly_tokens_used: number;
 };
 
-const formatNumber = (value: number) => new Intl.NumberFormat('ru').format(Number(value) || 0);
-const formatDate = (value: string | null) => value ? new Date(`${value.replace(' ', 'T')}Z`).toLocaleString('ru') : '—';
+const formatNumber = (value: number, locale: string) => new Intl.NumberFormat(locale).format(Number(value) || 0);
+const formatDate = (value: string | null, locale: string) => value ? new Date(`${value.replace(' ', 'T')}Z`).toLocaleString(locale) : '—';
 
 export function AccessKeysPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [keys, setKeys] = useState<AccessKey[]>([]);
   const [name, setName] = useState('');
   const [state, setState] = useState('');
@@ -89,9 +89,9 @@ export function AccessKeysPage() {
           <div className={styles.header}><span>{t('accessKeys.tableHeaders.key')}</span><span>{t('accessKeys.tableHeaders.users')}</span><span>{t('accessKeys.tableHeaders.tokensWeek')}</span><span>{t('accessKeys.tableHeaders.lastUsed')}</span><span /></div>
           {keys.map(key => <div className={styles.row} key={key.id}>
             <span><strong>{key.name}</strong><small>{key.key_prefix}{key.revoked_at ? ` · ${t('accessKeys.revoked')}` : ''}</small></span>
-            <span>{formatNumber(key.user_count)}</span><span>{formatNumber(key.weekly_tokens_used)}</span>
-            <span>{formatDate(key.last_used_at)}</span>
-            <span>{key.revoked_at ? <small>{formatDate(key.revoked_at)}</small> : <button type="button" className="buttonSecondary" onClick={() => void revoke(key)}>{t('accessKeys.revoke')}</button>}</span>
+            <span>{formatNumber(key.user_count, i18n.language)}</span><span>{formatNumber(key.weekly_tokens_used, i18n.language)}</span>
+            <span>{formatDate(key.last_used_at, i18n.language)}</span>
+            <span>{key.revoked_at ? <small>{formatDate(key.revoked_at, i18n.language)}</small> : <button type="button" className="buttonSecondary" onClick={() => void revoke(key)}>{t('accessKeys.revoke')}</button>}</span>
           </div>)}
           {!keys.length && <div className={styles.empty}>{t('accessKeys.emptyState')}</div>}
         </div>

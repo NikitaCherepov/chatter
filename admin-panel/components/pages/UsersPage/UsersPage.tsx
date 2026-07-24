@@ -58,8 +58,8 @@ function identityLabel(identity: Identity) {
   return identity.provider_subject;
 }
 
-function formatTokens(value: number) {
-  return new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+function formatTokens(value: number, locale: string) {
+  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
 }
 
 export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => void }) {
@@ -72,7 +72,7 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
   const [connection, setConnection] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const statusLabels: Record<string, string> = {
     approved: t('users.list.status.approved'),
@@ -185,7 +185,7 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
                 const hasQuota = tokenQuota > 0 || costQuota > 0;
                 const percent = user.quota_percent || 0;
                 const tooltipParts: string[] = [];
-                if (tokenQuota > 0) tooltipParts.push(`${formatTokens(user.weekly_tokens_used)} / ${formatTokens(tokenQuota)} tokens`);
+                if (tokenQuota > 0) tooltipParts.push(`${formatTokens(user.weekly_tokens_used, i18n.language)} / ${formatTokens(tokenQuota, i18n.language)} tokens`);
                 if (costQuota > 0) tooltipParts.push(`${formatCost(user.weekly_cost_used)} / ${formatCost(costQuota)}`);
                 return (
                   <tr key={user.id}>
@@ -208,7 +208,7 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
                         <span className={styles.muted}>∞</span>
                       )}
                     </td>
-                    <td className={styles.number}>{user.message_count.toLocaleString('ru')}</td>
+                    <td className={styles.number}>{user.message_count.toLocaleString(i18n.language)}</td>
                     <td className={styles.number}>{formatCost(user.total_cost_usd)}</td>
                     <td>{formatDate(user.last_message_at)}</td>
                     <td>{formatDate(user.created_at)}</td>

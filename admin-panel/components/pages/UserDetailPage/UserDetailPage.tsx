@@ -53,8 +53,8 @@ type UserDetail = {
   desktop: { online: boolean; connected_at: number | null; last_activity_at: number | null };
 };
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('ru').format(Number(value) || 0);
+function formatNumber(value: number, locale: string) {
+  return new Intl.NumberFormat(locale).format(Number(value) || 0);
 }
 
 function formatDate(value: string | number | null) {
@@ -79,7 +79,7 @@ function identityValue(identity: Identity) {
 }
 
 export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -213,18 +213,18 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
 
   const stats = [
     [t('users.detail.usage.stats.weeklyQuota'), user.weekly_tokens_quota > 0
-      ? `${formatNumber(user.weekly_tokens_used)} / ${formatNumber(user.weekly_tokens_quota)} (${weeklyPercent}%)`
+      ? `${formatNumber(user.weekly_tokens_used, i18n.language)} / ${formatNumber(user.weekly_tokens_quota, i18n.language)} (${weeklyPercent}%)`
       : '∞'],
     [t('users.detail.usage.stats.quotaReset'), weeklyResetsAt],
-    [t('users.detail.usage.stats.messages'), formatNumber(user.messages.total)],
-    [t('users.detail.usage.stats.userRequests'), formatNumber(user.messages.user)],
-    [t('users.detail.usage.stats.assistantResponses'), formatNumber(user.messages.assistant)],
-    [t('users.detail.usage.stats.chats'), formatNumber(user.chats_count)],
-    [t('users.detail.usage.stats.searchToday'), `${formatNumber(user.daily_web_search_count)} / ${formatNumber(user.daily_web_search_limit)}`],
-    [t('users.detail.usage.stats.searchTotal'), formatNumber(user.total_web_search_count)],
-    [t('users.detail.usage.stats.imagesToday'), `${formatNumber(user.daily_image_gen_count)} / ${formatNumber(user.daily_image_gen_limit)}`],
-    [t('users.detail.usage.stats.imagesTotal'), formatNumber(user.total_image_gen_count)],
-    [t('users.detail.usage.stats.messageLength'), formatNumber(user.total_message_length)],
+    [t('users.detail.usage.stats.messages'), formatNumber(user.messages.total, i18n.language)],
+    [t('users.detail.usage.stats.userRequests'), formatNumber(user.messages.user, i18n.language)],
+    [t('users.detail.usage.stats.assistantResponses'), formatNumber(user.messages.assistant, i18n.language)],
+    [t('users.detail.usage.stats.chats'), formatNumber(user.chats_count, i18n.language)],
+    [t('users.detail.usage.stats.searchToday'), `${formatNumber(user.daily_web_search_count, i18n.language)} / ${formatNumber(user.daily_web_search_limit, i18n.language)}`],
+    [t('users.detail.usage.stats.searchTotal'), formatNumber(user.total_web_search_count, i18n.language)],
+    [t('users.detail.usage.stats.imagesToday'), `${formatNumber(user.daily_image_gen_count, i18n.language)} / ${formatNumber(user.daily_image_gen_limit, i18n.language)}`],
+    [t('users.detail.usage.stats.imagesTotal'), formatNumber(user.total_image_gen_count, i18n.language)],
+    [t('users.detail.usage.stats.messageLength'), formatNumber(user.total_message_length, i18n.language)],
     [t('users.detail.usage.stats.lastMessage'), formatDate(user.messages.last_message_at)],
   ];
 
@@ -324,9 +324,9 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
 
       <Card title={t('users.detail.contextLimits.title')} description={t('users.detail.contextLimits.description')}>
         <div className={styles.statsGrid}>
-          <div><span>{t('users.detail.contextLimits.planLimit')}</span><strong>{formatNumber(user.max_context_tokens_limit)}</strong></div>
-          <div><span>{t('users.detail.contextLimits.selectedContext')}</span><strong>{formatNumber(user.max_context_tokens)}</strong></div>
-          <div><span>{t('users.detail.contextLimits.documents')}</span><strong>{user.attachment_max_tokens ? formatNumber(user.attachment_max_tokens) : t('users.detail.contextLimits.documentsAuto')}</strong></div>
+          <div><span>{t('users.detail.contextLimits.planLimit')}</span><strong>{formatNumber(user.max_context_tokens_limit, i18n.language)}</strong></div>
+          <div><span>{t('users.detail.contextLimits.selectedContext')}</span><strong>{formatNumber(user.max_context_tokens, i18n.language)}</strong></div>
+          <div><span>{t('users.detail.contextLimits.documents')}</span><strong>{user.attachment_max_tokens ? formatNumber(user.attachment_max_tokens, i18n.language) : t('users.detail.contextLimits.documentsAuto')}</strong></div>
         </div>
       </Card>
       {pendingPlan && (
@@ -362,8 +362,8 @@ type UsageByModelRow = {
   request_count: number;
 };
 
-function formatTokens(value: number) {
-  return new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+function formatTokens(value: number, locale: string) {
+  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
 }
 
 function formatCostUsd(usd: number | null | undefined): string {
@@ -417,7 +417,7 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal, costUsed, costQuota }
   costUsed: number;
   costQuota: number;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const routeLabels: Record<string, string> = {
     'manual': 'Manual',
     'auto-pro': 'Auto PRO',
@@ -484,7 +484,7 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal, costUsed, costQuota }
           <div className={styles.usageDonut}>
             <UsageDonut percent={percent} />
             <div className={styles.usageDonutCaption}>
-              <strong>{formatTokens(quotaUsed || 0)} / {quotaTotal > 0 ? formatTokens(quotaTotal) : '∞'}</strong>
+              <strong>{formatTokens(quotaUsed || 0, i18n.language)} / {quotaTotal > 0 ? formatTokens(quotaTotal, i18n.language) : '∞'}</strong>
               <small>{t('users.detail.modelUsage.conditionalUnits')}</small>
             </div>
           </div>
@@ -515,9 +515,9 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal, costUsed, costQuota }
                     <td><strong>{row.model_name || row.model_id || '—'}</strong><small>{row.provider_name || ''}</small></td>
                     <td>{row.route ? (routeLabels[row.route] || row.route) : '—'}</td>
                     <td>{row.request_count}{row.aborted_requests > 0 && <small title={t('users.detail.modelUsage.aborted')}> · {row.aborted_requests}⛔</small>}</td>
-                    <td>{formatTokens(row.total_tokens)}</td>
-                    <td>{formatTokens(row.cache_hit_tokens)}</td>
-                    <td>{row.free_requests > 0 && row.charged_tokens === 0 ? <span title={t('users.detail.modelUsage.freeTooltip')}>{t('users.detail.modelUsage.free')}</span> : formatTokens(row.charged_tokens)}</td>
+                    <td>{formatTokens(row.total_tokens, i18n.language)}</td>
+                    <td>{formatTokens(row.cache_hit_tokens, i18n.language)}</td>
+                    <td>{row.free_requests > 0 && row.charged_tokens === 0 ? <span title={t('users.detail.modelUsage.freeTooltip')}>{t('users.detail.modelUsage.free')}</span> : formatTokens(row.charged_tokens, i18n.language)}</td>
                     <td>{formatCostUsd(rowCost(row))}</td>
                   </tr>
                 ))}

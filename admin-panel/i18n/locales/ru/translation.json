@@ -15,27 +15,43 @@
     "refresh": "Обновить",
     "actionError": "Не удалось выполнить действие: {{error}}",
     "quickSetup": {
-      "title": "Быстрая настройка",
-      "description": "Основные части, необходимые для полноценной работы"
+      "title": "Первый запуск",
+      "description": "Пройдите шаги ниже — без обязательных бот не заработает"
     },
     "setupRows": {
       "mainModel": {
-        "title": "Основная модель",
-        "description": "OpenAI-совместимый провайдер"
+        "title": "AI-модели",
+        "description": "Цепочки PRO и LITE — добавьте хотя бы по одной модели в каждую"
       },
       "telegram": {
         "title": "Telegram",
-        "description": "Основной Telegram-бот"
+        "description": "Основной бот — токен от @BotFather"
+      },
+      "webSearch": {
+        "title": "Поиск в интернете",
+        "description": "Tavily API — актуальная информация из сети"
+      },
+      "webReader": {
+        "title": "Чтение страниц",
+        "description": "Browserless — открытие и очистка веб-страниц"
+      },
+      "pinecone": {
+        "title": "Векторная память",
+        "description": "Pinecone — долговременная память и контекст"
       },
       "notes": {
         "title": "Webapp Notes",
-        "description": "Необязательное Telegram Mini App"
+        "description": "Telegram Mini App для заметок"
       },
       "voice": {
         "title": "Голос",
-        "description": "Распознавание и озвучка для Telegram"
+        "description": "Распознавание речи и озвучка"
       }
     },
+    "stepsDone": "{{done}} из {{total}} шагов",
+    "requiredGroup": "Обязательно",
+    "recommendedGroup": "Рекомендуется",
+    "optionalGroup": "Опционально",
     "updateStatus": {
       "title": "Обновления",
       "description": "Проверка наличия обновлений сервера",

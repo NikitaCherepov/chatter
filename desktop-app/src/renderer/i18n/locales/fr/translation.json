@@ -30,7 +30,8 @@
     "nothingFound": "Aucun résultat",
     "selectPlaceholder": "Sélectionnez...",
     "unknown": "Inconnu",
-    "user": "Utilisateur"
+    "user": "Utilisateur",
+    "inDevelopment": "En développement"
   },
   "auth": {
     "subtitle": {
@@ -128,7 +129,8 @@
       "app": "Application",
       "limits": "Limites",
       "connections": "Comptes liés",
-      "mail": "Email"
+      "mail": "Email",
+      "billing": "Facturation"
     },
     "language": {
       "system": "Système",
@@ -358,7 +360,8 @@
     },
     "model": {
       "label": "Modèle :",
-      "automatic": "Sélection automatique"
+      "automatic": "Sélection automatique",
+      "freeBadge": "gratuit"
     },
     "messages": {
       "loading": "Chargement des messages...",
@@ -804,7 +807,39 @@
       "lastSyncWithDate": "Dernière synchronisation : {{date}}",
       "devicesCount": "Appareils ({{count}})",
       "group": "groupe",
-      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "Courtier MQTT enregistré",
+        "brokerSaveFailed": "Impossible d'enregistrer le courtier",
+        "invalidUrl": "Format d'URL invalide. Doit commencer par mqtt:// ou mqtts://",
+        "brokerDeleted": "Paramètres Zigbee supprimés",
+        "brokerDeleteFailed": "Impossible de supprimer les paramètres Zigbee",
+        "saveBrokerFirst": "Enregistrez d'abord l'adresse du courtier MQTT",
+        "syncResult": "{{provider}} : {{count}} appareils synchronisés",
+        "syncError": "Erreur de synchronisation : {{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://hôte:port (enregistré)",
+        "helpText": "Adresse du courtier MQTT (Mosquitto). Zigbee2MQTT doit être en cours d'exécution et connecté au courtier.",
+        "save": "Enregistrer",
+        "sync": "Synchroniser",
+        "syncing": "Synchronisation...",
+        "deleteTitle": "Supprimer Zigbee ?",
+        "deleteMessage": "Les paramètres du courtier MQTT et tous les appareils Zigbee synchronisés seront supprimés.",
+        "guideTitle": "Connexion de Zigbee2MQTT",
+        "step1": "Étape 1.",
+        "step1Text": "Installez un courtier MQTT (ex. Mosquitto) sur votre réseau. Port par défaut : 1883.",
+        "step2": "Étape 2.",
+        "step2Text": "Configurez Zigbee2MQTT pour se connecter à votre courtier. Dans configuration.yaml :",
+        "step3": "Étape 3.",
+        "step3Text": "Démarrez Zigbee2MQTT. Ouvrez l'interface Web (par défaut : http://localhost:8080) et appairez vos appareils via Permit Join.",
+        "step4": "Étape 4.",
+        "step4Text": "Saisissez l'adresse du courtier MQTT ci-dessus et cliquez sur Enregistrer. Format :",
+        "step5": "Étape 5.",
+        "step5Text": "Cliquez sur Synchroniser. Les appareils appairés depuis Zigbee2MQTT apparaîtront dans la liste ci-dessous.",
+        "note": "Remarque : le courtier MQTT doit être accessible depuis le serveur exécutant le backend Chatter. Si le courtier nécessite une authentification, incluez-la dans l'URL : mqtt://utilisateur:motdepasse@hôte:port"
+      }
     },
     "mail": {
       "title": "Comptes email",
@@ -878,5 +913,9 @@
     "defaultVoice": "Par défaut",
     "cartesia": "Cartesia (cloud)",
     "previewText": "Bonjour, je suis Chatter !"
+  },
+  "quota": {
+    "title": "Utilisation du quota",
+    "resetsAt": "Réinitialisation :"
   }
 }

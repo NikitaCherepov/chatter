@@ -2114,24 +2114,25 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
 
   if (!instruction) return res.status(400).json({ error: 'instruction_required' });
 
-  const detailInstructions: Record<string, string> = {
-    minimal: 'Будь максимально краток. Выдели только суть — характер, роль и ключевые правила. Не используй художественные описания. До 500 символов.',
-    medium: 'Сбалансированный persona-промпт: характер, стиль общения, ключевые правила. До 2000 символов.',
-    detailed: 'Детальный persona-промпт: характер, стиль общения, правила и правила мира, примеры реакций, tone of voice, краевые случаи. До 10000 символов.',
+  const user = getUserById(userId);
+
+  const detailKeyMap: Record<string, string> = {
+    minimal: 'confirmations.promptGenDetailMinimal',
+    medium: 'confirmations.promptGenDetailMedium',
+    detailed: 'confirmations.promptGenDetailDetailed',
     none: '',
   };
 
-  const detailHint = detailInstructions[detail] ?? '';
+  const detailHint = detailKeyMap[detail] ? translateForLanguage(user?.language, detailKeyMap[detail]) : '';
   const detailSuffix = detailHint ? ` ${detailHint}` : '';
 
   const hasExisting = currentContent.trim().length > 0;
-  const systemPrompt = `Ты — эксперт по созданию системных промптов для ИИ-ассистентов.${detailSuffix}\n\nОтветь ТОЛЬКО текстом промпта — без пояснений, без markdown-обёртки, без "Вот ваш промпт:". Просто текст системного промпта, который будет отправлен ИИ как инструкция.`;
+  const systemPrompt = translateForLanguage(user?.language, 'confirmations.promptGenSystem', { detail: detailSuffix });
   const userPrompt = hasExisting
-    ? `Задание: ${instruction}\n\nТекущий промпт (отредактируй его с учётом задания, сохрани ядро и стиль если они не конфликтуют):\n\n${currentContent}`
-    : `Задание: ${instruction}`;
+    ? translateForLanguage(user?.language, 'confirmations.promptGenUserEdit', { instruction, currentContent })
+    : translateForLanguage(user?.language, 'confirmations.promptGenUserNew', { instruction });
 
   try {
-    const user = getUserById(userId);
     const requestedModelId = typeof req.body?.preferred_model === 'string' ? req.body.preferred_model.trim() : '';
     const preferredModelId = requestedModelId || user?.preferred_model || null;
     const manualModel = preferredModelId ? resolveManualModel(preferredModelId, user?.is_admin === 1) : undefined;

@@ -131,6 +131,41 @@
   grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
   gap: var(--sp-4);
 }
+
+/* ── Quick Setup ── */
+
+.setupProgressBar {
+  height: 4px;
+  margin-bottom: var(--sp-1);
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-input);
+}
+.setupProgressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.35s ease;
+}
+.setupProgressLabel {
+  margin: 0 0 var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.setupGroupLabel {
+  padding-top: var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.setupGroupLabel:first-child {
+  padding-top: 0;
+}
+
 .checklist {
   display: flex;
   flex-direction: column;
@@ -141,8 +176,8 @@
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  min-height: 66px;
-  padding: var(--sp-3) 0;
+  min-height: 60px;
+  padding: var(--sp-2) 0;
   border: 0;
   border-bottom: 1px solid var(--border-light);
   border-radius: 0;
@@ -150,9 +185,6 @@
   color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
-}
-.setupRow:first-child {
-  padding-top: 0;
 }
 .setupRow:last-child {
   padding-bottom: 0;
@@ -197,6 +229,9 @@
   border-color: var(--color-success);
   background: var(--color-success);
 }
+
+/* ── Updates ── */
+
 .summary {
   display: flex;
   flex-direction: column;

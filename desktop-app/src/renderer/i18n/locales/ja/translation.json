@@ -30,7 +30,8 @@
     "nothingFound": "見つかりませんでした",
     "selectPlaceholder": "選択...",
     "unknown": "不明",
-    "user": "ユーザー"
+    "user": "ユーザー",
+    "inDevelopment": "開発中"
   },
   "auth": {
     "subtitle": {
@@ -128,7 +129,8 @@
       "app": "アプリ",
       "limits": "制限",
       "connections": "リンクされたアカウント",
-      "mail": "メール"
+      "mail": "メール",
+      "billing": "請求"
     },
     "language": {
       "system": "システム",
@@ -358,7 +360,8 @@
     },
     "model": {
       "label": "モデル:",
-      "automatic": "自動選択"
+      "automatic": "自動選択",
+      "freeBadge": "無料"
     },
     "messages": {
       "loading": "メッセージを読み込み中...",
@@ -804,7 +807,24 @@
       "lastSyncWithDate": "最終同期: {{date}}",
       "devicesCount": "デバイス ({{count}})",
       "group": "グループ",
-      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "MQTTブローカーを保存しました",
+        "brokerSaveFailed": "ブローカーを保存できませんでした",
+        "invalidUrl": "無効なURL形式です。mqtt://またはmqtts://で始まる必要があります",
+        "brokerDeleted": "Zigbee設定を削除しました",
+        "brokerDeleteFailed": "Zigbee設定を削除できませんでした",
+        "saveBrokerFirst": "先にMQTTブローカーアドレスを保存してください",
+        "syncResult": "{{provider}}: {{count}}台のデバイスを同期しました",
+        "syncError": "同期エラー: {{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://ホスト:ポート (保存済み)",
+        "helpText": "MQTTブローカーアドレス (Mosquitto)。Zigbee2MQTTが実行中でブローカーに接続されている必要があります。",
+        "save": "保存",
+        "sync": "同期"
+      }
     },
     "mail": {
       "title": "メールアカウント",
@@ -878,5 +898,9 @@
     "defaultVoice": "デフォルト",
     "cartesia": "Cartesia（クラウド）",
     "previewText": "こんにちは、私はチャッターです！"
+  },
+  "quota": {
+    "title": "クォータ使用量",
+    "resetsAt": "リセット:"
   }
 }

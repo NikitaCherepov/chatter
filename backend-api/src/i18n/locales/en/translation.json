@@ -70,7 +70,13 @@
   "confirmations": {
     "reviewSshSystem": "You are a security expert. Reply briefly.",
     "reviewSshPrompt": "Assess the safety of this SSH command on a server. Briefly explain the risks in 1–2 sentences. Command: {{command}}. Respond in {{language}}.",
-    "reviewCommandsSystem": "You are a DevOps security engineer. Analyze each command from the list for risks: data deletion, stopping critical services, irreversible changes, data leaks. For each command, write a brief verdict (safe/risky) and the reason if there are risks. At the end, write an overall conclusion. Respond in {{language}}. Be concise and to the point."
+    "reviewCommandsSystem": "You are a DevOps security engineer. Analyze each command from the list for risks: data deletion, stopping critical services, irreversible changes, data leaks. For each command, write a brief verdict (safe/risky) and the reason if there are risks. At the end, write an overall conclusion. Respond in {{language}}. Be concise and to the point.",
+    "promptGenSystem": "You are an expert in writing system prompts for AI assistants.{{detail}}\n\nReply ONLY with the prompt text — no explanations, no markdown wrapping, no \"Here is your prompt:\". Just the system prompt text that will be sent to the AI as an instruction.",
+    "promptGenDetailMinimal": " Be as concise as possible. Capture only the essence — character, role, and key rules. No artistic descriptions. Up to 500 characters.",
+    "promptGenDetailMedium": " A balanced persona prompt: character, communication style, key rules. Up to 2000 characters.",
+    "promptGenDetailDetailed": " A detailed persona prompt: character, communication style, rules and world-building rules, example reactions, tone of voice, edge cases. Up to 10000 characters.",
+    "promptGenUserNew": "Task: {{instruction}}",
+    "promptGenUserEdit": "Task: {{instruction}}\n\nCurrent prompt (edit it according to the task, preserving the core and style unless they conflict):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Quota exceeded. Resets {{resetsAt}}.",

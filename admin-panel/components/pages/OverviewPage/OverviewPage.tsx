@@ -47,6 +47,29 @@ export function OverviewPage({
     }
   }
 
+  // Readiness checks
+  const aiModelsReady =
+    settings.hasAiApiKey &&
+    settings.proModels.length > 0 &&
+    settings.liteModels.length > 0;
+  const telegramReady = settings.telegramEnabled && settings.hasTelegramToken;
+  const webSearchReady = settings.webSearch.hasApiKey;
+  const webReaderReady = settings.webReader.hasToken;
+  const pineconeReady = settings.pinecone.hasApiKey;
+  const notesReady =
+    settings.notesEnabled && settings.hasTelegramToken && Boolean(settings.notesUrl);
+
+  const steps = [
+    aiModelsReady,
+    telegramReady,
+    webSearchReady,
+    webReaderReady,
+    pineconeReady,
+    notesReady,
+  ];
+  const readyCount = steps.filter(Boolean).length;
+  const totalCount = steps.length;
+
   return (
     <div className={styles.stack}>
       <div className={styles.toolbar}>
@@ -76,31 +99,59 @@ export function OverviewPage({
           title={t('overview.quickSetup.title')}
           description={t('overview.quickSetup.description')}
         >
+          <div className={styles.setupProgressBar}>
+            <div
+              className={styles.setupProgressFill}
+              style={{ width: `${totalCount > 0 ? (readyCount / totalCount) * 100 : 0}%` }}
+            />
+          </div>
+          <p className={styles.setupProgressLabel}>
+            {t('overview.stepsDone', { done: readyCount, total: totalCount })}
+          </p>
+
           <div className={styles.checklist}>
+            {/* Required */}
+            <div className={styles.setupGroupLabel}>{t('overview.requiredGroup')}</div>
             <SetupRow
               title={t('overview.setupRows.mainModel.title')}
               description={t('overview.setupRows.mainModel.description')}
-              ready={settings.hasAiApiKey}
+              ready={aiModelsReady}
               onClick={() => onNavigate('models')}
             />
+
+            {/* Recommended */}
+            <div className={styles.setupGroupLabel}>{t('overview.recommendedGroup')}</div>
             <SetupRow
               title={t('overview.setupRows.telegram.title')}
               description={t('overview.setupRows.telegram.description')}
-              ready={settings.telegramEnabled && settings.hasTelegramToken}
+              ready={telegramReady}
               onClick={() => onNavigate('services')}
+            />
+
+            {/* Optional */}
+            <div className={styles.setupGroupLabel}>{t('overview.optionalGroup')}</div>
+            <SetupRow
+              title={t('overview.setupRows.webSearch.title')}
+              description={t('overview.setupRows.webSearch.description')}
+              ready={webSearchReady}
+              onClick={() => onNavigate('integrations')}
+            />
+            <SetupRow
+              title={t('overview.setupRows.webReader.title')}
+              description={t('overview.setupRows.webReader.description')}
+              ready={webReaderReady}
+              onClick={() => onNavigate('integrations')}
+            />
+            <SetupRow
+              title={t('overview.setupRows.pinecone.title')}
+              description={t('overview.setupRows.pinecone.description')}
+              ready={pineconeReady}
+              onClick={() => onNavigate('integrations')}
             />
             <SetupRow
               title={t('overview.setupRows.notes.title')}
               description={t('overview.setupRows.notes.description')}
-              ready={
-                settings.notesEnabled && settings.hasTelegramToken && Boolean(settings.notesUrl)
-              }
-              onClick={() => onNavigate('services')}
-            />
-            <SetupRow
-              title={t('overview.setupRows.voice.title')}
-              description={t('overview.setupRows.voice.description')}
-              ready={settings.voiceMode !== 'off' && settings.hasVoiceToken}
+              ready={notesReady}
               onClick={() => onNavigate('services')}
             />
           </div>

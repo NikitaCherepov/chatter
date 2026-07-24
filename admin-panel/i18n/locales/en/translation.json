@@ -15,27 +15,43 @@
     "refresh": "Refresh",
     "actionError": "Action failed: {{error}}",
     "quickSetup": {
-      "title": "Quick Setup",
-      "description": "Core components needed for full functionality"
+      "title": "First Launch",
+      "description": "Complete the steps below — the bot won't work without the required ones"
     },
     "setupRows": {
       "mainModel": {
-        "title": "Main Model",
-        "description": "OpenAI-compatible provider"
+        "title": "AI Models",
+        "description": "PRO and LITE chains — add at least one model to each"
       },
       "telegram": {
         "title": "Telegram",
-        "description": "Main Telegram bot"
+        "description": "Main bot — token from @BotFather"
+      },
+      "webSearch": {
+        "title": "Web Search",
+        "description": "Tavily API — real-time internet information"
+      },
+      "webReader": {
+        "title": "Web Reader",
+        "description": "Browserless — open and clean web pages"
+      },
+      "pinecone": {
+        "title": "Vector Memory",
+        "description": "Pinecone — long-term memory and context"
       },
       "notes": {
         "title": "Webapp Notes",
-        "description": "Optional Telegram Mini App"
+        "description": "Telegram Mini App for notes"
       },
       "voice": {
         "title": "Voice",
-        "description": "Speech recognition and TTS for Telegram"
+        "description": "Speech recognition and TTS"
       }
     },
+    "stepsDone": "{{done}} of {{total}} steps",
+    "requiredGroup": "Required",
+    "recommendedGroup": "Recommended",
+    "optionalGroup": "Optional",
     "updateStatus": {
       "title": "Updates",
       "description": "Check for server updates",

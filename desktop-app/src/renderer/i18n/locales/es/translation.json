@@ -30,7 +30,8 @@
     "nothingFound": "No se encontró nada",
     "selectPlaceholder": "Seleccione...",
     "unknown": "Desconocido",
-    "user": "Usuario"
+    "user": "Usuario",
+    "inDevelopment": "En desarrollo"
   },
   "auth": {
     "subtitle": {
@@ -128,7 +129,8 @@
       "app": "Aplicación",
       "limits": "Límites",
       "connections": "Cuentas vinculadas",
-      "mail": "Correo electrónico"
+      "mail": "Correo electrónico",
+      "billing": "Facturación"
     },
     "language": {
       "system": "Sistema",
@@ -358,7 +360,8 @@
     },
     "model": {
       "label": "Modelo:",
-      "automatic": "Selección automática"
+      "automatic": "Selección automática",
+      "freeBadge": "gratis"
     },
     "messages": {
       "loading": "Cargando mensajes...",
@@ -804,7 +807,39 @@
       "lastSyncWithDate": "Última sincronización: {{date}}",
       "devicesCount": "Dispositivos ({{count}})",
       "group": "grupo",
-      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "Broker MQTT guardado",
+        "brokerSaveFailed": "No se pudo guardar el broker",
+        "invalidUrl": "Formato de URL no válido. Debe comenzar con mqtt:// o mqtts://",
+        "brokerDeleted": "Configuración Zigbee eliminada",
+        "brokerDeleteFailed": "No se pudo eliminar la configuración Zigbee",
+        "saveBrokerFirst": "Guarde primero la dirección del broker MQTT",
+        "syncResult": "{{provider}}: {{count}} dispositivos sincronizados",
+        "syncError": "Error de sincronización: {{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://host:port (guardado)",
+        "helpText": "Dirección del broker MQTT (Mosquitto). Zigbee2MQTT debe estar ejecutándose y conectado al broker.",
+        "save": "Guardar",
+        "sync": "Sincronizar",
+        "syncing": "Sincronizando...",
+        "deleteTitle": "¿Eliminar Zigbee?",
+        "deleteMessage": "Se eliminarán la configuración del broker MQTT y todos los dispositivos zigbee sincronizados.",
+        "guideTitle": "Conectando Zigbee2MQTT",
+        "step1": "Paso 1.",
+        "step1Text": "Instale un broker MQTT (p. ej., Mosquitto) en su red. Puerto predeterminado: 1883.",
+        "step2": "Paso 2.",
+        "step2Text": "Configure Zigbee2MQTT para conectarse a su broker. En configuration.yaml:",
+        "step3": "Paso 3.",
+        "step3Text": "Inicie Zigbee2MQTT. Abra la interfaz web (predeterminado: http://localhost:8080) y empareje sus dispositivos mediante Permitir unión.",
+        "step4": "Paso 4.",
+        "step4Text": "Ingrese la dirección del broker MQTT arriba y haga clic en Guardar. Formato:",
+        "step5": "Paso 5.",
+        "step5Text": "Haga clic en Sincronizar. Los dispositivos emparejados de Zigbee2MQTT aparecerán en la lista a continuación.",
+        "note": "Nota: el broker MQTT debe ser accesible desde el servidor que ejecuta el backend de Chatter. Si el broker requiere autenticación, inclúyala en la URL: mqtt://usuario:contraseña@host:puerto"
+      }
     },
     "mail": {
       "title": "Cuentas de correo",
@@ -878,5 +913,9 @@
     "defaultVoice": "Por defecto",
     "cartesia": "Cartesia (nube)",
     "previewText": "¡Hola, soy Chatter!"
+  },
+  "quota": {
+    "title": "Uso de cuota",
+    "resetsAt": "Restablece:"
   }
 }

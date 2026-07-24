@@ -32,12 +32,12 @@ const emptyLimits: PlanLimitsData = {
 
 const PLAN_IDS: ('free' | 'standart' | 'pro')[] = ['free', 'standart', 'pro'];
 
-const formatNumber = (value: number) => new Intl.NumberFormat('ru').format(Number(value) || 0);
+const formatNumber = (value: number, locale: string) => new Intl.NumberFormat(locale).format(Number(value) || 0);
 const formatUsd = (value: number) => `$${(Number(value) || 0).toFixed(2)}`;
 const formatWeeklyUsd = (monthly: number) => `$${((Number(monthly) || 0) / 4).toFixed(2)}`;
 
 export function PlanLimitsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [limits, setLimits] = useState<PlanLimitsData>(emptyLimits);
   const [state, setState] = useState('');
   const [saving, setSaving] = useState(false);
@@ -139,7 +139,7 @@ export function PlanLimitsPage() {
               <div className={styles.row}>
                 <FormField
                   label={t('planLimits.weeklyQuotaLabel')}
-                  hint={t('planLimits.weeklyQuotaHint', { units: formatNumber(cfg.weekly_token_quota) })}
+                  hint={t('planLimits.weeklyQuotaHint', { units: formatNumber(cfg.weekly_token_quota, i18n.language) })}
                 >
                   <input
                     type="number"
