@@ -1724,7 +1724,7 @@ export type SmartHomeSettingsDto = {
   synced_at: number | null;
 };
 
-export async function getSmartHomeSettings(): Promise<{ settings: SmartHomeSettingsDto | null }> {
+export async function getSmartHomeSettings(): Promise<{ settings: SmartHomeSettingsDto[] }> {
   return apiFetch('/api/v1/smart-home/settings');
 }
 
@@ -1732,6 +1732,7 @@ export async function getSmartHomeDevices(): Promise<{ devices: SmartDeviceDto[]
   return apiFetch('/api/v1/smart-home/devices');
 }
 
+// ── Yandex ──
 export async function setSmartHomeToken(token: string): Promise<{ ok: boolean }> {
   return apiFetch('/api/v1/smart-home/token', {
     method: 'POST',
@@ -1744,6 +1745,24 @@ export async function deleteSmartHomeToken(): Promise<{ ok: boolean }> {
   return apiFetch('/api/v1/smart-home/token', { method: 'DELETE' });
 }
 
-export async function syncSmartHomeDevices(): Promise<{ synced: number }> {
-  return apiFetch('/api/v1/smart-home/sync', { method: 'POST' });
+// ── Zigbee (MQTT) ──
+export async function setZigbeeBroker(brokerUrl: string): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/smart-home/zigbee/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ broker_url: brokerUrl }),
+  });
+}
+
+export async function deleteZigbeeBroker(): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/smart-home/zigbee/token', { method: 'DELETE' });
+}
+
+// ── Sync (provider-aware) ──
+export async function syncSmartHomeDevices(provider: string = 'yandex'): Promise<{ synced: number }> {
+  return apiFetch('/api/v1/smart-home/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider }),
+  });
 }

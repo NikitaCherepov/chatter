@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { db, getNowUnix } from '../db.js';
 import { getEncryptionKey } from '../utils/encryption.js';
+import { discoverZigbeeDevices, discoverZigbeeGroups, publishZigbeeCommand } from './zigbee.js';
 
 // ── Encryption (uses shared ENCRYPTION_KEY, same as mail.ts) ─────────────────
 
@@ -286,17 +287,16 @@ function parseYandexData(userId: number, data: YandexInfoResponse): ParsedDevice
   return entities;
 }
 
-// ── Settings CRUD ───────────────────────────────────────────────────────────
-
-export const getSmartHomeSettings = (userId: number): SmartHomeSettingsDto | null => {
-  const row = db.prepare(`SELECT * FROM smart_home_settings WHERE user_id = ? AND provider = 'yandex'`)
-    .get(userId) as SmartHomeSettingsRow | undefined;
-  if (!row) return null;
-  return {
-    provider: row.provider,
-    has_token: !!row.token_enc,
-    synced_at: row.synced_at ?? null,
-  };
+export const getSmartHomeSettings = (userId: number, provider?: string): SmartHomeSettingsDto[] => {
+  if (provider) {
+    const row = db.prepare(`SELECT * FROM smart_home_settings WHERE user_id = ? AND provider = ?`)
+      .get(userId, provider) as SmartHomeSettingsRow | undefined;
+    if (!row) return [];
+    return [{ provider: row.provider, has_token: !!row.token_enc, synced_at: row.synced_at ?? null }];
+  }
+  const rows = db.prepare(`SELECT * FROM smart_home_settings WHERE user_id = ?`)
+    .all(userId) as SmartHomeSettingsRow[];
+  return rows.map(r => ({ provider: r.provider, has_token: !!r.token_enc, synced_at: r.synced_at ?? null }));
 };
 
 export const getYandexToken = (userId: number): string | null => {
@@ -321,10 +321,66 @@ export const setSmartHomeToken = (userId: number, token: string): void => {
 
 export const deleteSmartHomeToken = (userId: number): void => {
   db.prepare(`DELETE FROM smart_home_settings WHERE user_id = ? AND provider = 'yandex'`).run(userId);
-  // Also wipe synced devices
-  db.prepare(`DELETE FROM smart_devices WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM smart_devices WHERE user_id = ? AND provider = 'yandex'`).run(userId);
 };
 
+// ── Zigbee (MQTT) settings ──────────────────────────────────────────────────
+
+export const getZigbeeBrokerUrl = (userId: number): string | null => {
+  const row = db.prepare(`SELECT token_enc FROM smart_home_settings WHERE user_id = ? AND provider = 'zigbee'`)
+    .get(userId) as SmartHomeSettingsRow | undefined;
+  if (!row?.token_enc) return null;
+  try {
+    return decrypt(row.token_enc);
+  } catch {
+    return null;
+  }
+};
+
+export const setZigbeeToken = (userId: number, brokerUrl: string): void => {
+  const enc = encrypt(brokerUrl);
+  db.prepare(`
+    INSERT INTO smart_home_settings (user_id, provider, token_enc, synced_at)
+    VALUES (?, 'zigbee', ?, NULL)
+    ON CONFLICT (user_id, provider) DO UPDATE SET token_enc = excluded.token_enc, synced_at = NULL
+  `).run(userId, enc);
+};
+
+export const deleteZigbeeToken = (userId: number): void => {
+  db.prepare(`DELETE FROM smart_home_settings WHERE user_id = ? AND provider = 'zigbee'`).run(userId);
+  db.prepare(`DELETE FROM smart_devices WHERE user_id = ? AND provider = 'zigbee'`).run(userId);
+};
+
+// ── Sync from Zigbee2MQTT ───────────────────────────────────────────────────
+
+export const syncZigbeeDevices = async (userId: number): Promise<{ synced: number }> => {
+  const brokerUrl = getZigbeeBrokerUrl(userId);
+  if (!brokerUrl) throw new Error('no_broker');
+
+  const [devices, groups] = await Promise.all([
+    discoverZigbeeDevices(brokerUrl),
+    discoverZigbeeGroups(brokerUrl),
+  ]);
+
+  const allParsed = [...groups, ...devices]; // группы первыми
+
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM smart_devices WHERE user_id = ? AND provider = 'zigbee'`).run(userId);
+    const now = getNowUnix();
+    const insert = db.prepare(`
+      INSERT INTO smart_devices (id, user_id, name, room_name, provider, is_group, native_id, type, capabilities, target_ids, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const d of allParsed) {
+      insert.run(d.id, userId, d.name, d.room_name, d.provider, d.is_group, d.native_id, d.type, d.capabilities, d.target_ids, now);
+    }
+    db.prepare(`UPDATE smart_home_settings SET synced_at = ? WHERE user_id = ? AND provider = 'zigbee'`)
+      .run(now, userId);
+  });
+  tx();
+
+  return { synced: allParsed.length };
+};
 // ── Device CRUD ─────────────────────────────────────────────────────────────
 
 const rowToDto = (row: SmartDeviceRow): SmartDeviceDto => ({
@@ -346,7 +402,7 @@ export const listSmartDevices = (userId: number): SmartDeviceDto[] => {
 /** Compact JSON for AI tool response (get_smart_devices) */
 export const listSmartDevicesForAi = (userId: number): string => {
   const devices = listSmartDevices(userId);
-  if (!devices.length) return 'Устройства не найдены. Попросите пользователя добавить токен и синхронизировать устройства в настройках.';
+  if (!devices.length) return 'No devices found. Ask the user to add a token and sync devices in settings.';
   const compact = devices.map(d => ({
     id: d.id,
     name: d.name,
@@ -357,9 +413,14 @@ export const listSmartDevicesForAi = (userId: number): string => {
   return JSON.stringify(compact, null, 2);
 };
 
-// ── Sync from Yandex ────────────────────────────────────────────────────────
+// ── Sync dispatcher ──────────────────────────────────────────────────────────
 
-export const syncSmartHomeDevices = async (userId: number): Promise<{ synced: number }> => {
+export const syncSmartHomeDevices = async (userId: number, provider: string = 'yandex'): Promise<{ synced: number }> => {
+  if (provider === 'zigbee') {
+    return syncZigbeeDevices(userId);
+  }
+
+  // ── Yandex sync ──
   const token = getYandexToken(userId);
   if (!token) throw new Error('no_token');
 
@@ -375,9 +436,8 @@ export const syncSmartHomeDevices = async (userId: number): Promise<{ synced: nu
   const data = await response.json() as YandexInfoResponse;
   const parsed = parseYandexData(userId, data);
 
-  // Replace all devices for this user atomically
   const tx = db.transaction(() => {
-    db.prepare(`DELETE FROM smart_devices WHERE user_id = ?`).run(userId);
+    db.prepare(`DELETE FROM smart_devices WHERE user_id = ? AND provider = 'yandex'`).run(userId);
     const now = getNowUnix();
     const insert = db.prepare(`
       INSERT INTO smart_devices (id, user_id, name, room_name, provider, is_group, native_id, type, capabilities, target_ids, created_at)
@@ -393,7 +453,6 @@ export const syncSmartHomeDevices = async (userId: number): Promise<{ synced: nu
 
   return { synced: parsed.length };
 };
-
 // ── Control ─────────────────────────────────────────────────────────────────
 
 const findDeviceById = (userId: number, deviceId: string): SmartDeviceRow | null => {
@@ -402,21 +461,47 @@ const findDeviceById = (userId: number, deviceId: string): SmartDeviceRow | null
 };
 
 export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): Promise<string> => {
-  const token = getYandexToken(userId);
-  if (!token) return 'Ошибка: не настроен токен умного дома. Добавьте его в настройках.';
-
   const deviceId = (args.device_id || '').trim();
-  if (!deviceId) return 'Ошибка инструмента: не передан device_id. Сначала вызовите get_smart_devices.';
+  if (!deviceId) return 'Tool error: device_id not provided. Call get_smart_devices first.';
 
   const device = findDeviceById(userId, deviceId);
-  if (!device) return `Ошибка: устройство с id "${deviceId}" не найдено. Выполните синхронизацию в настройках.`;
+  if (!device) return `Error: device with id "${deviceId}" not found. Run sync in settings.`;
 
   const action = args.action;
   if (!action || !['on', 'off', 'set_color', 'set_brightness'].includes(action)) {
-    return 'Ошибка инструмента: неизвестное действие.';
+    return 'Tool error: unknown action.';
   }
 
-  // Build Yandex capability payloads
+  // ── Zigbee: MQTT publish ──
+  if (device.provider === 'zigbee') {
+    const brokerUrl = getZigbeeBrokerUrl(userId);
+    if (!brokerUrl) return 'Error: Zigbee MQTT broker not configured. Add it in settings.';
+
+    const targetIds: string[] = JSON.parse(device.target_ids);
+    const friendlyName = targetIds[0]; // zigbee uses friendly_name for MQTT topic
+    if (!friendlyName) return 'Error: device has no MQTT address.';
+
+    const result = await publishZigbeeCommand(brokerUrl, friendlyName, action, {
+      color: args.color,
+      brightness: args.brightness,
+    });
+
+    if (!result.ok) return `MQTT error: ${result.error}`;
+
+    const actionText = action === 'on'
+      ? 'turned on'
+      : action === 'off'
+        ? 'turned off'
+        : action === 'set_color'
+          ? `color changed to ${args.color}`
+          : `brightness set to ${args.brightness}%`;
+    return `Success: "${device.name}" → ${actionText}.`;
+  }
+
+  // ── Yandex: HTTP API ──
+  const token = getYandexToken(userId);
+  if (!token) return 'Error: Yandex token not configured. Add it in settings.';
+
   const onOffPayload = (value: boolean) => ({
     type: 'devices.capabilities.on_off',
     state: { instance: 'on', value }
@@ -436,13 +521,13 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): 
   if (action === 'on') actionsPayload = [onOffPayload(true)];
   if (action === 'off') actionsPayload = [onOffPayload(false)];
   if (action === 'set_color') {
-    if (!args.color) return 'Ошибка инструмента: для set_color нужен параметр color.';
+    if (!args.color) return 'Tool error: color parameter required for set_color.';
     const hsv = parseColorToHsv(args.color);
-    if (hsv === null) return `Ошибка инструмента: не удалось распознать цвет "${args.color}".`;
+    if (hsv === null) return `Tool error: could not parse color "${args.color}".`;
     actionsPayload = [onOffPayload(true), colorPayload(hsv)];
   }
   if (action === 'set_brightness') {
-    if (args.brightness === undefined) return 'Ошибка инструмента: для set_brightness нужен параметр brightness.';
+    if (args.brightness === undefined) return 'Tool error: brightness parameter required for set_brightness.';
     let br = Number(args.brightness);
     if (Number.isNaN(br)) br = 100;
     if (br < 1) br = 1;
@@ -451,8 +536,6 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): 
     actionsPayload = [onOffPayload(true), brightnessPayload(br)];
   }
 
-  // For groups: Yandex expects group id; for single devices: device id
-  // The /devices/actions endpoint accepts both device and group IDs
   const targetIds: string[] = JSON.parse(device.target_ids);
   const devicesPayload = targetIds.map(id => ({ id, actions: actionsPayload }));
 
@@ -470,7 +553,7 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): 
     let data: any = {};
     try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
 
-    if (!response.ok) return `Ошибка API Яндекса (${response.status}): ${raw || 'пустой ответ'}`;
+    if (!response.ok) return `Yandex API error (${response.status}): ${raw || 'empty response'}`;
 
     const resultDevices = Array.isArray(data?.devices) ? data.devices : [];
     const failed = resultDevices.filter((d: any) =>
@@ -480,18 +563,18 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): 
 
     if (failed.length) {
       const failedIds = failed.map((d: any) => d?.id).filter(Boolean).join(', ');
-      return `Команда выполнена частично. Ошибка у устройств: ${failedIds || 'неизвестно'}.`;
+      return `Command partially completed. Error on devices: ${failedIds || 'unknown'}.`;
     }
 
     const actionText = action === 'on'
-      ? 'включено'
+      ? 'turned on'
       : action === 'off'
-        ? 'выключено'
+        ? 'turned off'
         : action === 'set_color'
-          ? `цвет изменён на ${args.color}`
-          : `яркость установлена на ${brightnessValue ?? args.brightness}%`;
-    return `Успешно: "${device.name}" → ${actionText}.`;
+          ? `color changed to ${args.color}`
+          : `brightness set to ${brightnessValue ?? args.brightness}%`;
+    return `Success: "${device.name}" → ${actionText}.`;
   } catch (err: any) {
-    return `Техническая ошибка при управлении умным домом: ${err?.message || String(err)}`;
+    return `Smart home control error: ${err?.message || String(err)}`;
   }
 };

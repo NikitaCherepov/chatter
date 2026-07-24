@@ -24,7 +24,7 @@ import { getPendingPcConfirmation, deletePendingPcConfirmation } from './service
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
-import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
+import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbeeToken, deleteZigbeeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
@@ -4600,6 +4600,7 @@ app.get('/api/v1/smart-home/devices', (req: AuthedRequest, res: any) => {
   return res.json({ devices });
 });
 
+// ── Yandex token ──
 app.post('/api/v1/smart-home/token', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
@@ -4614,13 +4615,35 @@ app.delete('/api/v1/smart-home/token', (req: AuthedRequest, res: any) => {
   return res.json({ ok: true });
 });
 
+// ── Zigbee (MQTT) token ──
+app.post('/api/v1/smart-home/zigbee/token', (req: AuthedRequest, res: any) => {
+  const userId = accountIdFromRequest(req);
+  const brokerUrl = typeof req.body?.broker_url === 'string' ? req.body.broker_url.trim() : '';
+  if (!brokerUrl) return res.status(400).json({ error: 'broker_url_required' });
+  // Basic Url validation
+  if (!/^mqtt(s)?:\/\/.+/.test(brokerUrl) && !/^wss?:\/\/.+/.test(brokerUrl)) {
+    return res.status(400).json({ error: 'invalid_broker_url', message: 'URL must start with mqtt://, mqtts://, ws:// or wss://' });
+  }
+  setZigbeeToken(userId, brokerUrl);
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/smart-home/zigbee/token', (req: AuthedRequest, res: any) => {
+  const userId = accountIdFromRequest(req);
+  deleteZigbeeToken(userId);
+  return res.json({ ok: true });
+});
+
+// ── Sync (provider-aware) ──
 app.post('/api/v1/smart-home/sync', async (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
+  const provider = typeof req.body?.provider === 'string' ? req.body.provider.trim() : 'yandex';
   try {
-    const result = await syncSmartHomeDevices(userId);
+    const result = await syncSmartHomeDevices(userId, provider);
     return res.json(result);
   } catch (err: any) {
     if (err?.message === 'no_token') return res.status(400).json({ error: 'no_token' });
+    if (err?.message === 'no_broker') return res.status(400).json({ error: 'no_broker' });
     return res.status(502).json({ error: 'sync_failed', detail: err?.message || String(err) });
   }
 });
