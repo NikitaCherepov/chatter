@@ -6000,6 +6000,44 @@ export const sendMessageThroughAi = async (
     hasOnReasoningToken: !!streamCallbacks?.onReasoningToken,
   });
 
+  // ── Transport-safe wrappers for ephemeral UI callbacks ──
+  // These callbacks only push display events to the client. If delivery fails
+  // due to a transport problem (WebSocket disconnected, SSE closed, etc.),
+  // generation MUST continue. Non-transport errors are logged AND re-thrown
+  // so genuine bugs are not silently swallowed.
+  const TRANSPORT_ERRORS = new Set(['desktop_not_connected', 'ws_disconnected', 'ws_replaced']);
+  const safeUiCallback = <T extends (...args: any[]) => Promise<void> | void>(
+    fn: T | undefined,
+    label: string,
+  ): T | undefined => {
+    if (!fn) return undefined;
+    const wrapped = async (...args: Parameters<T>) => {
+      try {
+        await fn(...args);
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (TRANSPORT_ERRORS.has(msg)) {
+          // Transport boundary — swallow silently (already logged elsewhere).
+          return;
+        }
+        // Non-transport error (programming bug, DB failure, etc.) — log then
+        // re-throw so the caller / agent loop sees it.
+        console.warn(`[ui-callback:${label}] error`, msg);
+        throw err;
+      }
+    };
+    return wrapped as T;
+  };
+
+  const safeOnIntermediateMessage = safeUiCallback(options?.onIntermediateMessage, 'onIntermediateMessage');
+  const safeOnStateChange = safeUiCallback(options?.onStateChange, 'onStateChange');
+  const safeOnToolStatus = safeUiCallback(options?.onToolStatus, 'onToolStatus');
+  const safeOnMapUpdate = safeUiCallback(options?.onMapUpdate, 'onMapUpdate');
+  const safeOnDiceRoll = safeUiCallback(options?.onDiceRoll, 'onDiceRoll');
+  // onDesktopAction is also used for HITL notifications. It's safe to wrap:
+  // the actual confirmation flow uses sendToDesktop() / WS IPC separately.
+  const safeOnDesktopAction = safeUiCallback(options?.onDesktopAction, 'onDesktopAction');
+
   let chatId = 0;
   let totalTokens = 0;
   let usedModel = '';
@@ -6225,6 +6263,27 @@ export const sendMessageThroughAi = async (
     }
   }
   const isRegeneratingFromHistory = Boolean(regenerateUserText);
+
+  // ── Persist the user message EARLY, before any long AI work begins ──
+  // This guarantees the user's request survives even if generation is
+  // interrupted by a WebSocket transport failure or other exception.
+  // skipHistory / skipUserHistory / regenerate scenarios are respected:
+  // - skipHistory: internal/background tasks — no user message at all.
+  // - skipUserHistory: explicit "don't save user text" — no user message.
+  // - regenerateFromHistory: the user message already exists in DB from the
+  //   original turn; re-saving would create a duplicate row. Skip here.
+  if (!options?.skipHistory && !options?.skipUserHistory && !isRegeneratingFromHistory) {
+    const userTelegramChatId = Number.isFinite(Number(options?.userTelegramChatId))
+      ? Math.floor(Number(options?.userTelegramChatId))
+      : null;
+    const userTelegramMessageId = Number.isFinite(Number(options?.userTelegramMessageId))
+      ? Math.floor(Number(options?.userTelegramMessageId))
+      : null;
+    const userMessageImages = options?.userImages?.length ? options.userImages : null;
+    const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
+    userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
+  }
+
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const dynamicContextToolHint = `\n\n[DYNAMIC CONTEXT]\nCurrent user time is available via the get_user_time tool. Do not guess current date/time: call get_user_time when it matters for answering or scheduling.\nCurrent pixel avatar state is available via the get_avatar_state tool. To change emotions, use set_display_state.`;
   const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
@@ -6367,7 +6426,7 @@ export const sendMessageThroughAi = async (
     }
     dicePromptHint = buildDiceRollPrompt(diceRollValue);
     // Send the result immediately — client will lock the value and stop the animation.
-    try { await options?.onDiceRoll?.(diceRollValue); } catch { /* ignore */ }
+    try { await safeOnDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
   const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || 'User', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
@@ -6681,9 +6740,9 @@ User request: "${text}"`;
 
       if (message.tool_calls?.length) {
         // Модель вызывает тулз + написала текст (промежуточное сообщение)
-        if (options?.onIntermediateMessage) {
+        if (safeOnIntermediateMessage) {
           // Если есть обработчик — отправляем юзеру прямо сейчас
-          await options.onIntermediateMessage(stepContent);
+          await safeOnIntermediateMessage(stepContent);
         }
         // Коллбэка нет — текст останется в fullDbHistory для финальной отправки
       } else {
@@ -6749,7 +6808,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
   const toolUserMessage = getToolUserMessage(user.language, toolName, toolCall.function?.arguments || '{}');
   if (emitStatus && toolUserMessage) {
     toolUserMessages.push(toolUserMessage);
-    if (options?.onToolStatus) await options.onToolStatus(toolUserMessage);
+    if (safeOnToolStatus) await safeOnToolStatus(toolUserMessage);
   }
 
   let toolContent = '';
@@ -6774,8 +6833,8 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           manualModel: subagentManualModel,
           subagentMode,
           subagentReasoningLevel,
-          onToolStatus: options?.onToolStatus,
-          onDesktopAction: options?.onDesktopAction,
+          onToolStatus: safeOnToolStatus,
+          onDesktopAction: safeOnDesktopAction,
           onSubagentUsageCall: (agentName: string, usage: TokenUsageCall) => {
             subagentUsageCalls.push({ ...usage, agentName });
           },
@@ -6793,18 +6852,18 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     );
 
     // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
-    if (toolName === 'set_display_state' && displayStateSink.value && options?.onStateChange) {
-      await options.onStateChange(displayStateSink.value);
+    if (toolName === 'set_display_state' && displayStateSink.value && safeOnStateChange) {
+      await safeOnStateChange(displayStateSink.value);
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && options?.onDesktopAction) {
-      await options.onDesktopAction(desktopActionSink.value);
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
+      await safeOnDesktopAction(desktopActionSink.value);
     }
 
     // Если тулз вызвал map_control или find_transit_route — прокидываем данные карты
-    if ((toolName === 'map_control' || toolName === 'find_transit_route' || toolName === 'search_nearby') && mapUpdateSink.value && options?.onMapUpdate) {
-      await options.onMapUpdate(mapUpdateSink.value);
+    if ((toolName === 'map_control' || toolName === 'find_transit_route' || toolName === 'search_nearby') && mapUpdateSink.value && safeOnMapUpdate) {
+      await safeOnMapUpdate(mapUpdateSink.value);
     }
     }
   } catch (err: any) {
@@ -6856,7 +6915,7 @@ const runSpawnBatch = async (batch: any[]) => {
     const toolUserMessage = getToolUserMessage(user.language, 'spawn_subagent', toolCall.function?.arguments || '{}');
     if (toolUserMessage) {
       toolUserMessages.push(toolUserMessage);
-      if (options?.onToolStatus) await options.onToolStatus(toolUserMessage);
+      if (safeOnToolStatus) await safeOnToolStatus(toolUserMessage);
     }
   }
 
@@ -7010,17 +7069,8 @@ iterations.push(currentIteration);
     }
   }
 
-  if (!options?.skipHistory && !options?.skipUserHistory) {
-    const userTelegramChatId = Number.isFinite(Number(options?.userTelegramChatId))
-      ? Math.floor(Number(options?.userTelegramChatId))
-      : null;
-    const userTelegramMessageId = Number.isFinite(Number(options?.userTelegramMessageId))
-      ? Math.floor(Number(options?.userTelegramMessageId))
-      : null;
-    const userMessageImages = options?.userImages?.length ? options.userImages : null;
-    const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
-    userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
-  }
+  // User message is now persisted early (before AI generation starts) — see
+  // the block right after `isRegeneratingFromHistory`. Nothing to do here.
   assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
     ? Math.floor(Number(options?.assistantTelegramChatId))
     : null;
@@ -7082,8 +7132,8 @@ iterations.push(currentIteration);
         value: { chat_id: chatId, title }
       };
       const deliveredViaWs = sendToDesktop(userId, { type: 'desktop_action', ...action });
-      if (!deliveredViaWs && options?.onDesktopAction) {
-        await Promise.resolve(options.onDesktopAction(action)).catch((err: any) => {
+      if (!deliveredViaWs && safeOnDesktopAction) {
+        await Promise.resolve(safeOnDesktopAction(action)).catch((err: any) => {
           console.warn('[chat-title] client notification failed:', err?.message || String(err));
         });
       }

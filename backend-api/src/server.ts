@@ -5072,7 +5072,12 @@ wss.on('connection', (ws, req) => {
     authRefreshInFlight: false,
   };
   registerWsClient(client);
-  console.log(`[ws] account ${accountId} connected, total: ${wsClients.size}`);
+  console.log('[ws] account connected', {
+    accountId,
+    connectionId: client.connectionId,
+    replacedExisting: !!existing,
+    total: wsClients.size,
+  });
 
   // 4. Handle incoming messages
   ws.on('message', async (raw) => {
@@ -5156,14 +5161,32 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  ws.on('close', () => {
+  ws.on('close', (code, reason) => {
+    // Check if this socket was already superseded by a newer connection.
+    const wasAlreadyReplaced = wsClients.get(accountId) !== client;
     unregisterWsClient(client);
     // Reject all pending IPC requests
     for (const [, pending] of client.pendingIpc) {
       clearTimeout(pending.timer);
       pending.reject(new Error('ws_disconnected'));
     }
-    console.log(`[ws] account ${accountId} disconnected, total: ${wsClients.size}`);
+    const reasonStr = reason?.toString() || '';
+    const replacement = wsClients.get(accountId);
+    console.log('[ws] account disconnected', {
+      accountId,
+      connectionId: client.connectionId,
+      code,
+      reason: reasonStr,
+      replacedByNew: !!replacement,
+      replacementConnectionId: replacement?.connectionId ?? null,
+      total: wsClients.size,
+    });
+    if (wasAlreadyReplaced) {
+      console.log('[ws-transport] closed socket was already replaced — active generation continues unaffected', {
+        accountId,
+        oldConnectionId: client.connectionId,
+      });
+    }
   });
 });
 
@@ -5311,16 +5334,42 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   }
 
   const enabledMacros = getEnabledMacros(userId);
-  const sendWsJson = (payload: Record<string, unknown>) => new Promise<void>((resolve, reject) => {
-    if (client.ws.readyState !== WebSocket.OPEN) {
-      reject(new Error('desktop_not_connected'));
-      return;
+  // Transport-safe WS sender: looks up the CURRENT client on every call so
+  // reconnections are transparent. Never rejects — ephemeral UI events must
+  // not break AI generation. Returns false if delivery was not possible.
+  let wsTransportLostLogged = false;
+  const sendWsJson = (payload: Record<string, unknown>): Promise<boolean> => {
+    const currentClient = wsClients.get(userId);
+    if (!currentClient || currentClient.ws.readyState !== WebSocket.OPEN) {
+      if (!wsTransportLostLogged) {
+        wsTransportLostLogged = true;
+        console.warn('[ws-transport] client disconnected mid-stream, UI events will be skipped until reconnect', {
+          userId,
+          accountId: client.accountId,
+          connectionId: client.connectionId,
+        });
+      }
+      return Promise.resolve(false);
     }
-    client.ws.send(JSON.stringify(payload), (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
+    try {
+      currentClient.ws.send(JSON.stringify(payload), (err) => {
+        if (err) {
+          console.warn('[ws-transport] send failed (non-fatal)', {
+            userId,
+            payloadType: payload.type,
+            error: err.message,
+          });
+        }
+      });
+    } catch (err: any) {
+      console.warn('[ws-transport] send threw (non-fatal)', {
+        userId,
+        payloadType: payload.type,
+        error: err?.message || String(err),
+      });
+    }
+    return Promise.resolve(true);
+  };
 
   try {
     const rawUserRecord = getUserById(userId);
@@ -5366,10 +5415,13 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       },
     });
 
-    client.ws.send(JSON.stringify({ type: 'done', ...result }));
+    // Send 'done' through the current connection (may have reconnected since).
+    sendWsJson({ type: 'done', ...result });
   } catch (err: any) {
     const code = `${err?.message || 'ai_send_failed'}`;
-    client.ws.send(JSON.stringify({ type: 'error', error: code }));
+    // Send 'error' through the current connection (may have reconnected since).
+    // If desktop is offline, the user will see the result/error on next chat refresh.
+    sendWsJson({ type: 'error', error: code });
   }
 }
 // ── WS ipc_result handler ────────────────────────────────────────────────────
