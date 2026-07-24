@@ -898,16 +898,16 @@
         "deleteMessage": "The MQTT broker settings and all synced zigbee devices will be removed.",
         "guideTitle": "Connecting Zigbee2MQTT",
         "step1": "Step 1.",
-        "step1Text": "Install Mosquitto (MQTT broker) on the same server where Zigbee2MQTT runs.",
+        "step1Text": "Install an MQTT broker (e.g. Mosquitto) on your network. Default port: 1883.",
         "step2": "Step 2.",
-        "step2Text": "In the Zigbee2MQTT config (configuration.yaml), make sure the MQTT broker is set:",
+        "step2Text": "Configure Zigbee2MQTT to connect to your broker. In configuration.yaml:",
         "step3": "Step 3.",
-        "step3Text": "Start Zigbee2MQTT. Pair zigbee devices through the Z2M interface.",
+        "step3Text": "Start Zigbee2MQTT. Open the web UI (default: http://localhost:8080) and pair your devices via Permit Join.",
         "step4": "Step 4.",
         "step4Text": "Enter the MQTT broker address above and click Save. Format:",
         "step5": "Step 5.",
-        "step5Text": "Click Sync. Devices from Zigbee2MQTT will appear in the list below.",
-        "note": "Note: the MQTT broker must be reachable from the server running Chatter backend. If the broker is on a different host, make sure the port is open."
+        "step5Text": "Click Sync. Paired devices from Zigbee2MQTT will appear in the list below.",
+        "note": "Note: the MQTT broker must be reachable from the server running Chatter backend. If the broker requires authentication, include it in the URL: mqtt://user:password@host:port"
       }
     }
   },

@@ -114,7 +114,7 @@ export function SmartHomeSettings() {
     setSyncingProvider(provider);
     try {
       const result = await api.syncSmartHomeDevices(provider);
-      const label = provider === 'zigbee' ? 'Zigbee' : t('advanced.smart.zigbee.syncYandex', 'Yandex');
+      const label = provider === 'zigbee' ? 'Zigbee' : 'Yandex';
       toast.success(t('advanced.smart.zigbee.syncResult', { provider: label, count: result.synced }));
       await loadData();
     } catch (err: any) {
@@ -155,10 +155,8 @@ export function SmartHomeSettings() {
 
       {/* ════════════ Zigbee ════════════ */}
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel} style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+        <label className={s.fieldLabel} style={{ fontWeight: 600 }}>
           {t('advanced.smart.zigbee.title')}
-          {hasZigbeeBroker && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--accent)', color: '#fff' }}>✓</span>}
         </label>
         <div className={s.commandRow}>
           <input
@@ -175,7 +173,7 @@ export function SmartHomeSettings() {
         </div>
         <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
           <button className={s.saveBtn} onClick={handleSaveBroker} disabled={savingBroker || !brokerInput.trim()}>
-            {savingBroker ? t('common.saving') : t('advanced.smart.zigbee.save')}
+            {savingBroker ? t('common.saving') : t('advanced.smart.saveToken')}
           </button>
           {hasZigbeeBroker && (
             <button className={s.cancelBtn} style={{ color: '#e74c3c' }} onClick={() => setConfirmDeleteZigbee(true)}>
@@ -184,7 +182,7 @@ export function SmartHomeSettings() {
           )}
           {hasZigbeeBroker && (
             <button className={s.saveBtn} onClick={() => handleSync('zigbee')} disabled={!!syncingProvider}>
-              {syncingProvider === 'zigbee' ? t('advanced.smart.zigbee.syncing') : t('advanced.smart.zigbee.sync')}
+              {syncingProvider === 'zigbee' ? t('advanced.smart.syncing') : t('advanced.smart.sync')}
             </button>
           )}
         </div>
@@ -195,13 +193,73 @@ export function SmartHomeSettings() {
         )}
       </div>
 
-      {/* ════════════ Yandex ════════════ */}
-      <div className={s.macroFormDivider} />
+      {/* ── Zigbee Guide ── */}
       <div className={s.fieldGroup}>
-        <label className={s.fieldLabel} style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          {t('advanced.smart.zigbee.syncYandex', 'Yandex')}
-          {hasYandexToken && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--accent)', color: '#fff' }}>✓</span>}
+        <button
+          onClick={() => setShowZigbeeGuide(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: showZigbeeGuide ? 'var(--accent-icon)' : 'var(--text-muted)',
+            fontSize: '13px', fontWeight: 500, padding: 0,
+            transition: 'color 0.1s',
+          }}
+        >
+          <span>{t('advanced.smart.zigbee.guideTitle')}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transition: 'transform 0.15s', transform: showZigbeeGuide ? 'rotate(180deg)' : 'none' }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        <AnimatePresence initial={false}>
+          {showZigbeeGuide && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto', transition: { duration: 0.2, ease: 'easeOut' } }}
+              exit={{ opacity: 0, height: 0, transition: { duration: 0.15 } }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.7, marginTop: '10px' }}>
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step1')}</span><br />
+                  {t('advanced.smart.zigbee.step1Text')}
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step2')}</span><br />
+                  {t('advanced.smart.zigbee.step2Text')}<br />
+                  <code style={{ color: 'var(--accent)' }}>{'mqtt:\n  server: mqtt://localhost:1883'}</code>
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step3')}</span><br />
+                  {t('advanced.smart.zigbee.step3Text')}
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step4')}</span><br />
+                  {t('advanced.smart.zigbee.step4Text')}<br />
+                  <code style={{ color: 'var(--accent)' }}>mqtt://192.168.1.100:1883</code><br />
+                  <code style={{ color: 'var(--accent)' }}>mqtt://localhost:1883</code>
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step5')}</span><br />
+                  {t('advanced.smart.zigbee.step5Text')}
+                </div>
+                <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'var(--bg-modal-hover)', fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {t('advanced.smart.zigbee.note')}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ════════════ Yandex ════════════ */}
+      <div style={{ height: '1px', background: 'var(--border-light, #ccc)', margin: '16px 0', flexShrink: 0 }} />
+      <div className={s.fieldGroup}>
+        <label className={s.fieldLabel} style={{ fontWeight: 600 }}>
+          Yandex
         </label>
         <div className={s.commandRow}>
           <input
@@ -244,99 +302,8 @@ export function SmartHomeSettings() {
         )}
       </div>
 
-      {/* ════════════ Devices ════════════ */}
-      {hasAnyDevices && (
-        <>
-          <div className={s.macroFormDivider} />
-          <div className={s.fieldGroup}>
-            <div className={s.fieldLabel} style={{ marginBottom: '8px', fontWeight: 600 }}>
-              {t('advanced.smart.devicesCount', { count: devices.length })}
-            </div>
-
-            {yandexDevices.length > 0 && (
-              <>
-                <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-                  {t('advanced.smart.zigbee.syncYandex', 'Yandex')} {syncBadge('yandex')}
-                </div>
-                {yandexDevices.map(d => (
-                  <div key={d.id} className={s.macroCard}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 500, fontSize: '13px' }}>{d.name}</span>
-                        {d.is_group && (
-                          <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--border-light)', color: 'var(--text-muted)' }}>
-                            {t('advanced.smart.group')}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {d.room_name ? `📍 ${d.room_name}` : ''}
-                        {d.room_name && d.type ? ' · ' : ''}
-                        {d.type ? d.type.replace('devices.types.', '') : ''}
-                      </div>
-                      {d.capabilities.length > 0 && (
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
-                          {d.capabilities.map(c => (
-                            <code key={c} style={{ fontSize: '10px', color: 'var(--accent)', padding: '1px 6px', borderRadius: '3px', background: 'var(--bg-elevated)' }}>
-                              {c}
-                            </code>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {zigbeeDevices.length > 0 && (
-              <>
-                <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', marginTop: yandexDevices.length > 0 ? '10px' : '0', fontWeight: 600 }}>
-                  Zigbee {syncBadge('zigbee')}
-                </div>
-                {zigbeeDevices.map(d => (
-                  <div key={d.id} className={s.macroCard}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 500, fontSize: '13px' }}>{d.name}</span>
-                        {d.is_group && (
-                          <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--border-light)', color: 'var(--text-muted)' }}>
-                            {t('advanced.smart.group')}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {d.type || ''}
-                      </div>
-                      {d.capabilities.length > 0 && (
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
-                          {d.capabilities.map(c => (
-                            <code key={c} style={{ fontSize: '10px', color: 'var(--accent)', padding: '1px 6px', borderRadius: '3px', background: 'var(--bg-elevated)' }}>
-                              {c}
-                            </code>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-      {!hasAnyDevices && (hasYandexToken || hasZigbeeBroker) && !syncingProvider && (
-        <div className={s.fieldGroup}>
-          <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
-            {t('advanced.smart.notSynced')}
-          </div>
-        </div>
-      )}
-
-      {/* ════════════ Yandex Guide ════════════ */}
+      {/* ── Yandex Guide ── */}
       <div className={s.fieldGroup}>
-        <div className={s.macroFormDivider} />
         <button
           onClick={() => setShowGuide(v => !v)}
           style={{
@@ -400,68 +367,95 @@ export function SmartHomeSettings() {
         </AnimatePresence>
       </div>
 
-      {/* ════════════ Zigbee Guide ════════════ */}
-      <div className={s.fieldGroup}>
-        <div className={s.macroFormDivider} />
-        <button
-          onClick={() => setShowZigbeeGuide(v => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: showZigbeeGuide ? 'var(--accent-icon)' : 'var(--text-muted)',
-            fontSize: '13px', fontWeight: 500, padding: 0,
-            transition: 'color 0.1s',
-          }}
-        >
-          <span>{t('advanced.smart.zigbee.guideTitle')}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transition: 'transform 0.15s', transform: showZigbeeGuide ? 'rotate(180deg)' : 'none' }}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
+      {/* ════════════ Devices ════════════ */}
+      <div style={{ height: '1px', background: 'var(--border-light, #ccc)', margin: '16px 0', flexShrink: 0 }} />
+      {hasAnyDevices && (
+        <>
+          <div className={s.fieldGroup}>
+            <div className={s.fieldLabel} style={{ marginBottom: '8px', fontWeight: 600 }}>
+              {t('advanced.smart.devicesCount', { count: devices.length })}
+            </div>
 
-        <AnimatePresence initial={false}>
-          {showZigbeeGuide && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto', transition: { duration: 0.2, ease: 'easeOut' } }}
-              exit={{ opacity: 0, height: 0, transition: { duration: 0.15 } }}
-              style={{ overflow: 'hidden' }}
-            >
-              <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.7, marginTop: '10px' }}>
-                <div style={{ marginBottom: '10px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step1')}</span><br />
-                  {t('advanced.smart.zigbee.step1Text')}
+            {zigbeeDevices.length > 0 && (
+              <>
+                <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
+                  Zigbee {syncBadge('zigbee')}
                 </div>
-                <div style={{ marginBottom: '10px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step2')}</span><br />
-                  {t('advanced.smart.zigbee.step2Text')}<br />
-                  <code style={{ color: 'var(--accent)' }}>{'mqtt:\n  server: mqtt://localhost:1883'}</code>
+                {zigbeeDevices.map(d => (
+                  <div key={d.id} className={s.macroCard}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 500, fontSize: '13px' }}>{d.name}</span>
+                        {d.is_group && (
+                          <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--border-light)', color: 'var(--text-muted)' }}>
+                            {t('advanced.smart.group')}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {d.type || ''}
+                      </div>
+                      {d.capabilities.length > 0 && (
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                          {d.capabilities.map(c => (
+                            <code key={c} style={{ fontSize: '10px', color: 'var(--accent)', padding: '1px 6px', borderRadius: '3px', background: 'var(--bg-elevated)' }}>
+                              {c}
+                            </code>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {yandexDevices.length > 0 && (
+              <>
+                <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', marginTop: zigbeeDevices.length > 0 ? '10px' : '0', fontWeight: 600 }}>
+                  Yandex {syncBadge('yandex')}
                 </div>
-                <div style={{ marginBottom: '10px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step3')}</span><br />
-                  {t('advanced.smart.zigbee.step3Text')}
-                </div>
-                <div style={{ marginBottom: '10px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step4')}</span><br />
-                  {t('advanced.smart.zigbee.step4Text')}<br />
-                  <code style={{ color: 'var(--accent)' }}>mqtt://192.168.1.100:1883</code><br />
-                  <code style={{ color: 'var(--accent)' }}>mqtt://localhost:1883</code>
-                </div>
-                <div style={{ marginBottom: '10px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step5')}</span><br />
-                  {t('advanced.smart.zigbee.step5Text')}
-                </div>
-                <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'var(--bg-modal-hover)', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {t('advanced.smart.zigbee.note')}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                {yandexDevices.map(d => (
+                  <div key={d.id} className={s.macroCard}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 500, fontSize: '13px' }}>{d.name}</span>
+                        {d.is_group && (
+                          <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--border-light)', color: 'var(--text-muted)' }}>
+                            {t('advanced.smart.group')}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {d.room_name ? `📍 ${d.room_name}` : ''}
+                        {d.room_name && d.type ? ' · ' : ''}
+                        {d.type ? d.type.replace('devices.types.', '') : ''}
+                      </div>
+                      {d.capabilities.length > 0 && (
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                          {d.capabilities.map(c => (
+                            <code key={c} style={{ fontSize: '10px', color: 'var(--accent)', padding: '1px 6px', borderRadius: '3px', background: 'var(--bg-elevated)' }}>
+                              {c}
+                            </code>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {!hasAnyDevices && (hasYandexToken || hasZigbeeBroker) && !syncingProvider && (
+        <div className={s.fieldGroup}>
+          <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
+            {t('advanced.smart.notSynced')}
+          </div>
+        </div>
+      )}
 
       {confirmDeleteYandex && (
         <ConfirmDialog open={true} title={t('advanced.smart.deleteTitle')} text={t('advanced.smart.deleteMessage')}

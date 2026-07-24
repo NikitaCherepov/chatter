@@ -876,9 +876,6 @@
       "lastSyncWithDate": "Последняя синхронизация: {{date}}",
       "devicesCount": "Устройства ({{count}})",
       "group": "группа",
-      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
-    }
-  },
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
       "zigbee": {
         "title": "Zigbee (MQTT)",
@@ -894,25 +891,24 @@
         "placeholder": "mqtt://192.168.1.100:1883",
         "savedPlaceholder": "mqtt://host:port (сохранён)",
         "helpText": "Адрес MQTT-брокера (Mosquitto). Zigbee2MQTT должен быть запущен и подключён к брокеру.",
-        "save": "Сохранить",
-        "sync": "Синхронизировать",
-        "syncing": "Синхронизация...",
         "deleteTitle": "Удалить Zigbee?",
         "deleteMessage": "Настройки MQTT-брокера и все синхронизированные zigbee-устройства будут удалены.",
         "guideTitle": "Подключение Zigbee2MQTT",
         "step1": "Шаг 1.",
-        "step1Text": "Установите Mosquitto (MQTT-брокер) на том же сервере, где работает Zigbee2MQTT.",
+        "step1Text": "Установите MQTT-брокер (например, Mosquitto) в вашей сети. Порт по умолчанию: 1883.",
         "step2": "Шаг 2.",
-        "step2Text": "В конфиге Zigbee2MQTT (configuration.yaml) убедитесь, что MQTT-брокер указан:",
+        "step2Text": "Настройте Zigbee2MQTT на подключение к брокеру. В configuration.yaml:",
         "step3": "Шаг 3.",
-        "step3Text": "Запустите Zigbee2MQTT. Подключите zigbee-устройства через интерфейс Z2M.",
+        "step3Text": "Запустите Zigbee2MQTT. Откройте веб-интерфейс (по умолчанию: http://localhost:8080) и добавьте устройства через Permit Join.",
         "step4": "Шаг 4.",
         "step4Text": "Введите адрес MQTT-брокера выше и нажмите «Сохранить». Формат:",
         "step5": "Шаг 5.",
-        "step5Text": "Нажмите «Синхронизировать». Устройства из Zigbee2MQTT появятся в списке ниже.",
-        "note": "Важно: MQTT-брокер должен быть доступен по сети с сервера, где запущен Chatter backend. Если брокер на другом хосте — убедитесь, что порт открыт."
-      },
-      "tts": {
+        "step5Text": "Нажмите «Синхронизировать». Подключённые устройства из Zigbee2MQTT появятся в списке ниже.",
+        "note": "Важно: MQTT-брокер должен быть доступен по сети с сервера, где запущен Chatter backend. Если брокер требует аутентификацию, укажите её в URL: mqtt://user:password@host:port"
+      }
+    }
+  },
+  "tts": {
     "piper": "Piper (локальный)",
     "builtin": "Встроенный (Chromium)",
     "defaultVoice": "По умолчанию",
