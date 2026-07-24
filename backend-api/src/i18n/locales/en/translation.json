@@ -69,7 +69,8 @@
   },
   "confirmations": {
     "reviewSshSystem": "You are a security expert. Reply briefly.",
-    "reviewSshPrompt": "Assess the safety of this SSH command on a server. Briefly explain the risks in 1–2 sentences. Command: {{command}}. Respond in {{language}}."
+    "reviewSshPrompt": "Assess the safety of this SSH command on a server. Briefly explain the risks in 1–2 sentences. Command: {{command}}. Respond in {{language}}.",
+    "reviewCommandsSystem": "You are a DevOps security engineer. Analyze each command from the list for risks: data deletion, stopping critical services, irreversible changes, data leaks. For each command, write a brief verdict (safe/risky) and the reason if there are risks. At the end, write an overall conclusion. Respond in {{language}}. Be concise and to the point."
   },
   "errors": {
     "quotaExceeded": "⚠️ Quota exceeded. Resets {{resetsAt}}.",

@@ -19,6 +19,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
+import { QuotaWidget } from '../components/QuotaWidget';
 import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
@@ -4165,6 +4166,7 @@ export function ChatPage() {
             )}
 
             <div className={s.inputArea}>
+              <QuotaWidget variant="compact" />
               {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
               {diceRollEnabled && (
                 <div

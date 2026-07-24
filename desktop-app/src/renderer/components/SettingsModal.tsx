@@ -31,6 +31,7 @@ import { SmartHomeSettings } from './SmartHomeSettings';
 import { MailSettings } from './MailSettings';
 import { PCSettings } from './PCSettings';
 import { LinkTelegramModal } from './LinkTelegramModal';
+import { QuotaWidget } from './QuotaWidget';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 import chatS from '../pages/ChatPage.module.scss';
@@ -1008,6 +1009,13 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
                     {coreMemory.length} / 800
                   </span>
                 </div>
+              </div>
+
+              <div className={s.macroFormDivider} />
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('quota.title')}</label>
+                <QuotaWidget variant="full" />
               </div>
             </div>
           )}

@@ -1543,6 +1543,20 @@ export async function setAttachmentTokenLimit(attachmentMaxTokens: number): Prom
   });
 }
 
+// ---------- Weekly Quota / Budget ----------
+
+export type QuotaInfo = {
+  billing_mode: 'tokens' | 'budget';
+  percent: number;
+  tokens: { used: number; quota: number };
+  cost: { used: number; quota: number };
+  resets_at: number | null;
+};
+
+export async function fetchQuota(): Promise<QuotaInfo> {
+  return apiFetch('/api/v1/account/quota');
+}
+
 // ---------- Chat Attachments (Documents) ----------
 
 export type ChatAttachmentItem = {

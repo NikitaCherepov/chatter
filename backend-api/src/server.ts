@@ -1099,6 +1099,50 @@ app.put('/api/v1/account/core-memory', (req: AuthedRequest, res: any) => {
   return res.json({ ok: true });
 });
 
+// Weekly quota / budget usage for the current user
+app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const row = db.prepare(`
+    SELECT weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
+           weekly_cost_used, weekly_cost_quota
+    FROM users WHERE id = ?
+  `).get(userId) as {
+    weekly_tokens_used: number;
+    weekly_tokens_quota: number;
+    weekly_window_started_at: number;
+    weekly_cost_used: number;
+    weekly_cost_quota: number;
+  } | undefined;
+  if (!row) return res.status(404).json({ error: 'user_not_found' });
+
+  const userPlan = getUserById(userId)?.plan;
+  const planLimitsMap = loadPlanLimitsFromDb();
+  const planLimits = planLimitsMap[userPlan as keyof typeof planLimitsMap] ?? planLimitsMap.free;
+  const isBudget = planLimits.billing_mode === 'budget';
+  const used = isBudget ? row.weekly_cost_used : row.weekly_tokens_used;
+  const quota = isBudget ? row.weekly_cost_quota : row.weekly_tokens_quota;
+  const percent = quota > 0 ? Math.min(100, Math.round((Number(used) || 0) / quota * 100)) : 0;
+
+  const WEEK_SECONDS = 7 * 24 * 60 * 60;
+  const resetsAt = row.weekly_window_started_at > 0
+    ? (row.weekly_window_started_at + WEEK_SECONDS) * 1000
+    : null;
+
+  return res.json({
+    billing_mode: planLimits.billing_mode,
+    percent,
+    tokens: {
+      used: row.weekly_tokens_used,
+      quota: row.weekly_tokens_quota,
+    },
+    cost: {
+      used: row.weekly_cost_used,
+      quota: row.weekly_cost_quota,
+    },
+    resets_at: resetsAt,
+  });
+});
+
 const accountIdFromRequest = (req: AuthedRequest): number => {
   return resolveAccountId(req.authUserId!);
 };
@@ -4435,9 +4479,11 @@ app.post('/api/v1/devops/runbooks/review-commands', async (req: AuthedRequest, r
   }
 
   try {
+    const user = getUserById(userId);
     const cmdList = commands.map((c, i) => `${i + 1}. ${c}`).join('\n');
+    const systemPrompt = translateForLanguage(user?.language, 'confirmations.reviewCommandsSystem', { language: normalizeSupportedLanguage(user?.language) || 'English' });
     const verdict = await callLiteAi(
-      'Ты — DevOps-инженер по безопасности. Проанализируй каждую команду из списка на предмет рисков: удаление данных, остановка критичных сервисов, необратимые изменения, утечка данных. Для каждой команды напиши краткий вердикт (безопасно/рискованно) и причину если есть риски. В конце напиши общий вывод. Отвечай на русском языке кратко и по делу.',
+      systemPrompt,
       cmdList
     );
     return res.json({ verdict });
