@@ -1895,6 +1895,29 @@ async function handleRequest(req, res) {
     }));
   }
 
+  // ── Weekly cost quota: per-user overrides & resets ────────────────────
+  const weeklyCostQuotaMatch = pathname.match(/^\/api\/users\/(\d+)\/weekly-cost-quota$/);
+  if (weeklyCostQuotaMatch && req.method === 'PUT') {
+    const body = await readJson(req);
+    return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users/${weeklyCostQuotaMatch[1]}/weekly-cost-quota`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }));
+  }
+  const resetUserUsageMatch = pathname.match(/^\/api\/users\/(\d+)\/reset-weekly-usage$/);
+  if (resetUserUsageMatch && req.method === 'POST') {
+    return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users/${resetUserUsageMatch[1]}/reset-weekly-usage`, {
+      method: 'POST',
+      body: '{}',
+    }));
+  }
+  if (req.method === 'POST' && pathname === '/api/users/reset-weekly-usage-all') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/users/reset-weekly-usage-all', {
+      method: 'POST',
+      body: '{}',
+    }));
+  }
+
   // ── Model coefficients (token quota multipliers) ───────────────────────
   if (req.method === 'GET' && pathname === '/api/model-coefficients') {
     return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-coefficients'));

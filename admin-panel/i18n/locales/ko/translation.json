@@ -122,12 +122,16 @@
       "quotaId": "할당량 추적용 모델 ID",
       "quotaIdHint": "계수를 조회하는 데 사용되는 안정적인 식별자입니다. 비어 있으면 저장 시 자동으로 생성됩니다.",
       "coefficient": "비용 계수",
-      "coefficientHint": "0 = 무료(할당량 사용 없음), 1 = 기본값, 0.7 = 저렴, 1.5 = 비쌈",
+      "coefficientHint": "1 = 기본값, 0.7 = 저렴, 1.5 = 비쌈",
       "apiKey": "API 키",
       "apiKeyHint": "비워두면 현재 키를 유지합니다",
       "apiKeyPlaceholderExisting": "비워두면 변경되지 않습니다",
       "apiKeyPlaceholderNew": "API 키 붙여넣기",
-      "providerKind": "API 제공자"
+      "providerKind": "API 제공자",
+      "isFree": "무료 모델",
+      "isFreeHint": "활성화하면 모델이 할당량(토큰이나 예산($))을 소비하지 않으며 지출 금액에 포함되지 않습니다.",
+      "isFreeOn": "무료: 예",
+      "isFreeOff": "무료: 아니요"
     },
     "billing": {
       "customProvider": "사용자 정의",
@@ -463,7 +467,14 @@
         },
         "free": "무료",
         "aborted": "중단됨",
-        "freeTooltip": "무료 모델"
+        "freeTooltip": "무료 모델",
+        "weeklyCost": "$/주",
+        "resetUsage": "주간 사용량 초기화",
+        "resetUsageHint": "이 사용자의 주간 카운터를 초기화합니다.",
+        "resetUsageConfirm": "이 사용자의 주간 사용량을 초기화하시겠습니까?",
+        "resetting": "초기화 중...",
+        "resetDone": "주간 사용량이 초기화되었습니다.",
+        "resetError": "재설정 실패: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "메모리",
@@ -678,7 +689,9 @@
       "description": "모든 현재 사용자에게 제한 적용",
       "saving": "저장 중…",
       "saveLimits": "제한 저장",
-      "syncAll": "모든 사용자에게 동기화"
+      "syncAll": "모든 사용자에게 동기화",
+      "resetUsage": "모든 사용자의 주간 한도 재설정",
+      "resettingUsage": "재설정 중..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "프로",
         "hint": "프리미엄 구독"
       }
-    }
+    },
+    "billingModeToggle": "결제 모드: {{mode}}",
+    "billingMode": {
+      "tokens": "토큰",
+      "budget": "예산",
+      "tokensHint": "캐시 없이 절대 토큰 수로 계산됩니다. 모델은 지정된 계수에 따라 한도를 소비합니다.",
+      "budgetHint": "실제 비용($)으로 계산됩니다. 캐시는 저렴하고, 비싼 모델은 더 많이 소비합니다."
+    },
+    "budgetLabel": "월 예산 ($)",
+    "budgetHint": "주당 ~{{weekly}}. 0 = 할당량 없음.",
+    "subscriptionPriceLabel": "구독 가격 ($)",
+    "subscriptionPriceHint": "참고용이며 결제는 없습니다.",
+    "resetUsageConfirm": "모든 사용자의 주간 사용량을 초기화하시겠습니까?",
+    "resetting": "초기화 중...",
+    "resetUsageDone": "초기화 완료: {{count}}명의 사용자가 업데이트되었습니다."
   },
   "nav": {
     "overview": "개요",

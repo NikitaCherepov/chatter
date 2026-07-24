@@ -122,12 +122,16 @@
       "quotaId": "ID do modelo para rastreamento de cota",
       "quotaIdHint": "Identificador estável usado para consultar o coeficiente. Se vazio, gerado automaticamente ao salvar.",
       "coefficient": "Coeficiente de custo",
-      "coefficientHint": "0 = gratuito (sem uso de cota), 1 = padrão, 0,7 = mais barato, 1,5 = mais caro",
+      "coefficientHint": "1 = padrão, 0,7 = mais barato, 1,5 = mais caro",
       "apiKey": "Chave da API",
       "apiKeyHint": "Deixe em branco para manter a chave atual",
       "apiKeyPlaceholderExisting": "Deixe em branco para manter inalterado",
       "apiKeyPlaceholderNew": "Cole a chave da API",
-      "providerKind": "Provedor de API"
+      "providerKind": "Provedor de API",
+      "isFree": "Modelo gratuito",
+      "isFreeHint": "Se ativado, o modelo não consome nenhuma cota (nem tokens nem orçamento em $) e não é contabilizado no dinheiro gasto.",
+      "isFreeOn": "Gratuito: sim",
+      "isFreeOff": "Gratuito: não"
     },
     "billing": {
       "customProvider": "Personalizado",
@@ -463,7 +467,14 @@
         },
         "free": "gratuito",
         "aborted": "abortado",
-        "freeTooltip": "modelo gratuito"
+        "freeTooltip": "modelo gratuito",
+        "weeklyCost": "$ por semana",
+        "resetUsage": "Redefinir uso semanal",
+        "resetUsageHint": "Redefinir os contadores semanais deste usuário",
+        "resetUsageConfirm": "Redefinir uso semanal para este usuário?",
+        "resetting": "Redefinindo...",
+        "resetDone": "Uso semanal redefinido.",
+        "resetError": "Falha ao redefinir: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Memória",
@@ -678,7 +689,9 @@
       "description": "Aplicar limites a todos os usuários atuais",
       "saving": "Salvando…",
       "saveLimits": "Salvar limites",
-      "syncAll": "Sincronizar para todos os usuários"
+      "syncAll": "Sincronizar para todos os usuários",
+      "resetUsage": "Redefinir limites semanais para todos",
+      "resettingUsage": "Redefinindo..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "Pro",
         "hint": "Assinatura Premium"
       }
-    }
+    },
+    "billingModeToggle": "Faturamento: {{mode}}",
+    "billingMode": {
+      "tokens": "Tokens",
+      "budget": "Orçamento",
+      "tokensHint": "Contado por tokens absolutos sem cache. Modelos consomem limite com base no coeficiente especificado.",
+      "budgetHint": "Contado pelo custo real em $. Cache é mais barato, modelos caros consomem mais."
+    },
+    "budgetLabel": "Orçamento mensal ($)",
+    "budgetHint": "~{{weekly}} por semana. 0 = sem cota.",
+    "subscriptionPriceLabel": "Preço da assinatura ($)",
+    "subscriptionPriceHint": "Apenas para informação, sem pagamento.",
+    "resetUsageConfirm": "Redefinir uso semanal para TODOS os usuários?",
+    "resetting": "Redefinindo...",
+    "resetUsageDone": "Redefinição concluída: {{count}} usuários atualizados."
   },
   "nav": {
     "overview": "Visão Geral",

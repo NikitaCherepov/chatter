@@ -127,12 +127,16 @@
       "quotaId": "Kota takibi için model kimliği",
       "quotaIdHint": "Katsayıyı aramak için kullanılan sabit tanımlayıcı. Boş bırakılırsa, kaydedildiğinde otomatik olarak oluşturulur.",
       "coefficient": "Maliyet katsayısı",
-      "coefficientHint": "0 = ücretsiz (kota kullanımı yok), 1 = varsayılan, 0.7 = daha ucuz, 1.5 = daha pahalı",
+      "coefficientHint": "1 = varsayılan, 0.7 = daha ucuz, 1.5 = daha pahalı",
       "apiKey": "API anahtarı",
       "apiKeyHint": "Mevcut anahtarı korumak için boş bırakın",
       "apiKeyPlaceholderExisting": "Değiştirmeden bırakmak için boş bırakın",
       "apiKeyPlaceholderNew": "API anahtarını yapıştırın",
-      "providerKind": "API sağlayıcı"
+      "providerKind": "API sağlayıcı",
+      "isFree": "Ücretsiz model",
+      "isFreeHint": "Etkinleştirilirse, model herhangi bir kota tüketmez (ne token ne de $ cinsinden bütçe) ve harcanan paraya dahil edilmez.",
+      "isFreeOn": "Ücretsiz: evet",
+      "isFreeOff": "Ücretsiz: hayır"
     },
     "billing": {
       "customProvider": "Özel",
@@ -448,7 +452,14 @@
         },
         "free": "ücretsiz",
         "aborted": "iptal edildi",
-        "freeTooltip": "ücretsiz model"
+        "freeTooltip": "ücretsiz model",
+        "weeklyCost": "$/hafta",
+        "resetUsage": "Haftalık kullanımı sıfırla",
+        "resetUsageHint": "Bu kullanıcının haftalık sayaçlarını sıfırla",
+        "resetUsageConfirm": "Bu kullanıcı için haftalık kullanım sıfırlansın mı?",
+        "resetting": "Sıfırlanıyor...",
+        "resetDone": "Haftalık kullanım sıfırlandı.",
+        "resetError": "Sıfırlama başarısız: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Bellek",
@@ -663,7 +674,9 @@
       "description": "Tüm mevcut kullanıcılara sınırlamaları uygula",
       "saving": "Kaydediliyor…",
       "saveLimits": "Sınırlamaları kaydet",
-      "syncAll": "Tüm kullanıcılarla senkronize et"
+      "syncAll": "Tüm kullanıcılarla senkronize et",
+      "resetUsage": "Tümü için haftalık limitleri sıfırla",
+      "resettingUsage": "Sıfırlanıyor..."
     },
     "plans": {
       "free": {
@@ -678,7 +691,21 @@
         "label": "Pro",
         "hint": "Premium abonelik"
       }
-    }
+    },
+    "billingModeToggle": "Faturalandırma: {{mode}}",
+    "billingMode": {
+      "tokens": "Token",
+      "budget": "Bütçe",
+      "tokensHint": "Önbellek olmadan mutlak token sayısına göre sayılır. Modeller, belirtilen katsayıya göre limit tüketir.",
+      "budgetHint": "Gerçek maliyete ($) göre sayılır. Önbellek daha ucuzdur, pahalı modeller daha fazla tüketir."
+    },
+    "budgetLabel": "Aylık bütçe ($)",
+    "budgetHint": "Haftada ~{{weekly}}. 0 = kota yok.",
+    "subscriptionPriceLabel": "Abonelik fiyatı ($)",
+    "subscriptionPriceHint": "Yalnızca bilgi amaçlıdır, ödeme yok.",
+    "resetUsageConfirm": "TÜM kullanıcılar için haftalık kullanım sıfırlansın mı?",
+    "resetting": "Sıfırlanıyor...",
+    "resetUsageDone": "Sıfırlama tamamlandı: {{count}} kullanıcı güncellendi."
   },
   "nav": {
     "overview": "Genel Bakış",

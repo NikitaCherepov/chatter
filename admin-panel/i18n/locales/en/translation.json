@@ -54,18 +54,18 @@
       "restart": "Restart {{name}}",
       "stop": "Stop {{name}}",
       "start": "Start {{name}}",
-      "running": "running\u2026",
+      "running": "running…",
       "notRunning": "not running"
     }
   },
   "common": {
     "saved": "saved",
     "notSet": "not set",
-    "saving": "Applying\u2026",
+    "saving": "Applying…",
     "saveAndApply": "Save and apply",
     "error": "Error",
     "sectionReady": "Section ready",
-    "savingSettings": "Saving settings and starting containers\u2026",
+    "savingSettings": "Saving settings and starting containers…",
     "settingsApplied": "Settings applied.",
     "changedRelogin": "Changed. Log in again.",
     "coefficientLoadError": "Failed to load coefficients",
@@ -128,11 +128,15 @@
       "quotaId": "Model ID for quota tracking",
       "quotaIdHint": "Stable identifier used to look up the coefficient. If empty, generated automatically on save.",
       "coefficient": "Cost coefficient",
-      "coefficientHint": "0 = free (no quota usage), 1 = default, 0.7 = cheaper, 1.5 = more expensive",
+      "coefficientHint": "0.7 = cheaper, 1.5 = more expensive",
       "apiKey": "API key",
       "apiKeyHint": "Leave empty to keep the current key",
       "apiKeyPlaceholderExisting": "Leave empty to keep unchanged",
-      "apiKeyPlaceholderNew": "Paste API key"
+      "apiKeyPlaceholderNew": "Paste API key",
+      "isFree": "Free model",
+      "isFreeHint": "If enabled, the model does not consume any quota (neither tokens nor budget in $) and is not counted in spent money.",
+      "isFreeOn": "Free: yes",
+      "isFreeOff": "Free: no"
     },
     "billing": {
       "customProvider": "Custom",
@@ -249,7 +253,7 @@
       "qualityHint": "Higher quality means more expensive generation",
       "parametersHint": "Check the model to configure supported parameters.",
       "checkButton": "Check",
-      "checking": "Checking\u2026",
+      "checking": "Checking…",
       "checkError": "Failed to check model",
       "capabilityResolution": "resolution",
       "capabilityQuality": "quality",
@@ -448,7 +452,14 @@
         },
         "free": "free",
         "aborted": "aborted",
-        "freeTooltip": "free model"
+        "freeTooltip": "free model",
+        "weeklyCost": "$ per week",
+        "resetUsage": "Reset weekly usage",
+        "resetUsageHint": "Reset this user's weekly counters",
+        "resetUsageConfirm": "Reset weekly usage for this user?",
+        "resetting": "Resetting...",
+        "resetDone": "Weekly usage reset.",
+        "resetError": "Reset failed: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Memory",
@@ -472,7 +483,7 @@
   },
   "system": {
     "dataFrom": "Data from Chatter Manager",
-    "updating": "Updating data\u2026",
+    "updating": "Updating data…",
     "refresh": "Refresh",
     "serverStatus": {
       "title": "Server Status",
@@ -499,7 +510,7 @@
       "last24h": "24h",
       "last3days": "3 days",
       "last7days": "7 days",
-      "loading": "Loading metrics\u2026",
+      "loading": "Loading metrics…",
       "noData": "No metrics data yet. The chart will appear after the first minute."
     },
     "backups": {
@@ -525,20 +536,20 @@
       "includeConfigHint": "API keys and service settings. Keep this archive in a safe place",
       "importButton": "Import",
       "importing": "Uploading {{percent}}%",
-      "verifying": "Verifying\u2026",
+      "verifying": "Verifying…",
       "createBackup": "Create backup",
-      "creating": "Creating\u2026",
-      "creatingDb": "Creating a database snapshot\u2026",
-      "creatingDbAndFiles": "Creating a database and files archive\u2026",
+      "creating": "Creating…",
+      "creatingDb": "Creating a database snapshot…",
+      "creatingDbAndFiles": "Creating a database and files archive…",
       "created": "Backup created.",
-      "deleting": "Deleting backup\u2026",
+      "deleting": "Deleting backup…",
       "deleteConfirm": "Delete backup {{name}}?",
       "deleted": "Backup deleted.",
       "uploading": "Uploading {{name}}: {{percent}}% ({{loaded}} of {{total}})",
-      "uploaded": "File uploaded. The server is checking and importing the archive\u2026",
+      "uploaded": "File uploaded. The server is checking and importing the archive…",
       "imported": "File imported. It can now be restored.",
       "restoreConfirm": "Restore {{name}}? Services will be briefly stopped, and current data will be automatically backed up.",
-      "restoring": "Checking the archive, creating a safety backup, and restoring data\u2026",
+      "restoring": "Checking the archive, creating a safety backup, and restoring data…",
       "restored": "Data restored, services running.",
       "restoreError": "Restore error: {{message}}"
     },
@@ -554,14 +565,14 @@
       "includeFilesHint": "By default, auto-backup only saves the database",
       "lastRun": "Last run: {{time}}",
       "neverRun": "Auto-backups have not run yet",
-      "saving": "Saving\u2026",
+      "saving": "Saving…",
       "saveSchedule": "Save schedule",
       "saved": "Schedule saved."
     },
     "update": {
       "title": "Server Update",
       "description": "Only Docker images of server services are checked. Desktop is not affected.",
-      "checking": "Checking\u2026",
+      "checking": "Checking…",
       "check": "Check",
       "checkFailed": "Check failed",
       "unavailable": "Unavailable locally",
@@ -571,29 +582,29 @@
       "installedBuild": "Installed build",
       "latestBuild": "Latest build",
       "updateDockerOnly": "Update is only available for server installations running on latest Docker images.",
-      "checkHint": "\u201cCheck\u201d downloads images but does not restart services.",
+      "checkHint": "“Check” downloads images but does not restart services.",
       "updateButton": "Update server",
-      "updating": "Updating\u2026",
-      "fetchingInfo": "Downloading info about fresh server images\u2026",
+      "updating": "Updating…",
+      "fetchingInfo": "Downloading info about fresh server images…",
       "found": "New server images found.",
       "alreadyFresh": "Server is already using fresh images.",
       "checkError": "Check error: {{message}}",
-      "starting": "Starting update\u2026",
+      "starting": "Starting update…",
       "updateError": "Update error: {{message}}",
       "changes": {
         "services": "Services",
         "changed": "Changed: {{services}}",
         "rebuiltFromSame": "Images rebuilt from the same commit.",
-        "whatsNew": "What\u2019s new",
+        "whatsNew": "What’s new",
         "autoBackup": "A database backup will be created automatically before restart.",
         "cancel": "Cancel",
-        "updating": "Starting\u2026",
+        "updating": "Starting…",
         "confirm": "Update server"
       },
       "stages": {
-        "queued": "Update starting\u2026",
-        "backup": "Creating database backup\u2026",
-        "restarting": "Restarting server services. The panel will briefly disconnect\u2026",
+        "queued": "Update starting…",
+        "backup": "Creating database backup…",
+        "restarting": "Restarting server services. The panel will briefly disconnect…",
         "complete": "Server updated.",
         "failed": "Update failed."
       }
@@ -614,10 +625,10 @@
     "pause": "Pause",
     "clear": "Clear",
     "download": "Download",
-    "waiting": "Waiting for log lines\u2026",
+    "waiting": "Waiting for log lines…",
     "paused": "Output paused",
     "streamError": "Log stream ended with an error",
-    "noConnection": "No connection to log stream. Retrying\u2026"
+    "noConnection": "No connection to log stream. Retrying…"
   },
   "accessKeys": {
     "titleNew": "New key",
@@ -626,7 +637,7 @@
     "namePlaceholder": "e.g. friends or family",
     "serverUrlLabel": "Backend URL",
     "createButton": "Create key",
-    "creating": "Creating\u2026",
+    "creating": "Creating…",
     "copyLink": "Copy link",
     "linkCopied": "Link copied.",
     "issuedKeys": "Issued keys",
@@ -639,7 +650,7 @@
     },
     "revoked": "revoked",
     "revoke": "Revoke",
-    "confirmRevoke": "Revoke key \u00ab{{name}}\u00bb?",
+    "confirmRevoke": "Revoke key «{{name}}»?",
     "keyCreated": "Key created. The full value is only shown now.",
     "keyRevoked": "Key revoked. JWTs issued through it are no longer valid.",
     "emptyState": "No keys yet. Old login remains available until the first key is created.",
@@ -647,9 +658,9 @@
   },
   "planLimits": {
     "loadError": "Failed to load limits: {{message}}",
-    "saved": "Limits saved. New subscriptions will get updated values automatically. Click \u00abSynchronize\u00bb for existing users.",
+    "saved": "Limits saved. New subscriptions will get updated values automatically. Click «Synchronize» for existing users.",
     "syncConfirm": "Apply current limits to all existing users? This updates daily_web_search_limit, daily_image_gen_limit, max_context_tokens and weekly_tokens_quota.",
-    "syncing": "Synchronizing\u2026",
+    "syncing": "Synchronizing…",
     "synced": "Limits synchronized for all users.",
     "planTitle": "Plan: {{label}}",
     "weeklyQuotaLabel": "Weekly token quota",
@@ -661,15 +672,40 @@
     "actions": {
       "title": "Actions",
       "description": "Apply limits to all current users",
-      "saving": "Saving\u2026",
+      "saving": "Saving…",
       "saveLimits": "Save limits",
-      "syncAll": "Synchronize to all users"
+      "syncAll": "Synchronize to all users",
+      "resetUsage": "Reset weekly limits for all",
+      "resettingUsage": "Resetting..."
     },
     "plans": {
-      "free": { "label": "Free", "hint": "Basic users without a subscription" },
-      "standart": { "label": "Standart", "hint": "Standard subscription" },
-      "pro": { "label": "Pro", "hint": "Premium subscription" }
-    }
+      "free": {
+        "label": "Free",
+        "hint": "Basic users without a subscription"
+      },
+      "standart": {
+        "label": "Standart",
+        "hint": "Standard subscription"
+      },
+      "pro": {
+        "label": "Pro",
+        "hint": "Premium subscription"
+      }
+    },
+    "billingModeToggle": "Billing: {{mode}}",
+    "billingMode": {
+      "tokens": "Tokens",
+      "budget": "Budget",
+      "tokensHint": "Counted by absolute tokens without cache. Models consume limit based on the specified coefficient.",
+      "budgetHint": "Counted by actual cost in $. Cache is cheaper, expensive models consume more."
+    },
+    "budgetLabel": "Monthly budget ($)",
+    "budgetHint": "~{{weekly}} per week. 0 = no quota.",
+    "subscriptionPriceLabel": "Subscription price ($)",
+    "subscriptionPriceHint": "For information only, no payment.",
+    "resetUsageConfirm": "Reset weekly usage for ALL users?",
+    "resetting": "Resetting...",
+    "resetUsageDone": "Reset done: {{count}} users updated."
   },
   "nav": {
     "overview": "Overview",

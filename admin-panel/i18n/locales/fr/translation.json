@@ -122,12 +122,16 @@
       "quotaId": "ID du modèle pour le suivi des quotas",
       "quotaIdHint": "Identifiant stable utilisé pour rechercher le coefficient. Si vide, généré automatiquement lors de l'enregistrement.",
       "coefficient": "Coefficient de coût",
-      "coefficientHint": "0 = gratuit (pas d'utilisation de quota), 1 = par défaut, 0.7 = moins cher, 1.5 = plus cher",
+      "coefficientHint": "1 = par défaut, 0.7 = moins cher, 1.5 = plus cher",
       "apiKey": "Clé API",
       "apiKeyHint": "Laissez vide pour conserver la clé actuelle",
       "apiKeyPlaceholderExisting": "Laissez vide pour ne pas modifier",
       "apiKeyPlaceholderNew": "Collez la clé API",
-      "providerKind": "Fournisseur d'API"
+      "providerKind": "Fournisseur d'API",
+      "isFree": "Modèle gratuit",
+      "isFreeHint": "Si activé, le modèle ne consomme aucun quota (ni jetons ni budget en $) et n'est pas compté dans les dépenses.",
+      "isFreeOn": "Gratuit : oui",
+      "isFreeOff": "Gratuit : non"
     },
     "billing": {
       "customProvider": "Personnalisé",
@@ -463,7 +467,14 @@
         },
         "free": "gratuit",
         "aborted": "annulé",
-        "freeTooltip": "modèle gratuit"
+        "freeTooltip": "modèle gratuit",
+        "weeklyCost": "$ par semaine",
+        "resetUsage": "Réinitialiser l'utilisation hebdomadaire",
+        "resetUsageHint": "Réinitialiser les compteurs hebdomadaires de cet utilisateur",
+        "resetUsageConfirm": "Réinitialiser l'utilisation hebdomadaire pour cet utilisateur ?",
+        "resetting": "Réinitialisation...",
+        "resetDone": "Utilisation hebdomadaire réinitialisée.",
+        "resetError": "Échec de la réinitialisation : {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Mémoire",
@@ -678,7 +689,9 @@
       "description": "Appliquer des limites à tous les utilisateurs actuels",
       "saving": "Enregistrement…",
       "saveLimits": "Enregistrer les limites",
-      "syncAll": "Synchroniser avec tous les utilisateurs"
+      "syncAll": "Synchroniser avec tous les utilisateurs",
+      "resetUsage": "Réinitialiser les limites hebdomadaires pour tous",
+      "resettingUsage": "Réinitialisation..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "Pro",
         "hint": "Abonnement Premium"
       }
-    }
+    },
+    "billingModeToggle": "Facturation : {{mode}}",
+    "billingMode": {
+      "tokens": "Jetons",
+      "budget": "Budget",
+      "tokensHint": "Compté en jetons absolus sans cache. Les modèles consomment la limite selon le coefficient spécifié.",
+      "budgetHint": "Compté en coût réel en $. Le cache est moins cher, les modèles coûteux consomment plus."
+    },
+    "budgetLabel": "Budget mensuel ($)",
+    "budgetHint": "~{{weekly}} par semaine. 0 = pas de quota.",
+    "subscriptionPriceLabel": "Prix de l'abonnement ($)",
+    "subscriptionPriceHint": "À titre indicatif, aucun paiement.",
+    "resetUsageConfirm": "Réinitialiser l'utilisation hebdomadaire pour TOUS les utilisateurs ?",
+    "resetting": "Réinitialisation...",
+    "resetUsageDone": "Réinitialisation terminée : {{count}} utilisateurs mis à jour."
   },
   "nav": {
     "overview": "Aperçu",

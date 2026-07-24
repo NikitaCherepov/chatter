@@ -219,8 +219,14 @@ select {
   background: var(--bg-primary);
   color: var(--text-secondary);
 }
+.buttonDanger {
+  border: 1px solid var(--color-error);
+  background: var(--color-error);
+  color: #ffffff;
+}
 .buttonPrimary,
-.buttonSecondary {
+.buttonSecondary,
+.buttonDanger {
   white-space: nowrap;
 }
 .emptyInline {

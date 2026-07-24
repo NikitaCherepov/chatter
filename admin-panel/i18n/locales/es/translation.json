@@ -122,12 +122,16 @@
       "quotaId": "ID del modelo para seguimiento de cuota",
       "quotaIdHint": "Identificador estable utilizado para buscar el coeficiente. Si está vacío, se genera automáticamente al guardar.",
       "coefficient": "Coeficiente de costo",
-      "coefficientHint": "0 = gratis (sin uso de cuota), 1 = predeterminado, 0.7 = más barato, 1.5 = más caro",
+      "coefficientHint": "1 = predeterminado, 0.7 = más barato, 1.5 = más caro",
       "apiKey": "Clave API",
       "apiKeyHint": "Dejar vacío para mantener la clave actual",
       "apiKeyPlaceholderExisting": "Dejar vacío para no modificar",
       "apiKeyPlaceholderNew": "Pegar clave API",
-      "providerKind": "Proveedor de API"
+      "providerKind": "Proveedor de API",
+      "isFree": "Modelo gratuito",
+      "isFreeHint": "Si está habilitado, el modelo no consume cuota (ni tokens ni presupuesto en $) y no se contabiliza en el dinero gastado.",
+      "isFreeOn": "Gratuito: sí",
+      "isFreeOff": "Gratuito: no"
     },
     "billing": {
       "customProvider": "Personalizado",
@@ -463,7 +467,14 @@
         },
         "free": "gratuito",
         "aborted": "abortado",
-        "freeTooltip": "modelo gratuito"
+        "freeTooltip": "modelo gratuito",
+        "weeklyCost": "$ por semana",
+        "resetUsage": "Restablecer uso semanal",
+        "resetUsageHint": "Restablecer los contadores semanales de este usuario",
+        "resetUsageConfirm": "¿Restablecer el uso semanal de este usuario?",
+        "resetting": "Restableciendo...",
+        "resetDone": "Uso semanal restablecido.",
+        "resetError": "Error al restablecer: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Memoria",
@@ -678,7 +689,9 @@
       "description": "Aplicar límites a todos los usuarios actuales",
       "saving": "Guardando…",
       "saveLimits": "Guardar límites",
-      "syncAll": "Sincronizar con todos los usuarios"
+      "syncAll": "Sincronizar con todos los usuarios",
+      "resetUsage": "Restablecer límites semanales para todos",
+      "resettingUsage": "Restableciendo..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "Pro",
         "hint": "Suscripción Premium"
       }
-    }
+    },
+    "billingModeToggle": "Facturación: {{mode}}",
+    "billingMode": {
+      "tokens": "Tokens",
+      "budget": "Presupuesto",
+      "tokensHint": "Contado por tokens absolutos sin caché. Los modelos consumen límite según el coeficiente especificado.",
+      "budgetHint": "Contado por costo real en $. La caché es más barata, los modelos caros consumen más."
+    },
+    "budgetLabel": "Presupuesto mensual ($)",
+    "budgetHint": "~{{weekly}} por semana. 0 = sin cuota.",
+    "subscriptionPriceLabel": "Precio de suscripción ($)",
+    "subscriptionPriceHint": "Solo para información, sin pago.",
+    "resetUsageConfirm": "¿Restablecer el uso semanal de TODOS los usuarios?",
+    "resetting": "Restableciendo...",
+    "resetUsageDone": "Restablecimiento completado: {{count}} usuarios actualizados."
   },
   "nav": {
     "overview": "Resumen",

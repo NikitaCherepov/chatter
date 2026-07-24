@@ -29,6 +29,9 @@ type UserDetail = {
   weekly_tokens_used: number;
   weekly_tokens_quota: number;
   weekly_window_started_at: number;
+  weekly_cost_used: number;
+  weekly_cost_quota: number;
+  weekly_cost_quota_limit: number;
   daily_web_search_count: number;
   daily_web_search_limit: number;
   total_web_search_count: number;
@@ -101,7 +104,12 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
   useEffect(() => {
     void loadUser();
     const timer = window.setInterval(() => void loadUser(true), 10_000);
-    return () => window.clearInterval(timer);
+    const reloadHandler = () => void loadUser(true);
+    window.addEventListener('user-detail-reload', reloadHandler);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('user-detail-reload', reloadHandler);
+    };
   }, [loadUser]);
 
   const connections = useMemo(() => {
@@ -306,7 +314,13 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         <div className={styles.statsGrid}>{stats.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
       </Card>
 
-      <UsageByModelCard userId={user.id} quotaUsed={user.weekly_tokens_used} quotaTotal={user.weekly_tokens_quota} />
+      <UsageByModelCard
+        userId={user.id}
+        quotaUsed={user.weekly_tokens_used}
+        quotaTotal={user.weekly_tokens_quota}
+        costUsed={user.weekly_cost_used}
+        costQuota={user.weekly_cost_quota}
+      />
 
       <Card title={t('users.detail.contextLimits.title')} description={t('users.detail.contextLimits.description')}>
         <div className={styles.statsGrid}>
@@ -396,7 +410,13 @@ function UsageDonut({ percent }: { percent: number }) {
   );
 }
 
-function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; quotaUsed: number; quotaTotal: number }) {
+function UsageByModelCard({ userId, quotaUsed, quotaTotal, costUsed, costQuota }: {
+  userId: number;
+  quotaUsed: number;
+  quotaTotal: number;
+  costUsed: number;
+  costQuota: number;
+}) {
   const { t } = useTranslation();
   const routeLabels: Record<string, string> = {
     'manual': 'Manual',
@@ -408,6 +428,8 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
   };
   const [rows, setRows] = useState<UsageByModelRow[] | null>(null);
   const [error, setError] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetState, setResetState] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -427,8 +449,36 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
 
   const percent = quotaTotal > 0 ? Math.min(100, Math.round((quotaUsed || 0) / quotaTotal * 100)) : 0;
 
+  async function resetWeeklyUsage() {
+    if (!window.confirm(t('users.detail.modelUsage.resetUsageConfirm'))) return;
+    setResetting(true);
+    setResetState(t('users.detail.modelUsage.resetting'));
+    try {
+      await api(`/api/users/${userId}/reset-weekly-usage`, { method: 'POST', body: '{}' });
+      setResetState(t('users.detail.modelUsage.resetDone'));
+      // Reload user data to reflect zeroed counters
+      window.dispatchEvent(new CustomEvent('user-detail-reload'));
+    } catch (err) {
+      setResetState(t('users.detail.modelUsage.resetError', { error: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  const resetAside = (
+    <button
+      type="button"
+      className="buttonDanger"
+      onClick={() => void resetWeeklyUsage()}
+      disabled={resetting}
+      title={t('users.detail.modelUsage.resetUsageHint')}
+    >
+      {resetting ? t('users.detail.modelUsage.resetting') : t('users.detail.modelUsage.resetUsage')}
+    </button>
+  );
+
   return (
-    <Card title={t('users.detail.modelUsage.title')} description={t('users.detail.modelUsage.description')}>
+    <Card title={t('users.detail.modelUsage.title')} description={t('users.detail.modelUsage.description')} aside={resetAside}>
       <div className={styles.usageRow}>
         <div className={styles.usageDonut}>
           <UsageDonut percent={percent} />
@@ -437,6 +487,15 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
             <small>{t('users.detail.modelUsage.conditionalUnits')}</small>
           </div>
         </div>
+        {costQuota > 0 && (
+          <div className={styles.usageDonut}>
+            <UsageDonut percent={Math.min(100, Math.round((costUsed || 0) / costQuota * 100))} />
+            <div className={styles.usageDonutCaption}>
+              <strong>{formatCostUsd(costUsed || 0)} / {formatCostUsd(costQuota)}</strong>
+              <small>{t('users.detail.modelUsage.weeklyCost')}</small>
+            </div>
+          </div>
+        )}
         <div className={styles.usageTableWrap}>
           {error && <div className={styles.error}>{t('users.detail.modelUsage.loadError', { error })}</div>}
           {!rows && !error && <div className={styles.loading}>{t('users.detail.modelUsage.loading')}</div>}
@@ -465,6 +524,7 @@ function UsageByModelCard({ userId, quotaUsed, quotaTotal }: { userId: number; q
           )}
         </div>
       </div>
+      {resetState && <p className={styles.actionState}>{resetState}</p>}
     </Card>
   );
 }

@@ -21,6 +21,7 @@ export type ModelOverrideData = {
   pricingSource: string | null;
   pricingUpdatedAt: number | null;
   selectedApiKeyId: number | null;
+  isFree: boolean;
 };
 
 export type ManualModelConfig = ProviderModelConfig & {

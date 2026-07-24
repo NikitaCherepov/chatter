@@ -122,12 +122,16 @@
       "quotaId": "Modell-ID für Kontingentverfolgung",
       "quotaIdHint": "Stabile Kennung zur Suche des Koeffizienten. Wenn leer, wird beim Speichern automatisch generiert.",
       "coefficient": "Kostenkoeffizient",
-      "coefficientHint": "0 = kostenlos (keine Kontingentnutzung), 1 = Standard, 0,7 = günstiger, 1,5 = teurer",
+      "coefficientHint": "1 = Standard, 0,7 = günstiger, 1,5 = teurer",
       "apiKey": "API-Schlüssel",
       "apiKeyHint": "Leer lassen, um den aktuellen Schlüssel zu behalten",
       "apiKeyPlaceholderExisting": "Leer lassen, um unverändert zu lassen",
       "apiKeyPlaceholderNew": "API-Schlüssel einfügen",
-      "providerKind": "API-Anbieter"
+      "providerKind": "API-Anbieter",
+      "isFree": "Kostenloses Modell",
+      "isFreeHint": "Wenn aktiviert, verbraucht das Modell kein Kontingent (weder Tokens noch Budget in $) und wird nicht in den Ausgaben gezählt.",
+      "isFreeOn": "Kostenlos: ja",
+      "isFreeOff": "Kostenlos: nein"
     },
     "billing": {
       "customProvider": "Benutzerdefiniert",
@@ -463,7 +467,14 @@
         },
         "free": "kostenlos",
         "aborted": "abgebrochen",
-        "freeTooltip": "kostenloses Modell"
+        "freeTooltip": "kostenloses Modell",
+        "weeklyCost": "$ pro Woche",
+        "resetUsage": "Wöchentliche Nutzung zurücksetzen",
+        "resetUsageHint": "Setzt die wöchentlichen Zähler dieses Benutzers zurück",
+        "resetUsageConfirm": "Wöchentliche Nutzung für diesen Benutzer zurücksetzen?",
+        "resetting": "Wird zurückgesetzt...",
+        "resetDone": "Wöchentliche Nutzung zurückgesetzt.",
+        "resetError": "Zurücksetzen fehlgeschlagen: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Speicher",
@@ -678,7 +689,9 @@
       "description": "Limits für alle aktuellen Benutzer anwenden",
       "saving": "Speichern…",
       "saveLimits": "Limits speichern",
-      "syncAll": "Mit allen Benutzern synchronisieren"
+      "syncAll": "Mit allen Benutzern synchronisieren",
+      "resetUsage": "Wöchentliche Limits für alle zurücksetzen",
+      "resettingUsage": "Wird zurückgesetzt..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "Pro",
         "hint": "Premium-Abonnement"
       }
-    }
+    },
+    "billingModeToggle": "Abrechnung: {{mode}}",
+    "billingMode": {
+      "tokens": "Tokens",
+      "budget": "Budget",
+      "tokensHint": "Zählt absolute Tokens ohne Cache. Modelle verbrauchen Limit basierend auf dem angegebenen Koeffizienten.",
+      "budgetHint": "Zählt tatsächliche Kosten in $. Cache ist günstiger, teure Modelle verbrauchen mehr."
+    },
+    "budgetLabel": "Monatsbudget ($)",
+    "budgetHint": "~{{weekly}} pro Woche. 0 = kein Kontingent.",
+    "subscriptionPriceLabel": "Abonnementpreis ($)",
+    "subscriptionPriceHint": "Nur zur Information, keine Zahlung.",
+    "resetUsageConfirm": "Wöchentliche Nutzung für ALLE Benutzer zurücksetzen?",
+    "resetting": "Wird zurückgesetzt...",
+    "resetUsageDone": "Zurücksetzen abgeschlossen: {{count}} Benutzer aktualisiert."
   },
   "nav": {
     "overview": "Übersicht",

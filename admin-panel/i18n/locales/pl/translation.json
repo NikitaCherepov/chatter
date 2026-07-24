@@ -122,12 +122,16 @@
       "quotaId": "ID modelu do śledzenia limitów",
       "quotaIdHint": "Stały identyfikator używany do wyszukiwania współczynnika. Jeśli pusty, generowany automatycznie przy zapisie.",
       "coefficient": "Współczynnik kosztu",
-      "coefficientHint": "0 = darmowe (brak użycia limitu), 1 = domyślne, 0,7 = tańsze, 1,5 = droższe",
+      "coefficientHint": "1 = domyślne, 0,7 = tańsze, 1,5 = droższe",
       "apiKey": "Klucz API",
       "apiKeyHint": "Pozostaw puste, aby zachować obecny klucz",
       "apiKeyPlaceholderExisting": "Pozostaw puste, aby nie zmieniać",
       "apiKeyPlaceholderNew": "Wklej klucz API",
-      "providerKind": "Dostawca API"
+      "providerKind": "Dostawca API",
+      "isFree": "Darmowy model",
+      "isFreeHint": "Jeśli włączone, model nie zużywa żadnego limitu (ani tokenów, ani budżetu w $) i nie jest liczony do wydanych pieniędzy.",
+      "isFreeOn": "Darmowy: tak",
+      "isFreeOff": "Darmowy: nie"
     },
     "billing": {
       "customProvider": "Niestandardowy",
@@ -463,7 +467,14 @@
         },
         "free": "darmowy",
         "aborted": "przerwany",
-        "freeTooltip": "darmowy model"
+        "freeTooltip": "darmowy model",
+        "weeklyCost": "$ na tydzień",
+        "resetUsage": "Resetuj użycie tygodniowe",
+        "resetUsageHint": "Resetuj liczniki tygodniowe tego użytkownika",
+        "resetUsageConfirm": "Zresetować użycie tygodniowe dla tego użytkownika?",
+        "resetting": "Resetowanie...",
+        "resetDone": "Użycie tygodniowe zresetowane.",
+        "resetError": "Reset nieudany: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Pamięć",
@@ -678,7 +689,9 @@
       "description": "Zastosuj limity do wszystkich bieżących użytkowników",
       "saving": "Zapisywanie…",
       "saveLimits": "Zapisz limity",
-      "syncAll": "Synchronizuj z wszystkimi użytkownikami"
+      "syncAll": "Synchronizuj z wszystkimi użytkownikami",
+      "resetUsage": "Resetuj tygodniowe limity dla wszystkich",
+      "resettingUsage": "Resetowanie..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "Pro",
         "hint": "Subskrypcja Premium"
       }
-    }
+    },
+    "billingModeToggle": "Rozliczanie: {{mode}}",
+    "billingMode": {
+      "tokens": "Tokeny",
+      "budget": "Budżet",
+      "tokensHint": "Liczone przez bezwzględne tokeny bez pamięci podręcznej. Modele zużywają limit na podstawie określonego współczynnika.",
+      "budgetHint": "Liczone według rzeczywistego kosztu w $. Pamięć podręczna jest tańsza, drogie modele zużywają więcej."
+    },
+    "budgetLabel": "Miesięczny budżet ($)",
+    "budgetHint": "~{{weekly}} tygodniowo. 0 = brak limitu.",
+    "subscriptionPriceLabel": "Cena subskrypcji ($)",
+    "subscriptionPriceHint": "Tylko informacyjnie, brak płatności.",
+    "resetUsageConfirm": "Zresetować tygodniowe użycie dla WSZYSTKICH użytkowników?",
+    "resetting": "Resetowanie...",
+    "resetUsageDone": "Resetowanie zakończone: zaktualizowano {{count}} użytkowników."
   },
   "nav": {
     "overview": "Przegląd",

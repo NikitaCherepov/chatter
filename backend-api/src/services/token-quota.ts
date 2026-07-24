@@ -1,5 +1,6 @@
 import { db } from '../db.js';
 import { getNowUnix } from '../db.js';
+import type { BillingMode } from './plan-limits.js';
 
 const WEEK_SECONDS = 7 * 24 * 60 * 60;
 
@@ -22,6 +23,7 @@ export type ModelOverride = {
   pricing_source: string | null;
   pricing_updated_at: number | null;
   selected_api_key_id: number | null;
+  is_free: number; // INTEGER 0/1
 };
 
 export type PricingSnapshot = {
@@ -43,7 +45,7 @@ const readAllOverrides = (): Map<string, ModelOverride> => {
            provider_kind, openrouter_provider_slug, pricing_mode,
            input_price_per_million, output_price_per_million,
            cache_read_price_per_million, pricing_source, pricing_updated_at,
-           selected_api_key_id
+           selected_api_key_id, is_free
     FROM model_overrides
   `).all() as Array<ModelOverride>;
   const map = new Map<string, ModelOverride>();
@@ -116,16 +118,25 @@ export const refreshCoefficientCache = (): void => {
   refreshOverrideCache();
 };
 
+/** Returns true if model is explicitly marked as free via is_free flag. */
+export const isModelFree = (modelId: string | null | undefined): boolean => {
+  if (!modelId) return false;
+  const override = getModelOverride(modelId);
+  if (!override) return false;
+  return override.is_free === 1;
+};
+
 /** Calculates quota units without writing anything to the database. */
 export const calculateChargedTokens = (
   totalTokens: number,
   modelId: string | null | undefined,
 ): { charged: number; coefficient: number; isFree: boolean } => {
   const coefficient = getCoefficient(modelId);
+  const isFree = isModelFree(modelId);
   return {
     charged: Math.max(0, Math.round(Math.max(0, totalTokens || 0) * coefficient * 1000) / 1000),
     coefficient,
-    isFree: coefficient === 0,
+    isFree,
   };
 };
 
@@ -201,6 +212,7 @@ export const setModelProvider = (
     pricingSource?: string | null;
     coefficient?: number | null;
     selectedApiKeyId?: number | null;
+    isFree?: boolean | null;
   }
 ): void => {
   const now = getNowUnix();
@@ -217,6 +229,9 @@ export const setModelProvider = (
     ? (Number.isFinite(params.coefficient) && params.coefficient >= 0 ? params.coefficient : 1.0)
     : existing?.coefficient ?? 1.0;
   const selectedApiKeyId = params.selectedApiKeyId !== undefined ? params.selectedApiKeyId : existing?.selected_api_key_id ?? null;
+  const isFree = params.isFree !== undefined && params.isFree !== null
+    ? (params.isFree ? 1 : 0)
+    : existing?.is_free ?? 0;
 
   db.prepare(`
     INSERT INTO model_overrides (
@@ -224,8 +239,8 @@ export const setModelProvider = (
       provider_kind, openrouter_provider_slug, pricing_mode,
       input_price_per_million, output_price_per_million,
       cache_read_price_per_million, pricing_source, pricing_updated_at,
-      selected_api_key_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      selected_api_key_id, is_free
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(model_id) DO UPDATE SET
       coefficient = excluded.coefficient,
       updated_at = excluded.updated_at,
@@ -237,7 +252,8 @@ export const setModelProvider = (
       cache_read_price_per_million = excluded.cache_read_price_per_million,
       pricing_source = excluded.pricing_source,
       pricing_updated_at = excluded.pricing_updated_at,
-      selected_api_key_id = excluded.selected_api_key_id
+      selected_api_key_id = excluded.selected_api_key_id,
+      is_free = excluded.is_free
   `).run(
     modelId, coeff, now,
     providerKind,
@@ -248,7 +264,8 @@ export const setModelProvider = (
     typeof cacheReadPrice === 'number' && Number.isFinite(cacheReadPrice) ? cacheReadPrice : null,
     pricingSource,
     pricingSource ? now : null,
-    selectedApiKeyId
+    selectedApiKeyId,
+    isFree
   );
   refreshOverrideCache();
 };
@@ -268,11 +285,14 @@ type QuotaState = {
   weekly_tokens_used: number;
   weekly_tokens_quota: number;
   weekly_window_started_at: number;
+  weekly_cost_used: number;
+  weekly_cost_quota: number;
 };
 
 const getUserQuotaState = (userId: number): QuotaState | null => {
   const row = db.prepare(`
-    SELECT weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at
+    SELECT weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
+           weekly_cost_used, weekly_cost_quota
     FROM users WHERE id = ?
   `).get(userId) as QuotaState | undefined;
   return row ?? null;
@@ -280,8 +300,8 @@ const getUserQuotaState = (userId: number): QuotaState | null => {
 
 /**
  * Lazy-reset of the weekly window. If window_started_at + 7d <= now,
- * rolls window forward by N×7d (N >= 1) and zeroes weekly_tokens_used.
- * Returns the resulting (post-reset) quota state.
+ * rolls window forward by N×7d (N >= 1) and zeroes BOTH weekly_tokens_used
+ * and weekly_cost_used. Returns the resulting (post-reset) quota state.
  */
 export const advanceWeeklyWindowIfNeeded = (userId: number, now = getNowUnix()): QuotaState | null => {
   const state = getUserQuotaState(userId);
@@ -289,42 +309,60 @@ export const advanceWeeklyWindowIfNeeded = (userId: number, now = getNowUnix()):
   if (state.weekly_window_started_at === 0) {
     // First ever request — start the window now, keep used = 0.
     db.prepare(`
-      UPDATE users SET weekly_window_started_at = ?, weekly_tokens_used = 0 WHERE id = ?
+      UPDATE users SET weekly_window_started_at = ?, weekly_tokens_used = 0, weekly_cost_used = 0 WHERE id = ?
     `).run(now, userId);
-    return { ...state, weekly_window_started_at: now, weekly_tokens_used: 0 };
+    return { ...state, weekly_window_started_at: now, weekly_tokens_used: 0, weekly_cost_used: 0 };
   }
   const elapsed = now - state.weekly_window_started_at;
   if (elapsed < WEEK_SECONDS) return state;
   const weeksPassed = Math.floor(elapsed / WEEK_SECONDS);
   const newWindowStart = state.weekly_window_started_at + weeksPassed * WEEK_SECONDS;
   db.prepare(`
-    UPDATE users SET weekly_window_started_at = ?, weekly_tokens_used = 0 WHERE id = ?
+    UPDATE users SET weekly_window_started_at = ?, weekly_tokens_used = 0, weekly_cost_used = 0 WHERE id = ?
   `).run(newWindowStart, userId);
-  return { ...state, weekly_window_started_at: newWindowStart, weekly_tokens_used: 0 };
+  return { ...state, weekly_window_started_at: newWindowStart, weekly_tokens_used: 0, weekly_cost_used: 0 };
 };
 
 export type QuotaCheckResult =
-  | { ok: true; used: number; quota: number; windowStartedAt: number }
-  | { ok: false; error: 'quota_exceeded'; used: number; quota: number; windowStartedAt: number; resetsAt: number };
+  | { ok: true; used: number; quota: number; windowStartedAt: number; billingMode: BillingMode }
+  | { ok: false; error: 'quota_exceeded'; used: number; quota: number; windowStartedAt: number; resetsAt: number; billingMode: BillingMode };
 
 // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 export type QuotaExceededResult = Extract<QuotaCheckResult, { error: 'quota_exceeded' }>;
 
 /**
  * Checks if the user may start a new AI request. Admins always pass.
- * Lazily advances the weekly window. Does NOT charge tokens.
+ * Lazily advances the weekly window. Does NOT charge.
+ *
+ * Branches on user's plan billing_mode:
+ *   - 'tokens': compare weekly_tokens_used vs weekly_tokens_quota
+ *   - 'budget': compare weekly_cost_used vs weekly_cost_quota
  */
-export const checkQuota = (userId: number, isAdmin: boolean): QuotaCheckResult => {
+export const checkQuota = (userId: number, isAdmin: boolean, billingMode: BillingMode = 'tokens'): QuotaCheckResult => {
   const state = advanceWeeklyWindowIfNeeded(userId);
   if (!state) {
-    return { ok: true, used: 0, quota: 0, windowStartedAt: 0 };
+    return { ok: true, used: 0, quota: 0, windowStartedAt: 0, billingMode };
   }
-  if (isAdmin || state.weekly_tokens_quota <= 0) {
+
+  if (billingMode === 'budget') {
+    // Admin bypasses; quota <= 0 means "no quota configured" → block.
+    if (isAdmin) {
+      return { ok: true, used: state.weekly_cost_used, quota: state.weekly_cost_quota, windowStartedAt: state.weekly_window_started_at, billingMode };
+    }
+    if (state.weekly_cost_quota <= 0 || state.weekly_cost_used >= state.weekly_cost_quota) {
+      return { ok: false, error: 'quota_exceeded', used: state.weekly_cost_used, quota: state.weekly_cost_quota, windowStartedAt: state.weekly_window_started_at, resetsAt: state.weekly_window_started_at + WEEK_SECONDS, billingMode };
+    }
+    return { ok: true, used: state.weekly_cost_used, quota: state.weekly_cost_quota, windowStartedAt: state.weekly_window_started_at, billingMode };
+  }
+
+  // 'tokens' mode (legacy)
+  if (isAdmin) {
     return {
       ok: true,
       used: state.weekly_tokens_used,
       quota: state.weekly_tokens_quota,
       windowStartedAt: state.weekly_window_started_at,
+      billingMode,
     };
   }
   if (state.weekly_tokens_used >= state.weekly_tokens_quota) {
@@ -335,6 +373,7 @@ export const checkQuota = (userId: number, isAdmin: boolean): QuotaCheckResult =
       quota: state.weekly_tokens_quota,
       windowStartedAt: state.weekly_window_started_at,
       resetsAt: state.weekly_window_started_at + WEEK_SECONDS,
+      billingMode,
     };
   }
   return {
@@ -342,6 +381,7 @@ export const checkQuota = (userId: number, isAdmin: boolean): QuotaCheckResult =
     used: state.weekly_tokens_used,
     quota: state.weekly_tokens_quota,
     windowStartedAt: state.weekly_window_started_at,
+    billingMode,
   };
 };
 
@@ -371,17 +411,26 @@ export type ChargeInput = {
   pricingSource?: string | null;
 };
 
+export type ChargeTokensResult = {
+  charged: number;
+  coefficient: number;
+  isFree: boolean;
+  costUsd: number;
+};
+
 /**
- * Writes a row to user_token_usage and increments users.weekly_tokens_used.
- * coefficient is looked up from model_overrides by modelId (default 1.0).
- * If coefficient = 0, charged_tokens = 0 (free model, does not consume quota).
+ * Writes a row to user_token_usage and increments weekly_tokens_used +
+ * weekly_cost_used. coefficient is looked up from model_overrides by modelId
+ * (default 1.0). If coefficient = 0, charged_tokens = 0 (free model, does not
+ * consume quota).
  *
- * Cost snapshot is taken from model_overrides at the time of charge so that
- * future price changes do not affect historical records.
+ * weekly_cost_used is incremented by COALESCE(actualCostUsd, estimatedCostUsd, 0)
+ * regardless of billing_mode — this way switching modes between tokens/budget
+ * keeps both counters in sync.
  *
  * This function MUST be safe to call in finally / catch blocks — never throws.
  */
-export const chargeTokens = (input: ChargeInput): { charged: number; coefficient: number; isFree: boolean } => {
+export const chargeTokens = (input: ChargeInput): ChargeTokensResult => {
   try {
     const { charged, coefficient, isFree } = calculateChargedTokens(input.totalTokens, input.modelId);
     const now = getNowUnix();
@@ -406,6 +455,10 @@ export const chargeTokens = (input: ChargeInput): { charged: number; coefficient
 
     // Upstream provider: prefer explicit value from caller, fall back to override.
     const upstreamProviderSlug = input.upstreamProviderSlug ?? snapshot.upstream_provider_slug;
+
+    // Effective cost: prefer actual from API, fall back to estimated, then 0.
+    const actualCost = typeof input.actualCostUsd === 'number' && Number.isFinite(input.actualCostUsd) ? input.actualCostUsd : null;
+    const costUsd = actualCost ?? estResult.cost ?? 0;
 
     db.prepare(`
       INSERT INTO user_token_usage (
@@ -438,19 +491,25 @@ export const chargeTokens = (input: ChargeInput): { charged: number; coefficient
       snapshot.output_price_per_million,
       snapshot.cache_read_price_per_million,
       estResult.cost,
-      typeof input.actualCostUsd === 'number' && Number.isFinite(input.actualCostUsd) ? input.actualCostUsd : null,
+      actualCost,
       pricingSource
     );
 
-    // Free models (coefficient = 0) do not consume weekly quota.
+    // Free models (is_free=1) do not consume weekly quota nor cost budget.
+    // Usage row is still written for request analytics (with NULL cost).
     if (!isFree && charged > 0) {
       db.prepare(`UPDATE users SET weekly_tokens_used = weekly_tokens_used + ? WHERE id = ?`)
         .run(charged, input.userId);
     }
 
-    return { charged, coefficient, isFree };
+    if (!isFree && costUsd > 0) {
+      db.prepare(`UPDATE users SET weekly_cost_used = weekly_cost_used + ? WHERE id = ?`)
+        .run(Math.max(0, Math.round(costUsd * 1e7) / 1e7), input.userId);
+    }
+
+    return { charged, coefficient, isFree, costUsd };
   } catch (err) {
     console.warn('[token-quota] chargeTokens failed:', err);
-    return { charged: 0, coefficient: 1, isFree: false };
+    return { charged: 0, coefficient: 1, isFree: false, costUsd: 0 };
   }
 };

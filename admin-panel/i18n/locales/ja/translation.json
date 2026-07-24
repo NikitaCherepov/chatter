@@ -122,12 +122,16 @@
       "quotaId": "クォータ追跡用のモデルID",
       "quotaIdHint": "係数を検索するために使用される安定した識別子。空の場合は、保存時に自動生成されます。",
       "coefficient": "コスト係数",
-      "coefficientHint": "0 = 無料（クォータ消費なし）、1 = デフォルト、0.7 = より安い、1.5 = より高い",
+      "coefficientHint": "1 = デフォルト、0.7 = より安い、1.5 = より高い",
       "apiKey": "APIキー",
       "apiKeyHint": "空欄のままにすると現在のキーを保持",
       "apiKeyPlaceholderExisting": "空欄のままにすると変更なし",
       "apiKeyPlaceholderNew": "APIキーを貼り付け",
-      "providerKind": "APIプロバイダー"
+      "providerKind": "APIプロバイダー",
+      "isFree": "無料モデル",
+      "isFreeHint": "有効にすると、モデルはクォータ（トークンや予算（$））を消費せず、支出額にもカウントされません。",
+      "isFreeOn": "無料：はい",
+      "isFreeOff": "無料：いいえ"
     },
     "billing": {
       "customProvider": "カスタム",
@@ -463,7 +467,14 @@
         },
         "free": "無料",
         "aborted": "中断",
-        "freeTooltip": "無料モデル"
+        "freeTooltip": "無料モデル",
+        "weeklyCost": "$/週",
+        "resetUsage": "週間使用量をリセット",
+        "resetUsageHint": "このユーザーの週間カウンターをリセット",
+        "resetUsageConfirm": "このユーザーの週間使用量をリセットしますか？",
+        "resetting": "リセット中...",
+        "resetDone": "週間使用量をリセットしました。",
+        "resetError": "リセット失敗: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "メモリ",
@@ -678,7 +689,9 @@
       "description": "現在の全ユーザーに制限を適用",
       "saving": "保存中…",
       "saveLimits": "制限を保存",
-      "syncAll": "全ユーザーに同期"
+      "syncAll": "全ユーザーに同期",
+      "resetUsage": "全ユーザーの週間制限をリセット",
+      "resettingUsage": "リセット中..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "プロ",
         "hint": "プレミアムサブスクリプション"
       }
-    }
+    },
+    "billingModeToggle": "課金: {{mode}}",
+    "billingMode": {
+      "tokens": "トークン",
+      "budget": "予算",
+      "tokensHint": "キャッシュなしの絶対トークン数でカウント。モデルは指定された係数に基づいて制限を消費します。",
+      "budgetHint": "実際のコスト（$）でカウント。キャッシュは安く、高価なモデルは多く消費します。"
+    },
+    "budgetLabel": "月間予算（$）",
+    "budgetHint": "週あたり約{{weekly}}。0 = 割り当てなし。",
+    "subscriptionPriceLabel": "サブスクリプション価格 ($)",
+    "subscriptionPriceHint": "情報のみ、支払いは不要です。",
+    "resetUsageConfirm": "すべてのユーザーの週間使用量をリセットしますか？",
+    "resetting": "リセット中...",
+    "resetUsageDone": "リセット完了: {{count}} ユーザーを更新しました。"
   },
   "nav": {
     "overview": "概要",

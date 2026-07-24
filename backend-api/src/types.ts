@@ -22,6 +22,9 @@ export type UserRecord = {
   weekly_tokens_used?: number;
   weekly_tokens_quota?: number;
   weekly_window_started_at?: number;
+  weekly_cost_used?: number;
+  weekly_cost_quota?: number;
+  weekly_cost_quota_limit?: number;
   daily_web_search_count?: number;
   daily_web_search_limit?: number;
   total_web_search_count?: number;

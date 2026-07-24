@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -2703,6 +2703,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
       id, name, role, is_admin, status, plan, language, created_at,
       daily_message_count,
       weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
+      weekly_cost_used, weekly_cost_quota, weekly_cost_quota_limit,
       daily_web_search_count, daily_web_search_limit, total_web_search_count,
       daily_image_gen_count, daily_image_gen_limit, total_image_gen_count,
       total_message_length, preferred_model, reasoning_level,
@@ -3231,10 +3232,37 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
       image_attachments_allowed: Boolean(entry.image_attachments_allowed),
       max_context_tokens: Math.max(0, Math.floor(Number(entry.max_context_tokens) || 0)),
       weekly_token_quota: Math.max(0, Number(entry.weekly_token_quota) || 0),
+      billing_mode: entry.billing_mode === 'budget' ? 'budget' : 'tokens',
+      budget_usd: Math.max(0, Number(entry.budget_usd) || 0),
+      subscription_price: Math.max(0, Number(entry.subscription_price) || 0),
     };
   }
   savePlanLimitsToDb(next);
+  syncAllUsersPlanLimits();
   return res.json({ ok: true, limits: next });
+});
+
+// ─── Weekly cost quota: per-user overrides & resets ──────────────────────────
+
+app.put('/internal/admin/users/:id/weekly-cost-quota', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  const quota = Number(req.body?.quota);
+  if (!Number.isFinite(quota) || quota < 0) return res.status(400).json({ error: 'bad_quota' });
+  updateUserWeeklyCostQuota(userId, quota);
+  return res.json({ ok: true, weekly_cost_quota: quota });
+});
+
+app.post('/internal/admin/users/:id/reset-weekly-usage', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  resetUserWeeklyUsage(userId);
+  return res.json({ ok: true });
+});
+
+app.post('/internal/admin/users/reset-weekly-usage-all', internalAuth, (_req, res) => {
+  const affected = resetAllUsersWeeklyUsage();
+  return res.json({ ok: true, affected });
 });
 
 // ─── Model overrides (coefficients + provider info) ─────────────────────────
@@ -3245,7 +3273,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
            provider_kind, openrouter_provider_slug, pricing_mode,
            input_price_per_million, output_price_per_million,
            cache_read_price_per_million, pricing_source, pricing_updated_at,
-           selected_api_key_id
+           selected_api_key_id, is_free
     FROM model_overrides
   `).all() as Array<ModelOverride>;
   const coefficients: Record<string, number> = {};
@@ -3259,6 +3287,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
     pricingSource: string | null;
     pricingUpdatedAt: number | null;
     selectedApiKeyId: number | null;
+    isFree: boolean;
   }> = {};
   for (const row of rows) {
     coefficients[row.model_id] = row.coefficient;
@@ -3272,6 +3301,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
       pricingSource: row.pricing_source,
       pricingUpdatedAt: row.pricing_updated_at,
       selectedApiKeyId: row.selected_api_key_id,
+      isFree: row.is_free === 1,
     };
   }
   return res.json({ coefficients, overrides });
@@ -3290,6 +3320,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     cacheReadPricePerMillion?: number | null;
     pricingSource?: string | null;
     selectedApiKeyId?: number | null;
+    isFree?: boolean | null;
   } | null;
 
   // Handle coefficient-only mode (backward-compatible).
@@ -3305,6 +3336,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     || 'cacheReadPricePerMillion' in body
     || 'pricingSource' in body
     || 'selectedApiKeyId' in body
+    || 'isFree' in body
   );
 
   if (hasProviderFields) {
@@ -3319,6 +3351,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
       pricingSource: body?.pricingSource,
       coefficient: hasCoeff && rawCoeff >= 0 ? rawCoeff : null,
       selectedApiKeyId: body?.selectedApiKeyId,
+      isFree: body && 'isFree' in body ? Boolean(body.isFree) : null,
     });
     return res.json({ ok: true, model_id: modelId });
   }

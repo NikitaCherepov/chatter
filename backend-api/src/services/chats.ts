@@ -31,15 +31,23 @@ export const upsertUserFromTelegram = (
 ) => db.transaction(() => {
   const accountId = resolveTelegramAccountForUpsert(userId);
   const normalizedLanguage = normalizeSupportedLanguage(language);
+  const limits = getDefaultUserPlanLimits();
+  const weeklyCostQuota = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   const result = db.prepare(`
-    INSERT INTO users (id, name, role, is_admin, status, plan, language)
-    VALUES (?, ?, ?, ?, 'none', 'free', ?)
+    INSERT INTO users (id, name, role, is_admin, status, plan, language,
+      daily_web_search_limit, daily_image_gen_limit,
+      max_context_tokens_limit, max_context_tokens,
+      weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
+    VALUES (?, ?, ?, ?, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(users.name, excluded.name),
       language = COALESCE(users.language, excluded.language),
       is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
       role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
-  `).run(accountId, name, 'user', 0, normalizedLanguage);
+  `).run(accountId, name, 'user', 0, normalizedLanguage,
+    limits.daily_web_search_limit, limits.daily_image_gen_limit,
+    limits.max_context_tokens, limits.max_context_tokens,
+    limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
   ensureTelegramIdentity(accountId, userId, username);
   return result;
 })();
@@ -50,6 +58,8 @@ export const createOrUpdateUserForApiRegistration = (name: string | null = null)
     INSERT INTO users (id, name, role, is_admin, status, plan)
     VALUES (?, ?, 'user', 0, 'approved', 'free')
   `).run(userId, name);
+  // Apply free plan limits (quota, context, dailies) immediately.
+  updateUserPlan(userId, 'free');
   ensureActiveChat(userId);
   return userId;
 };
@@ -1590,11 +1600,13 @@ export const upsertTelegramUser = (
   const effectiveRole = role === 'admin' ? 'admin' : 'user';
   const effectiveIsAdmin = effectiveRole === 'admin' ? 1 : 0;
   const limits = getDefaultUserPlanLimits();
+  const weeklyCostQuota = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
 
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens)
-    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?)
+      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens,
+      weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       role = excluded.role,
@@ -1603,7 +1615,8 @@ export const upsertTelegramUser = (
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, effectiveRole, effectiveIsAdmin, status, normalizedLanguage, defaultPromptId,
-    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens);
+    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens,
+    limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
   ensureActiveChat(accountId);
@@ -1620,16 +1633,19 @@ export const createPendingTelegramUser = (
   const accountId = resolveTelegramAccountForUpsert(tgId);
   const normalizedLanguage = normalizeSupportedLanguage(language);
   const limits = getDefaultUserPlanLimits();
+  const weeklyCostQuota = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens)
-    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?)
+      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens,
+      weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(excluded.name, users.name),
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, normalizedLanguage, defaultPromptId,
-    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens);
+    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens,
+    limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
   ensureActiveChat(accountId);
@@ -1740,42 +1756,73 @@ export const getBannedUsersPage = (limit: number, offset: number) => {
 export const updateUserPlan = (userId: number, plan: UserPlan) => {
   userId = resolveAccountId(userId);
   const limits = getPlanLimits(plan);
+  const weeklyCostLimit = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   return db.prepare(`
     UPDATE users
     SET plan = ?,
         daily_web_search_limit = ?,
         daily_image_gen_limit = ?,
         max_context_tokens_limit = ?,
-        max_context_tokens = CASE
-          WHEN COALESCE(max_context_tokens, 0) <= 0 THEN ?
-          WHEN max_context_tokens > ? THEN ?
-          ELSE max_context_tokens
-        END,
-        weekly_tokens_quota = ?
+        max_context_tokens = ?,
+        weekly_tokens_quota = ?,
+        weekly_cost_quota_limit = ?,
+        weekly_cost_quota = ?
     WHERE id = ?
   `).run(plan, limits.daily_web_search_limit, limits.daily_image_gen_limit,
-    limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens,
-    limits.weekly_token_quota, userId);
+    limits.max_context_tokens, limits.max_context_tokens,
+    limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, userId);
 };
 
+/**
+ * Hard-syncs all plan-derived fields on users with current plan_limits_config.
+ *
+ * Per-user overrides (max_context_tokens, weekly_cost_quota) are OVERWRITTEN by
+ * the plan value — this is intentional. If admin raises OR lowers a plan limit,
+ * every user on that plan must reflect it immediately. Per-user tuning happens
+ * via dedicated endpoints AFTER sync, not by preserving stale values.
+ *
+ * Use resetUserWeeklyCost() / resetAllUsersWeeklyCost() to zero usage counters.
+ */
 export const syncAllUsersPlanLimits = () => {
   for (const [plan, limits] of Object.entries(loadPlanLimitsFromDb())) {
+    const weeklyCostLimit = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
     db.prepare(`
       UPDATE users
       SET daily_web_search_limit = ?,
           daily_image_gen_limit = ?,
           max_context_tokens_limit = ?,
-          max_context_tokens = CASE
-            WHEN COALESCE(max_context_tokens, 0) <= 0 THEN ?
-            WHEN max_context_tokens > ? THEN ?
-            ELSE max_context_tokens
-          END,
-          weekly_tokens_quota = ?
+          max_context_tokens = ?,
+          weekly_tokens_quota = ?,
+          weekly_cost_quota_limit = ?,
+          weekly_cost_quota = ?
       WHERE plan = ?
     `).run(limits.daily_web_search_limit, limits.daily_image_gen_limit,
-      limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens, limits.max_context_tokens,
-      limits.weekly_token_quota, plan);
+      limits.max_context_tokens, limits.max_context_tokens,
+      limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, plan);
   }
+};
+
+/** Reset weekly usage counters (tokens + cost) for a single user (admin action). */
+export const resetUserWeeklyUsage = (userId: number): void => {
+  userId = resolveAccountId(userId);
+  db.prepare(`UPDATE users SET weekly_cost_used = 0, weekly_tokens_used = 0 WHERE id = ?`).run(userId);
+};
+
+/** Reset weekly usage counters (tokens + cost) for all users (admin action). Returns affected row count. */
+export const resetAllUsersWeeklyUsage = (): number => {
+  const result = db.prepare(`
+    UPDATE users
+    SET weekly_cost_used = 0, weekly_tokens_used = 0
+    WHERE weekly_cost_used <> 0 OR weekly_tokens_used <> 0
+  `).run();
+  return result.changes;
+};
+
+/** Per-user override of weekly_cost_quota (admin can lower/raise within plan ceiling). */
+export const updateUserWeeklyCostQuota = (userId: number, quota: number): void => {
+  userId = resolveAccountId(userId);
+  const safe = Number.isFinite(quota) && quota >= 0 ? quota : 0;
+  db.prepare(`UPDATE users SET weekly_cost_quota = ? WHERE id = ?`).run(safe, userId);
 };
 
 // ---------- Telegram link codes ----------

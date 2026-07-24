@@ -2,7 +2,8 @@
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
-import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride } from './token-quota.js';
+import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd } from './token-quota.js';
+import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
@@ -500,6 +501,32 @@ const tokenUsageWithoutCallMeta = (usage?: TokenUsageCall): NormalizedTokenUsage
   const { model: _model, provider: _provider, ...normalized } = usage;
   return normalized;
 };
+
+/**
+ * Estimated USD cost for a single usage call.
+ * Uses actualCostUsd from API response if available, else calculates from
+ * the model's pricing snapshot via calculateEstimatedCostUsd.
+ * Returns 0 if neither is possible (unknown model / no prices).
+ */
+const estimateCallCostUsd = (call: TokenUsageCall): number => {
+  if (typeof call.actualCostUsd === 'number' && Number.isFinite(call.actualCostUsd)) {
+    return call.actualCostUsd;
+  }
+  const snapshot = getPricingSnapshot(call.uniqueId || call.model);
+  const est = calculateEstimatedCostUsd(
+    Math.max(0, call.cache_miss_tokens),
+    Math.max(0, call.cache_hit_tokens),
+    Math.max(0, call.completion_tokens),
+    snapshot.input_price_per_million,
+    snapshot.output_price_per_million,
+    snapshot.cache_read_price_per_million,
+  );
+  return est.cost ?? 0;
+};
+
+/** Sum of USD cost across calls (preferring actualCostUsd, falling back to estimate). */
+const sumCallsCostUsd = (calls: TokenUsageCall[]): number =>
+  calls.reduce((sum, call) => sum + estimateCallCostUsd(call), 0);
 
 const extractTokens = (response: any) => normalizeTokenUsage(response?.usage).total_tokens;
 const createAbortError = () => new DOMException('The user aborted a request.', 'AbortError');
@@ -5855,8 +5882,10 @@ export const sendMessageThroughAi = async (
     ? calculateChargedTokens(0, preferredModelId).isFree
     : false;
 
-  // Weekly token quota check (admin bypasses). Lazily advances the rolling window.
-  const quotaCheck = checkQuota(userId, user.is_admin === 1);
+  // Weekly quota check (admin bypasses). Lazily advances the rolling window.
+  // Branches on plan billing_mode: 'tokens' (legacy) or 'budget' (USD-based).
+  const planLimitsForQuota = getPlanLimits(user.plan);
+  const quotaCheck = checkQuota(userId, user.is_admin === 1, planLimitsForQuota.billing_mode);
   if (!quotaCheck.ok && !selectedMainModelIsFree) {
     const err = new Error('quota_exceeded') as Error & { code?: string; quota?: number; used?: number; resetsAt?: number };
     err.code = 'quota_exceeded';
@@ -5995,15 +6024,23 @@ export const sendMessageThroughAi = async (
     return normalized;
   };
   const shouldStopForQuota = (latestUsage: TokenUsageCall): boolean => {
-    if (isAdmin || quotaCheck.quota <= 0) return false;
+    if (isAdmin) return false;
+    if (quotaCheck.quota <= 0) return true;
+    // A free model must remain usable even when paid quota is exhausted.
     const latestCharge = calculateChargedTokens(
       latestUsage.total_tokens,
       latestUsage.uniqueId || latestUsage.model,
     );
-    // A free model must remain usable even when paid quota is exhausted.
     if (latestCharge.isFree) return false;
 
-    const requestCharge = [...usageCalls, ...subagentUsageCalls].reduce((total, call) => (
+    const allCalls = [...usageCalls, ...subagentUsageCalls];
+    if (quotaCheck.billingMode === 'budget') {
+      // Compare accumulated USD cost (this request so far) vs remaining budget.
+      const requestCostUsd = sumCallsCostUsd(allCalls);
+      return quotaCheck.used + requestCostUsd >= quotaCheck.quota;
+    }
+    // 'tokens' mode: sum charged tokens.
+    const requestCharge = allCalls.reduce((total, call) => (
       total + calculateChargedTokens(call.total_tokens, call.uniqueId || call.model).charged
     ), 0);
     return quotaCheck.used + requestCharge >= quotaCheck.quota;
@@ -6057,7 +6094,7 @@ export const sendMessageThroughAi = async (
         totalTokens: aggregate.total_tokens,
         aborted: opts?.aborted ?? false,
         upstreamProviderSlug: firstCall.upstreamProviderSlug ?? null,
-        actualCostUsd: firstCall.actualCostUsd ?? null,
+        actualCostUsd: sumCallsCostUsd(group) || null,
       });
     }
 
@@ -6090,7 +6127,7 @@ export const sendMessageThroughAi = async (
         totalTokens: aggregate.total_tokens,
         aborted: opts?.aborted ?? false,
         upstreamProviderSlug: firstCall.upstreamProviderSlug ?? null,
-        actualCostUsd: firstCall.actualCostUsd ?? null,
+        actualCostUsd: sumCallsCostUsd(group) || null,
       });
     }
   };

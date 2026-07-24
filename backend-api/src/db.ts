@@ -241,6 +241,9 @@ ensureUserColumn('daily_message_count', 'ALTER TABLE users ADD COLUMN daily_mess
 ensureUserColumn('weekly_tokens_used', 'ALTER TABLE users ADD COLUMN weekly_tokens_used REAL NOT NULL DEFAULT 0');
 ensureUserColumn('weekly_tokens_quota', 'ALTER TABLE users ADD COLUMN weekly_tokens_quota REAL NOT NULL DEFAULT 0');
 ensureUserColumn('weekly_window_started_at', 'ALTER TABLE users ADD COLUMN weekly_window_started_at INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('weekly_cost_used', 'ALTER TABLE users ADD COLUMN weekly_cost_used REAL NOT NULL DEFAULT 0');
+ensureUserColumn('weekly_cost_quota', 'ALTER TABLE users ADD COLUMN weekly_cost_quota REAL NOT NULL DEFAULT 0');
+ensureUserColumn('weekly_cost_quota_limit', 'ALTER TABLE users ADD COLUMN weekly_cost_quota_limit REAL NOT NULL DEFAULT 0');
 // Legacy columns (daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub) are no longer created
 // for fresh installs. They are dropped below via dropLegacyUserColumns() for upgraded databases.
 ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
@@ -333,6 +336,9 @@ db.exec(`
   UPDATE users SET total_message_length = 0 WHERE total_message_length IS NULL;
   UPDATE users SET weekly_tokens_used = 0 WHERE weekly_tokens_used IS NULL OR weekly_tokens_used < 0;
   UPDATE users SET weekly_tokens_quota = 0 WHERE weekly_tokens_quota IS NULL OR weekly_tokens_quota < 0;
+  UPDATE users SET weekly_cost_used = 0 WHERE weekly_cost_used IS NULL OR weekly_cost_used < 0;
+  UPDATE users SET weekly_cost_quota = 0 WHERE weekly_cost_quota IS NULL OR weekly_cost_quota < 0;
+  UPDATE users SET weekly_cost_quota_limit = 0 WHERE weekly_cost_quota_limit IS NULL OR weekly_cost_quota_limit < 0;
   UPDATE users SET weekly_window_started_at = 0 WHERE weekly_window_started_at IS NULL OR weekly_window_started_at < 0;
   UPDATE users SET daily_web_search_count = 0 WHERE daily_web_search_count IS NULL;
   UPDATE users SET daily_web_search_limit = 10 WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0;
@@ -617,6 +623,7 @@ ensureModelOverrideColumn('cache_read_price_per_million', 'ALTER TABLE model_ove
 ensureModelOverrideColumn('pricing_source', 'ALTER TABLE model_overrides ADD COLUMN pricing_source TEXT');
 ensureModelOverrideColumn('pricing_updated_at', 'ALTER TABLE model_overrides ADD COLUMN pricing_updated_at INTEGER');
 ensureModelOverrideColumn('selected_api_key_id', 'ALTER TABLE model_overrides ADD COLUMN selected_api_key_id INTEGER');
+ensureModelOverrideColumn('is_free', 'ALTER TABLE model_overrides ADD COLUMN is_free INTEGER NOT NULL DEFAULT 0');
 
 
 db.exec(`

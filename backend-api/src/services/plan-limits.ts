@@ -1,6 +1,8 @@
 import { db } from '../db.js';
 import type { UserPlan } from '../types.js';
 
+export type BillingMode = 'tokens' | 'budget';
+
 export type PlanLimits = {
   daily_web_search_limit: number;
   daily_image_gen_limit: number;
@@ -8,11 +10,19 @@ export type PlanLimits = {
   max_context_tokens: number;
   /** Weekly quota in conditional units. 0 means no quota (only flag-based limits apply). */
   weekly_token_quota: number;
+  /** 'tokens' = charge by raw tokens (legacy), 'budget' = charge by USD cost. */
+  billing_mode: BillingMode;
+  /** Monthly budget in USD. Divided by 4 to get weekly_cost_quota. 0 = blocked (no quota). */
+  budget_usd: number;
+  /** Subscription price in USD (informational only, no payment yet). */
+  subscription_price: number;
 };
 
 export const DEFAULT_USER_PLAN: UserPlan = 'free';
 
 export const PLAN_IDS: UserPlan[] = ['free', 'standart', 'pro'];
+
+export const DEFAULT_BILLING_MODE: BillingMode = 'tokens';
 
 /**
  * Code-level defaults. Used ONLY to seed plan_limits_config on first run
@@ -26,6 +36,9 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     image_attachments_allowed: false,
     max_context_tokens: 30_000,
     weekly_token_quota: 5_000_000,
+    billing_mode: 'tokens',
+    budget_usd: 0,
+    subscription_price: 0,
   },
   standart: {
     daily_web_search_limit: 5,
@@ -33,6 +46,9 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     image_attachments_allowed: true,
     max_context_tokens: 60_000,
     weekly_token_quota: 15_000_000,
+    billing_mode: 'tokens',
+    budget_usd: 0,
+    subscription_price: 0,
   },
   pro: {
     daily_web_search_limit: 20,
@@ -40,6 +56,9 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     image_attachments_allowed: true,
     max_context_tokens: 1_000_000,
     weekly_token_quota: 30_000_000,
+    billing_mode: 'tokens',
+    budget_usd: 0,
+    subscription_price: 0,
   },
 };
 
@@ -63,6 +82,9 @@ const sanitizeConfig = (raw: unknown, plan: UserPlan): PlanLimits => {
     image_attachments_allowed: Boolean(cfg.image_attachments_allowed ?? fallback.image_attachments_allowed),
     max_context_tokens: num(cfg.max_context_tokens, fallback.max_context_tokens),
     weekly_token_quota: real(cfg.weekly_token_quota, fallback.weekly_token_quota),
+    billing_mode: cfg.billing_mode === 'budget' ? 'budget' : 'tokens',
+    budget_usd: real(cfg.budget_usd, fallback.budget_usd),
+    subscription_price: real(cfg.subscription_price, fallback.subscription_price),
   };
 };
 

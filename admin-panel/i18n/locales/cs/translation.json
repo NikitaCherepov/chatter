@@ -128,12 +128,16 @@
       "quotaId": "ID modelu pro sledování kvót",
       "quotaIdHint": "Stabilní identifikátor používaný k vyhledání koeficientu. Pokud je prázdný, při uložení se vygeneruje automaticky.",
       "coefficient": "Koeficient nákladů",
-      "coefficientHint": "0 = zdarma (bez využití kvóty), 1 = výchozí, 0,7 = levnější, 1,5 = dražší",
+      "coefficientHint": "1 = výchozí, 0,7 = levnější, 1,5 = dražší",
       "apiKey": "API klíč",
       "apiKeyHint": "Ponechte prázdné pro zachování stávajícího klíče",
       "apiKeyPlaceholderExisting": "Ponechte prázdné pro zachování beze změny",
       "apiKeyPlaceholderNew": "Vložte API klíč",
-      "providerKind": "Poskytovatel API"
+      "providerKind": "Poskytovatel API",
+      "isFree": "Bezplatný model",
+      "isFreeHint": "Pokud je povoleno, model nespotřebovává žádný kvótu (ani tokeny, ani rozpočet v $) a nezapočítává se do utracených peněz.",
+      "isFreeOn": "Bezplatný: ano",
+      "isFreeOff": "Bezplatný: ne"
     },
     "billing": {
       "customProvider": "Vlastní",
@@ -449,7 +453,14 @@
         },
         "free": "zdarma",
         "aborted": "přerušeno",
-        "freeTooltip": "bezplatný model"
+        "freeTooltip": "bezplatný model",
+        "weeklyCost": "$ za týden",
+        "resetUsage": "Resetovat týdenní využití",
+        "resetUsageHint": "Resetovat týdenní počítadla tohoto uživatele",
+        "resetUsageConfirm": "Resetovat týdenní využití pro tohoto uživatele?",
+        "resetting": "Probíhá resetování...",
+        "resetDone": "Týdenní využití bylo resetováno.",
+        "resetError": "Reset selhal: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Paměť",
@@ -664,7 +675,9 @@
       "description": "Aplikovat limity na všechny aktuální uživatele",
       "saving": "Ukládání…",
       "saveLimits": "Uložit limity",
-      "syncAll": "Synchronizovat pro všechny uživatele"
+      "syncAll": "Synchronizovat pro všechny uživatele",
+      "resetUsage": "Resetovat týdenní limity pro všechny",
+      "resettingUsage": "Probíhá resetování..."
     },
     "plans": {
       "free": {
@@ -679,7 +692,21 @@
         "label": "Pro",
         "hint": "Prémiové předplatné"
       }
-    }
+    },
+    "billingModeToggle": "Účtování: {{mode}}",
+    "billingMode": {
+      "tokens": "Tokeny",
+      "budget": "Rozpočet",
+      "tokensHint": "Počítáno podle absolutních tokenů bez cache. Modely spotřebovávají limit na základě zadaného koeficientu.",
+      "budgetHint": "Počítáno podle skutečných nákladů v $. Cache je levnější, drahé modely spotřebovávají více."
+    },
+    "budgetLabel": "Měsíční rozpočet ($)",
+    "budgetHint": "~{{weekly}} týdně. 0 = bez kvóty.",
+    "subscriptionPriceLabel": "Cena předplatného ($)",
+    "subscriptionPriceHint": "Pouze pro informaci, bez platby.",
+    "resetUsageConfirm": "Obnovit týdenní využití pro VŠECHNY uživatele?",
+    "resetting": "Obnovování...",
+    "resetUsageDone": "Obnovení dokončeno: {{count}} uživatelů aktualizováno."
   },
   "nav": {
     "overview": "Přehled",

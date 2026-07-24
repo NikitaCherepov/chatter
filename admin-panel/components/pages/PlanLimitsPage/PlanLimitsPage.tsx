@@ -9,31 +9,39 @@ import { Toggle } from '../../ui/Toggle/Toggle';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import styles from './PlanLimitsPage.module.css';
 
+type BillingMode = 'tokens' | 'budget';
+
 type PlanLimits = {
   daily_web_search_limit: number;
   daily_image_gen_limit: number;
   image_attachments_allowed: boolean;
   max_context_tokens: number;
   weekly_token_quota: number;
+  billing_mode: BillingMode;
+  budget_usd: number;
+  subscription_price: number;
 };
 
 type PlanLimitsData = Record<'free' | 'standart' | 'pro', PlanLimits>;
 
 const emptyLimits: PlanLimitsData = {
-  free: { daily_web_search_limit: 0, daily_image_gen_limit: 0, image_attachments_allowed: false, max_context_tokens: 30000, weekly_token_quota: 5_000_000 },
-  standart: { daily_web_search_limit: 5, daily_image_gen_limit: 2, image_attachments_allowed: true, max_context_tokens: 60000, weekly_token_quota: 15_000_000 },
-  pro: { daily_web_search_limit: 20, daily_image_gen_limit: 5, image_attachments_allowed: true, max_context_tokens: 1_000_000, weekly_token_quota: 30_000_000 },
+  free: { daily_web_search_limit: 0, daily_image_gen_limit: 0, image_attachments_allowed: false, max_context_tokens: 30000, weekly_token_quota: 5_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
+  standart: { daily_web_search_limit: 5, daily_image_gen_limit: 2, image_attachments_allowed: true, max_context_tokens: 60000, weekly_token_quota: 15_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
+  pro: { daily_web_search_limit: 20, daily_image_gen_limit: 5, image_attachments_allowed: true, max_context_tokens: 1_000_000, weekly_token_quota: 30_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
 };
 
 const PLAN_IDS: ('free' | 'standart' | 'pro')[] = ['free', 'standart', 'pro'];
 
 const formatNumber = (value: number) => new Intl.NumberFormat('ru').format(Number(value) || 0);
+const formatUsd = (value: number) => `$${(Number(value) || 0).toFixed(2)}`;
+const formatWeeklyUsd = (monthly: number) => `$${((Number(monthly) || 0) / 4).toFixed(2)}`;
 
 export function PlanLimitsPage() {
   const { t } = useTranslation();
   const [limits, setLimits] = useState<PlanLimitsData>(emptyLimits);
   const [state, setState] = useState('');
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -73,25 +81,78 @@ export function PlanLimitsPage() {
     }
   }
 
+  async function resetAllUsage() {
+    if (!window.confirm(t('planLimits.resetUsageConfirm'))) return;
+    setResetting(true);
+    setState(t('planLimits.resetting'));
+    try {
+      const result = await api<{ affected: number }>('/api/users/reset-weekly-usage-all', { method: 'POST', body: '{}' });
+      setState(t('planLimits.resetUsageDone', { count: result.affected ?? 0 }));
+    } catch (err) {
+      setState(t('planLimits.loadError', { message: err instanceof Error ? err.message : String(err) }));
+    } finally { setResetting(false); }
+  }
+
   return (
     <form className={grid.stack} onSubmit={save} noValidate>
       {PLAN_IDS.map(id => {
         const cfg = limits[id];
+        const isBudget = cfg.billing_mode === 'budget';
         return (
           <Card key={id} title={t('planLimits.planTitle', { label: t(`planLimits.plans.${id}.label`) })} description={t(`planLimits.plans.${id}.hint`)}>
+            <div className={styles.billingToggle}>
+              <Toggle
+                checked={isBudget}
+                onChange={(checked) => update(id, { billing_mode: checked ? 'budget' : 'tokens' })}
+                label={t('planLimits.billingModeToggle', { mode: t(`planLimits.billingMode.${isBudget ? 'budget' : 'tokens'}`) })}
+              />
+              <p className={styles.billingHint}>
+                {isBudget ? t('planLimits.billingMode.budgetHint') : t('planLimits.billingMode.tokensHint')}
+              </p>
+            </div>
+
+            {isBudget ? (
+              <div className={styles.row}>
+                <FormField
+                  label={t('planLimits.budgetLabel')}
+                  hint={t('planLimits.budgetHint', { weekly: formatWeeklyUsd(cfg.budget_usd) })}
+                >
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={cfg.budget_usd}
+                    onChange={(e) => update(id, { budget_usd: Math.max(0, Number(e.target.value) || 0) })}
+                  />
+                </FormField>
+                <FormField label={t('planLimits.subscriptionPriceLabel')} hint={t('planLimits.subscriptionPriceHint')}>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={cfg.subscription_price}
+                    onChange={(e) => update(id, { subscription_price: Math.max(0, Number(e.target.value) || 0) })}
+                  />
+                </FormField>
+              </div>
+            ) : (
+              <div className={styles.row}>
+                <FormField
+                  label={t('planLimits.weeklyQuotaLabel')}
+                  hint={t('planLimits.weeklyQuotaHint', { units: formatNumber(cfg.weekly_token_quota) })}
+                >
+                  <input
+                    type="number"
+                    min={0}
+                    step={100_000}
+                    value={cfg.weekly_token_quota}
+                    onChange={(e) => update(id, { weekly_token_quota: Math.max(0, Number(e.target.value) || 0) })}
+                  />
+                </FormField>
+              </div>
+            )}
+
             <div className={styles.row}>
-              <FormField
-                label={t('planLimits.weeklyQuotaLabel')}
-                hint={t('planLimits.weeklyQuotaHint', { units: formatNumber(cfg.weekly_token_quota) })}
-              >
-                <input
-                  type="number"
-                  min={0}
-                  step={100_000}
-                  value={cfg.weekly_token_quota}
-                  onChange={(e) => update(id, { weekly_token_quota: Math.max(0, Number(e.target.value) || 0) })}
-                />
-              </FormField>
               <FormField label={t('planLimits.contextLimitLabel')}>
                 <input
                   type="number"
@@ -101,8 +162,6 @@ export function PlanLimitsPage() {
                   onChange={(e) => update(id, { max_context_tokens: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FormField>
-            </div>
-            <div className={styles.row}>
               <FormField label={t('planLimits.webSearchLabel')}>
                 <input
                   type="number"
@@ -135,11 +194,14 @@ export function PlanLimitsPage() {
 
       <Card title={t('planLimits.actions.title')} description={t('planLimits.actions.description')}>
         <div className={styles.actions}>
-          <button type="submit" className="buttonPrimary" disabled={saving}>
+          <button type="submit" className="buttonPrimary" disabled={saving || resetting}>
             {saving ? t('planLimits.actions.saving') : t('planLimits.actions.saveLimits')}
           </button>
-          <button type="button" className="buttonSecondary" onClick={() => void syncAll()} disabled={saving}>
+          <button type="button" className="buttonSecondary" onClick={() => void syncAll()} disabled={saving || resetting}>
             {t('planLimits.actions.syncAll')}
+          </button>
+          <button type="button" className="buttonDanger" onClick={() => void resetAllUsage()} disabled={saving || resetting}>
+            {resetting ? t('planLimits.actions.resettingUsage') : t('planLimits.actions.resetUsage')}
           </button>
         </div>
         {state && <p className={styles.state}>{state}</p>}

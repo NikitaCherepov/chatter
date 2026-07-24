@@ -122,12 +122,16 @@
       "quotaId": "ID modello per il tracciamento delle quote",
       "quotaIdHint": "Identificatore stabile utilizzato per cercare il coefficiente. Se vuoto, generato automaticamente al salvataggio.",
       "coefficient": "Coefficiente di costo",
-      "coefficientHint": "0 = gratuito (nessun utilizzo di quota), 1 = predefinito, 0.7 = più economico, 1.5 = più costoso",
+      "coefficientHint": "1 = predefinito, 0.7 = più economico, 1.5 = più costoso",
       "apiKey": "Chiave API",
       "apiKeyHint": "Lascia vuoto per mantenere la chiave corrente",
       "apiKeyPlaceholderExisting": "Lascia vuoto per non modificare",
       "apiKeyPlaceholderNew": "Incolla la chiave API",
-      "providerKind": "Fornitore API"
+      "providerKind": "Fornitore API",
+      "isFree": "Modello gratuito",
+      "isFreeHint": "Se abilitato, il modello non consuma alcuna quota (né token né budget in $) e non viene conteggiato nella spesa.",
+      "isFreeOn": "Gratuito: sì",
+      "isFreeOff": "Gratuito: no"
     },
     "billing": {
       "customProvider": "Personalizzato",
@@ -463,7 +467,14 @@
         },
         "free": "gratuito",
         "aborted": "annullato",
-        "freeTooltip": "modello gratuito"
+        "freeTooltip": "modello gratuito",
+        "weeklyCost": "$ a settimana",
+        "resetUsage": "Reimposta utilizzo settimanale",
+        "resetUsageHint": "Reimposta i contatori settimanali di questo utente",
+        "resetUsageConfirm": "Reimpostare l'utilizzo settimanale per questo utente?",
+        "resetting": "Reimpostazione in corso...",
+        "resetDone": "Utilizzo settimanale reimpostato.",
+        "resetError": "Ripristino fallito: {{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "Memoria",
@@ -678,7 +689,9 @@
       "description": "Applica limiti a tutti gli utenti correnti",
       "saving": "Salvataggio…",
       "saveLimits": "Salva limiti",
-      "syncAll": "Sincronizza con tutti gli utenti"
+      "syncAll": "Sincronizza con tutti gli utenti",
+      "resetUsage": "Ripristina limiti settimanali per tutti",
+      "resettingUsage": "Ripristino in corso..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "Pro",
         "hint": "Abbonamento Premium"
       }
-    }
+    },
+    "billingModeToggle": "Fatturazione: {{mode}}",
+    "billingMode": {
+      "tokens": "Token",
+      "budget": "Budget",
+      "tokensHint": "Contato per token assoluti senza cache. I modelli consumano il limite in base al coefficiente specificato.",
+      "budgetHint": "Contato per costo effettivo in $. La cache è più economica, i modelli costosi consumano di più."
+    },
+    "budgetLabel": "Budget mensile ($)",
+    "budgetHint": "~{{weekly}} a settimana. 0 = nessuna quota.",
+    "subscriptionPriceLabel": "Prezzo abbonamento ($)",
+    "subscriptionPriceHint": "Solo a scopo informativo, nessun pagamento.",
+    "resetUsageConfirm": "Reimpostare l'utilizzo settimanale per TUTTI gli utenti?",
+    "resetting": "Reimpostazione in corso...",
+    "resetUsageDone": "Reimpostazione completata: {{count}} utenti aggiornati."
   },
   "nav": {
     "overview": "Panoramica",

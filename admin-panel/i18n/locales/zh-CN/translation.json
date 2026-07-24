@@ -122,12 +122,16 @@
       "quotaId": "用于配额跟踪的模型 ID",
       "quotaIdHint": "用于查找系数的稳定标识符。如果为空，保存时自动生成。",
       "coefficient": "成本系数",
-      "coefficientHint": "0 = 免费（无配额消耗），1 = 默认，0.7 = 更便宜，1.5 = 更贵",
+      "coefficientHint": "1 = 默认，0.7 = 更便宜，1.5 = 更贵",
       "apiKey": "API 密钥",
       "apiKeyHint": "留空以保留当前密钥",
       "apiKeyPlaceholderExisting": "留空以保持不变",
       "apiKeyPlaceholderNew": "粘贴 API 密钥",
-      "providerKind": "API 提供商"
+      "providerKind": "API 提供商",
+      "isFree": "免费模型",
+      "isFreeHint": "如果启用，该模型不消耗任何配额（既不计入代币也不计入预算$），也不计入已花费金额。",
+      "isFreeOn": "免费：是",
+      "isFreeOff": "免费：否"
     },
     "billing": {
       "customProvider": "自定义",
@@ -463,7 +467,14 @@
         },
         "free": "免费",
         "aborted": "已中止",
-        "freeTooltip": "免费模型"
+        "freeTooltip": "免费模型",
+        "weeklyCost": "每周费用（$）",
+        "resetUsage": "重置每周用量",
+        "resetUsageHint": "重置此用户的每周计数器",
+        "resetUsageConfirm": "确定重置此用户的每周用量？",
+        "resetting": "重置中...",
+        "resetDone": "每周用量已重置。",
+        "resetError": "重置失败：{{error}}"
       },
       "contextBreakdown": {
         "memoryMerge": "内存",
@@ -678,7 +689,9 @@
       "description": "对所有当前用户应用限制",
       "saving": "保存中…",
       "saveLimits": "保存限制",
-      "syncAll": "同步到所有用户"
+      "syncAll": "同步到所有用户",
+      "resetUsage": "重置所有人的每周限制",
+      "resettingUsage": "重置中..."
     },
     "plans": {
       "free": {
@@ -693,7 +706,21 @@
         "label": "专业版",
         "hint": "高级订阅"
       }
-    }
+    },
+    "billingModeToggle": "计费：{{mode}}",
+    "billingMode": {
+      "tokens": "令牌",
+      "budget": "预算",
+      "tokensHint": "按绝对令牌计数，无缓存。模型根据指定系数消耗限额。",
+      "budgetHint": "按实际美元成本计数。缓存更便宜，昂贵模型消耗更多。"
+    },
+    "budgetLabel": "每月预算（$）",
+    "budgetHint": "每周约{{weekly}}。0 = 无限额。",
+    "subscriptionPriceLabel": "订阅价格（$）",
+    "subscriptionPriceHint": "仅供参考，无需付款。",
+    "resetUsageConfirm": "重置所有用户的每周使用量？",
+    "resetting": "正在重置...",
+    "resetUsageDone": "重置完成：已更新 {{count}} 个用户。"
   },
   "nav": {
     "overview": "概览",

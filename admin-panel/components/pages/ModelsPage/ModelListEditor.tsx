@@ -20,6 +20,7 @@ import {
   type OpenRouterPricing,
 } from '../../ui/ModelInput';
 import { FormField } from '../../ui/FormField/FormField';
+import { Toggle } from '../../ui/Toggle/Toggle';
 import { SecretState } from '../../ui/SecretState/SecretState';
 import styles from './ModelsPage.module.css';
 
@@ -465,6 +466,13 @@ export function ProviderModelFields({
       {/* Prices — only if override hook is available */}
       {coefficientManager?.getOverride && (
         <>
+          <FormField label={t('models.providerFields.isFree')} hint={t('models.providerFields.isFreeHint')}>
+            <Toggle
+              checked={Boolean(override?.isFree)}
+              onChange={(checked) => { void persistOverride({ isFree: checked }); }}
+              label={override?.isFree ? t('models.providerFields.isFreeOn') : t('models.providerFields.isFreeOff')}
+            />
+          </FormField>
           {providerKind === 'openrouter' && (
             <FormField label={t('models.billing.openrouterProvider') || 'OpenRouter provider'}
               hint={t('models.billing.openrouterProviderHint') || '“Auto” lets OpenRouter choose the endpoint'}>
