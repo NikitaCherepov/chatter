@@ -74,5 +74,13 @@
   },
   "chat": {
     "defaultTitle": "Chat {{number}}"
+  },
+  "confirmations": {
+    "reviewSshSystem": "Eres un experto en seguridad. Responde brevemente.",
+    "reviewSshPrompt": "Evalúa la seguridad de este comando SSH en un servidor. Explica brevemente los riesgos en 1-2 oraciones. Comando: {{command}}. Responde en {{language}}."
+  },
+  "errors": {
+    "quotaExceeded": "⚠️ Cuota excedida. Se restablece {{resetsAt}}.",
+    "genericServerError": "⚠️ Error del servidor. Revisa los registros."
   }
 }

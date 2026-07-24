@@ -74,5 +74,13 @@
       "list_devops_servers": "[{{agent}}] Získávání seznamu serverů...",
       "runningTool": "[{{agent}}] Spouštění {{tool}}..."
     }
+  },
+  "confirmations": {
+    "reviewSshSystem": "Jste bezpečnostní expert. Odpovězte stručně.",
+    "reviewSshPrompt": "Posuďte bezpečnost tohoto SSH příkazu na serveru. Stručně vysvětlete rizika v 1–2 větách. Příkaz: {{command}}. Odpovězte v {{language}}."
+  },
+  "errors": {
+    "quotaExceeded": "⚠️ Kvóta překročena. Obnoví se {{resetsAt}}.",
+    "genericServerError": "⚠️ Chyba serveru. Zkontrolujte protokoly."
   }
 }

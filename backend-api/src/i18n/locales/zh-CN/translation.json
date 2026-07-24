@@ -74,5 +74,13 @@
   },
   "chat": {
     "defaultTitle": "聊天 {{number}}"
+  },
+  "confirmations": {
+    "reviewSshSystem": "您是安全专家。请简要回复。",
+    "reviewSshPrompt": "评估此SSH命令在服务器上的安全性。用1-2句话简要说明风险。命令：{{command}}。用{{language}}回复。"
+  },
+  "errors": {
+    "quotaExceeded": "⚠️ 配额已超。重置时间：{{resetsAt}}。",
+    "genericServerError": "⚠️ 服务器错误。请检查日志。"
   }
 }

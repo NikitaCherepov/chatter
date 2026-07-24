@@ -5230,7 +5230,9 @@ bot.action(/^devops:review:(.+)$/, async (ctx) => {
             const liteResp = await axios.post(
                 `${BACKEND_API_BASE_URL}/internal/ai/lite`,
                 {
-                    text: ctx.t('confirmations.reviewSshPrompt', { command: cmd }),
+                    prompt_type: 'review_ssh',
+                    command: cmd,
+                    user_id: userId,
                 },
                 { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
             );

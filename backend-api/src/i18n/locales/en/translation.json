@@ -67,6 +67,10 @@
     "banned": "🚫 Access blocked by an administrator.",
     "unbanned": "✅ The block was removed. Your request is awaiting approval again."
   },
+  "confirmations": {
+    "reviewSshSystem": "You are a security expert. Reply briefly.",
+    "reviewSshPrompt": "Assess the safety of this SSH command on a server. Briefly explain the risks in 1–2 sentences. Command: {{command}}. Respond in {{language}}."
+  },
   "errors": {
     "quotaExceeded": "⚠️ Quota exceeded. Resets {{resetsAt}}.",
     "genericServerError": "⚠️ Server error. Check logs."

@@ -74,5 +74,13 @@
   },
   "chat": {
     "defaultTitle": "Chat {{number}}"
+  },
+  "confirmations": {
+    "reviewSshSystem": "Sie sind ein Sicherheitsexperte. Antworten Sie kurz.",
+    "reviewSshPrompt": "Bewerten Sie die Sicherheit dieses SSH-Befehls auf einem Server. Erklären Sie kurz die Risiken in 1–2 Sätzen. Befehl: {{command}}. Antworten Sie in {{language}}."
+  },
+  "errors": {
+    "quotaExceeded": "⚠️ Kontingent überschritten. Setzt zurück um {{resetsAt}}.",
+    "genericServerError": "⚠️ Serverfehler. Überprüfen Sie die Protokolle."
   }
 }

@@ -74,5 +74,13 @@
   },
   "chat": {
     "defaultTitle": "채팅 {{number}}"
+  },
+  "confirmations": {
+    "reviewSshSystem": "당신은 보안 전문가입니다. 간략히 답변하세요.",
+    "reviewSshPrompt": "서버에서 이 SSH 명령의 안전성을 평가하세요. 1~2문장으로 위험을 간략히 설명하세요. 명령: {{command}}. {{language}}로 응답하세요."
+  },
+  "errors": {
+    "quotaExceeded": "⚠️ 할당량 초과. {{resetsAt}}에 재설정됩니다.",
+    "genericServerError": "⚠️ 서버 오류. 로그를 확인하세요."
   }
 }

@@ -4887,6 +4887,23 @@ app.post('/internal/visual-click/approve', internalAuth, async (req, res) => {
 
 app.post('/internal/ai/lite', internalAuth, async (req, res) => {
   const text = `${req.body?.text || ''}`;
+  const promptType = `${req.body?.prompt_type || ''}`;
+  const command = `${req.body?.command || ''}`;
+
+  // Review SSH command: build prompt on the backend (single source of truth)
+  if (promptType === 'review_ssh' && command.trim()) {
+    const userId = resolveInternalAccountId(req.body?.user_id);
+    const user = Number.isFinite(userId) && userId > 0 ? getUserById(userId) : undefined;
+    const systemPrompt = translateForLanguage(user?.language, 'confirmations.reviewSshSystem');
+    const userPrompt = translateForLanguage(user?.language, 'confirmations.reviewSshPrompt', { command: command.trim(), language: normalizeSupportedLanguage(user?.language) || 'English' });
+    try {
+      const reply = await callLiteAi(systemPrompt, userPrompt);
+      return res.json({ reply_text: reply });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'lite_ai_failed', details: err?.message });
+    }
+  }
+
   if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
 
   try {

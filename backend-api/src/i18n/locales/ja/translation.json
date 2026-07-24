@@ -74,5 +74,13 @@
   },
   "chat": {
     "defaultTitle": "チャット {{number}}"
+  },
+  "confirmations": {
+    "reviewSshSystem": "あなたはセキュリティ専門家です。簡潔に回答してください。",
+    "reviewSshPrompt": "サーバー上のこのSSHコマンドの安全性を評価してください。リスクを1～2文で簡潔に説明してください。コマンド: {{command}}。{{language}}で回答してください。"
+  },
+  "errors": {
+    "quotaExceeded": "⚠️ クォータ超過。{{resetsAt}}にリセットされます。",
+    "genericServerError": "⚠️ サーバーエラー。ログを確認してください。"
   }
 }
