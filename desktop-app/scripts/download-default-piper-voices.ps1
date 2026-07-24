@@ -45,3 +45,8 @@ foreach ($voice in $voices) {
 }
 
 Write-Host 'Two default Russian and two default English Piper voices are installed.'
+
+# Explicitly reset $LASTEXITCODE so the caller (prepare-release-resources.ps1)
+# does not see a stale non-zero exit code from a previous native command when
+# every file was already cached and no download actually ran.
+$global:LASTEXITCODE = 0
