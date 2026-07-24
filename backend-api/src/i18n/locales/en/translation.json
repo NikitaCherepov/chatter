@@ -67,6 +67,11 @@
     "banned": "🚫 Access blocked by an administrator.",
     "unbanned": "✅ The block was removed. Your request is awaiting approval again."
   },
+  "errors": {
+    "quotaExceeded": "⚠️ Quota exceeded. Resets {{resetsAt}}.",
+    "genericServerError": "⚠️ Server error. Check logs."
+  },
+
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] Reading directory...",

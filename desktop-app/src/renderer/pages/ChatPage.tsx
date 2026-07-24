@@ -1518,15 +1518,39 @@ export function ChatPage() {
             ttsSpeak(res.message_id, res.reply_text);
           }
         },
-        onError: (err) => {
+        onError: (err, message) => {
           console.error('Stream error:', err);
           streamAppenderRef.current.flushNow();
           setStreamingState('done');
           setStreamingMsgId(null);
-          if (assistantMsgCreatedRef.current) {
-            setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
+          if (message) {
+            // Show localized error as assistant message (not saved to DB)
+            setMessages((prev) => {
+              const cleaned = prev.filter(m => m.id !== tempAssistantId);
+              const errorIdx = cleaned.findIndex(m => m.id === tempUserMsg.id);
+              if (errorIdx >= 0) {
+                const updated = [...cleaned];
+                updated.splice(errorIdx + 1, 0, {
+                  id: `error-${Date.now()}`,
+                  role: 'assistant' as const,
+                  content: message,
+                  created_at: new Date().toISOString(),
+                } as any);
+                return updated;
+              }
+              return [...cleaned, {
+                id: `error-${Date.now()}`,
+                role: 'assistant' as const,
+                content: message,
+                created_at: new Date().toISOString(),
+              } as any];
+            });
           } else {
-            setMessages((prev) => prev.filter(m => m.id !== tempUserMsg.id));
+            if (assistantMsgCreatedRef.current) {
+              setMessages((prev) => prev.filter(m => m.id !== tempAssistantId && m.id !== tempUserMsg.id));
+            } else {
+              setMessages((prev) => prev.filter(m => m.id !== tempUserMsg.id));
+            }
           }
           setShowTyping(false);
           setSending(false);
@@ -1999,12 +2023,22 @@ export function ChatPage() {
           setSending(false);
           if (res.display_state) applyAvatarState(res.display_state);
         },
-        onError: (err) => {
+        onError: (err, message) => {
           console.error('Regenerate error:', err);
           streamAppenderRef.current.flushNow();
           setStreamingState('done');
           setStreamingMsgId(null);
-          if (assistantMsgCreatedRef.current) {
+          if (message && assistantMsgCreatedRef.current) {
+            setMessages((prev) => {
+              const idx = prev.findIndex(m => m.id === tempAssistantId);
+              if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], content: message } as any;
+                return updated;
+              }
+              return prev;
+            });
+          } else if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.filter(m => m.id !== tempAssistantId));
           }
           setShowTyping(false);

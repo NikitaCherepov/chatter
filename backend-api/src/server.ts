@@ -78,6 +78,23 @@ db.transaction(() => {
 
 const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
 
+/** Build a localized error payload for AI send failures (quota, etc.). */
+const buildLocalizedAiError = (err: any, userId: number): { error: string; message?: string } => {
+  const code = `${err?.message || 'ai_send_failed'}`;
+  if (code === 'quota_exceeded') {
+    const user = getUserById(userId);
+    const resetsAt = err?.resetsAt
+      ? new Date(err.resetsAt * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '';
+    const message = translateForLanguage(user?.language, 'errors.quotaExceeded', { resetsAt });
+    return { error: code, message };
+  }
+  const user = getUserById(userId);
+  const message = translateForLanguage(user?.language, 'errors.genericServerError');
+  return { error: code, message };
+};
+
+
 type ModerationNotification = 'approved' | 'rejected' | 'banned' | 'unbanned';
 
 const notifyUserMessengers = async (
@@ -463,7 +480,8 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
     if (code === 'empty_text') return res.status(400).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
-    return res.status(500).json({ error: code });
+    const payload = buildLocalizedAiError(err, userId);
+    return res.status(500).json(payload);
   }
 });
 
@@ -577,11 +595,13 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
     res.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
     res.end();
   } catch (err: any) {
-    const code = `${err?.message || 'ai_send_failed'}`;
-    res.write(`event: error\ndata: ${JSON.stringify({ error: code })}\n\n`);
+    const payload = buildLocalizedAiError(err, userId);
+    res.write(`event: error\ndata: ${JSON.stringify(payload)}\n\n`);
     res.end();
   }
 });
+
+
 
 app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
   const targetUserId = resolveInternalAccountId(req.body?.target_user_id);
@@ -1593,8 +1613,8 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     res.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
     res.end();
   } catch (err: any) {
-    const code = `${err?.message || 'ai_send_failed'}`;
-    res.write(`event: error\ndata: ${JSON.stringify({ error: code })}\n\n`);
+    const payload = buildLocalizedAiError(err, userId);
+    res.write(`event: error\ndata: ${JSON.stringify(payload)}\n\n`);
     res.end();
   }
 });
@@ -5418,10 +5438,10 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     // Send 'done' through the current connection (may have reconnected since).
     sendWsJson({ type: 'done', ...result });
   } catch (err: any) {
-    const code = `${err?.message || 'ai_send_failed'}`;
+    const payload = buildLocalizedAiError(err, userId);
     // Send 'error' through the current connection (may have reconnected since).
     // If desktop is offline, the user will see the result/error on next chat refresh.
-    sendWsJson({ type: 'error', error: code });
+    sendWsJson({ type: 'error', ...payload });
   }
 }
 // ── WS ipc_result handler ────────────────────────────────────────────────────

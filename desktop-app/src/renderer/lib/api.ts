@@ -548,7 +548,7 @@ export type StreamCallbacks = {
   /** Стрим reasoning-токенов в реальном времени. */
   onReasoningStream?: (text: string) => void;
   onDone?: (result: ChatSendResponse) => void;
-  onError?: (err: string) => void;
+  onError?: (err: string, message?: string) => void;
 };
 
 // ---------- WebSocket ----------
@@ -719,7 +719,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           break;
         }
         case 'error': {
-          (activeStreamCallbacks.onError ?? wsCallbacks.onError)?.(msg.error);
+          (activeStreamCallbacks.onError ?? wsCallbacks.onError)?.(msg.error, msg.message);
           activeStreamCallbacks = {};
           break;
         }
@@ -987,7 +987,7 @@ async function streamChatMessageSSE(
             else if (eventName === 'dice_roll' && callbacks?.onDiceRoll) callbacks.onDiceRoll(Number(data.roll));
             else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
             else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
-            else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error);
+            else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error, data.message);
           } catch {
             // ignore malformed JSON
           }

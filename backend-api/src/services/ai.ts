@@ -3207,7 +3207,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const query = `${parsed.query || ''}`.trim();
     if (!query) return 'Tool error: empty search query.';
     const webLimit = checkWebSearchLimit(user);
-    if (!webLimit.allowed) return webLimit.reason;
+    if (!webLimit.allowed && user.is_admin !== 1) return webLimit.reason;
     incrementUserWebSearchUsage(user.id, 1);
     return runWebSearch(query, signal);
   }

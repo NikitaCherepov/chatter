@@ -1,4 +1,4 @@
-import { Markup, Telegraf } from 'telegraf';
+﻿import { Markup, Telegraf } from 'telegraf';
 import type { Context } from 'telegraf';
 import * as dotenv from 'dotenv';
 import crypto from 'crypto';
@@ -802,6 +802,7 @@ const runBackendAiStream = async (
         let currentEvent = '';
         let finalResult: any = null;
         let streamError: string | null = null;
+        let streamErrorMessage: string | null = null;
 
         const processSSE = async (raw: string) => {
             const lines = raw.split('\n');
@@ -843,6 +844,7 @@ const runBackendAiStream = async (
                                 break;
                             case 'error':
                                 streamError = data.error || 'unknown_error';
+                                streamErrorMessage = data.message || '';
                                 break;
                         }
                     } catch {
@@ -868,14 +870,18 @@ const runBackendAiStream = async (
             if (buffer.trim()) {
                 processSSE(buffer).then(() => {
                     if (streamError) {
-                        reject(new Error(streamError));
+                        const err = new Error(streamError) as Error & { localizedMessage?: string };
+                        err.localizedMessage = streamErrorMessage || undefined;
+                        reject(err);
                     } else {
                         resolve(finalResult || { reply_text: '' });
                     }
                 });
             } else {
                 if (streamError) {
-                    reject(new Error(streamError));
+                    const err = new Error(streamError) as Error & { localizedMessage?: string };
+                    err.localizedMessage = streamErrorMessage || undefined;
+                    reject(err);
                 } else {
                     resolve(finalResult || { reply_text: '' });
                 }
@@ -6291,14 +6297,15 @@ const processUserTextThroughAi = async (
             await options.onAssistantReply(assistantText);
         }
         return assistantText;
-    } catch (err) {
+    } catch (err: any) {
         console.error('Ошибка backend-ai вызова:', formatSafeError(err));
         if (!options?.suppressFinalReply) {
-            await ctx.reply(ctx.t('generated.systemErrorCheckBackendLogs'));
+            const localized = err?.localizedMessage || ctx.t('generated.systemErrorCheckBackendLogs');
+            await ctx.reply(localized);
         }
         return null;
     }
-};
+    }
 
 bot.on('text', async (ctx) => {
     const userId = ctx.state.accountId;
