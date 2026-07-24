@@ -27,6 +27,7 @@
     "copy": "Copy",
     "edit": "Edit",
     "clear": "Clear",
+    "inDevelopment": "In development",
     "yes": "Yes",
     "no": "No",
     "search": "Search",
@@ -132,6 +133,7 @@
       "restrictions": "Restrictions",
       "models": "Models",
       "limits": "Limits",
+      "billing": "Billing",
       "app": "Application"
     },
     "language": {

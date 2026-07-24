@@ -41,7 +41,7 @@ type Props = {
   onAccountChanged?: () => void | Promise<void>;
 };
 
-type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models';
+type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -77,6 +77,7 @@ const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'restrictions', labelKey: 'settings.sections.restrictions' },
   { key: 'models', labelKey: 'settings.sections.models' },
   { key: 'limits', labelKey: 'settings.sections.limits' },
+  { key: 'billing', labelKey: 'settings.sections.billing' },
   { key: 'app', labelKey: 'settings.sections.app' },
 ];
 
@@ -1647,6 +1648,13 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {section === 'billing' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('settings.sections.billing')}</div>
+              <div className={s.promptLoading}>{t('common.inDevelopment')}</div>
             </div>
           )}
 
