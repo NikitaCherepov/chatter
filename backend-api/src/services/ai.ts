@@ -132,12 +132,29 @@ export const activeHitlWaits = new Set<number>();
 // Server update drain lock — rejects new requests while preparing for update
 let updatePreparing = false;
 let updatePreparingSince = 0;
+let updatePrepareTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Safety net: if the admin reloads the page or closes the tab mid-drain,
+// the flag would block all AI requests forever. This auto-clears it after
+// 5 minutes so users are never stuck indefinitely.
+const UPDATE_PREPARE_AUTO_CLEAR_MS = 5 * 60 * 1000;
+
 export const getUpdatePreparing = () => updatePreparing;
 
 export const setUpdatePrepare = () => {
+  // Reset any previous auto-clear timer.
+  if (updatePrepareTimeout) {
+    clearTimeout(updatePrepareTimeout);
+  }
   updatePreparing = true;
   updatePreparingSince = Date.now();
+  updatePrepareTimeout = setTimeout(() => {
+    updatePreparing = false;
+    updatePreparingSince = 0;
+    updatePrepareTimeout = null;
+  }, UPDATE_PREPARE_AUTO_CLEAR_MS);
 };
+
 // Abort every active generation immediately. Does NOT touch the flag —
 // the flag is set separately via setUpdatePrepare().
 export const forceAbortActiveGenerations = () => {
@@ -152,7 +169,16 @@ export const forceAbortActiveGenerations = () => {
   }
   return aborted;
 };
-export const clearUpdatePrepare = () => { updatePreparing = false; updatePreparingSince = 0; };
+
+export const clearUpdatePrepare = () => {
+  if (updatePrepareTimeout) {
+    clearTimeout(updatePrepareTimeout);
+    updatePrepareTimeout = null;
+  }
+  updatePreparing = false;
+  updatePreparingSince = 0;
+};
+
 export const getUpdateState = () => ({
   preparing: updatePreparing,
   activeUsers: activeGenerations.size + activeHitlWaits.size,
