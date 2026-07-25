@@ -750,7 +750,7 @@ const adaptRequestBodyForProvider = (
   // ── OpenRouter: reasoning.effort + optional provider routing ──
   if (url.includes('openrouter.ai')) {
     const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, ...body } = requestBody as any;
-    if (level && level !== 'auto') {
+    if (level && level !== 'auto' && level !== 'none' && level !== 'minimal') {
       body.reasoning = { effort: level };
     }
     // If a specific upstream provider is configured, pin it.
@@ -1218,7 +1218,7 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string, optio
     temperature: 0.7
   };
 
-  const meta = await createCompletionWithLiteProviderFallback(requestBody, undefined, null);
+  const meta = await createCompletionWithLiteProviderFallback(requestBody, undefined, 'none');
   const msg = meta.response?.choices?.[0]?.message;
   const content = msg?.content;
   if (typeof content !== 'string' || !content.trim()) {
