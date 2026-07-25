@@ -750,7 +750,7 @@ const adaptRequestBodyForProvider = (
   // ── OpenRouter: reasoning.effort + optional provider routing ──
   if (url.includes('openrouter.ai')) {
     const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, ...body } = requestBody as any;
-    if (level && level !== 'auto' && level !== 'none' && level !== 'minimal') {
+    if (level && level !== 'auto') {
       body.reasoning = { effort: level };
     }
     // If a specific upstream provider is configured, pin it.
