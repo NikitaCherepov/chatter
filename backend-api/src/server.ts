@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'node:crypto';
@@ -3626,12 +3626,12 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
 // ── Admin: Server update preparation (drain active users) ──────────────────
 
 // GET: poll current state
-app.get('/api/v1/admin/update/prepare', adminMiddleware, (_req: AuthedRequest, res) => {
+app.get('/internal/admin/update/prepare', internalAuth, (_req, res) => {
   return res.json(getUpdateState());
 });
 
 // POST: prepare / cancel / extend / force
-app.post('/api/v1/admin/update/prepare', adminMiddleware, (req: AuthedRequest, res) => {
+app.post('/internal/admin/update/prepare', internalAuth, (req, res) => {
   const action = `${req.body?.action || ''}`.trim().toLowerCase();
   if (!['prepare', 'cancel', 'extend', 'force'].includes(action)) {
     return res.status(400).json({ error: 'bad_action', action });

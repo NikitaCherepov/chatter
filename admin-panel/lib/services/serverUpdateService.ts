@@ -34,21 +34,21 @@ export const serverUpdateService = {
   forceRefresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1&force=1'),
   apply: () => api('/api/server-update', { method: 'POST', body: '{}' }),
 
-  // Update drain endpoints
-  getUpdateState: () => api<UpdateState>('/api/v1/admin/update/prepare'),
-  prepareUpdate: () => api<UpdateState>('/api/v1/admin/update/prepare', {
+  // Update drain endpoints (proxied by chatter-manager -> backend-api)
+  getUpdateState: () => api<UpdateState>('/api/update/prepare'),
+  prepareUpdate: () => api<UpdateState>('/api/update/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'prepare' }),
   }),
-  cancelUpdate: () => api<UpdateState>('/api/v1/admin/update/prepare', {
+  cancelUpdate: () => api<UpdateState>('/api/update/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'cancel' }),
   }),
-  extendUpdate: () => api<UpdateState>('/api/v1/admin/update/prepare', {
+  extendUpdate: () => api<UpdateState>('/api/update/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'extend' }),
   }),
-  forceUpdate: () => api<{ aborted: number }>('/api/v1/admin/update/prepare', {
+  forceUpdate: () => api<{ aborted: number }>('/api/update/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'force' }),
   }),

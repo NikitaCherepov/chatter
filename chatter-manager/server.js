@@ -1807,6 +1807,28 @@ async function handleRequest(req, res) {
       .finally(() => { updatePromise = null; });
     return sendJson(res, 202, { ok: true, targetHash: snapshot.latestHash });
   }
+
+  if (pathname === '/api/update/prepare') {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/update/prepare'));
+      } catch (error) {
+        return sendJson(res, 502, { error: error.message || 'backend_drain_state_failed' });
+      }
+    }
+    if (req.method === 'POST') {
+      const body = await readJson(req);
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/update/prepare', {
+          method: 'POST',
+          body: JSON.stringify({ action: `${body.action || ''}`.trim().toLowerCase() }),
+        }));
+      } catch (error) {
+        const status = error.message === 'bad_action' ? 400 : 502;
+        return sendJson(res, status, { error: error.message || 'backend_drain_action_failed' });
+      }
+    }
+  }
   const serviceActionMatch = pathname.match(/^\/api\/services\/([^/]+)\/(start|stop|restart)$/);
   if (req.method === 'POST' && serviceActionMatch) {
     if (serverUpdateInProgress()) return sendJson(res, 409, { error: 'server_update_is_in_progress' });
