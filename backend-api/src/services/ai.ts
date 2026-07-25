@@ -7195,9 +7195,12 @@ iterations.push(currentIteration);
       // как обычное assistant-сообщение с пометкой aborted: true.
       console.log(`[AI] Generation aborted by user ${userId} (soft-save)`);
 
+      const partialContent = streamContentBuffer || fullDbHistory;
       const abortedAnswer = answer && answer !== FALLBACK_ANSWER
         ? answer + '\n\n_⏹ Generation stopped by user_'
-        : (toolUserMessages.length > 0 ? '_⏹ Generation stopped by user_' : '');
+        : (partialContent
+           ? partialContent + '\n\n_⏹ Generation stopped by user_'
+           : (toolUserMessages.length > 0 ? '_⏹ Generation stopped by user_' : ''));
       const abortedDbText = fullDbHistory || streamContentBuffer || abortedAnswer;
       const abortedReasoning = reasoningParts.length > 0
         ? reasoningParts.join('\n\n').trim()
