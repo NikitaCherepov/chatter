@@ -638,6 +638,15 @@
         "restarting": "서버 서비스를 다시 시작하는 중입니다. 패널이 잠시 연결이 끊길 수 있습니다…",
         "complete": "서버가 업데이트되었습니다.",
         "failed": "업데이트에 실패했습니다."
+      },
+      "drain": {
+        "waiting": "{{count}}명의 사용자가 아직 작업 중입니다. {{seconds}}초 대기 중…",
+        "allDone": "모든 사용자가 완료했습니다. 업데이트를 진행합니다…",
+        "activeUsers": "현재 {{count}}명의 사용자가 활성 상태입니다.",
+        "noActive": "현재 활성 사용자가 없습니다.",
+        "softUpdate": "최대 15초 대기 후 업데이트",
+        "forceNow": "지금 강제 업데이트",
+        "pollError": "드레인 폴링 실패: {{message}}"
       }
     },
     "error": "오류: {{message}}",

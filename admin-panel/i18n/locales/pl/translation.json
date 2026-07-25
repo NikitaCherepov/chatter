@@ -638,6 +638,15 @@
         "restarting": "Ponowne uruchamianie usług serwera. Panel na chwilę się rozłączy…",
         "complete": "Serwer zaktualizowany.",
         "failed": "Aktualizacja nie powiodła się."
+      },
+      "drain": {
+        "waiting": "{{count}} użytkownik(ów) wciąż pracuje. Czekam {{seconds}}s…",
+        "allDone": "Wszyscy skończyli. Kontynuuję aktualizację…",
+        "activeUsers": "{{count}} użytkownik(ów) obecnie aktywnych.",
+        "noActive": "Brak aktywnych użytkowników.",
+        "softUpdate": "Poczekaj do 15s i zaktualizuj",
+        "forceNow": "Wymuś aktualizację teraz",
+        "pollError": "Błąd odpytania opróżniania: {{message}}"
       }
     },
     "error": "Błąd: {{message}}",

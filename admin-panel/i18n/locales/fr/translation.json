@@ -638,6 +638,15 @@
         "restarting": "Redémarrage des services du serveur. Le panneau va brièvement se déconnecter…",
         "complete": "Serveur mis à jour.",
         "failed": "Échec de la mise à jour."
+      },
+      "drain": {
+        "waiting": "{{count}} utilisateur(s) encore actif(s). Attente {{seconds}}s…",
+        "allDone": "Tout le monde a terminé. Mise à jour en cours…",
+        "activeUsers": "{{count}} utilisateur(s) actuellement actif(s).",
+        "noActive": "Aucun utilisateur actif pour le moment.",
+        "softUpdate": "Attendre jusqu'à 15s et mettre à jour",
+        "forceNow": "Forcer la mise à jour maintenant",
+        "pollError": "Échec de la vérification de vidage : {{message}}"
       }
     },
     "error": "Erreur : {{message}}",

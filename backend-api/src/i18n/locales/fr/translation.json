@@ -88,7 +88,8 @@
   },
   "errors": {
     "quotaExceeded": "⚠️ Quota dépassé. Réinitialisation {{resetsAt}}.",
-    "genericServerError": "⚠️ Erreur serveur. Vérifiez les journaux."
+    "genericServerError": "⚠️ Erreur serveur. Vérifiez les journaux.",
+    "serverUpdating": "⚠️ Mise à jour du serveur en cours. Veuillez patienter et réessayer sous peu."
   },
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",

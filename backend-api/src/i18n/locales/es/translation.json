@@ -88,7 +88,8 @@
   },
   "errors": {
     "quotaExceeded": "⚠️ Cuota excedida. Se restablece {{resetsAt}}.",
-    "genericServerError": "⚠️ Error del servidor. Revisa los registros."
+    "genericServerError": "⚠️ Error del servidor. Revisa los registros.",
+    "serverUpdating": "⚠️ Actualización del servidor en curso. Espere e intente de nuevo en breve."
   },
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",

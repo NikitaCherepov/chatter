@@ -630,6 +630,15 @@
         "restarting": "Sunucu hizmetleri yeniden başlatılıyor. Panel kısa süreliğine bağlantıyı kesecek…",
         "complete": "Sunucu güncellendi.",
         "failed": "Güncelleme başarısız oldu."
+      },
+      "drain": {
+        "waiting": "{{count}} kullanıcı hâlâ çalışıyor. {{seconds}}s bekleniyor…",
+        "allDone": "Herkes bitirdi. Güncellemeye devam ediliyor…",
+        "activeUsers": "Şu anda {{count}} aktif kullanıcı.",
+        "noActive": "Şu anda aktif kullanıcı yok.",
+        "softUpdate": "En fazla 15s bekle ve güncelle",
+        "forceNow": "Şimdi zorla güncelle",
+        "pollError": "Drenaj yoklaması başarısız: {{message}}"
       }
     },
     "error": "Hata: {{message}}"

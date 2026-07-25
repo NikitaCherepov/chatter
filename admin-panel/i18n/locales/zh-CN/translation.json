@@ -638,6 +638,15 @@
         "restarting": "正在重启服务器服务。面板将短暂断开连接…",
         "complete": "服务器已更新。",
         "failed": "更新失败。"
+      },
+      "drain": {
+        "waiting": "{{count}} 位用户仍在工作。等待 {{seconds}} 秒…",
+        "allDone": "所有人都已完成。继续更新…",
+        "activeUsers": "当前 {{count}} 位用户活跃。",
+        "noActive": "当前没有活跃用户。",
+        "softUpdate": "等待最多15秒后更新",
+        "forceNow": "立即强制更新",
+        "pollError": "排空轮询失败：{{message}}"
       }
     },
     "error": "错误：{{message}}",

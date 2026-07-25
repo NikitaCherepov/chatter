@@ -631,6 +631,15 @@
         "restarting": "Restartování serverových služeb. Panel se na krátkou dobu odpojí…",
         "complete": "Server aktualizován.",
         "failed": "Aktualizace selhala."
+      },
+      "drain": {
+        "waiting": "{{count}} uživatel(é) stále pracují. Čekání {{seconds}}s…",
+        "allDone": "Všichni dokončili. Pokračuji v aktualizaci…",
+        "activeUsers": "{{count}} uživatel(é) právě aktivní.",
+        "noActive": "Žádní aktivní uživatelé.",
+        "softUpdate": "Počkat až 15s a aktualizovat",
+        "forceNow": "Vynutit aktualizaci nyní",
+        "pollError": "Selhalo dotazování na vyprázdnění: {{message}}"
       }
     },
     "error": "Chyba: {{message}}"

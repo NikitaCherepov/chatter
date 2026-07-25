@@ -638,6 +638,15 @@
         "restarting": "Reiniciando servicios del servidor. El panel se desconectará brevemente…",
         "complete": "Servidor actualizado.",
         "failed": "Actualización fallida."
+      },
+      "drain": {
+        "waiting": "{{count}} usuario(s) aún trabajando. Esperando {{seconds}}s…",
+        "allDone": "Todos terminaron. Procediendo con la actualización…",
+        "activeUsers": "{{count}} usuario(s) actualmente activos.",
+        "noActive": "No hay usuarios activos en este momento.",
+        "softUpdate": "Esperar hasta 15s y actualizar",
+        "forceNow": "Forzar actualización ahora",
+        "pollError": "Error en la consulta de drenaje: {{message}}"
       }
     },
     "error": "Error: {{message}}",

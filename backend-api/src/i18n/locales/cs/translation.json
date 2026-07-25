@@ -88,7 +88,8 @@
   },
   "errors": {
     "quotaExceeded": "⚠️ Kvóta překročena. Obnoví se {{resetsAt}}.",
-    "genericServerError": "⚠️ Chyba serveru. Zkontrolujte protokoly."
+    "genericServerError": "⚠️ Chyba serveru. Zkontrolujte protokoly.",
+    "serverUpdating": "⚠️ Probíhá aktualizace serveru. Počkejte prosím a zkuste to znovu za chvíli."
   },
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",

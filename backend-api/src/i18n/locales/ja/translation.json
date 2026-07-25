@@ -88,7 +88,8 @@
   },
   "errors": {
     "quotaExceeded": "⚠️ クォータ超過。{{resetsAt}}にリセットされます。",
-    "genericServerError": "⚠️ サーバーエラー。ログを確認してください。"
+    "genericServerError": "⚠️ サーバーエラー。ログを確認してください。",
+    "serverUpdating": "⚠️ サーバー更新中です。しばらく待ってからもう一度お試しください。"
   },
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",

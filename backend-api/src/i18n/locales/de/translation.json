@@ -88,7 +88,8 @@
   },
   "errors": {
     "quotaExceeded": "⚠️ Kontingent überschritten. Setzt zurück um {{resetsAt}}.",
-    "genericServerError": "⚠️ Serverfehler. Überprüfen Sie die Protokolle."
+    "genericServerError": "⚠️ Serverfehler. Überprüfen Sie die Protokolle.",
+    "serverUpdating": "⚠️ Server-Update läuft. Bitte warten und es später erneut versuchen."
   },
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",

@@ -638,6 +638,15 @@
         "restarting": "Reiniciando serviços do servidor. O painel será desconectado brevemente…",
         "complete": "Servidor atualizado.",
         "failed": "Falha na atualização."
+      },
+      "drain": {
+        "waiting": "{{count}} usuário(s) ainda trabalhando. Aguardando {{seconds}}s…",
+        "allDone": "Todos terminaram. Prosseguindo com a atualização…",
+        "activeUsers": "{{count}} usuário(s) atualmente ativos.",
+        "noActive": "Nenhum usuário ativo no momento.",
+        "softUpdate": "Aguardar até 15s e atualizar",
+        "forceNow": "Forçar atualização agora",
+        "pollError": "Falha na verificação de dreno: {{message}}"
       }
     },
     "error": "Erro: {{message}}",

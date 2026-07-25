@@ -88,7 +88,8 @@
   },
   "errors": {
     "quotaExceeded": "⚠️ 配额已超。重置时间：{{resetsAt}}。",
-    "genericServerError": "⚠️ 服务器错误。请检查日志。"
+    "genericServerError": "⚠️ 服务器错误。请检查日志。",
+    "serverUpdating": "⚠️ 服务器正在更新，请稍候再试。"
   },
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",

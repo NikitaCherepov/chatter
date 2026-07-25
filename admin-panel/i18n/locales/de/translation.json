@@ -638,6 +638,15 @@
         "restarting": "Serverdienste werden neu gestartet. Das Panel wird kurz getrennt…",
         "complete": "Server aktualisiert.",
         "failed": "Update fehlgeschlagen."
+      },
+      "drain": {
+        "waiting": "{{count}} Benutzer arbeiten noch. Warte {{seconds}}s…",
+        "allDone": "Alle fertig. Update wird fortgesetzt…",
+        "activeUsers": "{{count}} Benutzer derzeit aktiv.",
+        "noActive": "Derzeit keine aktiven Benutzer.",
+        "softUpdate": "Bis zu 15s warten und aktualisieren",
+        "forceNow": "Jetzt sofort aktualisieren",
+        "pollError": "Drain-Abfrage fehlgeschlagen: {{message}}"
       }
     },
     "error": "Fehler: {{message}}",

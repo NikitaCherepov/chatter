@@ -638,6 +638,15 @@
         "restarting": "Riavvio dei servizi server. Il pannello si disconnetterà brevemente…",
         "complete": "Server aggiornato.",
         "failed": "Aggiornamento fallito."
+      },
+      "drain": {
+        "waiting": "{{count}} utente/i ancora al lavoro. Attesa {{seconds}}s…",
+        "allDone": "Tutti hanno terminato. Procedo con l'aggiornamento…",
+        "activeUsers": "{{count}} utente/i attualmente attivi.",
+        "noActive": "Nessun utente attivo al momento.",
+        "softUpdate": "Attendi fino a 15s e aggiorna",
+        "forceNow": "Forza aggiornamento ora",
+        "pollError": "Errore nel drain poll: {{message}}"
       }
     },
     "error": "Errore: {{message}}",
