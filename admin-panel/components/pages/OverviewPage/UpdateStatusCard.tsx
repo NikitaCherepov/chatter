@@ -186,7 +186,6 @@ export function UpdateStatusCard() {
     }, 200);
   }
 
-  // /fix
   // ─── 2. Force ("Force update now") ───────────────────────────────────────
   // prepareUpdate() → forceAbortActiveGenerations() → applyUpdate().
   async function handleForceUpdate() {
