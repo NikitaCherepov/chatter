@@ -152,7 +152,8 @@
     "cancelled": "모델 선택이 취소되었습니다.",
     "buttons": {
       "cancel": "❌ 취소"
-    }
+    },
+    "freeBadge": "[무료]"
   },
   "context": {
     "card": "🗂 컨텍스트 제한 (토큰)\n현재: {{current}}k\n플랜 최대: {{max}}k\n플랜: {{plan}}",
@@ -750,5 +751,13 @@
       "leftButton": "왼쪽 마우스 버튼",
       "caption": "🖱 화면 클릭\n\n{{reason}}\n좌표: {{x}}%, {{y}}% ({{button}})"
     }
+  },
+  "recover": {
+    "noDesktopAccount": "이 계정에는 데스크톱 로그인/비밀번호가 없습니다. 데이터 복구가 불가능합니다.",
+    "loginMessage": "🔑 데스크톱 로그인: {{login}}",
+    "passwordMessage": "🔒 새 비밀번호: {{password}}",
+    "loginInstructions": "데스크톱 앱을 열고 이 로그인과 비밀번호로 로그인하세요. 앱에서 즉시 새 비밀번호를 설정하도록 요청합니다.",
+    "rateLimited": "새 비밀번호를 요청하려면 {{seconds}}초 기다려 주세요.",
+    "error": "데이터 복구에 실패했습니다. 나중에 다시 시도해 주세요."
   }
 }

@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { AuthPage } from './pages/AuthPage';
 import { ChatPage } from './pages/ChatPage';
+import { ForcePasswordChangePage } from './pages/ForcePasswordChangePage';
 import { useAuth, AuthProvider } from './lib/auth';
 import { UpdateModal } from './components/UpdateModal';
 import { CustomTitleBar } from './components/CustomTitleBar';
@@ -17,7 +18,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     return <div className={s.loading}>{t('common.loading')}</div>;
   }
 
-  return user ? <>{children}</> : <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  // Force password change after admin reset or recovery via Telegram bot.
+  if (user.must_change_password) return <Navigate to="/change-password" replace />;
+  return <>{children}</>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -29,6 +33,18 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   return user ? <Navigate to="/chat" replace /> : <>{children}</>;
+}
+
+function ChangePasswordRoute() {
+  const { user, initialized } = useAuth();
+  const { t } = useTranslation();
+
+  if (!initialized) {
+    return <div className={s.loading}>{t('common.loading')}</div>;
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.must_change_password) return <Navigate to="/chat" replace />;
+  return <ForcePasswordChangePage />;
 }
 
 export function App() {
@@ -46,6 +62,10 @@ export function App() {
                     <AuthPage />
                   </PublicRoute>
                 }
+              />
+              <Route
+                path="/change-password"
+                element={<ChangePasswordRoute />}
               />
               <Route
                 path="/chat"

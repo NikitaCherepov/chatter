@@ -152,7 +152,8 @@
     "cancelled": "Výběr modelu zrušen.",
     "buttons": {
       "cancel": "❌ Zrušit"
-    }
+    },
+    "freeBadge": "[zdarma]"
   },
   "context": {
     "card": "🗂 Limit kontextu (tokeny)\nAktuální: {{current}}k\nMaximum pro váš tarif: {{max}}k\nTarif: {{plan}}",
@@ -750,5 +751,13 @@
     "voiceNotRecognized": "🗣 Nerozuměl jsem.",
     "voiceRecognized": "🗣 Rozpoznáno:\n{{text}}",
     "transcriptionServerError": "❌ Selhání připojení k přepisovacímu serveru nebo interní chyba."
+  },
+  "recover": {
+    "noDesktopAccount": "Tento účet nemá přihlašovací jméno/heslo pro Desktop. Obnovení dat není k dispozici.",
+    "loginMessage": "🔑 Vaše přihlašovací jméno pro Desktop: {{login}}",
+    "passwordMessage": "🔒 Nové heslo: {{password}}",
+    "loginInstructions": "Otevřete aplikaci Desktop a přihlaste se tímto jménem a heslem. Aplikace vás okamžitě vyzve k nastavení nového hesla před pokračováním.",
+    "rateLimited": "Počkejte prosím {{seconds}} s, než požádáte o nové heslo.",
+    "error": "Obnovení dat se nezdařilo. Zkuste to prosím později."
   }
 }

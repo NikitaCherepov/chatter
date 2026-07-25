@@ -152,7 +152,8 @@
     "cancelled": "Sélection du modèle annulée.",
     "buttons": {
       "cancel": "❌ Annuler"
-    }
+    },
+    "freeBadge": "[gratuit]"
   },
   "context": {
     "card": "🗂 Limite de contexte (tokens)\nActuelle : {{current}}k\nMaximum pour votre forfait : {{max}}k\nForfait : {{plan}}",
@@ -750,5 +751,13 @@
       "leftButton": "bouton gauche de la souris",
       "caption": "🖱 Clic sur l'écran\n\n{{reason}}\nCoordonnées : {{x}}%, {{y}}% ({{button}})"
     }
+  },
+  "recover": {
+    "noDesktopAccount": "Ce compte n'a pas d'identifiant/mot de passe pour Desktop. La récupération des données est indisponible.",
+    "loginMessage": "🔑 Votre identifiant Desktop : {{login}}",
+    "passwordMessage": "🔒 Nouveau mot de passe : {{password}}",
+    "loginInstructions": "Ouvrez l'application Desktop et connectez-vous avec cet identifiant et ce mot de passe. L'application vous demandera immédiatement de définir un nouveau mot de passe avant de continuer.",
+    "rateLimited": "Veuillez patienter {{seconds}} sec avant de demander un nouveau mot de passe.",
+    "error": "Échec de la récupération des données. Veuillez réessayer plus tard."
   }
 }

@@ -44,6 +44,7 @@ export type UserRecord = {
   max_context_tokens?: number;
   attachment_max_tokens?: number;
   auth_token_version?: number;
+  must_change_password?: number;
 };
 
 export type AccountIdentityDto = {

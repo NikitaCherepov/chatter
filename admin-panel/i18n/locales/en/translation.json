@@ -448,7 +448,14 @@
         "unbanInProgress": "Unbanning…",
         "userUnbanned": "User unbanned and pending approval",
         "userBanned": "User banned",
-        "error": "Error: {{error}}"
+        "error": "Error: {{error}}",
+        "generatePassword": "Generate New Password",
+        "generatePasswordHint": "A new password will be generated, and all current user sessions will be revoked.",
+        "generatePasswordConfirm": "Are you sure? The user will lose access with their current password. A new one will be generated.",
+        "generatingPassword": "Generating password...",
+        "passwordGenerated": "New user password: {{password}}",
+        "passwordGeneratedSuccess": "New password generated",
+        "noPasswordIdentity": "User has no password-based login"
       },
       "modelUsage": {
         "title": "Usage by model",

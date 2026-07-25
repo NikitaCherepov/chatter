@@ -59,6 +59,33 @@
       "placeholder": "Verbindungslink einfügen",
       "connect": "Verbinden",
       "change": "Anderen Server verwenden"
+    },
+    "forgot": {
+      "link": "Passwort vergessen?",
+      "title": "Passwort-Wiederherstellung",
+      "subtitle": "Geben Sie Ihren Login ein. Ein Bestätigungscode wird per Telegram gesendet.",
+      "helpTitle": "Login vergessen?",
+      "helpText": "Öffnen Sie den Chatter Telegram-Bot und geben Sie /recover_desktop ein – Sie erhalten Ihren Login und ein neues Passwort.",
+      "noTelegramTitle": "Telegram nicht verknüpft",
+      "noTelegramHelp": "Die Wiederherstellung per Telegram ist nicht verfügbar, da Ihr Konto nicht mit Telegram verknüpft ist. Bitte kontaktieren Sie den Serveradministrator.",
+      "sendCode": "Code senden",
+      "codeLabel": "Code von Telegram",
+      "enterCode": "Code an Telegram für Konto {{login}} gesendet. Geben Sie die 6 Ziffern aus der Nachricht ein.",
+      "invalidCode": "6 Ziffern eingeben",
+      "verify": "Bestätigen",
+      "verifyFailed": "Code konnte nicht bestätigt werden",
+      "wrongCode": "Falscher Code. Verbleibende Versuche: {{attempts}}",
+      "codeExpired": "Code abgelaufen. Fordern Sie einen neuen an.",
+      "codeLocked": "Zu viele Versuche. Fordern Sie einen neuen Code an.",
+      "attemptsLeft": "Versuche: {{count}} von 3",
+      "rateLimited": "Zu viele Anfragen. Versuchen Sie es in {{seconds}} Sek. erneut.",
+      "requestFailed": "Code konnte nicht gesendet werden. Überprüfen Sie Ihre Anmeldedaten.",
+      "newPasswordTitle": "Neues Passwort erstellen",
+      "newPasswordPlaceholder": "Neues Passwort (mind. 8 Zeichen)",
+      "passwordTooShort": "Passwort muss mindestens 8 Zeichen lang sein",
+      "resetFailed": "Passwortänderung fehlgeschlagen",
+      "passwordChanged": "Passwort erfolgreich geändert!",
+      "loginWithNew": "Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
     }
   },
   "review": {
@@ -153,7 +180,12 @@
       "namePlaceholder": "Name eingeben...",
       "memory": "Hot Memory",
       "memoryHelp": "Was die KI immer über Sie weiß. Wird automatisch ausgefüllt, aber Sie können manuell bearbeiten.",
-      "memoryPlaceholder": "Name, Stadt, Beruf, Vorlieben..."
+      "memoryPlaceholder": "Name, Stadt, Beruf, Vorlieben...",
+      "changePassword": "Passwort ändern",
+      "currentPassword": "Aktuelles Passwort",
+      "newPassword": "Neues Passwort",
+      "changeLogin": "Login ändern",
+      "newLogin": "Neuer Login"
     },
     "prompt": {
       "style": "Kommunikationsstil",
@@ -258,7 +290,15 @@
       "describePrompt": "Beschreiben Sie, was Sie erhalten möchten",
       "promptGenerateFailed": "Prompt konnte nicht generiert werden",
       "promptApplied": "Prompt angewendet",
-      "cartesiaVoicesFailed": "Cartesia-Stimmen konnten nicht geladen werden"
+      "cartesiaVoicesFailed": "Cartesia-Stimmen konnten nicht geladen werden",
+      "passwordChanged": "Passwort erfolgreich geändert",
+      "passwordChangeFailed": "Passwortänderung fehlgeschlagen",
+      "wrongPassword": "Aktuelles Passwort ist falsch",
+      "loginChanged": "Anmeldung geändert auf {{login}}",
+      "loginChangeFailed": "Anmeldung konnte nicht geändert werden",
+      "loginAlreadyExists": "Diese Anmeldung ist bereits vergeben",
+      "badLogin": "Ungültiges Anmeldeformat",
+      "loginRequired": "Aktuelles Passwort und neue Anmeldung eingeben"
     },
     "connections": {
       "help": "Verwalten Sie Dienste, die sich bei diesem Konto anmelden und es nutzen können.",
@@ -917,5 +957,15 @@
   "quota": {
     "title": "Kontingentnutzung",
     "resetsAt": "Zurücksetzen:"
+  },
+  "forcePassword": {
+    "title": "Passwort ändern",
+    "subtitle": "Aus Sicherheitsgründen legen Sie bitte ein neues Passwort fest, bevor Sie fortfahren.",
+    "confirmPlaceholder": "Neues Passwort bestätigen",
+    "submit": "Passwort ändern",
+    "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
+    "sameAsOld": "Das neue Passwort muss sich vom aktuellen unterscheiden",
+    "success": "Passwort geändert. Bitte melden Sie sich erneut an.",
+    "logout": "Abmelden"
   }
 }

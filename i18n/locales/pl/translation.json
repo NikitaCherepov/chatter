@@ -152,7 +152,8 @@
     "cancelled": "Wybór modelu anulowany.",
     "buttons": {
       "cancel": "❌ Anuluj"
-    }
+    },
+    "freeBadge": "[darmowe]"
   },
   "context": {
     "card": "🗂 Limit kontekstu (tokeny)\nAktualny: {{current}}k\nMaksymalny dla Twojego planu: {{max}}k\nPlan: {{plan}}",
@@ -750,5 +751,13 @@
       "leftButton": "lewy przycisk myszy",
       "caption": "🖱 Kliknięcie na ekranie\n\n{{reason}}\nWspółrzędne: {{x}}%, {{y}}% ({{button}})"
     }
+  },
+  "recover": {
+    "noDesktopAccount": "To konto nie ma loginu/hasła do Desktop. Odzyskiwanie danych jest niedostępne.",
+    "loginMessage": "🔑 Twój login do Desktop: {{login}}",
+    "passwordMessage": "🔒 Nowe hasło: {{password}}",
+    "loginInstructions": "Otwórz aplikację Desktop i zaloguj się przy użyciu tego loginu i hasła. Aplikacja natychmiast poprosi Cię o ustawienie nowego hasła przed kontynuowaniem.",
+    "rateLimited": "Poczekaj {{seconds}} sekund przed ponownym żądaniem nowego hasła.",
+    "error": "Nie udało się odzyskać danych. Spróbuj ponownie później."
   }
 }

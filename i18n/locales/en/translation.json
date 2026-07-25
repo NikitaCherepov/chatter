@@ -403,6 +403,14 @@
       "cancel": "❌ Cancel"
     }
   },
+  "recover": {
+    "noDesktopAccount": "This account has no login/password for Desktop. Data recovery is unavailable.",
+    "loginMessage": "🔑 Your Desktop login: {{login}}",
+    "passwordMessage": "🔒 New password: {{password}}",
+    "loginInstructions": "Open the Desktop app and sign in with this login and password. The app will immediately ask you to set a new password before continuing.",
+    "rateLimited": "Please wait {{seconds}} sec before requesting a new password.",
+    "error": "Failed to recover data. Please try again later."
+  },
   "commands": {
     "start": "Show menu", "menu": "Open button menu", "clear": "Clear conversation memory",
     "tz": "Time zone: /tz <UTC>", "tasks": "My reminders", "task_delete": "Delete task by ID",

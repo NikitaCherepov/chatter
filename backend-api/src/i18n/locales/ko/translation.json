@@ -82,5 +82,9 @@
   "errors": {
     "quotaExceeded": "⚠️ 할당량 초과. {{resetsAt}}에 재설정됩니다.",
     "genericServerError": "⚠️ 서버 오류. 로그를 확인하세요."
+  },
+  "passwordReset": {
+    "title": "🔐 Chatter Desktop password recovery",
+    "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
   }
 }

@@ -152,7 +152,8 @@
     "cancelled": "モデル選択がキャンセルされました。",
     "buttons": {
       "cancel": "❌ キャンセル"
-    }
+    },
+    "freeBadge": "[無料]"
   },
   "context": {
     "card": "🗂 コンテキスト制限（トークン）\n現在: {{current}}k\nプランの最大: {{max}}k\nプラン: {{plan}}",
@@ -750,5 +751,13 @@
       "leftButton": "左マウスボタン",
       "caption": "🖱 画面クリック\n\n{{reason}}\n座標: {{x}}%, {{y}}% ({{button}})"
     }
+  },
+  "recover": {
+    "noDesktopAccount": "このアカウントにはデスクトップのログイン/パスワードがありません。データ復元は利用できません。",
+    "loginMessage": "🔑 デスクトップログイン: {{login}}",
+    "passwordMessage": "🔒 新しいパスワード: {{password}}",
+    "loginInstructions": "デスクトップアプリを開き、このログインとパスワードでサインインしてください。アプリはすぐに新しいパスワードの設定を求めます。",
+    "rateLimited": "新しいパスワードをリクエストする前に{{seconds}}秒お待ちください。",
+    "error": "データの復元に失敗しました。後でもう一度お試しください。"
   }
 }

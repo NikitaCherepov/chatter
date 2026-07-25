@@ -39,6 +39,9 @@ import chatS from '../pages/ChatPage.module.scss';
 type Props = {
   onClose: () => void;
   onAccountChanged?: () => void | Promise<void>;
+  /** Called when the user changed their password or login and server tokens
+   *  were revoked — the parent must force a sign-out and close the modal. */
+  onAuthInvalidated?: () => void;
 };
 
 type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models';
@@ -95,7 +98,7 @@ function clampZoomPct(pct: number): number {
   return Math.min(ZOOM_MAX_PCT, Math.max(ZOOM_MIN_PCT, snapped));
 }
 
-export function SettingsModal({ onClose, onAccountChanged }: Props) {
+export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: Props) {
   const { user, setUser } = useAuth();
   const { t, i18n } = useTranslation();
   const reasoningLevelLabels: Record<string, string> = {
@@ -112,6 +115,14 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
   // Account
   const [nameValue, setNameValue] = useState('');
   const [saving, setSaving] = useState(false);
+  // Password & login change — keep separate states so the two forms do not
+  // interact (clearing one must not clear the other).
+  const [pwdCurrent, setPwdCurrent] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [loginCurrent, setLoginCurrent] = useState('');
+  const [newLogin, setNewLogin] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [loginSaving, setLoginSaving] = useState(false);
 
   // Prompt
   const [prompts, setPrompts] = useState<api.PromptInfo[]>([]);
@@ -668,6 +679,66 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!pwdCurrent || newPassword.length < 8) {
+      toast.error(t('auth.forgot.passwordTooShort'));
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await api.apiFetch('/api/v1/user/password', {
+        method: 'PUT',
+        body: JSON.stringify({ current_password: pwdCurrent, new_password: newPassword }),
+      });
+      setPwdCurrent('');
+      setNewPassword('');
+      toast.success(t('settings.toasts.passwordChanged'));
+      // Server revoked all tokens — must re-login.
+      onAuthInvalidated?.();
+    } catch (err: any) {
+      const code = err?.code || err?.message;
+      if (code === 'wrong_current_password') {
+        toast.error(t('settings.toasts.wrongPassword'));
+      } else {
+        toast.error(t('settings.toasts.passwordChangeFailed'));
+      }
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const handleChangeLogin = async () => {
+    if (!loginCurrent || !newLogin.trim()) {
+      toast.error(t('settings.toasts.loginRequired'));
+      return;
+    }
+    setLoginSaving(true);
+    try {
+      const res = await api.apiFetch<{ ok: boolean; login: string }>('/api/v1/user/login', {
+        method: 'PUT',
+        body: JSON.stringify({ password: loginCurrent, new_login: newLogin.trim() }),
+      });
+      setLoginCurrent('');
+      setNewLogin('');
+      toast.success(t('settings.toasts.loginChanged', { login: res.login }));
+      // Server revoked all tokens — must re-login with new login.
+      onAuthInvalidated?.();
+    } catch (err: any) {
+      const code = err?.code || err?.message;
+      if (code === 'wrong_current_password') {
+        toast.error(t('settings.toasts.wrongPassword'));
+      } else if (code === 'login_already_exists') {
+        toast.error(t('settings.toasts.loginAlreadyExists'));
+      } else if (code === 'bad_login') {
+        toast.error(t('settings.toasts.badLogin'));
+      } else {
+        toast.error(t('settings.toasts.loginChangeFailed'));
+      }
+    } finally {
+      setLoginSaving(false);
+    }
+  };
+
   const handleSaveCoreMemory = async () => {
     setCoreMemorySaving(true);
     try {
@@ -985,6 +1056,65 @@ export function SettingsModal({ onClose, onAccountChanged }: Props) {
               >
                 {saving ? t('common.saving') : t('common.save')}
               </button>
+
+              <div className={s.macroFormDivider} />
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.account.changePassword')}</label>
+                <input
+                  className={s.fieldInput}
+                  type="password"
+                  value={pwdCurrent}
+                  onChange={(e) => setPwdCurrent(e.target.value)}
+                  placeholder={t('settings.account.currentPassword')}
+                  autoComplete="current-password"
+                />
+                <input
+                  className={s.fieldInput}
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder={t('settings.account.newPassword')}
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+                <button
+                  className={s.saveBtn}
+                  onClick={handleChangePassword}
+                  disabled={passwordSaving || !pwdCurrent || newPassword.length < 8}
+                >
+                  {passwordSaving ? t('common.saving') : t('settings.account.changePassword')}
+                </button>
+              </div>
+
+              <div className={s.macroFormDivider} />
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.account.changeLogin')}</label>
+                <input
+                  className={s.fieldInput}
+                  type="text"
+                  value={newLogin}
+                  onChange={(e) => setNewLogin(e.target.value)}
+                  placeholder={t('settings.account.newLogin')}
+                  autoComplete="username"
+                />
+                <input
+                  className={s.fieldInput}
+                  type="password"
+                  value={loginCurrent}
+                  onChange={(e) => setLoginCurrent(e.target.value)}
+                  placeholder={t('settings.account.currentPassword')}
+                  autoComplete="current-password"
+                />
+                <button
+                  className={s.saveBtn}
+                  onClick={handleChangeLogin}
+                  disabled={loginSaving || !loginCurrent || !newLogin.trim()}
+                >
+                  {loginSaving ? t('common.saving') : t('settings.account.changeLogin')}
+                </button>
+              </div>
 
               <div className={s.macroFormDivider} />
 

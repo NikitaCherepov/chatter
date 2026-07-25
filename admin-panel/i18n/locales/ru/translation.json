@@ -448,7 +448,14 @@
         "unbanInProgress": "Разблокирую…",
         "userUnbanned": "Пользователь разблокирован и ожидает одобрения",
         "userBanned": "Пользователь заблокирован",
-        "error": "Ошибка: {{error}}"
+        "error": "Ошибка: {{error}}",
+        "generatePassword": "Сгенерировать новый пароль",
+        "generatePasswordHint": "Пароль будет сгенерирован, и все текущие сессии пользователя будут сброшены.",
+        "generatePasswordConfirm": "Вы уверены? Пользователь потеряет доступ по текущему паролю. Будет сгенерирован новый.",
+        "generatingPassword": "Генерация пароля...",
+        "passwordGenerated": "Новый пароль пользователя: {{password}}",
+        "passwordGeneratedSuccess": "Новый пароль сгенерирован",
+        "noPasswordIdentity": "У пользователя нет входа по паролю"
       },
       "modelUsage": {
         "title": "Использование по моделям",

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/auth';
 import { clearServerConnection, configureServerConnection, loadServerConnection } from '../lib/api';
+import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import s from './AuthPage.module.scss';
 
 export function AuthPage() {
@@ -18,6 +20,7 @@ export function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(() => Boolean(loadServerConnection()));
   const [connectionLink, setConnectionLink] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleConnection = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +118,14 @@ export function AuthPage() {
           <button className={s.button} type="submit" disabled={loading}>
             {loading ? t('common.pleaseWait') : mode === 'login' ? t('auth.actions.signIn') : t('auth.actions.signUp')}
           </button>
+
+          {mode === 'login' && (
+            <p className={s.switchText}>
+              <a href="#" className={s.link} onClick={(e) => { e.preventDefault(); setShowForgotPassword(true); }}>
+                {t('auth.forgot.link')}
+              </a>
+            </p>
+          )}
         </form>
 
         <div className={s.divider} />
@@ -128,6 +139,15 @@ export function AuthPage() {
         <p className={s.switchText}><a href="#" className={s.link} onClick={async (e) => { e.preventDefault(); await clearServerConnection(); window.location.reload(); }}>{t('auth.connection.change')}</a></p>
         </>}
       </div>
+
+      <AnimatePresence>
+        {showForgotPassword && (
+          <ForgotPasswordModal
+            key="forgot-password"
+            onClose={() => setShowForgotPassword(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

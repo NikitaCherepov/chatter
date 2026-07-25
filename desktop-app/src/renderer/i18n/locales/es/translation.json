@@ -59,6 +59,33 @@
       "placeholder": "Pega el enlace de conexión",
       "connect": "Conectar",
       "change": "Usar otro servidor"
+    },
+    "forgot": {
+      "link": "¿Olvidaste tu contraseña?",
+      "title": "Recuperación de contraseña",
+      "subtitle": "Ingresa tu usuario. Se enviará un código de verificación a través de Telegram.",
+      "helpTitle": "¿Olvidaste tu usuario?",
+      "helpText": "Abre el bot de Chatter en Telegram y escribe /recover_desktop — recibirás tu usuario y una nueva contraseña.",
+      "noTelegramTitle": "Telegram no vinculado",
+      "noTelegramHelp": "La recuperación a través de Telegram no está disponible porque tu cuenta no está vinculada a Telegram. Contacta al administrador del servidor.",
+      "sendCode": "Enviar código",
+      "codeLabel": "Código de Telegram",
+      "enterCode": "Código enviado a Telegram para la cuenta {{login}}. Ingresa los 6 dígitos del mensaje.",
+      "invalidCode": "Ingrese 6 dígitos",
+      "verify": "Verificar",
+      "verifyFailed": "Error al verificar el código",
+      "wrongCode": "Código incorrecto. Intentos restantes: {{attempts}}",
+      "codeExpired": "Código expirado. Solicite uno nuevo.",
+      "codeLocked": "Demasiados intentos. Solicite un nuevo código.",
+      "attemptsLeft": "Intentos: {{count}} de 3",
+      "rateLimited": "Demasiadas solicitudes. Intente de nuevo en {{seconds}} seg.",
+      "requestFailed": "Error al enviar el código. Verifique su inicio de sesión.",
+      "newPasswordTitle": "Crear una nueva contraseña",
+      "newPasswordPlaceholder": "Nueva contraseña (mín. 8 caracteres)",
+      "passwordTooShort": "La contraseña debe tener al menos 8 caracteres",
+      "resetFailed": "Error al cambiar la contraseña",
+      "passwordChanged": "¡Contraseña cambiada exitosamente!",
+      "loginWithNew": "Ahora puede iniciar sesión con su nueva contraseña."
     }
   },
   "review": {
@@ -153,7 +180,12 @@
       "namePlaceholder": "Ingrese nombre...",
       "memory": "Memoria activa",
       "memoryHelp": "Lo que la IA recuerda siempre de ti. Se completa automáticamente, pero puedes editarlo manualmente.",
-      "memoryPlaceholder": "Nombre, ciudad, trabajo, preferencias..."
+      "memoryPlaceholder": "Nombre, ciudad, trabajo, preferencias...",
+      "changePassword": "Cambiar contraseña",
+      "currentPassword": "Contraseña actual",
+      "newPassword": "Nueva contraseña",
+      "changeLogin": "Cambiar inicio de sesión",
+      "newLogin": "Nuevo inicio de sesión"
     },
     "prompt": {
       "style": "Estilo de comunicación",
@@ -258,7 +290,15 @@
       "describePrompt": "Describe lo que deseas obtener",
       "promptGenerateFailed": "No se pudo generar el mensaje",
       "promptApplied": "Mensaje aplicado",
-      "cartesiaVoicesFailed": "No se pudieron cargar las voces de Cartesia"
+      "cartesiaVoicesFailed": "No se pudieron cargar las voces de Cartesia",
+      "passwordChanged": "Contraseña cambiada exitosamente",
+      "passwordChangeFailed": "Error al cambiar la contraseña",
+      "wrongPassword": "La contraseña actual es incorrecta",
+      "loginChanged": "Inicio de sesión cambiado a {{login}}",
+      "loginChangeFailed": "Error al cambiar el inicio de sesión",
+      "loginAlreadyExists": "Este inicio de sesión ya está en uso",
+      "badLogin": "Formato de inicio de sesión no válido",
+      "loginRequired": "Ingrese la contraseña actual y el nuevo inicio de sesión"
     },
     "connections": {
       "help": "Administra los servicios que pueden iniciar sesión y usar esta cuenta.",
@@ -917,5 +957,15 @@
   "quota": {
     "title": "Uso de cuota",
     "resetsAt": "Restablece:"
+  },
+  "forcePassword": {
+    "title": "Cambiar contraseña",
+    "subtitle": "Por razones de seguridad, establezca una nueva contraseña antes de continuar.",
+    "confirmPlaceholder": "Confirmar nueva contraseña",
+    "submit": "Cambiar contraseña",
+    "passwordsDoNotMatch": "Las contraseñas no coinciden",
+    "sameAsOld": "La nueva contraseña debe ser diferente de la actual",
+    "success": "Contraseña cambiada. Inicie sesión nuevamente.",
+    "logout": "Cerrar sesión"
   }
 }

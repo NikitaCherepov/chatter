@@ -4302,6 +4302,11 @@ export function ChatPage() {
             key="settings-modal"
             onClose={() => setShowSettings(false)}
             onAccountChanged={loadChats}
+            onAuthInvalidated={() => {
+              setShowSettings(false);
+              logout();
+              navigate('/login', { replace: true });
+            }}
           />
         )}
 

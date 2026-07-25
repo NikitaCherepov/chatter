@@ -82,5 +82,9 @@
   "errors": {
     "quotaExceeded": "⚠️ Kota aşıldı. {{resetsAt}} sıfırlanır.",
     "genericServerError": "⚠️ Sunucu hatası. Günlükleri kontrol edin."
+  },
+  "passwordReset": {
+    "title": "🔐 Chatter Desktop password recovery",
+    "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
   }
 }

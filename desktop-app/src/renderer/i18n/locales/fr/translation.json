@@ -59,6 +59,33 @@
       "placeholder": "Collez le lien de connexion",
       "connect": "Connecter",
       "change": "Utiliser un autre serveur"
+    },
+    "forgot": {
+      "link": "Mot de passe oublié ?",
+      "title": "Récupération de mot de passe",
+      "subtitle": "Saisissez votre identifiant. Un code de vérification vous sera envoyé via Telegram.",
+      "helpTitle": "Identifiant oublié ?",
+      "helpText": "Ouvrez le bot Chatter Telegram et tapez /recover_desktop — vous recevrez votre identifiant et un nouveau mot de passe.",
+      "noTelegramTitle": "Telegram non lié",
+      "noTelegramHelp": "La récupération via Telegram est indisponible car votre compte n'est pas lié à Telegram. Veuillez contacter l'administrateur du serveur.",
+      "sendCode": "Envoyer le code",
+      "codeLabel": "Code depuis Telegram",
+      "enterCode": "Code envoyé sur Telegram pour le compte {{login}}. Saisissez les 6 chiffres du message.",
+      "invalidCode": "Saisissez 6 chiffres",
+      "verify": "Vérifier",
+      "verifyFailed": "Échec de la vérification du code",
+      "wrongCode": "Code incorrect. Tentatives restantes : {{attempts}}",
+      "codeExpired": "Code expiré. Demandez-en un nouveau.",
+      "codeLocked": "Trop de tentatives. Demandez un nouveau code.",
+      "attemptsLeft": "Tentatives : {{count}} sur 3",
+      "rateLimited": "Trop de demandes. Réessayez dans {{seconds}} s.",
+      "requestFailed": "Échec de l'envoi du code. Vérifiez votre identifiant.",
+      "newPasswordTitle": "Créez un nouveau mot de passe",
+      "newPasswordPlaceholder": "Nouveau mot de passe (min 8 caractères)",
+      "passwordTooShort": "Le mot de passe doit comporter au moins 8 caractères",
+      "resetFailed": "Échec du changement de mot de passe",
+      "passwordChanged": "Mot de passe modifié avec succès !",
+      "loginWithNew": "Vous pouvez maintenant vous connecter avec votre nouveau mot de passe."
     }
   },
   "review": {
@@ -153,7 +180,12 @@
       "namePlaceholder": "Entrez le nom...",
       "memory": "Mémoire vive",
       "memoryHelp": "Ce que l'IA retient toujours de vous. Rempli automatiquement, mais vous pouvez le modifier manuellement.",
-      "memoryPlaceholder": "Nom, ville, travail, préférences..."
+      "memoryPlaceholder": "Nom, ville, travail, préférences...",
+      "changePassword": "Changer le mot de passe",
+      "currentPassword": "Mot de passe actuel",
+      "newPassword": "Nouveau mot de passe",
+      "changeLogin": "Changer l'identifiant",
+      "newLogin": "Nouvel identifiant"
     },
     "prompt": {
       "style": "Style de communication",
@@ -258,7 +290,15 @@
       "describePrompt": "Décrivez ce que vous voulez obtenir",
       "promptGenerateFailed": "Échec de la génération du prompt",
       "promptApplied": "Prompt appliqué",
-      "cartesiaVoicesFailed": "Échec du chargement des voix Cartesia"
+      "cartesiaVoicesFailed": "Échec du chargement des voix Cartesia",
+      "passwordChanged": "Mot de passe modifié avec succès",
+      "passwordChangeFailed": "Échec de la modification du mot de passe",
+      "wrongPassword": "Le mot de passe actuel est incorrect",
+      "loginChanged": "Identifiant modifié en {{login}}",
+      "loginChangeFailed": "Échec de la modification de l'identifiant",
+      "loginAlreadyExists": "Cet identifiant est déjà pris",
+      "badLogin": "Format d'identifiant invalide",
+      "loginRequired": "Saisissez le mot de passe actuel et le nouvel identifiant"
     },
     "connections": {
       "help": "Gérez les services qui peuvent se connecter et utiliser ce compte.",
@@ -917,5 +957,15 @@
   "quota": {
     "title": "Utilisation du quota",
     "resetsAt": "Réinitialisation :"
+  },
+  "forcePassword": {
+    "title": "Changer le mot de passe",
+    "subtitle": "Pour des raisons de sécurité, veuillez définir un nouveau mot de passe avant de continuer.",
+    "confirmPlaceholder": "Confirmer le nouveau mot de passe",
+    "submit": "Changer le mot de passe",
+    "passwordsDoNotMatch": "Les mots de passe ne correspondent pas",
+    "sameAsOld": "Le nouveau mot de passe doit être différent de l'actuel",
+    "success": "Mot de passe modifié. Veuillez vous reconnecter.",
+    "logout": "Se déconnecter"
   }
 }

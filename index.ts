@@ -394,6 +394,12 @@ type MailSetupFlow =
     | { step: 'await_password'; provider: 'google' | 'yandex'; email: string };
 const mailSetupFlows = new Map<number, MailSetupFlow>();
 const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page: number }>();
+
+// Rate limiter for /recover_desktop: 1 request per 60 sec per account.
+// Each call rotates the user's password and revokes all sessions, so it must
+// not be spammable.
+const recoverDesktopCooldowns = new Map<number, number>();
+const RECOVER_DESKTOP_COOLDOWN_SEC = 60;
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
@@ -3328,6 +3334,68 @@ bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
         }
         console.error('Unlink error:', formatSafeError(err));
         await ctx.editMessageText(ctx.t('unlink.confirmationError')).catch(() => {});
+    }
+});
+
+// ── /recover_desktop — recover desktop login & generate new password ──────
+bot.command('recover_desktop', async (ctx) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const t = ctx.t;
+
+    // Rate limit: 1 request per RECOVER_DESKTOP_COOLDOWN_SEC per account.
+    // Each call rotates the password and revokes all sessions, so it must
+    // not be spammable. Also periodically prune stale cooldown entries.
+    const nowSec = Math.floor(Date.now() / 1000);
+    const lastUsed = recoverDesktopCooldowns.get(userId);
+    if (lastUsed && nowSec - lastUsed < RECOVER_DESKTOP_COOLDOWN_SEC) {
+        const waitSec = RECOVER_DESKTOP_COOLDOWN_SEC - (nowSec - lastUsed);
+        return ctx.reply(t('recover.rateLimited', { seconds: waitSec }));
+    }
+    if (recoverDesktopCooldowns.size > 1000) {
+        for (const [key, ts] of recoverDesktopCooldowns) {
+            if (nowSec - ts > RECOVER_DESKTOP_COOLDOWN_SEC * 2) recoverDesktopCooldowns.delete(key);
+        }
+    }
+    recoverDesktopCooldowns.set(userId, nowSec);
+
+    try {
+        // Fetch account identities to check if password identity exists
+        const userRes = await axios.get(
+            `${BACKEND_API_BASE_URL}/internal/users/${userId}`,
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 10_000 }
+        );
+        const identities: Array<{ provider: string; provider_subject: string; username: string | null }> =
+            userRes.data?.user?.identities || [];
+        const passwordIdentity = identities.find((i: any) => i.provider === 'password');
+        if (!passwordIdentity) {
+            return ctx.reply(t('recover.noDesktopAccount'));
+        }
+
+        // Generate a new password via backend (also sets must_change_password=1)
+        const passwordRes = await axios.post(
+            `${BACKEND_API_BASE_URL}/internal/admin/users/${userId}/generate-password`,
+            {},
+            { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 10_000 }
+        );
+        const newPassword = passwordRes.data?.new_password;
+        if (!newPassword) {
+            return ctx.reply(t('recover.error'));
+        }
+
+        const login = passwordIdentity.provider_subject;
+
+        // Send login first, then the new password
+        await ctx.reply(t('recover.loginMessage', { login }));
+        await ctx.reply(t('recover.passwordMessage', { password: newPassword }));
+        await ctx.reply(t('recover.loginInstructions'));
+
+    } catch (err: any) {
+        if (err?.response?.data?.error === 'no_password_identity') {
+            return ctx.reply(t('recover.noDesktopAccount'));
+        }
+        console.error('recover_desktop error:', formatSafeError(err));
+        return ctx.reply(t('recover.error'));
     }
 });
 

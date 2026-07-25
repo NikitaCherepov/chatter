@@ -1918,6 +1918,16 @@ async function handleRequest(req, res) {
     }));
   }
 
+  // ── Admin: generate new password for user ───────────────────────────────
+  const generatePasswordMatch = pathname.match(/^\/api\/users\/([^/]+)\/generate-password$/);
+  if (req.method === 'POST' && generatePasswordMatch) {
+    const userId = generatePasswordMatch[1];
+    return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users/${userId}/generate-password`, {
+      method: 'POST',
+      body: '{}',
+    }));
+  }
+
   // ── Model coefficients (token quota multipliers) ───────────────────────
   if (req.method === 'GET' && pathname === '/api/model-coefficients') {
     return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-coefficients'));

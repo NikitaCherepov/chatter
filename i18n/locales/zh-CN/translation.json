@@ -152,7 +152,8 @@
     "cancelled": "模型选择已取消。",
     "buttons": {
       "cancel": "❌ 取消"
-    }
+    },
+    "freeBadge": "[免费]"
   },
   "context": {
     "card": "🗂 上下文限制（令牌）\n当前：{{current}}k\n您的计划最大值：{{max}}k\n计划：{{plan}}",
@@ -750,5 +751,13 @@
       "leftButton": "鼠标左键",
       "caption": "🖱 屏幕点击\n\n{{reason}}\n坐标: {{x}}%, {{y}}% ({{button}})"
     }
+  },
+  "recover": {
+    "noDesktopAccount": "此账户没有桌面端的登录名/密码。数据恢复不可用。",
+    "loginMessage": "🔑 您的桌面端登录名：{{login}}",
+    "passwordMessage": "🔒 新密码：{{password}}",
+    "loginInstructions": "打开桌面端应用并使用此登录名和密码登录。应用会立即要求您设置新密码后再继续。",
+    "rateLimited": "请等待 {{seconds}} 秒后再请求新密码。",
+    "error": "数据恢复失败。请稍后重试。"
   }
 }

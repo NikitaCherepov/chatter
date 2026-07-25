@@ -9,6 +9,7 @@ import {
   allocateAccountId,
   createPasswordIdentity,
   ensureTelegramIdentity,
+  getAccountIdentities,
   getPasswordIdentityByLogin,
   resolveAccountId,
   resolveTelegramAccountForUpsert,
@@ -1871,6 +1872,147 @@ export const getLinkCodeForUser = (userId: number) => {
   db.prepare('DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()').run();
   return db.prepare('SELECT code, expires_at FROM telegram_link_codes WHERE user_id = ?')
     .get(userId) as { code: string; expires_at: number } | undefined;
+};
+
+// ── Password reset codes ──────────────────────────────────────────────────
+
+/** Rate-limit: max 3 password-reset code requests per account per 10 minutes. */
+const PASSWORD_RESET_RATE_LIMIT_WINDOW_SEC = 600;
+const PASSWORD_RESET_RATE_LIMIT_MAX = 3;
+const PASSWORD_RESET_CODE_TTL_SEC = 300; // 5 min
+const PASSWORD_RESET_MAX_ATTEMPTS = 3;
+
+const passwordResetRequestCounts = new Map<number, { count: number; windowStart: number }>();
+
+const getPasswordResetRequestState = (accountId: number) => {
+  const now = Math.floor(Date.now() / 1000);
+  let state = passwordResetRequestCounts.get(accountId);
+  if (!state || state.windowStart + PASSWORD_RESET_RATE_LIMIT_WINDOW_SEC < now) {
+    state = { count: 0, windowStart: now };
+    passwordResetRequestCounts.set(accountId, state);
+  }
+  // Clean stale entries periodically
+  if (passwordResetRequestCounts.size > 1000) {
+    for (const [key, st] of passwordResetRequestCounts) {
+      if (st.windowStart + PASSWORD_RESET_RATE_LIMIT_WINDOW_SEC * 2 < now) passwordResetRequestCounts.delete(key);
+    }
+  }
+  return state;
+};
+
+export const generatePasswordResetCode = (accountId: number): { code: string; expires_in: number } | { error: string; retry_after?: number } => {
+  accountId = resolveAccountId(accountId);
+  const state = getPasswordResetRequestState(accountId);
+  state.count += 1;
+  if (state.count > PASSWORD_RESET_RATE_LIMIT_MAX) {
+    const retryAfter = state.windowStart + PASSWORD_RESET_RATE_LIMIT_WINDOW_SEC - Math.floor(Date.now() / 1000);
+    return { error: 'too_many_requests', retry_after: Math.max(1, retryAfter) };
+  }
+
+  // Cleanup expired codes
+  db.prepare('DELETE FROM password_reset_codes WHERE expires_at < unixepoch()').run();
+  // Invalidate existing pending codes for this account
+  db.prepare('DELETE FROM password_reset_codes WHERE account_id = ?').run(accountId);
+
+  const code = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + PASSWORD_RESET_CODE_TTL_SEC;
+
+  db.prepare('INSERT INTO password_reset_codes (account_id, code, expires_at, attempts) VALUES (?, ?, ?, 0)')
+    .run(accountId, code, expiresAt);
+
+  return { code, expires_in: PASSWORD_RESET_CODE_TTL_SEC };
+};
+
+export const verifyPasswordResetCode = (accountId: number, code: string): { ok: boolean; error?: string; attempts_left?: number } => {
+  accountId = resolveAccountId(accountId);
+
+  // Atomic verify-and-increment to avoid race condition where parallel
+  // requests could exceed PASSWORD_RESET_MAX_ATTEMPTS.
+  return db.transaction(() => {
+    // Cleanup expired
+    db.prepare('DELETE FROM password_reset_codes WHERE expires_at < unixepoch()').run();
+
+    const row = db.prepare('SELECT code, expires_at, attempts FROM password_reset_codes WHERE account_id = ?')
+      .get(accountId) as { code: string; expires_at: number; attempts: number } | undefined;
+
+    if (!row) return { ok: false, error: 'no_code' };
+    if (row.expires_at < Math.floor(Date.now() / 1000)) {
+      db.prepare('DELETE FROM password_reset_codes WHERE account_id = ?').run(accountId);
+      return { ok: false, error: 'expired' };
+    }
+    if (row.attempts >= PASSWORD_RESET_MAX_ATTEMPTS) {
+      db.prepare('DELETE FROM password_reset_codes WHERE account_id = ?').run(accountId);
+      return { ok: false, error: 'too_many_attempts' };
+    }
+    if (row.code !== code) {
+      db.prepare('UPDATE password_reset_codes SET attempts = attempts + 1 WHERE account_id = ?').run(accountId);
+      const remaining = PASSWORD_RESET_MAX_ATTEMPTS - row.attempts - 1;
+      return { ok: false, error: 'wrong_code', attempts_left: Math.max(0, remaining) };
+    }
+
+    // Success — delete the code
+    db.prepare('DELETE FROM password_reset_codes WHERE account_id = ?').run(accountId);
+    return { ok: true };
+  })();
+};
+
+/**
+ * Generate a signed reset token valid for 5 minutes.
+ * Allows the user to call reset-password without re-entering the code.
+ */
+export const signPasswordResetToken = (accountId: number): string => {
+  const JWT_SECRET = process.env.API_JWT_SECRET || '';
+  const now = Math.floor(Date.now() / 1000);
+  const payload = JSON.stringify({ sub: accountId, typ: 'pwd_reset', exp: now + 300, iat: now });
+  const content = Buffer.from(payload).toString('base64url');
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(content).digest('base64url');
+  return `${content}.${sig}`;
+};
+
+/** Verify and decode a password reset token. Returns account_id or null. */
+export const verifyPasswordResetToken = (token: string): number | null => {
+  const JWT_SECRET = process.env.API_JWT_SECRET || '';
+  const dotIndex = token.lastIndexOf('.');
+  if (dotIndex <= 0) return null;
+  const content = token.slice(0, dotIndex);
+  const sig = token.slice(dotIndex + 1);
+  const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(content).digest('base64url');
+  if (sig.length !== expectedSig.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
+
+  let payload: any;
+  try {
+    payload = JSON.parse(Buffer.from(content, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (payload.typ !== 'pwd_reset' || !Number.isFinite(payload.sub) || !Number.isFinite(payload.exp)) return null;
+  if (payload.exp <= Math.floor(Date.now() / 1000)) return null;
+  return payload.sub;
+};
+
+/** Admin action: generate a new random password for the user.
+ *  Caller passes the already-computed scrypt salt+hash (so we reuse
+ *  makePasswordHash from auth.js as the single source of truth).
+ *  Sets `must_change_password=1` so the desktop client forces a password
+ *  change on next sign-in. Returns the plaintext password generated by caller.
+ */
+export const adminApplyGeneratedPassword = (accountId: number, plainPassword: string, passwordSalt: string, passwordHash: string): { new_password: string } => {
+  accountId = resolveAccountId(accountId);
+  const identities = getAccountIdentities(accountId);
+  const passwordIdentity = identities.find(i => i.provider === 'password');
+  if (!passwordIdentity) throw new Error('no_password_identity');
+
+  db.prepare('UPDATE account_identities SET password_salt = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(passwordSalt, passwordHash, passwordIdentity.id);
+
+  // Force password change on next desktop sign-in.
+  db.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(accountId);
+
+  // Revoke all existing tokens so only the new password works.
+  revokeUserAuthTokens(accountId);
+  return { new_password: plainPassword };
 };
 
 // ── FTS5 full-text search ────────────────────────────────────────────────────

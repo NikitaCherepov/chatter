@@ -420,6 +420,24 @@ db.exec(`
 // Cleanup expired codes on startup
 db.exec("DELETE FROM telegram_link_codes WHERE expires_at < unixepoch()");
 
+// ── Password reset codes ──────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS password_reset_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+db.exec("CREATE INDEX IF NOT EXISTS idx_password_reset_account ON password_reset_codes(account_id)");
+db.exec("DELETE FROM password_reset_codes WHERE expires_at < unixepoch()");
+
+// Forces the user to change password on next desktop sign-in (set when admin
+// generates a new password or when recovery was done via Telegram bot).
+ensureUserColumn('must_change_password', "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0");
+
 // Token-based context limits.
 ensureUserColumn('max_context_tokens_limit', 'ALTER TABLE users ADD COLUMN max_context_tokens_limit INTEGER NOT NULL DEFAULT 30000');
 ensureUserColumn('max_context_tokens', 'ALTER TABLE users ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT 30000');

@@ -152,7 +152,8 @@
     "cancelled": "Selección de modelo cancelada.",
     "buttons": {
       "cancel": "❌ Cancelar"
-    }
+    },
+    "freeBadge": "[gratis]"
   },
   "context": {
     "card": "🗂 Límite de contexto (tokens)\nActual: {{current}}k\nMáximo para tu plan: {{max}}k\nPlan: {{plan}}",
@@ -750,5 +751,13 @@
       "leftButton": "botón izquierdo del ratón",
       "caption": "🖱 Clic en pantalla\n\n{{reason}}\nCoordenadas: {{x}}%, {{y}}% ({{button}})"
     }
+  },
+  "recover": {
+    "noDesktopAccount": "Esta cuenta no tiene inicio de sesión/contraseña para Desktop. La recuperación de datos no está disponible.",
+    "loginMessage": "🔑 Tu inicio de sesión en Desktop: {{login}}",
+    "passwordMessage": "🔒 Nueva contraseña: {{password}}",
+    "loginInstructions": "Abre la aplicación Desktop e inicia sesión con este usuario y contraseña. La aplicación te pedirá inmediatamente que establezcas una nueva contraseña antes de continuar.",
+    "rateLimited": "Espera {{seconds}} segundos antes de solicitar una nueva contraseña.",
+    "error": "Error al recuperar los datos. Inténtalo de nuevo más tarde."
   }
 }

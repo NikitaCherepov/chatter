@@ -152,7 +152,8 @@
     "cancelled": "Model seçimi iptal edildi.",
     "buttons": {
       "cancel": "❌ İptal"
-    }
+    },
+    "freeBadge": "[ücretsiz]"
   },
   "context": {
     "card": "🗂 Bağlam sınırı (token)\nMevcut: {{current}}k\nPlanınız için maksimum: {{max}}k\nPlan: {{plan}}",
@@ -750,5 +751,13 @@
     "voiceNotRecognized": "🗣 Hiçbir şey anlayamadım.",
     "voiceRecognized": "🗣 Tanınan:\n{{text}}",
     "transcriptionServerError": "❌ Transkripsiyon sunucusu bağlantı hatası veya iç hata."
+  },
+  "recover": {
+    "noDesktopAccount": "Bu hesabın Masaüstü için giriş/şifresi yok. Veri kurtarma kullanılamıyor.",
+    "loginMessage": "🔑 Masaüstü girişiniz: {{login}}",
+    "passwordMessage": "🔒 Yeni şifre: {{password}}",
+    "loginInstructions": "Masaüstü uygulamasını açın ve bu giriş ve şifre ile oturum açın. Uygulama devam etmeden önce hemen yeni bir şifre belirlemenizi isteyecektir.",
+    "rateLimited": "Yeni bir şifre istemeden önce lütfen {{seconds}} saniye bekleyin.",
+    "error": "Veri kurtarma başarısız oldu. Lütfen daha sonra tekrar deneyin."
   }
 }

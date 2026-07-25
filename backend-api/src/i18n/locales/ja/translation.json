@@ -82,5 +82,9 @@
   "errors": {
     "quotaExceeded": "⚠️ クォータ超過。{{resetsAt}}にリセットされます。",
     "genericServerError": "⚠️ サーバーエラー。ログを確認してください。"
+  },
+  "passwordReset": {
+    "title": "🔐 Chatter Desktop password recovery",
+    "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
   }
 }

@@ -74,6 +74,7 @@ type User = {
   subagent_model?: string | null;
   subagent_reasoning_level?: ReasoningLevel | null;
   telegram_linked?: boolean;
+  must_change_password?: boolean;
   identities?: Array<{
     provider: string;
     provider_subject: string;

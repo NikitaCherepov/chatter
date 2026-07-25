@@ -201,6 +201,27 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     }
   }
 
+  async function generatePassword() {
+    if (!user) return;
+    const hasPassword = user.identities?.some((i: any) => i.provider === 'password');
+    if (!hasPassword) {
+      setActionState(t('users.detail.actions.noPasswordIdentity'));
+      return;
+    }
+    if (!window.confirm(t('users.detail.actions.generatePasswordConfirm'))) return;
+    setActionState(t('users.detail.actions.generatingPassword'));
+    try {
+      const res = await api<{ new_password: string }>(`/api/users/${user.id}/generate-password`, { method: 'POST' });
+      alert(t('users.detail.actions.passwordGenerated', { password: res.new_password }));
+      // Don't leave a lingering "success" message — clear it after the action
+      // so the admin doesn't think it's still running when they do something else.
+      setActionState('');
+      await loadUser(true);
+    } catch (genError) {
+      setActionState(t('users.detail.actions.error', { error: genError instanceof Error ? genError.message : String(genError) }));
+    }
+  }
+
   if (loading && !user) return <div className={styles.loading}>{t('users.detail.loading')}</div>;
   if (!user) return <div className={styles.loading}>{t('users.detail.loadError', { error })}</div>;
 
@@ -289,6 +310,10 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
           <div><strong>{user.status === 'banned' ? t('users.detail.ban.banned') : t('users.detail.ban.blockAccount')}</strong><span>{user.ban?.reason || t('users.detail.ban.banHint')}</span></div>
           {user.status !== 'banned' && <input value={banReason} onChange={event => setBanReason(event.target.value)} placeholder={t('users.detail.ban.reasonPlaceholder')} disabled={user.role === 'admin'} />}
           <button type="button" className={styles.dangerButton} onClick={() => void toggleBan()} disabled={user.role === 'admin'}>{user.status === 'banned' ? t('users.detail.ban.unban') : t('users.detail.ban.ban')}</button>
+        </div>
+        <div className={styles.banBar}>
+          <div><span>{t('users.detail.actions.generatePasswordHint')}</span></div>
+          <button type="button" className={styles.dangerButton} onClick={() => void generatePassword()}>{t('users.detail.actions.generatePassword')}</button>
         </div>
         {actionState && <p className={styles.actionState}>{actionState}</p>}
       </Card>

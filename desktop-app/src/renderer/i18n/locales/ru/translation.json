@@ -63,6 +63,33 @@
       "placeholder": "Вставьте ссылку для подключения",
       "connect": "Подключиться",
       "change": "Использовать другой сервер"
+    },
+    "forgot": {
+      "link": "Забыли пароль?",
+      "title": "Восстановление пароля",
+      "subtitle": "Введите ваш логин. Код подтверждения будет отправлен в Telegram.",
+      "helpTitle": "Не помните логин?",
+      "helpText": "Откройте Telegram-бота Chatter и нажмите /recover_desktop — вам отправят логин и новый пароль.",
+      "noTelegramTitle": "Telegram не привязан",
+      "noTelegramHelp": "Восстановление через Telegram недоступно, так как аккаунт не привязан к Telegram. Обратитесь к администратору сервера.",
+      "sendCode": "Отправить код",
+      "codeLabel": "Код из Telegram",
+      "enterCode": "Код отправлен в Telegram на аккаунт {{login}}. Введите 6 цифр из сообщения.",
+      "invalidCode": "Введите 6 цифр",
+      "verify": "Подтвердить",
+      "verifyFailed": "Не удалось проверить код",
+      "wrongCode": "Неверный код. Осталось попыток: {{attempts}}",
+      "codeExpired": "Код истёк. Запросите новый.",
+      "codeLocked": "Слишком много попыток. Запросите новый код.",
+      "attemptsLeft": "Попыток: {{count}} из 3",
+      "rateLimited": "Слишком много запросов. Попробуйте через {{seconds}} сек.",
+      "requestFailed": "Не удалось отправить код. Проверьте логин.",
+      "newPasswordTitle": "Придумайте новый пароль",
+      "newPasswordPlaceholder": "Новый пароль (мин. 8 символов)",
+      "passwordTooShort": "Пароль должен быть не менее 8 символов",
+      "resetFailed": "Не удалось сменить пароль",
+      "passwordChanged": "Пароль успешно изменён!",
+      "loginWithNew": "Теперь вы можете войти с новым паролем."
     }
   },
   "review": {
@@ -70,6 +97,16 @@
     "reject": "Отклонить",
     "rejectWithComment": "Отклонить с комментарием",
     "commentPlaceholder": "Что изменить или почему отклонить?"
+  },
+  "forcePassword": {
+    "title": "Смена пароля",
+    "subtitle": "В целях безопасности установите новый пароль, прежде чем продолжить.",
+    "confirmPlaceholder": "Повторите новый пароль",
+    "submit": "Сменить пароль",
+    "passwordsDoNotMatch": "Пароли не совпадают",
+    "sameAsOld": "Новый пароль должен отличаться от текущего",
+    "success": "Пароль изменён. Войдите заново.",
+    "logout": "Выйти"
   },
   "widget": {
     "toSidebar": "В сайдбар",
@@ -157,7 +194,12 @@
       "namePlaceholder": "Введите имя...",
       "memory": "Горячая память",
       "memoryHelp": "То, что ИИ всегда помнит о вас. Заполняется автоматически, но вы можете редактировать вручную.",
-      "memoryPlaceholder": "Имя, город, работа, предпочтения..."
+      "memoryPlaceholder": "Имя, город, работа, предпочтения...",
+      "changePassword": "Сменить пароль",
+      "currentPassword": "Текущий пароль",
+      "newPassword": "Новый пароль",
+      "changeLogin": "Сменить логин",
+      "newLogin": "Новый логин"
     },
     "prompt": {
       "style": "Стиль общения",
@@ -262,7 +304,15 @@
       "describePrompt": "Опишите что хотите получить",
       "promptGenerateFailed": "Не удалось сгенерировать промпт",
       "promptApplied": "Промпт применён",
-      "cartesiaVoicesFailed": "Не удалось загрузить голоса Cartesia"
+      "cartesiaVoicesFailed": "Не удалось загрузить голоса Cartesia",
+      "passwordChanged": "Пароль успешно изменён",
+      "passwordChangeFailed": "Не удалось изменить пароль",
+      "wrongPassword": "Неверный текущий пароль",
+      "loginChanged": "Логин изменён на {{login}}",
+      "loginChangeFailed": "Не удалось изменить логин",
+      "loginAlreadyExists": "Такой логин уже используется",
+      "badLogin": "Недопустимый логин",
+      "loginRequired": "Введите текущий пароль и новый логин"
     },
     "connections": {
       "help": "Управляйте сервисами, которые могут входить в этот аккаунт и использовать его.",

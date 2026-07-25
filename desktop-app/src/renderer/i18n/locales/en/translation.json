@@ -63,6 +63,33 @@
     },
     "error": {
       "generic": "Something went wrong"
+    },
+    "forgot": {
+      "link": "Forgot password?",
+      "title": "Password Recovery",
+      "subtitle": "Enter your login. A verification code will be sent via Telegram.",
+      "helpTitle": "Forgot your login?",
+      "helpText": "Open the Chatter Telegram bot and type /recover_desktop — you'll receive your login and a new password.",
+      "noTelegramTitle": "Telegram not linked",
+      "noTelegramHelp": "Recovery via Telegram is unavailable because your account is not linked to Telegram. Please contact the server administrator.",
+      "sendCode": "Send Code",
+      "codeLabel": "Code from Telegram",
+      "enterCode": "Code sent to Telegram for account {{login}}. Enter the 6 digits from the message.",
+      "invalidCode": "Enter 6 digits",
+      "verify": "Verify",
+      "verifyFailed": "Failed to verify code",
+      "wrongCode": "Wrong code. Attempts remaining: {{attempts}}",
+      "codeExpired": "Code expired. Request a new one.",
+      "codeLocked": "Too many attempts. Request a new code.",
+      "attemptsLeft": "Attempts: {{count}} of 3",
+      "rateLimited": "Too many requests. Try again in {{seconds}} sec.",
+      "requestFailed": "Failed to send code. Check your login.",
+      "newPasswordTitle": "Create a new password",
+      "newPasswordPlaceholder": "New password (min 8 characters)",
+      "passwordTooShort": "Password must be at least 8 characters",
+      "resetFailed": "Failed to change password",
+      "passwordChanged": "Password changed successfully!",
+      "loginWithNew": "You can now sign in with your new password."
     }
   },
   "review": {
@@ -70,6 +97,16 @@
     "reject": "Reject",
     "rejectWithComment": "Reject with a comment",
     "commentPlaceholder": "What should be changed, or why are you rejecting it?"
+  },
+  "forcePassword": {
+    "title": "Change Password",
+    "subtitle": "For security reasons, please set a new password before continuing.",
+    "confirmPlaceholder": "Confirm new password",
+    "submit": "Change Password",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "sameAsOld": "New password must be different from the current one",
+    "success": "Password changed. Please sign in again.",
+    "logout": "Sign out"
   },
   "widget": {
     "toSidebar": "Move to sidebar",
@@ -157,7 +194,12 @@
       "namePlaceholder": "Enter your name...",
       "memory": "Core memory",
       "memoryHelp": "What the AI always remembers about you. It is filled automatically, but you can edit it manually.",
-      "memoryPlaceholder": "Name, city, job, preferences..."
+      "memoryPlaceholder": "Name, city, job, preferences...",
+      "changePassword": "Change Password",
+      "currentPassword": "Current Password",
+      "newPassword": "New Password",
+      "changeLogin": "Change Login",
+      "newLogin": "New Login"
     },
     "connections": {
       "help": "Manage services that can sign in to and use this account.",
@@ -285,7 +327,15 @@
       "describePrompt": "Describe what you want",
       "promptGenerateFailed": "Could not generate the prompt",
       "promptApplied": "Prompt applied",
-      "cartesiaVoicesFailed": "Could not load Cartesia voices"
+      "cartesiaVoicesFailed": "Could not load Cartesia voices",
+      "passwordChanged": "Password changed successfully",
+      "passwordChangeFailed": "Failed to change password",
+      "wrongPassword": "Current password is incorrect",
+      "loginChanged": "Login changed to {{login}}",
+      "loginChangeFailed": "Failed to change login",
+      "loginAlreadyExists": "This login is already taken",
+      "badLogin": "Invalid login format",
+      "loginRequired": "Enter current password and new login"
     }
   },
   "chat": {

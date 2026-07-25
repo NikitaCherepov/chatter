@@ -82,5 +82,9 @@
   "errors": {
     "quotaExceeded": "⚠️ 配额已超。重置时间：{{resetsAt}}。",
     "genericServerError": "⚠️ 服务器错误。请检查日志。"
+  },
+  "passwordReset": {
+    "title": "🔐 Chatter Desktop password recovery",
+    "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
   }
 }

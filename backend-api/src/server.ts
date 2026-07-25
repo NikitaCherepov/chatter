@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -861,6 +861,7 @@ const toAuthUserDto = (user: UserRecord) => {
     subagent_reasoning_level: effectiveUser.subagent_reasoning_level ?? null,
     telegram_linked: Boolean(telegramIdentity),
     telegram_id: telegramIdentity ? Number(telegramIdentity.provider_subject) : null,
+    must_change_password: Number(effectiveUser.must_change_password || 0) === 1,
     identities: identities.map(identity => ({
       provider: identity.provider,
       provider_subject: identity.provider_subject,
@@ -1089,6 +1090,179 @@ app.put('/api/v1/user/name', (req: AuthedRequest, res) => {
 app.post('/api/v1/auth/logout', (req: AuthedRequest, res) => {
   revokeUserAuthTokens(req.authUserId!);
   return res.json({ ok: true, all_sessions_revoked: true });
+});
+
+// ── Password recovery ────────────────────────────────────────────────────
+
+// Step 1: Request password reset code. Sends a 6-digit code via Telegram.
+app.post('/api/v1/auth/forgot-password', (req, res) => {
+  const login = `${req.body?.login || ''}`.trim().toLowerCase();
+  if (!login) return res.status(400).json({ error: 'login_required' });
+
+  const account = getPasswordAccountByLogin(login);
+  // Never reveal if the login exists — same response for both cases
+  if (!account) return res.json({ ok: true });
+
+  const accountId = resolveAccountId(account.user_id);
+  const user = getUserById(accountId);
+  if (!user || (user.status !== 'approved' && user.is_admin !== 1)) return res.json({ ok: true });
+
+  // Check if Telegram is linked — silently skip if not (no enumeration)
+  const identities = getAccountIdentities(accountId);
+  const telegramIdentity = identities.find(i => i.provider === 'telegram');
+  if (!telegramIdentity) return res.json({ ok: true });
+
+  const telegramId = Number(telegramIdentity.provider_subject);
+  if (!Number.isFinite(telegramId) || telegramId <= 0) return res.json({ ok: true });
+
+  // Generate code (with rate limit)
+  const result = generatePasswordResetCode(accountId);
+  if ('error' in result) {
+    if (result.error === 'too_many_requests') {
+      return res.status(429).json({ error: 'too_many_requests', retry_after: result.retry_after });
+    }
+    return res.status(500).json({ error: 'code_generation_failed' });
+  }
+
+  // Send code via Telegram — use account's preferred language if set.
+  // Compose title (bold) + body, both localized. The code is wrapped in
+  // backticks for monospace rendering in Telegram. Markdown is preserved
+  // by sendTelegramMessage when the message is sent through Bot API.
+  const recoveryTitle = translateForLanguage(user.language, 'passwordReset.title');
+  const recoveryBody = translateForLanguage(user.language, 'passwordReset.body', { code: `\`${result.code}\`` });
+  const recoveryMessage = `*${recoveryTitle}*\n\n${recoveryBody}`;
+  sendTelegramMessage(
+    telegramId,
+    recoveryMessage,
+    { strict: false }
+  ).catch(err => console.warn('[forgot-password] Failed to send Telegram message:', err));
+
+  return res.json({ ok: true, method: 'telegram' });
+});
+
+// Step 2: Verify the 6-digit code. Returns a signed reset_token for password change.
+app.post('/api/v1/auth/verify-reset-code', (req, res) => {
+  const login = `${req.body?.login || ''}`.trim().toLowerCase();
+  const code = `${req.body?.code || ''}`.trim();
+
+  if (!login) return res.status(400).json({ error: 'login_required' });
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: 'code_required' });
+  }
+
+  const account = getPasswordAccountByLogin(login);
+  if (!account) return res.status(404).json({ error: 'account_not_found' });
+
+  const accountId = resolveAccountId(account.user_id);
+  const verification = verifyPasswordResetCode(accountId, code);
+
+  if (!verification.ok) {
+    if (verification.error === 'expired') return res.status(410).json({ error: 'code_expired' });
+    if (verification.error === 'too_many_attempts') return res.status(429).json({ error: 'too_many_attempts' });
+    if (verification.error === 'wrong_code') {
+      return res.status(400).json({ error: 'wrong_code', attempts_left: verification.attempts_left });
+    }
+    return res.status(404).json({ error: 'code_not_found' });
+  }
+
+  // Issue a temporary reset token (only usable for password change)
+  const resetToken = signPasswordResetToken(accountId);
+  return res.json({ ok: true, reset_token: resetToken });
+});
+
+// Step 3: Set a new password using the reset_token.
+app.post('/api/v1/auth/reset-password', (req, res) => {
+  const resetToken = `${req.body?.reset_token || ''}`.trim();
+  const newPassword = `${req.body?.new_password || ''}`;
+
+  if (!resetToken) return res.status(400).json({ error: 'reset_token_required' });
+  if (newPassword.length < 8 || newPassword.length > 128) {
+    return res.status(400).json({ error: 'bad_password_length' });
+  }
+
+  const accountId = verifyPasswordResetToken(resetToken);
+  if (!accountId) return res.status(401).json({ error: 'invalid_or_expired_reset_token' });
+
+  const identities = getAccountIdentities(accountId);
+  const passwordIdentity = identities.find(i => i.provider === 'password');
+  if (!passwordIdentity) return res.status(404).json({ error: 'password_identity_not_found' });
+
+  const { salt, hash: newHash } = makePasswordHash(newPassword);
+  db.prepare('UPDATE account_identities SET password_salt = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(salt, newHash, passwordIdentity.id);
+
+  // Clear the "must change password" flag — user just chose a new password.
+  db.prepare('UPDATE users SET must_change_password = 0 WHERE id = ?').run(accountId);
+
+  // Revoke all existing tokens
+  revokeUserAuthTokens(accountId);
+
+  return res.json({ ok: true });
+});
+
+// ── Password / login change (authenticated) ──────────────────────────────
+
+// Change password while logged in.
+app.put('/api/v1/user/password', (req: AuthedRequest, res) => {
+  const userId = resolveAccountId(req.authUserId!);
+  const currentPassword = `${req.body?.current_password || ''}`;
+  const newPassword = `${req.body?.new_password || ''}`;
+
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'password_required' });
+  if (newPassword.length < 8 || newPassword.length > 128) {
+    return res.status(400).json({ error: 'bad_password_length' });
+  }
+
+  const identities = getAccountIdentities(userId);
+  const passwordIdentity = identities.find(i => i.provider === 'password');
+  if (!passwordIdentity || !passwordIdentity.password_salt || !passwordIdentity.password_hash) {
+    return res.status(400).json({ error: 'no_password_identity' });
+  }
+
+  if (!verifyPassword(currentPassword, passwordIdentity.password_salt, passwordIdentity.password_hash)) {
+    return res.status(401).json({ error: 'wrong_current_password' });
+  }
+
+  const { salt, hash: newHash } = makePasswordHash(newPassword);
+  db.prepare('UPDATE account_identities SET password_salt = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(salt, newHash, passwordIdentity.id);
+
+  // Clear the "must change password" flag — user successfully changed password.
+  db.prepare('UPDATE users SET must_change_password = 0 WHERE id = ?').run(userId);
+
+  revokeUserAuthTokens(userId);
+  return res.json({ ok: true });
+});
+
+// Change login while logged in.
+app.put('/api/v1/user/login', (req: AuthedRequest, res) => {
+  const userId = resolveAccountId(req.authUserId!);
+  const password = `${req.body?.password || ''}`;
+  const newLogin = `${req.body?.new_login || ''}`.trim().toLowerCase();
+
+  if (!password || !newLogin) return res.status(400).json({ error: 'login_password_required' });
+  if (!/^[-_.a-z0-9]{3,64}$/i.test(newLogin)) return res.status(400).json({ error: 'bad_login' });
+
+  const identities = getAccountIdentities(userId);
+  const passwordIdentity = identities.find(i => i.provider === 'password');
+  if (!passwordIdentity || !passwordIdentity.password_salt || !passwordIdentity.password_hash) {
+    return res.status(400).json({ error: 'no_password_identity' });
+  }
+
+  if (!verifyPassword(password, passwordIdentity.password_salt, passwordIdentity.password_hash)) {
+    return res.status(401).json({ error: 'wrong_current_password' });
+  }
+
+  // Check if new login is already taken
+  if (getPasswordAccountByLogin(newLogin)) {
+    return res.status(409).json({ error: 'login_already_exists' });
+  }
+
+  db.prepare('UPDATE account_identities SET provider_subject = ?, username = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(newLogin, newLogin, passwordIdentity.id);
+
+  revokeUserAuthTokens(userId);
+  return res.json({ ok: true, login: newLogin });
 });
 
 // Update core memory
@@ -3069,6 +3243,33 @@ app.delete('/internal/users/:id/ban', internalAuth, async (req, res) => {
   updateUserStatus(userId, 'none');
   if (user.status === 'banned') queueUserMessengerNotification(userId, 'unbanned');
   return res.json({ ok: true, status: 'none' });
+});
+
+// ── Internal: Admin generate new password ────────────────────────────────
+
+app.post('/internal/admin/users/:id/generate-password', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  try {
+    // Generate plaintext password and hash it here (single source of truth:
+    // makePasswordHash from auth.js). The chats service only persists it.
+    const plainPassword = crypto.randomBytes(12).toString('hex'); // 24-char hex
+    const { salt, hash } = makePasswordHash(plainPassword);
+    const result = adminApplyGeneratedPassword(userId, plainPassword, salt, hash);
+    console.log(`[admin] Password generated for user ${userId}`);
+    return res.json({ ok: true, new_password: result.new_password });
+  } catch (error: any) {
+    const code = error?.message || 'unknown_error';
+    if (code === 'no_password_identity') {
+      return res.status(400).json({ error: 'no_password_identity' });
+    }
+    console.error('[admin] generate-password failed:', error);
+    return res.status(500).json({ error: 'password_generation_failed' });
+  }
 });
 
 app.get('/internal/users/:id/ban', internalAuth, (req, res) => {

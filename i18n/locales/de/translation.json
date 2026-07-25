@@ -152,7 +152,8 @@
     "cancelled": "Modellauswahl abgebrochen.",
     "buttons": {
       "cancel": "❌ Abbrechen"
-    }
+    },
+    "freeBadge": "[kostenlos]"
   },
   "context": {
     "card": "🗂 Kontextlimit (Token)\nAktuell: {{current}}k\nMaximum für Ihren Plan: {{max}}k\nPlan: {{plan}}",
@@ -750,5 +751,13 @@
       "leftButton": "linke Maustaste",
       "caption": "🖱 Bildschirmklick\n\n{{reason}}\nKoordinaten: {{x}}%, {{y}}% ({{button}})"
     }
+  },
+  "recover": {
+    "noDesktopAccount": "Dieses Konto hat kein Login/Passwort für Desktop. Datenwiederherstellung nicht verfügbar.",
+    "loginMessage": "🔑 Ihr Desktop-Login: {{login}}",
+    "passwordMessage": "🔒 Neues Passwort: {{password}}",
+    "loginInstructions": "Öffnen Sie die Desktop-App und melden Sie sich mit diesem Login und Passwort an. Die App wird Sie sofort auffordern, ein neues Passwort festzulegen, bevor Sie fortfahren.",
+    "rateLimited": "Bitte warten Sie {{seconds}} Sekunden, bevor Sie ein neues Passwort anfordern.",
+    "error": "Datenwiederherstellung fehlgeschlagen. Bitte versuchen Sie es später erneut."
   }
 }

@@ -371,6 +371,33 @@
       "placeholder": "Incolla il link di connessione",
       "connect": "Connetti",
       "change": "Usa un altro server"
+    },
+    "forgot": {
+      "link": "Password dimenticata?",
+      "title": "Recupero password",
+      "subtitle": "Inserisci il tuo login. Un codice di verifica verrà inviato tramite Telegram.",
+      "helpTitle": "Hai dimenticato il login?",
+      "helpText": "Apri il bot Chatter Telegram e digita /recover_desktop — riceverai il tuo login e una nuova password.",
+      "noTelegramTitle": "Telegram non collegato",
+      "noTelegramHelp": "Il recupero tramite Telegram non è disponibile perché il tuo account non è collegato a Telegram. Contatta l'amministratore del server.",
+      "sendCode": "Invia codice",
+      "codeLabel": "Codice da Telegram",
+      "enterCode": "Codice inviato a Telegram per l'account {{login}}. Inserisci le 6 cifre del messaggio.",
+      "invalidCode": "Inserisci 6 cifre",
+      "verify": "Verifica",
+      "verifyFailed": "Verifica del codice fallita",
+      "wrongCode": "Codice errato. Tentativi rimanenti: {{attempts}}",
+      "codeExpired": "Codice scaduto. Richiedine uno nuovo.",
+      "codeLocked": "Troppi tentativi. Richiedi un nuovo codice.",
+      "attemptsLeft": "Tentativi: {{count}} di 3",
+      "rateLimited": "Troppe richieste. Riprova tra {{seconds}} sec.",
+      "requestFailed": "Invio del codice fallito. Controlla il tuo login.",
+      "newPasswordTitle": "Crea una nuova password",
+      "newPasswordPlaceholder": "Nuova password (min 8 caratteri)",
+      "passwordTooShort": "La password deve contenere almeno 8 caratteri",
+      "resetFailed": "Impossibile cambiare la password",
+      "passwordChanged": "Password cambiata con successo!",
+      "loginWithNew": "Ora puoi accedere con la tua nuova password."
     }
   },
   "review": {
@@ -465,7 +492,12 @@
       "namePlaceholder": "Inserisci nome...",
       "memory": "Memoria calda",
       "memoryHelp": "Ciò che l'IA ricorda sempre di te. Viene compilato automaticamente, ma puoi modificarlo manualmente.",
-      "memoryPlaceholder": "Nome, città, lavoro, preferenze..."
+      "memoryPlaceholder": "Nome, città, lavoro, preferenze...",
+      "changePassword": "Cambia password",
+      "currentPassword": "Password attuale",
+      "newPassword": "Nuova password",
+      "changeLogin": "Cambia login",
+      "newLogin": "Nuovo login"
     },
     "prompt": {
       "style": "Stile di comunicazione",
@@ -570,7 +602,15 @@
       "describePrompt": "Descrivi cosa vuoi ottenere",
       "promptGenerateFailed": "Impossibile generare il prompt",
       "promptApplied": "Prompt applicato",
-      "cartesiaVoicesFailed": "Impossibile caricare le voci Cartesia"
+      "cartesiaVoicesFailed": "Impossibile caricare le voci Cartesia",
+      "passwordChanged": "Password modificata con successo",
+      "passwordChangeFailed": "Impossibile modificare la password",
+      "wrongPassword": "La password attuale non è corretta",
+      "loginChanged": "Login cambiato in {{login}}",
+      "loginChangeFailed": "Impossibile cambiare login",
+      "loginAlreadyExists": "Questo login è già in uso",
+      "badLogin": "Formato login non valido",
+      "loginRequired": "Inserisci la password attuale e il nuovo login"
     },
     "connections": {
       "help": "Gestisci i servizi che possono accedere e utilizzare questo account.",
@@ -917,5 +957,15 @@
   "quota": {
     "title": "Utilizzo quota",
     "resetsAt": "Reimposta:"
+  },
+  "forcePassword": {
+    "title": "Cambia password",
+    "subtitle": "Per motivi di sicurezza, imposta una nuova password prima di continuare.",
+    "confirmPlaceholder": "Conferma nuova password",
+    "submit": "Cambia password",
+    "passwordsDoNotMatch": "Le password non corrispondono",
+    "sameAsOld": "La nuova password deve essere diversa da quella attuale",
+    "success": "Password modificata. Effettua di nuovo l'accesso.",
+    "logout": "Esci"
   }
 }

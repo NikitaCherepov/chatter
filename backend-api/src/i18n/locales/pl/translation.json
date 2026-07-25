@@ -82,5 +82,9 @@
   "errors": {
     "quotaExceeded": "⚠️ Limit przekroczony. Reset {{resetsAt}}.",
     "genericServerError": "⚠️ Błąd serwera. Sprawdź logi."
+  },
+  "passwordReset": {
+    "title": "🔐 Chatter Desktop password recovery",
+    "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
   }
 }

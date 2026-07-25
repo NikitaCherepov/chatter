@@ -59,6 +59,33 @@
       "placeholder": "接続リンクを貼り付け",
       "connect": "接続",
       "change": "別のサーバーを使用"
+    },
+    "forgot": {
+      "link": "パスワードをお忘れですか？",
+      "title": "パスワード復旧",
+      "subtitle": "ログインIDを入力してください。確認コードがTelegramに送信されます。",
+      "helpTitle": "ログインIDをお忘れですか？",
+      "helpText": "Chatter Telegramボットを開き、/recover_desktop と入力してください。ログインIDと新しいパスワードが届きます。",
+      "noTelegramTitle": "Telegramがリンクされていません",
+      "noTelegramHelp": "アカウントがTelegramにリンクされていないため、Telegram経由の復旧は利用できません。サーバー管理者に連絡してください。",
+      "sendCode": "コードを送信",
+      "codeLabel": "Telegramからのコード",
+      "enterCode": "アカウント {{login}} にコードが送信されました。メッセージの6桁の数字を入力してください。",
+      "invalidCode": "6桁の数字を入力",
+      "verify": "確認",
+      "verifyFailed": "コードの確認に失敗しました",
+      "wrongCode": "コードが間違っています。残り試行回数: {{attempts}}",
+      "codeExpired": "コードの有効期限が切れました。新しいコードをリクエストしてください。",
+      "codeLocked": "試行回数が多すぎます。新しいコードをリクエストしてください。",
+      "attemptsLeft": "試行回数: {{count}} / 3",
+      "rateLimited": "リクエストが多すぎます。{{seconds}}秒後にもう一度お試しください。",
+      "requestFailed": "コードの送信に失敗しました。ログイン情報を確認してください。",
+      "newPasswordTitle": "新しいパスワードを作成",
+      "newPasswordPlaceholder": "新しいパスワード（8文字以上）",
+      "passwordTooShort": "パスワードは8文字以上必要です",
+      "resetFailed": "パスワードの変更に失敗しました",
+      "passwordChanged": "パスワードが正常に変更されました！",
+      "loginWithNew": "新しいパスワードでサインインできます。"
     }
   },
   "review": {
@@ -153,7 +180,12 @@
       "namePlaceholder": "名前を入力...",
       "memory": "ホットメモリ",
       "memoryHelp": "AIが常にあなたについて覚えている情報です。自動的に入力されますが、手動で編集することもできます。",
-      "memoryPlaceholder": "名前、都市、仕事、好み..."
+      "memoryPlaceholder": "名前、都市、仕事、好み...",
+      "changePassword": "パスワードを変更",
+      "currentPassword": "現在のパスワード",
+      "newPassword": "新しいパスワード",
+      "changeLogin": "ログインIDを変更",
+      "newLogin": "新しいログインID"
     },
     "prompt": {
       "style": "会話スタイル",
@@ -258,7 +290,15 @@
       "describePrompt": "取得したい内容を説明してください",
       "promptGenerateFailed": "プロンプトの生成に失敗しました",
       "promptApplied": "プロンプトが適用されました",
-      "cartesiaVoicesFailed": "Cartesiaボイスの読み込みに失敗しました"
+      "cartesiaVoicesFailed": "Cartesiaボイスの読み込みに失敗しました",
+      "passwordChanged": "パスワードが正常に変更されました",
+      "passwordChangeFailed": "パスワードの変更に失敗しました",
+      "wrongPassword": "現在のパスワードが正しくありません",
+      "loginChanged": "ログインが {{login}} に変更されました",
+      "loginChangeFailed": "ログインの変更に失敗しました",
+      "loginAlreadyExists": "このログインは既に使用されています",
+      "badLogin": "ログイン形式が無効です",
+      "loginRequired": "現在のパスワードと新しいログインを入力してください"
     },
     "connections": {
       "help": "このアカウントにサインインして使用できるサービスを管理します。",
@@ -823,7 +863,11 @@
         "savedPlaceholder": "mqtt://ホスト:ポート (保存済み)",
         "helpText": "MQTTブローカーアドレス (Mosquitto)。Zigbee2MQTTが実行中でブローカーに接続されている必要があります。",
         "save": "保存",
-        "sync": "同期"
+        "sync": "同期",
+        "syncing": "同期中...",
+        "deleteTitle": "Zigbeeを削除しますか？",
+        "deleteMessage": "MQTTブローカーの設定と同期されたすべてのZigbeeデバイスが削除されます。",
+        "guideTitle": "Zigbee2MQTTに接続する"
       }
     },
     "mail": {
@@ -902,5 +946,15 @@
   "quota": {
     "title": "クォータ使用量",
     "resetsAt": "リセット:"
+  },
+  "forcePassword": {
+    "title": "パスワード変更",
+    "subtitle": "セキュリティ上の理由から、続行する前に新しいパスワードを設定してください。",
+    "confirmPlaceholder": "新しいパスワード（確認）",
+    "submit": "パスワードを変更",
+    "passwordsDoNotMatch": "パスワードが一致しません",
+    "sameAsOld": "新しいパスワードは現在のものと異なる必要があります",
+    "success": "パスワードが変更されました。再度サインインしてください。",
+    "logout": "サインアウト"
   }
 }
