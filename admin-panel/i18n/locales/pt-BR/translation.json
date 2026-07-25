@@ -646,6 +646,7 @@
         "noActive": "Nenhum usuário ativo no momento.",
         "softUpdate": "Aguardar até 15s e atualizar",
         "forceNow": "Forçar atualização agora",
+        "timeoutNotice": "15 segundos se passaram, {{count}} usuário(s) ainda trabalhando. Você pode continuar aguardando, forçar a atualização ou cancelar.",
         "pollError": "Falha na verificação de dreno: {{message}}"
       }
     },

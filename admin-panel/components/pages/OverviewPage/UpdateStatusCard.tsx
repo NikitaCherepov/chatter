@@ -8,7 +8,15 @@ import { serverUpdateService, UPDATE_DRAIN_TIMEOUT_MS, UPDATE_POLL_INTERVAL_MS, 
 import { ServerUpdateModal, type DrainState } from '../SystemPage/ServerUpdateModal/ServerUpdateModal';
 import styles from './OverviewPage.module.css';
 
-type DrainPhase = 'none' | 'draining' | 'updating';
+// ─── State machine ───────────────────────────────────────────────────────────
+//
+// idle       — modal open, admin hasn't picked an action yet.
+// draining   — prepareUpdate() called, flag is set, polling + 15s timer running.
+//              Auto-applies when activeUsers hits 0 before timeout.
+// timeout    — 15s elapsed, activeUsers > 0. Only Force / Cancel available.
+// applying   — applyUpdate() in progress (server is updating).
+//
+type DrainPhase = 'idle' | 'draining' | 'timeout' | 'applying';
 
 export function UpdateStatusCard() {
   const { t } = useTranslation();
@@ -16,16 +24,19 @@ export function UpdateStatusCard() {
   const { data: info, isLoading: checking } = useServerUpdate();
   const [confirming, setConfirming] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [applying, setApplying] = useState(false);
-  const [applyError, setApplyError] = useState('');
   const [message, setMessage] = useState('');
+  const [applyError, setApplyError] = useState('');
 
-  // Drain state. `drain` holds the latest snapshot shown in the modal
-  // (activeUsers + elapsed time). Initial fetch happens when the modal opens.
-  const [drainPhase, setDrainPhase] = useState<DrainPhase>('none');
+  const [drainPhase, setDrainPhase] = useState<DrainPhase>('idle');
   const [drain, setDrain] = useState<DrainState | null>(null);
-  const drainPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollErrorsRef = useRef(0);
+
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const drainStartRef = useRef<number>(0);
+  const phaseRef = useRef<DrainPhase>('idle');
+
+  // Keep phaseRef in sync so interval callbacks read the latest value.
+  useEffect(() => { phaseRef.current = drainPhase; }, [drainPhase]);
 
   const activeStatuses = useMemo(() => new Set(['queued', 'backup', 'restarting']), []);
   const operationMatchesLatest = Boolean(
@@ -43,34 +54,37 @@ export function UpdateStatusCard() {
       ? 'idle'
       : info.operation.status;
   const busy = checking || refreshing;
-  const updateInProgress = updating || applying || drainPhase !== 'none';
+  const updateInProgress = updating || drainPhase === 'applying';
 
-  const clearDrainTimer = useCallback(() => {
-    if (drainPollRef.current) {
-      clearInterval(drainPollRef.current);
-      drainPollRef.current = null;
+  // ─── Timers cleanup ──────────────────────────────────────────────────────
+  const clearAllTimers = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    if (tickTimerRef.current) {
+      clearInterval(tickTimerRef.current);
+      tickTimerRef.current = null;
     }
   }, []);
 
-  // Cleanup on unmount
-  useEffect(() => clearDrainTimer, [clearDrainTimer]);
+  useEffect(() => clearAllTimers, [clearAllTimers]);
 
-  // Safety net: if the modal gets closed while a drain is still active,
-  // stop the poll timer and ask the server to clear the drain flag so new
-  // requests are unblocked. `updating` is excluded because apply() owns
-  // that lifecycle.
+  // If modal closed while drain active — clear flag on backend, reset state.
   useEffect(() => {
-    if (confirming || drainPhase === 'none' || drainPhase === 'updating') return;
-    clearDrainTimer();
-    setDrainPhase('none');
+    if (confirming) return;
+    if (drainPhase === 'idle' || drainPhase === 'applying') return;
+    clearAllTimers();
+    setDrainPhase('idle');
     setDrain(null);
     serverUpdateService.cancelUpdate().catch(() => { /* best-effort */ });
-  }, [confirming, drainPhase, clearDrainTimer]);
+  }, [confirming, drainPhase, clearAllTimers]);
 
-  function updateDrainState(state: UpdateState) {
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+  function syncDrainDisplay(activeUsers: number) {
     setDrain({
-      activeUsers: state.activeUsers,
-      elapsedMs: state.elapsedMs,
+      activeUsers,
+      elapsedMs: Date.now() - drainStartRef.current,
       timeoutMs: UPDATE_DRAIN_TIMEOUT_MS,
     });
   }
@@ -90,9 +104,8 @@ export function UpdateStatusCard() {
   }
 
   async function applyUpdate() {
-    setApplying(true);
     setApplyError('');
-    setDrainPhase('updating');
+    setDrainPhase('applying');
     setMessage(t('system.update.starting'));
     try {
       await serverUpdateService.apply();
@@ -110,82 +123,68 @@ export function UpdateStatusCard() {
       const error = err instanceof Error ? err.message : String(err);
       setApplyError(error);
       setMessage(t('system.update.updateError', { message: error }));
-    } finally {
-      setApplying(false);
     }
   }
 
-  // Polls server drain state every UPDATE_POLL_INTERVAL_MS. Auto-applies when
-  // activeUsers reaches 0. After UPDATE_DRAIN_TIMEOUT_MS we keep waiting but
-  // the modal continues to show the count — the admin can still Force or Cancel.
-  function startDrainPolling() {
-    pollErrorsRef.current = 0;
-    setDrainPhase('draining');
-
-    drainPollRef.current = setInterval(async () => {
-      try {
-        const pollState = await serverUpdateService.getUpdateState();
-        pollErrorsRef.current = 0;
-        updateDrainState(pollState);
-
-        if (pollState.activeUsers === 0) {
-          clearDrainTimer();
-          await applyUpdate();
-        }
-      } catch (err) {
-        // After 3 consecutive poll failures, abort drain and surface the error.
-        pollErrorsRef.current += 1;
-        const msg = err instanceof Error ? err.message : String(err);
-        setApplyError(t('system.update.drain.pollError', { message: msg }));
-        if (pollErrorsRef.current >= 3) {
-          clearDrainTimer();
-          setDrainPhase('none');
-          setDrain(null);
-        }
-      }
-    }, UPDATE_POLL_INTERVAL_MS);
-  }
-
-  async function handleOpenModal() {
-    setApplyError('');
-    setConfirming(true);
-    // Prefetch current activeUsers count without setting the drain flag.
-    // The admin sees who is active before deciding soft / force / cancel.
-    setDrain({ activeUsers: 0, elapsedMs: 0, timeoutMs: UPDATE_DRAIN_TIMEOUT_MS });
-    try {
-      const state = await serverUpdateService.getUpdateState();
-      updateDrainState(state);
-    } catch {
-      // Non-fatal — the modal still opens, just without a precise count.
-    }
-  }
-
-  // "Soft update": set drain flag (this also aborts active generations on the
-  // server), then poll up to UPDATE_DRAIN_TIMEOUT_MS for remaining (HITL)
-  // users to finish, then apply.
+  // ─── 1. Soft ("Wait up to 15s and update") ───────────────────────────────
+  // prepareUpdate() → poll activeUsers + run 15s timer.
+  // If activeUsers === 0 before timeout → auto applyUpdate().
+  // If timeout reached with activeUsers > 0 → state = 'timeout'.
   async function handleSoftUpdate() {
-    if (drainPhase !== 'none') return;
+    if (drainPhase !== 'idle') return;
+    drainStartRef.current = Date.now();
+    setDrainPhase('draining');
+    setDrain({ activeUsers: 0, elapsedMs: 0, timeoutMs: UPDATE_DRAIN_TIMEOUT_MS });
+
+    // 1. Set flag (new requests blocked on backend).
+    let initialState: UpdateState;
     try {
-      const state = await serverUpdateService.prepareUpdate();
-      updateDrainState(state);
-      if (state.activeUsers === 0) {
-        await applyUpdate();
-        return;
-      }
-      startDrainPolling();
+      initialState = await serverUpdateService.prepareUpdate();
     } catch (err) {
       setApplyError(err instanceof Error ? err.message : String(err));
+      setDrainPhase('idle');
+      setDrain(null);
+      return;
     }
+    syncDrainDisplay(initialState.activeUsers);
+
+    // Edge case: nobody active — apply immediately.
+    if (initialState.activeUsers === 0) {
+      clearAllTimers();
+      await applyUpdate();
+      return;
+    }
+
+    // 2. Poll activeUsers from server.
+    pollTimerRef.current = setInterval(async () => {
+      try {
+        const pollState = await serverUpdateService.getUpdateState();
+        syncDrainDisplay(pollState.activeUsers);
+        if (pollState.activeUsers === 0 && phaseRef.current === 'draining') {
+          clearAllTimers();
+          await applyUpdate();
+        }
+      } catch {
+        // Transient network error — keep polling.
+      }
+    }, UPDATE_POLL_INTERVAL_MS);
+
+    // 3. UI tick + 15s deadline.
+    tickTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - drainStartRef.current;
+      setDrain((prev) => prev ? { ...prev, elapsedMs: elapsed } : prev);
+      if (elapsed >= UPDATE_DRAIN_TIMEOUT_MS && phaseRef.current === 'draining') {
+        clearAllTimers();
+        setDrainPhase('timeout');
+      }
+    }, 200);
   }
 
-  // "Force now": set drain flag (so new requests are blocked during apply
-  // window), abort everything immediately, then apply.
+  // ─── 2. Force ("Force update now") ───────────────────────────────────────
+  // prepareUpdate() → forceAbortActiveGenerations() → applyUpdate().
   async function handleForceUpdate() {
-    clearDrainTimer();
+    clearAllTimers();
     try {
-      // Set the flag first so the window between "user clicked" and "apply
-      // landed" is also covered. prepareUpdate also aborts active generations
-      // as part of setUpdatePrepare() on the backend.
       await serverUpdateService.prepareUpdate();
       await serverUpdateService.forceUpdate();
       await applyUpdate();
@@ -194,10 +193,36 @@ export function UpdateStatusCard() {
     }
   }
 
-  function handleCancel() {
+  // ─── 3. Cancel ───────────────────────────────────────────────────────────
+  // Clear flag on backend, close modal.
+  async function handleCancel() {
+    clearAllTimers();
+    if (drainPhase !== 'idle' && drainPhase !== 'applying') {
+      try { await serverUpdateService.cancelUpdate(); } catch { /* best-effort */ }
+    }
+    setDrainPhase('idle');
+    setDrain(null);
     setConfirming(false);
   }
 
+  async function handleOpenModal() {
+    setApplyError('');
+    setConfirming(true);
+    setDrainPhase('idle');
+    setDrain({ activeUsers: 0, elapsedMs: 0, timeoutMs: UPDATE_DRAIN_TIMEOUT_MS });
+    try {
+      const state = await serverUpdateService.getUpdateState();
+      setDrain({
+        activeUsers: state.activeUsers,
+        elapsedMs: 0,
+        timeoutMs: UPDATE_DRAIN_TIMEOUT_MS,
+      });
+    } catch {
+      // Non-fatal.
+    }
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────
   if (checking && !info) {
     return <strong className={styles.updateChecking}>{t('overview.updateStatus.checking')}</strong>;
   }
@@ -241,6 +266,7 @@ export function UpdateStatusCard() {
           operationMessage={applyError || info.operation.message}
           drainPhase={drainPhase}
           drain={drain}
+          applyError={applyError}
           onCancel={handleCancel}
           onSoftUpdate={handleSoftUpdate}
           onForceUpdate={handleForceUpdate}

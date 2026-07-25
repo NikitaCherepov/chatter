@@ -646,6 +646,7 @@
         "noActive": "当前没有活跃用户。",
         "softUpdate": "等待最多15秒后更新",
         "forceNow": "立即强制更新",
+        "timeoutNotice": "15秒已过，仍有{{count}}位用户在工作中。您可以继续等待、强制更新或取消。",
         "pollError": "排空轮询失败：{{message}}"
       }
     },

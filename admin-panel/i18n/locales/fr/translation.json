@@ -646,6 +646,7 @@
         "noActive": "Aucun utilisateur actif pour le moment.",
         "softUpdate": "Attendre jusqu'à 15s et mettre à jour",
         "forceNow": "Forcer la mise à jour maintenant",
+        "timeoutNotice": "15 secondes se sont écoulées, {{count}} utilisateur(s) encore actif(s). Vous pouvez continuer à attendre, forcer la mise à jour ou annuler.",
         "pollError": "Échec de la vérification de vidage : {{message}}"
       }
     },

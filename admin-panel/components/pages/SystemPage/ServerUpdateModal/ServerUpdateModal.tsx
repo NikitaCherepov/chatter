@@ -10,14 +10,34 @@ export type DrainState = {
   timeoutMs: number;
 };
 
-export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, operationStatus, operationMessage, drainPhase, drain, onCancel, onSoftUpdate, onForceUpdate }: {
+// 4-phase state machine:
+// idle     — modal open, no action taken yet
+// draining — prepareUpdate called, flag set, polling + 15s timer running
+// timeout  — 15s elapsed, activeUsers > 0, only Force/Cancel available
+// applying — applyUpdate in progress
+export type DrainPhase = 'idle' | 'draining' | 'timeout' | 'applying';
+
+export function ServerUpdateModal({
+  changelog,
+  rebuiltFromSameCommit,
+  updating,
+  operationStatus,
+  operationMessage,
+  drainPhase,
+  drain,
+  applyError,
+  onCancel,
+  onSoftUpdate,
+  onForceUpdate,
+}: {
   changelog: Record<string, string[]>;
   rebuiltFromSameCommit: boolean;
   updating: boolean;
   operationStatus: string;
   operationMessage: string;
-  drainPhase: 'none' | 'draining' | 'updating';
+  drainPhase: DrainPhase;
   drain: DrainState | null;
+  applyError: string;
   onCancel: () => void;
   onSoftUpdate: () => void;
   onForceUpdate: () => void;
@@ -53,15 +73,14 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
     return entries.map((entry) => `• ${entry}`).join('\n');
   }, [changelog, i18n.language]);
 
-  // Escape closes the modal. During `updating` we ignore Escape — closing
-  // mid-apply would be misleading since apply can't be cancelled.
+  // Escape closes modal unless update is in progress.
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !updating) onCancel();
+      if (event.key === 'Escape' && drainPhase !== 'applying') onCancel();
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [onCancel, updating]);
+  }, [onCancel, drainPhase]);
 
   useEffect(() => {
     if (effectiveStatus === 'complete') {
@@ -75,57 +94,56 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
     : 0;
 
   const onBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget || updating) return;
+    if (event.target !== event.currentTarget || drainPhase === 'applying') return;
     onCancel();
   };
+
+  // Show drain section in all phases except applying.
+  const showDrainSection = drain && drainPhase !== 'applying';
 
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={onBackdropClick}>
       <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="server-update-title">
         <h2 id="server-update-title">{t('system.update.title')}</h2>
 
-        {/* Active users count + drain progress. Hidden during apply (`updating`)
-            — at that point only the stage progress bar below is relevant. */}
-        {drain && drainPhase !== 'updating' && (
+        {/* ─── Drain status ─────────────────────────────────────────────── */}
+        {showDrainSection && (
           <div className={styles.drainSection}>
-            {/* Drain in progress, before timeout: show count + progress bar */}
-            {drainPhase === 'draining' && drain.activeUsers > 0 && drain.elapsedMs < drain.timeoutMs && (
+            {/* idle: show active users count before any action */}
+            {drainPhase === 'idle' && (
+              <p className={styles.drainText}>
+                {drain!.activeUsers > 0
+                  ? t('system.update.drain.activeUsers', { count: drain!.activeUsers })
+                  : t('system.update.drain.noActive')}
+              </p>
+            )}
+
+            {/* draining + still active: progress bar + count */}
+            {drainPhase === 'draining' && drain!.activeUsers > 0 && (
               <>
                 <p className={styles.drainText}>
-                  {t('system.update.drain.waiting', { count: drain.activeUsers, seconds: drainSecondsLeft })}
+                  {t('system.update.drain.waiting', { count: drain!.activeUsers, seconds: drainSecondsLeft })}
                 </p>
                 <div className={styles.drainBar}>
                   <div
                     className={styles.drainFill}
-                    style={{ width: `${Math.min(100, (drain.elapsedMs / drain.timeoutMs) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (drain!.elapsedMs / drain!.timeoutMs) * 100)}%` }}
                   />
                 </div>
               </>
             )}
-            {/* Drain in progress, timeout reached: keep flag set, keep polling,
-                but tell the admin a decision is needed. */}
-            {drainPhase === 'draining' && drain.activeUsers > 0 && drain.elapsedMs >= drain.timeoutMs && (
+
+            {/* timeout: 15s passed, still have users */}
+            {drainPhase === 'timeout' && (
               <p className={styles.drainTimeoutNotice}>
-                {t('system.update.drain.timeoutNotice', { count: drain.activeUsers })}
+                {t('system.update.drain.timeoutNotice', { count: drain!.activeUsers })}
               </p>
-            )}
-            {/* Pre-decision state: just show the active count. */}
-            {drainPhase === 'none' && (
-              <p className={styles.drainText}>
-                {drain.activeUsers > 0
-                  ? t('system.update.drain.activeUsers', { count: drain.activeUsers })
-                  : t('system.update.drain.noActive')}
-              </p>
-            )}
-            {/* Drain completed: everyone finished, auto-apply incoming. */}
-            {drainPhase === 'draining' && drain.activeUsers === 0 && (
-              <p className={styles.drainDone}>{t('system.update.drain.allDone')}</p>
             )}
           </div>
         )}
 
-        {/* Changelog (only before update starts) */}
-        {drainPhase === 'none' && (
+        {/* ─── Changelog (only in idle phase) ──────────────────────────── */}
+        {drainPhase === 'idle' && (
           <>
             {rebuiltFromSameCommit && <p className={styles.notice}>{t('system.update.changes.rebuiltFromSame')}</p>}
             {releaseNotes && (
@@ -138,7 +156,12 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
           </>
         )}
 
-        {/* Progress bar during update */}
+        {/* ─── Apply error ─────────────────────────────────────────────── */}
+        {applyError && (
+          <p className={styles.notice}>{applyError}</p>
+        )}
+
+        {/* ─── Progress bar (during applying / terminal) ───────────────── */}
         {showProgress && stageKey && (
           <div className={styles.progressSection}>
             <div className={styles.progressBar}>
@@ -153,31 +176,36 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
           </div>
         )}
 
-        {/* Actions */}
+        {/* ─── Action buttons ──────────────────────────────────────────── */}
         <div className={styles.actions}>
-          {updating ? (
+          {drainPhase === 'applying' ? (
             <button type="button" disabled>{t('system.update.changes.updating')}</button>
           ) : terminal ? (
             <button type="button" onClick={onCancel}>{t('system.update.changes.cancel')}</button>
           ) : (
             <>
-              {/* Cancel: always available (closes modal, clears drain if active) */}
+              {/* Cancel: always available unless applying */}
               <button type="button" className="buttonSecondary" onClick={onCancel}>
                 {t('system.update.changes.cancel')}
               </button>
-              {/* Soft update: set flag, abort active generations, wait up to 15s for HITL, then apply */}
+
+              {/* Soft: only in idle phase */}
               <button
                 type="button"
                 className="buttonSecondary"
                 onClick={onSoftUpdate}
-                disabled={drainPhase !== 'none'}
+                disabled={drainPhase !== 'idle'}
               >
                 {t('system.update.drain.softUpdate')}
               </button>
-              {/* Force update: abort everything immediately and apply.
-                  Available in any non-updating phase, including after the
-                  15s drain timeout — that's exactly the case it's for. */}
-              <button type="button" onClick={onForceUpdate} disabled={drainPhase !== 'none' && drainPhase !== 'draining'}>
+
+              {/* Force: available in idle, draining, AND timeout phases.
+                  We're already in the `else` branch (not applying, not terminal),
+                  so no disabled condition needed. */}
+              <button
+                type="button"
+                onClick={onForceUpdate}
+              >
                 {t('system.update.drain.forceNow')}
               </button>
             </>

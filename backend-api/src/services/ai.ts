@@ -138,8 +138,8 @@ export const setUpdatePrepare = () => {
   updatePreparing = true;
   updatePreparingSince = Date.now();
 };
-// "Force" prepare: sets the flag AND aborts every active generation
-// immediately. This is what the "Force update now" button calls.
+// Abort every active generation immediately. Does NOT touch the flag —
+// the flag is set separately via setUpdatePrepare().
 export const forceAbortActiveGenerations = () => {
   let aborted = 0;
   for (const [, controller] of activeGenerations.entries()) {

@@ -646,6 +646,7 @@
         "noActive": "Nessun utente attivo al momento.",
         "softUpdate": "Attendi fino a 15s e aggiorna",
         "forceNow": "Forza aggiornamento ora",
+        "timeoutNotice": "Sono passati 15 secondi, {{count}} utente/i ancora al lavoro. Puoi continuare ad aspettare, forzare l'aggiornamento o annullare.",
         "pollError": "Errore nel drain poll: {{message}}"
       }
     },

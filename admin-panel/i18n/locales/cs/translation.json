@@ -639,6 +639,7 @@
         "noActive": "Žádní aktivní uživatelé.",
         "softUpdate": "Počkat až 15s a aktualizovat",
         "forceNow": "Vynutit aktualizaci nyní",
+        "timeoutNotice": "Uběhlo 15 sekund, {{count}} uživatel(é) stále pracují. Můžete pokračovat v čekání, vynutit aktualizaci nebo zrušit.",
         "pollError": "Selhalo dotazování na vyprázdnění: {{message}}"
       }
     },

@@ -646,6 +646,7 @@
         "noActive": "Brak aktywnych użytkowników.",
         "softUpdate": "Poczekaj do 15s i zaktualizuj",
         "forceNow": "Wymuś aktualizację teraz",
+        "timeoutNotice": "Minęło 15 sekund, {{count}} użytkownik(ów) nadal pracuje. Możesz czekać dalej, wymusić aktualizację lub anulować.",
         "pollError": "Błąd odpytania opróżniania: {{message}}"
       }
     },

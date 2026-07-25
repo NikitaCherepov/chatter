@@ -3647,12 +3647,9 @@ app.post('/internal/admin/update/prepare', internalAuth, (req, res) => {
     return res.json(getUpdateState());
   }
 
-  // force: abort all active generations + clear flag.
-  // Note: HITL waits (activeHitlWaits) cannot be aborted here — their promises
-  // resolve/reject via user action or via the subsequent server restart during
-  // apply(). We return the real activeUsers count instead of lying with 0.
+  // force: ONLY aborts active generations. Does NOT touch the flag.
+  // The flag is set separately via 'prepare' action.
   const aborted = forceAbortActiveGenerations();
-  clearUpdatePrepare();
   return res.json({ ...getUpdateState(), aborted });
 });
 

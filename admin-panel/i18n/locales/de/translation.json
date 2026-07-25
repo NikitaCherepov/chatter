@@ -646,6 +646,7 @@
         "noActive": "Derzeit keine aktiven Benutzer.",
         "softUpdate": "Bis zu 15s warten und aktualisieren",
         "forceNow": "Jetzt sofort aktualisieren",
+        "timeoutNotice": "15 Sekunden sind vergangen, {{count}} Benutzer arbeiten noch. Sie können weiter warten, das Update erzwingen oder abbrechen.",
         "pollError": "Drain-Abfrage fehlgeschlagen: {{message}}"
       }
     },
