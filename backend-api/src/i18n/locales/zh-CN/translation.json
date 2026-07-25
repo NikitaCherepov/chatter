@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "您是安全专家。请简要回复。",
-    "reviewSshPrompt": "评估此SSH命令在服务器上的安全性。用1-2句话简要说明风险。命令：{{command}}。用{{language}}回复。"
+    "reviewSshPrompt": "评估此SSH命令在服务器上的安全性。用1-2句话简要说明风险。命令：{{command}}。用{{language}}回复。",
+    "reviewCommandsSystem": "你是一名DevOps安全工程师。分析列表中的每条命令是否存在风险：数据删除、停止关键服务、不可逆更改、数据泄露。对每条命令，给出简要判定（安全/有风险）以及有风险时的原因。最后给出总体结论。用{{language}}回复。简洁明了。",
+    "promptGenSystem": "你是为AI助手编写系统提示的专家。{{detail}}\n\n仅回复提示文本——不要解释，不要用markdown包裹，不要写“这是你的提示：”。只需发送给AI作为指令的系统提示文本。",
+    "promptGenDetailMinimal": " 尽可能简洁。只捕捉本质——角色、身份和关键规则。不要艺术描述。最多500字符。",
+    "promptGenDetailMedium": " 平衡的角色提示：角色、沟通风格、关键规则。最多2000字符。",
+    "promptGenDetailDetailed": " 详细的角色提示：角色、沟通风格、规则和世界构建规则、示例反应、语气、边缘情况。最多10000字符。",
+    "promptGenUserNew": "任务：{{instruction}}",
+    "promptGenUserEdit": "任务：{{instruction}}\n\n当前提示（根据任务编辑，除非冲突否则保留核心和风格）：\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ 配额已超。重置时间：{{resetsAt}}。",

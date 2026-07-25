@@ -46,7 +46,39 @@
       "syncErrorWithMessage": "Błąd synchronizacji: {{message}}",
       "lastSyncWithDate": "Ostatnia synchronizacja: {{date}}",
       "devicesCount": "Urządzenia ({{count}})",
-      "group": "grupa"
+      "group": "grupa",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "Zapisano brokera MQTT",
+        "brokerSaveFailed": "Nie udało się zapisać brokera",
+        "invalidUrl": "Nieprawidłowy format URL. Musi zaczynać się od mqtt:// lub mqtts://",
+        "brokerDeleted": "Usunięto ustawienia Zigbee",
+        "brokerDeleteFailed": "Nie udało się usunąć ustawień Zigbee",
+        "saveBrokerFirst": "Najpierw zapisz adres brokera MQTT",
+        "syncResult": "{{provider}}: zsynchronizowano {{count}} urządzeń",
+        "syncError": "Błąd synchronizacji: {{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://host:port (zapisano)",
+        "helpText": "Adres brokera MQTT (Mosquitto). Zigbee2MQTT musi być uruchomiony i połączony z brokerem.",
+        "save": "Zapisz",
+        "sync": "Synchronizuj",
+        "syncing": "Synchronizowanie...",
+        "deleteTitle": "Usunąć Zigbee?",
+        "deleteMessage": "Ustawienia brokera MQTT i wszystkie zsynchronizowane urządzenia Zigbee zostaną usunięte.",
+        "guideTitle": "Łączenie Zigbee2MQTT",
+        "step1": "Krok 1.",
+        "step1Text": "Zainstaluj brokera MQTT (np. Mosquitto) w swojej sieci. Domyślny port: 1883.",
+        "step2": "Krok 2.",
+        "step2Text": "Skonfiguruj Zigbee2MQTT, aby połączył się z brokerem. W pliku configuration.yaml:",
+        "step3": "Krok 3.",
+        "step3Text": "Uruchom Zigbee2MQTT. Otwórz interfejs webowy (domyślnie: http://localhost:8080) i sparuj urządzenia za pomocą Permit Join.",
+        "step4": "Krok 4.",
+        "step4Text": "Wprowadź powyższy adres brokera MQTT i kliknij Zapisz. Format:",
+        "step5": "Krok 5.",
+        "step5Text": "Kliknij Synchronizuj. Sparowane urządzenia z Zigbee2MQTT pojawią się na poniższej liście.",
+        "note": "Uwaga: broker MQTT musi być osiągalny z serwera uruchamiającego backend Chatter. Jeśli broker wymaga uwierzytelnienia, dołącz je do adresu URL: mqtt://user:password@host:port"
+      }
     },
     "macros": {
       "execution": "Wykonanie",
@@ -310,7 +342,8 @@
     "nothingFound": "Nic nie znaleziono",
     "selectPlaceholder": "Wybierz...",
     "unknown": "Nieznane",
-    "user": "Użytkownik"
+    "user": "Użytkownik",
+    "inDevelopment": "W trakcie rozwoju"
   },
   "auth": {
     "subtitle": {
@@ -338,6 +371,33 @@
       "placeholder": "Wklej link połączenia",
       "connect": "Połącz",
       "change": "Użyj innego serwera"
+    },
+    "forgot": {
+      "link": "Zapomniałeś hasła?",
+      "title": "Odzyskiwanie hasła",
+      "subtitle": "Wpisz swój login. Kod weryfikacyjny zostanie wysłany przez Telegram.",
+      "helpTitle": "Zapomniałeś loginu?",
+      "helpText": "Otwórz bota Chatter Telegram i wpisz /recover_desktop — otrzymasz swój login i nowe hasło.",
+      "noTelegramTitle": "Telegram nie jest połączony",
+      "noTelegramHelp": "Odzyskiwanie przez Telegram jest niedostępne, ponieważ Twoje konto nie jest połączone z Telegramem. Skontaktuj się z administratorem serwera.",
+      "sendCode": "Wyślij kod",
+      "codeLabel": "Kod z Telegrama",
+      "enterCode": "Kod wysłany na Telegram dla konta {{login}}. Wprowadź 6 cyfr z wiadomości.",
+      "invalidCode": "Wprowadź 6 cyfr",
+      "verify": "Zweryfikuj",
+      "verifyFailed": "Nie udało się zweryfikować kodu",
+      "wrongCode": "Nieprawidłowy kod. Pozostało prób: {{attempts}}",
+      "codeExpired": "Kod wygasł. Poproś o nowy.",
+      "codeLocked": "Zbyt wiele prób. Poproś o nowy kod.",
+      "attemptsLeft": "Próby: {{count}} z 3",
+      "rateLimited": "Zbyt wiele żądań. Spróbuj ponownie za {{seconds}} sek.",
+      "requestFailed": "Nie udało się wysłać kodu. Sprawdź swój login.",
+      "newPasswordTitle": "Utwórz nowe hasło",
+      "newPasswordPlaceholder": "Nowe hasło (min. 8 znaków)",
+      "passwordTooShort": "Hasło musi mieć co najmniej 8 znaków",
+      "resetFailed": "Nie udało się zmienić hasła",
+      "passwordChanged": "Hasło zostało zmienione!",
+      "loginWithNew": "Możesz teraz zalogować się przy użyciu nowego hasła."
     }
   },
   "review": {
@@ -408,7 +468,8 @@
       "app": "Aplikacja",
       "limits": "Limity",
       "connections": "Połączone konta",
-      "mail": "Poczta"
+      "mail": "Poczta",
+      "billing": "Rozliczenia"
     },
     "language": {
       "system": "Systemowy",
@@ -431,7 +492,12 @@
       "namePlaceholder": "Wpisz imię...",
       "memory": "Pamięć gorąca",
       "memoryHelp": "To, co AI zawsze o Tobie pamięta. Wypełniane automatycznie, ale możesz edytować ręcznie.",
-      "memoryPlaceholder": "Imię, miasto, praca, preferencje..."
+      "memoryPlaceholder": "Imię, miasto, praca, preferencje...",
+      "changePassword": "Zmień hasło",
+      "currentPassword": "Obecne hasło",
+      "newPassword": "Nowe hasło",
+      "changeLogin": "Zmień login",
+      "newLogin": "Nowy login"
     },
     "prompt": {
       "style": "Styl komunikacji",
@@ -536,7 +602,15 @@
       "describePrompt": "Opisz, co chcesz uzyskać",
       "promptGenerateFailed": "Nie udało się wygenerować promptu",
       "promptApplied": "Prompt zastosowany",
-      "cartesiaVoicesFailed": "Nie udało się załadować głosów Cartesia"
+      "cartesiaVoicesFailed": "Nie udało się załadować głosów Cartesia",
+      "passwordChanged": "Hasło zostało zmienione pomyślnie",
+      "passwordChangeFailed": "Nie udało się zmienić hasła",
+      "wrongPassword": "Obecne hasło jest nieprawidłowe",
+      "loginChanged": "Login zmieniony na {{login}}",
+      "loginChangeFailed": "Nie udało się zmienić loginu",
+      "loginAlreadyExists": "Ten login jest już zajęty",
+      "badLogin": "Nieprawidłowy format loginu",
+      "loginRequired": "Wprowadź obecne hasło i nowy login"
     },
     "connections": {
       "help": "Zarządzaj usługami, które mogą logować się i korzystać z tego konta.",
@@ -638,7 +712,8 @@
     },
     "model": {
       "label": "Model:",
-      "automatic": "Automatyczny wybór"
+      "automatic": "Automatyczny wybór",
+      "freeBadge": "darmowy"
     },
     "messages": {
       "loading": "Ładowanie wiadomości...",
@@ -878,5 +953,19 @@
     "defaultVoice": "Domyślny",
     "cartesia": "Cartesia (chmurowy)",
     "previewText": "Cześć, jestem Chatter!"
+  },
+  "quota": {
+    "title": "Wykorzystanie limitu",
+    "resetsAt": "Reset:"
+  },
+  "forcePassword": {
+    "title": "Zmień hasło",
+    "subtitle": "Ze względów bezpieczeństwa ustaw nowe hasło przed kontynuowaniem.",
+    "confirmPlaceholder": "Potwierdź nowe hasło",
+    "submit": "Zmień hasło",
+    "passwordsDoNotMatch": "Hasła nie są zgodne",
+    "sameAsOld": "Nowe hasło musi różnić się od obecnego",
+    "success": "Hasło zmienione. Zaloguj się ponownie.",
+    "logout": "Wyloguj się"
   }
 }

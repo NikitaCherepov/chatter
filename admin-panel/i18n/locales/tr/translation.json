@@ -34,6 +34,18 @@
       "voice": {
         "title": "Ses",
         "description": "Telegram için konuşma tanıma ve metin okuma"
+      },
+      "webSearch": {
+        "title": "Web Arama",
+        "description": "Tavily API — gerçek zamanlı internet bilgisi"
+      },
+      "webReader": {
+        "title": "Web Okuyucu",
+        "description": "Browserless — web sayfalarını aç ve temizle"
+      },
+      "pinecone": {
+        "title": "Vektör Bellek",
+        "description": "Pinecone — uzun süreli bellek ve bağlam"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "Güncelleme mevcut",
       "upToDate": "Güncel",
       "goUpdate": "Git"
-    }
+    },
+    "stepsDone": "{{done}} / {{total}} adım",
+    "requiredGroup": "Gerekli",
+    "recommendedGroup": "Önerilen",
+    "optionalGroup": "İsteğe Bağlı"
   },
   "common": {
     "saved": "kaydedildi",
@@ -432,7 +448,14 @@
         "unbanInProgress": "Yasak kaldırılıyor…",
         "userUnbanned": "Kullanıcının yasağı kaldırıldı ve onay bekliyor",
         "userBanned": "Kullanıcı yasaklandı",
-        "error": "Hata: {{error}}"
+        "error": "Hata: {{error}}",
+        "generatePassword": "Yeni Şifre Oluştur",
+        "generatePasswordHint": "Yeni bir şifre oluşturulacak ve tüm mevcut kullanıcı oturumları iptal edilecektir.",
+        "generatePasswordConfirm": "Emin misiniz? Kullanıcı mevcut şifresiyle erişimini kaybedecek. Yeni bir şifre oluşturulacak.",
+        "generatingPassword": "Şifre oluşturuluyor...",
+        "passwordGenerated": "Yeni kullanıcı şifresi: {{password}}",
+        "passwordGeneratedSuccess": "Yeni şifre oluşturuldu",
+        "noPasswordIdentity": "Kullanıcının şifre tabanlı girişi yok"
       },
       "modelUsage": {
         "title": "Modele göre kullanım",

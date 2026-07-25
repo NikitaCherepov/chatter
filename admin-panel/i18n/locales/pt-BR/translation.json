@@ -34,6 +34,18 @@
       "voice": {
         "title": "Voz",
         "description": "Reconhecimento de fala e TTS para Telegram"
+      },
+      "webSearch": {
+        "title": "Pesquisa na Web",
+        "description": "API Tavily — informações da internet em tempo real"
+      },
+      "webReader": {
+        "title": "Leitor Web",
+        "description": "Browserless — abrir e limpar páginas web"
+      },
+      "pinecone": {
+        "title": "Memória Vetorial",
+        "description": "Pinecone — memória de longo prazo e contexto"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "Atualização disponível",
       "upToDate": "Atualizado",
       "goUpdate": "Ir"
-    }
+    },
+    "stepsDone": "{{done}} de {{total}} etapas",
+    "requiredGroup": "Obrigatório",
+    "recommendedGroup": "Recomendado",
+    "optionalGroup": "Opcional"
   },
   "common": {
     "saved": "salvo",
@@ -447,7 +463,14 @@
         "unbanInProgress": "Desbanindo…",
         "userUnbanned": "Usuário desbanido e pendente de aprovação",
         "userBanned": "Usuário banido",
-        "error": "Erro: {{error}}"
+        "error": "Erro: {{error}}",
+        "generatePassword": "Gerar Nova Senha",
+        "generatePasswordHint": "Uma nova senha será gerada e todas as sessões atuais do usuário serão revogadas.",
+        "generatePasswordConfirm": "Tem certeza? O usuário perderá o acesso com a senha atual. Uma nova será gerada.",
+        "generatingPassword": "Gerando senha...",
+        "passwordGenerated": "Nova senha do usuário: {{password}}",
+        "passwordGeneratedSuccess": "Nova senha gerada",
+        "noPasswordIdentity": "O usuário não possui login baseado em senha"
       },
       "modelUsage": {
         "title": "Uso por modelo",

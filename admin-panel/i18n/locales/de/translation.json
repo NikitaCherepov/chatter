@@ -34,6 +34,18 @@
       "voice": {
         "title": "Sprache",
         "description": "Spracherkennung und TTS für Telegram"
+      },
+      "webSearch": {
+        "title": "Websuche",
+        "description": "Tavily API — Echtzeit-Internetinformationen"
+      },
+      "webReader": {
+        "title": "Web-Reader",
+        "description": "Browserless — Webseiten öffnen und bereinigen"
+      },
+      "pinecone": {
+        "title": "Vektorspeicher",
+        "description": "Pinecone — Langzeitspeicher und Kontext"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "Update verfügbar",
       "upToDate": "Aktuell",
       "goUpdate": "Los"
-    }
+    },
+    "stepsDone": "{{done}} von {{total}} Schritten",
+    "requiredGroup": "Erforderlich",
+    "recommendedGroup": "Empfohlen",
+    "optionalGroup": "Optional"
   },
   "common": {
     "saved": "gespeichert",
@@ -447,7 +463,14 @@
         "unbanInProgress": "Entsperren läuft…",
         "userUnbanned": "Benutzer entsperrt und ausstehende Genehmigung",
         "userBanned": "Benutzer gesperrt",
-        "error": "Fehler: {{error}}"
+        "error": "Fehler: {{error}}",
+        "generatePassword": "Neues Passwort generieren",
+        "generatePasswordHint": "Ein neues Passwort wird generiert und alle aktuellen Benutzersitzungen werden widerrufen.",
+        "generatePasswordConfirm": "Sind Sie sicher? Der Benutzer verliert den Zugriff mit seinem aktuellen Passwort. Ein neues wird generiert.",
+        "generatingPassword": "Passwort wird generiert...",
+        "passwordGenerated": "Neues Benutzerpasswort: {{password}}",
+        "passwordGeneratedSuccess": "Neues Passwort generiert",
+        "noPasswordIdentity": "Benutzer hat keine passwortbasierte Anmeldung"
       },
       "modelUsage": {
         "title": "Nutzung nach Modell",

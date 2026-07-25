@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "Bir güvenlik uzmanısınız. Kısaca yanıtlayın.",
-    "reviewSshPrompt": "Bu SSH komutunun bir sunucudaki güvenliğini değerlendirin. Riskleri 1-2 cümleyle kısaca açıklayın. Komut: {{command}}. {{language}} dilinde yanıtlayın."
+    "reviewSshPrompt": "Bu SSH komutunun bir sunucudaki güvenliğini değerlendirin. Riskleri 1-2 cümleyle kısaca açıklayın. Komut: {{command}}. {{language}} dilinde yanıtlayın.",
+    "reviewCommandsSystem": "Bir DevOps güvenlik mühendisisiniz. Listedeki her komutu riskler açısından analiz edin: veri silme, kritik hizmetleri durdurma, geri döndürülemez değişiklikler, veri sızıntıları. Her komut için kısa bir karar (güvenli/riskli) ve varsa riskin nedenini yazın. Sonunda genel bir sonuç yazın. {{language}} dilinde yanıt verin. Kısa ve öz olun.",
+    "promptGenSystem": "Yapay zeka asistanları için sistem promptları yazma konusunda uzmansınız.{{detail}}\n\nYalnızca prompt metnini yanıtlayın — açıklama yok, markdown sarmalama yok, \"İşte promptunuz:\" gibi bir şey yok. Sadece AI'ya talimat olarak gönderilecek sistem prompt metnini yazın.",
+    "promptGenDetailMinimal": " Mümkün olduğunca kısa olun. Yalnızca özü yakalayın — karakter, rol ve temel kurallar. Sanatsal betimlemeler yok. En fazla 500 karakter.",
+    "promptGenDetailMedium": " Dengeli bir kişilik promptu: karakter, iletişim tarzı, temel kurallar. En fazla 2000 karakter.",
+    "promptGenDetailDetailed": " Ayrıntılı bir kişilik promptu: karakter, iletişim tarzı, kurallar ve dünya inşa kuralları, örnek tepkiler, ses tonu, uç durumlar. En fazla 10000 karakter.",
+    "promptGenUserNew": "Görev: {{instruction}}",
+    "promptGenUserEdit": "Görev: {{instruction}}\n\nMevcut prompt (göreve göre düzenleyin, çelişmiyorsa özünü ve stilini koruyarak):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Kota aşıldı. {{resetsAt}} sıfırlanır.",

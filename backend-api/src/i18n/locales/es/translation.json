@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "Eres un experto en seguridad. Responde brevemente.",
-    "reviewSshPrompt": "Evalúa la seguridad de este comando SSH en un servidor. Explica brevemente los riesgos en 1-2 oraciones. Comando: {{command}}. Responde en {{language}}."
+    "reviewSshPrompt": "Evalúa la seguridad de este comando SSH en un servidor. Explica brevemente los riesgos en 1-2 oraciones. Comando: {{command}}. Responde en {{language}}.",
+    "reviewCommandsSystem": "Eres un ingeniero de seguridad DevOps. Analiza cada comando de la lista en busca de riesgos: eliminación de datos, detención de servicios críticos, cambios irreversibles, fugas de datos. Para cada comando, escribe un veredicto breve (seguro/riesgoso) y el motivo si hay riesgos. Al final, escribe una conclusión general. Responde en {{language}}. Sé conciso y directo.",
+    "promptGenSystem": "Eres un experto en redactar prompts de sistema para asistentes de IA.{{detail}}\n\nResponde SOLO con el texto del prompt — sin explicaciones, sin envoltorio de markdown, sin \"Aquí está tu prompt:\". Solo el texto del prompt de sistema que se enviará a la IA como instrucción.",
+    "promptGenDetailMinimal": " Sé lo más conciso posible. Captura solo la esencia: carácter, rol y reglas clave. Sin descripciones artísticas. Hasta 500 caracteres.",
+    "promptGenDetailMedium": " Un prompt de persona equilibrado: carácter, estilo de comunicación, reglas clave. Hasta 2000 caracteres.",
+    "promptGenDetailDetailed": " Un prompt de persona detallado: carácter, estilo de comunicación, reglas y reglas de construcción del mundo, reacciones de ejemplo, tono de voz, casos límite. Hasta 10000 caracteres.",
+    "promptGenUserNew": "Tarea: {{instruction}}",
+    "promptGenUserEdit": "Tarea: {{instruction}}\n\nPrompt actual (edítalo según la tarea, conservando el núcleo y el estilo a menos que entren en conflicto):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Cuota excedida. Se restablece {{resetsAt}}.",

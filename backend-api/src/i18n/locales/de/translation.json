@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "Sie sind ein Sicherheitsexperte. Antworten Sie kurz.",
-    "reviewSshPrompt": "Bewerten Sie die Sicherheit dieses SSH-Befehls auf einem Server. Erklären Sie kurz die Risiken in 1–2 Sätzen. Befehl: {{command}}. Antworten Sie in {{language}}."
+    "reviewSshPrompt": "Bewerten Sie die Sicherheit dieses SSH-Befehls auf einem Server. Erklären Sie kurz die Risiken in 1–2 Sätzen. Befehl: {{command}}. Antworten Sie in {{language}}.",
+    "reviewCommandsSystem": "Sie sind ein DevOps-Sicherheitsingenieur. Analysieren Sie jeden Befehl aus der Liste auf Risiken: Datenlöschung, Stoppen kritischer Dienste, irreversible Änderungen, Datenlecks. Schreiben Sie für jeden Befehl eine kurze Bewertung (sicher/riskant) und den Grund, falls Risiken bestehen. Schreiben Sie am Ende eine Gesamtschlussfolgerung. Antworten Sie in {{language}}. Seien Sie präzise und auf den Punkt.",
+    "promptGenSystem": "Sie sind ein Experte im Schreiben von System-Prompts für KI-Assistenten.{{detail}}\n\nAntworten Sie NUR mit dem Prompt-Text – keine Erklärungen, keine Markdown-Umrahmung, kein \"Hier ist Ihr Prompt:\". Nur der System-Prompt-Text, der als Anweisung an die KI gesendet wird.",
+    "promptGenDetailMinimal": " Seien Sie so präzise wie möglich. Erfassen Sie nur das Wesentliche – Charakter, Rolle und Schlüsselregeln. Keine künstlerischen Beschreibungen. Bis zu 500 Zeichen.",
+    "promptGenDetailMedium": " Ein ausgewogener Persona-Prompt: Charakter, Kommunikationsstil, Schlüsselregeln. Bis zu 2000 Zeichen.",
+    "promptGenDetailDetailed": " Ein detaillierter Persona-Prompt: Charakter, Kommunikationsstil, Regeln und Weltaufbauregeln, Beispielreaktionen, Tonfall, Randfälle. Bis zu 10000 Zeichen.",
+    "promptGenUserNew": "Aufgabe: {{instruction}}",
+    "promptGenUserEdit": "Aufgabe: {{instruction}}\n\nAktueller Prompt (bearbeiten Sie ihn gemäß der Aufgabe, wobei Kern und Stil erhalten bleiben, sofern sie nicht widersprechen):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Kontingent überschritten. Setzt zurück um {{resetsAt}}.",

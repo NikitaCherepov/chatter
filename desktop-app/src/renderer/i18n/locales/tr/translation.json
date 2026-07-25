@@ -46,7 +46,39 @@
       "syncErrorWithMessage": "Senkronizasyon hatası: {{message}}",
       "lastSyncWithDate": "Son senkronizasyon: {{date}}",
       "devicesCount": "Cihazlar ({{count}})",
-      "group": "grup"
+      "group": "grup",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "MQTT broker kaydedildi",
+        "brokerSaveFailed": "Broker kaydedilemedi",
+        "invalidUrl": "Geçersiz URL biçimi. mqtt:// veya mqtts:// ile başlamalıdır",
+        "brokerDeleted": "Zigbee ayarları kaldırıldı",
+        "brokerDeleteFailed": "Zigbee ayarları kaldırılamadı",
+        "saveBrokerFirst": "Önce MQTT broker adresini kaydedin",
+        "syncResult": "{{provider}}: {{count}} cihaz senkronize edildi",
+        "syncError": "Senkronizasyon hatası: {{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://host:port (kaydedildi)",
+        "helpText": "MQTT broker adresi (Mosquitto). Zigbee2MQTT çalışıyor ve broker'a bağlı olmalıdır.",
+        "save": "Kaydet",
+        "sync": "Senkronize Et",
+        "syncing": "Senkronize ediliyor...",
+        "deleteTitle": "Zigbee kaldırılsın mı?",
+        "deleteMessage": "MQTT broker ayarları ve senkronize edilmiş tüm zigbee cihazları kaldırılacaktır.",
+        "guideTitle": "Zigbee2MQTT'ye Bağlanma",
+        "step1": "Adım 1.",
+        "step1Text": "Ağınıza bir MQTT aracısı (ör. Mosquitto) kurun. Varsayılan port: 1883.",
+        "step2": "Adım 2.",
+        "step2Text": "Aracınıza bağlanmak için Zigbee2MQTT'yi yapılandırın. configuration.yaml dosyasında:",
+        "step3": "Adım 3.",
+        "step3Text": "Zigbee2MQTT'yi başlatın. Web arayüzünü açın (varsayılan: http://localhost:8080) ve Permit Join ile cihazlarınızı eşleştirin.",
+        "step4": "Adım 4.",
+        "step4Text": "Yukarıdaki MQTT aracı adresini girin ve Kaydet'e tıklayın. Biçim:",
+        "step5": "Adım 5.",
+        "step5Text": "Senkronize Et'e tıklayın. Zigbee2MQTT'den eşleştirilen cihazlar aşağıdaki listede görünecektir.",
+        "note": "Not: MQTT broker, Chatter arka uç sunucusundan erişilebilir olmalıdır. Broker kimlik doğrulaması gerektiriyorsa, URL'ye ekleyin: mqtt://kullanıcı:şifre@host:port"
+      }
     },
     "macros": {
       "execution": "Çalıştır",
@@ -310,7 +342,8 @@
     "nothingFound": "Hiçbir şey bulunamadı",
     "selectPlaceholder": "Seç...",
     "unknown": "Bilinmiyor",
-    "user": "Kullanıcı"
+    "user": "Kullanıcı",
+    "inDevelopment": "Geliştirme aşamasında"
   },
   "auth": {
     "connection": {
@@ -338,6 +371,33 @@
     },
     "error": {
       "generic": "Bir şeyler yanlış gitti"
+    },
+    "forgot": {
+      "link": "Şifrenizi mi unuttunuz?",
+      "title": "Şifre Kurtarma",
+      "subtitle": "Giriş bilgilerinizi girin. Telegram üzerinden bir doğrulama kodu gönderilecektir.",
+      "helpTitle": "Giriş bilgilerinizi mi unuttunuz?",
+      "helpText": "Chatter Telegram botunu açın ve /recover_desktop yazın — giriş bilgilerinizi ve yeni bir şifre alacaksınız.",
+      "noTelegramTitle": "Telegram bağlı değil",
+      "noTelegramHelp": "Hesabınız Telegram'a bağlı olmadığından Telegram üzerinden kurtarma mümkün değildir. Lütfen sunucu yöneticinizle iletişime geçin.",
+      "sendCode": "Kod Gönder",
+      "codeLabel": "Telegram'dan Kod",
+      "enterCode": "{{login}} hesabı için Telegram'a kod gönderildi. Mesajdaki 6 haneyi girin.",
+      "invalidCode": "6 hane girin",
+      "verify": "Doğrula",
+      "verifyFailed": "Kod doğrulanamadı",
+      "wrongCode": "Yanlış kod. Kalan deneme: {{attempts}}",
+      "codeExpired": "Kodun süresi doldu. Yeni bir kod isteyin.",
+      "codeLocked": "Çok fazla deneme. Yeni bir kod isteyin.",
+      "attemptsLeft": "Denemeler: {{count}} / 3",
+      "rateLimited": "Çok fazla istek. {{seconds}} saniye sonra tekrar deneyin.",
+      "requestFailed": "Kod gönderilemedi. Giriş bilgilerinizi kontrol edin.",
+      "newPasswordTitle": "Yeni bir şifre oluşturun",
+      "newPasswordPlaceholder": "Yeni şifre (en az 8 karakter)",
+      "passwordTooShort": "Şifre en az 8 karakter olmalıdır",
+      "resetFailed": "Şifre değiştirilemedi",
+      "passwordChanged": "Şifre başarıyla değiştirildi!",
+      "loginWithNew": "Artık yeni şifrenizle oturum açabilirsiniz."
     }
   },
   "review": {
@@ -408,7 +468,8 @@
       "restrictions": "Kısıtlamalar",
       "models": "Modeller",
       "limits": "Sınırlar",
-      "app": "Uygulama"
+      "app": "Uygulama",
+      "billing": "Faturalandırma"
     },
     "language": {
       "system": "Sistem",
@@ -431,7 +492,12 @@
       "namePlaceholder": "Adınızı girin...",
       "memory": "Temel hafıza",
       "memoryHelp": "Yapay zekanın sizinle ilgili her zaman hatırladığı şeyler. Otomatik olarak doldurulur, ancak manuel olarak düzenleyebilirsiniz.",
-      "memoryPlaceholder": "Ad, şehir, iş, tercihler..."
+      "memoryPlaceholder": "Ad, şehir, iş, tercihler...",
+      "changePassword": "Şifreyi Değiştir",
+      "currentPassword": "Mevcut Şifre",
+      "newPassword": "Yeni Şifre",
+      "changeLogin": "Girişi Değiştir",
+      "newLogin": "Yeni Giriş"
     },
     "connections": {
       "help": "Bu hesaba giriş yapabilen ve kullanabilen hizmetleri yönetin.",
@@ -559,7 +625,15 @@
       "describePrompt": "Ne istediğinizi açıklayın",
       "promptGenerateFailed": "İstem oluşturulamadı",
       "promptApplied": "İstem uygulandı",
-      "cartesiaVoicesFailed": "Cartesia sesleri yüklenemedi"
+      "cartesiaVoicesFailed": "Cartesia sesleri yüklenemedi",
+      "passwordChanged": "Şifre başarıyla değiştirildi",
+      "passwordChangeFailed": "Şifre değiştirilemedi",
+      "wrongPassword": "Mevcut şifre yanlış",
+      "loginChanged": "Giriş {{login}} olarak değiştirildi",
+      "loginChangeFailed": "Giriş değiştirilemedi",
+      "loginAlreadyExists": "Bu giriş zaten kullanılıyor",
+      "badLogin": "Geçersiz giriş formatı",
+      "loginRequired": "Mevcut şifreyi ve yeni girişi girin"
     }
   },
   "chat": {
@@ -638,7 +712,8 @@
     },
     "model": {
       "label": "Model:",
-      "automatic": "Otomatik seçim"
+      "automatic": "Otomatik seçim",
+      "freeBadge": "ücretsiz"
     },
     "messages": {
       "loading": "Mesajlar yükleniyor...",
@@ -878,5 +953,19 @@
     "defaultVoice": "Varsayılan",
     "cartesia": "Cartesia (bulut)",
     "previewText": "Merhaba, ben Chatter!"
+  },
+  "quota": {
+    "title": "Kota Kullanımı",
+    "resetsAt": "Sıfırlanma:"
+  },
+  "forcePassword": {
+    "title": "Şifre Değiştir",
+    "subtitle": "Güvenlik nedeniyle, devam etmeden önce lütfen yeni bir şifre belirleyin.",
+    "confirmPlaceholder": "Yeni şifreyi onayla",
+    "submit": "Şifreyi Değiştir",
+    "passwordsDoNotMatch": "Şifreler eşleşmiyor",
+    "sameAsOld": "Yeni şifre mevcut şifreden farklı olmalıdır",
+    "success": "Şifre değiştirildi. Lütfen tekrar oturum açın.",
+    "logout": "Oturumu Kapat"
   }
 }

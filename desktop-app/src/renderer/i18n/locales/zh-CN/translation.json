@@ -30,7 +30,8 @@
     "nothingFound": "未找到任何内容",
     "selectPlaceholder": "请选择...",
     "unknown": "未知",
-    "user": "用户"
+    "user": "用户",
+    "inDevelopment": "开发中"
   },
   "auth": {
     "subtitle": {
@@ -58,6 +59,33 @@
       "placeholder": "粘贴连接链接",
       "connect": "连接",
       "change": "使用其他服务器"
+    },
+    "forgot": {
+      "link": "忘记密码？",
+      "title": "密码恢复",
+      "subtitle": "输入您的登录名。验证码将通过Telegram发送。",
+      "helpTitle": "忘记登录名？",
+      "helpText": "打开Chatter Telegram机器人并输入 /recover_desktop — 您将收到您的登录名和新密码。",
+      "noTelegramTitle": "未关联Telegram",
+      "noTelegramHelp": "由于您的账户未关联Telegram，无法通过Telegram恢复。请联系服务器管理员。",
+      "sendCode": "发送验证码",
+      "codeLabel": "Telegram验证码",
+      "enterCode": "验证码已发送至账号{{login}}的Telegram。请输入消息中的6位数字。",
+      "invalidCode": "请输入6位数字",
+      "verify": "验证",
+      "verifyFailed": "验证码验证失败",
+      "wrongCode": "验证码错误。剩余尝试次数：{{attempts}}",
+      "codeExpired": "验证码已过期。请重新获取。",
+      "codeLocked": "尝试次数过多。请重新获取验证码。",
+      "attemptsLeft": "尝试次数：{{count}}/3",
+      "rateLimited": "请求过多，请在{{seconds}}秒后重试。",
+      "requestFailed": "发送验证码失败，请检查您的登录信息。",
+      "newPasswordTitle": "创建新密码",
+      "newPasswordPlaceholder": "新密码（至少8个字符）",
+      "passwordTooShort": "密码必须至少8个字符",
+      "resetFailed": "更改密码失败",
+      "passwordChanged": "密码更改成功！",
+      "loginWithNew": "您现在可以使用新密码登录。"
     }
   },
   "review": {
@@ -128,7 +156,8 @@
       "app": "应用",
       "limits": "限制",
       "connections": "已关联账户",
-      "mail": "电子邮件"
+      "mail": "电子邮件",
+      "billing": "账单"
     },
     "language": {
       "system": "系统",
@@ -151,7 +180,12 @@
       "namePlaceholder": "输入姓名...",
       "memory": "热记忆",
       "memoryHelp": "AI始终记住的关于您的信息。自动填充，但您可以手动编辑。",
-      "memoryPlaceholder": "姓名、城市、工作、偏好..."
+      "memoryPlaceholder": "姓名、城市、工作、偏好...",
+      "changePassword": "更改密码",
+      "currentPassword": "当前密码",
+      "newPassword": "新密码",
+      "changeLogin": "更改登录",
+      "newLogin": "新登录"
     },
     "prompt": {
       "style": "沟通风格",
@@ -256,7 +290,15 @@
       "describePrompt": "描述您想要的内容",
       "promptGenerateFailed": "生成提示失败",
       "promptApplied": "提示已应用",
-      "cartesiaVoicesFailed": "加载Cartesia语音失败"
+      "cartesiaVoicesFailed": "加载Cartesia语音失败",
+      "passwordChanged": "密码更改成功",
+      "passwordChangeFailed": "密码更改失败",
+      "wrongPassword": "当前密码不正确",
+      "loginChanged": "登录已更改为 {{login}}",
+      "loginChangeFailed": "更改登录失败",
+      "loginAlreadyExists": "此登录名已被占用",
+      "badLogin": "登录格式无效",
+      "loginRequired": "请输入当前密码和新登录名"
     },
     "connections": {
       "help": "管理可以登录并使用此账户的服务。",
@@ -358,7 +400,8 @@
     },
     "model": {
       "label": "模型：",
-      "automatic": "自动选择"
+      "automatic": "自动选择",
+      "freeBadge": "免费"
     },
     "messages": {
       "loading": "正在加载消息...",
@@ -804,7 +847,39 @@
       "lastSyncWithDate": "上次同步：{{date}}",
       "devicesCount": "设备（{{count}}）",
       "group": "组",
-      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID"
+      "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "MQTT 代理已保存",
+        "brokerSaveFailed": "无法保存代理",
+        "invalidUrl": "无效的 URL 格式。必须以 mqtt:// 或 mqtts:// 开头",
+        "brokerDeleted": "Zigbee 设置已删除",
+        "brokerDeleteFailed": "无法删除 Zigbee 设置",
+        "saveBrokerFirst": "请先保存 MQTT 代理地址",
+        "syncResult": "{{provider}}：已同步 {{count}} 个设备",
+        "syncError": "同步错误：{{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://host:port（已保存）",
+        "helpText": "MQTT 代理地址（Mosquitto）。Zigbee2MQTT 必须正在运行并连接到代理。",
+        "save": "保存",
+        "sync": "同步",
+        "syncing": "正在同步...",
+        "deleteTitle": "移除 Zigbee？",
+        "deleteMessage": "MQTT 代理设置和所有已同步的 zigbee 设备将被移除。",
+        "guideTitle": "连接 Zigbee2MQTT",
+        "step1": "步骤 1。",
+        "step1Text": "在您的网络上安装 MQTT 代理（例如 Mosquitto）。默认端口：1883。",
+        "step2": "步骤 2。",
+        "step2Text": "配置 Zigbee2MQTT 以连接到您的代理。在 configuration.yaml 中：",
+        "step3": "步骤 3。",
+        "step3Text": "启动 Zigbee2MQTT。打开 Web UI（默认：http://localhost:8080）并通过 Permit Join 配对您的设备。",
+        "step4": "步骤 4。",
+        "step4Text": "在上面输入 MQTT 代理地址并点击保存。格式：",
+        "step5": "步骤 5。",
+        "step5Text": "点击同步。来自 Zigbee2MQTT 的已配对设备将出现在下面的列表中。",
+        "note": "注意：MQTT 代理必须可从运行 Chatter 后端的服务器访问。如果代理需要身份验证，请在 URL 中包含：mqtt://user:password@host:port"
+      }
     },
     "mail": {
       "title": "电子邮件账户",
@@ -878,5 +953,19 @@
     "defaultVoice": "默认",
     "cartesia": "Cartesia（云端）",
     "previewText": "你好，我是Chatter！"
+  },
+  "quota": {
+    "title": "配额使用情况",
+    "resetsAt": "重置时间："
+  },
+  "forcePassword": {
+    "title": "更改密码",
+    "subtitle": "出于安全原因，请在继续之前设置新密码。",
+    "confirmPlaceholder": "确认新密码",
+    "submit": "更改密码",
+    "passwordsDoNotMatch": "密码不匹配",
+    "sameAsOld": "新密码必须与当前密码不同",
+    "success": "密码已更改。请重新登录。",
+    "logout": "退出登录"
   }
 }

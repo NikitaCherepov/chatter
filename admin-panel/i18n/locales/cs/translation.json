@@ -34,6 +34,18 @@
       "voice": {
         "title": "Hlas",
         "description": "Rozpoznávání řeči a TTS pro Telegram"
+      },
+      "webSearch": {
+        "title": "Webové vyhledávání",
+        "description": "Tavily API — informace z internetu v reálném čase"
+      },
+      "webReader": {
+        "title": "Čtečka webu",
+        "description": "Browserless — otevírání a čištění webových stránek"
+      },
+      "pinecone": {
+        "title": "Vektorová paměť",
+        "description": "Pinecone — dlouhodobá paměť a kontext"
       }
     },
     "config": {
@@ -57,7 +69,11 @@
       "rebuild": "Obraz přestavěn",
       "upToDate": "Aktuální",
       "goUpdate": "Provést"
-    }
+    },
+    "stepsDone": "{{done}} z {{total}} kroků",
+    "requiredGroup": "Povinné",
+    "recommendedGroup": "Doporučené",
+    "optionalGroup": "Volitelné"
   },
   "common": {
     "saved": "uloženo",
@@ -433,7 +449,14 @@
         "unbanInProgress": "Probíhá odblokování…",
         "userUnbanned": "Uživatel odblokován, čeká na schválení",
         "userBanned": "Uživatel zablokován",
-        "error": "Chyba: {{error}}"
+        "error": "Chyba: {{error}}",
+        "generatePassword": "Generovat nové heslo",
+        "generatePasswordHint": "Bude vygenerováno nové heslo a všechna aktuální uživatelská sezení budou zrušena.",
+        "generatePasswordConfirm": "Jste si jisti? Uživatel ztratí přístup se svým aktuálním heslem. Bude vygenerováno nové.",
+        "generatingPassword": "Generování hesla...",
+        "passwordGenerated": "Nové uživatelské heslo: {{password}}",
+        "passwordGeneratedSuccess": "Nové heslo vygenerováno",
+        "noPasswordIdentity": "Uživatel nemá přihlášení založené na hesle"
       },
       "modelUsage": {
         "title": "Využití podle modelu",

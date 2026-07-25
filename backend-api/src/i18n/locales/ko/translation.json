@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "당신은 보안 전문가입니다. 간략히 답변하세요.",
-    "reviewSshPrompt": "서버에서 이 SSH 명령의 안전성을 평가하세요. 1~2문장으로 위험을 간략히 설명하세요. 명령: {{command}}. {{language}}로 응답하세요."
+    "reviewSshPrompt": "서버에서 이 SSH 명령의 안전성을 평가하세요. 1~2문장으로 위험을 간략히 설명하세요. 명령: {{command}}. {{language}}로 응답하세요.",
+    "reviewCommandsSystem": "당신은 DevOps 보안 엔지니어입니다. 목록의 각 명령어를 데이터 삭제, 중요 서비스 중단, 되돌릴 수 없는 변경, 데이터 유출 위험에 대해 분석하세요. 각 명령어에 대해 간략한 판정(안전/위험)과 위험이 있는 경우 그 이유를 작성하세요. 마지막에 전체 결론을 작성하세요. {{language}}로 응답하세요. 간결하고 요점을 전달하세요.",
+    "promptGenSystem": "당신은 AI 어시스턴트를 위한 시스템 프롬프트 작성 전문가입니다.{{detail}}\n\n프롬프트 텍스트만 응답하세요. 설명, 마크다운 래핑, \"여기 프롬프트가 있습니다:\" 없이. AI에게 지침으로 전송될 시스템 프롬프트 텍스트만 작성하세요.",
+    "promptGenDetailMinimal": " 가능한 한 간결하게 작성하세요. 핵심만 담으세요 — 성격, 역할, 주요 규칙. 예술적 설명은 없습니다. 최대 500자.",
+    "promptGenDetailMedium": " 균형 잡힌 페르소나 프롬프트: 성격, 의사소통 스타일, 주요 규칙. 최대 2000자.",
+    "promptGenDetailDetailed": " 상세한 페르소나 프롬프트: 성격, 의사소통 스타일, 규칙 및 세계관 규칙, 예시 반응, 말투, 예외 상황. 최대 10000자.",
+    "promptGenUserNew": "작업: {{instruction}}",
+    "promptGenUserEdit": "작업: {{instruction}}\n\n현재 프롬프트(작업에 따라 편집하되, 충돌하지 않는 한 핵심과 스타일 유지):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ 할당량 초과. {{resetsAt}}에 재설정됩니다.",

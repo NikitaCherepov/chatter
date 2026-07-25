@@ -34,6 +34,18 @@
       "voice": {
         "title": "音声",
         "description": "Telegram 向け音声認識と TTS"
+      },
+      "webSearch": {
+        "title": "ウェブ検索",
+        "description": "Tavily API — リアルタイムのインターネット情報"
+      },
+      "webReader": {
+        "title": "ウェブリーダー",
+        "description": "Browserless — ウェブページを開いてクリーンに表示"
+      },
+      "pinecone": {
+        "title": "ベクターメモリ",
+        "description": "Pinecone — 長期記憶とコンテキスト"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "アップデートあり",
       "upToDate": "最新",
       "goUpdate": "移動"
-    }
+    },
+    "stepsDone": "{{done}} / {{total}} ステップ",
+    "requiredGroup": "必須",
+    "recommendedGroup": "推奨",
+    "optionalGroup": "オプション"
   },
   "common": {
     "saved": "保存しました",
@@ -447,7 +463,14 @@
         "unbanInProgress": "BAN解除中…",
         "userUnbanned": "ユーザーのBANが解除され、承認待ちです",
         "userBanned": "ユーザーをBANしました",
-        "error": "エラー: {{error}}"
+        "error": "エラー: {{error}}",
+        "generatePassword": "新しいパスワードを生成",
+        "generatePasswordHint": "新しいパスワードが生成され、現在のすべてのユーザーセッションが無効になります。",
+        "generatePasswordConfirm": "よろしいですか？ユーザーは現在のパスワードでアクセスできなくなります。新しいパスワードが生成されます。",
+        "generatingPassword": "パスワードを生成中...",
+        "passwordGenerated": "新しいユーザーパスワード: {{password}}",
+        "passwordGeneratedSuccess": "新しいパスワードが生成されました",
+        "noPasswordIdentity": "ユーザーはパスワードベースのログインを持っていません"
       },
       "modelUsage": {
         "title": "モデル別使用量",

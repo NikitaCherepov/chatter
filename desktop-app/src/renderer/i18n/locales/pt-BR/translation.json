@@ -30,7 +30,8 @@
     "nothingFound": "Nada encontrado",
     "selectPlaceholder": "Selecione...",
     "unknown": "Desconhecido",
-    "user": "Usuário"
+    "user": "Usuário",
+    "inDevelopment": "Em desenvolvimento"
   },
   "auth": {
     "subtitle": {
@@ -58,6 +59,33 @@
       "placeholder": "Cole o link de conexão",
       "connect": "Conectar",
       "change": "Usar outro servidor"
+    },
+    "forgot": {
+      "link": "Esqueceu a senha?",
+      "title": "Recuperação de Senha",
+      "subtitle": "Digite seu login. Um código de verificação será enviado via Telegram.",
+      "helpTitle": "Esqueceu seu login?",
+      "helpText": "Abra o bot do Chatter no Telegram e digite /recover_desktop — você receberá seu login e uma nova senha.",
+      "noTelegramTitle": "Telegram não vinculado",
+      "noTelegramHelp": "A recuperação via Telegram não está disponível porque sua conta não está vinculada ao Telegram. Entre em contato com o administrador do servidor.",
+      "sendCode": "Enviar Código",
+      "codeLabel": "Código do Telegram",
+      "enterCode": "Código enviado ao Telegram para a conta {{login}}. Digite os 6 dígitos da mensagem.",
+      "invalidCode": "Digite 6 dígitos",
+      "verify": "Verificar",
+      "verifyFailed": "Falha ao verificar o código",
+      "wrongCode": "Código errado. Tentativas restantes: {{attempts}}",
+      "codeExpired": "Código expirado. Solicite um novo.",
+      "codeLocked": "Muitas tentativas. Solicite um novo código.",
+      "attemptsLeft": "Tentativas: {{count}} de 3",
+      "rateLimited": "Muitas solicitações. Tente novamente em {{seconds}} seg.",
+      "requestFailed": "Falha ao enviar código. Verifique seu login.",
+      "newPasswordTitle": "Criar uma nova senha",
+      "newPasswordPlaceholder": "Nova senha (mínimo 8 caracteres)",
+      "passwordTooShort": "A senha deve ter pelo menos 8 caracteres",
+      "resetFailed": "Falha ao alterar a senha",
+      "passwordChanged": "Senha alterada com sucesso!",
+      "loginWithNew": "Agora você pode entrar com sua nova senha."
     }
   },
   "review": {
@@ -128,7 +156,8 @@
       "app": "Aplicativo",
       "limits": "Limites",
       "connections": "Contas vinculadas",
-      "mail": "Email"
+      "mail": "Email",
+      "billing": "Faturamento"
     },
     "language": {
       "system": "Sistema",
@@ -151,7 +180,12 @@
       "namePlaceholder": "Digite o nome...",
       "memory": "Memória ativa",
       "memoryHelp": "O que a IA sempre lembra sobre você. Preenchido automaticamente, mas você pode editar manualmente.",
-      "memoryPlaceholder": "Nome, cidade, trabalho, preferências..."
+      "memoryPlaceholder": "Nome, cidade, trabalho, preferências...",
+      "changePassword": "Alterar Senha",
+      "currentPassword": "Senha Atual",
+      "newPassword": "Nova Senha",
+      "changeLogin": "Alterar Login",
+      "newLogin": "Novo Login"
     },
     "prompt": {
       "style": "Estilo de comunicação",
@@ -256,7 +290,15 @@
       "describePrompt": "Descreva o que deseja obter",
       "promptGenerateFailed": "Falha ao gerar o prompt",
       "promptApplied": "Prompt aplicado",
-      "cartesiaVoicesFailed": "Falha ao carregar vozes Cartesia"
+      "cartesiaVoicesFailed": "Falha ao carregar vozes Cartesia",
+      "passwordChanged": "Senha alterada com sucesso",
+      "passwordChangeFailed": "Falha ao alterar a senha",
+      "wrongPassword": "A senha atual está incorreta",
+      "loginChanged": "Login alterado para {{login}}",
+      "loginChangeFailed": "Falha ao alterar o login",
+      "loginAlreadyExists": "Este login já está em uso",
+      "badLogin": "Formato de login inválido",
+      "loginRequired": "Informe a senha atual e o novo login"
     },
     "connections": {
       "help": "Gerencie serviços que podem fazer login e usar esta conta.",
@@ -358,7 +400,8 @@
     },
     "model": {
       "label": "Modelo:",
-      "automatic": "Seleção automática"
+      "automatic": "Seleção automática",
+      "freeBadge": "gratuito"
     },
     "messages": {
       "loading": "Carregando mensagens...",
@@ -804,7 +847,39 @@
       "syncErrorWithMessage": "Erro de sincronização: {{message}}",
       "lastSyncWithDate": "Última sincronização: {{date}}",
       "devicesCount": "Dispositivos ({{count}})",
-      "group": "grupo"
+      "group": "grupo",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "Broker MQTT salvo",
+        "brokerSaveFailed": "Não foi possível salvar o broker",
+        "invalidUrl": "Formato de URL inválido. Deve começar com mqtt:// ou mqtts://",
+        "brokerDeleted": "Configurações Zigbee removidas",
+        "brokerDeleteFailed": "Não foi possível remover as configurações Zigbee",
+        "saveBrokerFirst": "Salve o endereço do broker MQTT primeiro",
+        "syncResult": "{{provider}}: {{count}} dispositivos sincronizados",
+        "syncError": "Erro de sincronização: {{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://host:port (salvo)",
+        "helpText": "Endereço do broker MQTT (Mosquitto). O Zigbee2MQTT deve estar em execução e conectado ao broker.",
+        "save": "Salvar",
+        "sync": "Sincronizar",
+        "syncing": "Sincronizando...",
+        "deleteTitle": "Remover Zigbee?",
+        "deleteMessage": "As configurações do broker MQTT e todos os dispositivos zigbee sincronizados serão removidos.",
+        "guideTitle": "Conectando Zigbee2MQTT",
+        "step1": "Passo 1.",
+        "step1Text": "Instale um broker MQTT (ex.: Mosquitto) na sua rede. Porta padrão: 1883.",
+        "step2": "Passo 2.",
+        "step2Text": "Configure o Zigbee2MQTT para conectar ao seu broker. Em configuration.yaml:",
+        "step3": "Passo 3.",
+        "step3Text": "Inicie o Zigbee2MQTT. Abra a interface web (padrão: http://localhost:8080) e pareie seus dispositivos via Permit Join.",
+        "step4": "Passo 4.",
+        "step4Text": "Insira o endereço do broker MQTT acima e clique em Salvar. Formato:",
+        "step5": "Passo 5.",
+        "step5Text": "Clique em Sincronizar. Dispositivos pareados do Zigbee2MQTT aparecerão na lista abaixo.",
+        "note": "Nota: o broker MQTT deve estar acessível a partir do servidor que executa o backend do Chatter. Se o broker exigir autenticação, inclua-a na URL: mqtt://user:password@host:port"
+      }
     },
     "mail": {
       "title": "Contas de email",
@@ -878,5 +953,19 @@
     "defaultVoice": "Padrão",
     "cartesia": "Cartesia (nuvem)",
     "previewText": "Olá, eu sou o Chatter!"
+  },
+  "quota": {
+    "title": "Uso da Cota",
+    "resetsAt": "Redefine em:"
+  },
+  "forcePassword": {
+    "title": "Alterar Senha",
+    "subtitle": "Por motivos de segurança, defina uma nova senha antes de continuar.",
+    "confirmPlaceholder": "Confirmar nova senha",
+    "submit": "Alterar Senha",
+    "passwordsDoNotMatch": "As senhas não coincidem",
+    "sameAsOld": "A nova senha deve ser diferente da atual",
+    "success": "Senha alterada. Faça login novamente.",
+    "logout": "Sair"
   }
 }

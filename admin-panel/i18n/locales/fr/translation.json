@@ -34,6 +34,18 @@
       "voice": {
         "title": "Voix",
         "description": "Reconnaissance vocale et TTS pour Telegram"
+      },
+      "webSearch": {
+        "title": "Recherche Web",
+        "description": "API Tavily — informations Internet en temps réel"
+      },
+      "webReader": {
+        "title": "Lecteur Web",
+        "description": "Browserless — ouvrir et nettoyer les pages web"
+      },
+      "pinecone": {
+        "title": "Mémoire Vectorielle",
+        "description": "Pinecone — mémoire à long terme et contexte"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "Mise à jour disponible",
       "upToDate": "À jour",
       "goUpdate": "Aller"
-    }
+    },
+    "stepsDone": "{{done}} sur {{total}} étapes",
+    "requiredGroup": "Requis",
+    "recommendedGroup": "Recommandé",
+    "optionalGroup": "Optionnel"
   },
   "common": {
     "saved": "enregistré",
@@ -447,7 +463,14 @@
         "unbanInProgress": "Levée du bannissement en cours…",
         "userUnbanned": "Utilisateur débanni et en attente d'approbation",
         "userBanned": "Utilisateur banni",
-        "error": "Erreur : {{error}}"
+        "error": "Erreur : {{error}}",
+        "generatePassword": "Générer un nouveau mot de passe",
+        "generatePasswordHint": "Un nouveau mot de passe sera généré et toutes les sessions utilisateur actuelles seront révoquées.",
+        "generatePasswordConfirm": "Êtes-vous sûr ? L'utilisateur perdra l'accès avec son mot de passe actuel. Un nouveau sera généré.",
+        "generatingPassword": "Génération du mot de passe...",
+        "passwordGenerated": "Nouveau mot de passe utilisateur : {{password}}",
+        "passwordGeneratedSuccess": "Nouveau mot de passe généré",
+        "noPasswordIdentity": "L'utilisateur n'a pas de connexion par mot de passe"
       },
       "modelUsage": {
         "title": "Utilisation par modèle",

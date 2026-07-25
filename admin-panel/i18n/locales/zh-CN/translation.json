@@ -34,6 +34,18 @@
       "voice": {
         "title": "语音",
         "description": "Telegram 的语音识别和 TTS"
+      },
+      "webSearch": {
+        "title": "网络搜索",
+        "description": "Tavily API — 实时互联网信息"
+      },
+      "webReader": {
+        "title": "网页阅读器",
+        "description": "Browserless — 打开并清理网页"
+      },
+      "pinecone": {
+        "title": "向量记忆",
+        "description": "Pinecone — 长期记忆和上下文"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "有可用更新",
       "upToDate": "已是最新",
       "goUpdate": "前往"
-    }
+    },
+    "stepsDone": "已完成 {{done}} / {{total}} 步",
+    "requiredGroup": "必需",
+    "recommendedGroup": "推荐",
+    "optionalGroup": "可选"
   },
   "common": {
     "saved": "已保存",
@@ -447,7 +463,14 @@
         "unbanInProgress": "正在解封…",
         "userUnbanned": "用户已解封，待审批",
         "userBanned": "用户已封禁",
-        "error": "错误：{{error}}"
+        "error": "错误：{{error}}",
+        "generatePassword": "生成新密码",
+        "generatePasswordHint": "将生成一个新密码，并撤销所有当前用户会话。",
+        "generatePasswordConfirm": "确定吗？用户将无法使用当前密码登录。将生成一个新密码。",
+        "generatingPassword": "正在生成密码...",
+        "passwordGenerated": "新用户密码：{{password}}",
+        "passwordGeneratedSuccess": "新密码已生成",
+        "noPasswordIdentity": "用户没有基于密码的登录方式"
       },
       "modelUsage": {
         "title": "按模型使用情况",

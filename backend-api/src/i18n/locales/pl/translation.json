@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "Jesteś ekspertem ds. bezpieczeństwa. Odpowiedz krótko.",
-    "reviewSshPrompt": "Oceń bezpieczeństwo tego polecenia SSH na serwerze. Krótko wyjaśnij ryzyka w 1–2 zdaniach. Polecenie: {{command}}. Odpowiedz w języku {{language}}."
+    "reviewSshPrompt": "Oceń bezpieczeństwo tego polecenia SSH na serwerze. Krótko wyjaśnij ryzyka w 1–2 zdaniach. Polecenie: {{command}}. Odpowiedz w języku {{language}}.",
+    "reviewCommandsSystem": "Jesteś inżynierem DevOps ds. bezpieczeństwa. Przeanalizuj każdą komendę z listy pod kątem ryzyka: usunięcie danych, zatrzymanie krytycznych usług, nieodwracalne zmiany, wycieki danych. Dla każdej komendy napisz krótką ocenę (bezpieczna/ryzykowna) i powód, jeśli istnieje ryzyko. Na koniec napisz ogólny wniosek. Odpowiedz w języku {{language}}. Bądź zwięzły i rzeczowy.",
+    "promptGenSystem": "Jesteś ekspertem w pisaniu promptów systemowych dla asystentów AI.{{detail}}\n\nOdpowiedz TYLKO tekstem promptu — bez wyjaśnień, bez formatowania Markdown, bez „Oto twój prompt:”. Tylko tekst promptu systemowego, który zostanie wysłany do AI jako instrukcja.",
+    "promptGenDetailMinimal": " Bądź tak zwięzły, jak to możliwe. Uchwyć tylko esencję — charakter, rolę i kluczowe zasady. Bez artystycznych opisów. Do 500 znaków.",
+    "promptGenDetailMedium": " Zrównoważony prompt persony: charakter, styl komunikacji, kluczowe zasady. Do 2000 znaków.",
+    "promptGenDetailDetailed": " Szczegółowy prompt persony: charakter, styl komunikacji, zasady i zasady budowania świata, przykładowe reakcje, ton głosu, przypadki brzegowe. Do 10000 znaków.",
+    "promptGenUserNew": "Zadanie: {{instruction}}",
+    "promptGenUserEdit": "Zadanie: {{instruction}}\n\nObecny prompt (edytuj go zgodnie z zadaniem, zachowując rdzeń i styl, chyba że są sprzeczne):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Limit przekroczony. Reset {{resetsAt}}.",

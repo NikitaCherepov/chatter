@@ -867,7 +867,18 @@
         "syncing": "同期中...",
         "deleteTitle": "Zigbeeを削除しますか？",
         "deleteMessage": "MQTTブローカーの設定と同期されたすべてのZigbeeデバイスが削除されます。",
-        "guideTitle": "Zigbee2MQTTに接続する"
+        "guideTitle": "Zigbee2MQTTに接続する",
+        "step1": "ステップ1。",
+        "step1Text": "ネットワークにMQTTブローカー（例：Mosquitto）をインストールします。デフォルトポート：1883。",
+        "step2": "ステップ2。",
+        "step2Text": "Zigbee2MQTTを設定してブローカーに接続します。configuration.yamlで：",
+        "step3": "ステップ3。",
+        "step3Text": "Zigbee2MQTTを起動します。Web UI（デフォルト：http://localhost:8080）を開き、Permit Joinでデバイスをペアリングします。",
+        "step4": "ステップ4。",
+        "step4Text": "上記のMQTTブローカーアドレスを入力し、保存をクリックします。形式：",
+        "step5": "ステップ5。",
+        "step5Text": "同期をクリックします。Zigbee2MQTTからペアリングされたデバイスが以下のリストに表示されます。",
+        "note": "注：MQTTブローカーはChatterバックエンドを実行しているサーバーから到達可能である必要があります。ブローカーが認証を必要とする場合は、URLに含めてください：mqtt://user:password@host:port"
       }
     },
     "mail": {

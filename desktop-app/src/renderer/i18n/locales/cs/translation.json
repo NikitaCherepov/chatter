@@ -46,7 +46,39 @@
       "syncErrorWithMessage": "Chyba synchronizace: {{message}}",
       "lastSyncWithDate": "Poslední synchronizace: {{date}}",
       "devicesCount": "Zařízení ({{count}})",
-      "group": "skupina"
+      "group": "skupina",
+      "zigbee": {
+        "title": "Zigbee (MQTT)",
+        "syncYandex": "Yandex",
+        "brokerSaved": "MQTT broker uložen",
+        "brokerSaveFailed": "Nepodařilo se uložit broker",
+        "invalidUrl": "Neplatný formát URL. Musí začínat mqtt:// nebo mqtts://",
+        "brokerDeleted": "Nastavení Zigbee odstraněna",
+        "brokerDeleteFailed": "Nepodařilo se odstranit nastavení Zigbee",
+        "saveBrokerFirst": "Nejprve uložte adresu MQTT brokeru",
+        "syncResult": "{{provider}}: synchronizováno {{count}} zařízení",
+        "syncError": "Chyba synchronizace: {{message}}",
+        "placeholder": "mqtt://192.168.1.100:1883",
+        "savedPlaceholder": "mqtt://host:port (uloženo)",
+        "helpText": "Adresa MQTT brokeru (Mosquitto). Zigbee2MQTT musí být spuštěn a připojen k brokeru.",
+        "save": "Uložit",
+        "sync": "Synchronizovat",
+        "syncing": "Synchronizace...",
+        "deleteTitle": "Odstranit Zigbee?",
+        "deleteMessage": "Nastavení MQTT brokeru a všechna synchronizovaná zařízení Zigbee budou odstraněna.",
+        "guideTitle": "Připojení Zigbee2MQTT",
+        "step1": "Krok 1.",
+        "step1Text": "Nainstalujte do své sítě MQTT broker (např. Mosquitto). Výchozí port: 1883.",
+        "step2": "Krok 2.",
+        "step2Text": "Nakonfigurujte Zigbee2MQTT pro připojení k vašemu brokeru. V configuration.yaml:",
+        "step3": "Krok 3.",
+        "step3Text": "Spusťte Zigbee2MQTT. Otevřete webové rozhraní (výchozí: http://localhost:8080) a spárujte zařízení pomocí Permit Join.",
+        "step4": "Krok 4.",
+        "step4Text": "Zadejte výše adresu MQTT brokeru a klikněte na Uložit. Formát:",
+        "step5": "Krok 5.",
+        "step5Text": "Klikněte na Synchronizovat. Spárovaná zařízení z Zigbee2MQTT se zobrazí v seznamu níže.",
+        "note": "Poznámka: MQTT broker musí být dosažitelný ze serveru, na kterém běží Chatter backend. Pokud broker vyžaduje autentizaci, uveďte ji v URL: mqtt://user:password@host:port"
+      }
     },
     "macros": {
       "execution": "Spustit",
@@ -310,7 +342,8 @@
     "nothingFound": "Nic nenalezeno",
     "selectPlaceholder": "Vybrat...",
     "unknown": "Neznámý",
-    "user": "Uživatel"
+    "user": "Uživatel",
+    "inDevelopment": "Ve vývoji"
   },
   "auth": {
     "connection": {
@@ -338,6 +371,33 @@
     },
     "error": {
       "generic": "Něco se pokazilo"
+    },
+    "forgot": {
+      "link": "Zapomněli jste heslo?",
+      "title": "Obnovení hesla",
+      "subtitle": "Zadejte své přihlašovací jméno. Ověřovací kód bude odeslán přes Telegram.",
+      "helpTitle": "Zapomněli jste přihlašovací jméno?",
+      "helpText": "Otevřete Chatter Telegram bota a napište /recover_desktop — obdržíte své přihlašovací jméno a nové heslo.",
+      "noTelegramTitle": "Telegram není propojen",
+      "noTelegramHelp": "Obnovení přes Telegram není možné, protože váš účet není propojen s Telegramem. Kontaktujte prosím správce serveru.",
+      "sendCode": "Odeslat kód",
+      "codeLabel": "Kód z Telegramu",
+      "enterCode": "Kód byl odeslán do Telegramu pro účet {{login}}. Zadejte 6 číslic ze zprávy.",
+      "invalidCode": "Zadejte 6 číslic",
+      "verify": "Ověřit",
+      "verifyFailed": "Ověření kódu selhalo",
+      "wrongCode": "Nesprávný kód. Zbývající pokusy: {{attempts}}",
+      "codeExpired": "Kód vypršel. Vyžádejte si nový.",
+      "codeLocked": "Příliš mnoho pokusů. Vyžádejte si nový kód.",
+      "attemptsLeft": "Pokusy: {{count}} ze 3",
+      "rateLimited": "Příliš mnoho požadavků. Zkuste to znovu za {{seconds}} s.",
+      "requestFailed": "Odeslání kódu selhalo. Zkontrolujte své přihlašovací jméno.",
+      "newPasswordTitle": "Vytvořte nové heslo",
+      "newPasswordPlaceholder": "Nové heslo (minimálně 8 znaků)",
+      "passwordTooShort": "Heslo musí mít alespoň 8 znaků",
+      "resetFailed": "Změna hesla selhala",
+      "passwordChanged": "Heslo bylo úspěšně změněno!",
+      "loginWithNew": "Nyní se můžete přihlásit pomocí svého nového hesla."
     }
   },
   "review": {
@@ -408,7 +468,8 @@
       "restrictions": "Omezení",
       "models": "Modely",
       "limits": "Limity",
-      "app": "Aplikace"
+      "app": "Aplikace",
+      "billing": "Fakturace"
     },
     "language": {
       "system": "Systém",
@@ -431,7 +492,12 @@
       "namePlaceholder": "Zadejte své jméno...",
       "memory": "Paměť",
       "memoryHelp": "Co si o vás AI vždy pamatuje. Vyplňuje se automaticky, ale můžete jej upravit ručně.",
-      "memoryPlaceholder": "Jméno, město, práce, preference..."
+      "memoryPlaceholder": "Jméno, město, práce, preference...",
+      "changePassword": "Změnit heslo",
+      "currentPassword": "Stávající heslo",
+      "newPassword": "Nové heslo",
+      "changeLogin": "Změnit přihlašovací jméno",
+      "newLogin": "Nové přihlašovací jméno"
     },
     "connections": {
       "help": "Spravujte služby, které se mohou přihlásit k tomuto účtu a používat jej.",
@@ -559,7 +625,15 @@
       "describePrompt": "Popište, co chcete",
       "promptGenerateFailed": "Nepodařilo se vygenerovat prompt",
       "promptApplied": "Výzva použita",
-      "cartesiaVoicesFailed": "Nepodařilo se načíst hlasy Cartesia"
+      "cartesiaVoicesFailed": "Nepodařilo se načíst hlasy Cartesia",
+      "passwordChanged": "Heslo bylo úspěšně změněno",
+      "passwordChangeFailed": "Změna hesla se nezdařila",
+      "wrongPassword": "Aktuální heslo je nesprávné",
+      "loginChanged": "Přihlašovací jméno změněno na {{login}}",
+      "loginChangeFailed": "Změna přihlašovacího jména se nezdařila",
+      "loginAlreadyExists": "Toto přihlašovací jméno je již obsazeno",
+      "badLogin": "Neplatný formát přihlašovacího jména",
+      "loginRequired": "Zadejte aktuální heslo a nové přihlašovací jméno"
     }
   },
   "chat": {
@@ -638,7 +712,8 @@
     },
     "model": {
       "label": "Model:",
-      "automatic": "Automatický výběr"
+      "automatic": "Automatický výběr",
+      "freeBadge": "zdarma"
     },
     "messages": {
       "loading": "Načítání zpráv...",
@@ -878,5 +953,19 @@
     "defaultVoice": "Výchozí",
     "cartesia": "Cartesia (cloud)",
     "previewText": "Ahoj, jsem Chatter!"
+  },
+  "quota": {
+    "title": "Využití kvóty",
+    "resetsAt": "Reset:"
+  },
+  "forcePassword": {
+    "title": "Změnit heslo",
+    "subtitle": "Z bezpečnostních důvodů si prosím před pokračováním nastavte nové heslo.",
+    "confirmPlaceholder": "Potvrdit nové heslo",
+    "submit": "Změnit heslo",
+    "passwordsDoNotMatch": "Hesla se neshodují",
+    "sameAsOld": "Nové heslo se musí lišit od stávajícího",
+    "success": "Heslo změněno. Přihlaste se znovu.",
+    "logout": "Odhlásit se"
   }
 }

@@ -34,6 +34,18 @@
       "voice": {
         "title": "음성",
         "description": "Telegram용 음성 인식 및 TTS"
+      },
+      "webSearch": {
+        "title": "웹 검색",
+        "description": "Tavily API — 실시간 인터넷 정보"
+      },
+      "webReader": {
+        "title": "웹 리더",
+        "description": "Browserless — 웹 페이지 열기 및 정리"
+      },
+      "pinecone": {
+        "title": "벡터 메모리",
+        "description": "Pinecone — 장기 메모리 및 컨텍스트"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "업데이트 가능",
       "upToDate": "최신 상태",
       "goUpdate": "이동"
-    }
+    },
+    "stepsDone": "{{done}} / {{total}} 단계",
+    "requiredGroup": "필수",
+    "recommendedGroup": "권장",
+    "optionalGroup": "선택"
   },
   "common": {
     "saved": "저장됨",
@@ -447,7 +463,14 @@
         "unbanInProgress": "차단 해제 중…",
         "userUnbanned": "사용자 차단 해제됨, 승인 대기 중",
         "userBanned": "사용자 차단됨",
-        "error": "오류: {{error}}"
+        "error": "오류: {{error}}",
+        "generatePassword": "새 비밀번호 생성",
+        "generatePasswordHint": "새 비밀번호가 생성되며, 모든 현재 사용자 세션이 해지됩니다.",
+        "generatePasswordConfirm": "확실합니까? 사용자는 현재 비밀번호로 접근할 수 없게 됩니다. 새 비밀번호가 생성됩니다.",
+        "generatingPassword": "비밀번호 생성 중...",
+        "passwordGenerated": "새 사용자 비밀번호: {{password}}",
+        "passwordGeneratedSuccess": "새 비밀번호가 생성되었습니다",
+        "noPasswordIdentity": "사용자에게 비밀번호 기반 로그인이 없습니다"
       },
       "modelUsage": {
         "title": "모델별 사용량",

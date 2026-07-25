@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "Vous êtes un expert en sécurité. Répondez brièvement.",
-    "reviewSshPrompt": "Évaluez la sécurité de cette commande SSH sur un serveur. Expliquez brièvement les risques en 1 à 2 phrases. Commande : {{command}}. Répondez en {{language}}."
+    "reviewSshPrompt": "Évaluez la sécurité de cette commande SSH sur un serveur. Expliquez brièvement les risques en 1 à 2 phrases. Commande : {{command}}. Répondez en {{language}}.",
+    "reviewCommandsSystem": "Vous êtes un ingénieur DevOps en sécurité. Analysez chaque commande de la liste pour les risques : suppression de données, arrêt de services critiques, modifications irréversibles, fuites de données. Pour chaque commande, rédigez un bref verdict (sûr/risqué) et la raison en cas de risques. À la fin, rédigez une conclusion générale. Répondez en {{language}}. Soyez concis et allez droit au but.",
+    "promptGenSystem": "Vous êtes un expert en rédaction de prompts système pour les assistants IA.{{detail}}\n\nRépondez UNIQUEMENT avec le texte du prompt — pas d'explications, pas d'encadrement Markdown, pas de \"Voici votre prompt :\". Juste le texte du prompt système qui sera envoyé à l'IA comme instruction.",
+    "promptGenDetailMinimal": " Soyez aussi concis que possible. Ne capturez que l'essentiel — personnage, rôle et règles clés. Pas de descriptions artistiques. Jusqu'à 500 caractères.",
+    "promptGenDetailMedium": " Un prompt de personnalité équilibré : personnage, style de communication, règles clés. Jusqu'à 2000 caractères.",
+    "promptGenDetailDetailed": " Un prompt de personnalité détaillé : personnage, style de communication, règles et règles de construction du monde, exemples de réactions, ton de la voix, cas limites. Jusqu'à 10000 caractères.",
+    "promptGenUserNew": "Tâche : {{instruction}}",
+    "promptGenUserEdit": "Tâche : {{instruction}}\n\nPrompt actuel (modifiez-le selon la tâche, en préservant le cœur et le style sauf s'ils sont en conflit) :\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Quota dépassé. Réinitialisation {{resetsAt}}.",

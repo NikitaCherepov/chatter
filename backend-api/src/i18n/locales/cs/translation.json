@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "Jste bezpečnostní expert. Odpovězte stručně.",
-    "reviewSshPrompt": "Posuďte bezpečnost tohoto SSH příkazu na serveru. Stručně vysvětlete rizika v 1–2 větách. Příkaz: {{command}}. Odpovězte v {{language}}."
+    "reviewSshPrompt": "Posuďte bezpečnost tohoto SSH příkazu na serveru. Stručně vysvětlete rizika v 1–2 větách. Příkaz: {{command}}. Odpovězte v {{language}}.",
+    "reviewCommandsSystem": "Jste DevOps bezpečnostní inženýr. Analyzujte každý příkaz ze seznamu z hlediska rizik: mazání dat, zastavení kritických služeb, nevratné změny, úniky dat. U každého příkazu napište stručný verdikt (bezpečný/rizikový) a důvod, pokud existují rizika. Na konci napište celkový závěr. Odpovězte v {{language}}. Buďte struční a výstižní.",
+    "promptGenSystem": "Jste odborník na psaní systémových promptů pro AI asistenty.{{detail}}\n\nOdpovězte POUZE textem promptu – žádná vysvětlení, žádné markdown obalení, žádné \"Zde je váš prompt:\". Pouze text systémového promptu, který bude odeslán AI jako instrukce.",
+    "promptGenDetailMinimal": " Buďte co nejstručnější. Zachyťte pouze podstatu – charakter, roli a klíčová pravidla. Žádné umělecké popisy. Až 500 znaků.",
+    "promptGenDetailMedium": " Vyvážený persona prompt: charakter, komunikační styl, klíčová pravidla. Až 2000 znaků.",
+    "promptGenDetailDetailed": " Detailní persona prompt: charakter, komunikační styl, pravidla a pravidla budování světa, příklady reakcí, tón hlasu, okrajové případy. Až 10000 znaků.",
+    "promptGenUserNew": "Úkol: {{instruction}}",
+    "promptGenUserEdit": "Úkol: {{instruction}}\n\nAktuální prompt (upravte jej podle úkolu, zachovejte jádro a styl, pokud nejsou v rozporu):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Kvóta překročena. Obnoví se {{resetsAt}}.",

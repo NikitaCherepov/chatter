@@ -284,7 +284,7 @@ function collectProtectedTokens(text) {
     /\{\{\s*[^{}]+?\s*\}\}/g,
     /\$\{[^{}]+?\}/g,
     /%\d*\$?[sdif]/g,
-    /https?:\/\/[^\s<>()]+/g,
+    /https?:\/\/[a-zA-Z0-9._~:/?#\[\]@!$&'*+,;=%\-]+/g,
   ];
   return patterns.flatMap((pattern) => text.match(pattern) || []).sort();
 }

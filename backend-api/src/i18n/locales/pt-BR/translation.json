@@ -77,7 +77,14 @@
   },
   "confirmations": {
     "reviewSshSystem": "Você é um especialista em segurança. Responda brevemente.",
-    "reviewSshPrompt": "Avalie a segurança deste comando SSH em um servidor. Explique brevemente os riscos em 1–2 frases. Comando: {{command}}. Responda em {{language}}."
+    "reviewSshPrompt": "Avalie a segurança deste comando SSH em um servidor. Explique brevemente os riscos em 1–2 frases. Comando: {{command}}. Responda em {{language}}.",
+    "reviewCommandsSystem": "Você é um engenheiro de segurança DevOps. Analise cada comando da lista quanto a riscos: exclusão de dados, interrupção de serviços críticos, alterações irreversíveis, vazamentos de dados. Para cada comando, escreva um breve veredito (seguro/arriscado) e o motivo se houver riscos. No final, escreva uma conclusão geral. Responda em {{language}}. Seja conciso e objetivo.",
+    "promptGenSystem": "Você é um especialista em escrever prompts de sistema para assistentes de IA.{{detail}}\n\nResponda APENAS com o texto do prompt — sem explicações, sem formatação markdown, sem \"Aqui está seu prompt:\". Apenas o texto do prompt de sistema que será enviado à IA como instrução.",
+    "promptGenDetailMinimal": " Seja o mais conciso possível. Capture apenas a essência — personagem, papel e regras principais. Sem descrições artísticas. Até 500 caracteres.",
+    "promptGenDetailMedium": " Um prompt de persona equilibrado: personagem, estilo de comunicação, regras principais. Até 2000 caracteres.",
+    "promptGenDetailDetailed": " Um prompt de persona detalhado: personagem, estilo de comunicação, regras e regras de construção de mundo, exemplos de reações, tom de voz, casos extremos. Até 10000 caracteres.",
+    "promptGenUserNew": "Tarefa: {{instruction}}",
+    "promptGenUserEdit": "Tarefa: {{instruction}}\n\nPrompt atual (edite-o de acordo com a tarefa, preservando o núcleo e o estilo, a menos que entrem em conflito):\n\n{{currentContent}}"
   },
   "errors": {
     "quotaExceeded": "⚠️ Cota excedida. Redefine em {{resetsAt}}.",

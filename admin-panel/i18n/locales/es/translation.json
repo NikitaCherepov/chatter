@@ -34,6 +34,18 @@
       "voice": {
         "title": "Voz",
         "description": "Reconocimiento de voz y TTS para Telegram"
+      },
+      "webSearch": {
+        "title": "Búsqueda web",
+        "description": "API de Tavily — información de internet en tiempo real"
+      },
+      "webReader": {
+        "title": "Lector web",
+        "description": "Browserless — abre y limpia páginas web"
+      },
+      "pinecone": {
+        "title": "Memoria vectorial",
+        "description": "Pinecone — memoria a largo plazo y contexto"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "Actualización disponible",
       "upToDate": "Actualizado",
       "goUpdate": "Ir"
-    }
+    },
+    "stepsDone": "{{done}} de {{total}} pasos",
+    "requiredGroup": "Requerido",
+    "recommendedGroup": "Recomendado",
+    "optionalGroup": "Opcional"
   },
   "common": {
     "saved": "guardado",
@@ -447,7 +463,14 @@
         "unbanInProgress": "Desbloqueando…",
         "userUnbanned": "Usuario desbloqueado y pendiente de aprobación",
         "userBanned": "Usuario bloqueado",
-        "error": "Error: {{error}}"
+        "error": "Error: {{error}}",
+        "generatePassword": "Generar nueva contraseña",
+        "generatePasswordHint": "Se generará una nueva contraseña y se revocarán todas las sesiones de usuario actuales.",
+        "generatePasswordConfirm": "¿Está seguro? El usuario perderá el acceso con su contraseña actual. Se generará una nueva.",
+        "generatingPassword": "Generando contraseña...",
+        "passwordGenerated": "Nueva contraseña de usuario: {{password}}",
+        "passwordGeneratedSuccess": "Nueva contraseña generada",
+        "noPasswordIdentity": "El usuario no tiene inicio de sesión basado en contraseña"
       },
       "modelUsage": {
         "title": "Uso por modelo",

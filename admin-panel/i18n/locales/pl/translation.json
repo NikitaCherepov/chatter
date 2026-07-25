@@ -34,6 +34,18 @@
       "voice": {
         "title": "Głos",
         "description": "Rozpoznawanie mowy i TTS dla Telegram"
+      },
+      "webSearch": {
+        "title": "Wyszukiwarka internetowa",
+        "description": "Tavily API — informacje z internetu w czasie rzeczywistym"
+      },
+      "webReader": {
+        "title": "Czytnik stron",
+        "description": "Browserless — otwieranie i czyszczenie stron internetowych"
+      },
+      "pinecone": {
+        "title": "Pamięć wektorowa",
+        "description": "Pinecone — pamięć długoterminowa i kontekst"
       }
     },
     "config": {
@@ -56,7 +68,11 @@
       "updateAvailable": "Dostępna aktualizacja",
       "upToDate": "Aktualne",
       "goUpdate": "Przejdź"
-    }
+    },
+    "stepsDone": "{{done}} z {{total}} kroków",
+    "requiredGroup": "Wymagane",
+    "recommendedGroup": "Zalecane",
+    "optionalGroup": "Opcjonalne"
   },
   "common": {
     "saved": "zapisano",
@@ -447,7 +463,14 @@
         "unbanInProgress": "Odblokowywanie…",
         "userUnbanned": "Użytkownik odblokowany i oczekuje na zatwierdzenie",
         "userBanned": "Użytkownik zablokowany",
-        "error": "Błąd: {{error}}"
+        "error": "Błąd: {{error}}",
+        "generatePassword": "Wygeneruj nowe hasło",
+        "generatePasswordHint": "Zostanie wygenerowane nowe hasło, a wszystkie bieżące sesje użytkownika zostaną unieważnione.",
+        "generatePasswordConfirm": "Czy na pewno? Użytkownik straci dostęp do swojego obecnego hasła. Zostanie wygenerowane nowe.",
+        "generatingPassword": "Generowanie hasła...",
+        "passwordGenerated": "Nowe hasło użytkownika: {{password}}",
+        "passwordGeneratedSuccess": "Nowe hasło wygenerowane",
+        "noPasswordIdentity": "Użytkownik nie ma logowania opartego na haśle"
       },
       "modelUsage": {
         "title": "Użycie według modelu",
