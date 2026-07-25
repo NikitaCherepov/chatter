@@ -178,10 +178,15 @@ export function UpdateStatusCard() {
     }
   }
 
-  // "Force now": abort everything immediately and apply.
+  // "Force now": set drain flag (so new requests are blocked during apply
+  // window), abort everything immediately, then apply.
   async function handleForceUpdate() {
     clearDrainTimer();
     try {
+      // Set the flag first so the window between "user clicked" and "apply
+      // landed" is also covered. prepareUpdate also aborts active generations
+      // as part of setUpdatePrepare() on the backend.
+      await serverUpdateService.prepareUpdate();
       await serverUpdateService.forceUpdate();
       await applyUpdate();
     } catch (err) {

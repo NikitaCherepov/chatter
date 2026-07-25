@@ -84,10 +84,12 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
       <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="server-update-title">
         <h2 id="server-update-title">{t('system.update.title')}</h2>
 
-        {/* Active users count + drain progress (shown whenever drain snapshot exists) */}
-        {drain && (
+        {/* Active users count + drain progress. Hidden during apply (`updating`)
+            — at that point only the stage progress bar below is relevant. */}
+        {drain && drainPhase !== 'updating' && (
           <div className={styles.drainSection}>
-            {drainPhase === 'draining' && drain.activeUsers > 0 && (
+            {/* Drain in progress, before timeout: show count + progress bar */}
+            {drainPhase === 'draining' && drain.activeUsers > 0 && drain.elapsedMs < drain.timeoutMs && (
               <>
                 <p className={styles.drainText}>
                   {t('system.update.drain.waiting', { count: drain.activeUsers, seconds: drainSecondsLeft })}
@@ -100,6 +102,14 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
                 </div>
               </>
             )}
+            {/* Drain in progress, timeout reached: keep flag set, keep polling,
+                but tell the admin a decision is needed. */}
+            {drainPhase === 'draining' && drain.activeUsers > 0 && drain.elapsedMs >= drain.timeoutMs && (
+              <p className={styles.drainTimeoutNotice}>
+                {t('system.update.drain.timeoutNotice', { count: drain.activeUsers })}
+              </p>
+            )}
+            {/* Pre-decision state: just show the active count. */}
             {drainPhase === 'none' && (
               <p className={styles.drainText}>
                 {drain.activeUsers > 0
@@ -107,6 +117,7 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
                   : t('system.update.drain.noActive')}
               </p>
             )}
+            {/* Drain completed: everyone finished, auto-apply incoming. */}
             {drainPhase === 'draining' && drain.activeUsers === 0 && (
               <p className={styles.drainDone}>{t('system.update.drain.allDone')}</p>
             )}
@@ -159,12 +170,14 @@ export function ServerUpdateModal({ changelog, rebuiltFromSameCommit, updating, 
                 type="button"
                 className="buttonSecondary"
                 onClick={onSoftUpdate}
-                disabled={drainPhase === 'draining'}
+                disabled={drainPhase !== 'none'}
               >
                 {t('system.update.drain.softUpdate')}
               </button>
-              {/* Force update: abort everything immediately and apply */}
-              <button type="button" onClick={onForceUpdate} disabled={drainPhase === 'draining'}>
+              {/* Force update: abort everything immediately and apply.
+                  Available in any non-updating phase, including after the
+                  15s drain timeout — that's exactly the case it's for. */}
+              <button type="button" onClick={onForceUpdate} disabled={drainPhase !== 'none' && drainPhase !== 'draining'}>
                 {t('system.update.drain.forceNow')}
               </button>
             </>

@@ -636,6 +636,7 @@
         "allDone": "Everyone finished. Proceeding with update…",
         "activeUsers": "{{count}} user(s) currently active.",
         "noActive": "No active users right now.",
+        "timeoutNotice": "15 seconds have passed, {{count}} user(s) still working. You can keep waiting, force the update, or cancel.",
         "softUpdate": "Wait up to 15s and update",
         "forceNow": "Force update now",
         "pollError": "Drain poll failed: {{message}}"
