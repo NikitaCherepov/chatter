@@ -363,6 +363,11 @@
   white-space: nowrap;
 }
 
+.gearIcon {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .footerBtns {
   display: flex;
   gap: 4px;
