@@ -126,16 +126,17 @@ export function GalleryTool({ chatId, onImageClick, onChatSelect }: Props) {
       ) : (
         <div className={s.grid}>
           {media.map((item, i) => {
-            const src = api.resolveImageUrl(item.url);
+            const fullSrc = api.resolveImageUrl(item.url);
+            const thumbSrc = api.resolveImageUrl(item.url, 300);
             const key = `${item.message_id}-${i}`;
             return (
               <div key={key} className={s.thumbWrapper}>
                 <button
                   className={s.thumb}
-                  onClick={() => onImageClick?.(src, item.message_id, item.url)}
+                  onClick={() => onImageClick?.(fullSrc, item.message_id, item.url)}
                   title={item.type === 'generated' ? t('tools.gallery.generated') : t('tools.gallery.userPhoto')}
                 >
-                  <img src={src} alt="" loading="lazy" />
+                  <img src={thumbSrc} alt="" loading="lazy" />
                   {item.type === 'generated' && <span className={s.badge}>{t('tools.gallery.ai')}</span>}
                 </button>
 

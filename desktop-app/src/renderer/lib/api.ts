@@ -390,12 +390,14 @@ export async function getAllMedia(limit = 100, offset = 0): Promise<{ media: Cha
   return apiFetch(`/api/v1/media/all?limit=${limit}&offset=${offset}`);
 }
 
-export function resolveImageUrl(url: string): string {
+export function resolveImageUrl(url: string, thumbnailWidth?: number): string {
   if (!url.startsWith('/')) return url;
   const tokens = loadTokens();
-  const separator = url.includes('?') ? '&' : '?';
-  const authParam = tokens?.access_token ? `${separator}token=${tokens.access_token}` : '';
-  return `${API_BASE}${url}${authParam}`;
+  const params = new URLSearchParams();
+  if (tokens?.access_token) params.set('token', tokens.access_token);
+  if (thumbnailWidth && thumbnailWidth > 0) params.set('w', String(thumbnailWidth));
+  const qs = params.toString();
+  return `${API_BASE}${url}${qs ? `?${qs}` : ''}`;
 }
 
 export async function sendMessageToTelegram(messageId: number): Promise<{ ok: boolean }> {

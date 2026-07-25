@@ -937,7 +937,8 @@ app.post('/api/v1/auth/refresh', (req, res) => {
 });
 
 // ── Image download API (owner-only, supports ?token= query param for <img src>) ─
-app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
+// Optional ?w=N query param resizes on-the-fly for gallery thumbnails.
+app.get('/api/v1/images/:filename', async (req: AuthedRequest, res) => {
   // Accept token from query param (for <img src> usage) or Authorization header
   const queryToken = `${req.query.token || ''}`.trim();
   const authHeader = `${req.headers.authorization || ''}`;
@@ -971,6 +972,25 @@ app.get('/api/v1/images/:filename', (req: AuthedRequest, res) => {
   if (!row) {
     console.log(`[image-access] DENIED - no matching row for effectiveId=${effectiveId}, pattern=${likePattern}`);
     return res.status(403).json({ error: 'access_denied' });
+  }
+
+  // On-the-fly resize for gallery thumbnails
+  const targetWidth = Number.parseInt(`${req.query.w || ''}`, 10);
+  if (targetWidth > 0 && targetWidth <= 1920) {
+    try {
+      const sharp = (await import('sharp')).default;
+      const resized = await sharp(filepath, { failOn: 'none' })
+        .resize(targetWidth, targetWidth, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 75 })
+        .toBuffer();
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      res.send(resized);
+      return;
+    } catch (err) {
+      console.error(`[image-resize] Failed to resize ${filename}:`, err);
+      // fall through to send original file
+    }
   }
 
   res.sendFile(filepath);
