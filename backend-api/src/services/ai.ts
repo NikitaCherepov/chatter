@@ -133,18 +133,24 @@ export const activeHitlWaits = new Set<number>();
 let updatePreparing = false;
 let updatePreparingSince = 0;
 export const getUpdatePreparing = () => updatePreparing;
+
 export const setUpdatePrepare = () => {
   updatePreparing = true;
   updatePreparingSince = Date.now();
-  // Abort every active generation immediately. New requests are blocked by
-  // the flag check in sendMessageThroughAi; this kills in-flight streams so
-  // activeUsers drops to (at most) the HITL-wait count, which we still have
-  // to wait for because HITL promise rejection isn't wired up here.
+};
+// "Force" prepare: sets the flag AND aborts every active generation
+// immediately. This is what the "Force update now" button calls.
+export const forceAbortActiveGenerations = () => {
+  let aborted = 0;
   for (const [, controller] of activeGenerations.entries()) {
     try {
-      if (!controller.signal.aborted) controller.abort();
+      if (!controller.signal.aborted) {
+        controller.abort();
+        aborted += 1;
+      }
     } catch { /* ignore */ }
   }
+  return aborted;
 };
 export const clearUpdatePrepare = () => { updatePreparing = false; updatePreparingSince = 0; };
 export const getUpdateState = () => ({

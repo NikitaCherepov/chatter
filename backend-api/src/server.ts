@@ -12,7 +12,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, cl
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -3651,15 +3651,7 @@ app.post('/internal/admin/update/prepare', internalAuth, (req, res) => {
   // Note: HITL waits (activeHitlWaits) cannot be aborted here — their promises
   // resolve/reject via user action or via the subsequent server restart during
   // apply(). We return the real activeUsers count instead of lying with 0.
-  let aborted = 0;
-  for (const [, controller] of activeGenerations.entries()) {
-    try {
-      if (!controller.signal.aborted) {
-        controller.abort();
-        aborted += 1;
-      }
-    } catch { /* ignore */ }
-  }
+  const aborted = forceAbortActiveGenerations();
   clearUpdatePrepare();
   return res.json({ ...getUpdateState(), aborted });
 });
