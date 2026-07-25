@@ -630,6 +630,16 @@
         "restarting": "Restarting server services. The panel will briefly disconnect…",
         "complete": "Server updated.",
         "failed": "Update failed."
+      },
+      "drain": {
+        "checking": "Checking active users…",
+        "waiting": "{{count}} user(s) still working. Waiting {{seconds}}s…",
+        "allDone": "Everyone finished. Proceeding with update…",
+        "timeout": "{{count}} user(s) still working after timeout.",
+        "forceStop": "Force stop & update",
+        "waitingBtn": "Waiting…",
+        "waitMore": "Wait more",
+        "pollError": "Drain poll failed: {{message}}"
       }
     },
     "error": "Error: {{message}}"

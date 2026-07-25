@@ -128,6 +128,19 @@ export type ToolIteration = {
 // Registry of active generations для остановки по userId
 export const activeGenerations = new Map<number, AbortController>();
 export const activeHitlWaits = new Set<number>();
+
+// Server update drain lock — rejects new requests while preparing for update
+let updatePreparing = false;
+let updatePreparingSince = 0;
+export const getUpdatePreparing = () => updatePreparing;
+export const setUpdatePrepare = () => { updatePreparing = true; updatePreparingSince = Date.now(); };
+export const extendUpdatePrepare = () => { if (updatePreparing) updatePreparingSince = Date.now(); };
+export const clearUpdatePrepare = () => { updatePreparing = false; updatePreparingSince = 0; };
+export const getUpdateState = () => ({
+  preparing: updatePreparing,
+  activeUsers: activeGenerations.size + activeHitlWaits.size,
+  elapsedMs: updatePreparingSince ? Date.now() - updatePreparingSince : 0,
+});
 const MAX_PENDING_TASKS_PER_USER = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
@@ -5877,6 +5890,11 @@ export const sendMessageThroughAi = async (
   const user = getUserById(userId);
   if (!user) throw new Error('user_not_found');
   if (user.status !== 'approved' && user.is_admin !== 1) throw new Error('user_not_approved');
+
+  // Reject immediately if server update is in progress
+  if (getUpdatePreparing()) {
+    throw new Error('server_update_in_progress');
+  }
 
   const preferredModelId = options?.preferredModel || user.preferred_model || null;
   const selectedMainModelIsFree = preferredModelId

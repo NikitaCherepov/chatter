@@ -12,7 +12,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, cl
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, resolveManualModel } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, extendUpdatePrepare, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -87,6 +87,11 @@ const buildLocalizedAiError = (err: any, userId: number): { error: string; messa
       ? new Date(err.resetsAt * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
       : '';
     const message = translateForLanguage(user?.language, 'errors.quotaExceeded', { resetsAt });
+    return { error: code, message };
+  }
+  if (code === 'server_update_in_progress') {
+    const user = getUserById(userId);
+    const message = translateForLanguage(user?.language, 'errors.serverUpdating');
     return { error: code, message };
   }
   const user = getUserById(userId);
@@ -3616,6 +3621,54 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
   savePlanLimitsToDb(next);
   syncAllUsersPlanLimits();
   return res.json({ ok: true, limits: next });
+});
+
+// ── Admin: Server update preparation (drain active users) ──────────────────
+
+// GET: poll current state
+app.get('/api/v1/admin/update/prepare', adminMiddleware, (_req: AuthedRequest, res) => {
+  return res.json(getUpdateState());
+});
+
+// POST: prepare / cancel / extend / force
+app.post('/api/v1/admin/update/prepare', adminMiddleware, (req: AuthedRequest, res) => {
+  const action = `${req.body?.action || ''}`.trim().toLowerCase();
+  if (!['prepare', 'cancel', 'extend', 'force'].includes(action)) {
+    return res.status(400).json({ error: 'bad_action', action });
+  }
+
+  if (action === 'prepare') {
+    setUpdatePrepare();
+    return res.json(getUpdateState());
+  }
+
+  if (action === 'cancel') {
+    clearUpdatePrepare();
+    return res.json(getUpdateState());
+  }
+
+  if (action === 'extend') {
+    // Reset drain timer without touching the flag — lets admin wait another
+    // full timeout window. No-op if no drain is currently active.
+    extendUpdatePrepare();
+    return res.json(getUpdateState());
+  }
+
+  // force: abort all active generations + clear flag.
+  // Note: HITL waits (activeHitlWaits) cannot be aborted here — their promises
+  // resolve/reject via user action or via the subsequent server restart during
+  // apply(). We return the real activeUsers count instead of lying with 0.
+  let aborted = 0;
+  for (const [, controller] of activeGenerations.entries()) {
+    try {
+      if (!controller.signal.aborted) {
+        controller.abort();
+        aborted += 1;
+      }
+    } catch { /* ignore */ }
+  }
+  clearUpdatePrepare();
+  return res.json({ ...getUpdateState(), aborted });
 });
 
 // ─── Weekly cost quota: per-user overrides & resets ──────────────────────────

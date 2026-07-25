@@ -84,6 +84,7 @@
   },
   "errors": {
     "quotaExceeded": "⚠️ Quota exceeded. Resets {{resetsAt}}.",
+    "serverUpdating": "⚠️ Server update in progress. Please wait and try again shortly.",
     "genericServerError": "⚠️ Server error. Check logs."
   },
 

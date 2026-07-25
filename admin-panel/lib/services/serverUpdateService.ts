@@ -19,9 +19,37 @@ export type ServerUpdateInfo = {
   operation: UpdateOperation;
 };
 
+export type UpdateState = {
+  preparing: boolean;
+  activeUsers: number;
+  elapsedMs: number;
+};
+
+export const UPDATE_DRAIN_TIMEOUT_MS = 15_000;
+export const UPDATE_POLL_INTERVAL_MS = 2_000;
+
 export const serverUpdateService = {
   getStatus: () => api<ServerUpdateInfo>('/api/server-update'),
   refresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1'),
   forceRefresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1&force=1'),
   apply: () => api('/api/server-update', { method: 'POST', body: '{}' }),
+
+  // Update drain endpoints
+  getUpdateState: () => api<UpdateState>('/api/v1/admin/update/prepare'),
+  prepareUpdate: () => api<UpdateState>('/api/v1/admin/update/prepare', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'prepare' }),
+  }),
+  cancelUpdate: () => api<UpdateState>('/api/v1/admin/update/prepare', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'cancel' }),
+  }),
+  extendUpdate: () => api<UpdateState>('/api/v1/admin/update/prepare', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'extend' }),
+  }),
+  forceUpdate: () => api<{ aborted: number }>('/api/v1/admin/update/prepare', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'force' }),
+  }),
 };
