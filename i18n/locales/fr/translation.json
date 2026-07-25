@@ -72,7 +72,8 @@
       "language": "🌐 Langue",
       "help": "ℹ️ Aide",
       "notesWebApp": "📝 Notes (WebApp)",
-      "chats": "💬 Discussions"
+      "chats": "💬 Discussions",
+      "recoverDesktop": "🔑 Récupérer la connexion bureau"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Nouveau mot de passe : {{password}}",
     "loginInstructions": "Ouvrez l'application Desktop et connectez-vous avec cet identifiant et ce mot de passe. L'application vous demandera immédiatement de définir un nouveau mot de passe avant de continuer.",
     "rateLimited": "Veuillez patienter {{seconds}} sec avant de demander un nouveau mot de passe.",
-    "error": "Échec de la récupération des données. Veuillez réessayer plus tard."
+    "error": "Échec de la récupération des données. Veuillez réessayer plus tard.",
+    "confirm": "⚠️ Cela réinitialisera votre mot de passe et mettra fin à toutes les sessions de bureau actives. Continuer ?",
+    "buttons": {
+      "yes": "✅ Oui, réinitialiser le mot de passe",
+      "no": "❌ Annuler"
+    },
+    "inProgress": "⏳ Génération d'un nouveau mot de passe...",
+    "cancelled": "❌ Annulé.",
+    "cancelledCallback": "Annulé",
+    "expired": "⌛ Demande expirée. Utilisez /recover_desktop ou le bouton du menu.",
+    "expiredCallback": "Cette demande a expiré",
+    "wrongUser": "Ce bouton est destiné à un autre compte"
   }
 }

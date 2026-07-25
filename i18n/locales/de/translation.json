@@ -72,7 +72,8 @@
       "language": "🌐 Sprache",
       "help": "ℹ️ Hilfe",
       "notesWebApp": "📝 Notizen (WebApp)",
-      "chats": "💬 Chats"
+      "chats": "💬 Chats",
+      "recoverDesktop": "🔑 Desktop-Anmeldung wiederherstellen"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Neues Passwort: {{password}}",
     "loginInstructions": "Öffnen Sie die Desktop-App und melden Sie sich mit diesem Login und Passwort an. Die App wird Sie sofort auffordern, ein neues Passwort festzulegen, bevor Sie fortfahren.",
     "rateLimited": "Bitte warten Sie {{seconds}} Sekunden, bevor Sie ein neues Passwort anfordern.",
-    "error": "Datenwiederherstellung fehlgeschlagen. Bitte versuchen Sie es später erneut."
+    "error": "Datenwiederherstellung fehlgeschlagen. Bitte versuchen Sie es später erneut.",
+    "confirm": "⚠️ Dies setzt Ihr Passwort zurück und beendet alle aktiven Desktop-Sitzungen. Fortfahren?",
+    "buttons": {
+      "yes": "✅ Ja, Passwort zurücksetzen",
+      "no": "❌ Abbrechen"
+    },
+    "inProgress": "⏳ Neues Passwort wird generiert...",
+    "cancelled": "❌ Abgebrochen.",
+    "cancelledCallback": "Abgebrochen",
+    "expired": "⌛ Anfrage abgelaufen. Verwenden Sie /recover_desktop oder die Menüschaltfläche erneut.",
+    "expiredCallback": "Diese Anfrage ist abgelaufen",
+    "wrongUser": "Diese Schaltfläche ist für ein anderes Konto"
   }
 }

@@ -72,7 +72,8 @@
       "language": "🌐 Idioma",
       "help": "ℹ️ Ayuda",
       "notesWebApp": "📝 Notas (WebApp)",
-      "chats": "💬 Chats"
+      "chats": "💬 Chats",
+      "recoverDesktop": "🔑 Recuperar inicio de sesión de escritorio"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Nueva contraseña: {{password}}",
     "loginInstructions": "Abre la aplicación Desktop e inicia sesión con este usuario y contraseña. La aplicación te pedirá inmediatamente que establezcas una nueva contraseña antes de continuar.",
     "rateLimited": "Espera {{seconds}} segundos antes de solicitar una nueva contraseña.",
-    "error": "Error al recuperar los datos. Inténtalo de nuevo más tarde."
+    "error": "Error al recuperar los datos. Inténtalo de nuevo más tarde.",
+    "confirm": "⚠️ Esto restablecerá tu contraseña y finalizará todas las sesiones activas de Escritorio. ¿Continuar?",
+    "buttons": {
+      "yes": "✅ Sí, restablecer contraseña",
+      "no": "❌ Cancelar"
+    },
+    "inProgress": "⏳ Generando una nueva contraseña...",
+    "cancelled": "❌ Cancelado.",
+    "cancelledCallback": "Cancelado",
+    "expired": "⌛ Solicitud caducada. Usa /recover_desktop o el botón del menú nuevamente.",
+    "expiredCallback": "Esta solicitud ha caducado",
+    "wrongUser": "Este botón es para una cuenta diferente"
   }
 }

@@ -72,7 +72,8 @@
       "chats": "💬 Sohbetler",
       "language": "🌐 Dil",
       "help": "ℹ️ Yardım",
-      "notesWebApp": "📝 Notlar (WebApp)"
+      "notesWebApp": "📝 Notlar (WebApp)",
+      "recoverDesktop": "🔑 Masaüstü girişini kurtar"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Yeni şifre: {{password}}",
     "loginInstructions": "Masaüstü uygulamasını açın ve bu giriş ve şifre ile oturum açın. Uygulama devam etmeden önce hemen yeni bir şifre belirlemenizi isteyecektir.",
     "rateLimited": "Yeni bir şifre istemeden önce lütfen {{seconds}} saniye bekleyin.",
-    "error": "Veri kurtarma başarısız oldu. Lütfen daha sonra tekrar deneyin."
+    "error": "Veri kurtarma başarısız oldu. Lütfen daha sonra tekrar deneyin.",
+    "confirm": "⚠️ Bu, şifrenizi sıfırlayacak ve tüm aktif Masaüstü oturumlarını sonlandıracak. Devam edilsin mi?",
+    "buttons": {
+      "yes": "✅ Evet, şifreyi sıfırla",
+      "no": "❌ İptal"
+    },
+    "inProgress": "⏳ Yeni bir şifre oluşturuluyor...",
+    "cancelled": "❌ İptal edildi.",
+    "cancelledCallback": "İptal edildi",
+    "expired": "⌛ İstek süresi doldu. /recover_desktop veya menü düğmesini tekrar kullanın.",
+    "expiredCallback": "Bu isteğin süresi doldu",
+    "wrongUser": "Bu düğme farklı bir hesap içindir"
   }
 }

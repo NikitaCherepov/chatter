@@ -192,6 +192,7 @@ type UserRecord = {
     max_context_tokens_limit?: number;
     max_context_tokens?: number;
     preferred_model?: string | null;
+    identities?: Array<{ provider: string; provider_subject: string; username: string | null }>;
 };
 type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
@@ -240,7 +241,7 @@ type NoteStatsRecord = {
     notes_count: number;
     notes_chars: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'chats' | 'language' | 'help';
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'chats' | 'language' | 'help' | 'recover_desktop';
 type MenuActionButton = {
     id: MenuActionId;
     labelKey: string;
@@ -268,7 +269,8 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'language', labelKey: 'menu.buttons.language', adminOnly: false, row: 6 },
     { id: 'notes', labelKey: 'menu.buttons.notes', adminOnly: false, row: 7 },
     { id: 'chats', labelKey: 'menu.buttons.chats', adminOnly: false, row: 7 },
-    { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 8 }
+    { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 8 },
+    { id: 'recover_desktop', labelKey: 'menu.buttons.recoverDesktop', adminOnly: false, row: 9 }
 ];
 
 const MENU_ACTION_BY_ID = Object.fromEntries(MAIN_MENU_ACTIONS.map(item => [item.id, item])) as Record<MenuActionId, MenuActionButton>;
@@ -282,8 +284,12 @@ const buildTimezoneSetupKeyboard = (t: BotTranslate) => Markup.keyboard([
     [Markup.button.locationRequest(t('timezone.buttons.sendLocation'))]
 ]).resize().oneTime();
 
-const buildMainMenuInlineKeyboard = (isAdmin: boolean, t: BotTranslate) => {
-    const visibleItems = MAIN_MENU_ACTIONS.filter(item => isAdmin || !item.adminOnly);
+const buildMainMenuInlineKeyboard = (isAdmin: boolean, hasDesktopAccount: boolean, t: BotTranslate) => {
+    const visibleItems = MAIN_MENU_ACTIONS.filter(item => {
+        if (item.adminOnly && !isAdmin) return false;
+        if (item.id === 'recover_desktop' && !hasDesktopAccount) return false;
+        return true;
+    });
     const rows = [...new Set(visibleItems.map(item => item.row))]
         .sort((a, b) => a - b)
         .map(row => visibleItems
@@ -400,6 +406,12 @@ const adminUserContextLimitFlows = new Map<number, { targetUserId: number; page:
 // not be spammable.
 const recoverDesktopCooldowns = new Map<number, number>();
 const RECOVER_DESKTOP_COOLDOWN_SEC = 60;
+
+// Confirmation flow state for /recover_desktop (similar to unlinkChoiceFlows).
+// User clicks the button → we show a YES/NO inline keyboard → only on YES we
+// actually rotate the password. Expires after 5 minutes.
+const recoverDesktopConfirmFlows = new Map<number, { expiresAt: number }>();
+const RECOVER_DESKTOP_CONFIRM_TTL_MS = 5 * 60 * 1000;
 const adminAiMessageFlow = new Map<number, number>();
 
 const startSelfRenameFlow = (ctx: any) => {
@@ -2089,6 +2101,7 @@ const showMenu = async (ctx: any) => {
     const isAdmin = ctx.state.role === 'admin';
     const userId = ctx.state.accountId;
     const userRecord = userId ? await getUser(userId) : undefined;
+    const hasDesktopAccount = userRecord?.identities?.some(i => i.provider === 'password') ?? false;
     const activePrompt = userRecord && userId
         ? await resolvePromptForUser(userId)
         : await runBackendGetDefaultPrompt();
@@ -2150,7 +2163,7 @@ const showMenu = async (ctx: any) => {
         ctx.t('menu.chooseAction')
     ].join('\n');
 
-    return ctx.reply(text, buildMainMenuInlineKeyboard(isAdmin, ctx.t));
+    return ctx.reply(text, buildMainMenuInlineKeyboard(isAdmin, hasDesktopAccount, ctx.t));
 };
 
 const handleClear = async (ctx: any) => {
@@ -3338,20 +3351,40 @@ bot.action(/^unlink:(desktop|telegram|cancel):(\d+)$/, async (ctx) => {
 });
 
 // ── /recover_desktop — recover desktop login & generate new password ──────
-bot.command('recover_desktop', async (ctx) => {
+// Two-step flow: command/button → confirmation dialog → actual password
+// rotation. Mirrors the unlink flow: an inline YES/NO keyboard so the user
+// must explicitly confirm before sessions are revoked.
+
+const startRecoverDesktopConfirm = async (ctx: any) => {
     const userId = ctx.state.accountId;
     if (!userId) return;
-    const t = ctx.t;
 
-    // Rate limit: 1 request per RECOVER_DESKTOP_COOLDOWN_SEC per account.
-    // Each call rotates the password and revokes all sessions, so it must
-    // not be spammable. Also periodically prune stale cooldown entries.
+    // Rate-limit the *start* of the flow too, so a user cannot spam the
+    // button and create endless confirmation dialogs.
     const nowSec = Math.floor(Date.now() / 1000);
     const lastUsed = recoverDesktopCooldowns.get(userId);
     if (lastUsed && nowSec - lastUsed < RECOVER_DESKTOP_COOLDOWN_SEC) {
         const waitSec = RECOVER_DESKTOP_COOLDOWN_SEC - (nowSec - lastUsed);
-        return ctx.reply(t('recover.rateLimited', { seconds: waitSec }));
+        return ctx.reply(ctx.t('recover.rateLimited', { seconds: waitSec }));
     }
+
+    recoverDesktopConfirmFlows.set(userId, { expiresAt: Date.now() + RECOVER_DESKTOP_CONFIRM_TTL_MS });
+    return ctx.reply(
+        ctx.t('recover.confirm'),
+        Markup.inlineKeyboard([
+            [Markup.button.callback(ctx.t('recover.buttons.yes'), `recover:yes:${userId}`)],
+            [Markup.button.callback(ctx.t('recover.buttons.no'), `recover:no:${userId}`)]
+        ])
+    );
+};
+
+const executeRecoverDesktop = async (ctx: any) => {
+    const userId = ctx.state.accountId;
+    if (!userId) return;
+    const t = ctx.t;
+
+    // Apply the rate limit now (actual rotation). Also prune stale entries.
+    const nowSec = Math.floor(Date.now() / 1000);
     if (recoverDesktopCooldowns.size > 1000) {
         for (const [key, ts] of recoverDesktopCooldowns) {
             if (nowSec - ts > RECOVER_DESKTOP_COOLDOWN_SEC * 2) recoverDesktopCooldowns.delete(key);
@@ -3397,6 +3430,43 @@ bot.command('recover_desktop', async (ctx) => {
         console.error('recover_desktop error:', formatSafeError(err));
         return ctx.reply(t('recover.error'));
     }
+};
+
+bot.command('recover_desktop', async (ctx) => {
+    await startRecoverDesktopConfirm(ctx);
+});
+
+// Confirmation callback handler. Mirrors the unlink flow: payload includes
+// the owner account id so a stale callback from another user can't fire.
+bot.action(/^recover:(yes|no):(\d+)$/, async (ctx) => {
+    const choice = (ctx as any).match[1] as 'yes' | 'no';
+    const ownerAccountId = Number.parseInt((ctx as any).match[2], 10);
+    const userId = ctx.state.accountId;
+
+    if (!userId || userId !== ownerAccountId) {
+        await ctx.answerCbQuery(ctx.t('recover.wrongUser'));
+        return;
+    }
+
+    const pending = recoverDesktopConfirmFlows.get(userId);
+    if (!pending || pending.expiresAt <= Date.now()) {
+        recoverDesktopConfirmFlows.delete(userId);
+        await ctx.answerCbQuery(ctx.t('recover.expiredCallback'));
+        await ctx.editMessageText(ctx.t('recover.expired')).catch(() => {});
+        return;
+    }
+    recoverDesktopConfirmFlows.delete(userId);
+
+    if (choice === 'no') {
+        await ctx.answerCbQuery(ctx.t('recover.cancelledCallback'));
+        await ctx.editMessageText(ctx.t('recover.cancelled')).catch(() => {});
+        return;
+    }
+
+    // Confirmed — rotate the password and reply with credentials.
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(ctx.t('recover.inProgress')).catch(() => {});
+    await executeRecoverDesktop(ctx);
 });
 
 bot.command('tz', async (ctx) => {
@@ -3751,7 +3821,7 @@ bot.on('location', async (ctx) => {
     return ctx.reply(ctx.t('timezone.locationSet', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|chats|language|help)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|chats|language|help|recover_desktop)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -3913,6 +3983,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
         await ctx.reply(ctx.t('language.card', {
             language: getNativeLanguageName(ctx.state.language)
         }), buildLanguageKeyboard(ctx.state.language, ctx.t));
+        return;
+    }
+
+    if (actionId === 'recover_desktop') {
+        await startRecoverDesktopConfirm(ctx);
         return;
     }
 

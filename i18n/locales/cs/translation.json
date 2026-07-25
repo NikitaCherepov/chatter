@@ -72,7 +72,8 @@
       "chats": "💬 Chaty",
       "language": "🌐 Jazyk",
       "help": "ℹ️ Nápověda",
-      "notesWebApp": "📝 Poznámky (WebApp)"
+      "notesWebApp": "📝 Poznámky (WebApp)",
+      "recoverDesktop": "🔑 Obnovit přihlášení k desktopu"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Nové heslo: {{password}}",
     "loginInstructions": "Otevřete aplikaci Desktop a přihlaste se tímto jménem a heslem. Aplikace vás okamžitě vyzve k nastavení nového hesla před pokračováním.",
     "rateLimited": "Počkejte prosím {{seconds}} s, než požádáte o nové heslo.",
-    "error": "Obnovení dat se nezdařilo. Zkuste to prosím později."
+    "error": "Obnovení dat se nezdařilo. Zkuste to prosím později.",
+    "confirm": "⚠️ Toto resetuje vaše heslo a ukončí všechny aktivní relace Desktopu. Pokračovat?",
+    "buttons": {
+      "yes": "✅ Ano, resetovat heslo",
+      "no": "❌ Zrušit"
+    },
+    "inProgress": "⏳ Generuji nové heslo...",
+    "cancelled": "❌ Zrušeno.",
+    "cancelledCallback": "Zrušeno",
+    "expired": "⌛ Požadavek vypršel. Použijte /recover_desktop nebo tlačítko v nabídce.",
+    "expiredCallback": "Tento požadavek vypršel",
+    "wrongUser": "Toto tlačítko je pro jiný účet"
   }
 }

@@ -72,7 +72,8 @@
       "language": "🌐 语言",
       "help": "ℹ️ 帮助",
       "notesWebApp": "📝 笔记（WebApp）",
-      "chats": "💬 聊天"
+      "chats": "💬 聊天",
+      "recoverDesktop": "🔑 恢复桌面登录"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 新密码：{{password}}",
     "loginInstructions": "打开桌面端应用并使用此登录名和密码登录。应用会立即要求您设置新密码后再继续。",
     "rateLimited": "请等待 {{seconds}} 秒后再请求新密码。",
-    "error": "数据恢复失败。请稍后重试。"
+    "error": "数据恢复失败。请稍后重试。",
+    "confirm": "⚠️ 这将重置您的密码并终止所有活动的桌面会话。是否继续？",
+    "buttons": {
+      "yes": "✅ 是，重置密码",
+      "no": "❌ 取消"
+    },
+    "inProgress": "⏳ 正在生成新密码...",
+    "cancelled": "❌ 已取消。",
+    "cancelledCallback": "已取消",
+    "expired": "⌛ 请求已过期。请使用 /recover_desktop 或菜单按钮重新操作。",
+    "expiredCallback": "此请求已过期",
+    "wrongUser": "此按钮用于其他账户"
   }
 }

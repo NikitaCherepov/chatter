@@ -72,7 +72,8 @@
       "chats": "💬 Chats",
       "language": "🌐 Language",
       "help": "ℹ️ Help",
-      "notesWebApp": "📝 Notes (WebApp)"
+      "notesWebApp": "📝 Notes (WebApp)",
+      "recoverDesktop": "🔑 Recover desktop login"
     }
   },
   "language": {
@@ -409,6 +410,14 @@
     "passwordMessage": "🔒 New password: {{password}}",
     "loginInstructions": "Open the Desktop app and sign in with this login and password. The app will immediately ask you to set a new password before continuing.",
     "rateLimited": "Please wait {{seconds}} sec before requesting a new password.",
+    "confirm": "⚠️ This will reset your password and terminate all active Desktop sessions. Continue?",
+    "buttons": { "yes": "✅ Yes, reset password", "no": "❌ Cancel" },
+    "inProgress": "⏳ Generating a new password...",
+    "cancelled": "❌ Cancelled.",
+    "cancelledCallback": "Cancelled",
+    "expired": "⌛ Request expired. Use /recover_desktop or the menu button again.",
+    "expiredCallback": "This request has expired",
+    "wrongUser": "This button is for a different account",
     "error": "Failed to recover data. Please try again later."
   },
   "commands": {

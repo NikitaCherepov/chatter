@@ -1048,75 +1048,14 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   placeholder={t('settings.account.namePlaceholder')}
                   autoFocus
                 />
-              </div>
-              <button
-                className={s.saveBtn}
-                onClick={handleSaveName}
-                disabled={saving || !nameValue.trim()}
-              >
-                {saving ? t('common.saving') : t('common.save')}
-              </button>
-
-              <div className={s.macroFormDivider} />
-
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.changePassword')}</label>
-                <input
-                  className={s.fieldInput}
-                  type="password"
-                  value={pwdCurrent}
-                  onChange={(e) => setPwdCurrent(e.target.value)}
-                  placeholder={t('settings.account.currentPassword')}
-                  autoComplete="current-password"
-                />
-                <input
-                  className={s.fieldInput}
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder={t('settings.account.newPassword')}
-                  minLength={8}
-                  autoComplete="new-password"
-                />
                 <button
                   className={s.saveBtn}
-                  onClick={handleChangePassword}
-                  disabled={passwordSaving || !pwdCurrent || newPassword.length < 8}
+                  onClick={handleSaveName}
+                  disabled={saving || !nameValue.trim()}
                 >
-                  {passwordSaving ? t('common.saving') : t('settings.account.changePassword')}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
               </div>
-
-              <div className={s.macroFormDivider} />
-
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.changeLogin')}</label>
-                <input
-                  className={s.fieldInput}
-                  type="text"
-                  value={newLogin}
-                  onChange={(e) => setNewLogin(e.target.value)}
-                  placeholder={t('settings.account.newLogin')}
-                  autoComplete="username"
-                />
-                <input
-                  className={s.fieldInput}
-                  type="password"
-                  value={loginCurrent}
-                  onChange={(e) => setLoginCurrent(e.target.value)}
-                  placeholder={t('settings.account.currentPassword')}
-                  autoComplete="current-password"
-                />
-                <button
-                  className={s.saveBtn}
-                  onClick={handleChangeLogin}
-                  disabled={loginSaving || !loginCurrent || !newLogin.trim()}
-                >
-                  {loginSaving ? t('common.saving') : t('settings.account.changeLogin')}
-                </button>
-              </div>
-
-              <div className={s.macroFormDivider} />
 
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('settings.account.memory')}</label>
@@ -1150,6 +1089,63 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('quota.title')}</label>
                 <QuotaWidget variant="full" />
+              </div>
+
+              <div className={s.macroFormDivider} />
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.account.changePassword')}</label>
+                <input
+                  className={s.fieldInput}
+                  type="password"
+                  value={pwdCurrent}
+                  onChange={(e) => setPwdCurrent(e.target.value)}
+                  placeholder={t('settings.account.currentPassword')}
+                  autoComplete="current-password"
+                />
+                <input
+                  className={s.fieldInput}
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder={t('settings.account.newPassword')}
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+                <button
+                  className={s.saveBtn}
+                  onClick={handleChangePassword}
+                  disabled={passwordSaving || !pwdCurrent || newPassword.length < 8}
+                >
+                  {passwordSaving ? t('common.saving') : t('settings.account.changePassword')}
+                </button>
+              </div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.account.changeLogin')}</label>
+                <input
+                  className={s.fieldInput}
+                  type="text"
+                  value={newLogin}
+                  onChange={(e) => setNewLogin(e.target.value)}
+                  placeholder={t('settings.account.newLogin')}
+                  autoComplete="username"
+                />
+                <input
+                  className={s.fieldInput}
+                  type="password"
+                  value={loginCurrent}
+                  onChange={(e) => setLoginCurrent(e.target.value)}
+                  placeholder={t('settings.account.currentPassword')}
+                  autoComplete="current-password"
+                />
+                <button
+                  className={s.saveBtn}
+                  onClick={handleChangeLogin}
+                  disabled={loginSaving || !loginCurrent || !newLogin.trim()}
+                >
+                  {loginSaving ? t('common.saving') : t('settings.account.changeLogin')}
+                </button>
               </div>
             </div>
           )}

@@ -72,7 +72,8 @@
       "language": "🌐 Lingua",
       "help": "ℹ️ Aiuto",
       "notesWebApp": "📝 Note (WebApp)",
-      "chats": "💬 Chat"
+      "chats": "💬 Chat",
+      "recoverDesktop": "🔑 Recupera accesso desktop"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Nuova password: {{password}}",
     "loginInstructions": "Apri l'app Desktop e accedi con questo login e password. L'app ti chiederà immediatamente di impostare una nuova password prima di continuare.",
     "rateLimited": "Attendi {{seconds}} secondi prima di richiedere una nuova password.",
-    "error": "Recupero dati fallito. Riprova più tardi."
+    "error": "Recupero dati fallito. Riprova più tardi.",
+    "confirm": "⚠️ Questa operazione reimposterà la password e terminerà tutte le sessioni Desktop attive. Continuare?",
+    "buttons": {
+      "yes": "✅ Sì, reimposta password",
+      "no": "❌ Annulla"
+    },
+    "inProgress": "⏳ Generazione di una nuova password in corso...",
+    "cancelled": "❌ Annullato.",
+    "cancelledCallback": "Annullato",
+    "expired": "⌛ Richiesta scaduta. Usa /recover_desktop o il pulsante del menu.",
+    "expiredCallback": "Questa richiesta è scaduta",
+    "wrongUser": "Questo pulsante è per un account diverso"
   }
 }

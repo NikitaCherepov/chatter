@@ -801,9 +801,11 @@
 }
 
 .macroFormDivider {
+  width: 100%;
   height: 1px;
   background-color: var(--border-light);
   margin: 16px 0;
+  flex-shrink: 0;
 }
 
 .macroFormButtons {

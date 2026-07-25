@@ -72,7 +72,8 @@
       "language": "🌐 Język",
       "help": "ℹ️ Pomoc",
       "notesWebApp": "📝 Notatki (WebApp)",
-      "chats": "💬 Czaty"
+      "chats": "💬 Czaty",
+      "recoverDesktop": "🔑 Odzyskaj login do pulpitu"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Nowe hasło: {{password}}",
     "loginInstructions": "Otwórz aplikację Desktop i zaloguj się przy użyciu tego loginu i hasła. Aplikacja natychmiast poprosi Cię o ustawienie nowego hasła przed kontynuowaniem.",
     "rateLimited": "Poczekaj {{seconds}} sekund przed ponownym żądaniem nowego hasła.",
-    "error": "Nie udało się odzyskać danych. Spróbuj ponownie później."
+    "error": "Nie udało się odzyskać danych. Spróbuj ponownie później.",
+    "confirm": "⚠️ To zresetuje Twoje hasło i zakończy wszystkie aktywne sesje pulpitu. Kontynuować?",
+    "buttons": {
+      "yes": "✅ Tak, resetuj hasło",
+      "no": "❌ Anuluj"
+    },
+    "inProgress": "⏳ Generowanie nowego hasła...",
+    "cancelled": "❌ Anulowano.",
+    "cancelledCallback": "Anulowano",
+    "expired": "⌛ Żądanie wygasło. Użyj /recover_desktop lub przycisku menu ponownie.",
+    "expiredCallback": "To żądanie wygasło",
+    "wrongUser": "Ten przycisk jest dla innego konta"
   }
 }

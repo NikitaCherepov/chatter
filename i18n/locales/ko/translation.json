@@ -72,7 +72,8 @@
       "language": "🌐 언어",
       "help": "ℹ️ 도움말",
       "notesWebApp": "📝 메모 (웹앱)",
-      "chats": "💬 채팅"
+      "chats": "💬 채팅",
+      "recoverDesktop": "🔑 데스크톱 로그인 복구"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 새 비밀번호: {{password}}",
     "loginInstructions": "데스크톱 앱을 열고 이 로그인과 비밀번호로 로그인하세요. 앱에서 즉시 새 비밀번호를 설정하도록 요청합니다.",
     "rateLimited": "새 비밀번호를 요청하려면 {{seconds}}초 기다려 주세요.",
-    "error": "데이터 복구에 실패했습니다. 나중에 다시 시도해 주세요."
+    "error": "데이터 복구에 실패했습니다. 나중에 다시 시도해 주세요.",
+    "confirm": "⚠️ 비밀번호가 재설정되고 모든 활성 데스크톱 세션이 종료됩니다. 계속하시겠습니까?",
+    "buttons": {
+      "yes": "✅ 예, 비밀번호 재설정",
+      "no": "❌ 취소"
+    },
+    "inProgress": "⏳ 새 비밀번호 생성 중...",
+    "cancelled": "❌ 취소됨.",
+    "cancelledCallback": "취소됨",
+    "expired": "⌛ 요청이 만료되었습니다. /recover_desktop 또는 메뉴 버튼을 다시 사용하세요.",
+    "expiredCallback": "이 요청은 만료되었습니다",
+    "wrongUser": "이 버튼은 다른 계정용입니다"
   }
 }

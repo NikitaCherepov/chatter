@@ -72,7 +72,8 @@
       "language": "🌐 Idioma",
       "help": "ℹ️ Ajuda",
       "notesWebApp": "📝 Notas (WebApp)",
-      "chats": "💬 Conversas"
+      "chats": "💬 Conversas",
+      "recoverDesktop": "🔑 Recuperar login da área de trabalho"
     }
   },
   "language": {
@@ -758,6 +759,17 @@
     "passwordMessage": "🔒 Nova senha: {{password}}",
     "loginInstructions": "Abra o aplicativo Desktop e faça login com este login e senha. O aplicativo solicitará imediatamente que você defina uma nova senha antes de continuar.",
     "rateLimited": "Aguarde {{seconds}} segundos antes de solicitar uma nova senha.",
-    "error": "Falha ao recuperar dados. Tente novamente mais tarde."
+    "error": "Falha ao recuperar dados. Tente novamente mais tarde.",
+    "confirm": "⚠️ Isso redefinirá sua senha e encerrará todas as sessões ativas da área de trabalho. Continuar?",
+    "buttons": {
+      "yes": "✅ Sim, redefinir senha",
+      "no": "❌ Cancelar"
+    },
+    "inProgress": "⏳ Gerando uma nova senha...",
+    "cancelled": "❌ Cancelado.",
+    "cancelledCallback": "Cancelado",
+    "expired": "⌛ Solicitação expirada. Use /recover_desktop ou o botão do menu novamente.",
+    "expiredCallback": "Esta solicitação expirou",
+    "wrongUser": "Este botão é para uma conta diferente"
   }
 }
