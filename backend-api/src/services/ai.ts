@@ -533,7 +533,7 @@ const extractTokens = (response: any) => normalizeTokenUsage(response?.usage).to
 const createAbortError = () => new DOMException('The user aborted a request.', 'AbortError');
 
 const isAbortError = (err: any) =>
-  err?.name === 'AbortError' || err?.code === 'ABORT_ERR' || `${err?.message || ''}` === 'AbortError';
+  err?.name === 'AbortError' || err?.code === 'ABORT_ERR' || `${err?.message || ''}` === 'AbortError' || `${err?.message || ''}`.includes('aborted');
 
 export const throwIfAborted = (signal?: AbortSignal) => {
   if (signal?.aborted) throw createAbortError();
@@ -5979,18 +5979,23 @@ export const sendMessageThroughAi = async (
     activeGenerations.set(userId, abortController);
   }
 
-  // ── Стрим-колбеки для токен-стриминга в реальном времени ──
-  const streamCallbacks: StreamCallbacks | undefined =
-    (options?.onStreamToken || options?.onReasoningStream)
-      ? {
-          onToken: options?.onStreamToken
-            ? (t) => { Promise.resolve(options.onStreamToken!(t)).catch(e => console.warn('[stream onToken]', e)); }
-            : undefined,
-          onReasoningToken: options?.onReasoningStream
-            ? (t) => { Promise.resolve(options.onReasoningStream!(t)).catch(e => console.warn('[stream onReasoningToken]', e)); }
-            : undefined,
+  // ── Stream callbacks for real-time token streaming ──
+  // Always create onToken/onReasoningToken to accumulate into streamContentBuffer/streamReasoningBuffer,
+  // so partial content is preserved on abort during streaming.
+  const streamCallbacks: StreamCallbacks = {
+    onToken: (t) => {
+      streamContentBuffer += t;
+      if (options?.onStreamToken) {
+        Promise.resolve(options.onStreamToken!(t)).catch(e => console.warn('[stream onToken]', e));
+      }
+    },
+    onReasoningToken: options?.onReasoningStream
+      ? (t) => {
+          streamReasoningBuffer += t;
+          Promise.resolve(options.onReasoningStream!(t)).catch(e => console.warn('[stream onReasoningToken]', e));
         }
-      : undefined;
+      : (t) => { streamReasoningBuffer += t; },
+  };
 
   console.log('[sendMessageThroughAi] streamCallbacks', {
     hasOptions: !!options,
@@ -6174,6 +6179,8 @@ export const sendMessageThroughAi = async (
   // ── Soft-abort buffers: declared OUTSIDE try, чтобы catch имел к ним доступ ──
   let answer = FALLBACK_ANSWER;
   let fullDbHistory = '';
+  let streamContentBuffer = '';
+  let streamReasoningBuffer = '';
   let finalAnswer = '';
   const reasoningParts: string[] = [];
   const toolCallsHistory: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
@@ -6719,6 +6726,8 @@ User request: "${text}"`;
     }
     const stepReasoning = extractReasoning(message, response);
     if (stepReasoning) reasoningParts.push(stepReasoning);
+    // Reset streaming reasoning buffer — content already captured in reasoningParts
+    streamReasoningBuffer = '';
     // Collect tool calls for UI display
     if (message.tool_calls?.length) {
       for (const tc of message.tool_calls) {
@@ -6738,6 +6747,8 @@ User request: "${text}"`;
     if (stepContent) {
       // Всегда собираем полную историю для базы данных
       fullDbHistory += (fullDbHistory ? '\n\n' : '') + stepContent;
+      // Reset streaming buffer — content already captured in fullDbHistory
+      streamContentBuffer = '';
 
       if (message.tool_calls?.length) {
         // Модель вызывает тулз + написала текст (промежуточное сообщение)
@@ -7187,8 +7198,10 @@ iterations.push(currentIteration);
       const abortedAnswer = answer && answer !== FALLBACK_ANSWER
         ? answer + '\n\n_⏹ Generation stopped by user_'
         : (toolUserMessages.length > 0 ? '_⏹ Generation stopped by user_' : '');
-      const abortedDbText = fullDbHistory || abortedAnswer;
-      const abortedReasoning = reasoningParts.length > 0 ? reasoningParts.join('\n\n').trim() : null;
+      const abortedDbText = fullDbHistory || streamContentBuffer || abortedAnswer;
+      const abortedReasoning = reasoningParts.length > 0
+        ? reasoningParts.join('\n\n').trim()
+        : (streamReasoningBuffer.trim() || null);
       const abortedTcJson = iterations.length > 0 ? JSON.stringify(iterations) : null;
       const abortedSubagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
       const abortedAggregateUsage = sumTokenUsage(usageCalls);
