@@ -1,0 +1,24 @@
+.content {
+  z-index: 9999;
+  padding: 8px 12px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-body);
+  background: var(--bg-primary);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  max-width: 360px;
+  word-break: break-word;
+  user-select: none;
+  animation: tooltipIn 0.15s ease;
+}
+
+.arrow {
+  fill: var(--bg-primary);
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

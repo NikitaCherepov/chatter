@@ -16,6 +16,7 @@ import type { ImageItem, DocumentItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
 import Slider from '../components/Slider';
 import { SettingsModal } from '../components/SettingsModal';
+import { Tooltip } from '../components/Tooltip';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
@@ -2677,20 +2678,22 @@ export function ChatPage() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <div className={s.chatItemTitle}>
-                      <AnimatePresence mode="popLayout" initial={false}>
-                        <motion.span
-                          key={chat.title || t('chat.sidebar.newChat')}
-                          initial={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
-                          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                          exit={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
-                          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                          style={{ display: 'inline-block' }}
-                        >
-                          {chat.title || t('chat.sidebar.newChat')}
-                        </motion.span>
-                      </AnimatePresence>
-                    </div>
+                    <Tooltip content={chat.title || t('chat.sidebar.newChat')} delayDuration={600}>
+                      <div className={s.chatItemTitle}>
+                        <AnimatePresence mode="popLayout" initial={false}>
+                          <motion.span
+                            key={chat.title || t('chat.sidebar.newChat')}
+                            initial={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
+                            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                            exit={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
+                            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                            style={{ display: 'inline-block' }}
+                          >
+                            {chat.title || t('chat.sidebar.newChat')}
+                          </motion.span>
+                        </AnimatePresence>
+                      </div>
+                    </Tooltip>
                   )}
                   {getUnread(chat.id) > 0 && (
                     <span className={s.unreadBadge}>{getUnread(chat.id)}</span>
