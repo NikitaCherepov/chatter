@@ -1948,14 +1948,14 @@ async function handleRequest(req, res) {
     }
   }
 
-  // ── Prompts (global presets) ──────────────────────────────────────────
+  // ── Prompts (global presets, admin-panel) ─────────────────────────────
 
   if (req.method === 'GET' && pathname === '/api/prompts') {
-    return sendJson(res, 200, await backendInternalRequest('/internal/prompts'));
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/prompts'));
   }
   if (req.method === 'POST' && pathname === '/api/prompts') {
     const body = await readJson(req);
-    return sendJson(res, 201, await backendInternalRequest('/internal/prompts', {
+    return sendJson(res, 201, await backendInternalRequest('/internal/admin/prompts', {
       method: 'POST',
       body: JSON.stringify(body),
     }));
@@ -1965,10 +1965,10 @@ async function handleRequest(req, res) {
   if (promptIdMatch) {
     const pid = promptIdMatch[1];
     if (req.method === 'GET') {
-      return sendJson(res, 200, await backendInternalRequest(`/internal/prompts/${pid}`));
+      return sendJson(res, 200, await backendInternalRequest(`/internal/admin/prompts/${pid}`));
     }
     if (req.method === 'DELETE') {
-      return sendJson(res, 200, await backendInternalRequest(`/internal/prompts/${pid}`, { method: 'DELETE' }));
+      return sendJson(res, 200, await backendInternalRequest(`/internal/admin/prompts/${pid}`, { method: 'DELETE' }));
     }
   }
   const promptFieldMatch = pathname.match(/^\/api\/prompts\/(\d+)\/(name|description|content|default)$/);
@@ -1977,16 +1977,9 @@ async function handleRequest(req, res) {
     const pid = promptFieldMatch[1];
     const field = promptFieldMatch[2];
     const body = await readJson(req);
-    const endpoint = field === 'default' ? `/internal/prompts/${pid}/default` : `/internal/prompts/${pid}/${field}`;
+    const endpoint = field === 'default' ? `/internal/admin/prompts/${pid}/default` : `/internal/admin/prompts/${pid}/${field}`;
     return sendJson(res, 200, await backendInternalRequest(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(body),
-    }));
-  }
-  if (req.method === 'POST' && pathname === '/api/prompts/reset-users') {
-    const body = await readJson(req);
-    return sendJson(res, 200, await backendInternalRequest('/internal/prompts/reset-users', {
-      method: 'POST',
       body: JSON.stringify(body),
     }));
   }

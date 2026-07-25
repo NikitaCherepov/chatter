@@ -2440,7 +2440,7 @@ app.post('/internal/link/unlink', internalAuth, (req, res) => {
   }
 });
 
-// ── Internal: Prompts CRUD ─────────────────────────────────────────────────
+// ── Internal: Prompts CRUD (Telegram bot, requires actor_user_id) ────────────
 
 app.get('/internal/prompts', internalAuth, (_req, res) => {
   const prompts = getAllPrompts();
@@ -2540,6 +2540,108 @@ app.delete('/internal/prompts/:id', internalAuth, internalAdminAuth, (req, res) 
   resetUsersPromptIfDeleted(promptId);
   return res.json({ ok: true });
 });
+
+// ── Internal (admin-panel via manager): Admin Prompts CRUD ───────────────────
+
+app.get('/internal/admin/prompts', internalAuth, (_req, res) => {
+  const prompts = getAllPrompts();
+  return res.json({ prompts });
+});
+
+app.get('/internal/admin/prompts/:id', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  const prompt = getPromptById(promptId);
+  if (!prompt) return res.status(404).json({ error: 'prompt_not_found' });
+  return res.json({ prompt });
+});
+
+app.post('/internal/admin/prompts', internalAuth, (req, res) => {
+  const name = `${req.body?.name || ''}`.trim();
+  const description = `${req.body?.description || ''}`.trim();
+  const content = `${req.body?.content || ''}`.trim();
+  const isDefault = Boolean(req.body?.is_default);
+
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  if (!content) return res.status(400).json({ error: 'content_required' });
+
+  try {
+    const result = createPrompt(name, description, content, isDefault);
+    return res.status(201).json({ ok: true, prompt_id: Number(result.lastInsertRowid) });
+  } catch (err: any) {
+    return res.status(409).json({ error: 'name_already_exists' });
+  }
+});
+
+app.put('/internal/admin/prompts/:id/name', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  const name = `${req.body?.name || ''}`.trim();
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  if (!name) return res.status(400).json({ error: 'name_required' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  try {
+    updatePromptName(promptId, name);
+    return res.json({ ok: true });
+  } catch {
+    return res.status(409).json({ error: 'name_already_exists' });
+  }
+});
+
+app.put('/internal/admin/prompts/:id/description', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  const description = `${req.body?.description || ''}`.trim();
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  updatePromptDescription(promptId, description);
+  return res.json({ ok: true });
+});
+
+app.put('/internal/admin/prompts/:id/content', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  const content = `${req.body?.content || ''}`.trim();
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  if (!content) return res.status(400).json({ error: 'content_required' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  updatePromptContent(promptId, content);
+  return res.json({ ok: true });
+});
+
+app.put('/internal/admin/prompts/:id/default', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  setDefaultPrompt(promptId);
+  return res.json({ ok: true });
+});
+
+app.delete('/internal/admin/prompts/:id', internalAuth, (req, res) => {
+  const promptId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
+
+  const existing = getPromptById(promptId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  const all = getAllPrompts();
+  if (all.length <= 1) return res.status(422).json({ error: 'cannot_delete_last_prompt' });
+  if (existing.is_default) return res.status(422).json({ error: 'cannot_delete_default_prompt' });
+
+  deletePrompt(promptId);
+  resetUsersPromptIfDeleted(promptId);
+  return res.json({ ok: true });
+});
+
 
 // ── Internal: User prompt selection ────────────────────────────────────────
 
@@ -3309,13 +3411,6 @@ app.put('/internal/users/:id/prompt/custom', internalAuth, (req, res) => {
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
   updateUserCustomPrompt(userId, content);
-  return res.json({ ok: true });
-});
-
-app.post('/internal/prompts/reset-users', internalAuth, internalAdminAuth, (req, res) => {
-  const promptId = Number(req.body?.prompt_id);
-  if (!Number.isFinite(promptId) || promptId <= 0) return res.status(400).json({ error: 'bad_prompt_id' });
-  resetUsersPromptIfDeleted(promptId);
   return res.json({ ok: true });
 });
 

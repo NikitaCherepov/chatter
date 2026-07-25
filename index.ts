@@ -1283,12 +1283,6 @@ const runBackendSetPreferredModel = async (userId: number, modelId: string | nul
     return response.data as { ok: boolean; preferred_model: string | null };
 };
 
-const runBackendResetUsersPromptIfDeleted = async (promptId: number) => {
-    if (!BACKEND_INTERNAL_TOKEN) throw new Error('BACKEND_INTERNAL_TOKEN не настроен.');
-    const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/prompts/reset-users`, { prompt_id: promptId }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
-    return response.data as { ok: boolean };
-};
-
 type UserChatRecord = {
     id: number;
     user_id: number;
@@ -1921,9 +1915,6 @@ const selectUserCustomPrompt = async (id: number) => {
 };
 const updateUserCustomPrompt = async (id: number, content: string) => {
     await runBackendUpdateCustomPrompt(id, content);
-};
-const resetUsersPromptIfDeleted = async (promptId: number) => {
-    await runBackendResetUsersPromptIfDeleted(promptId);
 };
 const removeUser = async (id: number) => {
     await runBackendRemoveUser(id);
