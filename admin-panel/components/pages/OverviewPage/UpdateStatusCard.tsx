@@ -178,7 +178,6 @@ export function UpdateStatusCard() {
     }
   }
 
-  // /fix
   // "Force now": set drain flag (so new requests are blocked during apply
   // window), abort everything immediately, then apply.
   async function handleForceUpdate() {
