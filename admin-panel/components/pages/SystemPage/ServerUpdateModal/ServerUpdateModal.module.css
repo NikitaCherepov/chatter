@@ -9,6 +9,9 @@
 }
 
 .modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
   width: min(520px, 100%);
   padding: var(--sp-5);
   border: 1px solid var(--border-medium);
@@ -24,16 +27,12 @@
 }
 
 .modal h2 { font-size: var(--fs-lg); }
-.modal h3 { margin-top: var(--sp-4); font-size: var(--fs-sm); }
-.modal p { margin: var(--sp-1) 0 0; color: var(--text-muted); font-size: var(--fs-xs); }
-/* When the drain section precedes h3, the section's bottom padding already
-   provides spacing — don't add a second gap on top of it. */
-.drainSection + h3 { margin-top: var(--sp-3); }
+.modal h3 { font-size: var(--fs-sm); }
+.modal p { margin: 0; color: var(--text-muted); font-size: var(--fs-xs); }
 .notice { color: var(--color-warning) !important; }
 
 .changelog {
   max-height: 220px;
-  margin-top: var(--sp-2);
   overflow: auto;
   padding: var(--sp-3);
   border: 1px solid var(--border-light);
@@ -77,7 +76,6 @@
 }
 
 .drainSection {
-  margin-top: var(--sp-4);
   padding: var(--sp-3);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
@@ -117,5 +115,4 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--sp-2);
-  margin-top: var(--sp-5);
 }
