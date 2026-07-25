@@ -155,12 +155,14 @@ export function UpdateStatusCard() {
       return;
     }
 
-    // 2. Poll activeUsers from server.
+    // 2. Poll activeUsers from server. Runs in both `draining` and `timeout`
+    //    phases — the count must stay live even after the 15s deadline.
+    //    If users drain to 0 in EITHER phase, auto-apply the update.
     pollTimerRef.current = setInterval(async () => {
       try {
         const pollState = await serverUpdateService.getUpdateState();
         syncDrainDisplay(pollState.activeUsers);
-        if (pollState.activeUsers === 0 && phaseRef.current === 'draining') {
+        if (pollState.activeUsers === 0 && (phaseRef.current === 'draining' || phaseRef.current === 'timeout')) {
           clearAllTimers();
           await applyUpdate();
         }
@@ -169,12 +171,16 @@ export function UpdateStatusCard() {
       }
     }, UPDATE_POLL_INTERVAL_MS);
 
-    // 3. UI tick + 15s deadline.
+    // 3. UI tick + 15s deadline. Stops only the tick timer when timeout
+    //    is reached — polling continues until admin acts or users drain.
     tickTimerRef.current = setInterval(() => {
       const elapsed = Date.now() - drainStartRef.current;
       setDrain((prev) => prev ? { ...prev, elapsedMs: elapsed } : prev);
       if (elapsed >= UPDATE_DRAIN_TIMEOUT_MS && phaseRef.current === 'draining') {
-        clearAllTimers();
+        if (tickTimerRef.current) {
+          clearInterval(tickTimerRef.current);
+          tickTimerRef.current = null;
+        }
         setDrainPhase('timeout');
       }
     }, 200);
@@ -213,11 +219,57 @@ export function UpdateStatusCard() {
     setDrain({ activeUsers: 0, elapsedMs: 0, timeoutMs: UPDATE_DRAIN_TIMEOUT_MS });
     try {
       const state = await serverUpdateService.getUpdateState();
-      setDrain({
-        activeUsers: state.activeUsers,
-        elapsedMs: 0,
-        timeoutMs: UPDATE_DRAIN_TIMEOUT_MS,
-      });
+      // If the drain flag is already set on the backend (e.g. admin reloaded
+      // the page mid-drain), resume polling instead of pretending nothing
+      // happened. The flag blocks all user AI requests, so we must not
+      // ignore it.
+      if (state.preparing) {
+        drainStartRef.current = Date.now() - state.elapsedMs;
+        setDrainPhase('draining');
+        syncDrainDisplay(state.activeUsers);
+        // Edge case: flag stuck but nobody active — apply immediately.
+        if (state.activeUsers === 0) {
+          await applyUpdate();
+          return;
+        }
+        // Resume polling + enforce remaining time budget.
+        const remainingMs = Math.max(0, UPDATE_DRAIN_TIMEOUT_MS - state.elapsedMs);
+        pollTimerRef.current = setInterval(async () => {
+          try {
+            const pollState = await serverUpdateService.getUpdateState();
+            syncDrainDisplay(pollState.activeUsers);
+            if (pollState.activeUsers === 0 && (phaseRef.current === 'draining' || phaseRef.current === 'timeout')) {
+              clearAllTimers();
+              await applyUpdate();
+            }
+          } catch {
+            // keep polling
+          }
+        }, UPDATE_POLL_INTERVAL_MS);
+
+        if (remainingMs > 0) {
+          tickTimerRef.current = setInterval(() => {
+            const elapsed = Date.now() - drainStartRef.current;
+            setDrain((prev) => prev ? { ...prev, elapsedMs: elapsed } : prev);
+            if (elapsed >= UPDATE_DRAIN_TIMEOUT_MS && phaseRef.current === 'draining') {
+              if (tickTimerRef.current) {
+                clearInterval(tickTimerRef.current);
+                tickTimerRef.current = null;
+              }
+              setDrainPhase('timeout');
+            }
+          }, 200);
+        } else {
+          // Elapsed time already exceeded 15s — jump straight to timeout.
+          setDrainPhase('timeout');
+        }
+      } else {
+        setDrain({
+          activeUsers: state.activeUsers,
+          elapsedMs: 0,
+          timeoutMs: UPDATE_DRAIN_TIMEOUT_MS,
+        });
+      }
     } catch {
       // Non-fatal.
     }
