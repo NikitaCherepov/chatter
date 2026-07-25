@@ -632,13 +632,12 @@
         "failed": "Update failed."
       },
       "drain": {
-        "checking": "Checking active users…",
         "waiting": "{{count}} user(s) still working. Waiting {{seconds}}s…",
         "allDone": "Everyone finished. Proceeding with update…",
-        "timeout": "{{count}} user(s) still working after timeout.",
-        "forceStop": "Force stop & update",
-        "waitingBtn": "Waiting…",
-        "waitMore": "Wait more",
+        "activeUsers": "{{count}} user(s) currently active.",
+        "noActive": "No active users right now.",
+        "softUpdate": "Wait up to 15s and update",
+        "forceNow": "Force update now",
         "pollError": "Drain poll failed: {{message}}"
       }
     },

@@ -26,6 +26,9 @@
 .modal h2 { font-size: var(--fs-lg); }
 .modal h3 { margin-top: var(--sp-4); font-size: var(--fs-sm); }
 .modal p { margin: var(--sp-1) 0 0; color: var(--text-muted); font-size: var(--fs-xs); }
+/* When the drain section precedes h3, the section's bottom padding already
+   provides spacing — don't add a second gap on top of it. */
+.drainSection + h3 { margin-top: var(--sp-3); }
 .notice { color: var(--color-warning) !important; }
 
 .changelog {
@@ -94,18 +97,11 @@
   font-weight: 600;
 }
 
-.drainTimeout {
-  margin: 0;
-  color: var(--color-warning);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-}
-
 .drainBar {
   width: 100%;
-  height: 4px;
+  height: 6px;
   background-color: var(--bg-primary);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
   margin-top: var(--sp-2);
 }
@@ -113,7 +109,7 @@
 .drainFill {
   height: 100%;
   background-color: var(--accent);
-  border-radius: 2px;
+  border-radius: 3px;
   transition: width 0.3s ease;
 }
 

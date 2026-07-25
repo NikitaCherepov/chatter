@@ -44,10 +44,6 @@ export const serverUpdateService = {
     method: 'POST',
     body: JSON.stringify({ action: 'cancel' }),
   }),
-  extendUpdate: () => api<UpdateState>('/api/update/prepare', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'extend' }),
-  }),
   forceUpdate: () => api<{ aborted: number }>('/api/update/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'force' }),

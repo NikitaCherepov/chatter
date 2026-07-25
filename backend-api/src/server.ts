@@ -12,7 +12,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, cl
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, extendUpdatePrepare, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -3633,7 +3633,7 @@ app.get('/internal/admin/update/prepare', internalAuth, (_req, res) => {
 // POST: prepare / cancel / extend / force
 app.post('/internal/admin/update/prepare', internalAuth, (req, res) => {
   const action = `${req.body?.action || ''}`.trim().toLowerCase();
-  if (!['prepare', 'cancel', 'extend', 'force'].includes(action)) {
+  if (!['prepare', 'cancel', 'force'].includes(action)) {
     return res.status(400).json({ error: 'bad_action', action });
   }
 
@@ -3644,13 +3644,6 @@ app.post('/internal/admin/update/prepare', internalAuth, (req, res) => {
 
   if (action === 'cancel') {
     clearUpdatePrepare();
-    return res.json(getUpdateState());
-  }
-
-  if (action === 'extend') {
-    // Reset drain timer without touching the flag — lets admin wait another
-    // full timeout window. No-op if no drain is currently active.
-    extendUpdatePrepare();
     return res.json(getUpdateState());
   }
 
