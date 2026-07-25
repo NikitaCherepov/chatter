@@ -130,6 +130,7 @@ export const activeGenerations = new Map<number, AbortController>();
 export const activeHitlWaits = new Set<number>();
 
 // Server update drain lock — rejects new requests while preparing for update
+//checkupdate
 let updatePreparing = false;
 let updatePreparingSince = 0;
 export const getUpdatePreparing = () => updatePreparing;
