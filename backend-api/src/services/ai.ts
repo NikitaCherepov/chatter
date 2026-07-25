@@ -7156,8 +7156,10 @@ iterations.push(currentIteration);
   chargeAssistantMessageId = assistantMessageId;
   chargeAborted = false;
 
+  const applyAborted = abortController.signal.aborted;
   return {
-    reply_text: answer,
+    reply_text: applyAborted ? (fullDbHistory || answer) : answer,
+    ...(applyAborted ? { aborted: true } : {}),
     reasoning_content: reasoningContent,
     chat_id: chatId,
     message_id: assistantMessageId,
