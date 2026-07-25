@@ -2678,7 +2678,7 @@ export function ChatPage() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <Tooltip content={chat.title || t('chat.sidebar.newChat')} delayDuration={600}>
+                    <Tooltip content={chat.title || t('chat.sidebar.newChat')} delayDuration={600} arrowAtPointer>
                       <div className={s.chatItemTitle}>
                         <AnimatePresence mode="popLayout" initial={false}>
                           <motion.span
