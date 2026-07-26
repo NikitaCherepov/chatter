@@ -106,11 +106,11 @@ export function OnboardingModal({ announcements, onDone }: Props) {
           <AnimatePresence mode="wait">
             <motion.div
               key={`${currentSlide.id}`}
+              className={s.slideContent}
               variants={SLIDE_VARIANTS}
               initial="enter"
               animate="center"
               exit="exit"
-              style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
             >
               {currentSlide.image && (
                 <div className={s.imageWrap}>
@@ -137,12 +137,14 @@ export function OnboardingModal({ announcements, onDone }: Props) {
               total: totalSlides,
             })}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {!isFirstSlide && (
-              <button className={s.navBtn} onClick={goBack}>
-                {t('onboarding.back')}
-              </button>
-            )}
+          <div className={s.navRow}>
+            <div>
+              {!isFirstSlide && (
+                <button className={s.navBtn} onClick={goBack}>
+                  {t('onboarding.back')}
+                </button>
+              )}
+            </div>
             {isLastSlide ? (
               <button className={s.primaryBtn} onClick={handleDone}>
                 {t('onboarding.done')}
