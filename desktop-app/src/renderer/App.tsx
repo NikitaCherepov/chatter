@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { AuthPage } from './pages/AuthPage';
 import { ChatPage } from './pages/ChatPage';
 import { ForcePasswordChangePage } from './pages/ForcePasswordChangePage';
 import { useAuth, AuthProvider } from './lib/auth';
+import * as api from './lib/api';
+import { getUnseenAnnouncements } from './lib/announcements';
 import { UpdateModal } from './components/UpdateModal';
+import { OnboardingModal } from './components/OnboardingModal';
 import { CustomTitleBar } from './components/CustomTitleBar';
 import s from './App.module.scss';
 
@@ -81,8 +85,47 @@ export function App() {
         </div>
       </div>
       <Toaster position="top-right" richColors closeButton offset={52} />
+      <AnnouncementOverlay />
       <UpdateListener />
     </AuthProvider>
+  );
+}
+
+/** Shows announcements (welcome, feature releases) the user hasn't seen yet.
+ *  Only renders when the user is authenticated and initialized. */
+function AnnouncementOverlay() {
+  const { user, initialized } = useAuth();
+  const [visible, setVisible] = useState(true);
+
+  const unseen = useMemo(
+    () => (user ? getUnseenAnnouncements(user.ui_settings) : []),
+    [user],
+  );
+
+  const handleDone = useCallback(
+    async (seenIds: string[]) => {
+      try {
+        const existing = user?.ui_settings?.seen_announcements ?? [];
+        const merged = [...new Set([...existing, ...seenIds])];
+        await api.setUiSettings({ seen_announcements: merged });
+      } catch {
+        // If saving fails, show again next time.
+      }
+      setVisible(false);
+    },
+    [user],
+  );
+
+  if (!initialized || !user || unseen.length === 0 || !visible) return null;
+
+  return (
+    <AnimatePresence>
+      <OnboardingModal
+        key="onboarding"
+        announcements={unseen}
+        onDone={handleDone}
+      />
+    </AnimatePresence>
   );
 }
 

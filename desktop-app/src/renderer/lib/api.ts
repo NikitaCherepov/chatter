@@ -55,6 +55,7 @@ type Tokens = {
 export type UiSettings = {
   show_tokens?: boolean;
   dice_roll_enabled?: boolean;
+  seen_announcements?: string[];
 };
 
 type User = {

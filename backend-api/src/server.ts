@@ -832,12 +832,19 @@ const parseFeatureFlags = (user: UserRecord): Record<string, boolean> => {
 };
 
 /** UI settings: configurable display options stored per-user. */
-export const parseUiSettings = (user: UserRecord): { show_tokens?: boolean; dice_roll_enabled?: boolean } => {
+export const parseUiSettings = (user: UserRecord): {
+  show_tokens?: boolean;
+  dice_roll_enabled?: boolean;
+  seen_announcements?: string[];
+} => {
   try {
     const parsed = JSON.parse(user.ui_settings || '{}');
     return {
       ...(typeof parsed.show_tokens === 'boolean' ? { show_tokens: parsed.show_tokens } : {}),
       ...(typeof parsed.dice_roll_enabled === 'boolean' ? { dice_roll_enabled: parsed.dice_roll_enabled } : {}),
+      ...(Array.isArray(parsed.seen_announcements) && parsed.seen_announcements.every((id: unknown) => typeof id === 'string')
+        ? { seen_announcements: parsed.seen_announcements as string[] }
+        : {}),
     };
   } catch { return {}; }
 };
