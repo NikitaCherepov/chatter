@@ -1045,6 +1045,12 @@ function createWindow() {
     return info;
   });
 
+/** Redacts API-key-like strings (sk-...) from file content before it reaches the AI. */
+const REDACT_API_KEY_RE = /\bsk-[A-Za-z0-9_-]{20,}\b/g;
+function redactApiKeys(content: string): string {
+  return content.replace(REDACT_API_KEY_RE, '<Api_Key>');
+}
+
   ipcMain.handle('read-file', async (event, payload: { file_path: string; start_line?: number; max_lines?: number; line_numbers?: boolean }) => {
     assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
@@ -1079,7 +1085,7 @@ function createWindow() {
         : sliced;
 
       return {
-        content: formatted.join('\n'),
+        content: redactApiKeys(formatted.join('\n')),
         start_line: startLine,
         read_lines: sliced.length,
         total_lines: totalLines,
@@ -1118,7 +1124,7 @@ function createWindow() {
       : lines;
 
     return {
-      content: formatted.join('\n'),
+      content: redactApiKeys(formatted.join('\n')),
       start_line: startLine,
       read_lines: lines.length,
       total_lines: totalLines,
@@ -1156,7 +1162,7 @@ function createWindow() {
       totalLines++;
       if (matches.length >= maxMatches) return;
       if (line.toLowerCase().includes(normalizedQuery)) {
-        matches.push({ line_number: totalLines, line: line.trim() });
+        matches.push({ line_number: totalLines, line: redactApiKeys(line.trim()) });
       }
     };
 
