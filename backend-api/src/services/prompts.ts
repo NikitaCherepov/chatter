@@ -44,6 +44,13 @@ You are connected to an interface with a screen. You have a system tool for call
 export const LANGUAGE_HINT = `\n\n[LANGUAGE]
 ALWAYS respond in the same language the user writes in. Mirror their language naturally — do not switch unless they do.
 `;
+
+export const SECURITY_PROTOCOL_HINT = `\n\n[SECURITY & LEAK PROTOCOL]
+1. Restricted Files: Do NOT read files containing production secrets (e.g., .env, .npmrc, .ssh/id_rsa, ~/.aws/credentials) unless explicitly instructed by the user. If instructed, WARN the user first about the risk of sending secrets to the LLM API.
+2. Leak Detection & Alerting: If you read a file and discover an unmasked secret (e.g., database password, auth token, private key), you MUST:
+   - Mask the secret in your text response (e.g., output sk-****). Do NOT repeat the raw secret.
+   - IMMEDIATELY print a prominent warning: "SECURITY ALERT: I read an exposed secret in [filename]. It was sent to the LLM API and saved in the tool history. Revoke and reissue it immediately."
+`;
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type PromptRecord = {
