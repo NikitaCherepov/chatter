@@ -142,13 +142,15 @@
   "attach": {
     "title": "Attach files",
     "drop": "Click to select files or drag them here",
-    "imageHint": "{{formats}} — max. 20 MB",
+    "imageHint": "{{formats}} — images are compressed before sending, {{size}} total",
     "documentHint": "txt, md, json, pdf, docx, code… — max. 5 MB",
     "action": "Attach ({{count}})",
     "error": {
       "imageTooLarge": "File is too large: {{name}} (max. 20 MB)",
       "documentTooLarge": "File is too large: {{name}} (max. 5 MB)",
       "imageLimit": "Your plan allows up to {{count}} images",
+      "imageTotalTooLarge": "The prepared images exceed the {{size}} total limit",
+      "imagePrepare": "Could not prepare image: {{name}}",
       "read": "Could not read: {{name}}",
       "unsupported": "Unsupported format: {{name}}"
     }
@@ -393,6 +395,7 @@
       "label": "Reasoning:"
     },
     "generationStopped": "_⏹ Generation stopped_",
+    "connectionLostBeforeSend": "The connection closed before the server accepted the message. Please send it again.",
     "export": {
       "defaultTitle": "Chat"
     },

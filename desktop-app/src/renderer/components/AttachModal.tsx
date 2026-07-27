@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
+import { prepareImageForUpload } from '../lib/imageCompression';
 import s from './AttachModal.module.scss';
 
 /* ── Image config ── */
@@ -27,8 +28,6 @@ const IMAGE_FORMAT_LABELS: string = ALLOWED_IMAGE_FORMATS
   .map((mime) => MIME_TO_EXT[mime] || mime.split('/')[1]?.toUpperCase() || mime)
   .join(', ');
 
-const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20 MB
-
 /* ── Document config ── */
 const ALLOWED_DOC_EXTENSIONS = [
   'txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'log', 'xml',
@@ -49,6 +48,7 @@ export type ImageItem = {
   preview: string;
   base64: string;
   mime_type: string;
+  size_bytes: number;
 };
 
 export type DocumentItem = {
@@ -61,8 +61,8 @@ export type DocumentItem = {
 type Props = {
   onClose: () => void;
   onAttach: (items: { images: ImageItem[]; documents: DocumentItem[] }) => void;
-  currentImageCount: number;
-  maxImageCount: number;
+  currentImageBytes: number;
+  maxTotalImageBytes: number;
 };
 
 const overlayVariants = {
@@ -89,7 +89,7 @@ function getExt(name: string): string {
   return name.slice(dot + 1).toLowerCase();
 }
 
-export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCount }: Props) {
+export function AttachModal({ onClose, onAttach, currentImageBytes, maxTotalImageBytes }: Props) {
   const { t } = useTranslation();
   const [images, setImages] = useState<ImageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -97,7 +97,6 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const remainingImages = maxImageCount - currentImageCount;
   const totalCount = images.length + documents.length;
 
   const processFiles = async (files: FileList | File[]) => {
@@ -109,24 +108,20 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
     for (const file of fileArr) {
       // Try image first
       if (ALLOWED_IMAGE_FORMATS.includes(file.type)) {
-        if (file.size > MAX_IMAGE_SIZE) {
-          setError(t('attach.error.imageTooLarge', { name: file.name }));
-          continue;
-        }
-        if (images.length + validImages.length >= remainingImages) {
-          setError(t('attach.error.imageLimit', { count: maxImageCount }));
-          break;
-        }
         try {
-          const base64 = await fileToBase64(file);
-          validImages.push({
-            file,
-            preview: URL.createObjectURL(file),
-            base64: base64.split(',')[1] || base64,
-            mime_type: file.type,
-          });
+          const prepared = await prepareImageForUpload(file);
+          const pendingBytes = images.reduce((sum, image) => sum + image.size_bytes, 0)
+            + validImages.reduce((sum, image) => sum + image.size_bytes, 0);
+          if (currentImageBytes + pendingBytes + prepared.size_bytes > maxTotalImageBytes) {
+            URL.revokeObjectURL(prepared.preview);
+            setError(t('attach.error.imageTotalTooLarge', {
+              size: formatSize(maxTotalImageBytes),
+            }));
+            continue;
+          }
+          validImages.push(prepared);
         } catch {
-          setError(t('attach.error.read', { name: file.name }));
+          setError(t('attach.error.imagePrepare', { name: file.name }));
         }
         continue;
       }
@@ -260,7 +255,10 @@ export function AttachModal({ onClose, onAttach, currentImageCount, maxImageCoun
             </div>
             <span className={s.dropText}>{t('attach.drop')}</span>
             <span className={s.dropHint}>
-              {t('attach.imageHint', { formats: IMAGE_FORMAT_LABELS })}
+              {t('attach.imageHint', {
+                formats: IMAGE_FORMAT_LABELS,
+                size: formatSize(maxTotalImageBytes),
+              })}
             </span>
             <span className={s.dropHint}>
               {t('attach.documentHint')}

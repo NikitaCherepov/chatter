@@ -739,10 +739,10 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
   - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) → `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` → `{ reply_text, message_id, chat_id, usage, ... }`
-    - `extra_images` — array of additional images (up to the global technical limit): `[{ base64, mime_type? }]`
+    - `extra_images` — array of additional images; all images share a 32 MB decoded-payload limit: `[{ base64, mime_type? }]`
     - The first image (required) is passed in `image_base64`, the rest via `extra_images`
     - The plan controls whether image attachments are allowed; documents are available on every plan
-    - Errors: `images_not_allowed_for_plan`, `too_many_images_max_N`
+    - Errors: `images_not_allowed_for_plan`, `image_too_large`, `image_payload_too_large`
 - URL tool:
   - `POST /internal/tools/read_url` → `{ url }` → `{ ok, url, text }`
 - Prompts:

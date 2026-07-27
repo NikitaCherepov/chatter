@@ -39,7 +39,7 @@ import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePro
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
-import { areImageAttachmentsAllowedForPlan, MAX_IMAGES_PER_REQUEST } from './services/plan-limits.js';
+import { areImageAttachmentsAllowedForPlan, MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES } from './services/plan-limits.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
@@ -142,7 +142,7 @@ const app = express();
 const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
 const BACKEND_INTERNAL_TOKEN = `${process.env.BACKEND_INTERNAL_TOKEN || ''}`.trim();
 
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '64mb' }));
 
 const buildRejectedByUserError = (commentRaw: unknown) => {
   const comment = typeof commentRaw === 'string' ? commentRaw.trim().slice(0, 1000) : '';
@@ -788,6 +788,7 @@ app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
     if (code === 'user_not_approved') return res.status(403).json({ error: code });
     if (code === 'empty_image') return res.status(400).json({ error: code });
     if (code === 'image_too_large') return res.status(413).json({ error: code });
+    if (code === 'image_payload_too_large') return res.status(413).json({ error: code });
     if (code === 'user_not_found') return res.status(404).json({ error: code });
     if (code.startsWith('too_many_images')) return res.status(400).json({ error: code });
     if (code === 'images_not_allowed_for_plan') return res.status(403).json({ error: code });
@@ -863,7 +864,7 @@ const toAuthUserDto = (user: UserRecord) => {
     is_admin: effectiveUser.is_admin,
     plan: effectiveUser.plan,
     image_attachments_allowed: areImageAttachmentsAllowedForPlan(effectiveUser.plan, effectiveUser.is_admin === 1),
-    max_images_per_request: MAX_IMAGES_PER_REQUEST,
+    max_image_attachments_total_bytes: MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
     selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
     core_memory: effectiveUser.core_memory ?? null,
@@ -1734,15 +1735,17 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     })
     .filter(img => img.base64.length > 0);
 
-  if (images.length > MAX_IMAGES_PER_REQUEST) {
-    return res.status(400).json({ error: `too_many_images_max_${MAX_IMAGES_PER_REQUEST}` });
-  }
   // Validate image sizes — обычные HTTP-ошибки до переключения на SSE
+  let totalImageBytes = 0;
   for (const img of images) {
     const buf = Buffer.from(img.base64, 'base64');
     if (!buf.length) continue;
     if (buf.length > MAX_IMAGE_BYTES_API) {
       return res.status(413).json({ error: 'image_too_large' });
+    }
+    totalImageBytes += buf.length;
+    if (totalImageBytes > MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES) {
+      return res.status(413).json({ error: 'image_payload_too_large' });
     }
   }
 
@@ -5634,6 +5637,10 @@ wss.on('connection', (ws, req) => {
       }
     } catch (err) {
       console.error('[ws] message error:', formatSafeError(err));
+      const currentClient = wsClients.get(accountId);
+      if (currentClient?.ws.readyState === WebSocket.OPEN) {
+        currentClient.ws.send(JSON.stringify({ type: 'error', error: 'request_processing_failed' }));
+      }
     }
   });
 
@@ -5739,15 +5746,17 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     }))
     .filter(img => img.base64.length > 0);
 
-  if (parsedImages.length > MAX_IMAGES_PER_REQUEST) {
-    client.ws.send(JSON.stringify({ type: 'error', error: `too_many_images_max_${MAX_IMAGES_PER_REQUEST}` }));
-    return;
-  }
+  let totalImageBytes = 0;
   for (const img of parsedImages) {
     const buf = Buffer.from(img.base64, 'base64');
     if (!buf.length) continue;
     if (buf.length > MAX_IMAGE_BYTES_API) {
       client.ws.send(JSON.stringify({ type: 'error', error: 'image_too_large' }));
+      return;
+    }
+    totalImageBytes += buf.length;
+    if (totalImageBytes > MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES) {
+      client.ws.send(JSON.stringify({ type: 'error', error: 'image_payload_too_large' }));
       return;
     }
   }
@@ -5807,6 +5816,11 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       client.ws.send(JSON.stringify({ type: 'error', error: 'document_parse_failed', detail: err?.message || String(err) }));
       return;
     }
+  }
+
+  const currentClient = wsClients.get(userId);
+  if (currentClient?.ws.readyState === WebSocket.OPEN) {
+    currentClient.ws.send(JSON.stringify({ type: 'chat_accepted' }));
   }
 
   const enabledMacros = getEnabledMacros(userId);

@@ -1,7 +1,7 @@
 import { sendMessageThroughAi } from './ai.js';
 import { getUserById } from './chats.js';
 import { saveUserImageThumbnail } from './image-storage.js';
-import { areImageAttachmentsAllowedForPlan, MAX_IMAGES_PER_REQUEST } from './plan-limits.js';
+import { areImageAttachmentsAllowedForPlan, MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES } from './plan-limits.js';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -38,9 +38,12 @@ export const runPhotoAnalyzeTurn = async (
     })
     .filter((img): img is { base64: string; mimeType: string } => img !== null);
 
-  const totalImages = 1 + extraImages.length;
-  if (totalImages > MAX_IMAGES_PER_REQUEST) {
-    throw new Error(`too_many_images_max_${MAX_IMAGES_PER_REQUEST}`);
+  const totalImageBytes = imageBuffer.length + extraImages.reduce(
+    (total, image) => total + Buffer.byteLength(image.base64, 'base64'),
+    0,
+  );
+  if (totalImageBytes > MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES) {
+    throw new Error('image_payload_too_large');
   }
 
   const allImages = [

@@ -28,6 +28,10 @@ import { getWakeWordEnabled } from '../lib/wakeWordToggle';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import { getSpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { getRenderPerfBudget, getRenderPerfStep } from '../lib/renderPerf';
+import {
+  DEFAULT_MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
+  prepareImageForUpload,
+} from '../lib/imageCompression';
 import s from './ChatPage.module.scss';
 
 const ALLOWED_FORMATS: string[] = (() => {
@@ -768,9 +772,19 @@ export function ChatPage() {
     'null': t('chat.reasoning.auto'), 'none': t('chat.reasoning.off'), 'minimal': t('chat.reasoning.minimalShort'), 'low': t('chat.reasoning.lowShort'), 'medium': t('chat.reasoning.mediumShort'), 'high': t('chat.reasoning.highShort'), 'xhigh': t('chat.reasoning.maxShort'),
   };
 
-  const maxImages = user?.image_attachments_allowed
-    ? Math.max(0, Math.floor(user.max_images_per_request || 0))
+  const maxImageBytes = user?.image_attachments_allowed
+    ? Math.max(
+        0,
+        Math.floor(
+          user.max_image_attachments_total_bytes
+          || DEFAULT_MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
+        ),
+      )
     : 0;
+  const attachedImageBytes = useMemo(
+    () => attachedImages.reduce((total, image) => total + image.size_bytes, 0),
+    [attachedImages],
+  );
 
   const loadChats = async () => {
     setLoadingChats(true);
@@ -1273,6 +1287,12 @@ export function ChatPage() {
       base64: img.base64,
       mime_type: img.mime_type,
     }));
+    if (attachedImageBytes > maxImageBytes) {
+      toast.error(t('attach.error.imageTotalTooLarge', {
+        size: `${Math.round(maxImageBytes / (1024 * 1024))} MB`,
+      }));
+      return;
+    }
 
     const documentsToSend = attachedDocuments.map((doc) => ({
       base64: doc.base64,
@@ -1526,7 +1546,15 @@ export function ChatPage() {
           streamAppenderRef.current.flushNow();
           setStreamingState('done');
           setStreamingMsgId(null);
-          if (message) {
+          const visibleMessage = message
+            || (err === 'image_payload_too_large' || err === 'image_too_large'
+              ? t('attach.error.imageTotalTooLarge', {
+                  size: `${Math.round(maxImageBytes / (1024 * 1024))} MB`,
+                })
+              : err === 'connection_lost_before_request_accepted'
+                ? t('chat.connectionLostBeforeSend')
+                : undefined);
+          if (visibleMessage) {
             // Show localized error as assistant message (not saved to DB)
             setMessages((prev) => {
               const cleaned = prev.filter(m => m.id !== tempAssistantId);
@@ -1536,7 +1564,7 @@ export function ChatPage() {
                 updated.splice(errorIdx + 1, 0, {
                   id: `error-${Date.now()}`,
                   role: 'assistant' as const,
-                  content: message,
+                  content: visibleMessage,
                   created_at: new Date().toISOString(),
                 } as any);
                 return updated;
@@ -1544,7 +1572,7 @@ export function ChatPage() {
               return [...cleaned, {
                 id: `error-${Date.now()}`,
                 role: 'assistant' as const,
-                content: message,
+                content: visibleMessage,
                 created_at: new Date().toISOString(),
               } as any];
             });
@@ -1569,7 +1597,7 @@ export function ChatPage() {
       isVoice ? { isVoice: true, preferredModel: preferredModel, dice_mode: diceMode } : { preferredModel: preferredModel, dice_mode: diceMode },
       documentsToSend.length > 0 ? documentsToSend : undefined
     );
-  }, [input, sending, activeChatId, attachedImages, attachedDocuments, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState]);
+  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1644,36 +1672,39 @@ export function ChatPage() {
       const file = item.getAsFile();
       if (!file) continue;
 
-      if (attachedImages.length >= maxImages) break;
-
       e.preventDefault();
 
       try {
-        const base64Full = await fileToBase64(file);
-        const base64 = base64Full.split(',')[1] || base64Full;
-        const newItem: ImageItem = {
-          file,
-          preview: URL.createObjectURL(file),
-          base64,
-          mime_type: file.type,
-        };
+        const newItem = await prepareImageForUpload(file);
+        if (attachedImageBytes + newItem.size_bytes > maxImageBytes) {
+          URL.revokeObjectURL(newItem.preview);
+          toast.error(t('attach.error.imageTotalTooLarge', {
+            size: `${Math.round(maxImageBytes / (1024 * 1024))} MB`,
+          }));
+          break;
+        }
         setAttachedImages((prev) => [...prev, newItem]);
       } catch {
-        console.error('Failed to read pasted image');
+        toast.error(t('attach.error.imagePrepare', { name: file.name }));
       }
 
       // Only handle first image from paste
       break;
     }
-  }, [attachedImages.length, maxImages]);
+  }, [attachedImageBytes, maxImageBytes, t]);
 
   const handleAttachFromModal = useCallback((items: { images: ImageItem[]; documents: DocumentItem[] }) => {
     if (items.images.length > 0) {
       setAttachedImages((prev) => {
-        const combined = [...prev, ...items.images];
-        if (combined.length > maxImages) {
-          const excess = combined.splice(maxImages);
-          excess.forEach((img) => URL.revokeObjectURL(img.preview));
+        const combined = [...prev];
+        let totalBytes = prev.reduce((total, image) => total + image.size_bytes, 0);
+        for (const image of items.images) {
+          if (totalBytes + image.size_bytes > maxImageBytes) {
+            URL.revokeObjectURL(image.preview);
+            continue;
+          }
+          combined.push(image);
+          totalBytes += image.size_bytes;
         }
         return combined;
       });
@@ -1682,7 +1713,7 @@ export function ChatPage() {
       setAttachedDocuments((prev) => [...prev, ...items.documents]);
     }
     setShowAttachModal(false);
-  }, [maxImages]);
+  }, [maxImageBytes]);
 
   const handleDeleteAttachment = useCallback(async (messageId: number, filename: string) => {
     if (!activeChatId) return;
@@ -4238,7 +4269,7 @@ export function ChatPage() {
                 </div>
               )}
 
-              {maxImages > 0 ? (
+              {maxImageBytes > 0 ? (
                 <svg
                   className={s.inputIcon}
                   style={{ cursor: 'pointer' }}
@@ -4336,8 +4367,8 @@ export function ChatPage() {
             key="attach-modal"
             onClose={() => setShowAttachModal(false)}
             onAttach={handleAttachFromModal}
-            currentImageCount={attachedImages.length}
-            maxImageCount={maxImages}
+            currentImageBytes={attachedImageBytes}
+            maxTotalImageBytes={maxImageBytes}
           />
         )}
 
@@ -4418,13 +4449,4 @@ export function ChatPage() {
       </AnimatePresence>
     </div>
   );
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }

@@ -66,7 +66,7 @@ type User = {
   is_admin: number;
   plan: string;
   image_attachments_allowed: boolean;
-  max_images_per_request: number;
+  max_image_attachments_total_bytes: number;
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
   core_memory: string | null;
@@ -573,6 +573,14 @@ type WsCallbacks = StreamCallbacks & {
 
 let wsCallbacks: WsCallbacks = {};
 let activeStreamCallbacks: StreamCallbacks = {};
+let activeChatRequestAccepted = false;
+
+const failActiveChatRequest = (error: string, message?: string) => {
+  const callback = activeStreamCallbacks.onError ?? wsCallbacks.onError;
+  activeStreamCallbacks = {};
+  activeChatRequestAccepted = false;
+  callback?.(error, message);
+};
 
 const refreshWebSocketAccessToken = (): Promise<boolean> => {
   if (wsTokenRefreshPromise) return wsTokenRefreshPromise;
@@ -702,6 +710,9 @@ export function initWebSocket(callbacks?: WsCallbacks) {
       const msg = JSON.parse(ev.data as string);
 
       switch (msg.type) {
+        case 'chat_accepted':
+          activeChatRequestAccepted = true;
+          break;
         case 'intermediate': (activeStreamCallbacks.onIntermediate ?? wsCallbacks.onIntermediate)?.(msg.text); break;
         case 'stream_token': (activeStreamCallbacks.onStreamToken ?? wsCallbacks.onStreamToken)?.(msg.text); break;
         case 'reasoning_token': (activeStreamCallbacks.onReasoningStream ?? wsCallbacks.onReasoningStream)?.(msg.text); break;
@@ -720,11 +731,13 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'done': {
           (activeStreamCallbacks.onDone ?? wsCallbacks.onDone)?.(msg);
           activeStreamCallbacks = {};
+          activeChatRequestAccepted = false;
           break;
         }
         case 'error': {
           (activeStreamCallbacks.onError ?? wsCallbacks.onError)?.(msg.error, msg.message);
           activeStreamCallbacks = {};
+          activeChatRequestAccepted = false;
           break;
         }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
@@ -800,6 +813,11 @@ export function initWebSocket(callbacks?: WsCallbacks) {
       wsAuthRefreshAckTimer = null;
     }
     if (wasCurrentSocket) wsCallbacks.onDisconnect?.();
+    if (wasCurrentSocket && Object.keys(activeStreamCallbacks).length > 0 && !activeChatRequestAccepted) {
+      failActiveChatRequest(
+        ev.code === 1009 ? 'image_payload_too_large' : 'connection_lost_before_request_accepted',
+      );
+    }
 
     // 4001 means that the access token is no longer valid (usually expired).
     // Refresh it before reconnecting, otherwise every retry would reuse the same token.
@@ -868,11 +886,10 @@ export async function streamChatMessage(
   options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' },
   documents?: ChatSendDocument[]
 ) {
-  // Update callbacks for this request
-  activeStreamCallbacks = callbacks ?? {};
-
   // If WS is connected — send through WS
   if (ws && ws.readyState === WebSocket.OPEN) {
+    activeStreamCallbacks = callbacks ?? {};
+    activeChatRequestAccepted = false;
     const msg: Record<string, unknown> = { type: 'chat_send', text };
     if (chatId) msg.chat_id = chatId;
     if (images?.length) msg.images = images;
@@ -885,7 +902,11 @@ export async function streamChatMessage(
     if (options?.skip_user_history) msg.skip_user_history = true;
     if (options?.regenerate_from_history) msg.regenerate_from_history = true;
     if (options?.dice_mode) msg.dice_mode = options.dice_mode;
-    ws.send(JSON.stringify(msg));
+    try {
+      ws.send(JSON.stringify(msg));
+    } catch {
+      failActiveChatRequest('connection_lost_before_request_accepted');
+    }
     return;
   }
 
