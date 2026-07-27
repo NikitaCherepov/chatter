@@ -654,7 +654,7 @@ services/subagents/
   - `POST /internal/messages/bind-telegram` -> `{ user_id, message_id, telegram_chat_id?, telegram_message_id? }`
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
-  - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) -> `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` -> `{ reply_text, message_id, chat_id, usage, ... }`
+  - `POST /internal/photo/analyze` -> `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` -> `{ reply_text, message_id, chat_id, usage, ... }`
     - `extra_images` - массив дополнительных изображений; до 50 изображений с общим лимитом 32 МБ после декодирования: `[{ base64, mime_type? }]`
     - Первое изображение (обязательное) передаётся в `image_base64`, остальные через `extra_images`
     - Тариф определяет только доступность прикрепления изображений; документы доступны на всех тарифах

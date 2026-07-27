@@ -236,7 +236,6 @@ if [[ ! -f "$BACKEND_ENV" ]]; then
     "BACKEND_INTERNAL_TOKEN=${INTERNAL_TOKEN}" \
     "ENCRYPTION_KEY=$(random_hex 32)" \
     "BACKEND_SCHEDULER_ENABLED=1" \
-    "BACKEND_PHOTO_API_ENABLED=0" \
     "TIMEWEB_API_KEY=" \
     "TIMEWEB_BASE_URL=https://openrouter.ai/api/v1" \
     "TELEGRAM_TOKEN=" \

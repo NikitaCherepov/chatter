@@ -220,7 +220,6 @@ const internalAdminAuth = (req: any, res: any, next: any) => {
 };
 
 const BACKEND_VOICE_API_ENABLED = `${process.env.BACKEND_VOICE_API_ENABLED || '0'}`.trim() === '1';
-const BACKEND_PHOTO_API_ENABLED = `${process.env.BACKEND_PHOTO_API_ENABLED || '0'}`.trim() === '1';
 const BACKEND_VECTOR_MEMORY_API_ENABLED = `${process.env.BACKEND_VECTOR_MEMORY_API_ENABLED || '0'}`.trim() === '1';
 
 // Telegram chat UI. The bot supplies Telegram IDs; backend-api resolves the
@@ -750,10 +749,6 @@ app.post('/internal/voice/turn', internalAuth, async (req, res) => {
 });
 
 app.post('/internal/photo/analyze', internalAuth, async (req, res) => {
-  if (!BACKEND_PHOTO_API_ENABLED) {
-    return res.status(503).json({ error: 'backend_photo_api_disabled' });
-  }
-
   const userId = resolveInternalAccountId(req.body?.user_id);
   const imageBase64 = `${req.body?.image_base64 || ''}`;
   const imageMimeType = `${req.body?.image_mime_type || 'image/jpeg'}`;
@@ -5482,11 +5477,7 @@ const server = app.listen(PORT, () => {
   } else {
     console.log('[backend-voice] disabled (BACKEND_VOICE_API_ENABLED != 1)');
   }
-  if (BACKEND_PHOTO_API_ENABLED) {
-    console.log('[backend-photo] enabled (BACKEND_PHOTO_API_ENABLED=1), endpoint: POST /internal/photo/analyze');
-  } else {
-    console.log('[backend-photo] disabled (BACKEND_PHOTO_API_ENABLED != 1)');
-  }
+  console.log('[backend-photo] endpoint enabled: POST /internal/photo/analyze');
   if (BACKEND_VECTOR_MEMORY_API_ENABLED) {
     console.log('[backend-vector-memory] enabled (BACKEND_VECTOR_MEMORY_API_ENABLED=1), endpoints: POST /api/v1/vector-memory/chunks, POST /api/v1/vector-memory/search');
   } else {
