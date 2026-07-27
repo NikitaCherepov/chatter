@@ -1058,3 +1058,61 @@ Packaged builds use `electron-updater` with public GitHub Releases from `NikitaC
 - Desktop updates are independent from Chatter server Docker updates.
 
 A published release must contain the NSIS installer, its `.blockmap`, and `latest.yml`. Draft releases are ignored by installed clients.
+
+## Announcements & Onboarding (welcome modal)
+
+Multi-slide announcements shown to users who haven't seen them yet. The first announcement (`welcome_v1`) serves as the onboarding flow after registration. New feature announcements work the same way — just add an entry to the registry.
+
+### How it works
+
+1. Desktop stores all announcements in [src/renderer/lib/announcements.ts](src/renderer/lib/announcements.ts) — the `DESKTOP_ANNOUNCEMENTS` array.
+2. Server stores `seen_announcements: string[]` in `users.ui_settings` (JSON). Merged via `PUT /api/v1/user/ui-settings`.
+3. On startup, `AnnouncementOverlay` in App.tsx compares `seen_announcements` from the server with the local registry. Unseen announcements are shown one by one.
+4. After clicking "Done" on the last slide, the IDs are saved to the server and the modal closes.
+5. When a different user logs in, `visible` resets so they see their own unseen announcements.
+
+### Adding a new announcement
+
+1. **Add an entry** to `DESKTOP_ANNOUNCEMENTS` in [src/renderer/lib/announcements.ts](src/renderer/lib/announcements.ts):
+
+```ts
+{
+  id: 'new_feature_v1',          // unique ID, stored in seen_announcements
+  slides: [
+    {
+      id: 'intro',               // unique within this announcement
+      titleKey: 'onboarding.newFeature.intro.title',   // i18n key, Markdown
+      bodyKey: 'onboarding.newFeature.intro.body',     // i18n key, Markdown
+      image: someImportedImage,  // optional, e.g. import img from '...'
+    },
+    // more slides...
+  ],
+},
+```
+
+2. **Add i18n keys** in `desktop-app/src/renderer/i18n/locales/{en,ru,...}/translation.json` under `onboarding.newFeature.*`. Both `title` and `body` support Markdown rendered by `MarkdownRenderer`.
+
+3. That's it. The modal automatically uses the new entry for users who haven't seen it. No server changes needed.
+
+### Key files
+
+| File | Role |
+|---|---|
+| `src/renderer/lib/announcements.ts` | Types (`Announcement`, `AnnouncementSlide`), registry array, `getUnseenAnnouncements()` helper |
+| `src/renderer/components/OnboardingModal.tsx` | Reusable modal: slide navigation, `AnimatePresence` transitions, `MarkdownRenderer` for content, step indicator |
+| `src/renderer/App.tsx` → `AnnouncementOverlay` | Checks unseen announcements after auth, shows modal, saves seen IDs to server on close |
+| `backend-api/src/server.ts` → `VALID_UI_KEYS` | `seen_announcements` is a validated `string[]` field in `users.ui_settings` |
+
+### Modal component API
+
+```tsx
+<OnboardingModal
+  announcements={unseen}       // Announcement[]
+  onDone={(seenIds) => {}}     // called on "Done" / close, passes IDs to save
+/>
+```
+
+- Props: `announcements: Announcement[]`, `onDone: (ids: string[]) => void`
+- Slide transitions: framer-motion `AnimatePresence` with horizontal slide
+- Style: same size as SettingsModal (70vw × 75vh), all styles from `global.scss` variables
+- Footer: absolute step indicator centered, nav buttons space-between (Back left, Next/Done right)

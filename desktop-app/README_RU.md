@@ -1058,3 +1058,61 @@ Desktop-клиент использует **WebSocket** для двунапра�
 - Обновления Desktop не связаны с Docker-обновлениями сервера.
 
 Опубликованный релиз должен содержать NSIS-установщик, его `.blockmap` и `latest.yml`. Черновики GitHub Releases установленные клиенты не видят.
+
+## Анонсы и приветственная модалка (Onboarding)
+
+Многослайдовые анонсы для пользователей, которые их ещё не видели. Первый анонс (`welcome_v1`) — это приветственный онбординг после регистрации. Анонсы новых фич добавляются так же — одной записью в реестр.
+
+### Как работает
+
+1. Десктоп хранит все анонсы в [src/renderer/lib/announcements.ts](src/renderer/lib/announcements.ts) — массив `DESKTOP_ANNOUNCEMENTS`.
+2. Сервер хранит `seen_announcements: string[]` в `users.ui_settings` (JSON). Сохраняется через `PUT /api/v1/user/ui-settings`.
+3. При старте `AnnouncementOverlay` в App.tsx сравнивает `seen_announcements` с локальным реестром. Непросмотренные анонсы показываются один за другим.
+4. После нажатия «Понятно» на последнем слайде ID сохраняются на сервер, модалка закрывается.
+5. При входе другого пользователя `visible` сбрасывается — он видит свои непросмотренные анонсы.
+
+### Добавление нового анонса
+
+1. **Добавить запись** в `DESKTOP_ANNOUNCEMENTS` в [src/renderer/lib/announcements.ts](src/renderer/lib/announcements.ts):
+
+```ts
+{
+  id: 'new_feature_v1',          // уникальный ID, сохраняется в seen_announcements
+  slides: [
+    {
+      id: 'intro',               // уникальный в пределах анонса
+      titleKey: 'onboarding.newFeature.intro.title',   // ключ i18n, Markdown
+      bodyKey: 'onboarding.newFeature.intro.body',     // ключ i18n, Markdown
+      image: someImportedImage,  // опционально, import img from '...'
+    },
+    // ещё слайды...
+  ],
+},
+```
+
+2. **Добавить ключи i18n** в `desktop-app/src/renderer/i18n/locales/{en,ru,...}/translation.json` в секции `onboarding.newFeature.*`. И title, и body поддерживают Markdown, рендерится через `MarkdownRenderer`.
+
+3. Готово. Модалка автоматически покажет новый анонс пользователям, которые его ещё не видели. Сервер менять не нужно.
+
+### Ключевые файлы
+
+| Файл | Роль |
+|---|---|
+| `src/renderer/lib/announcements.ts` | Типы (`Announcement`, `AnnouncementSlide`), массив-реестр, хелпер `getUnseenAnnouncements()` |
+| `src/renderer/components/OnboardingModal.tsx` | Переиспользуемая модалка: навигация по слайдам, `AnimatePresence` переходы, `MarkdownRenderer`, индикатор шагов |
+| `src/renderer/App.tsx` → `AnnouncementOverlay` | Проверяет непросмотренные анонсы после auth, показывает модалку, сохраняет seen IDs на сервер |
+| `backend-api/src/server.ts` → `VALID_UI_KEYS` | `seen_announcements` — валидируемое поле `string[]` в `users.ui_settings` |
+
+### API компонента
+
+```tsx
+<OnboardingModal
+  announcements={unseen}       // Announcement[]
+  onDone={(seenIds) => {}}     // вызывается по «Понятно» / закрытию, передаёт ID для сохранения
+/>
+```
+
+- Пропсы: `announcements: Announcement[]`, `onDone: (ids: string[]) => void`
+- Анимация: framer-motion `AnimatePresence`, горизонтальный переход слайдов
+- Размер: как SettingsModal (70vw × 75vh), все стили из переменных `global.scss`
+- Футер: индикатор шагов по центру (absolute), кнопки Назад/Далее по краям (space-between)
