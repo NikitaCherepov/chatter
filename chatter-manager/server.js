@@ -74,6 +74,7 @@ const DATABASE_FILE = path.join(DATA_DIR, 'chatter.db');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const BACKUPS_DIR = path.resolve(process.env.CHATTER_BACKUPS_DIR || '/backups');
 const UPDATE_STATE_FILE = path.join(CONFIG_DIR, 'server-update.json');
+const METRICS_FILE = path.join(CONFIG_DIR, 'metrics.json');
 const HOST_PROJECT_DIR = `${process.env.CHATTER_HOST_PROJECT_DIR || ''}`.trim();
 const HOST_CONFIG_DIR = `${process.env.CHATTER_HOST_CONFIG_DIR || ''}`.trim();
 const BACKUP_CONFIG_FILES = [
@@ -99,6 +100,14 @@ const randomSecret = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 const METRICS_MAX = 10080;
 const METRICS_INTERVAL_MS = 60_000;
 const metricsHistory = [];
+// Load persisted metrics on startup
+try {
+  const persisted = JSON.parse(fs.readFileSync(METRICS_FILE, 'utf8'));
+  if (Array.isArray(persisted)) {
+    metricsHistory.push(...persisted);
+    if (metricsHistory.length > METRICS_MAX) metricsHistory.splice(0, metricsHistory.length - METRICS_MAX);
+  }
+} catch { /* File doesn't exist yet — fresh start */ }
 
 function atomicWrite(filePath, content, mode = 0o600) {
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -1067,6 +1076,8 @@ async function getSystemInfo() {
   };
 }
 
+let metricsSaveCounter = 0;
+
 async function collectMetricsSnapshot() {
   try {
     const info = await getSystemInfo();
@@ -1081,6 +1092,11 @@ async function collectMetricsSnapshot() {
       diskTotal: info.disk.total,
     });
     if (metricsHistory.length > METRICS_MAX) metricsHistory.splice(0, metricsHistory.length - METRICS_MAX);
+    // Persist every 10 snapshots (every 10 minutes)
+    if (++metricsSaveCounter >= 10) {
+      metricsSaveCounter = 0;
+      atomicWrite(METRICS_FILE, `${JSON.stringify(metricsHistory)}\n`);
+    }
   } catch (error) {
     console.error('[manager] metrics collection failed:', error.message);
   }
