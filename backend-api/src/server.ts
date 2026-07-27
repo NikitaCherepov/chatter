@@ -4256,7 +4256,9 @@ app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
 
 // ─── UI settings (display options stored per user) ──────────────────────────
 
-const VALID_UI_KEYS = ['show_tokens', 'dice_roll_enabled'] as const;
+const VALID_UI_KEYS = ['show_tokens', 'dice_roll_enabled', 'seen_announcements'] as const;
+
+type UiSettingValue = boolean | string[];
 
 /** Преобразует dice_mode из body запроса в форсированное значение d20. */
 const resolveDiceForceValue = (mode: unknown): number | undefined => {
@@ -4265,15 +4267,22 @@ const resolveDiceForceValue = (mode: unknown): number | undefined => {
   return undefined; // 'normal' или невалидное — случайный бросок
 };
 
+const isValidUiValue = (key: string, value: unknown): value is UiSettingValue => {
+  if (key === 'seen_announcements') {
+    return Array.isArray(value) && value.every((v: unknown) => typeof v === 'string');
+  }
+  return typeof value === 'boolean';
+};
+
 app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  const settings: Record<string, boolean> = { show_tokens: true, dice_roll_enabled: false };
+  const settings: Record<string, UiSettingValue> = { show_tokens: true, dice_roll_enabled: false, seen_announcements: [] };
   try {
     const raw = JSON.parse(user.ui_settings || '{}');
     for (const key of VALID_UI_KEYS) {
-      if (typeof raw[key] === 'boolean') settings[key] = raw[key];
+      if (key in raw && isValidUiValue(key, raw[key])) settings[key] = raw[key];
     }
   } catch { /* defaults */ }
   return res.json({ settings });
@@ -4287,15 +4296,15 @@ app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
   }
   // load-merge: читаем существующие и мержим только валидные ключи
   const user = getUserById(userId);
-  const existing: Record<string, boolean> = {};
+  const existing: Record<string, UiSettingValue> = {};
   try {
     const raw = JSON.parse(user?.ui_settings || '{}');
     for (const key of VALID_UI_KEYS) {
-      if (typeof raw[key] === 'boolean') existing[key] = raw[key];
+      if (key in raw && isValidUiValue(key, raw[key])) existing[key] = raw[key];
     }
   } catch { /* empty */ }
   for (const key of VALID_UI_KEYS) {
-    if (typeof incoming[key] === 'boolean') existing[key] = incoming[key];
+    if (key in incoming && isValidUiValue(key, incoming[key])) existing[key] = incoming[key];
   }
   db.prepare('UPDATE users SET ui_settings = ? WHERE id = ?').run(JSON.stringify(existing), userId);
   return res.json({ ok: true, settings: existing });

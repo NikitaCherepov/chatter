@@ -274,7 +274,9 @@
       "noSpecializedSubagents": "No specialized subagents",
       "noSpecializedSubagentsHelp": "Disables predefined subagents (invoke_subagent).",
       "noAdhocSubagents": "No ad-hoc subagents",
-      "noAdhocSubagentsHelp": "Disables creating subagents on the fly (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Disables creating subagents on the fly (spawn_subagent).",
+      "noWakeWord": "Disable wake word",
+      "noWakeWordHelp": "Stop listening for wake words (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). The microphone stream will be turned off."
     },
     "models": {
       "title": "Model settings",

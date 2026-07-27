@@ -251,7 +251,9 @@
       "noSpecializedSubagents": "Без специализированных субагентов",
       "noSpecializedSubagentsHelp": "Отключает вызов заранее настроенных субагентов (invoke_subagent).",
       "noAdhocSubagents": "Без создания субагентов",
-      "noAdhocSubagentsHelp": "Отключает создание субагентов на лету (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Отключает создание субагентов на лету (spawn_subagent).",
+      "noWakeWord": "Отключить wake word",
+      "noWakeWordHelp": "Не слушать wake words (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Поток микрофона будет остановлен."
     },
     "models": {
       "title": "Настройки моделей",

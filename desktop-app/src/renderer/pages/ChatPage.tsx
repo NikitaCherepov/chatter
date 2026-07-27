@@ -24,6 +24,7 @@ import { QuotaWidget } from '../components/QuotaWidget';
 import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
+import { getWakeWordEnabled } from '../lib/wakeWordToggle';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import { getSpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { getRenderPerfBudget, getRenderPerfStep } from '../lib/renderPerf';
@@ -2308,28 +2309,20 @@ export function ChatPage() {
 
   // ── Wake word: stream mic chunks to ONNX listener, react to detections ──
   const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => getWakeWordEnabled());
 
+  // Listen for external toggles (SettingsModal Voice tab)
   useEffect(() => {
-    let disposed = false;
+    const handler = (e: Event) => {
+      const enabled = (e as CustomEvent<{ enabled: boolean }>).detail?.enabled;
+      if (typeof enabled === 'boolean') setWakeWordEnabled(enabled);
+    };
+    window.addEventListener('chatter:wakeword-toggle', handler);
+    return () => window.removeEventListener('chatter:wakeword-toggle', handler);
+  }, []);
 
-    void (async () => {
-      try {
-        const result = await window.electronAPI.startWakeWord();
-        if (!result.ok) {
-          console.error('[wakeword] failed to start:', result.error);
-          toast.error(t('chat.toasts.wakeWordFailed'));
-          return;
-        }
-
-        if (!disposed) {
-          await startWakeWordAudioStream();
-        }
-      } catch (error) {
-        console.error('[wakeword] failed to start:', error);
-        toast.error(t('chat.toasts.wakeWordFailed'));
-      }
-    })();
-
+  // Detection callback — set up once while ChatPage is mounted
+  useEffect(() => {
     const unsubscribe = window.electronAPI.onWakeWordDetected(async (payload) => {
       console.log('[wakeword] detected:', payload);
 
@@ -2404,14 +2397,39 @@ export function ChatPage() {
     });
 
     return () => {
-      disposed = true;
       unsubscribe();
-      void stopWakeWordAudioStream();
-      void window.electronAPI.stopWakeWord();
       speechRecorderRef.current?.stop();
       speechRecorderRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Start/stop the ONNX listener + microphone stream reactively
+  useEffect(() => {
+    let disposed = false;
+
+    if (wakeWordEnabled) {
+      void (async () => {
+        try {
+          const result = await window.electronAPI.startWakeWord();
+          if (!result.ok) {
+            console.error('[wakeword] failed to start:', result.error);
+            toast.error(t('chat.toasts.wakeWordFailed'));
+            return;
+          }
+          if (!disposed) await startWakeWordAudioStream();
+        } catch (error) {
+          console.error('[wakeword] failed to start:', error);
+          toast.error(t('chat.toasts.wakeWordFailed'));
+        }
+      })();
+    }
+
+    return () => {
+      disposed = true;
+      void stopWakeWordAudioStream();
+      void window.electronAPI.stopWakeWord();
+    };
+  }, [wakeWordEnabled, t]);
 
   // Listen for external tool open requests (bot / IPC)
   useEffect(() => {

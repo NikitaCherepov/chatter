@@ -9,6 +9,7 @@ import { PromptSelector } from './PromptSelector';
 import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchRemoteTtsProviders, fetchPiperVoiceList } from '../lib/tts';
 import type { TtsSettings } from '../lib/tts';
 import { getSpeechRecognitionLanguage, setSpeechRecognitionLanguage, type SpeechRecognitionLanguage } from '../lib/speechRecognition';
+import { getWakeWordEnabled, setWakeWordEnabled as setWakeWordEnabledStorage } from '../lib/wakeWordToggle';
 import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
@@ -157,6 +158,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [recognitionLanguage, setRecognitionLanguage] = useState<SpeechRecognitionLanguage>(
     () => getSpeechRecognitionLanguage(),
   );
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => getWakeWordEnabled());
 
   const recognitionLanguageOptions = useMemo<SelectOption[]>(() => [
     { value: 'auto', label: t('settings.voice.recognitionAuto') },
@@ -1685,6 +1687,28 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                         <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noAdhocSubagents')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
                           {t('settings.restrictions.noAdhocSubagentsHelp')}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={!wakeWordEnabled}
+                        onChange={() => {
+                          const next = !wakeWordEnabled;
+                          setWakeWordEnabled(next);
+                          setWakeWordEnabledStorage(next);
+                        }}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noWakeWord')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          {t('settings.restrictions.noWakeWordHelp')}
                         </div>
                       </div>
                     </label>
