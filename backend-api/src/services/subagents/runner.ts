@@ -418,6 +418,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
                 subagentReasoningLevel: reasoningLevel,
                 onToolStatus: ctx.onToolStatus,
                 onDesktopAction: ctx.onDesktopAction,
+                onVisionUsageCall: ctx.onVisionUsageCall,
                 availableToolDefs: ctx.runtimeToolDefs,
               },
             ),

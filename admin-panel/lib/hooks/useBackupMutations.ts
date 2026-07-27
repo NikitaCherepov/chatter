@@ -3,8 +3,8 @@
 import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
-import type { BackupInfo, BackupSchedule } from '../../components/pages/SystemPage/types';
-import { backupService } from '../services/backupService';
+import type { BackupSchedule } from '../../components/pages/SystemPage/types';
+import { backupService, type BackupsResponse } from '../services/backupService';
 
 function messageFromError(error: Error) {
   return error instanceof Error ? error.message : String(error);
@@ -23,8 +23,21 @@ export function useBackupMutations(t: TFunction) {
 
   const deleteMutation = useMutation({
     mutationFn: (name: string) => backupService.delete(name),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['backups'], exact: true });
+    onMutate: async (name) => {
+      await queryClient.cancelQueries({ queryKey: ['backups'], exact: true });
+      const previous = queryClient.getQueryData<BackupsResponse>(['backups']);
+      if (previous) {
+        queryClient.setQueryData<BackupsResponse>(['backups'], {
+          ...previous,
+          backups: previous.backups.filter((b) => b.name !== name),
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _name, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['backups'], context.previous);
+      }
     },
   });
 

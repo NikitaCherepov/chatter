@@ -3244,9 +3244,24 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
+  const runTrackedVisionCompletion = async (requestPayload: Record<string, unknown>) => {
+    const completion = await runCompletion('vision-pro', requestPayload, undefined, signal);
+    const normalized = normalizeTokenUsage(completion.response?.usage);
+    if (normalized.total_tokens > 0) {
+      subagentExtra?.onVisionUsageCall?.({
+        ...normalized,
+        model: completion.usedModel || 'unknown',
+        provider: completion.usedProvider || 'unknown',
+        uniqueId: completion.usedUniqueId ?? null,
+        upstreamProviderSlug: completion.upstreamProviderSlug ?? null,
+        actualCostUsd: completion.actualCostUsd ?? null,
+      });
+    }
+    return completion;
+  };
 
   if (toolName === 'get_user_time') {
     return JSON.stringify(getUserTimePayload(timezoneOffset), null, 2);
@@ -3985,9 +4000,9 @@ If the task is a description, return a detailed text response.`
             }
           ];
 
-          const visionResp = await runCompletion('vision-pro', {
+          const visionResp = await runTrackedVisionCompletion({
             messages: visionMessages,
-            max_tokens: 1000,
+            max_tokens: 2000,
           });
 
           const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
@@ -4135,9 +4150,9 @@ If the task is a description, return a detailed text response.`
         }
       ];
 
-      const visionResp = await runCompletion('vision-pro', {
+      const visionResp = await runTrackedVisionCompletion({
         messages: visionMessages,
-        max_tokens: 1000,
+        max_tokens: 2000,
       });
 
       const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
@@ -4221,7 +4236,7 @@ Respond in the user's language. Be detailed and precise.`
         }
       ];
 
-      const visionResp = await runCompletion('vision-pro', {
+      const visionResp = await runTrackedVisionCompletion({
         messages: visionMessages,
         max_tokens: 2000,
       });
@@ -5643,6 +5658,7 @@ Respond in the user's language. Be detailed and precise.`
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
           onUsageCall: subagentExtra?.onSubagentUsageCall,
+          onVisionUsageCall: subagentExtra?.onVisionUsageCall,
           shouldStopForQuota: subagentExtra?.shouldStopForQuota,
           runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
@@ -5743,6 +5759,7 @@ Respond in the user's language. Be detailed and precise.`
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
           onSubagentTrace: subagentExtra?.onSubagentTrace,
           onUsageCall: subagentExtra?.onSubagentUsageCall,
+          onVisionUsageCall: subagentExtra?.onVisionUsageCall,
           shouldStopForQuota: subagentExtra?.shouldStopForQuota,
           runtimeToolDefs: subagentExtra?.availableToolDefs,
         },
@@ -6115,17 +6132,21 @@ export const sendMessageThroughAi = async (
   let diceRollValue: number | null = null;
   const usageCalls: TokenUsageCall[] = [];
   const subagentUsageCalls: Array<TokenUsageCall & { agentName: string }> = [];
+  const visionUsageCalls: TokenUsageCall[] = [];
+  let latestRequestUsage: TokenUsageCall | undefined;
   const recordCompletionUsage = (completion: Pick<CompletionMeta, 'response' | 'usedModel' | 'usedProvider' | 'usedUniqueId'> & { upstreamProviderSlug?: string | null; actualCostUsd?: number | null }) => {
     const normalized = normalizeTokenUsage(completion.response?.usage);
     if (normalized.total_tokens <= 0) return normalized;
-    usageCalls.push({
+    const call: TokenUsageCall = {
       ...normalized,
       model: completion.usedModel || 'unknown',
       provider: completion.usedProvider || 'unknown',
       uniqueId: completion.usedUniqueId ?? null,
       upstreamProviderSlug: (completion as any).upstreamProviderSlug ?? null,
       actualCostUsd: (completion as any).actualCostUsd ?? null,
-    });
+    };
+    usageCalls.push(call);
+    latestRequestUsage = call;
     totalTokens += normalized.total_tokens;
     return normalized;
   };
@@ -6139,7 +6160,7 @@ export const sendMessageThroughAi = async (
     );
     if (latestCharge.isFree) return false;
 
-    const allCalls = [...usageCalls, ...subagentUsageCalls];
+    const allCalls = [...usageCalls, ...subagentUsageCalls, ...visionUsageCalls];
     if (quotaCheck.billingMode === 'budget') {
       // Compare accumulated USD cost (this request so far) vs remaining budget.
       const requestCostUsd = sumCallsCostUsd(allCalls);
@@ -6222,6 +6243,39 @@ export const sendMessageThroughAi = async (
         chatId: chatId > 0 ? chatId : null,
         messageId: opts.assistantMessageId ?? null,
         route: `subagent:${firstCall.agentName}`,
+        modelId: firstCall.uniqueId || firstCall.model || null,
+        modelName: firstCall.model || null,
+        providerName: firstCall.provider || null,
+        promptTokens: aggregate.prompt_tokens,
+        completionTokens: aggregate.completion_tokens,
+        cacheHitTokens: aggregate.cache_hit_tokens,
+        cacheMissTokens: aggregate.cache_miss_tokens,
+        reasoningTokens: aggregate.reasoning_tokens,
+        totalTokens: aggregate.total_tokens,
+        aborted: opts?.aborted ?? false,
+        upstreamProviderSlug: firstCall.upstreamProviderSlug ?? null,
+        actualCostUsd: sumCallsCostUsd(group) || null,
+      });
+    }
+
+    // Vision tools call a separate provider/model and must not be merged with
+    // either the parent model or the subagent that happened to invoke them.
+    const visionGrouped = new Map<string, TokenUsageCall[]>();
+    for (const call of visionUsageCalls) {
+      const key = JSON.stringify([call.uniqueId || call.model, call.provider]);
+      const group = visionGrouped.get(key) || [];
+      group.push(call);
+      visionGrouped.set(key, group);
+    }
+    for (const group of visionGrouped.values()) {
+      const aggregate = sumTokenUsage(group);
+      if (aggregate.total_tokens <= 0) continue;
+      const firstCall = group[0];
+      chargeTokens({
+        userId,
+        chatId: chatId > 0 ? chatId : null,
+        messageId: opts.assistantMessageId ?? null,
+        route: 'auto-vision',
         modelId: firstCall.uniqueId || firstCall.model || null,
         modelName: firstCall.model || null,
         providerName: firstCall.provider || null,
@@ -6707,7 +6761,7 @@ User request: "${text}"`;
   while (loop < effectiveMaxLoops) {
     loop += 1;
 
-    const latestUsage = usageCalls[usageCalls.length - 1];
+    const latestUsage = latestRequestUsage;
     const finalizeForQuota = !quotaFinalizationIssued
       && !!latestUsage
       && shouldStopForQuota(latestUsage);
@@ -6913,6 +6967,11 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           onDesktopAction: safeOnDesktopAction,
           onSubagentUsageCall: (agentName: string, usage: TokenUsageCall) => {
             subagentUsageCalls.push({ ...usage, agentName });
+            latestRequestUsage = usage;
+          },
+          onVisionUsageCall: (usage: TokenUsageCall) => {
+            visionUsageCalls.push(usage);
+            latestRequestUsage = usage;
           },
           shouldStopForQuota,
           displayManifest: options?.displayManifest,

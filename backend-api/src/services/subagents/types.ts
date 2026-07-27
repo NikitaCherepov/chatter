@@ -56,6 +56,8 @@ export interface SubagentContext {
   runtimeToolDefs?: any[];
   /** Reports every provider completion so the parent request can charge quota accurately. */
   onUsageCall?: (agentName: string, usage: TokenUsageCall) => void;
+  /** Reports auxiliary vision-model calls separately from the subagent model. */
+  onVisionUsageCall?: (usage: TokenUsageCall) => void;
   /** Stops paid agent loops gracefully once this request reaches the user's quota. */
   shouldStopForQuota?: (usage: TokenUsageCall) => boolean;
 }
