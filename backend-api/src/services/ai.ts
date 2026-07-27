@@ -12,7 +12,7 @@ import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from '
 import { getMailAccountsForUser, runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
-import { getCleanTextFromUrl } from './web-reader.js';
+import { getCleanTextFromUrl, wrapUntrustedContent } from './web-reader.js';
 import { runImageGeneration } from './image-generation.js';
 import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
 import { findTransitRoute, searchNearby } from './transit.js';
@@ -1568,7 +1568,7 @@ const runWebSearch = async (query: string, signal?: AbortSignal) => {
 
     let resultText = data.answer ? `Summary: ${data.answer}\n\n` : '';
     resultText += results.map((item, index) => `${index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}`).join('\n\n');
-    return `<untrusted_web_content>${resultText}</untrusted_web_content>`;
+    return wrapUntrustedContent(resultText);
   } catch (err) {
     if (isAbortError(err)) throw err;
     return 'Tool error: search service temporarily unavailable.';

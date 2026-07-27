@@ -11,6 +11,13 @@ const isHttpUrl = (value: string) => {
   }
 };
 
+/** Escapes closing tags inside content to prevent break-out from untrusted data wrappers. */
+export const wrapUntrustedContent = (content: string): string => {
+  const sanitized = content.replace(/<\/untrusted_web_content>/gi, '<untrusted_web_content>')
+    .replace(/<\/untrusted_>/gi, '<untrusted_>');
+  return `<untrusted_web_content>${sanitized}</untrusted_web_content>`;
+};
+
 export const getCleanTextFromUrl = async (targetUrl: string) => {
   const url = `${targetUrl || ''}`.trim();
   if (!url) throw new Error('url_required');
@@ -59,7 +66,7 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
       return 'Текст на странице не найден или контент заблокирован (возможно, пустой body).';
     }
 
-    return `<untrusted_web_content>${cleanText.slice(0, 15000)}</untrusted_web_content>`;
+    return wrapUntrustedContent(cleanText.slice(0, 15000));
 
   } catch (error: any) {
     const errorDetails = error?.message || String(error);
