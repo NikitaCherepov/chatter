@@ -1108,7 +1108,7 @@ async function readBackupManifest(filePath) {
   }
 }
 
-async function listBackups() {
+function listBackups() {
   // Fast listing — only stat, no tar extraction. Manifest fields are loaded lazily by the frontend.
   const entries = fs.readdirSync(BACKUPS_DIR, { withFileTypes: true })
     .filter((entry) => entry.isFile() && safeBackupName(entry.name));
