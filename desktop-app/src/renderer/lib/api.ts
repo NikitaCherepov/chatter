@@ -684,6 +684,16 @@ export function onDesktopAction(cb: StreamCallbacks['onDesktopAction']) {
   };
 }
 
+/** Register a persistent handler for map updates initiated outside the desktop chat. */
+export function onMapUpdate(cb: StreamCallbacks['onMapUpdate']) {
+  wsCallbacks.onMapUpdate = cb;
+  return () => {
+    if (wsCallbacks.onMapUpdate === cb) {
+      wsCallbacks.onMapUpdate = undefined;
+    }
+  };
+}
+
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = { ...wsCallbacks, ...callbacks };
 
