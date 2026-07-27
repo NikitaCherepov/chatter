@@ -13,10 +13,10 @@ export type BackupInfo = {
   name: string;
   size: number;
   createdAt: string;
-  includesUploads: boolean;
-  includesConfiguration: boolean;
-  version: string;
-  source: 'manual' | 'automatic';
+  includesUploads?: boolean;
+  includesConfiguration?: boolean;
+  version?: string;
+  source?: 'manual' | 'automatic';
 };
 
 export type BackupSchedule = {

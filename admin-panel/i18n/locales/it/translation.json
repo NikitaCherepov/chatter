@@ -591,7 +591,7 @@
       "off": "Disattivato",
       "daily": "Giornaliero",
       "weekly": "Settimanale",
-      "keepCount": "Mantieni ultime copie",
+      "keepCount": "Conserva ultime auto-copie",
       "includeFiles": "Includi file",
       "includeFilesHint": "Per impostazione predefinita, il backup automatico salva solo il database",
       "lastRun": "Ultima esecuzione: {{time}}",

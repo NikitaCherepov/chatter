@@ -583,7 +583,7 @@
       "off": "Kapalı",
       "daily": "Günlük",
       "weekly": "Haftalık",
-      "keepCount": "Son kopyaları sakla",
+      "keepCount": "Son otomatik kopyaları sakla",
       "includeFiles": "Dosyaları dahil et",
       "includeFilesHint": "Varsayılan olarak, otomatik yedekleme yalnızca veritabanını kaydeder",
       "lastRun": "Son çalıştırma: {{time}}",

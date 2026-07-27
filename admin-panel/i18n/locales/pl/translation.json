@@ -591,7 +591,7 @@
       "off": "Wyłączone",
       "daily": "Codziennie",
       "weekly": "Co tydzień",
-      "keepCount": "Zachowaj ostatnie kopie",
+      "keepCount": "Zachowaj ostatnie auto-kopie",
       "includeFiles": "Dołącz pliki",
       "includeFilesHint": "Domyślnie automatyczna kopia zapasowa zapisuje tylko bazę danych",
       "lastRun": "Ostatnie uruchomienie: {{time}}",

@@ -49,10 +49,10 @@ export function BackupsPanel({ backups, creating, restoring, importing, importPr
         {backups.length === 0 ? <div className={styles.empty}>{t('system.backups.empty')}</div> : backups.map((backup) => (
           <div className={styles.tableRow} key={backup.name}>
             <span>{new Date(backup.createdAt).toLocaleString()}</span>
-            <span>{[backup.includesUploads ? t('system.backups.dbAndFiles') : t('system.backups.db'), backup.includesConfiguration ? t('system.backups.configuration') : ''].filter(Boolean).join(' + ')}</span>
-            <span>{formatBytes(backup.size)}</span><span>{backup.version}{backup.source === 'automatic' ? ` · ${t('system.backups.auto')}` : ''}</span>
+            <span>{backup.includesUploads !== undefined ? [backup.includesUploads ? t('system.backups.dbAndFiles') : t('system.backups.db'), backup.includesConfiguration ? t('system.backups.configuration') : ''].filter(Boolean).join(' + ') : '...'}</span>
+            <span>{formatBytes(backup.size)}</span><span>{backup.version ?? '...'}{backup.source === 'automatic' ? ` · ${t('system.backups.auto')}` : ''}</span>
             <span className={styles.rowActions}>
-              <a className="buttonSecondary" href={`/api/backups/${encodeURIComponent(backup.name)}/download`}>{t('system.backups.download')}</a>
+              <button type="button" className="buttonSecondary" onClick={() => { window.location.href = `/api/backups/${encodeURIComponent(backup.name)}/download`; }}>{t('system.backups.download')}</button>
               <button type="button" className="buttonSecondary" onClick={() => onRestore(backup)} disabled={creating || restoring || importing}>{t('system.backups.restore')}</button>
               <button type="button" className="buttonSecondary" onClick={() => onDelete(backup)} disabled={creating || restoring || importing}>{t('system.backups.delete')}</button>
             </span>

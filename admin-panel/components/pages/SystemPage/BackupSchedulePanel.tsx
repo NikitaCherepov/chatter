@@ -34,14 +34,16 @@ export function BackupSchedulePanel({
         />
       </label>
       <label>
-        <span>{t('system.schedule.keepCount')}</span>
+        <span className={styles.scheduleCopy}>
+          <strong>{t('system.schedule.keepCount')}</strong>
+          <small>{t('system.schedule.keepCountHint')}</small>
+        </span>
         <Input
           type="number"
           min={1}
-          max={30}
+          max={100}
           value={schedule.retention}
           onChange={(event) => onChange({ retention: Number(event.target.value) })}
-          disabled={schedule.frequency === 'off'}
         />
       </label>
       <div className={styles.scheduleCheckbox}>

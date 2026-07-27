@@ -1109,21 +1109,18 @@ async function readBackupManifest(filePath) {
 }
 
 async function listBackups() {
+  // Fast listing — only stat, no tar extraction. Manifest fields are loaded lazily by the frontend.
   const entries = fs.readdirSync(BACKUPS_DIR, { withFileTypes: true })
     .filter((entry) => entry.isFile() && safeBackupName(entry.name));
-  const backups = await Promise.all(entries.map(async (entry) => {
+  const backups = entries.map((entry) => {
     const filePath = path.join(BACKUPS_DIR, entry.name);
-    const [stat, manifest] = [fs.statSync(filePath), await readBackupManifest(filePath)];
+    const stat = fs.statSync(filePath);
     return {
       name: entry.name,
       size: stat.size,
-      createdAt: manifest?.createdAt || stat.mtime.toISOString(),
-      includesUploads: Boolean(manifest?.includesUploads),
-      includesConfiguration: Boolean(manifest?.includesConfiguration),
-      version: `${manifest?.version || 'unknown'}`,
-      source: manifest?.source === 'automatic' ? 'automatic' : 'manual'
+      createdAt: stat.birthtime.toISOString(),
     };
-  }));
+  });
   return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -2081,8 +2078,23 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, { range, points });
   }
 
-  if (req.method === 'GET' && pathname === '/api/backups') return sendJson(res, 200, { creating: Boolean(backupPromise), restoring: Boolean(restorePromise), backups: await listBackups() });
+  if (req.method === 'GET' && pathname === '/api/backups') return sendJson(res, 200, { creating: Boolean(backupPromise), restoring: Boolean(restorePromise), backups: listBackups() });
   if (req.method === 'GET' && pathname === '/api/backups/schedule') return sendJson(res, 200, getBackupSchedule());
+
+  const backupDetailsMatch = pathname.match(/^\/api\/backups\/([^/]+)\/details$/);
+  if (req.method === 'GET' && backupDetailsMatch) {
+    const name = safeBackupName(decodeURIComponent(backupDetailsMatch[1]));
+    const filePath = name ? path.join(BACKUPS_DIR, name) : '';
+    if (!filePath || !fs.existsSync(filePath)) return sendJson(res, 404, { error: 'backup_not_found' });
+    const manifest = await readBackupManifest(filePath);
+    return sendJson(res, 200, {
+      name,
+      includesUploads: Boolean(manifest?.includesUploads),
+      includesConfiguration: Boolean(manifest?.includesConfiguration),
+      version: `${manifest?.version || 'unknown'}`,
+      source: manifest?.source === 'automatic' ? 'automatic' : 'manual',
+    });
+  }
 
   if (req.method === 'PUT' && pathname === '/api/backups/schedule') {
     const schedule = saveBackupSchedule(await readJson(req));

@@ -591,7 +591,7 @@
       "off": "끄기",
       "daily": "매일",
       "weekly": "매주",
-      "keepCount": "마지막 복사본 보관",
+      "keepCount": "마지막 자동 사본 보관",
       "includeFiles": "파일 포함",
       "includeFilesHint": "기본적으로 자동 백업은 데이터베이스만 저장합니다",
       "lastRun": "마지막 실행: {{time}}",

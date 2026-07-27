@@ -591,7 +591,7 @@
       "off": "关闭",
       "daily": "每天",
       "weekly": "每周",
-      "keepCount": "保留最近副本数",
+      "keepCount": "保留最近自动副本",
       "includeFiles": "包含文件",
       "includeFilesHint": "默认情况下，自动备份仅保存数据库",
       "lastRun": "上次运行：{{time}}",

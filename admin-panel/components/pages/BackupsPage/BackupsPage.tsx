@@ -10,6 +10,7 @@ import type { BackupInfo, BackupSchedule } from '../SystemPage/types';
 import { formatBytes } from '../SystemPage/types';
 import { useBackups, useBackupSchedule } from '../../../lib/hooks/useBackups';
 import { useBackupMutations } from '../../../lib/hooks/useBackupMutations';
+import { useBackupDetails } from '../../../lib/hooks/useBackupDetails';
 import { uploadBackup } from '../../../lib/services/backupService';
 import styles from '../SystemPage/SystemPage.module.css';
 
@@ -26,7 +27,7 @@ export function BackupsPage() {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importState, setImportState] = useState('');
-  const [schedule, setSchedule] = useState<BackupSchedule>({ frequency: 'off', includeUploads: false, retention: 7, lastRunAt: '' });
+  const [schedule, setSchedule] = useState<BackupSchedule>({ frequency: 'off', includeUploads: false, retention: 10, lastRunAt: '' });
 
   // Sync schedule from query to local state for editing
   useEffect(() => {
@@ -72,9 +73,13 @@ export function BackupsPage() {
     }
   }
 
+  // ─── Lazy-load manifest details for each backup ────────────────────────────
+  const baseBackups = backupsQuery.data?.backups ?? [];
+  const { map: detailsMap } = useBackupDetails(baseBackups.map((b) => b.name));
+
   // ─── Derived state ───────────────────────────────────────────────────────
   const loading = backupsQuery.isLoading || scheduleQuery.isLoading;
-  const backups = backupsQuery.data?.backups ?? [];
+  const backups = baseBackups.map((b) => ({ ...b, ...detailsMap.get(b.name) }));
   const creating = createMutation.isPending || (backupsQuery.data?.creating ?? false);
   const restoring = restoreMutation.isPending || (backupsQuery.data?.restoring ?? false);
   const scheduleSaving = scheduleMutation.isPending;

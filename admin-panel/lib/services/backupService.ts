@@ -10,6 +10,7 @@ export type BackupsResponse = {
 export const backupService = {
   getBackups: () => api<BackupsResponse>('/api/backups'),
   getSchedule: () => api<BackupSchedule>('/api/backups/schedule'),
+  getDetails: (name: string) => api<Omit<BackupInfo, 'size' | 'createdAt'>>(`/api/backups/${encodeURIComponent(name)}/details`),
   create: (includeUploads: boolean, includeConfiguration: boolean) =>
     api('/api/backups', { method: 'POST', body: JSON.stringify({ includeUploads, includeConfiguration }) }),
   delete: (name: string) =>

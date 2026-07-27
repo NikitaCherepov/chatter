@@ -584,7 +584,7 @@
       "off": "Vypnuto",
       "daily": "Denně",
       "weekly": "Týdně",
-      "keepCount": "Ponechat poslední kopie",
+      "keepCount": "Ponechat posledních auto-kopií",
       "includeFiles": "Zahrnout soubory",
       "includeFilesHint": "Ve výchozím nastavení automatické zálohování ukládá pouze databázi",
       "lastRun": "Poslední spuštění: {{time}}",

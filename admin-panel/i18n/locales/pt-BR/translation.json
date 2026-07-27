@@ -591,7 +591,7 @@
       "off": "Desligado",
       "daily": "Diário",
       "weekly": "Semanal",
-      "keepCount": "Manter últimas cópias",
+      "keepCount": "Manter últimas auto-cópias",
       "includeFiles": "Incluir arquivos",
       "includeFilesHint": "Por padrão, o backup automático salva apenas o banco de dados",
       "lastRun": "Última execução: {{time}}",
