@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AnimatePresence } from 'framer-motion';
@@ -96,6 +96,16 @@ export function App() {
 function AnnouncementOverlay() {
   const { user, initialized } = useAuth();
   const [visible, setVisible] = useState(true);
+  const prevUserIdRef = useRef<number | null>(null);
+
+  // Reset visibility when a different user logs in.
+  useEffect(() => {
+    const userId = user?.id ?? null;
+    if (userId !== prevUserIdRef.current) {
+      prevUserIdRef.current = userId;
+      setVisible(true);
+    }
+  }, [user?.id]);
 
   const unseen = useMemo(
     () => (user ? getUnseenAnnouncements(user.ui_settings) : []),
