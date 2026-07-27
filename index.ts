@@ -49,10 +49,14 @@ type BotContext = Context & {
 
 const formatSafeError = (error: unknown) => {
     if (axios.isAxiosError(error)) {
+        const backendError = typeof error.response?.data?.error === 'string'
+            ? `backend=${error.response.data.error}`
+            : '';
         const details = [
             error.message,
             error.code ? `code=${error.code}` : '',
-            error.response?.status ? `status=${error.response.status}` : ''
+            error.response?.status ? `status=${error.response.status}` : '',
+            backendError
         ].filter(Boolean);
         return details.join(' ');
     }

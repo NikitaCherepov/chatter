@@ -545,6 +545,7 @@ function saveSettings(input) {
     TIMEWEB_API_KEY: proModels[0]?.apiKey || legacyAiApiKey,
     TIMEWEB_BASE_URL: proModels[0]?.baseUrl || legacyAiBaseUrl,
     TELEGRAM_TOKEN: telegramToken,
+    BACKEND_PHOTO_API_ENABLED: telegramEnabled ? '1' : '0',
     BACKEND_VOICE_API_ENABLED: voiceMode === 'off' ? '0' : '1',
     VOICE_TRANSCRIBE_URL: voiceMode === 'local' ? 'http://voice:3030/api/voice' : voiceMode === 'remote' ? voiceExternalUrl : '',
     VOICE_TRANSCRIBE_TOKEN: voiceMode === 'off' ? '' : voiceToken
