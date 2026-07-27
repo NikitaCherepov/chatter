@@ -13,8 +13,10 @@ const isHttpUrl = (value: string) => {
 
 /** Escapes closing tags inside content to prevent break-out from untrusted data wrappers. */
 export const wrapUntrustedContent = (content: string): string => {
-  const sanitized = content.replace(/<\/untrusted_web_content>/gi, '<untrusted_web_content>')
-    .replace(/<\/untrusted_>/gi, '<untrusted_>');
+  const sanitized = content.replace(
+    /<\s*\/\s*untrusted_web_content\s*>/gi,
+    '&lt;/untrusted_web_content&gt;',
+  );
   return `<untrusted_web_content>${sanitized}</untrusted_web_content>`;
 };
 
