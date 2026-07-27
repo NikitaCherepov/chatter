@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "Copias de seguridad automáticas",
-      "description": "El administrador las ejecuta por sí solo, no se necesita un cron separado",
+      "description": "El administrador las ejecuta por sí solo, no se necesita un cron separado. Las copias manuales nunca se eliminan.",
       "frequency": "Frecuencia",
       "off": "Desactivado",
       "daily": "Diario",

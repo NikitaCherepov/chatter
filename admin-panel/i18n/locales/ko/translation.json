@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "자동 백업",
-      "description": "관리자가 자체적으로 실행하므로 별도의 cron이 필요하지 않습니다",
+      "description": "관리자가 자체적으로 실행하므로 별도의 cron이 필요하지 않습니다. 수동 백업은 삭제되지 않습니다.",
       "frequency": "빈도",
       "off": "끄기",
       "daily": "매일",

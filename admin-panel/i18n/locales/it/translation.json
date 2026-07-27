@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "Backup automatici",
-      "description": "Il gestore li esegue autonomamente, nessun cron separato necessario",
+      "description": "Il gestore li esegue autonomamente, nessun cron separato necessario. I backup manuali non vengono mai eliminati.",
       "frequency": "Frequenza",
       "off": "Disattivato",
       "daily": "Giornaliero",

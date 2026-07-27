@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "Automatyczne kopie zapasowe",
-      "description": "Manager uruchamia je samodzielnie, nie jest potrzebny osobny cron",
+      "description": "Manager uruchamia je samodzielnie, nie jest potrzebny osobny cron. Ręczne kopie nigdy nie są usuwane.",
       "frequency": "Częstotliwość",
       "off": "Wyłączone",
       "daily": "Codziennie",

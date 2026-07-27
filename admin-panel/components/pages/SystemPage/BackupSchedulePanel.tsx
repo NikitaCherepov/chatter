@@ -34,10 +34,7 @@ export function BackupSchedulePanel({
         />
       </label>
       <label>
-        <span className={styles.scheduleCopy}>
-          <strong>{t('system.schedule.keepCount')}</strong>
-          <small>{t('system.schedule.keepCountHint')}</small>
-        </span>
+        <span>{t('system.schedule.keepCount')}</span>
         <Input
           type="number"
           min={1}

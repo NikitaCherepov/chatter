@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "Automatische Backups",
-      "description": "Manager führt sie selbstständig aus, kein separater Cron erforderlich",
+      "description": "Manager führt sie selbstständig aus, kein separater Cron erforderlich. Manuelle Backups werden nie gelöscht.",
       "frequency": "Häufigkeit",
       "off": "Aus",
       "daily": "Täglich",

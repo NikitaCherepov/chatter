@@ -578,7 +578,7 @@
     },
     "schedule": {
       "title": "Otomatik Yedeklemeler",
-      "description": "Yönetici bunları kendi başına çalıştırır, ayrı bir cron gerekmez",
+      "description": "Yönetici bunları kendi başına çalıştırır, ayrı bir cron gerekmez. Manuel yedeklemeler asla silinmez.",
       "frequency": "Sıklık",
       "off": "Kapalı",
       "daily": "Günlük",

@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "自动备份",
-      "description": "管理器自行运行，无需单独的cron",
+      "description": "管理器自行运行，无需单独的cron。手动备份永不会被删除。",
       "frequency": "频率",
       "off": "关闭",
       "daily": "每天",

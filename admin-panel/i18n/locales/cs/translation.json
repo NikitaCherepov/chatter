@@ -579,7 +579,7 @@
     },
     "schedule": {
       "title": "Automatické zálohy",
-      "description": "Správce je spouští sám, není potřeba samostatný cron",
+      "description": "Správce je spouští sám, není potřeba samostatný cron. Ruční zálohy nejsou nikdy mazány.",
       "frequency": "Frekvence",
       "off": "Vypnuto",
       "daily": "Denně",

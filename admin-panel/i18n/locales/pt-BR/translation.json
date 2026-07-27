@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "Backups Automáticos",
-      "description": "O Manager executa-os automaticamente, sem necessidade de cron separado",
+      "description": "O Manager executa-os automaticamente, sem necessidade de cron separado. Backups manuais nunca são excluídos.",
       "frequency": "Frequência",
       "off": "Desligado",
       "daily": "Diário",

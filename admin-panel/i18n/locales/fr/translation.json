@@ -586,7 +586,7 @@
     },
     "schedule": {
       "title": "Sauvegardes automatiques",
-      "description": "Le gestionnaire les exécute automatiquement, aucun cron séparé nécessaire",
+      "description": "Le gestionnaire les exécute automatiquement, aucun cron séparé nécessaire. Les sauvegardes manuelles ne sont jamais supprimées.",
       "frequency": "Fréquence",
       "off": "Désactivé",
       "daily": "Quotidien",
