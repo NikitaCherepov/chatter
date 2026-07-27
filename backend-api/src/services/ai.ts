@@ -1568,7 +1568,7 @@ const runWebSearch = async (query: string, signal?: AbortSignal) => {
 
     let resultText = data.answer ? `Summary: ${data.answer}\n\n` : '';
     resultText += results.map((item, index) => `${index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}`).join('\n\n');
-    return resultText;
+    return `<untrusted_web_content>${resultText}</untrusted_web_content>`;
   } catch (err) {
     if (isAbortError(err)) throw err;
     return 'Tool error: search service temporarily unavailable.';

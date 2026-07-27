@@ -59,7 +59,7 @@ export const getCleanTextFromUrl = async (targetUrl: string) => {
       return 'Текст на странице не найден или контент заблокирован (возможно, пустой body).';
     }
 
-    return cleanText.slice(0, 15000);
+    return `<untrusted_web_content>${cleanText.slice(0, 15000)}</untrusted_web_content>`;
 
   } catch (error: any) {
     const errorDetails = error?.message || String(error);
