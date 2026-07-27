@@ -66,6 +66,7 @@ type User = {
   is_admin: number;
   plan: string;
   image_attachments_allowed: boolean;
+  max_image_attachments_per_request: number;
   max_image_attachments_total_bytes: number;
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;

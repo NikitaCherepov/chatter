@@ -134,7 +134,7 @@
     "error": {
       "imageTooLarge": "Datei zu groß: {{name}} (max. 20 MB)",
       "documentTooLarge": "Datei zu groß: {{name}} (max. 5 MB)",
-      "imageLimit": "Maximal {{count}} Bilder für Ihren Plan",
+      "imageLimit": "Sie können bis zu {{count}} Bilder gleichzeitig anhängen",
       "read": "Konnte nicht gelesen werden: {{name}}",
       "unsupported": "Nicht unterstütztes Format: {{name}}"
     }

@@ -134,7 +134,7 @@
     "error": {
       "imageTooLarge": "Archivo demasiado grande: {{name}} (máx. 20 MB)",
       "documentTooLarge": "Archivo demasiado grande: {{name}} (máx. 5 MB)",
-      "imageLimit": "Máximo {{count}} imágenes para su plan",
+      "imageLimit": "Puede adjuntar hasta {{count}} imágenes a la vez",
       "read": "No se pudo leer: {{name}}",
       "unsupported": "Formato no compatible: {{name}}"
     }

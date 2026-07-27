@@ -446,7 +446,7 @@
     "error": {
       "imageTooLarge": "File troppo grande: {{name}} (max 20 MB)",
       "documentTooLarge": "File troppo grande: {{name}} (max 5 MB)",
-      "imageLimit": "Massimo {{count}} immagini per il tuo piano",
+      "imageLimit": "Puoi allegare fino a {{count}} immagini alla volta",
       "read": "Impossibile leggere: {{name}}",
       "unsupported": "Formato non supportato: {{name}}"
     }

@@ -134,7 +134,7 @@
     "error": {
       "imageTooLarge": "ファイルが大きすぎます: {{name}} (最大20MB)",
       "documentTooLarge": "ファイルが大きすぎます: {{name}} (最大5MB)",
-      "imageLimit": "お使いのプランでは最大{{count}}枚の画像までです",
+      "imageLimit": "一度に最大{{count}}枚の画像を添付できます",
       "read": "読み取れませんでした: {{name}}",
       "unsupported": "サポートされていない形式です: {{name}}"
     }

@@ -446,7 +446,7 @@
     "error": {
       "imageTooLarge": "Plik jest za duży: {{name}} (maks. 20 MB)",
       "documentTooLarge": "Plik jest za duży: {{name}} (maks. 5 MB)",
-      "imageLimit": "Maksymalnie {{count}} obrazów dla Twojego planu",
+      "imageLimit": "Jednorazowo możesz załączyć maksymalnie {{count}} obrazów",
       "read": "Nie udało się odczytać: {{name}}",
       "unsupported": "Nieobsługiwany format: {{name}}"
     }

@@ -134,7 +134,7 @@
     "error": {
       "imageTooLarge": "Fichier trop volumineux : {{name}} (max. 20 Mo)",
       "documentTooLarge": "Fichier trop volumineux : {{name}} (max. 5 Mo)",
-      "imageLimit": "Maximum {{count}} images pour votre forfait",
+      "imageLimit": "Vous pouvez joindre jusqu’à {{count}} images à la fois",
       "read": "Impossible de lire : {{name}}",
       "unsupported": "Format non pris en charge : {{name}}"
     }

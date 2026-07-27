@@ -446,7 +446,7 @@
     "error": {
       "imageTooLarge": "Soubor je příliš velký: {{name}} (max. 20 MB)",
       "documentTooLarge": "Soubor je příliš velký: {{name}} (max. 5 MB)",
-      "imageLimit": "Váš tarif umožňuje až {{count}} obrázků",
+      "imageLimit": "Najednou můžete připojit maximálně {{count}} obrázků",
       "read": "Nelze přečíst: {{name}}",
       "unsupported": "Nepodporovaný formát: {{name}}"
     }

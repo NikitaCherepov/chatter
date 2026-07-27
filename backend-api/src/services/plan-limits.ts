@@ -63,6 +63,7 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
 };
 
 export const MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES = 32 * 1024 * 1024;
+export const MAX_IMAGE_ATTACHMENTS_PER_REQUEST = 50;
 
 const sanitizeConfig = (raw: unknown, plan: UserPlan): PlanLimits => {
   const fallback = DEFAULT_PLAN_LIMITS[plan];

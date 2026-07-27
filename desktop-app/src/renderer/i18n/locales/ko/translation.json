@@ -446,7 +446,7 @@
     "error": {
       "imageTooLarge": "파일이 너무 큽니다: {{name}} (최대 20MB)",
       "documentTooLarge": "파일이 너무 큽니다: {{name}} (최대 5MB)",
-      "imageLimit": "플랜에 따라 최대 {{count}}개의 이미지만 가능합니다",
+      "imageLimit": "한 번에 최대 {{count}}개의 이미지를 첨부할 수 있습니다",
       "read": "읽을 수 없음: {{name}}",
       "unsupported": "지원되지 않는 형식: {{name}}"
     }

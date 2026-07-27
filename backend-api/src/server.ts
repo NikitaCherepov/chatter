@@ -39,7 +39,11 @@ import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePro
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
-import { areImageAttachmentsAllowedForPlan, MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES } from './services/plan-limits.js';
+import {
+  areImageAttachmentsAllowedForPlan,
+  MAX_IMAGE_ATTACHMENTS_PER_REQUEST,
+  MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
+} from './services/plan-limits.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
@@ -864,6 +868,7 @@ const toAuthUserDto = (user: UserRecord) => {
     is_admin: effectiveUser.is_admin,
     plan: effectiveUser.plan,
     image_attachments_allowed: areImageAttachmentsAllowedForPlan(effectiveUser.plan, effectiveUser.is_admin === 1),
+    max_image_attachments_per_request: MAX_IMAGE_ATTACHMENTS_PER_REQUEST,
     max_image_attachments_total_bytes: MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
     selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
@@ -1734,6 +1739,10 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       return { base64, mimeType };
     })
     .filter(img => img.base64.length > 0);
+
+  if (images.length > MAX_IMAGE_ATTACHMENTS_PER_REQUEST) {
+    return res.status(400).json({ error: `too_many_images_max_${MAX_IMAGE_ATTACHMENTS_PER_REQUEST}` });
+  }
 
   // Validate image sizes — обычные HTTP-ошибки до переключения на SSE
   let totalImageBytes = 0;
@@ -5745,6 +5754,11 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       mimeType: `${img?.mime_type || 'image/jpeg'}`.trim() || 'image/jpeg',
     }))
     .filter(img => img.base64.length > 0);
+
+  if (parsedImages.length > MAX_IMAGE_ATTACHMENTS_PER_REQUEST) {
+    client.ws.send(JSON.stringify({ type: 'error', error: `too_many_images_max_${MAX_IMAGE_ATTACHMENTS_PER_REQUEST}` }));
+    return;
+  }
 
   let totalImageBytes = 0;
   for (const img of parsedImages) {

@@ -61,6 +61,8 @@ export type DocumentItem = {
 type Props = {
   onClose: () => void;
   onAttach: (items: { images: ImageItem[]; documents: DocumentItem[] }) => void;
+  currentImageCount: number;
+  maxImageCount: number;
   currentImageBytes: number;
   maxTotalImageBytes: number;
 };
@@ -89,7 +91,14 @@ function getExt(name: string): string {
   return name.slice(dot + 1).toLowerCase();
 }
 
-export function AttachModal({ onClose, onAttach, currentImageBytes, maxTotalImageBytes }: Props) {
+export function AttachModal({
+  onClose,
+  onAttach,
+  currentImageCount,
+  maxImageCount,
+  currentImageBytes,
+  maxTotalImageBytes,
+}: Props) {
   const { t } = useTranslation();
   const [images, setImages] = useState<ImageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -108,6 +117,10 @@ export function AttachModal({ onClose, onAttach, currentImageBytes, maxTotalImag
     for (const file of fileArr) {
       // Try image first
       if (ALLOWED_IMAGE_FORMATS.includes(file.type)) {
+        if (currentImageCount + images.length + validImages.length >= maxImageCount) {
+          setError(t('attach.error.imageLimit', { count: maxImageCount }));
+          break;
+        }
         try {
           const prepared = await prepareImageForUpload(file);
           const pendingBytes = images.reduce((sum, image) => sum + image.size_bytes, 0)

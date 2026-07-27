@@ -148,7 +148,7 @@
     "error": {
       "imageTooLarge": "File is too large: {{name}} (max. 20 MB)",
       "documentTooLarge": "File is too large: {{name}} (max. 5 MB)",
-      "imageLimit": "Your plan allows up to {{count}} images",
+      "imageLimit": "You can attach up to {{count}} images at a time",
       "imageTotalTooLarge": "The prepared images exceed the {{size}} total limit",
       "imagePrepare": "Could not prepare image: {{name}}",
       "read": "Could not read: {{name}}",

@@ -655,10 +655,10 @@ services/subagents/
 - Voice/photo:
   - `POST /internal/voice/turn` (`BACKEND_VOICE_API_ENABLED=1`)
   - `POST /internal/photo/analyze` (`BACKEND_PHOTO_API_ENABLED=1`) -> `{ user_id, image_base64, image_mime_type?, caption?, chat_id?, extra_images?, options? }` -> `{ reply_text, message_id, chat_id, usage, ... }`
-    - `extra_images` - массив дополнительных изображений; для всех изображений действует общий лимит 32 МБ после декодирования: `[{ base64, mime_type? }]`
+    - `extra_images` - массив дополнительных изображений; до 50 изображений с общим лимитом 32 МБ после декодирования: `[{ base64, mime_type? }]`
     - Первое изображение (обязательное) передаётся в `image_base64`, остальные через `extra_images`
     - Тариф определяет только доступность прикрепления изображений; документы доступны на всех тарифах
-    - Ошибки: `images_not_allowed_for_plan`, `image_too_large`, `image_payload_too_large`
+    - Ошибки: `images_not_allowed_for_plan`, `too_many_images_max_50`, `image_too_large`, `image_payload_too_large`
 - URL tool:
   - `POST /internal/tools/read_url` -> `{ url }` -> `{ ok, url, text }`
 - Prompts:

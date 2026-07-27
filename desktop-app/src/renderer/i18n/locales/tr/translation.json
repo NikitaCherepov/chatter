@@ -446,7 +446,7 @@
     "error": {
       "imageTooLarge": "Dosya çok büyük: {{name}} (maks. 20 MB)",
       "documentTooLarge": "Dosya çok büyük: {{name}} (maks. 5 MB)",
-      "imageLimit": "Planınız en fazla {{count}} resme izin veriyor",
+      "imageLimit": "Tek seferde en fazla {{count}} görsel ekleyebilirsiniz",
       "read": "{{name}} okunamadı",
       "unsupported": "Desteklenmeyen biçim: {{name}}"
     }

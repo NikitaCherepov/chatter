@@ -781,6 +781,9 @@ export function ChatPage() {
         ),
       )
     : 0;
+  const maxImageCount = user?.image_attachments_allowed
+    ? Math.max(0, Math.floor(user.max_image_attachments_per_request || 50))
+    : 0;
   const attachedImageBytes = useMemo(
     () => attachedImages.reduce((total, image) => total + image.size_bytes, 0),
     [attachedImages],
@@ -1287,6 +1290,10 @@ export function ChatPage() {
       base64: img.base64,
       mime_type: img.mime_type,
     }));
+    if (attachedImages.length > maxImageCount) {
+      toast.error(t('attach.error.imageLimit', { count: maxImageCount }));
+      return;
+    }
     if (attachedImageBytes > maxImageBytes) {
       toast.error(t('attach.error.imageTotalTooLarge', {
         size: `${Math.round(maxImageBytes / (1024 * 1024))} MB`,
@@ -1547,7 +1554,9 @@ export function ChatPage() {
           setStreamingState('done');
           setStreamingMsgId(null);
           const visibleMessage = message
-            || (err === 'image_payload_too_large' || err === 'image_too_large'
+            || (err.startsWith('too_many_images_max_')
+              ? t('attach.error.imageLimit', { count: maxImageCount })
+              : err === 'image_payload_too_large' || err === 'image_too_large'
               ? t('attach.error.imageTotalTooLarge', {
                   size: `${Math.round(maxImageBytes / (1024 * 1024))} MB`,
                 })
@@ -1597,7 +1606,7 @@ export function ChatPage() {
       isVoice ? { isVoice: true, preferredModel: preferredModel, dice_mode: diceMode } : { preferredModel: preferredModel, dice_mode: diceMode },
       documentsToSend.length > 0 ? documentsToSend : undefined
     );
-  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t]);
+  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1675,6 +1684,10 @@ export function ChatPage() {
       e.preventDefault();
 
       try {
+        if (attachedImages.length >= maxImageCount) {
+          toast.error(t('attach.error.imageLimit', { count: maxImageCount }));
+          break;
+        }
         const newItem = await prepareImageForUpload(file);
         if (attachedImageBytes + newItem.size_bytes > maxImageBytes) {
           URL.revokeObjectURL(newItem.preview);
@@ -1691,7 +1704,7 @@ export function ChatPage() {
       // Only handle first image from paste
       break;
     }
-  }, [attachedImageBytes, maxImageBytes, t]);
+  }, [attachedImages.length, attachedImageBytes, maxImageBytes, maxImageCount, t]);
 
   const handleAttachFromModal = useCallback((items: { images: ImageItem[]; documents: DocumentItem[] }) => {
     if (items.images.length > 0) {
@@ -1699,7 +1712,7 @@ export function ChatPage() {
         const combined = [...prev];
         let totalBytes = prev.reduce((total, image) => total + image.size_bytes, 0);
         for (const image of items.images) {
-          if (totalBytes + image.size_bytes > maxImageBytes) {
+          if (combined.length >= maxImageCount || totalBytes + image.size_bytes > maxImageBytes) {
             URL.revokeObjectURL(image.preview);
             continue;
           }
@@ -1713,7 +1726,7 @@ export function ChatPage() {
       setAttachedDocuments((prev) => [...prev, ...items.documents]);
     }
     setShowAttachModal(false);
-  }, [maxImageBytes]);
+  }, [maxImageBytes, maxImageCount]);
 
   const handleDeleteAttachment = useCallback(async (messageId: number, filename: string) => {
     if (!activeChatId) return;
@@ -4367,6 +4380,8 @@ export function ChatPage() {
             key="attach-modal"
             onClose={() => setShowAttachModal(false)}
             onAttach={handleAttachFromModal}
+            currentImageCount={attachedImages.length}
+            maxImageCount={maxImageCount}
             currentImageBytes={attachedImageBytes}
             maxTotalImageBytes={maxImageBytes}
           />

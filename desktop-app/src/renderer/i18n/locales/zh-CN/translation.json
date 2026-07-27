@@ -134,7 +134,7 @@
     "error": {
       "imageTooLarge": "文件太大: {{name}} (最大 20 MB)",
       "documentTooLarge": "文件太大: {{name}} (最大 5 MB)",
-      "imageLimit": "您的计划最多 {{count}} 张图片",
+      "imageLimit": "一次最多可附加 {{count}} 张图片",
       "read": "无法读取: {{name}}",
       "unsupported": "不支持的格式: {{name}}"
     }
