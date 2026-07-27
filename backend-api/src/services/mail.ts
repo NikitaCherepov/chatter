@@ -5,6 +5,7 @@ import { simpleParser } from 'mailparser';
 import { db } from '../db.js';
 import { getUserById } from './chats.js';
 import { getEncryptionKey } from '../utils/encryption.js';
+import { wrapUntrustedContent } from './web-reader.js';
 
 export type MailProvider = 'yandex' | 'google' | 'custom';
 
@@ -298,7 +299,7 @@ export const runEmailCheck = async (
       const sliced = useServerSearch ? sorted : sorted.slice(safeOffset, safeOffset + safeLimit);
       if (!sliced.length) return `Ничего не найдено (offset=${safeOffset}, limit=${safeLimit}).`;
 
-      return JSON.stringify({
+      return wrapUntrustedContent(JSON.stringify({
         mail_account_id: account.id,
         label: account.label,
         provider: account.provider,
@@ -307,7 +308,7 @@ export const runEmailCheck = async (
         offset: safeOffset,
         limit: safeLimit,
         items: sliced
-      }, null, 2);
+      }, null, 2));
     } finally {
       lock.release();
     }
@@ -384,7 +385,7 @@ export const runEmailRead = async (userId: number, subjectPart: string, provider
 
       if (!cleanText.trim()) return 'Не удалось извлечь читаемый текст из письма.';
       const compact = cleanText.slice(0, 3500);
-      return `Письмо найдено: ${msg?.envelope?.subject || pickedSubject}\n\n${compact}`;
+      return wrapUntrustedContent(`Письмо найдено: ${msg?.envelope?.subject || pickedSubject}\n\n${compact}`);
     } finally {
       lock.release();
     }
