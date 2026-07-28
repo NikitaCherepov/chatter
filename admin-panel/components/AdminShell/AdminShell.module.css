@@ -118,6 +118,9 @@
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
 }
 .logout:hover {
   background: var(--bg-modal-hover);
