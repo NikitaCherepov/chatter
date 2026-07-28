@@ -862,6 +862,17 @@ export function ChatPage() {
     });
   }, [activeChatId, chats]);
 
+  // External clients write into the same backend chat. Refresh the open
+  // conversation when their user message and final answer are persisted.
+  useEffect(() => api.onChatUpdated((data) => {
+    void loadChats();
+    if (data.chat_id === activeChatId) {
+      void loadMessages(data.chat_id);
+    } else if (data.phase === 'assistant') {
+      incrementUnread(data.chat_id);
+    }
+  }), [activeChatId]);
+
   const refreshContextTokens = useCallback(async (chatId: number) => {
     try {
       const tokens = await api.getChatContextTokens(chatId);

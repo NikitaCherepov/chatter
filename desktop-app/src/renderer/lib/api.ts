@@ -570,6 +570,11 @@ type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
   onDisconnect?: () => void;
   onTaskResult?: (data: { chat_id: number; text: string; is_new_chat: boolean }) => void;
+  onChatUpdated?: (data: {
+    chat_id: number;
+    message_id: number;
+    phase: 'user' | 'assistant';
+  }) => void;
 };
 
 let wsCallbacks: WsCallbacks = {};
@@ -674,6 +679,16 @@ export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
   wsCallbacks.onTaskResult = cb;
 }
 
+/** Register a handler for messages added to a chat by another client, such as Telegram. */
+export function onChatUpdated(cb: NonNullable<WsCallbacks['onChatUpdated']>) {
+  wsCallbacks.onChatUpdated = cb;
+  return () => {
+    if (wsCallbacks.onChatUpdated === cb) {
+      wsCallbacks.onChatUpdated = undefined;
+    }
+  };
+}
+
 /** Register a persistent handler for desktop actions that may arrive after a chat request has finished. */
 export function onDesktopAction(cb: StreamCallbacks['onDesktopAction']) {
   wsCallbacks.onDesktopAction = cb;
@@ -752,6 +767,13 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           break;
         }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
+        case 'chat_updated':
+          wsCallbacks.onChatUpdated?.({
+            chat_id: Number(msg.chat_id),
+            message_id: Number(msg.message_id),
+            phase: msg.phase === 'assistant' ? 'assistant' : 'user',
+          });
+          break;
         case 'auth_refreshed':
           if (wsAuthRefreshAckTimer) clearTimeout(wsAuthRefreshAckTimer);
           wsAuthRefreshAckTimer = null;

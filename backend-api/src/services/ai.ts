@@ -5946,6 +5946,8 @@ export const sendMessageThroughAi = async (
     reasoningLevel?: ReasoningLevel | null;
     autoRejectHitl?: boolean;
     isBackgroundTask?: boolean;
+    /** Notify a connected Desktop when an external client writes into this chat. */
+    notifyDesktopChatUpdates?: boolean;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -6305,6 +6307,18 @@ export const sendMessageThroughAi = async (
   const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
   let assistantTelegramChatId: number | null = null;
   let userMessageId = 0;
+  const telegramOriginChatId = Number(options?.userTelegramChatId);
+  const externalChatOrigin = options?.notifyDesktopChatUpdates === true
+    || (Number.isFinite(telegramOriginChatId) && telegramOriginChatId !== 0);
+  const notifyDesktopChatUpdated = (phase: 'user' | 'assistant', messageId: number) => {
+    if (!externalChatOrigin || messageId <= 0) return;
+    sendToDesktop(userId, {
+      type: 'chat_updated',
+      phase,
+      chat_id: chatId,
+      message_id: messageId,
+    });
+  };
 
   // Tracking for token-quota charge in finally block.
   let chargeAssistantMessageId = 0;
@@ -6408,6 +6422,7 @@ export const sendMessageThroughAi = async (
     const userMessageImages = options?.userImages?.length ? options.userImages : null;
     const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
     userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
+    notifyDesktopChatUpdated('user', userMessageId);
   }
 
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
@@ -7241,6 +7256,7 @@ iterations.push(currentIteration);
           providerName: usedProvider || null,
         }
       );
+  notifyDesktopChatUpdated('assistant', assistantMessageId);
 
   const safeTokens = Math.max(0, Math.floor(aggregateUsage.total_tokens || totalTokens));
   const countAsUserMessage = options?.countAsUserMessage !== false;
@@ -7356,6 +7372,7 @@ iterations.push(currentIteration);
               providerName: usedProvider || null,
             }
           );
+          notifyDesktopChatUpdated('assistant', abortedMessageId);
         } catch (saveErr) {
           console.warn(`[AI] soft-save failed:`, saveErr);
         }
