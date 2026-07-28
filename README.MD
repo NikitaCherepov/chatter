@@ -1,255 +1,259 @@
-# Что такое Чаттер?
+**English** | [Русский](README_RU.MD)
 
-Чаттер - это мультиплатформенная система с ИИ-агентом, который крутится на сервере и которым вы можете поделиться одним кликом с друзьями или родственниками! А также развернуть на нём свой собственный сервис с тарифами, лимитами и удобным управлением.
+---
 
-Цены на модели подтягиваются автоматически. Всё, что вам нужно - выставить бюджет для подписки.
+# What is Chatter?
 
-> **На данный момент платёжная система не интегрирована!**
+Chatter is a multi-platform system with an AI agent that runs on a server and can be shared with friends or family in one click! You can also deploy your own service on it with plans, limits, and convenient management.
 
-![Chatter связывает Telegram и Desktop](docs/assets/chatter-telegram-desktop.gif)
+Model pricing is pulled automatically. All you need is to set a budget for the subscription.
 
-Хотели поделиться ИИ с мамой, но ей неудобно разбираться с технологиями? Дайте ей своего телеграм-бота. Нулевой порог вхождения.
+> **Payment system is not yet integrated!**
 
-Хотели себе Джарвиса, который будет включать свет, откликаться на голос и опускать жалюзи на ночь? После подключения интеграции умного дома Чаттер сможет делать это без дополнительного кода и лишних трат токенов.
+![Chatter connects Telegram and Desktop](docs/assets/chatter-telegram-desktop.gif)
 
-Или же вы просто хотели поролить с ботом, но не хотели копаться в конфигах, поднимать локальный сервер и разбираться в настройках? У Чаттера максимально дружелюбный интерфейс и удобная админка (насколько это возможно).
+Wanted to share AI with your mom but she finds technology too complicated? Give her your Telegram bot. Zero learning curve.
 
-ИИ-агент крутится на сервере (backend) и связывает Telegram и ПК между собой.
+Wanted your own Jarvis that turns on the lights, responds to voice commands, and lowers the blinds at night? After connecting the smart home integration, Chatter can do it without additional code or wasted tokens.
+
+Or maybe you just wanted to roleplay with a bot but didn't want to dig through configs, spin up a local server, and figure out settings? Chatter has the most user-friendly interface and convenient admin panel (as much as possible).
+
+The AI agent runs on the server (backend) and connects Telegram and your PC together.
 
 ```
 Telegram <-> Backend <-> Desktop
 ```
 
-Пользователь Telegram может продолжать те же чаты и управлять своим ПК, пока Desktop подключён. Большая часть функций доступна независимо от того, откуда отправлено сообщение.
+A Telegram user can continue the same chats and control their PC while Desktop is connected. Most features are available regardless of where the message was sent from.
 
 ---
 
-## Как устроен проект?
+## How is the project structured?
 
- - **backend-api** — вся серверная логика Чаттера. Здесь живут агент, инструменты, память, чаты, лимиты, пользователи и вся общая логика.
- - **desktop-app** — Electron-приложение для общения с агентом и управления вашим ПК.
- - **Telegram-бот** — второй полноценный интерфейс к тому же самому аккаунту, чатам и возможностям. Находится в корне проекта (неудобно, но с этого всё начиналось).
- - **admin-panel** — управление моделями, ключами, пользователями, лимитами, бэкапами и состоянием сервера.
- - **chatter-manager** — связывает админ-панель с Docker и позволяет запускать, останавливать и обновлять компоненты.
- - **webapp-notes** — мини-приложение Telegram с записками.
- - **voice-service** — опциональная локальная расшифровка и озвучка.
+ - **backend-api** — all server-side logic of Chatter. The agent, tools, memory, chats, limits, users, and all shared logic live here.
+ - **desktop-app** — Electron app for communicating with the agent and controlling your PC.
+ - **Telegram bot** — a second full-fledged interface to the same account, chats, and features. Located in the project root (inconvenient, but that's where it all started).
+ - **admin-panel** — management of models, keys, users, limits, backups, and server state.
+ - **chatter-manager** — connects the admin panel to Docker, allowing you to start, stop, and update components.
+ - **webapp-notes** — Telegram mini-app for notes.
+ - **voice-service** — optional local transcription and speech synthesis.
 
-Все серверные части запускаются в отдельных Docker-контейнерах и связываются через Docker Compose. Поэтому вы можете оставить только то, что вам действительно нужно.
+All server components run in separate Docker containers and are linked via Docker Compose. So you can keep only what you actually need.
 
 ---
 
-## Как установить?
+## How to install?
 
- 1. Арендуйте сервер и обязательно установите на нём fail2ban. Установщик сам настроит UFW: сохранит доступ к фактическому SSH-порту сервера и откроет порты 80/443 для Chatter.
- 2. Зайдите в консоль и выполните:
+ 1. Rent a server and make sure to install fail2ban on it. The installer will configure UFW automatically: it will preserve access to the actual SSH port of the server and open ports 80/443 for Chatter.
+ 2. Open a console and run:
     ```bash
     curl -fsSL https://raw.githubusercontent.com/NikitaCherepov/chatter/main/install.sh | sudo bash
     ```
- 3. **ОБЯЗАТЕЛЬНО** сохраните выданный логин и пароль в конце установки.
- 4. Зайдите в админ-панель по адресу вашего сервера и введите логин и пароль, выданные в консоли.
- 5. Выполните пункты, необходимые для первого запуска:
-    - Добавьте модель и API-ключ для Auto-режима.
-    - Добавьте модель и API-ключ для Lite-режима.
-    - Получите у [BotFather](https://t.me/BotFather) Telegram-токен и добавьте его в панель.
-    - Также, при желании, скопируйте выданную в панели ссылку на Webapp-Notes и добавьте её в бота.
- 6. Напишите в бота и одобрите свой профиль через админ-панель, а также выдайте себе права администратора.
+ 3. **MAKE SURE** to save the login and password displayed at the end of the installation.
+ 4. Go to the admin panel at your server's address and enter the login and password shown in the console.
+ 5. Complete the steps required for the first launch:
+    - Add a model and API key for Auto mode.
+    - Add a model and API key for Lite mode.
+    - Get a Telegram token from [BotFather](https://t.me/BotFather) and add it to the panel.
+    - Optionally, copy the Webapp-Notes link provided in the panel and add it to your bot.
+ 6. Message the bot and approve your profile via the admin panel, then grant yourself administrator rights.
 
-**Готово!**
-
----
-
-## Как подключить Desktop-App?
-
- 1. Скачать приложение из Releases и установить. Windows может предупредить об отсутствии цифровой подписи: сейчас сборка не подписана сертификатом.
- 2. Зайти в раздел Access Keys в админ-панели.
- 3. Создать новый ключ и вставить его в Desktop-приложение.
- 4. Зарегистрироваться.
-
-**Готово!**
+**Done!**
 
 ---
 
-## Как связать ваш ПК-аккаунт и Telegram, объединив их?
+## How to connect the Desktop App?
 
- 1. Зайти в настройки на десктопе.
- 2. Выбрать "Linked accounts".
- 3. Нажать на "Telegram".
- 4. Ввести в Telegram-боте: `/link`
- 5. Ввести показанный на экране код.
+ 1. Download the app from Releases and install it. Windows may warn about a missing digital signature: the build is currently not signed with a certificate.
+ 2. Go to the Access Keys section in the admin panel.
+ 3. Create a new key and paste it into the Desktop app.
+ 4. Register.
 
-**Готово!**
-
----
-
-## Как поделиться им с другом?
-
-**В Telegram:**
- 1. Скиньте ему Telegram-бота и ждите, пока он напишет.
- 2. Одобрите его аккаунт из админ-панели.
-
-**На десктопе:**
- 1. Отправьте ему Desktop-приложение и передайте Access Key для подключения к вашему серверу.
-
-**Готово!**
-
-Вы всегда видите, поделился ли человек вашим ключом и в любой момент можете его отозвать.
+**Done!**
 
 ---
 
-## Что может админ-панель?
+## How to link your PC account and Telegram together?
 
-![Обзор состояния сервера в админ-панели Chatter](docs/assets/admin-overview.png)
+ 1. Go to settings on the desktop.
+ 2. Select "Linked accounts".
+ 3. Click on "Telegram".
+ 4. Send in the Telegram bot: `/link`
+ 5. Enter the code shown on screen.
 
- 1. **Отслеживать состояние компонентов** и перезагружать их.
- 2. **Захотели добавить новую модель?** Вам не нужно заново вводить сохранённый API-ключ или изучать весь OpenRouter в поисках имени модели.
-    - API-ключ можно сохранить и переиспользовать.
-    - В админ-панели работает поисковик по моделям OpenRouter.
-    - Список провайдеров подтягивается, как только вы выбрали модель. Хотите, чтобы запрос шёл только к определённому провайдеру? Просто выберите его в выпадающем списке.
-    - Цены input/output/cache-токенов устанавливаются автоматически при выборе модели.
-    - Отдельно доступна Vision-модель — если основная модель не мультимодальная, то она попросит у Vision описать картинку, которую вы прикрепили.
-
-    ![Выбор модели, провайдера и цен в админ-панели](docs/assets/admin-model-selection.gif)
-
- 3. **Удобное управление лимитами.**
-    - Достаточно настроить бюджет, который юзер может потратить.
-    - Настраиваемый лимит картинок и веб-поиска для всех юзеров, а также отключаемая возможность прикреплять картинки.
-
-    ![Настройка тарифов, бюджетов и лимитов](docs/assets/admin-plans-limits.png)
-
- 4. **Анализ** того, какие модели используют юзеры, есть ли среди них сабагенты, как хорошо кэшируются сообщения и многое другое.
-
-    ![Статистика, подключения и использование моделей пользователем](docs/assets/admin-user-usage.png)
-
- 5. Логи бэкенда и графики показателей сервера.
- 6. Удобная интеграция доступных сервисов. Вставьте ключ, введите данные, и всё заработает из коробки.
- 7. **Кастомная сборка:**
-    - Не хотите мини-приложение телеграм? Не включайте.
-    - Нет мощностей на серверную озвучку и расшифровку голоса? Не проблема.
-    - Вы можете настроить сколько угодно предустановленных промптов для ваших юзеров.
- 8. Вам нужно забанить юзера? Одно нажатие, и он никогда больше не пробьётся вам ни в Telegram, ни в Desktop-приложение. А ключ всегда можно отозвать.
+**Done!**
 
 ---
 
-## Что же умеет Чаттер?
+## How to share it with a friend?
 
- 1. Пользоваться векторной памятью. У каждого юзера по умолчанию создаётся отдельная изолированная запись. Пока что доступна только интеграция [Pinecone](https://app.pinecone.io/).
- 2. Откликаться на "Alexa", "Hey, Jarvis", "Hey Mycroft", "Hey Rhasspy", а также отвечать и распознавать речь.
+**Via Telegram:**
+ 1. Send them the Telegram bot and wait for them to message.
+ 2. Approve their account from the admin panel.
 
-    ![Голосовая активация Chatter и управление интерфейсом](docs/assets/chatter-voice-activation.gif)
+**Via Desktop:**
+ 1. Send them the Desktop app and share an Access Key to connect to your server.
 
- 3. В Desktop-приложение встроены:
-    - локальная модель для озвучки Piper;
-    - нативная модель озвучки от Chrome;
-    - интеграция с [Cartesia](https://www.cartesia.ai/).
- 4. Умеет выполнять команды на ПК, а также редактировать и читать файлы. Им можно пользоваться как CLI.
+**Done!**
 
-    ![Chatter создаёт и самостоятельно открывает сайт](docs/assets/chatter-site-creation.gif)
-
- 5. Читать и отправлять почту с почтовых ящиков, которые вы туда добавили. На данный момент доступна удобная интеграция с инструкциями для [Gmail](https://mail.google.com/mail/) и [Yandex](https://mail.yandex.ru/), а также с любой другой почтой, которую вы можете настроить вручную. Отправка почты происходит только по подтверждению юзера.
- 6. Использовать поисковик с помощью сервиса [Tavily](https://www.tavily.com/).
- 7. Читать и парсить сайты с помощью [Browserless](https://www.browserless.io/pricing).
- 8. Генерировать изображения по образцу или по тексту через OpenRouter.
- 9. Использовать сабагентов для любых задач.
-
-    ![Параллельная работа сабагентов Chatter](docs/assets/chatter-parallel-subagents.gif)
-
- 10. Вызывать специализированных агентов. Например: для сжатия и форматирования видео в другие форматы.
- 11. Управлять вашими серверами. Боту не передаётся ни SSH-ключ, ни sudo-пароль. Для выполнения команды открывается сеанс SSH прямо на вашем сервере. SSH-ключ можно подтянуть одной кнопкой прямо с компьютера.
- 12. Сохранять и использовать Runbook-инструкции для дальнейшего использования, а также делиться ими с другими.
- 13. Сохранять макросы для эффектного управления (*Alexa, it's time to work!*).
- 14. Кастомные промпты, а также ИИ-редактор, встроенный прямо в панель для их удобного редактирования.
- 15. Ставить таски и напоминания. Например: включить свет, напомнить выбросить капли для глаз через месяц или проверить сервер (только если команды находятся в разрешённых), пока вы спите.
- 16. Управлять своим пиксельным аватаром и подстраивать его настроение под разговор прямо на экране. А также выводить на него любые картинки и гифки, которые он нашёл в интернете.
- 17. Создавать пиксель-арт, а также выводить его напрямую на пиксельный аватар.
- 18. Сохранять чат в DOCX, отправлять сообщения из чата напрямую в привязанный Telegram, а также использовать много других Quality of Life фич.
- 19. Нравится ролить с ботами? Для вас встроен **Dice Mode**, который подбрасывает кубик d20 на каждое ваше сообщение и влияет на сюжет!
- 20. Управлять картой, встроенной прямо в интерфейс приложения, запоминать точки на карте и прокладывать маршруты (однако, проверяйте инфу!).
- 21. Сохранять записки в свой блокнот, который точно так же доступен из приложения в Telegram.
- 22. Настраивать размер контекста, удобно и без конфигов выбирать модель для вызываемых сабагентов, настраивать уровни размышления (сейчас доступны настройки для провайдеров OpenRouter, DeepSeek и Xiaomi).
- 23. Управлять веб-камерой, делать скриншоты и кликать по экрану, пока Desktop подключён. Любое такое действие требует вашего подтверждения.
- 24. Большая часть фич доступна из Telegram с удобным меню и inline-кнопками.
- 25. Управлять умным домом и включать свет по расписанию. Доступна интеграция с Yandex; поддержка Zigbee пока экспериментальная и требует дополнительного тестирования.
- 26. Возможность прикреплять документы и фото даже к модели, которая не обладает зрением (при отдельно настроенной vision-модели).
- 27. Расшифровывать голосовые сообщения из Telegram! (нужен мощный сервер хотя бы с двумя ядрами, 2 ГБ оперативки и включённым voice-api)
- 28. Удобное и быстрое создание веток чата, а также перегенерация с инструкцией.
- 29. Бот предложил команду, но вы не знаете, что она делает? Нажимаете на кнопку Review, и Lite-модель оценит её риски.
+You can always see if someone has shared your key, and you can revoke it at any time.
 
 ---
 
-## На чём сфокусирован Чаттер?
+## What can the admin panel do?
 
-### 1. Безопасная работа с агентом
+![Chatter admin panel server overview](docs/assets/admin-overview.png)
 
- - Каждое действие по работе с сервером/ПК допускается только при разрешении юзера. Исключения: включённый Yolo-режим, Allow Always или «работать в этой папке». «Работать в этой папке» находит ближайший к вам `.git` и предлагает выбрать её по умолчанию.
- - Агент не видит SSH-ключ или ваш пароль: они подставляются автоматически и хранятся в зашифрованном виде. **НЕ ДАВАЙТЕ** агенту пароль, даже если он попросит. Для создания нового юзера на сервере у него есть отдельная команда!
- - На десктопе можно кастомно отключать фичи для безопасности. Вы можете запретить запись данных, разрешив только чтение, отключить сабагентов, интернет или команды на ПК. Или вообще обрубить ему доступ к памяти о вас.
- - Почта, SSH-ключи и чувствительные данные шифруются.
- - Все внутренние API админ-панели проходят через reverse proxy, а подбор пароля банится.
- - Встроена базовая защита от prompt injection.
- - Если вы не знаете, что делает команда, которую хочет выполнить нейросеть, то вы нажимаете на Review, и другая нейросеть объясняет её вам, оценивая риски.
+ 1. **Monitor component status** and restart them.
+ 2. **Want to add a new model?** No need to re-enter a saved API key or browse through all of OpenRouter searching for a model name.
+    - API keys can be saved and reused.
+    - A model search engine for OpenRouter is built into the admin panel.
+    - The provider list is populated as soon as you select a model. Want requests to go only to a specific provider? Just pick it from the dropdown.
+    - Input/output/cache token prices are set automatically when you select a model.
+    - A Vision model is available separately — if the main model is not multimodal, it will ask Vision to describe the image you attached.
 
-    ![Проверка рисков команды перед выполнением](docs/assets/chatter-command-review.gif)
+    ![Selecting a model, provider and pricing in the admin panel](docs/assets/admin-model-selection.gif)
 
-### 2. Жёсткая оптимизация всего
+ 3. **Convenient limit management.**
+    - Just set the budget a user can spend.
+    - Customizable limits for images and web search for all users, plus the ability to disable image attachments.
 
- - Системные промпты и другие повторяемые части контекста остаются стабильными, чтобы провайдер мог кэшировать до 90–95% входных токенов.
- - Чаты, фото и сообщения динамически подгружаются, чтобы не перегружать DOM. Виртуализация не используется (ненавижу): вместо неё используются кнопка подгрузки и расчёт по количеству символов.
- - OpenRouter перенаправляет вас на разных провайдеров и ломает кэширование, а лезть и настраивать ключ не хочется? Просто выберите провайдера, который подтягивается напрямую с OpenRouter, и будет использоваться только он.
- - Вы можете ввести много разных провайдеров (OpenRouter/DeepSeek/Xiaomi/etc), и если первый упадёт с ошибкой, то задача сразу перенаправится другому.
- - Нет денег гонять каждый раз модель со зрением? Не беда. Добавьте один раз vision-модель, и ваш основной ИИ-бот просто спросит у неё, что изображено на картинке, которую вы прикрепили.
- - Нет денег на озвучку, но хочется? Для этого встроены локальные модели. А абсолютно все интеграции имеют бесплатный лимит.
- - Не хочется гонять ИИ, чтобы он писал код сам для себя, раз за разом тратя токены? Он захардкожен. Казалось бы, минус, да? Но так вы можете работать над Чаттером (при желании) вместе с подпиской на большие сервисы, просто сделав `git clone` на свой компьютер.
- - Desktop-приложение в обычном режиме потребляет около 300 МБ RAM и почти не нагружает процессор. Серверные контейнеры считаются отдельно, а TTS и Whisper закономерно требуют больше ресурсов. Для сравнения: Codex у меня умудрялся разрастаться до десятков гигабайт — не мог не подколоть :)
- - Чтобы не ломать кэширование, при переполнении контекста архивируется 50% диалога (в дальнейшем будет добавлен краткий пересказ для сжатия).
- - Если документ не помещается, Chatter автоматически обрезает его содержимое, оставляя до 90% выбранного контекстного лимита.
- - Специально выделенная Lite-модель, которая используется для создания названий чатов, review и для других лёгких запросов.
+    ![Setting up plans, budgets and limits](docs/assets/admin-plans-limits.png)
 
-### 3. Удобство
+ 4. **Analysis** of which models users are using, whether subagents are involved, how well messages are being cached, and much more.
 
- - Хотите перекинуть себе в телеграм картинки или сообщения, которые сгенерила нейросеть, чтобы они были в телефоне? Нажмите на одну кнопку.
- - Хотите улучшить промпт? Нажмите на одну кнопку и примените изменения, которые предложил вам ИИ.
- - Не хотите заполнять макросы или записывать что-то в блокнот? Попросите сделать это ИИ.
- - Не хотите искать свой SSH-ключ по всему ПК? Нажмите на одну кнопку :D
- - Ушли из дома и хотите продолжить диалог с телефона? Абсолютно все чаты, выбор промпта и модели доступны прямо из Telegram!
- - Не хотите мучаться и опять искать свой API-ключ, подбирать модель на OpenRouter или выяснять, как парсится мышление новой модели? API-ключи можно сохранить, модели подтягиваются сами и сразу показывают стоимость, ограничение контекста и выбор доступных провайдеров, чтобы сохранить кэширование! А DeepSeek и Xiaomi предусмотрены в коде как сторонние провайдеры (если будут новые типа Mistral — пишите, я добавлю).
- - Не хотите вручную считать, сколько стоит каждая модель? OpenRouter подставляет свои значения, а для других есть предустановленные.
- - Ваши юзеры не хотят заморачиваться и разбираться в выборах моделей? Всегда есть Auto-режим!
- - Все интеграции позже обрастут описанием и инструкциями по быстрому подключению. Такие уже есть в умном доме.
+    ![User statistics, connections and model usage](docs/assets/admin-user-usage.png)
 
-### 4. Кастомизация
-
- - Параметры каждой модели можно настроить. Температура, Top P и другие.
- - Функционал Desktop-приложения отключается и кастомизируется.
+ 5. Backend logs and server performance graphs.
+ 6. Convenient integration of available services. Paste a key, enter the data, and everything works out of the box.
+ 7. **Custom build:**
+    - Don't want the Telegram mini-app? Don't enable it.
+    - No capacity for server-side TTS and voice transcription? No problem.
+    - You can configure as many preset prompts for your users as you want.
+ 8. Need to ban a user? One click, and they immediately lose access to your server through Telegram and the Desktop app. The access key can also be revoked at any time.
 
 ---
 
-## Перевод проекта на свой язык
+## What can Chatter do?
 
-Решили перевести проект на свой язык? Это делается быстро и просто:
+ 1. Use vector memory. Each user gets a separate isolated record by default. Currently only [Pinecone](https://app.pinecone.io/) integration is available.
+ 2. Wake on "Alexa", "Hey, Jarvis", "Hey Mycroft", or "Hey Rhasspy", with support for speech recognition and voice replies.
 
- 1. Добавьте свой язык в `shared/languages.ts` — это единый источник списка языков для всех компонентов.
- 2. Запустите:
+    ![Chatter voice activation and UI control](docs/assets/chatter-voice-activation.gif)
+
+ 3. Built into the Desktop app:
+    - local Piper model for TTS;
+    - native Chrome TTS model;
+    - [Cartesia](https://www.cartesia.ai/) integration.
+ 4. Execute commands on the PC, as well as edit and read files. It can be used as a CLI.
+
+    ![Chatter creates and opens a website on its own](docs/assets/chatter-site-creation.gif)
+
+ 5. Read and send emails from mailboxes you've added. Currently, convenient guided integration is available for [Gmail](https://mail.google.com/mail/) and [Yandex](https://mail.yandex.ru/), as well as any other email you can configure manually. Sending emails requires user confirmation.
+ 6. Use web search via the [Tavily](https://www.tavily.com/) service.
+ 7. Read and parse websites using [Browserless](https://www.browserless.io/pricing).
+ 8. Generate images from a reference or from text via OpenRouter.
+ 9. Use subagents for any task.
+
+    ![Chatter parallel subagents at work](docs/assets/chatter-parallel-subagents.gif)
+
+ 10. Invoke specialized agents. For example: compressing and converting videos to other formats.
+ 11. Manage your servers. The bot never sees your SSH key or sudo password. For command execution, an SSH session opens directly on your server. The SSH key can be pulled with one button straight from your computer.
+ 12. Save and use Runbook instructions for later use, and share them with others.
+ 13. Save macros for dramatic control (*Alexa, it's time to work!*).
+ 14. Custom prompts, plus an AI editor built right into the panel for convenient editing.
+ 15. Set tasks and reminders. For example: turn on the light, remind you to discard the eye drops in a month, or check the server (only if commands are in the allowed list) while you sleep.
+ 16. Control your pixel avatar and adjust its mood to the conversation right on screen. Also display any images and GIFs it found on the internet on it.
+ 17. Create pixel art and output it directly to the pixel avatar.
+ 18. Save chats as DOCX, send messages from a chat directly to a linked Telegram account, plus many other Quality of Life features.
+ 19. Like roleplaying with bots? **Dice Mode** is built in, rolling a d20 on every message you send and influencing the story!
+ 20. Control the map built into the app interface, remember points on the map, and plot routes (but double-check the info!).
+ 21. Save notes to your notebook, which is also accessible from the Telegram app.
+ 22. Configure context size, conveniently select models for subagents without touching configs, and set reasoning levels (currently available for OpenRouter, DeepSeek, and Xiaomi providers).
+ 23. Control the webcam, take screenshots, and click on the screen while Desktop is connected. Any such action requires your confirmation.
+ 24. Most features are accessible from Telegram with a convenient menu and inline buttons.
+ 25. Control your smart home and turn on lights on a schedule. Yandex integration is available; Zigbee support is currently experimental and needs further testing.
+ 26. Attach documents and photos even to a model without vision (when a vision-model is set up separately).
+ 27. Transcribe voice messages from Telegram! (requires a powerful server with at least 2 cores, 2 GB RAM, and voice-api enabled)
+ 28. Convenient and fast creation of chat branches, plus regeneration with instructions.
+ 29. The bot suggests a command but you don't know what it does? Press the Review button and the Lite model assesses its risks.
+
+---
+
+## What is Chatter focused on?
+
+### 1. Safe agent operations
+
+ - Every server/PC action is allowed only with user approval. Exceptions: Yolo mode enabled, Allow Always, or "work in this folder". "Work in this folder" finds the nearest `.git` and suggests it as the default.
+ - The agent never sees your SSH key or password: they are substituted automatically and stored encrypted. **DO NOT** give the agent your password, even if it asks. It has a separate command for creating a new user on the server!
+ - On the desktop, you can selectively disable features for safety. You can forbid writing data while allowing reads only, disable subagents, internet, or PC commands. Or cut off its access to your memory entirely.
+ - Email, SSH keys, and sensitive data are encrypted.
+ - All admin panel API requests go through a reverse proxy and Chatter Manager, while repeated login attempts are automatically blocked.
+ - Basic prompt injection protection is built in.
+ - If you don't know what a command suggested by the neural network does, you press Review and another neural network explains it to you, assessing the risks.
+
+    ![Checking command risks before execution](docs/assets/chatter-command-review.gif)
+
+### 2. Relentless optimization
+
+ - System prompts and other repeated context parts remain stable so the provider can cache up to 90–95% of input tokens.
+ - Chats, photos, and messages are loaded dynamically to avoid overloading the DOM. Virtualization is not used (I hate it): instead, a load-more button and character-count-based calculation are used.
+ - OpenRouter redirects you to different providers and breaks caching, and you don't want to dig in and configure keys? Just select a provider pulled directly from OpenRouter, and only that provider will be used.
+ - You can enter multiple providers (OpenRouter/DeepSeek/Xiaomi/etc), and if the first one fails with an error, the task is immediately redirected to another.
+ - No money to run a vision model every time? No problem. Add a vision model once, and your main AI bot will simply ask it to describe the image you attached.
+ - No money for TTS but still want it? Local models are built in for that. Many external integrations also offer a free tier.
+ - Don't want the AI generating utility code for itself over and over and burning tokens each time? Chatter's built-in tools are implemented in code ahead of time. Looks like a downside, right? But this way you can work on Chatter (if you want to) alongside subscriptions to major services, just by doing `git clone` on your computer.
+ - The Desktop app in normal mode uses about 300 MB RAM and barely loads the CPU. Server containers are counted separately, while TTS and Whisper naturally require more resources. For comparison: Codex could bloat to tens of gigabytes on my machine — couldn't resist a jab :)
+ - To avoid breaking caching, when context overflows, 50% of the conversation is archived (a short summarization for compression will be added in the future).
+ - If a document doesn't fit, Chatter automatically trims its content, keeping up to 90% of the selected context limit.
+ - A dedicated Lite model is used for generating chat titles, reviews, and other lightweight requests.
+
+### 3. Convenience
+
+ - Want to forward images or messages generated by the AI to your Telegram so they're on your phone? Press one button.
+ - Want to improve a prompt? Press one button and apply the changes the AI suggests.
+ - Don't want to fill in macros or write something in the notebook? Ask the AI to do it.
+ - Don't want to search for your SSH key across your entire PC? Press one button :D
+ - Left home and want to continue the conversation from your phone? All chats, prompt selection, and model choice are available right from Telegram!
+ - Don't want to struggle and search for your API key again, pick a model on OpenRouter, or figure out how to parse the reasoning of a new model? API keys can be saved, models are pulled automatically and immediately show cost, context limits, and available providers to preserve caching! And DeepSeek and Xiaomi are coded in as third-party providers (if new ones like Mistral appear — write to me, I'll add them).
+ - Don't want to manually calculate how much each model costs? OpenRouter fills in its own values, and there are presets for others.
+ - Your users don't want to bother figuring out model choices? Auto mode is always there!
+ - All integrations will later get descriptions and quick-start guides. These already exist for the smart home integration.
+
+### 4. Customization
+
+ - Parameters of each model can be configured. Temperature, Top P, and others.
+ - Desktop app functionality can be disabled and customized.
+
+---
+
+## Translating the project to your language
+
+Decided to translate the project into your language? It's quick and easy:
+
+ 1. Add your language to `shared/languages.ts` — this is the single source of truth for the language list across all components.
+ 2. Run:
     ```bash
     npm run sync:languages
     ```
-    чтобы обновить локальные копии списка.
- 3. Добавьте свой API-ключ в `.env.i18n`:
+    to update local copies of the list.
+ 3. Add your API key to `.env.i18n`:
     ```
     I18N_TRANSLATE_API_URL=url
     I18N_TRANSLATE_API_KEY=your_key
     I18N_TRANSLATE_MODEL=your_model
     ```
- 4. Запустите:
+ 4. Run:
     ```bash
     npm run i18n:translate:all
     ```
-    Команда отдельно переведёт Telegram-бота, Desktop, Backend API, Webapp Notes, админ-панель и changelog-файлы.
- 5. Наслаждайтесь.
+    This command will separately translate the Telegram bot, Desktop, Backend API, Webapp Notes, admin panel, and changelog files.
+ 5. Enjoy.
 
 ---
 
-## Важно
+## Important
 
- - В сервисе могут встречаться баги, которые я не нашёл. Если вы нашли такой баг — прикрепляйте его в Issues, разберёмся. Те баги, которые я уже нашёл, лежат в плане на исправление. Я работаю над проектом один, поэтому помощь приветствуется!
- - В планах на будущее находится рефакторинг desktop-app, а также backend-api.
- - В использовании Чаттера как Cli для работы ещё могут встречаться проблемы (например, он может перепутать строку и не проверить типы, оставив ошибку). Я работаю над улучшением.
+ - The service may contain bugs I haven't found yet. If you find one — submit it to Issues, we'll figure it out. The bugs I already know about are in the fix backlog. I'm working on the project alone, so help is welcome!
+ - Future plans include refactoring both the desktop-app and the backend-api.
+ - When using Chatter as a CLI for work, issues may still occur (e.g. it might confuse a string and not check types, leaving an error). I'm working on improving this.
