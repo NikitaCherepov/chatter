@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
+import { formatDateTime } from '../../../lib/formatDate';
 import { Card } from '../../ui/Card/Card';
 import styles from './AccessKeysPage.module.css';
 
@@ -18,7 +19,6 @@ type AccessKey = {
 };
 
 const formatNumber = (value: number, locale: string) => new Intl.NumberFormat(locale).format(Number(value) || 0);
-const formatDate = (value: string | null, locale: string) => value ? new Date(`${value.replace(' ', 'T')}Z`).toLocaleString(locale) : '—';
 
 export function AccessKeysPage() {
   const { t, i18n } = useTranslation();
@@ -90,8 +90,8 @@ export function AccessKeysPage() {
           {keys.map(key => <div className={styles.row} key={key.id}>
             <span><strong>{key.name}</strong><small>{key.key_prefix}{key.revoked_at ? ` · ${t('accessKeys.revoked')}` : ''}</small></span>
             <span>{formatNumber(key.user_count, i18n.language)}</span><span>{formatNumber(key.weekly_tokens_used, i18n.language)}</span>
-            <span>{formatDate(key.last_used_at, i18n.language)}</span>
-            <span>{key.revoked_at ? <small>{formatDate(key.revoked_at, i18n.language)}</small> : <button type="button" className="buttonSecondary" onClick={() => void revoke(key)}>{t('accessKeys.revoke')}</button>}</span>
+            <span>{formatDateTime(key.last_used_at, i18n.language)}</span>
+            <span>{key.revoked_at ? <small>{formatDateTime(key.revoked_at, i18n.language)}</small> : <button type="button" className="buttonSecondary" onClick={() => void revoke(key)}>{t('accessKeys.revoke')}</button>}</span>
           </div>)}
           {!keys.length && <div className={styles.empty}>{t('accessKeys.emptyState')}</div>}
         </div>

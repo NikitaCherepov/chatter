@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
+import { formatDateTime } from '../../../lib/formatDate';
 import { Card } from '../../ui/Card/Card';
 import { Select } from '../../ui/Select/Select';
 import { PlanDurationModal, type PlanDuration, type UserPlan } from './PlanDurationModal/PlanDurationModal';
@@ -57,18 +58,6 @@ function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(Number(value) || 0);
 }
 
-function formatDate(value: string | number | null) {
-  if (!value) return '—';
-  const normalized = typeof value === 'number'
-    ? value
-    : value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('ru', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  }).format(date);
-}
-
 function identityValue(identity: Identity) {
   const username = identity.username
     ? identity.provider === 'telegram' && !identity.username.startsWith('@')
@@ -80,6 +69,7 @@ function identityValue(identity: Identity) {
 
 export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () => void }) {
   const { t, i18n } = useTranslation();
+  const locale = i18n.language;
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -124,7 +114,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         value: password ? identityValue(password) : t('users.detail.noAccount'),
         state: user.desktop.online ? t('users.detail.onlineNow') : password ? t('users.detail.notConnected') : t('users.detail.notBound'),
         online: user.desktop.online,
-        updated: user.desktop.online ? formatDate(user.desktop.last_activity_at) : password ? formatDate(password.updated_at) : '—',
+        updated: user.desktop.online ? formatDateTime(user.desktop.last_activity_at, locale) : password ? formatDateTime(password.updated_at, locale) : '—',
       },
       {
         name: 'Telegram',
@@ -132,7 +122,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         value: telegram ? identityValue(telegram) : t('users.detail.telegramNotBound'),
         state: telegram ? t('users.detail.bound') : t('users.detail.notBound'),
         online: null,
-        updated: telegram ? formatDate(telegram.updated_at) : '—',
+        updated: telegram ? formatDateTime(telegram.updated_at, locale) : '—',
       },
       ...extra.map(identity => ({
         name: identity.provider,
@@ -140,10 +130,10 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         value: identityValue(identity),
         state: t('users.detail.bound'),
         online: null,
-        updated: formatDate(identity.updated_at),
+        updated: formatDateTime(identity.updated_at, locale),
       })),
     ];
-  }, [user]);
+  }, [locale, t, user]);
 
   async function changeRole(role: 'user' | 'admin') {
     if (!user || role === user.role) return;
@@ -246,7 +236,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     ? Math.min(100, Math.round((user.weekly_tokens_used || 0) / user.weekly_tokens_quota * 100))
     : 0;
   const weeklyResetsAt = user.weekly_window_started_at
-    ? formatDate(new Date((user.weekly_window_started_at + 7 * 24 * 60 * 60) * 1000).toISOString())
+    ? formatDateTime(new Date((user.weekly_window_started_at + 7 * 24 * 60 * 60) * 1000).toISOString(), locale)
     : '—';
 
   const stats = [
@@ -263,7 +253,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     [t('users.detail.usage.stats.imagesToday'), `${formatNumber(user.daily_image_gen_count, i18n.language)} / ${formatNumber(user.daily_image_gen_limit, i18n.language)}`],
     [t('users.detail.usage.stats.imagesTotal'), formatNumber(user.total_image_gen_count, i18n.language)],
     [t('users.detail.usage.stats.messageLength'), formatNumber(user.total_message_length, i18n.language)],
-    [t('users.detail.usage.stats.lastMessage'), formatDate(user.messages.last_message_at)],
+    [t('users.detail.usage.stats.lastMessage'), formatDateTime(user.messages.last_message_at, locale)],
   ];
 
   return (
@@ -275,7 +265,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
 
       <Card
         title={user.name || t('users.list.userDefaultName', { id: user.id })}
-        description={t('users.detail.description', { id: user.id, created: formatDate(user.created_at) })}
+        description={t('users.detail.description', { id: user.id, created: formatDateTime(user.created_at, locale) })}
         aside={<span className={user.desktop.online ? styles.online : styles.offline}>{user.desktop.online ? t('users.detail.desktopOnline') : t('users.detail.desktopOffline')}</span>}
       >
         <div className={styles.accountGrid}>
@@ -315,13 +305,13 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
                 { value: 'pro', label: 'Pro' },
               ]}
             />
-            <small>{user.subscription?.ends_at ? t('users.detail.planUntil', { date: formatDate(user.subscription.ends_at) }) : t('users.detail.planForever')}</small>
+            <small>{user.subscription?.ends_at ? t('users.detail.planUntil', { date: formatDateTime(user.subscription.ends_at, locale) }) : t('users.detail.planForever')}</small>
             <button type="button" className={styles.durationButton} onClick={() => setPendingPlan(user.plan as UserPlan)}>{t('users.detail.changeDuration')}</button>
           </div>
           <div><span>{t('users.detail.languageLabel')}</span><strong>{user.language || t('users.detail.languageNotSet')}</strong></div>
           <div><span>{t('users.detail.preferredModelLabel')}</span><strong>{user.preferred_model || t('users.detail.preferredModelAuto')}</strong></div>
           <div><span>{t('users.detail.reasoningLabel')}</span><strong>{user.reasoning_level || t('users.detail.reasoningDefault')}</strong></div>
-          <div><span>{t('users.detail.lastDesktopKey')}</span><strong>{user.last_server_access_key ? `${user.last_server_access_key.name} · ${user.last_server_access_key.key_prefix}` : t('users.detail.desktopKeyNotUsed')}</strong><small>{user.last_server_access_key ? formatDate(user.last_server_access_key.last_used_at) : '—'}</small></div>
+          <div><span>{t('users.detail.lastDesktopKey')}</span><strong>{user.last_server_access_key ? `${user.last_server_access_key.name} · ${user.last_server_access_key.key_prefix}` : t('users.detail.desktopKeyNotUsed')}</strong><small>{user.last_server_access_key ? formatDateTime(user.last_server_access_key.last_used_at, locale) : '—'}</small></div>
         </div>
         <div className={styles.banBar}>
           <div><strong>{user.status === 'banned' ? t('users.detail.ban.banned') : t('users.detail.ban.blockAccount')}</strong><span>{user.ban?.reason || t('users.detail.ban.banHint')}</span></div>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../lib/api';
+import { formatDateTime } from '../../../lib/formatDate';
 import { useTranslation } from 'react-i18next';
 import { Card } from '../../ui/Card/Card';
 import { Input } from '../../ui/Input/Input';
@@ -33,16 +34,6 @@ type UserOverview = {
 type UsersResponse = { users: UserOverview[]; total: number; limited: boolean };
 
 const planLabels: Record<string, string> = { free: 'Free', standart: 'Standard', pro: 'Pro' };
-
-function formatDate(value: string | null) {
-  if (!value) return '—';
-  const normalized = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('ru', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  }).format(date);
-}
 
 function formatCost(usd: number | null | undefined): string {
   if (usd === null || usd === undefined || !Number.isFinite(usd) || usd === 0) return '—';
@@ -210,8 +201,8 @@ export function UsersPage({ onSelectUser }: { onSelectUser: (userId: number) => 
                     </td>
                     <td className={styles.number}>{user.message_count.toLocaleString(i18n.language)}</td>
                     <td className={styles.number}>{formatCost(user.total_cost_usd)}</td>
-                    <td>{formatDate(user.last_message_at)}</td>
-                    <td>{formatDate(user.created_at)}</td>
+                    <td>{formatDateTime(user.last_message_at, i18n.language)}</td>
+                    <td>{formatDateTime(user.created_at, i18n.language)}</td>
                   </tr>
                 );
               })}
