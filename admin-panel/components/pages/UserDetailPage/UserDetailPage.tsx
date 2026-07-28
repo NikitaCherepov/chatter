@@ -201,6 +201,23 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     }
   }
 
+  async function deleteUser() {
+    if (!user) return;
+    if (!window.confirm(t('users.detail.actions.deleteUserConfirm'))) return;
+    setActionState(t('users.detail.actions.deletingUser'));
+    try {
+      await api(`/api/users/${user.id}`, { method: 'DELETE' });
+      onBack();
+    } catch (deleteError) {
+      const msg = deleteError instanceof Error ? deleteError.message : String(deleteError);
+      if (msg.includes('cannot_delete_admin')) {
+        setActionState(t('users.detail.actions.cannotDeleteAdmin'));
+      } else {
+        setActionState(t('users.detail.actions.error', { error: msg }));
+      }
+    }
+  }
+
   async function generatePassword() {
     if (!user) return;
     const hasPassword = user.identities?.some((i: any) => i.provider === 'password');
@@ -314,6 +331,10 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         <div className={styles.banBar}>
           <div><span>{t('users.detail.actions.generatePasswordHint')}</span></div>
           <button type="button" className={styles.dangerButton} onClick={() => void generatePassword()}>{t('users.detail.actions.generatePassword')}</button>
+        </div>
+        <div className={styles.banBar}>
+          <div><strong>{t('users.detail.actions.deleteUser')}</strong><span>{t('users.detail.actions.deleteUserHint')}</span></div>
+          <button type="button" className={styles.dangerButton} onClick={() => void deleteUser()}>{t('users.detail.actions.deleteUser')}</button>
         </div>
         {actionState && <p className={styles.actionState}>{actionState}</p>}
       </Card>

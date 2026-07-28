@@ -455,7 +455,12 @@
         "generatingPassword": "Generating password...",
         "passwordGenerated": "New user password: {{password}}",
         "passwordGeneratedSuccess": "New password generated",
-        "noPasswordIdentity": "User has no password-based login"
+        "noPasswordIdentity": "User has no password-based login",
+        "deleteUser": "Delete User",
+        "deleteUserConfirm": "Are you sure you want to permanently delete this user? ALL user data (chats, notes, tasks, files, identities) will be removed. This action cannot be undone.",
+        "deleteUserHint": "Permanently removes the user and all associated data from the database.",
+        "deletingUser": "Deleting user…",
+        "cannotDeleteAdmin": "Cannot delete an administrator"
       },
       "modelUsage": {
         "title": "Usage by model",

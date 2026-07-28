@@ -2027,6 +2027,11 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && userDetailMatch) {
     return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users-overview/${userDetailMatch[1]}`));
   }
+  if (req.method === 'DELETE' && userDetailMatch) {
+    return sendJson(res, 200, await backendInternalRequest(`/internal/users/${userDetailMatch[1]}`, {
+      method: 'DELETE',
+    }));
+  }
   const userUsageMatch = pathname.match(/^\/api\/users\/(\d+)\/usage$/);
   if (req.method === 'GET' && userUsageMatch) {
     return sendJson(res, 200, await backendInternalRequest(`/internal/admin/users/${userUsageMatch[1]}/usage`));
