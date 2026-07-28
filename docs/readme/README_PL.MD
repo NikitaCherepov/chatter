@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | **Polski** | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | **Polski** | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Ceny modeli są pobierane automatycznie. Jedyne, czego potrzebujesz, to ustawić
 
 > **System płatności nie jest jeszcze zintegrowany!**
 
-![Chatter łączy Telegram i Desktop](docs/assets/chatter-telegram-desktop.gif)
+![Chatter łączy Telegram i Desktop](../assets/chatter-telegram-desktop.gif)
 
 Chciałeś udostępnić AI swojej mamie, ale uważa, że technologia jest zbyt skomplikowana? Daj jej swojego bota Telegram. Zero krzywej uczenia się.
 
@@ -102,7 +102,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 
 ## Co potrafi panel administracyjny?
 
-![Podgląd panelu administracyjnego Chatter](docs/assets/admin-overview.png)
+![Podgląd panelu administracyjnego Chatter](../assets/admin-overview.png)
 
 1. **Monitoruj stan komponentów** i restartuj je.
 2. **Chcesz dodać nowy model?** Nie ma potrzeby ponownego wprowadzania zapisanego klucza API ani przeglądania całego OpenRouter w poszukiwaniu nazwy modelu.
@@ -112,17 +112,17 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
    - Ceny tokenów wejścia/wyjścia/cache są ustawiane automatycznie po wybraniu modelu.
    - Model Vision jest dostępny osobno — jeśli główny model nie jest multimodalny, poprosi Vision o opisanie dołączonego obrazu.
 
-   ![Wybór modelu, dostawcy i ceny w panelu administracyjnym](docs/assets/admin-model-selection.gif)
+   ![Wybór modelu, dostawcy i ceny w panelu administracyjnym](../assets/admin-model-selection.gif)
 
 3. **Wygodne zarządzanie limitami.**
    - Po prostu ustaw budżet, który użytkownik może wydać.
    - Konfigurowalne limity dla obrazów i wyszukiwania w sieci dla wszystkich użytkowników, plus możliwość wyłączenia załączników obrazów.
 
-   ![Konfiguracja planów, budżetów i limitów](docs/assets/admin-plans-limits.png)
+   ![Konfiguracja planów, budżetów i limitów](../assets/admin-plans-limits.png)
 
 4. **Analiza** tego, które modele są używane przez użytkowników, czy subagenci są zaangażowani, jak dobrze buforowane są wiadomości i wiele więcej.
 
-   ![Statystyki użytkowników, połączenia i użycie modeli](docs/assets/admin-user-usage.png)
+   ![Statystyki użytkowników, połączenia i użycie modeli](../assets/admin-user-usage.png)
 
 5. Logi backendu i wykresy wydajności serwera.
 6. Wygodna integracja dostępnych usług. Wklej klucz, wprowadź dane, a wszystko działa od razu.
@@ -139,7 +139,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 1. Używa pamięci wektorowej. Każdy użytkownik domyślnie otrzymuje osobny, izolowany zapis. Obecnie dostępna jest tylko integracja z [Pinecone](https://app.pinecone.io/).
 2. Budzi się na "Alexa", "Hey, Jarvis", "Hey Mycroft" lub "Hey Rhasspy", z obsługą rozpoznawania mowy i odpowiedzi głosowych.
 
-   ![Aktywacja głosowa Chatter i sterowanie UI](docs/assets/chatter-voice-activation.gif)
+   ![Aktywacja głosowa Chatter i sterowanie UI](../assets/chatter-voice-activation.gif)
 
 3. Wbudowane w aplikację Desktop:
    - lokalny model Piper do TTS;
@@ -147,7 +147,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
    - integracja z [Cartesia](https://www.cartesia.ai/).
 4. Wykonuje polecenia na komputerze, a także edytuje i odczytuje pliki. Może być używany jako CLI.
 
-   ![Chatter samodzielnie tworzy i otwiera stronę internetową](docs/assets/chatter-site-creation.gif)
+   ![Chatter samodzielnie tworzy i otwiera stronę internetową](../assets/chatter-site-creation.gif)
 
 5. Odczytuje i wysyła e-maile z dodanych skrzynek pocztowych. Obecnie dostępna jest wygodna, prowadzona integracja dla [Gmail](https://mail.google.com/mail/) i [Yandex](https://mail.yandex.ru/), a także dowolnej innej poczty, którą można skonfigurować ręcznie. Wysyłanie e-maili wymaga potwierdzenia użytkownika.
 6. Używa wyszukiwania w sieci przez usługę [Tavily](https://www.tavily.com/).
@@ -155,7 +155,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 8. Generuje obrazy na podstawie referencji lub z tekstu przez OpenRouter.
 9. Używa subagentów do dowolnego zadania.
 
-   ![Równoległa praca subagentów Chatter](docs/assets/chatter-parallel-subagents.gif)
+   ![Równoległa praca subagentów Chatter](../assets/chatter-parallel-subagents.gif)
 
 10. Wywołuje wyspecjalizowanych agentów. Na przykład: kompresowanie i konwertowanie wideo na inne formaty.
 11. Zarządza Twoimi serwerami. Bot nigdy nie widzi Twojego klucza SSH ani hasła sudo. Do wykonywania poleceń sesja SSH otwiera się bezpośrednio na Twoim serwerze. Klucz SSH można pobrać jednym przyciskiem prosto z komputera.
@@ -192,7 +192,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 - Podstawowa ochrona przed iniekcją promptów jest wbudowana.
 - Jeśli nie wiesz, co robi polecenie sugerowane przez sieć neuronową, naciskasz Review, a inna sieć neuronowa wyjaśnia Ci to, oceniając ryzyko.
 
-   ![Sprawdzanie ryzyka polecenia przed wykonaniem](docs/assets/chatter-command-review.gif)
+   ![Sprawdzanie ryzyka polecenia przed wykonaniem](../assets/chatter-command-review.gif)
 
 ### 2. Nieustanna optymalizacja
 

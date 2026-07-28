@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | **Čeština**
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | **Čeština**
 
 ---
 
@@ -10,7 +10,7 @@ Ceny modelů se stahují automaticky. Vše, co potřebujete, je nastavit rozpoč
 
 > **Platební systém zatím není integrován!**
 
-![Chatter propojuje Telegram a Desktop](docs/assets/chatter-telegram-desktop.gif)
+![Chatter propojuje Telegram a Desktop](../assets/chatter-telegram-desktop.gif)
 
 Chtěli jste sdílet AI se svou matkou, ale technologie jí připadá příliš složitá? Dejte jí svého Telegram bota. Žádná křivka učení.
 
@@ -102,7 +102,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 
 ## Co všechno admin panel umí?
 
-![Přehled serveru v admin panelu Chatteru](docs/assets/admin-overview.png)
+![Přehled serveru v admin panelu Chatteru](../assets/admin-overview.png)
 
 1. **Sledovat stav komponent** a restartovat je.
 2. **Chcete přidat nový model?** Není třeba znovu zadávat uložený API klíč nebo procházet celý OpenRouter při hledání názvu modelu.
@@ -112,17 +112,17 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
    - Ceny tokenů pro vstup/výstup/mezipaměť se nastaví automaticky při výběru modelu.
    - Vision model je k dispozici samostatně — pokud hlavní model není multimodální, požádá Vision, aby popsal obrázek, který jste přiložili.
 
-   ![Výběr modelu, poskytovatele a ceny v admin panelu](docs/assets/admin-model-selection.gif)
+   ![Výběr modelu, poskytovatele a ceny v admin panelu](../assets/admin-model-selection.gif)
 
 3. **Pohodlná správa limitů.**
    - Stačí nastavit rozpočet, který může uživatel utratit.
    - Přizpůsobitelné limity pro obrázky a webové vyhledávání pro všechny uživatele a možnost zakázat připojování obrázků.
 
-   ![Nastavení plánů, rozpočtů a limitů](docs/assets/admin-plans-limits.png)
+   ![Nastavení plánů, rozpočtů a limitů](../assets/admin-plans-limits.png)
 
 4. **Analýza** toho, které modely uživatelé používají, zda jsou zapojeni subagenti, jak dobře jsou zprávy ukládány do mezipaměti a mnohem více.
 
-   ![Uživatelské statistiky, připojení a využití modelů](docs/assets/admin-user-usage.png)
+   ![Uživatelské statistiky, připojení a využití modelů](../assets/admin-user-usage.png)
 
 5. Backend logy a grafy výkonu serveru.
 6. Pohodlná integrace dostupných služeb. Vložte klíč, zadejte údaje a vše funguje ihned po vybalení.
@@ -139,7 +139,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 1. Používat vektorovou paměť. Každý uživatel ve výchozím nastavení dostane samostatný izolovaný záznam. V současné době je k dispozici pouze integrace [Pinecone](https://app.pinecone.io/).
 2. Probouzet se na "Alexa", "Hey, Jarvis", "Hey Mycroft" nebo "Hey Rhasspy" s podporou rozpoznávání řeči a hlasových odpovědí.
 
-   ![Chatter hlasová aktivace a ovládání rozhraní](docs/assets/chatter-voice-activation.gif)
+   ![Chatter hlasová aktivace a ovládání rozhraní](../assets/chatter-voice-activation.gif)
 
 3. Integrováno do Desktop aplikace:
    - lokální Piper model pro TTS;
@@ -147,7 +147,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
    - [Cartesia](https://www.cartesia.ai/) integrace.
 4. Spouštět příkazy na PC a také upravovat a číst soubory. Lze použít jako CLI.
 
-   ![Chatter samostatně vytváří a otevírá webové stránky](docs/assets/chatter-site-creation.gif)
+   ![Chatter samostatně vytváří a otevírá webové stránky](../assets/chatter-site-creation.gif)
 
 5. Číst a odesílat e-maily z přidaných poštovních schránek. V současné době je k dispozici pohodlná řízená integrace pro [Gmail](https://mail.google.com/mail/) a [Yandex](https://mail.yandex.ru/) a také jakýkoli jiný e-mail, který můžete nakonfigurovat ručně. Odesílání e-mailů vyžaduje potvrzení uživatele.
 6. Používat webové vyhledávání prostřednictvím služby [Tavily](https://www.tavily.com/).
@@ -155,7 +155,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 8. Generovat obrázky z reference nebo z textu přes OpenRouter.
 9. Používat subagenty pro jakýkoli úkol.
 
-   ![Chatter paralelní subagenti při práci](docs/assets/chatter-parallel-subagents.gif)
+   ![Chatter paralelní subagenti při práci](../assets/chatter-parallel-subagents.gif)
 
 10. Volat specializované agenty. Například: komprese a konverze videí do jiných formátů.
 11. Spravovat své servery. Bot nikdy neuvidí váš SSH klíč ani sudo heslo. Pro spouštění příkazů se SSH relace otevírá přímo na vašem serveru. SSH klíč lze stáhnout jedním tlačítkem přímo z vašeho počítače.
@@ -192,7 +192,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 - Základní ochrana proti prompt injection je zabudována.
 - Pokud nevíte, co dělá příkaz navržený neurální sítí, stisknete Review a jiná neurální síť vám jej vysvětlí a posoudí rizika.
 
-   ![Kontrola rizik příkazu před provedením](docs/assets/chatter-command-review.gif)
+   ![Kontrola rizik příkazu před provedením](../assets/chatter-command-review.gif)
 
 ### 2. Neúnavná optimalizace
 

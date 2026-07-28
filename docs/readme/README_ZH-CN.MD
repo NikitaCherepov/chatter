@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | **中文（简体）** | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | **中文（简体）** | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Chatter 是一个多平台系统，配备 AI 智能体，运行在服务器上�
 
 > **支付系统尚未集成！**
 
-![Chatter 连接 Telegram 和 Desktop](docs/assets/chatter-telegram-desktop.gif)
+![Chatter 连接 Telegram 和 Desktop](../assets/chatter-telegram-desktop.gif)
 
 想和妈妈分享 AI，但她觉得技术太复杂？给她你的 Telegram 机器人。零学习成本。
 
@@ -102,7 +102,7 @@ Telegram 用户可以在 Desktop 连接的情况下继续相同的对话并控�
 
 ## 管理面板能做什么？
 
-![Chatter 管理面板服务器概览](docs/assets/admin-overview.png)
+![Chatter 管理面板服务器概览](../assets/admin-overview.png)
 
 1. **监控组件状态**并重新启动它们。
 2. **想添加新模型？** 无需重新输入已保存的 API 密钥，也无需浏览整个 OpenRouter 搜索模型名称。
@@ -112,17 +112,17 @@ Telegram 用户可以在 Desktop 连接的情况下继续相同的对话并控�
    - 选择模型时，输入/输出/缓存 token 价格会自动设置。
    - Vision 模型单独提供——如果主模型不是多模态的，它会请 Vision 描述你附上的图片。
 
-   ![在管理面板中选择模型、提供商和价格](docs/assets/admin-model-selection.gif)
+   ![在管理面板中选择模型、提供商和价格](../assets/admin-model-selection.gif)
 
 3. **便捷的限额管理。**
    - 只需设置用户可用的预算。
    - 可为所有用户自定义图片和网络搜索的限制，还可以禁用图片附件。
 
-   ![设置套餐、预算和限制](docs/assets/admin-plans-limits.png)
+   ![设置套餐、预算和限制](../assets/admin-plans-limits.png)
 
 4. **分析**用户正在使用哪些模型、是否涉及子智能体、消息缓存效果如何等等。
 
-   ![用户统计、连接和模型使用情况](docs/assets/admin-user-usage.png)
+   ![用户统计、连接和模型使用情况](../assets/admin-user-usage.png)
 
 5. 后端日志和服务器性能图表。
 6. 便捷地集成可用服务。粘贴密钥，输入数据，一切立即可用。
@@ -139,7 +139,7 @@ Telegram 用户可以在 Desktop 连接的情况下继续相同的对话并控�
 1. 使用向量记忆。默认情况下，每个用户获得独立的隔离记录。目前仅支持 [Pinecone](https://app.pinecone.io/) 集成。
 2. 通过"Alexa"、"Hey, Jarvis"、"Hey Mycroft"或"Hey Rhasspy"唤醒，支持语音识别和语音回复。
 
-   ![Chatter 语音激活和 UI 控制](docs/assets/chatter-voice-activation.gif)
+   ![Chatter 语音激活和 UI 控制](../assets/chatter-voice-activation.gif)
 
 3. 内置到 Desktop 应用程序中：
    - 用于 TTS 的本地 Piper 模型；
@@ -147,7 +147,7 @@ Telegram 用户可以在 Desktop 连接的情况下继续相同的对话并控�
    - [Cartesia](https://www.cartesia.ai/) 集成。
 4. 在 PC 上执行命令，以及编辑和读取文件。可用作 CLI。
 
-   ![Chatter 自主创建并打开网站](docs/assets/chatter-site-creation.gif)
+   ![Chatter 自主创建并打开网站](../assets/chatter-site-creation.gif)
 
 5. 读取和发送已添加邮箱的电子邮件。目前，[Gmail](https://mail.google.com/mail/) 和 [Yandex](https://mail.yandex.ru/) 提供便捷的引导式集成，其他邮箱也可以手动配置。发送邮件需要用户确认。
 6. 通过 [Tavily](https://www.tavily.com/) 服务使用网络搜索。
@@ -155,7 +155,7 @@ Telegram 用户可以在 Desktop 连接的情况下继续相同的对话并控�
 8. 通过 OpenRouter 根据参考图或文本生成图片。
 9. 使用子智能体处理任何任务。
 
-   ![Chatter 并行子智能体工作](docs/assets/chatter-parallel-subagents.gif)
+   ![Chatter 并行子智能体工作](../assets/chatter-parallel-subagents.gif)
 
 10. 调用专门的智能体。例如：压缩视频并将其转换为其他格式。
 11. 管理你的服务器。机器人永远不会看到你的 SSH 密钥或 sudo 密码。执行命令时，SSH 会话会直接在你的服务器上打开。SSH 密钥可以通过一个按钮直接从你的电脑获取。
@@ -192,7 +192,7 @@ Telegram 用户可以在 Desktop 连接的情况下继续相同的对话并控�
 - 内置基本的提示注入保护。
 - 如果你不知道神经网络建议的命令做什么，按下 Review，另一个神经网络会向你解释，并评估风险。
 
-   ![执行前检查命令风险](docs/assets/chatter-command-review.gif)
+   ![执行前检查命令风险](../assets/chatter-command-review.gif)
 
 ### 2. 不懈的优化
 

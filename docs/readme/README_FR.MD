@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | **Français** | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | **Français** | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Les prix des modeles sont recuperes automatiquement. Tout ce dont vous avez beso
 
 > **Le systeme de paiement nest pas encore integre!**
 
-![Chatter connecte Telegram et le Bureau](docs/assets/chatter-telegram-desktop.gif)
+![Chatter connecte Telegram et le Bureau](../assets/chatter-telegram-desktop.gif)
 
 Vous vouliez partager lIA avec votre mere mais elle trouve la technologie trop compliquee? Donnez-lui votre bot Telegram. Zero courbe dapprentissage.
 
@@ -102,7 +102,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 
 ## Que peut faire le panneau dadministration?
 
-![Apercu du serveur dans le panneau dadministration Chatter](docs/assets/admin-overview.png)
+![Apercu du serveur dans le panneau dadministration Chatter](../assets/admin-overview.png)
 
 1. **Surveiller letat des composants** et les redemarrer.
 2. **Vous voulez ajouter un nouveau modele?** Pas besoin de ressaisir une cle API sauvegardee ou de parcourir tout OpenRouter a la recherche dun nom de modele.
@@ -112,17 +112,17 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
    - Les prix des tokens dentree/sortie/cache sont definis automatiquement lorsque vous selectionnez un modele.
    - Un modele Vision est disponible separement. Si le modele principal nest pas multimodal, il demandera a Vision de decrire limage que vous avez jointe.
 
-   ![Selection dun modele, fournisseur et tarification dans le panneau dadministration](docs/assets/admin-model-selection.gif)
+   ![Selection dun modele, fournisseur et tarification dans le panneau dadministration](../assets/admin-model-selection.gif)
 
 3. **Gestion pratique des limites.**
    - Definissez simplement le budget quun utilisateur peut depenser.
    - Limites personnalisables pour les images et la recherche web pour tous les utilisateurs, ainsi que la possibilite de desactiver les pieces jointes images.
 
-   ![Configuration des formules, budgets et limites](docs/assets/admin-plans-limits.png)
+   ![Configuration des formules, budgets et limites](../assets/admin-plans-limits.png)
 
 4. **Analyse** des modeles utilises par les utilisateurs, de la participation des sous-agents, de lefficacite du cache des messages et bien plus encore.
 
-   ![Statistiques utilisateur, connexions et utilisation des modeles](docs/assets/admin-user-usage.png)
+   ![Statistiques utilisateur, connexions et utilisation des modeles](../assets/admin-user-usage.png)
 
 5. Journaux du backend et graphiques de performance du serveur.
 6. Integration pratique des services disponibles. Collez une cle, saisissez les donnees, et tout fonctionne immediatement.
@@ -139,7 +139,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 1. Utiliser la memoire vectorielle. Chaque utilisateur obtient un enregistrement isole separe par defaut. Actuellement, seule lintegration [Pinecone](https://app.pinecone.io/) est disponible.
 2. Se reveiller sur "Alexa", "Hey, Jarvis", "Hey Mycroft" ou "Hey Rhasspy", avec prise en charge de la reconnaissance vocale et des reponses vocales.
 
-   ![Activation vocale Chatter et controle de linterface utilisateur](docs/assets/chatter-voice-activation.gif)
+   ![Activation vocale Chatter et controle de linterface utilisateur](../assets/chatter-voice-activation.gif)
 
 3. Integre dans lapplication de Bureau :
    - modele local Piper pour la TTS;
@@ -147,7 +147,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
    - integration [Cartesia](https://www.cartesia.ai/).
 4. Executer des commandes sur le PC, ainsi que modifier et lire des fichiers. Peut etre utilise comme CLI.
 
-   ![Chatter cree et ouvre un site web tout seul](docs/assets/chatter-site-creation.gif)
+   ![Chatter cree et ouvre un site web tout seul](../assets/chatter-site-creation.gif)
 
 5. Lire et envoyer des e-mails depuis les boites aux lettres que vous avez ajoutees. Actuellement, une integration guidee pratique est disponible pour [Gmail](https://mail.google.com/mail/) et [Yandex](https://mail.yandex.ru/), ainsi que pour toute autre adresse e-mail que vous pouvez configurer manuellement. Lenvoi de-mails necessite la confirmation de lutilisateur.
 6. Utiliser la recherche web via le service [Tavily](https://www.tavily.com/).
@@ -155,7 +155,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 8. Generer des images a partir dune reference ou de texte via OpenRouter.
 9. Utiliser des sous-agents pour nimporte quelle tache.
 
-   ![Sous-agents paralleles Chatter au travail](docs/assets/chatter-parallel-subagents.gif)
+   ![Sous-agents paralleles Chatter au travail](../assets/chatter-parallel-subagents.gif)
 
 10. Invoquer des agents specialises. Par exemple : compresser et convertir des videos vers dautres formats.
 11. Gerer vos serveurs. Le bot ne voit jamais votre cle SSH ni votre mot de passe sudo. Pour lexecution de commandes, une session SSH souvre directement sur votre serveur. La cle SSH peut etre recuperee en un bouton directement depuis votre ordinateur.
@@ -192,7 +192,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 - Une protection de base contre linjection de prompts est integree.
 - Si vous ne savez pas ce que fait une commande suggeree par le reseau neuronal, vous appuyez sur Review et un autre reseau neuronal vous lexplique, en evaluant les risques.
 
-   ![Verification des risques de commande avant execution](docs/assets/chatter-command-review.gif)
+   ![Verification des risques de commande avant execution](../assets/chatter-command-review.gif)
 
 ### 2. Optimisation incessante
 

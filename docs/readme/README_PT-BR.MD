@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | **Português (BR)** | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | **Português (BR)** | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Os precos dos modelos sao obtidos automaticamente. Tudo que voce precisa e defin
 
 > **O sistema de pagamento ainda nao foi integrado!**
 
-![Chatter conecta Telegram e Desktop](docs/assets/chatter-telegram-desktop.gif)
+![Chatter conecta Telegram e Desktop](../assets/chatter-telegram-desktop.gif)
 
 Queria compartilhar IA com sua mae, mas ela acha a tecnologia complicada demais? De a ela seu bot do Telegram. Curva de aprendizado zero.
 
@@ -102,7 +102,7 @@ Voce sempre pode ver se alguem compartilhou sua chave e pode revoga-la a qualque
 
 ## O que o painel de administracao pode fazer?
 
-![Visao geral do painel de administracao do Chatter](docs/assets/admin-overview.png)
+![Visao geral do painel de administracao do Chatter](../assets/admin-overview.png)
 
 1. **Monitore o estado dos componentes** e reinicie-os.
 2. **Quer adicionar um novo modelo?** Nao ha necessidade de reinserir uma chave de API salva ou navegar por todo o OpenRouter procurando um nome de modelo.
@@ -112,17 +112,17 @@ Voce sempre pode ver se alguem compartilhou sua chave e pode revoga-la a qualque
    - Os precos dos tokens de entrada/saida/cache sao definidos automaticamente ao selecionar um modelo.
    - Um modelo Vision esta disponivel separadamente — se o modelo principal nao for multimodal, ele pedira ao Vision para descrever a imagem que voce anexou.
 
-   ![Selecionando modelo, provedor e precos no painel de administracao](docs/assets/admin-model-selection.gif)
+   ![Selecionando modelo, provedor e precos no painel de administracao](../assets/admin-model-selection.gif)
 
 3. **Gerenciamento conveniente de limites.**
    - Basta definir o orcamento que um usuario pode gastar.
    - Limites personalizaveis para imagens e pesquisa na web para todos os usuarios, alem da capacidade de desativar anexos de imagem.
 
-   ![Configurando planos, orcamentos e limites](docs/assets/admin-plans-limits.png)
+   ![Configurando planos, orcamentos e limites](../assets/admin-plans-limits.png)
 
 4. **Analise** de quais modelos os usuarios estao usando, se subagentes estao envolvidos, o quao bem as mensagens estao sendo armazenadas em cache e muito mais.
 
-   ![Estatisticas de usuario, conexoes e uso de modelos](docs/assets/admin-user-usage.png)
+   ![Estatisticas de usuario, conexoes e uso de modelos](../assets/admin-user-usage.png)
 
 5. Logs do backend e graficos de desempenho do servidor.
 6. Integracao conveniente de servicos disponiveis. Cole uma chave, insira os dados, e tudo funciona imediatamente.
@@ -139,7 +139,7 @@ Voce sempre pode ver se alguem compartilhou sua chave e pode revoga-la a qualque
 1. Usar memoria vetorial. Cada usuario recebe um registro isolado separado por padrao. Atualmente, apenas a integracao com [Pinecone](https://app.pinecone.io/) esta disponivel.
 2. Acordar com "Alexa", "Hey, Jarvis", "Hey Mycroft" ou "Hey Rhasspy", com suporte para reconhecimento de fala e respostas de voz.
 
-   ![Ativacao por voz e controle de interface do Chatter](docs/assets/chatter-voice-activation.gif)
+   ![Ativacao por voz e controle de interface do Chatter](../assets/chatter-voice-activation.gif)
 
 3. Integrado ao aplicativo Desktop:
    - modelo local Piper para TTS;
@@ -147,7 +147,7 @@ Voce sempre pode ver se alguem compartilhou sua chave e pode revoga-la a qualque
    - integracao com [Cartesia](https://www.cartesia.ai/).
 4. Executar comandos no PC, bem como editar e ler arquivos. Pode ser usado como CLI.
 
-   ![Chatter cria e abre um site sozinho](docs/assets/chatter-site-creation.gif)
+   ![Chatter cria e abre um site sozinho](../assets/chatter-site-creation.gif)
 
 5. Ler e enviar e-mails de caixas de entrada que voce adicionou. Atualmente, a integracao guiada conveniente esta disponivel para [Gmail](https://mail.google.com/mail/) e [Yandex](https://mail.yandex.ru/), bem como qualquer outro e-mail que voce possa configurar manualmente. O envio de e-mails requer confirmacao do usuario.
 6. Usar pesquisa na web via servico [Tavily](https://www.tavily.com/).
@@ -155,7 +155,7 @@ Voce sempre pode ver se alguem compartilhou sua chave e pode revoga-la a qualque
 8. Gerar imagens a partir de uma referencia ou de texto via OpenRouter.
 9. Usar subagentes para qualquer tarefa.
 
-   ![Subagentes paralelos do Chatter em acao](docs/assets/chatter-parallel-subagents.gif)
+   ![Subagentes paralelos do Chatter em acao](../assets/chatter-parallel-subagents.gif)
 
 10. Invocar agentes especializados. Por exemplo: comprimir e converter videos para outros formatos.
 11. Gerenciar seus servidores. O bot nunca ve sua chave SSH ou senha sudo. Para execucao de comandos, uma sessao SSH e aberta diretamente no seu servidor. A chave SSH pode ser obtida com um botao diretamente do seu computador.
@@ -192,7 +192,7 @@ Voce sempre pode ver se alguem compartilhou sua chave e pode revoga-la a qualque
 - Protecao basica contra injecao de prompt esta integrada.
 - Se voce nao sabe o que um comando sugerido pela rede neural faz, voce pressiona Review e outra rede neural explica para voce, avaliando os riscos.
 
-   ![Verificando riscos de comando antes da execucao](docs/assets/chatter-command-review.gif)
+   ![Verificando riscos de comando antes da execucao](../assets/chatter-command-review.gif)
 
 ### 2. Otimizacao incansavel
 

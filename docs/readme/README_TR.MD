@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | **Türkçe** | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | **Türkçe** | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Model fiyatlandırması otomatik olarak çekilir. Tek ihtiyacınız, abonelik i�
 
 > **Ödeme sistemi henüz entegre edilmedi!**
 
-![Chatter, Telegram ve Masaüstünü birbirine bağlar](docs/assets/chatter-telegram-desktop.gif)
+![Chatter, Telegram ve Masaüstünü birbirine bağlar](../assets/chatter-telegram-desktop.gif)
 
 Yapay zekayı annenizle paylaşmak istediniz ama teknolojiyi çok karmaşık mı buluyor? Ona Telegram botunuzu verin. Sıfır öğrenme eğrisi.
 
@@ -102,7 +102,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 
 ## Yönetim Paneli Neler Yapabilir?
 
-![Chatter yönetim paneli sunucu genel bakış](docs/assets/admin-overview.png)
+![Chatter yönetim paneli sunucu genel bakış](../assets/admin-overview.png)
 
 1. **Bileşen durumunu izleyin** ve yeniden başlatın.
 2. **Yeni bir model eklemek mi istiyorsunuz?** Kaydedilmiş bir API anahtarını yeniden girmenize veya OpenRouter'da bir model adı aramanıza gerek yok.
@@ -112,17 +112,17 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
    - Girdi/çıktı/önbellek token fiyatları, bir model seçtiğinizde otomatik olarak ayarlanır.
    - Görme (Vision) modeli ayrı olarak mevcuttur — ana model çok modlu değilse, eklediğiniz görseli tanımlaması için Vision'a sorar.
 
-   ![Yönetim panelinde model, sağlayıcı ve fiyatlandırma seçme](docs/assets/admin-model-selection.gif)
+   ![Yönetim panelinde model, sağlayıcı ve fiyatlandırma seçme](../assets/admin-model-selection.gif)
 
 3. **Kullanışlı limit yönetimi.**
    - Sadece bir kullanıcının harcayabileceği bütçeyi belirleyin.
    - Tüm kullanıcılar için görsel ve web arama limitleri özelleştirilebilir, ayrıca görsel ekleme özelliğini devre dışı bırakma imkanı.
 
-   ![Planlar, bütçeler ve limitler ayarlama](docs/assets/admin-plans-limits.png)
+   ![Planlar, bütçeler ve limitler ayarlama](../assets/admin-plans-limits.png)
 
 4. Hangi modellerin kullanıldığı, alt ajanların devreye girip girmediği, mesajların ne kadar iyi önbelleğe alındığı ve çok daha fazlası hakkında **analiz**.
 
-   ![Kullanıcı istatistikleri, bağlantılar ve model kullanımı](docs/assets/admin-user-usage.png)
+   ![Kullanıcı istatistikleri, bağlantılar ve model kullanımı](../assets/admin-user-usage.png)
 
 5. Backend günlükleri ve sunucu performans grafikleri.
 6. Mevcut hizmetlerin kullanışlı entegrasyonu. Bir anahtar yapıştırın, verileri girin ve her şey kutudan çıktığı gibi çalışır.
@@ -139,7 +139,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 1. Vektör belleği kullanın. Her kullanıcı varsayılan olarak ayrı, izole bir kayıt alır. Şu anda yalnızca [Pinecone](https://app.pinecone.io/) entegrasyonu mevcuttur.
 2. "Alexa", "Hey, Jarvis", "Hey Mycroft" veya "Hey Rhasspy" ile uyandırma, konuşma tanıma ve sesli yanıt desteği ile.
 
-   ![Chatter ses aktivasyonu ve arayüz kontrolü](docs/assets/chatter-voice-activation.gif)
+   ![Chatter ses aktivasyonu ve arayüz kontrolü](../assets/chatter-voice-activation.gif)
 
 3. Masaüstü uygulamasına entegre:
    - TTS için yerel Piper modeli;
@@ -147,7 +147,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
    - [Cartesia](https://www.cartesia.ai/) entegrasyonu.
 4. PC'de komutları çalıştırmanın yanı sıra dosyaları düzenleme ve okuma. CLI olarak kullanılabilir.
 
-   ![Chatter kendi başına bir web sitesi oluşturur ve açar](docs/assets/chatter-site-creation.gif)
+   ![Chatter kendi başına bir web sitesi oluşturur ve açar](../assets/chatter-site-creation.gif)
 
 5. Eklediğiniz posta kutularından e-postaları okuma ve gönderme. Şu anda [Gmail](https://mail.google.com/mail/) ve [Yandex](https://mail.yandex.ru/) için kullanışlı rehberli entegrasyonun yanı sıra manuel olarak yapılandırabileceğiniz diğer tüm e-postalar mevcuttur. E-posta göndermek kullanıcı onayı gerektirir.
 6. [Tavily](https://www.tavily.com/) hizmeti aracılığıyla web araması kullanın.
@@ -155,7 +155,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 8. OpenRouter aracılığıyla bir referanstan veya metinden görsel oluşturun.
 9. Herhangi bir görev için alt ajanlar kullanın.
 
-   ![Çalışan Chatter paralel alt ajanları](docs/assets/chatter-parallel-subagents.gif)
+   ![Çalışan Chatter paralel alt ajanları](../assets/chatter-parallel-subagents.gif)
 
 10. Uzmanlaşmış ajanları çağırın. Örneğin: videoları sıkıştırma ve diğer formatlara dönüştürme.
 11. Sunucularınızı yönetin. Bot, SSH anahtarınızı veya sudo şifrenizi asla görmez. Komutları çalıştırmak için bir SSH oturumu doğrudan sunucunuzda açılır. SSH anahtarı tek bir düğmeyle doğrudan bilgisayarınızdan çekilebilir.
@@ -192,7 +192,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 - Temel prompt enjeksiyon koruması entegre edilmiştir.
 - Sinir ağı tarafından önerilen bir komutun ne yaptığını bilmiyorsanız, İncele düğmesine basarsınız ve başka bir sinir ağı bunu size açıklayarak riskleri değerlendirir.
 
-   ![Çalıştırmadan önce komut risklerini kontrol etme](docs/assets/chatter-command-review.gif)
+   ![Çalıştırmadan önce komut risklerini kontrol etme](../assets/chatter-command-review.gif)
 
 ### 2. Amansız optimizasyon
 

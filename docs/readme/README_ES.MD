@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | **Español** | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | **Español** | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Los precios de los modelos se obtienen automaticamente. Todo lo que necesitas es
 
 > **El sistema de pago aun no esta integrado.**
 
-![Chatter conecta Telegram y Desktop](docs/assets/chatter-telegram-desktop.gif)
+![Chatter conecta Telegram y Desktop](../assets/chatter-telegram-desktop.gif)
 
 Querias compartir IA con tu mama pero ella encuentra la tecnologia demasiado complicada? Dale tu bot de Telegram. Curva de aprendizaje cero.
 
@@ -102,7 +102,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
 
 ## Que puede hacer el panel de administracion?
 
-![Panel de administracion de Chatter - resumen del servidor](docs/assets/admin-overview.png)
+![Panel de administracion de Chatter - resumen del servidor](../assets/admin-overview.png)
 
 1. **Monitorear el estado de los componentes** y reiniciarlos.
 2. **Quieres agregar un nuevo modelo?** No es necesario volver a ingresar una clave de API guardada ni buscar en todo OpenRouter el nombre de un modelo.
@@ -112,17 +112,17 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
    - Los precios de tokens de entrada/salida/cache se establecen automaticamente al seleccionar un modelo.
    - Un modelo Vision esta disponible por separado. Si el modelo principal no es multimodal, le pedira a Vision que describa la imagen que adjuntaste.
 
-   ![Seleccion de modelo, proveedor y precio en el panel de administracion](docs/assets/admin-model-selection.gif)
+   ![Seleccion de modelo, proveedor y precio en el panel de administracion](../assets/admin-model-selection.gif)
 
 3. **Gestion comoda de limites.**
    - Simplemente establece el presupuesto que un usuario puede gastar.
    - Limites personalizables para imagenes y busqueda web para todos los usuarios, ademas de la posibilidad de deshabilitar los archivos adjuntos de imagenes.
 
-   ![Configuracion de planes, presupuestos y limites](docs/assets/admin-plans-limits.png)
+   ![Configuracion de planes, presupuestos y limites](../assets/admin-plans-limits.png)
 
 4. **Analisis** de que modelos estan usando los usuarios, si los subagentes estan involucrados, que tan bien se estan almacenando en cache los mensajes y mucho mas.
 
-   ![Estadisticas de usuario, conexiones y uso de modelos](docs/assets/admin-user-usage.png)
+   ![Estadisticas de usuario, conexiones y uso de modelos](../assets/admin-user-usage.png)
 
 5. Registros del backend y graficos de rendimiento del servidor.
 6. Integracion comoda de servicios disponibles. Pega una clave, ingresa los datos y todo funciona de inmediato.
@@ -139,7 +139,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
 1. Usar memoria vectorial. Cada usuario obtiene un registro aislado separado por defecto. Actualmente solo esta disponible la integracion con [Pinecone](https://app.pinecone.io/).
 2. Activarse con "Alexa", "Hey, Jarvis", "Hey Mycroft" o "Hey Rhasspy", con soporte para reconocimiento de voz y respuestas de voz.
 
-   ![Activacion por voz de Chatter y control de la interfaz de usuario](docs/assets/chatter-voice-activation.gif)
+   ![Activacion por voz de Chatter y control de la interfaz de usuario](../assets/chatter-voice-activation.gif)
 
 3. Integrado en la aplicacion de Desktop:
    - modelo local Piper para TTS;
@@ -147,7 +147,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
    - integracion con [Cartesia](https://www.cartesia.ai/).
 4. Ejecutar comandos en el PC, asi como editar y leer archivos. Puede usarse como CLI.
 
-   ![Chatter crea y abre un sitio web por si mismo](docs/assets/chatter-site-creation.gif)
+   ![Chatter crea y abre un sitio web por si mismo](../assets/chatter-site-creation.gif)
 
 5. Leer y enviar correos electronicos desde las bandejas de entrada que hayas agregado. Actualmente, la integracion guiada comoda esta disponible para [Gmail](https://mail.google.com/mail/) y [Yandex](https://mail.yandex.ru/), asi como cualquier otro correo electronico que puedas configurar manualmente. El envio de correos requiere confirmacion del usuario.
 6. Usar la busqueda web a traves del servicio [Tavily](https://www.tavily.com/).
@@ -155,7 +155,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
 8. Generar imagenes a partir de una referencia o de texto a traves de OpenRouter.
 9. Usar subagentes para cualquier tarea.
 
-   ![Subagentes paralelos de Chatter en accion](docs/assets/chatter-parallel-subagents.gif)
+   ![Subagentes paralelos de Chatter en accion](../assets/chatter-parallel-subagents.gif)
 
 10. Invocar agentes especializados. Por ejemplo: comprimir y convertir videos a otros formatos.
 11. Gestionar tus servidores. El bot nunca ve tu clave SSH ni tu contrasena de sudo. Para la ejecucion de comandos, se abre una sesion SSH directamente en tu servidor. La clave SSH se puede obtener con un solo boton directamente desde tu computadora.
@@ -192,7 +192,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
 - La proteccion basica contra inyeccion de prompts esta integrada.
 - Si no sabes lo que hace un comando sugerido por la red neuronal, presionas Review y otra red neuronal te lo explica, evaluando los riesgos.
 
-   ![Verificacion de riesgos de comandos antes de la ejecucion](docs/assets/chatter-command-review.gif)
+   ![Verificacion de riesgos de comandos antes de la ejecucion](../assets/chatter-command-review.gif)
 
 ### 2. Optimizacion incansable
 

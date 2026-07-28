@@ -1,4 +1,4 @@
-**English** | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+**English** | [Русский](docs/readme/README_RU.MD) | [Deutsch](docs/readme/README_DE.MD) | [Español](docs/readme/README_ES.MD) | [Français](docs/readme/README_FR.MD) | [Italiano](docs/readme/README_IT.MD) | [日本語](docs/readme/README_JA.MD) | [한국어](docs/readme/README_KO.MD) | [Polski](docs/readme/README_PL.MD) | [Português (BR)](docs/readme/README_PT-BR.MD) | [中文（简体）](docs/readme/README_ZH-CN.MD) | [Türkçe](docs/readme/README_TR.MD) | [Čeština](docs/readme/README_CS.MD)
 
 ---
 

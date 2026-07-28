@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | **日本語** | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | **日本語** | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Chatterは、サーバー上で動作し、ワンクリックで友人や家族�
 
 > **決済システムはまだ統合されていません！**
 
-![ChatterがTelegramとDesktopを接続](docs/assets/chatter-telegram-desktop.gif)
+![ChatterがTelegramとDesktopを接続](../assets/chatter-telegram-desktop.gif)
 
 AIを母親と共有したいけれど、テクノロジーが複雑すぎると思われている？Telegramボットを渡しましょう。学習曲線はゼロです。
 
@@ -102,7 +102,7 @@ Telegramユーザーは、Desktopが接続されている間、同じチャッ�
 
 ## 管理パネルでできることは？
 
-![Chatter管理パネルサーバー概要](docs/assets/admin-overview.png)
+![Chatter管理パネルサーバー概要](../assets/admin-overview.png)
 
  1. **コンポーネントの状態を監視**し、再起動します。
  2. **新しいモデルを追加したい？** 保存済みのAPIキーを再入力したり、OpenRouter全体からモデル名を探し回ったりする必要はありません。
@@ -112,17 +112,17 @@ Telegramユーザーは、Desktopが接続されている間、同じチャッ�
     - 入力/出力/キャッシュのトークン価格はモデル選択時に自動的に設定されます。
     - Visionモデルは別途利用可能です — メインモデルがマルチモーダルでない場合、添付された画像の説明をVisionに依頼します。
 
-    ![管理パネルでのモデル、プロバイダー、価格の選択](docs/assets/admin-model-selection.gif)
+    ![管理パネルでのモデル、プロバイダー、価格の選択](../assets/admin-model-selection.gif)
 
  3. **便利な制限管理。**
     - ユーザーが使用できる予算を設定するだけです。
     - すべてのユーザーに対して画像とウェブ検索のカスタマイズ可能な制限、さらに画像添付を無効にする機能。
 
-    ![プラン、予算、制限の設定](docs/assets/admin-plans-limits.png)
+    ![プラン、予算、制限の設定](../assets/admin-plans-limits.png)
 
  4. **分析** — ユーザーがどのモデルを使用しているか、サブエージェントが関与しているか、メッセージがどの程度キャッシュされているかなど。
 
-    ![ユーザー統計、接続、モデル使用状況](docs/assets/admin-user-usage.png)
+    ![ユーザー統計、接続、モデル使用状況](../assets/admin-user-usage.png)
 
  5. バックエンドログとサーバーパフォーマンスグラフ。
  6. 利用可能なサービスの便利な統合。キーを貼り付け、データを入力するだけで、すべてがすぐに動作します。
@@ -139,7 +139,7 @@ Telegramユーザーは、Desktopが接続されている間、同じチャッ�
  1. ベクターメモリを使用。各ユーザーはデフォルトで分離された個別のレコードを取得します。現在は[Pinecone](https://app.pinecone.io/)統合のみ利用可能です。
  2. "Alexa"、"Hey, Jarvis"、"Hey Mycroft"、"Hey Rhasspy"でウェイクアップ、音声認識と音声応答をサポート。
 
-    ![Chatterの音声起動とUI制御](docs/assets/chatter-voice-activation.gif)
+    ![Chatterの音声起動とUI制御](../assets/chatter-voice-activation.gif)
 
  3. Desktopアプリに組み込み：
     - ローカルPiperモデル（TTS用）；
@@ -147,7 +147,7 @@ Telegramユーザーは、Desktopが接続されている間、同じチャッ�
     - [Cartesia](https://www.cartesia.ai/)統合。
  4. PC上でコマンドを実行、ファイルの編集と読み取り。CLIとして使用可能。
 
-    ![Chatterが自分でウェブサイトを作成して開く](docs/assets/chatter-site-creation.gif)
+    ![Chatterが自分でウェブサイトを作成して開く](../assets/chatter-site-creation.gif)
 
  5. 追加したメールボックスからメールを読み取り、送信。現在、[Gmail](https://mail.google.com/mail/)と[Yandex](https://mail.yandex.ru/)、および手動設定可能なその他のメールに対応した便利なガイド付き統合が利用可能です。メールの送信にはユーザーの確認が必要です。
  6. [Tavily](https://www.tavily.com/)サービスを使用したウェブ検索。
@@ -155,7 +155,7 @@ Telegramユーザーは、Desktopが接続されている間、同じチャッ�
  8. 参照画像またはテキストからOpenRouter経由で画像生成。
  9. 任意のタスクにサブエージェントを使用。
 
-    ![Chatterの並列サブエージェント動作](docs/assets/chatter-parallel-subagents.gif)
+    ![Chatterの並列サブエージェント動作](../assets/chatter-parallel-subagents.gif)
 
  10. 専門エージェントの呼び出し。例：動画の圧縮や他フォーマットへの変換。
  11. サーバーの管理。ボットはあなたのSSHキーやsudoパスワードを見ることはありません。コマンド実行のため、SSHセッションはサーバー上で直接開かれます。SSHキーはワンボタンでコンピューターから直接取得できます。
@@ -192,7 +192,7 @@ Telegramユーザーは、Desktopが接続されている間、同じチャッ�
  - 基本的なプロンプトインジェクション保護が組み込まれています。
  - ニューラルネットワークが提案したコマンドが何をするかわからない場合、Reviewを押すと別のニューラルネットワークがそれを説明し、リスクを評価します。
 
-    ![実行前のコマンドリスクチェック](docs/assets/chatter-command-review.gif)
+    ![実行前のコマンドリスクチェック](../assets/chatter-command-review.gif)
 
 ### 2. 絶え間ない最適化
 

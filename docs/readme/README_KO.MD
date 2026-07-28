@@ -1,4 +1,4 @@
-[English](README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | **한국어** | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
+[English](../../README.MD) | [Русский](README_RU.MD) | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | **한국어** | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
@@ -10,7 +10,7 @@ Chatter는 서버에서 실행되는 AI 에이전트를 갖춘 멀티플랫폼 �
 
 > **결제 시스템은 아직 통합되지 않았습니다!**
 
-![Chatter가 Telegram과 Desktop을 연결](docs/assets/chatter-telegram-desktop.gif)
+![Chatter가 Telegram과 Desktop을 연결](../assets/chatter-telegram-desktop.gif)
 
 AI를 엄마와 공유하고 싶지만 기술이 너무 복잡하다고 생각하시나요? Telegram 봇을 알려주세요. 학습 곡선이 전혀 없습니다.
 
@@ -102,7 +102,7 @@ Telegram 사용자는 Desktop이 연결되어 있는 동안 동일한 채팅을 
 
 ## 관리자 패널로 무엇을 할 수 있나요?
 
-![Chatter 관리자 패널 서버 개요](docs/assets/admin-overview.png)
+![Chatter 관리자 패널 서버 개요](../assets/admin-overview.png)
 
  1. **구성 요소 상태 모니터링** 및 재시작.
  2. **새 모델을 추가하고 싶으신가요?** 저장된 API 키를 다시 입력하거나 OpenRouter 전체에서 모델 이름을 찾을 필요가 없습니다.
@@ -112,17 +112,17 @@ Telegram 사용자는 Desktop이 연결되어 있는 동안 동일한 채팅을 
     - 입력/출력/캐시 토큰 가격은 모델 선택 시 자동으로 설정됩니다.
     - Vision 모델은 별도로 사용할 수 있습니다 — 메인 모델이 멀티모달이 아닌 경우, 첨부된 이미지를 설명하도록 Vision에 요청합니다.
 
-    ![관리자 패널에서 모델, 공급자 및 가격 선택](docs/assets/admin-model-selection.gif)
+    ![관리자 패널에서 모델, 공급자 및 가격 선택](../assets/admin-model-selection.gif)
 
  3. **편리한 제한 관리.**
     - 사용자가 사용할 수 있는 예산을 설정하기만 하면 됩니다.
     - 모든 사용자에 대한 이미지 및 웹 검색의 사용자 정의 가능한 제한, 이미지 첨부를 비활성화하는 기능.
 
-    ![플랜, 예산 및 제한 설정](docs/assets/admin-plans-limits.png)
+    ![플랜, 예산 및 제한 설정](../assets/admin-plans-limits.png)
 
  4. **분석** — 사용자가 어떤 모델을 사용하는지, 하위 에이전트가 관여하는지, 메시지가 얼마나 잘 캐시되는지 등.
 
-    ![사용자 통계, 연결 및 모델 사용량](docs/assets/admin-user-usage.png)
+    ![사용자 통계, 연결 및 모델 사용량](../assets/admin-user-usage.png)
 
  5. 백엔드 로그 및 서버 성능 그래프.
  6. 사용 가능한 서비스의 편리한 통합. 키를 붙여넣고 데이터를 입력하면 모든 것이 즉시 작동합니다.
@@ -139,7 +139,7 @@ Telegram 사용자는 Desktop이 연결되어 있는 동안 동일한 채팅을 
  1. 벡터 메모리 사용. 각 사용자는 기본적으로 분리된 개별 레코드를 얻습니다. 현재는 [Pinecone](https://app.pinecone.io/) 통합만 사용 가능합니다.
  2. "Alexa", "Hey, Jarvis", "Hey Mycroft" 또는 "Hey Rhasspy"로 깨어나기, 음성 인식 및 음성 응답 지원.
 
-    ![Chatter 음성 활성화 및 UI 제어](docs/assets/chatter-voice-activation.gif)
+    ![Chatter 음성 활성화 및 UI 제어](../assets/chatter-voice-activation.gif)
 
  3. Desktop 앱에 내장:
     - 로컬 Piper 모델(TTS용);
@@ -147,7 +147,7 @@ Telegram 사용자는 Desktop이 연결되어 있는 동안 동일한 채팅을 
     - [Cartesia](https://www.cartesia.ai/) 통합.
  4. PC에서 명령 실행, 파일 편집 및 읽기. CLI로 사용할 수 있습니다.
 
-    ![Chatter가 스스로 웹사이트를 만들고 엽니다](docs/assets/chatter-site-creation.gif)
+    ![Chatter가 스스로 웹사이트를 만들고 엽니다](../assets/chatter-site-creation.gif)
 
  5. 추가한 메일함에서 이메일 읽기 및 보내기. 현재 [Gmail](https://mail.google.com/mail/) 및 [Yandex](https://mail.yandex.ru/), 그리고 수동으로 구성할 수 있는 다른 모든 이메일에 대한 편리한 안내 통합이 제공됩니다. 이메일 전송에는 사용자 확인이 필요합니다.
  6. [Tavily](https://www.tavily.com/) 서비스를 통한 웹 검색.
@@ -155,7 +155,7 @@ Telegram 사용자는 Desktop이 연결되어 있는 동안 동일한 채팅을 
  8. 참조 이미지 또는 텍스트에서 OpenRouter를 통해 이미지 생성.
  9. 모든 작업에 하위 에이전트 사용.
 
-    ![Chatter 병렬 하위 에이전트 작업](docs/assets/chatter-parallel-subagents.gif)
+    ![Chatter 병렬 하위 에이전트 작업](../assets/chatter-parallel-subagents.gif)
 
  10. 전문 에이전트 호출. 예: 비디오 압축 및 다른 형식으로 변환.
  11. 서버 관리. 봇은 SSH 키나 sudo 비밀번호를 절대 볼 수 없습니다. 명령 실행을 위해 서버에서 직접 SSH 세션이 열립니다. SSH 키는 컴퓨터에서 한 번의 버튼으로 가져올 수 있습니다.
@@ -192,7 +192,7 @@ Telegram 사용자는 Desktop이 연결되어 있는 동안 동일한 채팅을 
  - 기본적인 프롬프트 인젝션 보호 기능이 내장되어 있습니다.
  - 신경망이 제안한 명령이 무엇을 하는지 모르겠다면 Review를 누르면 다른 신경망이 이를 설명하고 위험을 평가합니다.
 
-    ![실행 전 명령 위험 확인](docs/assets/chatter-command-review.gif)
+    ![실행 전 명령 위험 확인](../assets/chatter-command-review.gif)
 
 ### 2. 끊임없는 최적화
 
