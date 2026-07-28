@@ -2113,7 +2113,7 @@ const buildDisplayStateTool = (manifest?: { moods?: string[]; reactions?: string
   };
 };
 
-/** Build desktop_action tool — only available on desktop client */
+/** Build desktop_action tool — available whenever the user's desktop client is connected */
 const buildDesktopActionTool = () => {
   return {
     type: 'function' as const,
@@ -6587,8 +6587,10 @@ export const sendMessageThroughAi = async (
     buildListMonitorsTool(), buildCaptureScreenTool(), buildExecuteVisualClickTool(), buildCaptureWebcamTool(),
     buildDescribeImageTool(),
   ];
-  // Tools that require a desktop client UI — only when isDesktop
-  const desktopOnlyTools = options?.isDesktop ? [
+  // UI actions can originate from any client (Telegram, future messengers, Desktop).
+  // Expose them whenever the request itself comes from Desktop or Desktop is online.
+  const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId));
+  const desktopOnlyTools = desktopUiAvailable ? [
     buildDesktopActionTool(),
   ] : [];
   // Build spawn_subagent AFTER we know all available tools (including serverOnlyTools, desktopOnlyTools, etc.)
@@ -7108,7 +7110,7 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
     }
 
     executionMode = 'pro';
-    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(options?.isDesktop ? [buildDesktopActionTool()] : [])] as any[];
+    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(desktopUiAvailable ? [buildDesktopActionTool()] : [])] as any[];
     currentMessages.length = 0;
     currentMessages.push(
       { role: 'system', content: proSystemPrompt },
