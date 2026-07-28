@@ -1,4 +1,4 @@
-[English](README.MD) | **Русский**
+[English](README.MD) | **Русский** | [Deutsch](README_DE.MD) | [Español](README_ES.MD) | [Français](README_FR.MD) | [Italiano](README_IT.MD) | [日本語](README_JA.MD) | [한국어](README_KO.MD) | [Polski](README_PL.MD) | [Português (BR)](README_PT-BR.MD) | [中文（简体）](README_ZH-CN.MD) | [Türkçe](README_TR.MD) | [Čeština](README_CS.MD)
 
 ---
 
