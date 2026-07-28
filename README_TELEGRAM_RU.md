@@ -1,6 +1,6 @@
 # Chatter Bot (`index.ts`)
 
-[English](README.md) | [Русский](README_RU.md)
+[English](README_TELEGRAM.md) | [Русский](README_TELEGRAM_RU.md)
 
 Telegram-бот проекта `chatter`.
 

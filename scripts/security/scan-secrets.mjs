@@ -252,6 +252,9 @@ const rules = [
     valueGroup: 3,
     binarySafe: true,
     filter: (value, match, context) => {
+      if (/(?:^|\/)i18n\/locales\/[^/]+\/translation\.json$/i.test(context.file.replaceAll('\\', '/'))) {
+        return false;
+      }
       const quoted = Boolean(match[2]);
       const configLikeFile = /\.(?:env|ya?ml|toml|ini|conf|config)$/i.test(context.file);
       return (quoted || configLikeFile) && looksLikeSecretValue(value);
