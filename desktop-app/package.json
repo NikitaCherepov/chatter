@@ -114,6 +114,9 @@
         "zip"
       ]
     },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
     "publish": [
       {
         "provider": "github",
