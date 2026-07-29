@@ -93,4 +93,4 @@ jobs:
         with:
           package-name: chatter-${{ matrix.image }}
           package-type: container
-          min-versions-to-keep: 3
+          min-versions-to-keep: 1
