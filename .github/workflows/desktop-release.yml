@@ -78,17 +78,6 @@ jobs:
       - name: Build localized release notes
         run: node scripts/build-desktop-release-notes.mjs --output desktop-release-notes.json
 
-      - name: Store build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: chatter-desktop-${{ steps.version.outputs.version }}
-          if-no-files-found: error
-          path: |
-            desktop-app/release/*.exe
-            desktop-app/release/*.blockmap
-            desktop-app/release/*.zip
-            desktop-app/release/latest.yml
-
       - name: Create draft GitHub Release
         shell: pwsh
         env:
