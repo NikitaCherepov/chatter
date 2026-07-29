@@ -203,7 +203,7 @@ You can always see if someone has shared your key, and you can revoke it at any 
  - No money to run a vision model every time? No problem. Add a vision model once, and your main AI bot will simply ask it to describe the image you attached.
  - No money for TTS but still want it? Local models are built in for that. Many external integrations also offer a free tier.
  - Don't want the AI generating utility code for itself over and over and burning tokens each time? Chatter's built-in tools are implemented in code ahead of time. Looks like a downside, right? But this way you can work on Chatter (if you want to) alongside subscriptions to major services, just by doing `git clone` on your computer.
- - The Desktop app in normal mode uses about 300 MB RAM and barely loads the CPU. Server containers are counted separately, while TTS and Whisper naturally require more resources. For comparison: Codex could bloat to tens of gigabytes on my machine — couldn't resist a jab :)
+ - The Desktop app in normal mode uses about 300 MB RAM and barely loads the CPU. Server containers are counted separately, while TTS and Whisper naturally require more resources. Codex itself can easily slow down and lag on my machine.
  - To avoid breaking caching, when context overflows, 50% of the conversation is archived (a short summarization for compression will be added in the future).
  - If a document doesn't fit, Chatter automatically trims its content, keeping up to 90% of the selected context limit.
  - A dedicated Lite model is used for generating chat titles, reviews, and other lightweight requests.
@@ -257,3 +257,4 @@ Decided to translate the project into your language? It's quick and easy:
  - The service may contain bugs I haven't found yet. If you find one — submit it to Issues, we'll figure it out. The bugs I already know about are in the fix backlog. I'm working on the project alone, so help is welcome!
  - Future plans include refactoring both the desktop-app and the backend-api.
  - When using Chatter as a CLI for work, issues may still occur (e.g. it might confuse a string and not check types, leaving an error). I'm working on improving this.
+ - **Security notice:** Chatter is under active development and has a large attack surface due to its integrations, remote-control tools, and self-hosted architecture. While security is treated as a priority, no software can be guaranteed to be completely secure. Review the configuration before exposing an instance to the internet, keep it updated, and report vulnerabilities responsibly. Security hardening will continue as the project evolves.

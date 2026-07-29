@@ -203,7 +203,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 - Nie masz pieniędzy, aby uruchamiać model vision za każdym razem? Nie ma problemu. Dodaj model vision raz, a Twój główny bot AI po prostu poprosi go o opisanie dołączonego obrazu.
 - Nie masz pieniędzy na TTS, ale wciąż go chcesz? Wbudowane są do tego lokalne modele. Wiele zewnętrznych integracji oferuje również darmowy poziom.
 - Nie chcesz, aby AI generowało dla siebie kod narzędziowy w kółko i spalało tokeny za każdym razem? Wbudowane narzędzia Chattera są zaimplementowane w kodzie z wyprzedzeniem. Wygląda to jak wada, prawda? Ale w ten sposób możesz pracować nad Chatterem (jeśli chcesz) obok subskrypcji głównych usług, po prostu robiąc `git clone` na swoim komputerze.
-- Aplikacja Desktop w normalnym trybie zużywa około 300 MB RAM i ledwo obciąża CPU. Kontenery serwerowe są liczone osobno, podczas gdy TTS i Whisper naturalnie wymagają więcej zasobów. Dla porównania: Codex mógł rozrosnąć się do dziesiątek gigabajtów na moim komputerze — nie mogłem się powstrzymać przed małym uszczypliwością :)
+- Aplikacja Desktop w normalnym trybie zużywa około 300 MB RAM i ledwo obciąża CPU. Kontenery serwerowe są liczone osobno, podczas gdy TTS i Whisper naturalnie wymagają więcej zasobów. Sam Codex potrafi u mnie spokojnie zwalniać i się zacinać.
 - Aby nie psuć buforowania, gdy kontekst się przepełni, 50% rozmowy jest archiwizowane (krótkie podsumowanie do kompresji zostanie dodane w przyszłości).
 - Jeśli dokument nie mieści się, Chatter automatycznie przycina jego zawartość, zachowując do 90% wybranego limitu kontekstu.
 - Dedykowany model Lite jest używany do generowania tytułów czatów, recenzji i innych lekkich żądań.
@@ -257,3 +257,4 @@ Postanowiłeś przetłumaczyć projekt na swój język? To szybkie i łatwe:
 - Usługa może zawierać błędy, których jeszcze nie znalazłem. Jeśli znajdziesz — zgłoś go w Issues, rozpracujemy to. Błędy, o których już wiem, są w kolejce do naprawy. Pracuję nad projektem sam, więc pomoc jest mile widziana!
 - Przyszłe plany obejmują refaktoryzację zarówno desktop-app, jak i backend-api.
 - Podczas używania Chattera jako CLI do pracy mogą nadal występować problemy (np. może pomylić string i nie sprawdzić typów, pozostawiając błąd). Pracuję nad poprawą tego.
+- **Informacja o bezpieczeństwie:** Chatter jest aktywnie rozwijany i ma dużą powierzchnię ataku ze względu na integracje, narzędzia zdalnego sterowania oraz architekturę self-hosted. Bezpieczeństwo jest priorytetem, ale żadne oprogramowanie nie może mieć gwarancji pełnego bezpieczeństwa. Sprawdź konfigurację przed udostępnieniem instancji w Internecie, regularnie ją aktualizuj i odpowiedzialnie zgłaszaj podatności. Zabezpieczenia będą nadal ulepszane wraz z rozwojem projektu.

@@ -203,7 +203,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 - Nemáte peníze na to, abyste pokaždé spouštěli vision model? Žádný problém. Přidejte vision model jednou a váš hlavní AI bot ho jednoduše požádá, aby popsal obrázek, který jste přiložili.
 - Nemáte peníze na TTS, ale přesto ho chcete? K tomu jsou zabudovány lokální modely. Mnoho externích integrací také nabízí bezplatnou úroveň.
 - Nechcete, aby si AI znovu a znovu generovala pomocný kód a pokaždé pálila tokeny? Chatterovy vestavěné nástroje jsou implementovány předem v kódu. Vypadá to jako nevýhoda, že? Ale takto můžete pracovat na Chatteru (pokud chcete) vedle předplatného velkých služeb, stačí provést `git clone` na svém počítači.
-- Desktop aplikace v normálním režimu spotřebuje asi 300 MB RAM a téměř nezatěžuje CPU. Serverové kontejnery se počítají zvlášť, zatímco TTS a Whisper přirozeně vyžadují více zdrojů. Pro srovnání: Codex mi na počítači dokázal nabobtnat na desítky gigabajtů — nemohl jsem si odpustit rýpanec :)
+- Desktop aplikace v normálním režimu spotřebuje asi 300 MB RAM a téměř nezatěžuje CPU. Serverové kontejnery se počítají zvlášť, zatímco TTS a Whisper přirozeně vyžadují více zdrojů. Samotný Codex se mi na počítači klidně zpomaluje a seká.
 - Aby nedošlo k narušení ukládání do mezipaměti, když kontext přeteče, je 50 % konverzace archivováno (v budoucnu bude přidáno krátké shrnutí pro kompresi).
 - Pokud se dokument nevejde, Chatter automaticky zkrátí jeho obsah a zachová až 90 % zvoleného limit kontextu.
 - Vyhrazený Lite model se používá pro generování názvů chatů, recenzí a dalších nenáročných požadavků.
@@ -257,3 +257,4 @@ Rozhodli jste se přeložit projekt do svého jazyka? Je to rychlé a snadné:
 - Služba může obsahovat chyby, které jsem dosud nenašel. Pokud nějakou najdete — nahlaste ji do Issues, vyřešíme to. Chyby, o kterých již vím, jsou v backlogu oprav. Na projektu pracuji sám, takže pomoc je vítána!
 - Budoucí plány zahrnují refaktoring desktop-app i backend-api.
 - Při používání Chatteru jako CLI pro práci se mohou stále vyskytovat problémy (např. může si splést řetězec a nezkontrolovat typy, což zanechá chybu). Pracuji na zlepšení.
+- **Bezpečnostní upozornění:** Chatter je aktivně vyvíjen a kvůli integracím, nástrojům vzdáleného ovládání a self-hosted architektuře má velkou plochu pro útoky. Přestože je bezpečnost prioritou, u žádného softwaru nelze zaručit úplnou bezpečnost. Před zpřístupněním instance internetu zkontrolujte konfiguraci, udržujte ji aktualizovanou a zranitelnosti hlaste zodpovědně. Zabezpečení se bude s vývojem projektu dále zlepšovat.
