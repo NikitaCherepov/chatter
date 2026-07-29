@@ -448,7 +448,9 @@
       "documentTooLarge": "파일이 너무 큽니다: {{name}} (최대 5MB)",
       "imageLimit": "한 번에 최대 {{count}}개의 이미지를 첨부할 수 있습니다",
       "read": "읽을 수 없음: {{name}}",
-      "unsupported": "지원되지 않는 형식: {{name}}"
+      "unsupported": "지원되지 않는 형식: {{name}}",
+      "imageTotalTooLarge": "준비된 이미지가 {{size}} 총 제한을 초과합니다",
+      "imagePrepare": "이미지를 준비할 수 없습니다: {{name}}"
     }
   },
   "settings": {
@@ -469,7 +471,8 @@
       "limits": "제한",
       "connections": "연결된 계정",
       "mail": "이메일",
-      "billing": "결제"
+      "billing": "결제",
+      "about": "정보"
     },
     "language": {
       "system": "시스템",
@@ -549,7 +552,9 @@
       "noSpecializedSubagents": "전문 서브에이전트 없음",
       "noSpecializedSubagentsHelp": "사전 설정된 서브에이전트 호출(invoke_subagent)을 비활성화합니다.",
       "noAdhocSubagents": "서브에이전트 생성 없음",
-      "noAdhocSubagentsHelp": "즉시 서브에이전트 생성(spawn_subagent)을 비활성화합니다."
+      "noAdhocSubagentsHelp": "즉시 서브에이전트 생성(spawn_subagent)을 비활성화합니다.",
+      "noWakeWord": "웨이크 워드 비활성화",
+      "noWakeWordHelp": "웨이크 워드(Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) 수신을 중지합니다. 마이크 스트림이 꺼집니다."
     },
     "models": {
       "title": "모델 설정",
@@ -634,6 +639,14 @@
       "refreshFailed": "계정이 연결되었지만 상태를 새로고침할 수 없습니다",
       "unlinkFailed": "Telegram 연결을 해제할 수 없습니다",
       "passwordRequired": "Telegram 연결을 해제하려면 비밀번호 로그인이 필요합니다"
+    },
+    "about": {
+      "version": "버전 {{version}}",
+      "license": "GNU Affero General Public License v3.0에 따라 라이선스가 부여되었습니다.",
+      "licenseLink": "라이선스",
+      "website": "웹사이트",
+      "support": "Chatter 지원",
+      "supportHelp": "프로젝트를 계속 발전시키는 데 도움을 주세요"
     }
   },
   "chat": {
@@ -858,7 +871,8 @@
     "image": {
       "generatedAlt": "생성된 이미지",
       "photoAlt": "사진"
-    }
+    },
+    "connectionLostBeforeSend": "서버가 메시지를 수락하기 전에 연결이 종료되었습니다. 다시 보내주세요."
   },
   "promptSelector": {
     "placeholder": "프롬프트 선택...",
@@ -967,5 +981,25 @@
     "sameAsOld": "새 비밀번호는 현재 비밀번호와 달라야 합니다",
     "success": "비밀번호가 변경되었습니다. 다시 로그인해 주세요.",
     "logout": "로그아웃"
+  },
+  "onboarding": {
+    "back": "뒤로",
+    "next": "다음",
+    "done": "알겠어요",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Telegram 연결",
+        "body": "지금 바로 Telegram 계정을 연결하는 것을 권장합니다.\n\n- **계정 복구** — 데스크톱 비밀번호를 잊어버린 경우, 연결된 Telegram 계정을 통해서만 액세스를 복원할 수 있습니다.\n- **원격 액세스 및 동기화** — 컴퓨터에서 멀리 떨어져 있을 때 휴대폰으로 요청을 보내고 어시스턴트와 채팅할 수 있습니다.\n\n계정 연결은 언제든지 설정에서 할 수 있습니다."
+      },
+      "features": {
+        "title": "## 개인정보 보호 및 생태계",
+        "body": "AI 도구와 환경 통합을 완전히 제어할 수 있습니다:\n\n- **제한 사항** — 언제든지 봇의 인터넷 액세스를 차단하고, PC 명령 실행을 막고, 하위 에이전트 생성을 비활성화하거나, 깨끗한 대화를 위해 게스트 모드를 활성화할 수 있습니다.\n- **스마트 홈** — Yandex Smart Home 또는 Zigbee2MQTT를 통해 로컬 기기를 연결하세요. 어시스턴트가 조명, 콘센트 및 온도를 제어할 수 있습니다.\n- **음성 제어** — 어시스턴트가 항상 듣고 있습니다. 'Alexa' 또는 'Hey, Jarvis!'라고 말하기만 하면 됩니다. 음성 탭에서 어시스턴트의 음성을 선택할 수 있습니다."
+      },
+      "experimental": {
+        "title": "## 실험적 기능",
+        "body": "정기적으로 새로운 기능을 추가하고 있습니다. 지금 사용해 볼 수 있는 기능은 다음과 같습니다:\n\n- **DevOps Agent** — 내장 SSH 도구. 안전한 수동 확인 정책으로 원격 서버에서 명령을 실행합니다.\n- **Maps & Routes** — AI가 장소를 검색하고 오른쪽 패널의 대화형 지도에서 경로를 작성할 수 있습니다.\n- **Dice Roll Mode (d20)** — 테이블탑 팬을 위한 기능. 가상 주사위 굴림을 추가하여 행동의 성공 여부를 결정하고 AI 응답의 내러티브를 안내합니다(**설정 → 애플리케이션**에서 활성화)."
+      }
+    }
   }
 }

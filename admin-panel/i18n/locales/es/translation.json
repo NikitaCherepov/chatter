@@ -470,7 +470,12 @@
         "generatingPassword": "Generando contraseña...",
         "passwordGenerated": "Nueva contraseña de usuario: {{password}}",
         "passwordGeneratedSuccess": "Nueva contraseña generada",
-        "noPasswordIdentity": "El usuario no tiene inicio de sesión basado en contraseña"
+        "noPasswordIdentity": "El usuario no tiene inicio de sesión basado en contraseña",
+        "deleteUser": "Eliminar usuario",
+        "deleteUserConfirm": "¿Está seguro de que desea eliminar permanentemente este usuario? Se eliminarán TODOS los datos del usuario (chats, notas, tareas, archivos, identidades). Esta acción no se puede deshacer.",
+        "deleteUserHint": "Elimina permanentemente al usuario y todos los datos asociados de la base de datos.",
+        "deletingUser": "Eliminando usuario…",
+        "cannotDeleteAdmin": "No se puede eliminar un administrador"
       },
       "modelUsage": {
         "title": "Uso por modelo",
@@ -854,7 +859,13 @@
       "pl": "Polaco",
       "pt-BR": "Portugués (Brasil)",
       "zh-CN": "Chino (simplificado)"
-    }
+    },
+    "aboutTitle": "Acerca de",
+    "aboutDescription": "Información del proyecto y enlaces útiles",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "Licencia",
+    "aboutBoosty": "Apoyar a Chatter en Boosty",
+    "aboutWebsite": "Sitio web"
   },
   "prompts": {
     "listTitle": "Indicaciones del sistema",

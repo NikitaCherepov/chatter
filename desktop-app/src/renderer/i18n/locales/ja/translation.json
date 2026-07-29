@@ -136,7 +136,9 @@
       "documentTooLarge": "ファイルが大きすぎます: {{name}} (最大5MB)",
       "imageLimit": "一度に最大{{count}}枚の画像を添付できます",
       "read": "読み取れませんでした: {{name}}",
-      "unsupported": "サポートされていない形式です: {{name}}"
+      "unsupported": "サポートされていない形式です: {{name}}",
+      "imageTotalTooLarge": "準備された画像が{{size}}の合計制限を超えています",
+      "imagePrepare": "画像を準備できませんでした: {{name}}"
     }
   },
   "settings": {
@@ -157,7 +159,8 @@
       "limits": "制限",
       "connections": "リンクされたアカウント",
       "mail": "メール",
-      "billing": "請求"
+      "billing": "請求",
+      "about": "概要"
     },
     "language": {
       "system": "システム",
@@ -237,7 +240,9 @@
       "noSpecializedSubagents": "専門サブエージェントなし",
       "noSpecializedSubagentsHelp": "事前設定されたサブエージェントの呼び出し（invoke_subagent）を無効にします。",
       "noAdhocSubagents": "サブエージェント作成なし",
-      "noAdhocSubagentsHelp": "その場でのサブエージェント作成（spawn_subagent）を無効にします。"
+      "noAdhocSubagentsHelp": "その場でのサブエージェント作成（spawn_subagent）を無効にします。",
+      "noWakeWord": "ウェイクワードを無効にする",
+      "noWakeWordHelp": "ウェイクワード（Alexa、Hey Jarvis、Hey Mycroft、Hey Rhasspy）のリスニングを停止します。マイクストリームがオフになります。"
     },
     "models": {
       "title": "モデル設定",
@@ -322,6 +327,14 @@
       "refreshFailed": "アカウントはリンクされましたが、ステータスを更新できませんでした",
       "unlinkFailed": "Telegramのリンクを解除できませんでした",
       "passwordRequired": "Telegramのリンクを解除するにはパスワードログインが必要です"
+    },
+    "about": {
+      "version": "バージョン {{version}}",
+      "license": "GNU Affero General Public License v3.0の下でライセンスされています。",
+      "licenseLink": "ライセンス",
+      "website": "ウェブサイト",
+      "support": "サポートチャッター",
+      "supportHelp": "プロジェクトの継続を支援する"
     }
   },
   "chat": {
@@ -546,7 +559,8 @@
     "image": {
       "generatedAlt": "生成された画像",
       "photoAlt": "写真"
-    }
+    },
+    "connectionLostBeforeSend": "サーバーがメッセージを受け入れる前に接続が閉じられました。もう一度送信してください。"
   },
   "promptSelector": {
     "placeholder": "プロンプトを選択...",
@@ -967,5 +981,25 @@
     "sameAsOld": "新しいパスワードは現在のものと異なる必要があります",
     "success": "パスワードが変更されました。再度サインインしてください。",
     "logout": "サインアウト"
+  },
+  "onboarding": {
+    "back": "戻る",
+    "next": "次へ",
+    "done": "完了",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Telegramに接続",
+        "body": "すぐにTelegramアカウントをリンクすることをお勧めします。\n\n- **アカウント復旧** — デスクトップのパスワードを忘れた場合、リンクしたTelegramアカウントを通じてのみアクセスを復元できます。\n- **リモートアクセスと同期** — スマートフォンからリクエストを送信したり、アシスタントとチャットしたりできます。\n\n設定からいつでもアカウントをリンクできます。"
+      },
+      "features": {
+        "title": "## プライバシーとエコシステム",
+        "body": "AIツールと環境との統合を完全に制御できます。\n\n- **制限** — いつでもボットのインターネットアクセスを遮断したり、PCコマンドの実行をブロックしたり、サブエージェントの作成を無効にしたり、クリーンな会話のためのゲストモードを有効にしたりできます。\n- **スマートホーム** — Yandex Smart HomeまたはZigbee2MQTTを介したローカルデバイスを接続できます。アシスタントは照明、コンセント、空調を制御できます。\n- **音声制御** — アシスタントは常に待機しています。「アレクサ」または「ねえ、ジャービス！」と呼びかけてください。音声タブでアシスタントの声を選択できます。"
+      },
+      "experimental": {
+        "title": "## 実験的機能",
+        "body": "定期的に新機能を追加しています。今すぐ試せる機能は以下の通りです：\n\n- **DevOps Agent** — 内蔵SSHツール。安全な手動確認ポリシーでリモートサーバー上でコマンドを実行します。\n- **Maps & Routes** — AIが場所を検索し、右パネルのインタラクティブマップ上でルートを構築できます。\n- **Dice Roll Mode (d20)** — テーブルトップファン向け。アクションの成功を決定し、AI応答のナラティブを導く仮想ダイスロールを追加します（**設定 → アプリケーション**で有効化）。"
+      }
+    }
   }
 }

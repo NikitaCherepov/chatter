@@ -455,7 +455,12 @@
         "generatingPassword": "Şifre oluşturuluyor...",
         "passwordGenerated": "Yeni kullanıcı şifresi: {{password}}",
         "passwordGeneratedSuccess": "Yeni şifre oluşturuldu",
-        "noPasswordIdentity": "Kullanıcının şifre tabanlı girişi yok"
+        "noPasswordIdentity": "Kullanıcının şifre tabanlı girişi yok",
+        "deleteUser": "Kullanıcıyı Sil",
+        "deleteUserConfirm": "Bu kullanıcıyı kalıcı olarak silmek istediğinize emin misiniz? TÜM kullanıcı verileri (sohbetler, notlar, görevler, dosyalar, kimlikler) kaldırılacaktır. Bu işlem geri alınamaz.",
+        "deleteUserHint": "Kullanıcıyı ve ilişkili tüm verileri veritabanından kalıcı olarak kaldırır.",
+        "deletingUser": "Kullanıcı siliniyor…",
+        "cannotDeleteAdmin": "Bir yönetici silinemez"
       },
       "modelUsage": {
         "title": "Modele göre kullanım",
@@ -834,7 +839,13 @@
       "pl": "Lehçe",
       "pt-BR": "Portekizce (Brezilya)",
       "zh-CN": "Çince (Basitleştirilmiş)"
-    }
+    },
+    "aboutTitle": "Hakkında",
+    "aboutDescription": "Proje bilgisi ve faydalı bağlantılar",
+    "aboutLicense": "GNU Affero Genel Kamu Lisansı v3.0",
+    "aboutLicenseLink": "Lisans",
+    "aboutBoosty": "Chatter'ı Boosty'de Destekleyin",
+    "aboutWebsite": "Web Sitesi"
   },
   "prompts": {
     "listTitle": "Sistem İstemleri",

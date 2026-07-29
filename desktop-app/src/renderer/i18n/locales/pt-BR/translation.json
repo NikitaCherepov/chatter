@@ -136,7 +136,9 @@
       "documentTooLarge": "Arquivo muito grande: {{name}} (máx. 5 MB)",
       "imageLimit": "Você pode anexar até {{count}} imagens por vez",
       "read": "Não foi possível ler: {{name}}",
-      "unsupported": "Formato não suportado: {{name}}"
+      "unsupported": "Formato não suportado: {{name}}",
+      "imageTotalTooLarge": "As imagens preparadas excedem o limite total de {{size}}",
+      "imagePrepare": "Não foi possível preparar a imagem: {{name}}"
     }
   },
   "settings": {
@@ -157,7 +159,8 @@
       "limits": "Limites",
       "connections": "Contas vinculadas",
       "mail": "Email",
-      "billing": "Faturamento"
+      "billing": "Faturamento",
+      "about": "Sobre"
     },
     "language": {
       "system": "Sistema",
@@ -237,7 +240,9 @@
       "noSpecializedSubagents": "Sem subagentes especializados",
       "noSpecializedSubagentsHelp": "Desativa a chamada de subagentes pré-configurados (invoke_subagent).",
       "noAdhocSubagents": "Sem criação de subagentes",
-      "noAdhocSubagentsHelp": "Desativa a criação de subagentes em tempo real (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Desativa a criação de subagentes em tempo real (spawn_subagent).",
+      "noWakeWord": "Desativar palavra de ativação",
+      "noWakeWordHelp": "Parar de ouvir palavras de ativação (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). O fluxo do microfone será desligado."
     },
     "models": {
       "title": "Configurações de modelos",
@@ -322,6 +327,14 @@
       "refreshFailed": "A conta foi vinculada, mas o status não pôde ser atualizado",
       "unlinkFailed": "Não foi possível desvincular o Telegram",
       "passwordRequired": "É necessário fazer login com senha antes de desvincular o Telegram"
+    },
+    "about": {
+      "version": "Versão {{version}}",
+      "license": "Licenciado sob a GNU Affero General Public License v3.0.",
+      "licenseLink": "Licença",
+      "website": "Site",
+      "support": "Suporte Chatter",
+      "supportHelp": "Ajude a manter o projeto em andamento"
     }
   },
   "chat": {
@@ -546,7 +559,8 @@
     "image": {
       "generatedAlt": "Imagem gerada",
       "photoAlt": "Foto"
-    }
+    },
+    "connectionLostBeforeSend": "A conexão foi fechada antes que o servidor aceitasse a mensagem. Por favor, envie novamente."
   },
   "promptSelector": {
     "placeholder": "Selecione um prompt...",
@@ -967,5 +981,25 @@
     "sameAsOld": "A nova senha deve ser diferente da atual",
     "success": "Senha alterada. Faça login novamente.",
     "logout": "Sair"
+  },
+  "onboarding": {
+    "back": "Voltar",
+    "next": "Avançar",
+    "done": "Entendi",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Conectar Telegram",
+        "body": "Recomendamos vincular sua conta do Telegram imediatamente.\n\n- **Recuperação de conta** — se você esquecer sua senha do Desktop, só poderá restaurar o acesso através de uma conta do Telegram vinculada.\n- **Acesso remoto e sincronização** — envie solicitações e converse com seu assistente pelo celular quando estiver longe do computador.\n\nVocê pode vincular sua conta a qualquer momento em Configurações."
+      },
+      "features": {
+        "title": "## Privacidade e Ecossistema",
+        "body": "Você tem controle total sobre as ferramentas de IA e integração com seu ambiente:\n\n- **Restrições** — a qualquer momento, você pode cortar o acesso do bot à internet, bloquear a execução de comandos no PC, desativar a criação de subagentes ou ativar o Modo Convidado para uma conversa limpa.\n- **Casa Inteligente** — conecte Yandex Smart Home ou dispositivos locais via Zigbee2MQTT. O assistente pode controlar luzes, tomadas e climatização.\n- **Controle por voz** — o assistente está pronto para ouvir. Basta dizer: 'Alexa' ou 'Ei, Jarvis!'. Você pode escolher a voz do assistente na aba Voz."
+      },
+      "experimental": {
+        "title": "## Recursos Experimentais",
+        "body": "Adicionamos novos recursos regularmente. Aqui está o que você pode experimentar agora:\n\n- **Agente DevOps** — ferramenta SSH integrada. Execute comandos em servidores remotos com políticas seguras de confirmação manual.\n- **Mapas e Rotas** — a IA pode pesquisar lugares e construir rotas em um mapa interativo no painel direito.\n- **Modo de Rolagem de Dados (d20)** — para fãs de jogos de tabuleiro. Adiciona uma rolagem de dados virtual que determina o sucesso das ações e guia a narrativa nas respostas da IA (ative em **Configurações → Aplicativo**)."
+      }
+    }
   }
 }

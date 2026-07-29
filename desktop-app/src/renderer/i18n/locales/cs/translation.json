@@ -448,7 +448,9 @@
       "documentTooLarge": "Soubor je příliš velký: {{name}} (max. 5 MB)",
       "imageLimit": "Najednou můžete připojit maximálně {{count}} obrázků",
       "read": "Nelze přečíst: {{name}}",
-      "unsupported": "Nepodporovaný formát: {{name}}"
+      "unsupported": "Nepodporovaný formát: {{name}}",
+      "imageTotalTooLarge": "Připravené obrázky překračují celkový limit {{size}}",
+      "imagePrepare": "Nelze připravit obrázek: {{name}}"
     }
   },
   "settings": {
@@ -469,7 +471,8 @@
       "models": "Modely",
       "limits": "Limity",
       "app": "Aplikace",
-      "billing": "Fakturace"
+      "billing": "Fakturace",
+      "about": "O aplikaci"
     },
     "language": {
       "system": "Systém",
@@ -572,7 +575,9 @@
       "noSpecializedSubagents": "Žádní specializovaní podagenti",
       "noSpecializedSubagentsHelp": "Zakáže předdefinované podagenty (invoke_subagent).",
       "noAdhocSubagents": "Žádní ad-hoc podagenti",
-      "noAdhocSubagentsHelp": "Zakáže vytváření podagentů za běhu (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Zakáže vytváření podagentů za běhu (spawn_subagent).",
+      "noWakeWord": "Zakázat budící slovo",
+      "noWakeWordHelp": "Zastavit poslech budících slov (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Mikrofonní proud bude vypnut."
     },
     "models": {
       "title": "Nastavení modelů",
@@ -634,6 +639,14 @@
       "loginAlreadyExists": "Toto přihlašovací jméno je již obsazeno",
       "badLogin": "Neplatný formát přihlašovacího jména",
       "loginRequired": "Zadejte aktuální heslo a nové přihlašovací jméno"
+    },
+    "about": {
+      "version": "Verze {{version}}",
+      "license": "Licencováno pod GNU Affero General Public License v3.0.",
+      "licenseLink": "Licence",
+      "website": "Webové stránky",
+      "support": "Podpora Chatter",
+      "supportHelp": "Pomozte udržet projekt v chodu"
     }
   },
   "chat": {
@@ -858,7 +871,8 @@
     "image": {
       "generatedAlt": "Vygenerovaný obrázek",
       "photoAlt": "Fotografie"
-    }
+    },
+    "connectionLostBeforeSend": "Spojení se uzavřelo dříve, než server přijal zprávu. Pošlete ji prosím znovu."
   },
   "promptSelector": {
     "placeholder": "Vyberte prompt...",
@@ -967,5 +981,25 @@
     "sameAsOld": "Nové heslo se musí lišit od stávajícího",
     "success": "Heslo změněno. Přihlaste se znovu.",
     "logout": "Odhlásit se"
+  },
+  "onboarding": {
+    "back": "Zpět",
+    "next": "Další",
+    "done": "Hotovo",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Připojit Telegram",
+        "body": "Doporučujeme propojit váš Telegram účet hned teď.\n\n- **Obnovení účtu** — pokud zapomenete heslo k Desktopu, přístup lze obnovit pouze přes propojený Telegram účet.\n- **Vzdálený přístup a synchronizace** — posílejte požadavky a chatujte s asistentem z telefonu, když nejste u počítače.\n\nÚčet můžete propojit kdykoli v Nastavení."
+      },
+      "features": {
+        "title": "## Soukromí a ekosystém",
+        "body": "Máte plnou kontrolu nad nástroji AI a integrací s vaším prostředím:\n\n- **Omezení** — kdykoli můžete odříznout přístup bota k internetu, zablokovat provádění příkazů na PC, zakázat vytváření subagentů nebo zapnout Hostující režim pro čistý konverzační start.\n- **Chytrá domácnost** — připojte Yandex Smart Home nebo lokální zařízení přes Zigbee2MQTT. Asistent může ovládat světla, zásuvky a klima.\n- **Hlasové ovládání** — asistent je připraven naslouchat. Stačí říct: 'Alexo' nebo 'Hej, Jarvisi!'. Hlas asistenta si můžete vybrat v záložce Hlas."
+      },
+      "experimental": {
+        "title": "## Experimentální funkce",
+        "body": "Pravidelně přidáváme nové funkce. Zde je to, co můžete vyzkoušet právě teď:\n\n- **DevOps Agent** — vestavěný nástroj SSH. Spouštějte příkazy na vzdálených serverech s bezpečnými zásadami ručního potvrzení.\n- **Mapy a trasy** — AI umí vyhledávat místa a vytvářet trasy na interaktivní mapě v pravém panelu.\n- **Režim hodu kostkou (d20)** — pro fanoušky deskových her. Přidává virtuální hod kostkou, který určuje úspěšnost akcí a řídí vyprávění v odpovědích AI (povolte v **Nastavení → Aplikace**)."
+      }
+    }
   }
 }

@@ -470,7 +470,12 @@
         "generatingPassword": "パスワードを生成中...",
         "passwordGenerated": "新しいユーザーパスワード: {{password}}",
         "passwordGeneratedSuccess": "新しいパスワードが生成されました",
-        "noPasswordIdentity": "ユーザーはパスワードベースのログインを持っていません"
+        "noPasswordIdentity": "ユーザーはパスワードベースのログインを持っていません",
+        "deleteUser": "ユーザーを削除",
+        "deleteUserConfirm": "このユーザーを完全に削除してもよろしいですか？すべてのユーザーデータ（チャット、メモ、タスク、ファイル、ID）が削除されます。この操作は元に戻せません。",
+        "deleteUserHint": "データベースからユーザーと関連データを完全に削除します。",
+        "deletingUser": "ユーザーを削除中…",
+        "cannotDeleteAdmin": "管理者は削除できません"
       },
       "modelUsage": {
         "title": "モデル別使用量",
@@ -854,7 +859,13 @@
       "pl": "Polski",
       "pt-BR": "Português (Brasil)",
       "zh-CN": "中文（简体）"
-    }
+    },
+    "aboutTitle": "概要",
+    "aboutDescription": "プロジェクト情報と便利なリンク",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "ライセンス",
+    "aboutBoosty": "BoostyでChatterを支援",
+    "aboutWebsite": "ウェブサイト"
   },
   "prompts": {
     "listTitle": "システムプロンプト",

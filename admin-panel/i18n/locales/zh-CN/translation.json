@@ -470,7 +470,12 @@
         "generatingPassword": "正在生成密码...",
         "passwordGenerated": "新用户密码：{{password}}",
         "passwordGeneratedSuccess": "新密码已生成",
-        "noPasswordIdentity": "用户没有基于密码的登录方式"
+        "noPasswordIdentity": "用户没有基于密码的登录方式",
+        "deleteUser": "删除用户",
+        "deleteUserConfirm": "您确定要永久删除此用户吗？所有用户数据（聊天、笔记、任务、文件、身份）都将被移除。此操作无法撤销。",
+        "deleteUserHint": "从数据库中永久删除用户及其所有相关数据。",
+        "deletingUser": "正在删除用户…",
+        "cannotDeleteAdmin": "无法删除管理员"
       },
       "modelUsage": {
         "title": "按模型使用情况",
@@ -854,7 +859,13 @@
       "pl": "Polski",
       "pt-BR": "Português (Brasil)",
       "zh-CN": "中文（简体）"
-    }
+    },
+    "aboutTitle": "关于",
+    "aboutDescription": "项目信息和有用链接",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "许可证",
+    "aboutBoosty": "在Boosty上支持Chatter",
+    "aboutWebsite": "网站"
   },
   "prompts": {
     "listTitle": "系统提示词",

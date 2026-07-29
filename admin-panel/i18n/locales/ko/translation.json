@@ -470,7 +470,12 @@
         "generatingPassword": "비밀번호 생성 중...",
         "passwordGenerated": "새 사용자 비밀번호: {{password}}",
         "passwordGeneratedSuccess": "새 비밀번호가 생성되었습니다",
-        "noPasswordIdentity": "사용자에게 비밀번호 기반 로그인이 없습니다"
+        "noPasswordIdentity": "사용자에게 비밀번호 기반 로그인이 없습니다",
+        "deleteUser": "사용자 삭제",
+        "deleteUserConfirm": "이 사용자를 영구적으로 삭제하시겠습니까? 모든 사용자 데이터(채팅, 메모, 작업, 파일, 신원)가 제거됩니다. 이 작업은 취소할 수 없습니다.",
+        "deleteUserHint": "데이터베이스에서 사용자 및 모든 관련 데이터를 영구적으로 제거합니다.",
+        "deletingUser": "사용자 삭제 중…",
+        "cannotDeleteAdmin": "관리자는 삭제할 수 없습니다."
       },
       "modelUsage": {
         "title": "모델별 사용량",
@@ -854,7 +859,13 @@
       "pl": "폴란드어",
       "pt-BR": "포르투갈어(브라질)",
       "zh-CN": "중국어(간체)"
-    }
+    },
+    "aboutTitle": "정보",
+    "aboutDescription": "프로젝트 정보 및 유용한 링크",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "라이선스",
+    "aboutBoosty": "Boosty에서 Chatter 지원하기",
+    "aboutWebsite": "웹사이트"
   },
   "prompts": {
     "listTitle": "시스템 프롬프트",

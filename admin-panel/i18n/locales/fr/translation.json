@@ -470,7 +470,12 @@
         "generatingPassword": "Génération du mot de passe...",
         "passwordGenerated": "Nouveau mot de passe utilisateur : {{password}}",
         "passwordGeneratedSuccess": "Nouveau mot de passe généré",
-        "noPasswordIdentity": "L'utilisateur n'a pas de connexion par mot de passe"
+        "noPasswordIdentity": "L'utilisateur n'a pas de connexion par mot de passe",
+        "deleteUser": "Supprimer l'utilisateur",
+        "deleteUserConfirm": "Voulez-vous vraiment supprimer définitivement cet utilisateur ? TOUTES les données utilisateur (chats, notes, tâches, fichiers, identités) seront supprimées. Cette action est irréversible.",
+        "deleteUserHint": "Supprime définitivement l'utilisateur et toutes les données associées de la base de données.",
+        "deletingUser": "Suppression de l'utilisateur…",
+        "cannotDeleteAdmin": "Impossible de supprimer un administrateur"
       },
       "modelUsage": {
         "title": "Utilisation par modèle",
@@ -854,7 +859,13 @@
       "pl": "Polonais",
       "pt-BR": "Portugais (Brésil)",
       "zh-CN": "Chinois (simplifié)"
-    }
+    },
+    "aboutTitle": "À propos",
+    "aboutDescription": "Informations sur le projet et liens utiles",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "Licence",
+    "aboutBoosty": "Soutenir Chatter sur Boosty",
+    "aboutWebsite": "Site web"
   },
   "prompts": {
     "listTitle": "Invites système",

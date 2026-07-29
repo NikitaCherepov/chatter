@@ -456,7 +456,12 @@
         "generatingPassword": "Generování hesla...",
         "passwordGenerated": "Nové uživatelské heslo: {{password}}",
         "passwordGeneratedSuccess": "Nové heslo vygenerováno",
-        "noPasswordIdentity": "Uživatel nemá přihlášení založené na hesle"
+        "noPasswordIdentity": "Uživatel nemá přihlášení založené na hesle",
+        "deleteUser": "Smazat uživatele",
+        "deleteUserConfirm": "Opravdu chcete tohoto uživatele trvale smazat? Všechna data uživatele (chaty, poznámky, úkoly, soubory, identity) budou odstraněna. Tuto akci nelze vrátit zpět.",
+        "deleteUserHint": "Trvale odstraní uživatele a všechna související data z databáze.",
+        "deletingUser": "Mazání uživatele…",
+        "cannotDeleteAdmin": "Nelze smazat administrátora"
       },
       "modelUsage": {
         "title": "Využití podle modelu",
@@ -835,7 +840,13 @@
       "pl": "Polština",
       "pt-BR": "Portugalština (Brazílie)",
       "zh-CN": "Čínština (zjednodušená)"
-    }
+    },
+    "aboutTitle": "O aplikaci",
+    "aboutDescription": "Informace o projektu a užitečné odkazy",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "Licence",
+    "aboutBoosty": "Podpořte Chatter na Boosty",
+    "aboutWebsite": "Webová stránka"
   },
   "prompts": {
     "listTitle": "Systémové výzvy",

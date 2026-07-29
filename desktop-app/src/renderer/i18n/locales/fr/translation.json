@@ -136,7 +136,9 @@
       "documentTooLarge": "Fichier trop volumineux : {{name}} (max. 5 Mo)",
       "imageLimit": "Vous pouvez joindre jusqu’à {{count}} images à la fois",
       "read": "Impossible de lire : {{name}}",
-      "unsupported": "Format non pris en charge : {{name}}"
+      "unsupported": "Format non pris en charge : {{name}}",
+      "imageTotalTooLarge": "Les images préparées dépassent la limite totale de {{size}}",
+      "imagePrepare": "Impossible de préparer l'image : {{name}}"
     }
   },
   "settings": {
@@ -157,7 +159,8 @@
       "limits": "Limites",
       "connections": "Comptes liés",
       "mail": "Email",
-      "billing": "Facturation"
+      "billing": "Facturation",
+      "about": "À propos"
     },
     "language": {
       "system": "Système",
@@ -237,7 +240,9 @@
       "noSpecializedSubagents": "Sans sous-agents spécialisés",
       "noSpecializedSubagentsHelp": "Désactive l'appel de sous-agents préconfigurés (invoke_subagent).",
       "noAdhocSubagents": "Sans création de sous-agents",
-      "noAdhocSubagentsHelp": "Désactive la création de sous-agents à la volée (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Désactive la création de sous-agents à la volée (spawn_subagent).",
+      "noWakeWord": "Désactiver le mot de réveil",
+      "noWakeWordHelp": "Arrêter l'écoute des mots de réveil (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Le flux du microphone sera désactivé."
     },
     "models": {
       "title": "Paramètres des modèles",
@@ -322,6 +327,14 @@
       "refreshFailed": "Le compte a été lié, mais son statut n'a pas pu être actualisé",
       "unlinkFailed": "Impossible de dissocier Telegram",
       "passwordRequired": "Une connexion par mot de passe est requise avant de pouvoir dissocier Telegram"
+    },
+    "about": {
+      "version": "Version {{version}}",
+      "license": "Sous licence GNU Affero General Public License v3.0.",
+      "licenseLink": "Licence",
+      "website": "Site web",
+      "support": "Assistance Chatter",
+      "supportHelp": "Aidez à maintenir le projet en vie"
     }
   },
   "chat": {
@@ -546,7 +559,8 @@
     "image": {
       "generatedAlt": "Image générée",
       "photoAlt": "Photo"
-    }
+    },
+    "connectionLostBeforeSend": "La connexion s'est fermée avant que le serveur n'accepte le message. Veuillez le renvoyer."
   },
   "promptSelector": {
     "placeholder": "Sélectionnez un prompt...",
@@ -967,5 +981,25 @@
     "sameAsOld": "Le nouveau mot de passe doit être différent de l'actuel",
     "success": "Mot de passe modifié. Veuillez vous reconnecter.",
     "logout": "Se déconnecter"
+  },
+  "onboarding": {
+    "back": "Retour",
+    "next": "Suivant",
+    "done": "Compris",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Connecter Telegram",
+        "body": "Nous vous recommandons de lier votre compte Telegram dès maintenant.\n\n- **Récupération de compte** — si vous oubliez votre mot de passe Desktop, vous ne pouvez restaurer l'accès que via un compte Telegram lié.\n- **Accès à distance et synchronisation** — envoyez des demandes et discutez avec votre assistant depuis votre téléphone lorsque vous êtes loin de votre ordinateur.\n\nVous pouvez lier votre compte à tout moment dans les Paramètres."
+      },
+      "features": {
+        "title": "## Confidentialité et Écosystème",
+        "body": "Vous avez un contrôle total sur les outils d'IA et l'intégration avec votre environnement :\n\n- **Restrictions** — à tout moment, vous pouvez couper l'accès Internet du bot, bloquer l'exécution de commandes PC, désactiver la création de sous-agents ou activer le Mode Invité pour une conversation vierge.\n- **Maison intelligente** — connectez Yandex Smart Home ou des appareils locaux via Zigbee2MQTT. L'assistant peut contrôler les lumières, les prises et le climat.\n- **Contrôle vocal** — l'assistant est prêt à écouter. Dites simplement : 'Alexa', ou 'Hé, Jarvis !'. Vous pouvez choisir la voix de l'assistant dans l'onglet Voix."
+      },
+      "experimental": {
+        "title": "## Fonctionnalités expérimentales",
+        "body": "Nous ajoutons régulièrement de nouvelles fonctionnalités. Voici ce que vous pouvez essayer dès maintenant :\n\n- **Agent DevOps** — outil SSH intégré. Exécutez des commandes sur des serveurs distants avec des politiques de confirmation manuelle sécurisées.\n- **Cartes et itinéraires** — l'IA peut rechercher des lieux et construire des itinéraires sur une carte interactive dans le panneau de droite.\n- **Mode lancer de dé (d20)** — pour les fans de jeux de société. Ajoute un lancer de dé virtuel qui détermine le succès des actions et guide la narration dans les réponses de l'IA (activer dans **Paramètres → Application**)."
+      }
+    }
   }
 }

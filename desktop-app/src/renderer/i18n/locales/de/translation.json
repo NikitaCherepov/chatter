@@ -136,7 +136,9 @@
       "documentTooLarge": "Datei zu groß: {{name}} (max. 5 MB)",
       "imageLimit": "Sie können bis zu {{count}} Bilder gleichzeitig anhängen",
       "read": "Konnte nicht gelesen werden: {{name}}",
-      "unsupported": "Nicht unterstütztes Format: {{name}}"
+      "unsupported": "Nicht unterstütztes Format: {{name}}",
+      "imageTotalTooLarge": "Die vorbereiteten Bilder überschreiten das {{size}}-Limit",
+      "imagePrepare": "Bild konnte nicht vorbereitet werden: {{name}}"
     }
   },
   "settings": {
@@ -157,7 +159,8 @@
       "limits": "Grenzen",
       "connections": "Verknüpfte Konten",
       "mail": "E-Mail",
-      "billing": "Abrechnung"
+      "billing": "Abrechnung",
+      "about": "Über"
     },
     "language": {
       "system": "System",
@@ -237,7 +240,9 @@
       "noSpecializedSubagents": "Keine spezialisierten Subagenten",
       "noSpecializedSubagentsHelp": "Deaktiviert den Aufruf vorkonfigurierter Subagenten (invoke_subagent).",
       "noAdhocSubagents": "Keine Erstellung von Subagenten",
-      "noAdhocSubagentsHelp": "Deaktiviert die Erstellung von Subagenten im laufenden Betrieb (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Deaktiviert die Erstellung von Subagenten im laufenden Betrieb (spawn_subagent).",
+      "noWakeWord": "Wake-Wort deaktivieren",
+      "noWakeWordHelp": "Stoppt das Lauschen auf Wake-Wörter (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Der Mikrofonstream wird ausgeschaltet."
     },
     "models": {
       "title": "Modelleinstellungen",
@@ -322,6 +327,14 @@
       "refreshFailed": "Das Konto wurde verknüpft, aber sein Status konnte nicht aktualisiert werden",
       "unlinkFailed": "Telegram konnte nicht getrennt werden",
       "passwordRequired": "Für die Trennung von Telegram ist eine Passwortanmeldung erforderlich"
+    },
+    "about": {
+      "version": "Version {{version}}",
+      "license": "Lizenziert unter der GNU Affero General Public License v3.0.",
+      "licenseLink": "Lizenz",
+      "website": "Webseite",
+      "support": "Support Chatter",
+      "supportHelp": "Helfen Sie mit, das Projekt voranzubringen"
     }
   },
   "chat": {
@@ -546,7 +559,8 @@
     "image": {
       "generatedAlt": "Generiertes Bild",
       "photoAlt": "Foto"
-    }
+    },
+    "connectionLostBeforeSend": "Die Verbindung wurde geschlossen, bevor der Server die Nachricht akzeptiert hat. Bitte senden Sie sie erneut."
   },
   "promptSelector": {
     "placeholder": "Prompt auswählen...",
@@ -967,5 +981,25 @@
     "sameAsOld": "Das neue Passwort muss sich vom aktuellen unterscheiden",
     "success": "Passwort geändert. Bitte melden Sie sich erneut an.",
     "logout": "Abmelden"
+  },
+  "onboarding": {
+    "back": "Zurück",
+    "next": "Weiter",
+    "done": "Verstanden",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Telegram verbinden",
+        "body": "Wir empfehlen, Ihr Telegram-Konto sofort zu verknüpfen.\n\n- **Kontowiederherstellung** — falls Sie Ihr Desktop-Passwort vergessen, können Sie den Zugriff nur über ein verknüpftes Telegram-Konto wiederherstellen.\n- **Fernzugriff & Synchronisation** — senden Sie Anfragen und chatten Sie mit Ihrem Assistenten von Ihrem Telefon aus, wenn Sie nicht am Computer sind.\n\nSie können Ihr Konto jederzeit in den Einstellungen verknüpfen."
+      },
+      "features": {
+        "title": "## Datenschutz & Ökosystem",
+        "body": "Sie haben die volle Kontrolle über KI-Tools und die Integration in Ihre Umgebung:\n\n- **Einschränkungen** — jederzeit können Sie den Internetzugriff des Bots sperren, die Ausführung von PC-Befehlen blockieren, die Erstellung von Unteragenten deaktivieren oder den Gastmodus für eine saubere Unterhaltung aktivieren.\n- **Smart Home** — verbinden Sie Yandex Smart Home oder lokale Geräte über Zigbee2MQTT. Der Assistent kann Lampen, Steckdosen und Klimaanlagen steuern.\n- **Sprachsteuerung** — der Assistent ist bereit zuzuhören. Sagen Sie einfach: 'Alexa' oder 'Hey, Jarvis!'. Sie können die Stimme des Assistenten im Reiter Stimme auswählen."
+      },
+      "experimental": {
+        "title": "## Experimentelle Funktionen",
+        "body": "Wir fügen regelmäßig neue Funktionen hinzu. Hier ist, was Sie jetzt ausprobieren können:\n\n- **DevOps-Agent** — integriertes SSH-Tool. Führen Sie Befehle auf entfernten Servern mit sicheren manuellen Bestätigungsrichtlinien aus.\n- **Karten & Routen** — KI kann Orte suchen und Routen auf einer interaktiven Karte im rechten Bereich erstellen.\n- **Würfelmodus (d20)** — für Tabletop-Fans. Fügt einen virtuellen Würfelwurf hinzu, der den Erfolg von Aktionen bestimmt und die Erzählung in KI-Antworten lenkt (aktivieren in **Einstellungen → Anwendung**)."
+      }
+    }
   }
 }

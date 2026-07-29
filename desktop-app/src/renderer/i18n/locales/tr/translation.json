@@ -448,7 +448,9 @@
       "documentTooLarge": "Dosya çok büyük: {{name}} (maks. 5 MB)",
       "imageLimit": "Tek seferde en fazla {{count}} görsel ekleyebilirsiniz",
       "read": "{{name}} okunamadı",
-      "unsupported": "Desteklenmeyen biçim: {{name}}"
+      "unsupported": "Desteklenmeyen biçim: {{name}}",
+      "imageTotalTooLarge": "Hazırlanan görseller {{size}} toplam sınırını aşıyor",
+      "imagePrepare": "Görsel hazırlanamadı: {{name}}"
     }
   },
   "settings": {
@@ -469,7 +471,8 @@
       "models": "Modeller",
       "limits": "Sınırlar",
       "app": "Uygulama",
-      "billing": "Faturalandırma"
+      "billing": "Faturalandırma",
+      "about": "Hakkında"
     },
     "language": {
       "system": "Sistem",
@@ -572,7 +575,9 @@
       "noSpecializedSubagents": "Özelleşmiş alt ajan yok",
       "noSpecializedSubagentsHelp": "Önceden tanımlanmış alt ajanları devre dışı bırakır (invoke_subagent).",
       "noAdhocSubagents": "Geçici alt ajan yok",
-      "noAdhocSubagentsHelp": "Anlık alt ajan oluşturmayı devre dışı bırakır (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Anlık alt ajan oluşturmayı devre dışı bırakır (spawn_subagent).",
+      "noWakeWord": "Uyandırma kelimesini devre dışı bırak",
+      "noWakeWordHelp": "Uyandırma kelimelerini (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) dinlemeyi durdur. Mikrofon akışı kapatılacak."
     },
     "models": {
       "title": "Model ayarları",
@@ -634,6 +639,14 @@
       "loginAlreadyExists": "Bu giriş zaten kullanılıyor",
       "badLogin": "Geçersiz giriş formatı",
       "loginRequired": "Mevcut şifreyi ve yeni girişi girin"
+    },
+    "about": {
+      "version": "Sürüm {{version}}",
+      "license": "GNU Affero Genel Kamu Lisansı v3.0 altında lisanslanmıştır.",
+      "licenseLink": "Lisans",
+      "website": "Web Sitesi",
+      "support": "Chatter Desteği",
+      "supportHelp": "Projenin ilerlemesine yardımcı olun"
     }
   },
   "chat": {
@@ -858,7 +871,8 @@
     "image": {
       "generatedAlt": "Oluşturulan görsel",
       "photoAlt": "Fotoğraf"
-    }
+    },
+    "connectionLostBeforeSend": "Sunucu mesajı kabul etmeden bağlantı kapandı. Lütfen tekrar gönderin."
   },
   "promptSelector": {
     "placeholder": "Bir prompt seçin...",
@@ -967,5 +981,25 @@
     "sameAsOld": "Yeni şifre mevcut şifreden farklı olmalıdır",
     "success": "Şifre değiştirildi. Lütfen tekrar oturum açın.",
     "logout": "Oturumu Kapat"
+  },
+  "onboarding": {
+    "back": "Geri",
+    "next": "İleri",
+    "done": "Anladım",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Telegram'ı Bağlayın",
+        "body": "Telegram hesabınızı hemen bağlamanızı öneririz.\n\n- **Hesap kurtarma** — Masaüstü şifrenizi unutursanız, erişimi yalnızca bağlı bir Telegram hesabı üzerinden geri yükleyebilirsiniz.\n- **Uzaktan erişim ve senkronizasyon** — bilgisayarınızdan uzaktayken telefonunuzdan asistanınıza istek gönderin ve sohbet edin.\n\nHesabınızı istediğiniz zaman Ayarlar'dan bağlayabilirsiniz."
+      },
+      "features": {
+        "title": "## Gizlilik ve Ekosistem",
+        "body": "AI araçları ve ortamınızla entegrasyon üzerinde tam kontrole sahipsiniz:\n\n- **Kısıtlamalar** — istediğiniz zaman botun internet erişimini kesebilir, PC komut yürütmeyi engelleyebilir, alt ajan oluşturmayı devre dışı bırakabilir veya temiz bir sayfa için Misafir Modu'nu etkinleştirebilirsiniz.\n- **Akıllı Ev** — Yandex Smart Home veya Zigbee2MQTT üzerinden yerel cihazları bağlayın. Asistan ışıkları, prizleri ve iklimi kontrol edebilir.\n- **Ses kontrolü** — asistan dinlemeye hazır. Sadece 'Alexa' veya 'Hey, Jarvis!' deyin. Asistanın sesini Ses sekmesinden seçebilirsiniz."
+      },
+      "experimental": {
+        "title": "## Deneysel Özellikler",
+        "body": "Düzenli olarak yeni özellikler ekliyoruz. İşte şu anda deneyebilecekleriniz:\n\n- **DevOps Ajanı** — yerleşik SSH aracı. Güvenli manuel onay politikalarıyla uzak sunucularda komut çalıştırın.\n- **Haritalar ve Rotalar** — Yapay zeka, sağ paneldeki etkileşimli haritada yer arayabilir ve rotalar oluşturabilir.\n- **Zar Atma Modu (d20)** — masaüstü oyun hayranları için. Eylemlerin başarısını belirleyen ve yapay zeka yanıtlarında anlatıyı yönlendiren sanal bir zar atışı ekler (etkinleştirmek için **Ayarlar → Uygulama**)."
+      }
+    }
   }
 }

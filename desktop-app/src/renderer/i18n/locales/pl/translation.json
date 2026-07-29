@@ -448,7 +448,9 @@
       "documentTooLarge": "Plik jest za duży: {{name}} (maks. 5 MB)",
       "imageLimit": "Jednorazowo możesz załączyć maksymalnie {{count}} obrazów",
       "read": "Nie udało się odczytać: {{name}}",
-      "unsupported": "Nieobsługiwany format: {{name}}"
+      "unsupported": "Nieobsługiwany format: {{name}}",
+      "imageTotalTooLarge": "Przygotowane obrazy przekraczają limit {{size}}",
+      "imagePrepare": "Nie można przygotować obrazu: {{name}}"
     }
   },
   "settings": {
@@ -469,7 +471,8 @@
       "limits": "Limity",
       "connections": "Połączone konta",
       "mail": "Poczta",
-      "billing": "Rozliczenia"
+      "billing": "Rozliczenia",
+      "about": "O aplikacji"
     },
     "language": {
       "system": "Systemowy",
@@ -549,7 +552,9 @@
       "noSpecializedSubagents": "Bez wyspecjalizowanych subagentów",
       "noSpecializedSubagentsHelp": "Wyłącza wywoływanie wstępnie skonfigurowanych subagentów (invoke_subagent).",
       "noAdhocSubagents": "Bez tworzenia subagentów",
-      "noAdhocSubagentsHelp": "Wyłącza tworzenie subagentów na bieżąco (spawn_subagent)."
+      "noAdhocSubagentsHelp": "Wyłącza tworzenie subagentów na bieżąco (spawn_subagent).",
+      "noWakeWord": "Wyłącz słowo budzące",
+      "noWakeWordHelp": "Zatrzymaj nasłuchiwanie słów budzących (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Strumień mikrofonu zostanie wyłączony."
     },
     "models": {
       "title": "Ustawienia modeli",
@@ -634,6 +639,14 @@
       "refreshFailed": "Konto zostało połączone, ale nie można odświeżyć jego statusu",
       "unlinkFailed": "Nie można odłączyć Telegrama",
       "passwordRequired": "Przed odłączeniem Telegrama wymagane jest logowanie hasłem"
+    },
+    "about": {
+      "version": "Wersja {{version}}",
+      "license": "Licencjonowane na warunkach GNU Affero General Public License v3.0.",
+      "licenseLink": "Licencja",
+      "website": "Strona internetowa",
+      "support": "Wsparcie Chatter",
+      "supportHelp": "Pomóż utrzymać projekt w ruchu"
     }
   },
   "chat": {
@@ -858,7 +871,8 @@
     "image": {
       "generatedAlt": "Wygenerowany obraz",
       "photoAlt": "Zdjęcie"
-    }
+    },
+    "connectionLostBeforeSend": "Połączenie zostało zamknięte, zanim serwer zaakceptował wiadomość. Wyślij ją ponownie."
   },
   "promptSelector": {
     "placeholder": "Wybierz prompt...",
@@ -967,5 +981,25 @@
     "sameAsOld": "Nowe hasło musi różnić się od obecnego",
     "success": "Hasło zmienione. Zaloguj się ponownie.",
     "logout": "Wyloguj się"
+  },
+  "onboarding": {
+    "back": "Wstecz",
+    "next": "Dalej",
+    "done": "Rozumiem",
+    "stepIndicator": "{{current}} / {{total}}",
+    "welcome": {
+      "telegram": {
+        "title": "## Połącz Telegram",
+        "body": "Zalecamy natychmiastowe połączenie konta Telegram.\n\n- **Odzyskiwanie konta** — jeśli zapomnisz hasła do Desktop, dostęp można przywrócić tylko przez połączone konto Telegram.\n- **Zdalny dostęp i synchronizacja** — wysyłaj zapytania i rozmawiaj z asystentem z telefonu, gdy jesteś z dala od komputera.\n\nMożesz połączyć konto w dowolnym momencie w Ustawieniach."
+      },
+      "features": {
+        "title": "## Prywatność i Ekosystem",
+        "body": "Masz pełną kontrolę nad narzędziami AI i integracją ze swoim środowiskiem:\n\n- **Ograniczenia** — w każdej chwili możesz odciąć botowi dostęp do internetu, zablokować wykonywanie poleceń na PC, wyłączyć tworzenie subagentów lub włączyć Tryb Gościa dla rozmowy od zera.\n- **Smart Home** — podłącz Yandex Smart Home lub lokalne urządzenia przez Zigbee2MQTT. Asystent może sterować oświetleniem, gniazdkami i klimatyzacją.\n- **Sterowanie głosowe** — asystent jest gotowy do słuchania. Wystarczy powiedzieć: 'Alexa' lub 'Hej, Jarvis!'. Możesz wybrać głos asystenta w zakładce Głos."
+      },
+      "experimental": {
+        "title": "## Funkcje eksperymentalne",
+        "body": "Regularnie dodajemy nowe funkcje. Oto, co możesz wypróbować już teraz:\n\n- **Agent DevOps** — wbudowane narzędzie SSH. Uruchamiaj polecenia na zdalnych serwerach z bezpiecznymi zasadami ręcznego potwierdzania.\n- **Mapy i trasy** — AI może wyszukiwać miejsca i budować trasy na interaktywnej mapie w prawym panelu.\n- **Tryb rzutu kostką (d20)** — dla fanów gier stołowych. Dodaje wirtualny rzut kostką, który określa powodzenie akcji i kieruje narracją w odpowiedziach AI (włącz w **Ustawienia → Aplikacja**)."
+      }
+    }
   }
 }
