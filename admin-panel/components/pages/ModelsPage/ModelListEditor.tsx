@@ -110,6 +110,8 @@ const PROVIDER_URLS: Record<NonNullable<ProviderKind>, string> = {
   custom: '',
 };
 
+const API_KEYS_CHANGED_EVENT = 'chatter:api-keys-changed';
+
 function resolveProviderKind(baseUrl: string): ProviderKind {
   const url = baseUrl.toLowerCase();
   if (url.includes('openrouter.ai')) return 'openrouter';
@@ -225,9 +227,15 @@ export function ProviderModelFields({
   const [newKeyValue, setNewKeyValue] = useState('');
   const [selectedApiKeyId, setSelectedApiKeyId] = useState('');
 
-  useEffect(() => {
+  const loadApiKeys = useCallback(() => {
     api<ApiKey[]>('/api/api-keys').then(setApiKeys).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadApiKeys();
+    window.addEventListener(API_KEYS_CHANGED_EVENT, loadApiKeys);
+    return () => window.removeEventListener(API_KEYS_CHANGED_EVENT, loadApiKeys);
+  }, [loadApiKeys]);
 
   const override = coefficientManager?.getOverride?.(model.uniqueId);
 
@@ -568,8 +576,7 @@ export function ProviderModelFields({
             setNewKeyName('');
             setNewKeyValue('');
             setShowCreateKey(false);
-            // Reload the list
-            api<ApiKey[]>('/api/api-keys').then(setApiKeys).catch(() => {});
+            window.dispatchEvent(new Event(API_KEYS_CHANGED_EVENT));
           } catch {
             // error handled by api helper
           }
