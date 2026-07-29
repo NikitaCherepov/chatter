@@ -1556,6 +1556,54 @@ function formatDesktopReleaseNotes(value: unknown): string {
     .join('\n\n');
 }
 
+const desktopChangelogRequests = new Map<string, Promise<string>>();
+
+function isValidDesktopChangelog(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const changes = (value as { changes?: unknown }).changes;
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return false;
+
+  const entries = Object.values(changes);
+  return entries.length > 0 && entries.every((localeChanges) =>
+    Array.isArray(localeChanges)
+    && localeChanges.length > 0
+    && localeChanges.every((entry) => typeof entry === 'string' && entry.trim().length > 0));
+}
+
+function loadDesktopReleaseNotes(
+  version: string,
+  fallback: unknown,
+  log: (message: string) => void,
+): Promise<string> {
+  const fallbackNotes = formatDesktopReleaseNotes(fallback);
+  const safeVersion = version.trim();
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(safeVersion)) {
+    return Promise.resolve(fallbackNotes);
+  }
+
+  const cached = desktopChangelogRequests.get(safeVersion);
+  if (cached) return cached;
+
+  const request = (async () => {
+    try {
+      const url = `https://github.com/NikitaCherepov/chatter/releases/download/v${safeVersion}/desktop-changelog.json`;
+      const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const notes = await response.text();
+      if (Buffer.byteLength(notes, 'utf8') > 512 * 1024) throw new Error('changelog is too large');
+      if (!isValidDesktopChangelog(JSON.parse(notes))) throw new Error('invalid changelog format');
+      return notes;
+    } catch (error) {
+      desktopChangelogRequests.delete(safeVersion);
+      log(`localized changelog unavailable for ${safeVersion}: ${error instanceof Error ? error.message : String(error)}`);
+      return fallbackNotes;
+    }
+  })();
+
+  desktopChangelogRequests.set(safeVersion, request);
+  return request;
+}
+
 type TrustedServer = {
   origin: string;
 };
@@ -1705,11 +1753,12 @@ function setupGithubDesktopUpdater() {
 
   autoUpdater.on('checking-for-update', () => log('checking for update'));
   autoUpdater.on('update-not-available', (info) => log(`up to date: ${info.version}`));
-  autoUpdater.on('update-available', (info) => {
+  autoUpdater.on('update-available', async (info) => {
     log(`update available: ${info.version}`);
+    const releaseNotes = await loadDesktopReleaseNotes(info.version, info.releaseNotes, log);
     mainWindow?.webContents.send('update:available', {
       version: info.version,
-      releaseNotes: formatDesktopReleaseNotes(info.releaseNotes),
+      releaseNotes,
       size: 0,
     });
   });
@@ -1732,10 +1781,11 @@ function setupGithubDesktopUpdater() {
       if (!result?.updateInfo || result.updateInfo.version === app.getVersion()) {
         return { updateAvailable: false };
       }
+      const releaseNotes = await loadDesktopReleaseNotes(result.updateInfo.version, result.updateInfo.releaseNotes, log);
       return {
         updateAvailable: true,
         version: result.updateInfo.version,
-        releaseNotes: formatDesktopReleaseNotes(result.updateInfo.releaseNotes),
+        releaseNotes,
         size: 0,
       };
     } catch (error) {

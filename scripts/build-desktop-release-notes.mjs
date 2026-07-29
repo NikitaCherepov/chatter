@@ -55,6 +55,9 @@ function validateChanges(value, locales) {
 
 const inputPath = resolveFromRoot(readOption('--input', 'desktop-changelog.json'));
 const outputPath = resolveFromRoot(readOption('--output', 'desktop-app/release/release-notes.json'));
+const markdownOutput = process.argv.includes('--markdown-output')
+  ? resolveFromRoot(readOption('--markdown-output', ''))
+  : null;
 const checkOnly = process.argv.includes('--check');
 
 const changelog = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
@@ -68,4 +71,11 @@ if (checkOnly) {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, releaseNotes, 'utf8');
   console.log(`Desktop release notes written to ${path.relative(projectRoot, outputPath)}.`);
+
+  if (markdownOutput) {
+    const markdown = `## What's new\n\n${changes.en.map((entry) => `- ${entry}`).join('\n')}\n`;
+    fs.mkdirSync(path.dirname(markdownOutput), { recursive: true });
+    fs.writeFileSync(markdownOutput, markdown, 'utf8');
+    console.log(`GitHub release notes written to ${path.relative(projectRoot, markdownOutput)}.`);
+  }
 }

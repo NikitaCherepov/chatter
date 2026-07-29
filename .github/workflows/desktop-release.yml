@@ -75,8 +75,11 @@ jobs:
         working-directory: desktop-app
         run: npm run build:win -- --publish never
 
-      - name: Build localized release notes
-        run: node scripts/build-desktop-release-notes.mjs --output desktop-release-notes.json
+      - name: Build release notes
+        run: >
+          node scripts/build-desktop-release-notes.mjs
+          --output .release/desktop-changelog.json
+          --markdown-output .release/release-notes.md
 
       - name: Create draft GitHub Release
         shell: pwsh
@@ -92,11 +95,12 @@ jobs:
               } |
               ForEach-Object { $_.FullName }
           )
+          $assets += (Resolve-Path -LiteralPath .release/desktop-changelog.json).Path
           if ($assets.Count -eq 0) { throw 'Desktop build produced no release files.' }
 
           gh release create $env:RELEASE_TAG @assets `
             --repo $env:GITHUB_REPOSITORY `
             --target $env:GITHUB_SHA `
             --title "Chatter Desktop $env:RELEASE_VERSION" `
-            --notes-file desktop-release-notes.json `
+            --notes-file .release/release-notes.md `
             --draft
