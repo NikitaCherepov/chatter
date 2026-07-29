@@ -38,7 +38,7 @@ A Telegram user can continue the same chats and control their PC while Desktop i
  - **admin-panel** — management of models, keys, users, limits, backups, and server state.
  - **chatter-manager** — connects the admin panel to Docker, allowing you to start, stop, and update components.
  - **webapp-notes** — Telegram mini-app for notes.
- - **voice-service** — optional local transcription and speech synthesis.
+ - **voice-service** — optional Telegram-only service: transcribes incoming voice messages and automatically voices Chatter's reply when the user sends a voice message.
 
 All server components run in separate Docker containers and are linked via Docker Compose. So you can keep only what you actually need.
 

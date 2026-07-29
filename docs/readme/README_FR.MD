@@ -36,7 +36,7 @@ Un utilisateur Telegram peut continuer les memes conversations et controler son 
 - **admin-panel** — gestion des modeles, des cles, des utilisateurs, des limites, des sauvegardes et de letat du serveur.
 - **chatter-manager** — connecte le panneau dadministration a Docker, vous permettant de demarrer, arreter et mettre a jour les composants.
 - **webapp-notes** — mini-application Telegram pour les notes.
-- **voice-service** — transcription locale et synthese vocale optionnelles.
+- **voice-service** — service optionnel réservé à Telegram : il transcrit les messages vocaux entrants et vocalise automatiquement la réponse de Chatter lorsque l’utilisateur envoie un message vocal.
 
 Tous les composants serveur fonctionnent dans des conteneurs Docker separes et sont lies via Docker Compose. Vous pouvez donc garder uniquement ce dont vous avez reellement besoin.
 

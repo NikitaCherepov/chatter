@@ -36,7 +36,7 @@ Telegram 用户可以在 Desktop 连接的情况下继续相同的对话并控�
 - **admin-panel** — 管理模型、密钥、用户、限制、备份和服务器状态。
 - **chatter-manager** — 将管理面板连接到 Docker，允许您启动、停止和更新组件。
 - **webapp-notes** — 用于笔记的 Telegram 小程序。
-- **voice-service** — 可选的本地转录和语音合成。
+- **voice-service** — 仅用于 Telegram 的可选服务：转录收到的语音消息，并在用户发送语音消息时自动朗读 Chatter 的回复。
 
 所有服务器组件都在独立的 Docker 容器中运行，并通过 Docker Compose 连接。因此你可以只保留真正需要的内容。
 

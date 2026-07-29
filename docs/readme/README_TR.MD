@@ -36,7 +36,7 @@ Bir Telegram kullanıcısı, Masaüstü bağlıyken aynı sohbetlere devam edebi
 - **admin-panel** — Modellerin, anahtarların, kullanıcıların, limitlerin, yedeklemelerin ve sunucu durumunun yönetimi.
 - **chatter-manager** — Yönetim panelini Docker'a bağlayarak bileşenleri başlatmanıza, durdurmanıza ve güncellemenize olanak tanır.
 - **webapp-notes** — Notlar için Telegram mini uygulaması.
-- **voice-service** — İsteğe bağlı yerel transkripsiyon ve konuşma sentezi.
+- **voice-service** — yalnızca Telegram için isteğe bağlı hizmet: gelen sesli mesajları yazıya döker ve kullanıcı sesli mesaj gönderdiğinde Chatter'ın yanıtını otomatik olarak seslendirir.
 
 Tüm sunucu bileşenleri ayrı Docker konteynırlarında çalışır ve Docker Compose ile birbirine bağlanır. Böylece yalnızca gerçekten ihtiyacınız olanı tutabilirsiniz.
 

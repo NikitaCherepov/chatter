@@ -36,7 +36,7 @@ Telegram 사용자는 Desktop이 연결되어 있는 동안 동일한 채팅을 
  - **admin-panel** — 모델, 키, 사용자, 제한, 백업 및 서버 상태 관리.
  - **chatter-manager** — 관리자 패널을 Docker에 연결하여 구성 요소를 시작, 중지 및 업데이트할 수 있습니다.
  - **webapp-notes** — 메모용 Telegram 미니 앱.
- - **voice-service** — 선택적 로컬 전사 및 음성 합성.
+ - **voice-service** — Telegram 전용 선택 서비스입니다. 수신한 음성 메시지를 텍스트로 변환하고, 사용자가 음성 메시지를 보내면 Chatter의 답변을 자동으로 음성으로 읽어 줍니다.
 
 모든 서버 구성 요소는 별도의 Docker 컨테이너에서 실행되며 Docker Compose를 통해 연결됩니다. 따라서 실제로 필요한 것만 유지할 수 있습니다.
 

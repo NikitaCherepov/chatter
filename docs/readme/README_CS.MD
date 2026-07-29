@@ -36,7 +36,7 @@ Uživatel Telegramu může pokračovat ve stejných chatech a ovládat své PC, 
 - **admin-panel** — správa modelů, klíčů, uživatelů, limitů, záloh a stavu serveru.
 - **chatter-manager** — propojuje admin panel s Dockerem, umožňuje spouštět, zastavovat a aktualizovat komponenty.
 - **webapp-notes** — Telegram miniaplikace pro poznámky.
-- **voice-service** — volitelný lokální přepis a syntéza řeči.
+- **voice-service** — volitelná služba pouze pro Telegram: přepisuje příchozí hlasové zprávy a automaticky namluví odpověď Chatteru, když uživatel odešle hlasovou zprávu.
 
 Všechny serverové komponenty beží v oddělených Docker kontejnerech a jsou propojeny přes Docker Compose. Můžete si tak ponechat jen to, co skutečně potřebujete.
 
