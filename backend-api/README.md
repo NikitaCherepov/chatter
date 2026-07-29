@@ -1208,16 +1208,16 @@ A "dice" mode for roleplay fun. Enabled via a checkbox in the "Application" sett
 
 ```text
 [DICE ROLL MODE: ACTIVE]
-The user rolled a d20 dice for this specific message.
+The user rolled a d20 for this specific message.
 Dice Roll Result: {roll} out of 20.
 
-You MUST adapt the narrative tone and flavor of your response based strictly on this result:
-- 1 (Critical Failure): spectacular failure, severe or unexpected consequences
-- 2–9 (Failure): failure, obstacles
-- 10–19 (Success): standard success
-- 20 (Critical Success): triumph, delight
+You MUST adapt the outcome and narrative tone of your response based strictly on this result:
+- 1 (Critical Failure): spectacular failure with severe or unexpected consequences appropriate to the scene
+- 2–9 (Failure): meaningful obstacles, complications, or unintended consequences
+- 10–19 (Success): a capable and convincing success appropriate to the strength of the roll
+- 20 (Critical Success): exceptional success with an impressive advantage, unexpected benefit, or memorable outcome
 
-CRITICAL SYSTEM RULE: even on roll=1, if a tool call is required — it is executed. The dice affects ONLY the response style, not the mechanics.
+CRITICAL SYSTEM RULE: required tool calls are always executed normally. The dice affects the narrative interpretation, consequences, and tone, but never fabricates, alters, hides, or sabotages real tool results.
 ```
 
 **`dice_roll` event (WS + SSE):**

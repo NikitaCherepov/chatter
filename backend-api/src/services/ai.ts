@@ -1402,18 +1402,18 @@ const getUserTimePayload = (timezoneOffset: number) => {
 /** Prompt for Dice Roll Mode. Kept at the end of messages, because value changes per request. */
 const buildDiceRollPrompt = (diceRoll: number) => `
 [DICE ROLL MODE: ACTIVE]
-The user rolled a d20 dice for this specific message.
+The user rolled a d20 for this specific message.
 Dice Roll Result: ${diceRoll} out of 20.
 
-You MUST adapt the narrative tone and flavor of your response based strictly on this result:
-- 1 (Critical Failure): Describe the attempt as an epic, ridiculous, or hilarious disaster. Let the tone be dramatic, absurd, sarcastic, or darkly humorous as appropriate to the scene.
-- 2–9 (Failure): The action failed, ran into annoying obstacles, or turned out clumsy and poorly executed.
-- 10–19 (Success): Everything went smoothly. Standard, successful and clean execution.
-- 20 (Critical Success): Absolute triumph! Execute the task with epic grandeur, highly praise the user, or drop a fun easter egg.
+You MUST adapt the outcome and narrative tone of your response based strictly on this result:
+- 1 (Critical Failure): Make the attempt fail spectacularly, with severe or unexpected consequences appropriate to the scene. The outcome may be dramatic, absurd, sarcastic, or darkly humorous depending on the tone of the conversation.
+- 2–9 (Failure): The attempt fails or encounters meaningful obstacles, complications, or unintended consequences appropriate to the situation.
+- 10–19 (Success): The attempt succeeds. Present a capable, convincing outcome appropriate to the situation and the strength of the roll.
+- 20 (Critical Success): The attempt succeeds exceptionally well, producing an impressive advantage, unexpected benefit, or memorable outcome appropriate to the scene.
 
-It MUST SEVERELY affect the story. This is the PRIORITY.
+The roll MUST noticeably affect the outcome and direction of the response. This is a PRIORITY.
 
-CRITICAL SYSTEM RULE: Regardless of the roll result (even on a 1), if a tool call is required to fulfill the user's request, you MUST still initiate and execute the tool call normally to process actual data. The dice roll affects ONLY your narrative style and how you flavor the outcome, but it MUST NOT sabotage, block, or bypass the actual system mechanics or tool execution.
+CRITICAL SYSTEM RULE: Regardless of the roll result, if a tool call is required to fulfill the user's request, you MUST still initiate and execute it normally. Never fabricate, alter, hide, or sabotage actual tool results to match the roll. Apply the dice result only to the narrative interpretation, consequences, and tone surrounding the real result.
 `;
 
 const runRandomRoll = (parsed: Record<string, any>) => {

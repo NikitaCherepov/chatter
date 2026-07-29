@@ -793,7 +793,7 @@ In forced modes, the circle shows "1" or "20" with a dashed border (to distingui
 
 ### Bot Prompt
 
-The backend injects a hint with the roll result at the beginning of `proSystemPrompt`. The dice affects **only** the narrative tone of the response (dramatic failure on 1, exceptional success on 20, etc.), but **does not** block tool calls — even on roll=1, if `execute_ssh_command` is needed, the bot will execute it.
+The backend appends a hint with the roll result to the final user message so the stable system prompt remains cacheable. The roll noticeably affects the narrative outcome, consequences, and tone, but **does not** alter real tool results or block tool calls — even on roll=1, if `execute_ssh_command` is needed, the bot will execute it normally.
 
 ### Key Files
 
