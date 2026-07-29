@@ -7,6 +7,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  DOCKER_BUILD_RECORD_UPLOAD: false
+
 concurrency:
   group: docker-images-${{ github.ref }}
   cancel-in-progress: false
@@ -84,3 +87,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           provenance: mode=max
           sbom: true
+
+      - name: Delete old image versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: chatter-${{ matrix.image }}
+          package-type: container
+          min-versions-to-keep: 3
