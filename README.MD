@@ -1,5 +1,7 @@
 **English** | [Русский](docs/readme/README_RU.MD) | [Deutsch](docs/readme/README_DE.MD) | [Español](docs/readme/README_ES.MD) | [Français](docs/readme/README_FR.MD) | [Italiano](docs/readme/README_IT.MD) | [日本語](docs/readme/README_JA.MD) | [한국어](docs/readme/README_KO.MD) | [Polski](docs/readme/README_PL.MD) | [Português (BR)](docs/readme/README_PT-BR.MD) | [中文（简体）](docs/readme/README_ZH-CN.MD) | [Türkçe](docs/readme/README_TR.MD) | [Čeština](docs/readme/README_CS.MD)
 
+[Website](https://ncherepov.ru) · [Support on Boosty](https://boosty.to/hoursen)
+
 ---
 
 # What is Chatter?
@@ -258,3 +260,11 @@ Decided to translate the project into your language? It's quick and easy:
  - Future plans include refactoring both the desktop-app and the backend-api.
  - When using Chatter as a CLI for work, issues may still occur (e.g. it might confuse a string and not check types, leaving an error). I'm working on improving this.
  - **Security notice:** Chatter is under active development and has a large attack surface due to its integrations, remote-control tools, and self-hosted architecture. While security is treated as a priority, no software can be guaranteed to be completely secure. Review the configuration before exposing an instance to the internet, keep it updated, and report vulnerabilities responsibly. Security hardening will continue as the project evolves.
+
+---
+
+## License
+
+Copyright (C) 2026 Nikita Cherepov.
+
+Chatter is licensed under the [GNU Affero General Public License v3.0](LICENSE).

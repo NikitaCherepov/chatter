@@ -7,6 +7,7 @@ import { Card } from '../../ui/Card/Card';
 import { FormField } from '../../ui/FormField/FormField';
 import { Select, type SelectOption } from '../../ui/Select/Select';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
+import { AboutPanel } from './AboutPanel/AboutPanel';
 import styles from './SettingsPage.module.css';
 
 export function SettingsPage() {
@@ -46,6 +47,7 @@ export function SettingsPage() {
           </FormField>
         </div>
       </Card>
+      <AboutPanel />
     </div>
   );
 }

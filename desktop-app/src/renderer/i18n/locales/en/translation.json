@@ -312,6 +312,7 @@
       "version": "Version {{version}}",
       "license": "Licensed under the GNU Affero General Public License v3.0.",
       "licenseLink": "License",
+      "website": "Website",
       "support": "Support Chatter",
       "supportHelp": "Help keep the project moving"
     },

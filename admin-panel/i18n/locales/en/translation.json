@@ -827,6 +827,12 @@
     "languageTitle": "Interface language",
     "languageDescription": "Language used to display the admin panel",
     "languageLabel": "Language",
+    "aboutTitle": "About",
+    "aboutDescription": "Project information and useful links",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "License",
+    "aboutBoosty": "Support Chatter on Boosty",
+    "aboutWebsite": "Website",
     "languageOptions": {
       "ru": "Русский",
       "en": "English",

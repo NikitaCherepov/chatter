@@ -2,9 +2,10 @@ import { useTranslation } from 'react-i18next';
 import boostyLogo from '../../assets/brand/boosty.svg';
 import styles from './AboutSettings.module.scss';
 
-const GITHUB_URL = 'https://github.com/NikitaCherepov/chatter';
-const LICENSE_URL = `${GITHUB_URL}/blob/main/LICENSE`;
+const GITHUB_URL = 'https://github.com/NikitaCherepov';
+const LICENSE_URL = `${GITHUB_URL}/chatter/blob/main/LICENSE`;
 const BOOSTY_URL = 'https://boosty.to/hoursen';
+const WEBSITE_URL = 'https://ncherepov.ru';
 
 export function AboutSettings() {
   const { t } = useTranslation();
@@ -31,6 +32,9 @@ export function AboutSettings() {
         </a>
         <a href={LICENSE_URL} target="_blank" rel="noreferrer">
           {t('settings.about.licenseLink')}
+        </a>
+        <a href={WEBSITE_URL} target="_blank" rel="noreferrer">
+          {t('settings.about.website')}
         </a>
       </div>
 

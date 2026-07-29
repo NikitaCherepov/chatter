@@ -1,0 +1,82 @@
+.content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6);
+}
+
+.details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.details strong {
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+}
+
+.textLinks {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-1);
+}
+
+.textLinks a {
+  color: var(--text-secondary);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+
+.textLinks a:hover {
+  color: var(--accent);
+}
+
+.buttons {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--sp-2);
+}
+
+.linkButton {
+  display: flex;
+  min-width: 96px;
+  height: var(--ctrl-h);
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+
+.linkButton:hover {
+  border-color: var(--accent);
+}
+
+.linkButton img {
+  width: 64px;
+  height: auto;
+}
+
+@media (max-width: 700px) {
+  .content {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .buttons {
+    width: 100%;
+  }
+
+  .linkButton {
+    flex: 1;
+  }
+}

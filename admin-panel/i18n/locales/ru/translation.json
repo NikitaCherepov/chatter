@@ -818,6 +818,12 @@
     "languageTitle": "Язык интерфейса",
     "languageDescription": "Язык, на котором отображается панель управления",
     "languageLabel": "Язык",
+    "aboutTitle": "О проекте",
+    "aboutDescription": "Информация о проекте и полезные ссылки",
+    "aboutLicense": "GNU Affero General Public License v3.0",
+    "aboutLicenseLink": "Лицензия",
+    "aboutBoosty": "Поддержать Chatter на Boosty",
+    "aboutWebsite": "Сайт",
     "languageOptions": {
       "ru": "Русский",
       "en": "English",
