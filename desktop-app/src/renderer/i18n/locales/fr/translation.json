@@ -994,7 +994,7 @@
       },
       "features": {
         "title": "## Confidentialité et Écosystème",
-        "body": "Vous avez un contrôle total sur les outils d'IA et l'intégration avec votre environnement :\n\n- **Restrictions** — à tout moment, vous pouvez couper l'accès Internet du bot, bloquer l'exécution de commandes PC, désactiver la création de sous-agents ou activer le Mode Invité pour une conversation vierge.\n- **Maison intelligente** — connectez Yandex Smart Home ou des appareils locaux via Zigbee2MQTT. L'assistant peut contrôler les lumières, les prises et le climat.\n- **Contrôle vocal** — l'assistant est prêt à écouter. Dites simplement : 'Alexa', ou 'Hé, Jarvis !'. Vous pouvez choisir la voix de l'assistant dans l'onglet Voix."
+        "body": "Vous avez un contrôle total sur les outils d'IA et l'intégration avec votre environnement :\n\n- **Restrictions** — à tout moment, vous pouvez couper l'accès Internet du bot, bloquer l'exécution de commandes PC, désactiver la création de sous-agents ou activer le Mode Invité pour une conversation vierge.\n- **Maison intelligente** — connectez Yandex Smart Home ou des appareils locaux via Zigbee2MQTT. L'assistant peut contrôler les lumières, les prises et le climat.\n- **Contrôle vocal** — l'assistant est prêt à écouter. Dites 'Alexa', 'Hey Jarvis', 'Hey Mycroft' ou 'Hey Rhasspy'. Vous pouvez choisir la voix de l'assistant dans l'onglet Voix ou désactiver l'écoute du mot d'activation dans **Paramètres → Restrictions**."
       },
       "experimental": {
         "title": "## Fonctionnalités expérimentales",

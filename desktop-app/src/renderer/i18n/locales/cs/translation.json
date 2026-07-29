@@ -994,7 +994,7 @@
       },
       "features": {
         "title": "## Soukromí a ekosystém",
-        "body": "Máte plnou kontrolu nad nástroji AI a integrací s vaším prostředím:\n\n- **Omezení** — kdykoli můžete odříznout přístup bota k internetu, zablokovat provádění příkazů na PC, zakázat vytváření subagentů nebo zapnout Hostující režim pro čistý konverzační start.\n- **Chytrá domácnost** — připojte Yandex Smart Home nebo lokální zařízení přes Zigbee2MQTT. Asistent může ovládat světla, zásuvky a klima.\n- **Hlasové ovládání** — asistent je připraven naslouchat. Stačí říct: 'Alexo' nebo 'Hej, Jarvisi!'. Hlas asistenta si můžete vybrat v záložce Hlas."
+        "body": "Máte plnou kontrolu nad nástroji AI a integrací s vaším prostředím:\n\n- **Omezení** — kdykoli můžete odříznout přístup bota k internetu, zablokovat provádění příkazů na PC, zakázat vytváření subagentů nebo zapnout Hostující režim pro čistý konverzační start.\n- **Chytrá domácnost** — připojte Yandex Smart Home nebo lokální zařízení přes Zigbee2MQTT. Asistent může ovládat světla, zásuvky a klima.\n- **Hlasové ovládání** — asistent je připraven naslouchat. Řekněte 'Alexa', 'Hey Jarvis', 'Hey Mycroft' nebo 'Hey Rhasspy'. Hlas asistenta si můžete vybrat v záložce Hlas nebo vypnout poslech aktivačního slova v **Nastavení → Omezení**."
       },
       "experimental": {
         "title": "## Experimentální funkce",

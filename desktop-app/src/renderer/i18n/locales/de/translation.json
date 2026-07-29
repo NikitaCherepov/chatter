@@ -994,7 +994,7 @@
       },
       "features": {
         "title": "## Datenschutz & Ökosystem",
-        "body": "Sie haben die volle Kontrolle über KI-Tools und die Integration in Ihre Umgebung:\n\n- **Einschränkungen** — jederzeit können Sie den Internetzugriff des Bots sperren, die Ausführung von PC-Befehlen blockieren, die Erstellung von Unteragenten deaktivieren oder den Gastmodus für eine saubere Unterhaltung aktivieren.\n- **Smart Home** — verbinden Sie Yandex Smart Home oder lokale Geräte über Zigbee2MQTT. Der Assistent kann Lampen, Steckdosen und Klimaanlagen steuern.\n- **Sprachsteuerung** — der Assistent ist bereit zuzuhören. Sagen Sie einfach: 'Alexa' oder 'Hey, Jarvis!'. Sie können die Stimme des Assistenten im Reiter Stimme auswählen."
+        "body": "Sie haben die volle Kontrolle über KI-Tools und die Integration in Ihre Umgebung:\n\n- **Einschränkungen** — jederzeit können Sie den Internetzugriff des Bots sperren, die Ausführung von PC-Befehlen blockieren, die Erstellung von Unteragenten deaktivieren oder den Gastmodus für eine saubere Unterhaltung aktivieren.\n- **Smart Home** — verbinden Sie Yandex Smart Home oder lokale Geräte über Zigbee2MQTT. Der Assistent kann Lampen, Steckdosen und Klimaanlagen steuern.\n- **Sprachsteuerung** — der Assistent ist bereit zuzuhören. Sagen Sie 'Alexa', 'Hey Jarvis', 'Hey Mycroft' oder 'Hey Rhasspy'. Sie können die Stimme des Assistenten im Reiter Stimme auswählen oder die Wake-Word-Erkennung unter **Einstellungen → Einschränkungen** deaktivieren."
       },
       "experimental": {
         "title": "## Experimentelle Funktionen",

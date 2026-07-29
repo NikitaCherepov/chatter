@@ -1,56 +1,43 @@
 {
   "changes": {
     "ru": [
-      "Добавлено одно",
-      "Добавлено второе"
+      "Сервер Chatter готов к первому публичному релизу."
     ],
     "en": [
-      "Added one",
-      "Added two"
+      "Chatter Server is ready for its first public release."
     ],
     "cs": [
-      "Přidán jeden",
-      "Přidány dva"
+      "Chatter Server je připraven na své první veřejné vydání."
     ],
     "de": [
-      "Eins hinzugefügt",
-      "Zwei hinzugefügt"
+      "Chatter Server ist bereit für seine erste öffentliche Veröffentlichung."
     ],
     "es": [
-      "Añadido uno",
-      "Añadido dos"
+      "El servidor Chatter está listo para su primera versión pública."
     ],
     "fr": [
-      "Ajouté un",
-      "Ajouté deux"
+      "Le serveur Chatter est prêt pour sa première version publique."
     ],
     "it": [
-      "Aggiunto uno",
-      "Aggiunti due"
+      "Chatter Server è pronto per la sua prima versione pubblica."
     ],
     "ja": [
-      "1つ追加",
-      "2つ追加"
+      "Chatter Server は最初の公開リリースの準備ができています。"
     ],
     "ko": [
-      "하나 추가됨",
-      "둘 추가됨"
+      "Chatter 서버가 첫 번째 공개 릴리스를 준비했습니다."
     ],
     "pl": [
-      "Dodano jeden",
-      "Dodano dwa"
+      "Serwer Chatter jest gotowy do pierwszej publicznej wersji."
     ],
     "pt-BR": [
-      "Adicionado um",
-      "Adicionado dois"
+      "O Chatter Server está pronto para seu primeiro lançamento público."
     ],
     "tr": [
-      "Bir eklendi",
-      "İki eklendi"
+      "Chatter Sunucusu ilk halka açık sürümüne hazır."
     ],
     "zh-CN": [
-      "添加了一个",
-      "添加了两个"
+      "Chatter Server 已准备好首次公开发布。"
     ]
   }
 }

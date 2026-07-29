@@ -1,56 +1,43 @@
 {
   "changes": {
     "en": [
-      "Desktop updates now use public GitHub Releases.",
-      "Differential downloads are supported through NSIS block maps."
+      "Chatter Desktop is ready for its first public release."
     ],
     "ru": [
-      "Обновления Desktop теперь загружаются из публичных GitHub Releases.",
-      "Поддерживается дифференциальная загрузка через NSIS block map."
+      "Chatter Desktop готов к первому публичному релизу."
     ],
     "de": [
-      "Desktop-Updates verwenden jetzt öffentliche GitHub-Releases.",
-      "Differentielle Downloads werden über NSIS-Blockzuordnungen unterstützt."
+      "Chatter Desktop ist bereit für seine erste öffentliche Veröffentlichung."
     ],
     "es": [
-      "Las actualizaciones de escritorio ahora usan GitHub Releases público.",
-      "Las descargas diferenciales son compatibles mediante mapas de bloques NSIS."
+      "Chatter Desktop está listo para su primera versión pública."
     ],
     "fr": [
-      "Les mises à jour du bureau utilisent désormais les versions publiques de GitHub.",
-      "Les téléchargements différentiels sont pris en charge via les cartes de blocs NSIS."
+      "Chatter Desktop est prêt pour sa première version publique."
     ],
     "it": [
-      "Gli aggiornamenti del desktop ora utilizzano le versioni pubbliche di GitHub.",
-      "I download differenziali sono supportati tramite mappe di blocchi NSIS."
+      "Chatter Desktop è pronto per la sua prima versione pubblica."
     ],
     "ja": [
-      "デスクトップアップデートは公開GitHubリリースを使用するようになりました。",
-      "差分ダウンロードはNSISブロックマップでサポートされています。"
+      "Chatter Desktop は最初の公開リリースの準備ができました。"
     ],
     "ko": [
-      "데스크톱 업데이트는 이제 공개 GitHub 릴리스를 사용합니다.",
-      "NSIS 블록 맵을 통해 차등 다운로드가 지원됩니다."
+      "Chatter Desktop이 첫 번째 공개 릴리스를 준비했습니다."
     ],
     "pl": [
-      "Aktualizacje pulpitu korzystają teraz z publicznych wydań GitHub.",
-      "Pobieranie różnicowe jest obsługiwane przez mapy bloków NSIS."
+      "Chatter Desktop jest gotowy do pierwszej publicznej wersji."
     ],
     "pt-BR": [
-      "As atualizações do desktop agora usam GitHub Releases públicos.",
-      "Downloads diferenciais são suportados através de mapas de blocos NSIS."
+      "O Chatter Desktop está pronto para seu primeiro lançamento público."
     ],
     "zh-CN": [
-      "桌面更新现在使用公共 GitHub Releases。",
-      "通过 NSIS 块映射支持差异下载。"
+      "Chatter Desktop 已准备好首次公开发布。"
     ],
     "tr": [
-      "Masaüstü güncellemeleri artık herkese açık GitHub Releases kullanıyor.",
-      "Farklı indirmeler, NSIS blok haritaları aracılığıyla desteklenmektedir."
+      "Chatter Desktop ilk halka açık sürümüne hazır."
     ],
     "cs": [
-      "Desktopové aktualizace nyní používají veřejná vydání na GitHubu.",
-      "Diferenciální stahování je podporováno pomocí blokových map NSIS."
+      "Chatter Desktop je připraven na své první veřejné vydání."
     ]
   }
 }

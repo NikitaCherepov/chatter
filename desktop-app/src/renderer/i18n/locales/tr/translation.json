@@ -994,7 +994,7 @@
       },
       "features": {
         "title": "## Gizlilik ve Ekosistem",
-        "body": "AI araçları ve ortamınızla entegrasyon üzerinde tam kontrole sahipsiniz:\n\n- **Kısıtlamalar** — istediğiniz zaman botun internet erişimini kesebilir, PC komut yürütmeyi engelleyebilir, alt ajan oluşturmayı devre dışı bırakabilir veya temiz bir sayfa için Misafir Modu'nu etkinleştirebilirsiniz.\n- **Akıllı Ev** — Yandex Smart Home veya Zigbee2MQTT üzerinden yerel cihazları bağlayın. Asistan ışıkları, prizleri ve iklimi kontrol edebilir.\n- **Ses kontrolü** — asistan dinlemeye hazır. Sadece 'Alexa' veya 'Hey, Jarvis!' deyin. Asistanın sesini Ses sekmesinden seçebilirsiniz."
+        "body": "AI araçları ve ortamınızla entegrasyon üzerinde tam kontrole sahipsiniz:\n\n- **Kısıtlamalar** — istediğiniz zaman botun internet erişimini kesebilir, PC komut yürütmeyi engelleyebilir, alt ajan oluşturmayı devre dışı bırakabilir veya temiz bir sayfa için Misafir Modu'nu etkinleştirebilirsiniz.\n- **Akıllı Ev** — Yandex Smart Home veya Zigbee2MQTT üzerinden yerel cihazları bağlayın. Asistan ışıkları, prizleri ve iklimi kontrol edebilir.\n- **Ses kontrolü** — asistan dinlemeye hazır. 'Alexa', 'Hey Jarvis', 'Hey Mycroft' veya 'Hey Rhasspy' deyin. Asistanın sesini Ses sekmesinden seçebilir veya **Ayarlar → Kısıtlamalar** bölümünden uyandırma sözcüğü dinlemeyi kapatabilirsiniz."
       },
       "experimental": {
         "title": "## Deneysel Özellikler",
