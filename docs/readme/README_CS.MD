@@ -6,7 +6,7 @@
 
 Chatter je multi-platformní systém s AI agentem, který bezi na serveru a lze jej jedním kliknutím sdílet s přáteli nebo rodinou! Můžete si také nasadit vlastní službu s plány, limity a pohodlnou správou.
 
-Ceny modelů se stahují automaticky. Vše, co potřebujete, je nastavit rozpočet pro předplatné.
+Ceny modelů se automaticky načítají z OpenRouteru. Vše, co potřebujete, je nastavit rozpočet pro předplatné.
 
 > **Platební systém zatím není integrován!**
 

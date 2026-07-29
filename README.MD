@@ -8,7 +8,7 @@
 
 Chatter is a multi-platform system with an AI agent that runs on a server and can be shared with friends or family in one click! You can also deploy your own service on it with plans, limits, and convenient management.
 
-Model pricing is pulled automatically. All you need is to set a budget for the subscription.
+Model pricing is pulled automatically from OpenRouter. All you need is to set a budget for the subscription.
 
 > **Payment system is not yet integrated!**
 

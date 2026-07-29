@@ -6,7 +6,7 @@
 
 Chatter è un sistema multi-piattaforma con un agente AI che funziona su un server e può essere condiviso con amici o familiari con un clic! Puoi anche distribuire il tuo servizio con piani, limiti e una gestione comoda.
 
-I prezzi dei modelli vengono estratti automaticamente. Tutto ciò che serve è impostare un budget per l'abbonamento.
+I prezzi dei modelli vengono recuperati automaticamente da OpenRouter. Tutto ciò che serve è impostare un budget per l'abbonamento.
 
 > **Il sistema di pagamento non è ancora integrato!**
 

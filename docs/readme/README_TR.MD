@@ -6,7 +6,7 @@
 
 Chatter, bir sunucuda çalışan ve arkadaşlarınız veya ailenizle tek tıkla paylaşılabilen, çok platformlu bir yapay zeka ajan sistemidir! Ayrıca planlar, limitler ve kullanışlı yönetim ile kendi hizmetinizi de kurabilirsiniz.
 
-Model fiyatlandırması otomatik olarak çekilir. Tek ihtiyacınız, abonelik için bir bütçe belirlemektir.
+Model fiyatları otomatik olarak OpenRouter'dan alınır. Tek ihtiyacınız, abonelik için bir bütçe belirlemektir.
 
 > **Ödeme sistemi henüz entegre edilmedi!**
 

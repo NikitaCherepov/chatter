@@ -6,7 +6,7 @@
 
 Chatter ist ein Multiplattform-System mit einem KI-Agenten, der auf einem Server läuft und mit nur einem Klick mit Freunden oder der Familie geteilt werden kann! Du kannst auch deinen eigenen Dienst darauf mit Tarifen, Limits und praktischer Verwaltung bereitstellen.
 
-Die Modellpreise werden automatisch abgerufen. Alles, was du brauchst, ist ein Budget für das Abonnement festzulegen.
+Modellpreise werden automatisch von OpenRouter abgerufen. Alles, was du brauchst, ist ein Budget für das Abonnement festzulegen.
 
 > **Das Zahlungssystem ist noch nicht integriert!**
 

@@ -6,7 +6,7 @@
 
 Chatter e um sistema multiplataforma com um agente de IA que roda em um servidor e pode ser compartilhado com amigos ou familiares com um clique! Voce tambem pode implantar seu proprio servico com planos, limites e gerenciamento conveniente.
 
-Os precos dos modelos sao obtidos automaticamente. Tudo que voce precisa e definir um orcamento para a assinatura.
+Os preços dos modelos são obtidos automaticamente do OpenRouter. Tudo que você precisa é definir um orçamento para a assinatura.
 
 > **O sistema de pagamento ainda nao foi integrado!**
 

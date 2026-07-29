@@ -6,7 +6,7 @@
 
 Chatter to wieloplatformowy system z agentem AI, który działa na serwerze i może być udostępniany znajomym lub rodzinie jednym kliknięciem! Możesz również uruchomić na nim własną usługę z planami, limitami i wygodnym zarządzaniem.
 
-Ceny modeli są pobierane automatycznie. Jedyne, czego potrzebujesz, to ustawić budżet na subskrypcję.
+Ceny modeli są pobierane automatycznie z OpenRoutera. Jedyne, czego potrzebujesz, to ustawić budżet na subskrypcję.
 
 > **System płatności nie jest jeszcze zintegrowany!**
 
