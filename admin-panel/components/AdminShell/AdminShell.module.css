@@ -80,6 +80,27 @@
   margin: var(--sp-3) var(--sp-2);
   background: var(--border-light);
 }
+.supportLink {
+  display: flex;
+  width: auto;
+  height: var(--ctrl-h);
+  align-items: center;
+  margin: 0 var(--sp-2);
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  text-decoration: none;
+  transition:
+    background-color 0.1s;
+}
+.supportLink:hover {
+  background: var(--bg-modal-hover);
+}
+.supportLink img {
+  width: 72px;
+  height: auto;
+}
 .account {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) 30px;

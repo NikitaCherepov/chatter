@@ -173,7 +173,8 @@
       "models": "Models",
       "limits": "Limits",
       "billing": "Billing",
-      "app": "Application"
+      "app": "Application",
+      "about": "About"
     },
     "language": {
       "system": "System",
@@ -306,6 +307,13 @@
       "diceHelp": "Adds a d20 next to the message box. AI responses depend on your luck.",
       "contextLimitHelp": "Older messages are archived when the context exceeds the limit. When exceeded, the context is collapsed to 50%. Plan maximum: {{max}}k tokens.",
       "attachmentLimitHelp": "How many context tokens attached document contents may use. 0 = auto (90% of the context limit). Maximum: {{max}}k tokens."
+    },
+    "about": {
+      "version": "Version {{version}}",
+      "license": "Licensed under the GNU Affero General Public License v3.0.",
+      "licenseLink": "License",
+      "support": "Support Chatter",
+      "supportHelp": "Help keep the project moving"
     },
     "toasts": {
       "saveSettingFailed": "Could not save the setting",

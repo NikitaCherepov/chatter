@@ -21,6 +21,18 @@
   gap: var(--sp-2);
   margin-bottom: var(--sp-1);
 }
+.logoMark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
 .title {
   margin: 0;
   color: var(--text-primary);

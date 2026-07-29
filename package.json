@@ -1,6 +1,7 @@
 {
   "name": "chatter-bot",
   "version": "1.0.0",
+  "license": "AGPL-3.0-only",
   "scripts": {
     "sync:languages": "node scripts/sync-languages.mjs",
     "sync:languages:check": "node scripts/sync-languages.mjs --check",

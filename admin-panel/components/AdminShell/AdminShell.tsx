@@ -94,6 +94,15 @@ export function AdminShell({
           <div className={styles.divider} />
           <NavigationItems items={secondaryItems} active={section} onSelect={onSectionChange} />
         </nav>
+        <a
+          className={styles.supportLink}
+          href="https://boosty.to/hoursen"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Support Chatter on Boosty"
+        >
+          <img src="/boosty.svg" alt="Boosty" />
+        </a>
         <div className={styles.account}>
           <span className={styles.avatar}>{username.slice(0, 1).toUpperCase()}</span>
           <span className={styles.username}>{username}</span>

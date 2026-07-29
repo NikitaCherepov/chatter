@@ -33,9 +33,10 @@ import { MailSettings } from './MailSettings';
 import { PCSettings } from './PCSettings';
 import { LinkTelegramModal } from './LinkTelegramModal';
 import { QuotaWidget } from './QuotaWidget';
+import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSettings';
+import { AboutSettings } from './AboutSettings/AboutSettings';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
-import chatS from '../pages/ChatPage.module.scss';
 
 type Props = {
   onClose: () => void;
@@ -45,7 +46,7 @@ type Props = {
   onAuthInvalidated?: () => void;
 };
 
-type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models';
+type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -83,6 +84,7 @@ const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'limits', labelKey: 'settings.sections.limits' },
   { key: 'billing', labelKey: 'settings.sections.billing' },
   { key: 'app', labelKey: 'settings.sections.app' },
+  { key: 'about', labelKey: 'settings.sections.about' },
 ];
 
 // Electron uses logarithmic zoom: zoomFactor = 1.2^level
@@ -102,15 +104,6 @@ function clampZoomPct(pct: number): number {
 export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: Props) {
   const { user, setUser } = useAuth();
   const { t, i18n } = useTranslation();
-  const reasoningLevelLabels: Record<string, string> = {
-    null: t('settings.reasoning.auto'),
-    none: t('settings.reasoning.off'),
-    minimal: t('settings.reasoning.minimalShort'),
-    low: t('settings.reasoning.lowShort'),
-    medium: t('settings.reasoning.mediumShort'),
-    high: t('settings.reasoning.highShort'),
-    xhigh: t('settings.reasoning.maxShort'),
-  };
   const [section, setSection] = useState<Section>('account');
 
   // Account
@@ -1725,6 +1718,18 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                 {t('settings.models.help')}
               </span>
 
+              <SubagentModelSettings
+                models={modelsCatalog}
+                model={subagentModel}
+                modelSaving={subagentModelSaving}
+                reasoningLevel={subagentReasoningLevel}
+                reasoningLevels={subagentAvailableReasoningLevels}
+                reasoningSaving={subagentReasoningSaving}
+                onModelChange={handleSubagentModelChange}
+                onReasoningChange={setSubagentReasoningLevelState}
+                onReasoningCommit={handleSubagentReasoningCommit}
+              />
+
               {modelsLoading ? (
                 <div className={s.promptLoading}>{t('common.loading')}</div>
               ) : modelsCatalog.length === 0 ? (
@@ -1880,49 +1885,6 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
               </div>
 
               <div className={s.fieldGroup}>
-                <div className={chatS.modelSelector}>
-                  {modelsCatalog.length > 0 && (
-                    <>
-                      <label className={chatS.modelLabel}>{t('settings.app.subagentModel')}</label>
-                      <div className={chatS.modelSelectWrap}>
-                        <Select
-                          options={[
-                            { value: '', label: t('settings.reasoning.auto'), hint: t('settings.app.automaticSelection') },
-                            ...modelsCatalog.map(m => ({
-                              value: m.id,
-                              label: m.name,
-                              hint: m.description || undefined,
-                            })),
-                          ]}
-                          value={subagentModel || ''}
-                          onChange={handleSubagentModelChange}
-                          placeholder={t('settings.reasoning.auto')}
-                          disabled={subagentModelSaving}
-                        />
-                      </div>
-                    </>
-                  )}
-                  {subagentAvailableReasoningLevels.length > 1 && (
-                    <div className={chatS.reasoningControl}>
-                      <Slider
-                        mode="discrete"
-                        label={t('settings.app.reasoning')}
-                        values={subagentAvailableReasoningLevels}
-                        labels={reasoningLevelLabels}
-                        value={subagentReasoningLevel}
-                        onChange={(v) => setSubagentReasoningLevelState(v as api.ReasoningLevel | null)}
-                        onCommit={handleSubagentReasoningCommit}
-                        disabled={subagentReasoningSaving}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  {t('settings.app.subagentHelp')}
-                </div>
-              </div>
-
-              <div className={s.fieldGroup}>
                 <Checkbox
                   checked={Boolean(uiSettings.dice_roll_enabled)}
                   onChange={handleToggleDiceRoll}
@@ -1933,6 +1895,13 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   {t('settings.app.diceHelp')}
                 </div>
               </div>
+            </div>
+          )}
+
+          {section === 'about' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('settings.sections.about')}</div>
+              <AboutSettings />
             </div>
           )}
 

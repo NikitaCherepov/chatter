@@ -42,16 +42,7 @@ export function LoginScreen({
     <main className={styles.container}>
       <section className={styles.card}>
         <div className={styles.logoRow}>
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-            <rect width="28" height="28" rx="7" fill="var(--accent)" />
-            <path
-              d="M8 14L12 18L20 10"
-              stroke="var(--accent-contrast)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <span className={styles.logoMark} aria-hidden="true">C</span>
           <h1 className={styles.title}>Chatter</h1>
         </div>
         <p className={styles.subtitle}>{t('login.subtitle')}</p>
