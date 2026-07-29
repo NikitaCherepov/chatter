@@ -635,7 +635,8 @@
         "autoBackup": "重启前将自动创建数据库备份。",
         "cancel": "取消",
         "updating": "正在启动…",
-        "confirm": "更新服务器"
+        "confirm": "更新服务器",
+        "retry": "重试"
       },
       "stages": {
         "queued": "更新即将开始…",

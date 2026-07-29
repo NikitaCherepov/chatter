@@ -27,6 +27,7 @@ export function ServerUpdateModal({
   drain,
   applyError,
   onCancel,
+  onRetry,
   onSoftUpdate,
   onForceUpdate,
 }: {
@@ -39,6 +40,7 @@ export function ServerUpdateModal({
   drain: DrainState | null;
   applyError: string;
   onCancel: () => void;
+  onRetry: () => void;
   onSoftUpdate: () => void;
   onForceUpdate: () => void;
 }) {
@@ -181,7 +183,16 @@ export function ServerUpdateModal({
           {drainPhase === 'applying' ? (
             <button type="button" disabled>{t('system.update.changes.updating')}</button>
           ) : terminal ? (
-            <button type="button" onClick={onCancel}>{t('system.update.changes.cancel')}</button>
+            <>
+              <button type="button" className="buttonSecondary" onClick={onCancel}>
+                {t('system.update.changes.cancel')}
+              </button>
+              {failed && (
+                <button type="button" onClick={onRetry}>
+                  {t('system.update.changes.retry')}
+                </button>
+              )}
+            </>
           ) : (
             <>
               {/* Cancel: always available unless applying */}

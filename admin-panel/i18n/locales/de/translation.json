@@ -635,7 +635,8 @@
         "autoBackup": "Vor dem Neustart wird automatisch ein Datenbank-Backup erstellt.",
         "cancel": "Abbrechen",
         "updating": "Starte…",
-        "confirm": "Server aktualisieren"
+        "confirm": "Server aktualisieren",
+        "retry": "Erneut versuchen"
       },
       "stages": {
         "queued": "Update startet…",

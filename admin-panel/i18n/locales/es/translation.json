@@ -635,7 +635,8 @@
         "autoBackup": "Se creará automáticamente una copia de seguridad de la base de datos antes de reiniciar.",
         "cancel": "Cancelar",
         "updating": "Iniciando…",
-        "confirm": "Actualizar servidor"
+        "confirm": "Actualizar servidor",
+        "retry": "Reintentar"
       },
       "stages": {
         "queued": "Actualización iniciando…",

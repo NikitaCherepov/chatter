@@ -627,7 +627,8 @@
         "autoBackup": "A database backup will be created automatically before restart.",
         "cancel": "Cancel",
         "updating": "Starting…",
-        "confirm": "Update server"
+        "confirm": "Update server",
+        "retry": "Retry"
       },
       "stages": {
         "queued": "Update starting…",

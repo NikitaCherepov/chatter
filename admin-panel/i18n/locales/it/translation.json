@@ -635,7 +635,8 @@
         "autoBackup": "Verrà creato automaticamente un backup del database prima del riavvio.",
         "cancel": "Annulla",
         "updating": "Avvio…",
-        "confirm": "Aggiorna server"
+        "confirm": "Aggiorna server",
+        "retry": "Riprova"
       },
       "stages": {
         "queued": "Aggiornamento in avvio…",

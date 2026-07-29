@@ -635,7 +635,8 @@
         "autoBackup": "Kopia zapasowa bazy danych zostanie utworzona automatycznie przed ponownym uruchomieniem.",
         "cancel": "Anuluj",
         "updating": "Rozpoczynanie…",
-        "confirm": "Aktualizuj serwer"
+        "confirm": "Aktualizuj serwer",
+        "retry": "Spróbuj ponownie"
       },
       "stages": {
         "queued": "Aktualizacja rozpoczęta…",

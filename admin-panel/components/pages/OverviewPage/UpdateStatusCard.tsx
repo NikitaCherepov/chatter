@@ -122,6 +122,7 @@ export function UpdateStatusCard() {
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       setApplyError(error);
+      setDrainPhase('idle');
       setMessage(t('system.update.updateError', { message: error }));
     }
   }
@@ -320,6 +321,7 @@ export function UpdateStatusCard() {
           drain={drain}
           applyError={applyError}
           onCancel={handleCancel}
+          onRetry={applyUpdate}
           onSoftUpdate={handleSoftUpdate}
           onForceUpdate={handleForceUpdate}
         />

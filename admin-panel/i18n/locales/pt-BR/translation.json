@@ -635,7 +635,8 @@
         "autoBackup": "Um backup do banco de dados será criado automaticamente antes da reinicialização.",
         "cancel": "Cancelar",
         "updating": "Iniciando…",
-        "confirm": "Atualizar servidor"
+        "confirm": "Atualizar servidor",
+        "retry": "Tentar novamente"
       },
       "stages": {
         "queued": "Atualização iniciando…",

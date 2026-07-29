@@ -635,7 +635,8 @@
         "autoBackup": "Une sauvegarde de la base de données sera créée automatiquement avant le redémarrage.",
         "cancel": "Annuler",
         "updating": "Démarrage…",
-        "confirm": "Mettre à jour le serveur"
+        "confirm": "Mettre à jour le serveur",
+        "retry": "Réessayer"
       },
       "stages": {
         "queued": "Mise à jour en attente…",

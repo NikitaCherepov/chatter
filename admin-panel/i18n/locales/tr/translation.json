@@ -627,7 +627,8 @@
         "autoBackup": "Yeniden başlatmadan önce otomatik olarak bir veritabanı yedeklemesi oluşturulacaktır.",
         "cancel": "İptal",
         "updating": "Başlatılıyor…",
-        "confirm": "Sunucuyu güncelle"
+        "confirm": "Sunucuyu güncelle",
+        "retry": "Tekrar dene"
       },
       "stages": {
         "queued": "Güncelleme başlatılıyor…",

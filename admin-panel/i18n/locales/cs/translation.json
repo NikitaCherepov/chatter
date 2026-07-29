@@ -628,7 +628,8 @@
         "autoBackup": "Před restartem bude automaticky vytvořena záloha databáze.",
         "cancel": "Zrušit",
         "updating": "Spouštění…",
-        "confirm": "Aktualizovat server"
+        "confirm": "Aktualizovat server",
+        "retry": "Zkusit znovu"
       },
       "stages": {
         "queued": "Aktualizace se spouští…",

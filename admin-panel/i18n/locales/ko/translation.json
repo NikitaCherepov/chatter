@@ -635,7 +635,8 @@
         "autoBackup": "재시작 전에 데이터베이스 백업이 자동으로 생성됩니다.",
         "cancel": "취소",
         "updating": "시작 중…",
-        "confirm": "서버 업데이트"
+        "confirm": "서버 업데이트",
+        "retry": "다시 시도"
       },
       "stages": {
         "queued": "업데이트 시작 중…",
