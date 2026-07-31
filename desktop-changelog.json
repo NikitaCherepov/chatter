@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Chatter Desktop is ready for its first public release."
+      "Fixed voice recognition bug."
     ],
     "ru": [
-      "Chatter Desktop готов к первому публичному релизу."
+      "Исправлена ошибка распознавания голоса."
     ],
     "de": [
-      "Chatter Desktop ist bereit für seine erste öffentliche Veröffentlichung."
+      "Fehler bei der Spracherkennung behoben."
     ],
     "es": [
-      "Chatter Desktop está listo para su primera versión pública."
+      "Se corrigió el error de reconocimiento de voz."
     ],
     "fr": [
-      "Chatter Desktop est prêt pour sa première version publique."
+      "Correction d'un bug de reconnaissance vocale."
     ],
     "it": [
-      "Chatter Desktop è pronto per la sua prima versione pubblica."
+      "Corretto bug di riconoscimento vocale."
     ],
     "ja": [
-      "Chatter Desktop は最初の公開リリースの準備ができました。"
+      "音声認識のバグを修正しました。"
     ],
     "ko": [
-      "Chatter Desktop이 첫 번째 공개 릴리스를 준비했습니다."
+      "음성 인식 버그를 수정했습니다."
     ],
     "pl": [
-      "Chatter Desktop jest gotowy do pierwszej publicznej wersji."
+      "Naprawiono błąd rozpoznawania głosu."
     ],
     "pt-BR": [
-      "O Chatter Desktop está pronto para seu primeiro lançamento público."
+      "Corrigido bug de reconhecimento de voz."
     ],
     "zh-CN": [
-      "Chatter Desktop 已准备好首次公开发布。"
+      "修复了语音识别错误。"
     ],
     "tr": [
-      "Chatter Desktop ilk halka açık sürümüne hazır."
+      "Ses tanıma hatası düzeltildi."
     ],
     "cs": [
-      "Chatter Desktop je připraven na své první veřejné vydání."
+      "Opravena chyba rozpoznávání hlasu."
     ]
   }
 }
