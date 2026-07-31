@@ -68,8 +68,18 @@ try {
     $whisperExe = $whisperExe.FullName
   }
 
-  & $whisperExe '--help' *> $null
-  if ($LASTEXITCODE -ne 0) {
+  $whisperCheckInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $whisperCheckInfo.FileName = $whisperExe
+  $whisperCheckInfo.Arguments = '--help'
+  $whisperCheckInfo.UseShellExecute = $false
+  $whisperCheckInfo.CreateNoWindow = $true
+  $whisperCheckInfo.RedirectStandardOutput = $true
+  $whisperCheckInfo.RedirectStandardError = $true
+  $whisperCheck = [System.Diagnostics.Process]::Start($whisperCheckInfo)
+  $whisperCheck.BeginOutputReadLine()
+  $whisperCheck.BeginErrorReadLine()
+  $whisperCheck.WaitForExit()
+  if ($whisperCheck.ExitCode -ne 0) {
     throw "The selected Whisper CLI failed its startup check: $whisperExe"
   }
 
