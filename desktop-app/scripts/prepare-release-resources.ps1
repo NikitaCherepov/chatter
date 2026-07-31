@@ -24,9 +24,32 @@ function Download-File {
 
 New-Item -ItemType Directory -Force -Path $modelsDirectory, $tempDirectory | Out-Null
 
+function Find-WhisperCli {
+  param(
+    [Parameter(Mandatory = $true)][string]$Directory,
+    [switch]$Recurse
+  )
+
+  $knownNames = @(
+    'whisper-whisper-cli.exe',
+    'whisper-cli.exe',
+    'whisper-main.exe',
+    'main.exe',
+    'whisper.exe'
+  )
+
+  Get-ChildItem -LiteralPath $Directory -File -Recurse:$Recurse |
+    Where-Object {
+      $_.Name -in $knownNames -and
+      $_.Length -gt 64KB
+    } |
+    Sort-Object Length -Descending |
+    Select-Object -First 1
+}
+
 try {
-  $whisperExe = Join-Path $modelsDirectory 'whisper.exe'
-  if ($Force -or -not (Test-Path -LiteralPath $whisperExe)) {
+  $whisperExe = Find-WhisperCli -Directory $modelsDirectory
+  if ($Force -or -not $whisperExe) {
     $archive = Join-Path $tempDirectory 'whisper.zip'
     $expanded = Join-Path $tempDirectory 'whisper'
     Download-File `
@@ -34,14 +57,20 @@ try {
       -Destination $archive
     Expand-Archive -LiteralPath $archive -DestinationPath $expanded -Force
 
-    $sourceExe = Get-ChildItem -LiteralPath $expanded -Recurse -File |
-      Where-Object { $_.Name -in 'whisper-cli.exe', 'main.exe' } |
-      Select-Object -First 1
-    if (-not $sourceExe) { throw 'The Whisper archive does not contain whisper-cli.exe or main.exe.' }
+    $sourceExe = Find-WhisperCli -Directory $expanded -Recurse
+    if (-not $sourceExe) { throw 'The Whisper archive does not contain a working CLI executable.' }
 
+    $whisperExe = Join-Path $modelsDirectory $sourceExe.Name
     Copy-Item -LiteralPath $sourceExe.FullName -Destination $whisperExe -Force
     Get-ChildItem -LiteralPath $sourceExe.Directory.FullName -Filter '*.dll' -File |
       Copy-Item -Destination $modelsDirectory -Force
+  } else {
+    $whisperExe = $whisperExe.FullName
+  }
+
+  & $whisperExe '--help' *> $null
+  if ($LASTEXITCODE -ne 0) {
+    throw "The selected Whisper CLI failed its startup check: $whisperExe"
   }
 
   $whisperModel = Join-Path $modelsDirectory 'ggml-small.bin'

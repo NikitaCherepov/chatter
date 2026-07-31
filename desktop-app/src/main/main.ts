@@ -176,9 +176,15 @@ const getModelPath = () => {
 // Dynamic whisper.exe path: dev vs packaged
 const getWhisperExePath = () => {
   return requireExistingPath('whisper executable', [
-    app.isPackaged
-      ? path.join(process.resourcesPath, 'models', 'whisper.exe')
-      : path.join(__dirname, '..', '..', 'models', 'whisper.exe'),
+    ...[
+      'whisper-whisper-cli.exe',
+      'whisper-cli.exe',
+      'whisper-main.exe',
+      'main.exe',
+      'whisper.exe',
+    ].map((fileName) => app.isPackaged
+      ? path.join(process.resourcesPath, 'models', fileName)
+      : path.join(__dirname, '..', '..', 'models', fileName)),
   ]);
 };
 
