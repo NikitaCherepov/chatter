@@ -2207,22 +2207,32 @@ export const searchChatHistory = (
   query: string,
   limit = 20,
 ): ChatMessageSearchHit[] => {
-  const safeQuery = query.replace(/[^\w\sа-яА-ЯёЁ]/g, ' ').trim();
-  if (safeQuery.length < 3) return [];
+  const safeQuery = query.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
+  if (safeQuery.length < 2) return [];
 
   const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
-  const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+  const ftsQuery = safeQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => `"${word.replace(/"/g, '""')}"*`)
+    .join(' ');
 
-  // Step 1: FTS5 search (no table alias — MATCH requires bare table name).
+  // Filter bot-hidden chats before LIMIT so hidden hits cannot displace visible ones.
+  // FTS5 MATCH requires the bare virtual-table name on the left side.
   const rawHits = db.prepare(`
     SELECT
-      chat_id,
-      message_id,
+      messages_fts.chat_id,
+      messages_fts.message_id,
       snippet(messages_fts, 0, '<<', '>>', '...', 12) as snippet,
-      rank
+      messages_fts.rank
     FROM messages_fts
-    WHERE user_id = ? AND messages_fts MATCH ?
-    ORDER BY rank
+    JOIN user_chats
+      ON user_chats.id = messages_fts.chat_id
+      AND user_chats.user_id = messages_fts.user_id
+    WHERE messages_fts.user_id = ?
+      AND user_chats.bot_hidden = 0
+      AND messages_fts MATCH ?
+    ORDER BY messages_fts.rank
     LIMIT ?
   `).all(userId, ftsQuery, safeLimit) as Array<{
     chat_id: number;
@@ -2233,18 +2243,7 @@ export const searchChatHistory = (
 
   if (rawHits.length === 0) return [];
 
-  // Step 2: filter out bot_hidden chats and enrich with role/created_at.
-  const chatIds = [...new Set(rawHits.map(h => h.chat_id))];
-  const hiddenChats = new Set(
-    (db.prepare(`SELECT id FROM user_chats WHERE user_id = ? AND id IN (${chatIds.map(() => '?').join(',')}) AND bot_hidden = 1`)
-      .all(userId, ...chatIds) as Array<{ id: number }>)
-      .map(r => r.id)
-  );
-
-  const visibleHits = rawHits.filter(h => !hiddenChats.has(h.chat_id));
-  if (visibleHits.length === 0) return [];
-
-  const messageIds = visibleHits.map(h => h.message_id);
+  const messageIds = rawHits.map(h => h.message_id);
   const msgMetaRows = db.prepare(`SELECT id, role, created_at FROM chat_messages WHERE id IN (${messageIds.map(() => '?').join(',')})`)
     .all(...messageIds) as Array<{ id: number; role: string; created_at: string }>;
   const msgMeta = new Map(msgMetaRows.map(r => [r.id, r]));
@@ -2253,7 +2252,7 @@ export const searchChatHistory = (
   const titleCache = new Map<number, string>();
   const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
 
-  return visibleHits.map(hit => {
+  return rawHits.map(hit => {
     let title = titleCache.get(hit.chat_id);
     if (title === undefined) {
       const chat = db.prepare('SELECT title FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string } | undefined;
@@ -2302,7 +2301,7 @@ export const getChatMessagesAround = (
 ): ChatContextResult | null => {
   // Validate chat belongs to user and is not bot_hidden.
   const chat = db.prepare('SELECT title, bot_hidden FROM user_chats WHERE id = ? AND user_id = ?').get(chatId, userId) as { title: string; bot_hidden: number } | undefined;
-  if (!chat) return null;
+  if (!chat || chat.bot_hidden === 1) return null;
 
   const safeBefore = Math.max(0, Math.min(50, Math.floor(before)));
   const safeAfter = Math.max(0, Math.min(50, Math.floor(after)));

@@ -3558,11 +3558,19 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   // ── Chat history search tools ───────────────────────────────────────────────
 
   if (toolName === 'search_chat_history') {
+    if (desktopActionSink) desktopActionSink.value = null;
     const query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
     if (!query) return 'No results: empty search query.';
     const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 20;
     const hits = searchChatHistory(user.id, query, limit);
     if (hits.length === 0) return `No messages found for "${query}".`;
+    const firstHit = hits[0];
+    if (desktopActionSink) {
+      desktopActionSink.value = {
+        action: 'suggest_chat_link',
+        value: { chat_id: firstHit.chat_id, title: firstHit.chat_title },
+      };
+    }
     const lines = hits.map(h =>
       `[chat_id: ${h.chat_id}] [message_id: ${h.message_id}]\nChat: "${h.chat_title}" (${h.role})\n…${h.snippet}…`
     );
@@ -7087,7 +7095,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'search_chat_history' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
       await safeOnDesktopAction(desktopActionSink.value);
     }
 
