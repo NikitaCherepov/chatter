@@ -459,6 +459,10 @@ export const getReasoningLevelsForBaseURL = (baseURL: string): ReasoningLevel[] 
     return ['none', 'high']; // только thinking enabled/disabled
   }
 
+  if (url.includes('generativelanguage.googleapis.com')) {
+    return ['none', 'minimal', 'low', 'medium', 'high'];
+  }
+
   return null; // unknown provider — slider не показываем
 };
 
@@ -701,6 +705,7 @@ export type ModelSettings = {
 const PROVIDER_SUPPORTED_PARAMS: Record<string, Set<string>> = {
   openrouter: new Set(['temperature', 'top_p', 'top_k', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'max_tokens']),
   deepseek:   new Set(['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'max_tokens']),
+  google:     new Set(['max_tokens']),
   default:    new Set(['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'max_tokens']),
 };
 
@@ -708,6 +713,7 @@ const getProviderSupportedParams = (baseURL: string): Set<string> => {
   const url = (baseURL || '').toLowerCase();
   if (url.includes('openrouter.ai')) return PROVIDER_SUPPORTED_PARAMS.openrouter;
   if (url.includes('deepseek.com')) return PROVIDER_SUPPORTED_PARAMS.deepseek;
+  if (url.includes('generativelanguage.googleapis.com')) return PROVIDER_SUPPORTED_PARAMS.google;
   return PROVIDER_SUPPORTED_PARAMS.default;
 };
 
@@ -792,6 +798,35 @@ const adaptRequestBodyForProvider = (
       // auto, low, medium, high, xhigh — всё включено
       body.thinking = { type: 'enabled' };
     }
+    return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
+  }
+
+  // ── Google Gemini OpenAI compatibility ──
+  if (url.includes('generativelanguage.googleapis.com')) {
+    const {
+      thinking: _t,
+      clear_thinking: _ct,
+      reasoning: _r,
+      reasoning_effort: _re,
+      ...body
+    } = requestBody as any;
+
+    // Gemini 3.5+ rejects the legacy sampling controls deprecated by Google.
+    if (model.toLowerCase().startsWith('gemini-3.')) {
+      delete body.temperature;
+      delete body.top_p;
+      delete body.top_k;
+    }
+
+    if (level && level !== 'auto') {
+      // Gemini 3 cannot disable thinking; minimal is its lowest supported level.
+      if (level === 'none') {
+        body.reasoning_effort = model.toLowerCase().startsWith('gemini-2.5-') ? 'none' : 'minimal';
+      } else {
+        body.reasoning_effort = level === 'xhigh' ? 'high' : level;
+      }
+    }
+
     return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
 
