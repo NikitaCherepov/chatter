@@ -197,6 +197,39 @@ const parseModelChain = (raw: string | undefined, fallback: string[]) => {
   return parsed.length ? parsed : fallback;
 };
 
+const sanitizeProviderErrorBody = (value: string): string => value
+  .replace(/AIza[0-9A-Za-z_-]{20,}/g, '[REDACTED_API_KEY]')
+  .slice(0, 4000);
+
+/** Capture upstream validation errors before the OpenAI SDK consumes the body. */
+const createOpenAIClient = (apiKey: string, baseURL: string): OpenAI => {
+  let providerHost = 'unknown';
+  try {
+    providerHost = new URL(baseURL).hostname || providerHost;
+  } catch { /* invalid URL will be reported by the SDK itself */ }
+
+  const diagnosticFetch: typeof fetch = async (input, init) => {
+    const response = await fetch(input, init);
+    if (!response.ok) {
+      const responseBody = await response.clone().text().catch(() => '');
+      console.warn('[ai] upstream error response', {
+        providerHost,
+        status: response.status,
+        statusText: response.statusText,
+        requestId: response.headers.get('x-request-id') || response.headers.get('x-goog-request-id') || undefined,
+        body: responseBody ? sanitizeProviderErrorBody(responseBody) : '<empty response body>',
+      });
+    }
+    return response;
+  };
+
+  return new OpenAI({
+    apiKey,
+    baseURL,
+    fetch: diagnosticFetch,
+  });
+};
+
 type LiteProvider = {
   name: string;
   baseURL: string;
@@ -242,10 +275,7 @@ type SetTimezoneArgs = {
 const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
 const PRO_API_KEY = `${process.env.TIMEWEB_API_KEY || ''}`.trim();
 const PRO_CLIENT = PRO_API_KEY
-  ? new OpenAI({
-      apiKey: PRO_API_KEY,
-      baseURL: process.env.TIMEWEB_BASE_URL
-    })
+  ? createOpenAIClient(PRO_API_KEY, `${process.env.TIMEWEB_BASE_URL || ''}`)
   : null;
 
 const slugifyModelId = (value: string) => {
@@ -293,7 +323,7 @@ const parseProProviders = (): LiteProvider[] => {
     providers.push({
       name: `pro-${providerIdx + 1}`,
       baseURL: base,
-      client: new OpenAI({ apiKey: key, baseURL: base }),
+      client: createOpenAIClient(key, base),
       modelChain: models,
       uniqueIds,
     });
@@ -314,7 +344,7 @@ const parseLiteProviders = (): LiteProvider[] => {
     return [{
       name: 'lite-1',
       baseURL: defaultBase,
-      client: new OpenAI({ apiKey: defaultKey, baseURL: defaultBase }),
+      client: createOpenAIClient(defaultKey, defaultBase),
       modelChain: defaultModels,
       uniqueIds: defaultModels.map((m, i) => `lite-${slugifyModelId(m)}-0-${i}`),
     }];
@@ -332,7 +362,7 @@ const parseLiteProviders = (): LiteProvider[] => {
     providers.push({
       name: `lite-${providerIdx + 1}`,
       baseURL: base,
-      client: new OpenAI({ apiKey: key, baseURL: base }),
+      client: createOpenAIClient(key, base),
       modelChain: models,
       uniqueIds,
     });
@@ -353,7 +383,7 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
     proProviders.push({
       name: 'vision-pro-1',
       baseURL: proDefaultBase,
-      client: new OpenAI({ apiKey: proDefaultKey, baseURL: proDefaultBase }),
+      client: createOpenAIClient(proDefaultKey, proDefaultBase),
       modelChain: proDefaultModels,
       uniqueIds: proDefaultModels.map((m, i) => i === 0 ? visionUniqueId : `vision-${slugifyModelId(m)}-${i}`),
     });
@@ -368,7 +398,7 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
     liteProviders.push({
       name: 'vision-lite-1',
       baseURL: liteDefaultBase,
-      client: new OpenAI({ apiKey: liteDefaultKey, baseURL: liteDefaultBase }),
+      client: createOpenAIClient(liteDefaultKey, liteDefaultBase),
       modelChain: liteDefaultModels,
       uniqueIds: liteDefaultModels.map((m, i) => i === 0 ? `${visionUniqueId}-lite` : `vision-lite-${slugifyModelId(m)}-${i}`),
     });
@@ -402,7 +432,7 @@ const parseManualModels = (): ManualModelEntry[] => {
       apiModelName,
       name: displayName || apiModelName,
       description: description || '',
-      client: new OpenAI({ apiKey, baseURL }),
+      client: createOpenAIClient(apiKey, baseURL),
       baseURL,
       supportsVision: parseManualModelFlag(supportsVisionRaw),
       adminOnly: parseManualModelFlag(adminOnlyRaw),
@@ -460,7 +490,9 @@ export const getReasoningLevelsForBaseURL = (baseURL: string): ReasoningLevel[] 
   }
 
   if (url.includes('generativelanguage.googleapis.com')) {
-    return ['none', 'minimal', 'low', 'medium', 'high'];
+    // OpenAI compatibility maps these values to Gemini thinking_level.
+    // Gemini 3.x cannot disable thinking, so "none" is intentionally absent.
+    return ['minimal', 'low', 'medium', 'high'];
   }
 
   return null; // unknown provider — slider не показываем
@@ -819,8 +851,8 @@ const adaptRequestBodyForProvider = (
     }
 
     if (level && level !== 'auto') {
-      // Gemini 3 cannot disable thinking; minimal is its lowest supported level.
       if (level === 'none') {
+        // Gemini 2.5 Flash can disable thinking; Gemini 3.x cannot.
         body.reasoning_effort = model.toLowerCase().startsWith('gemini-2.5-') ? 'none' : 'minimal';
       } else {
         body.reasoning_effort = level === 'xhigh' ? 'high' : level;
