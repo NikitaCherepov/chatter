@@ -998,7 +998,12 @@ const streamAndAssemble = async (
   };
   let finalUsage: any = undefined;
   // Temporary storage for tool_calls по index
-  const toolCallMap = new Map<number, { id?: string; type: 'function'; function: { name: string; arguments: string } }>();
+  const toolCallMap = new Map<number, {
+    id?: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+    extra_content?: unknown;
+  }>();
 
   try {
     for await (const chunk of stream as any) {
@@ -1049,6 +1054,10 @@ const streamAndAssemble = async (
           if (tc.type) slot.type = tc.type;
           if (tc.function?.name) slot.function.name += tc.function.name;
           if (tc.function?.arguments) slot.function.arguments += tc.function.arguments;
+          // Gemini attaches its required thought_signature here. Preserve the
+          // provider metadata unchanged so the next tool-loop iteration can
+          // return it to the upstream API. Other providers simply omit it.
+          if (tc.extra_content !== undefined) slot.extra_content = tc.extra_content;
         }
       }
     }
