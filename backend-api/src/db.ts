@@ -319,6 +319,16 @@ ensureChatMessageColumn('attachments', 'ALTER TABLE chat_messages ADD COLUMN att
 // Subagent traces — полные trace ad-hoc субагентов для UI-отображения (не уходит в AI-контекст)
 ensureChatMessageColumn('subagents_json', 'ALTER TABLE chat_messages ADD COLUMN subagents_json TEXT');
 
+// ── user_chats: bot visibility flag ────────────────────────────────────────
+// bot_hidden = 1 excludes the chat from the bot's search_chat_history tool.
+const hasUserChatColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(user_chats)').all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+if (!hasUserChatColumn('bot_hidden')) {
+  db.exec("ALTER TABLE user_chats ADD COLUMN bot_hidden INTEGER NOT NULL DEFAULT 0");
+}
+
 ensureTaskColumn('recurrence_type', "ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'");
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
 ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');

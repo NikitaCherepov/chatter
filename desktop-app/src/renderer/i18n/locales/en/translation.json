@@ -419,6 +419,8 @@
       "noChats": "No chats",
       "rename": "Rename",
       "downloadDocx": "Download DOCX",
+      "hideFromBot": "Hide from bot search",
+      "showInBot": "Show in bot search",
       "unlinkTelegram": "Unlink Telegram",
       "linkTelegram": "Link Telegram",
       "logout": "Log out"
@@ -451,6 +453,10 @@
     "macro": {
       "title": "Macro suggestion",
       "save": "Save to settings"
+    },
+    "chatLink": {
+      "title": "Found chat",
+      "open": "Open chat"
     },
     "confirm": {
       "commandTitle": "Command confirmation",

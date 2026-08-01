@@ -701,6 +701,7 @@ export function ChatPage() {
   const [deletingImage, setDeletingImage] = useState(false);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
+  const [pendingChatLinks, setPendingChatLinks] = useState<Array<{ chat_id: number; title: string }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
@@ -1198,6 +1199,15 @@ export function ChatPage() {
         setChats(prev => prev.map(c =>
           c.id === val.chat_id ? { ...c, title: val.title! } : c
         ));
+      }
+    }
+    if (action.action === 'suggest_chat_link' && action.value) {
+      const val = action.value as { chat_id?: number; title?: string };
+      if (val.chat_id && val.title) {
+        setPendingChatLinks(prev => {
+          if (prev.some(c => c.chat_id === val.chat_id)) return prev;
+          return [...prev, { chat_id: val.chat_id!, title: val.title! }];
+        });
       }
     }
     handleDesktopAction(action);
@@ -1815,6 +1825,21 @@ export function ChatPage() {
   const handleStartDelete = (chatId: number) => {
     setDeletingChatId(chatId);
     setContextMenuChatId(null);
+  };
+
+  const handleToggleBotHidden = async (chatId: number) => {
+    const chat = chats.find(c => c.id === chatId);
+    const newHidden = !chat?.bot_hidden;
+    setContextMenuChatId(null);
+    // Optimistic update
+    setChats(prev => prev.map(c => c.id === chatId ? { ...c, bot_hidden: newHidden } : c));
+    try {
+      await api.setChatBotHidden(chatId, newHidden);
+    } catch (err) {
+      console.error('Failed to toggle bot visibility:', err);
+      // Revert on error
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, bot_hidden: !newHidden } : c));
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -2825,6 +2850,25 @@ export function ChatPage() {
               </svg>
               {t('chat.sidebar.downloadDocx')}
             </button>
+            <button className={s.contextMenuItem} onClick={() => handleToggleBotHidden(contextMenuChatId)}>
+              {chats.find(c => c.id === contextMenuChatId)?.bot_hidden ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  {t('chat.sidebar.showInBot')}
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                  {t('chat.sidebar.hideFromBot')}
+                </>
+              )}
+            </button>
             <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
@@ -3391,6 +3435,46 @@ export function ChatPage() {
                     <button
                       className={s.suggestMacroDismissBtn}
                       onClick={() => setPendingMacros(prev => prev.filter((_, i) => i !== macroIdx))}
+                    >
+                      {t('common.reject')}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Suggest Chat Link cards */}
+              {pendingChatLinks.map((link, linkIdx) => (
+                <div key={`chat-link-${linkIdx}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>{t('chat.chatLink.title')}</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      onClick={() => setPendingChatLinks(prev => prev.filter((_, i) => i !== linkIdx))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className={s.suggestMacroName}>{link.title}</div>
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={() => {
+                        setActiveChatId(link.chat_id);
+                        api.activateChat(link.chat_id).catch(() => {});
+                        setPendingChatLinks(prev => prev.filter((_, i) => i !== linkIdx));
+                      }}
+                    >
+                      {t('chat.chatLink.open')}
+                    </button>
+                    <button
+                      className={s.suggestMacroDismissBtn}
+                      onClick={() => setPendingChatLinks(prev => prev.filter((_, i) => i !== linkIdx))}
                     >
                       {t('common.reject')}
                     </button>

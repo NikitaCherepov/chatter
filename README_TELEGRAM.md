@@ -94,6 +94,8 @@ The bot receives the list of tools from the backend and passes them to the AI. A
 - **save_note** / **list_my_notes** / **read_note** / **delete_note** — notes.
 - **update_core_memory** — static user profile.
 - **search_cold_memory** / **save_to_cold_memory** / **delete_from_cold_memory** — vector memory archive.
+- **search_chat_history** — full-text search across the user's chat history (FTS5). Returns individual messages with snippet, chat title, chat_id, and message_id. Chats hidden via desktop (bot_hidden) are excluded. Used to find past discussions.
+- **read_chat_context** — read a window of messages (±n) around a given message_id in a chat. Used after search_chat_history to browse the context of a found message. Supports pagination via has_more_before / has_more_after.
 - **random_roll** — coin/dice roll.
 - **generate_image** — generate images from a text description. Triggered by explicit intent ("draw", "generate an image"). The prompt is automatically translated to English. The image is sent to Telegram as a photo.
 - **execute_pc_command** — execute a command on the user's PC. Requires confirmation via inline buttons (if desktop is connected). Optional `background: true` is used for opening GUI applications (VS Code, Notepad, browser) when stdout/stderr is not needed and there's no need to wait for the window to close.

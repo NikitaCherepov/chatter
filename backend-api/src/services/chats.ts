@@ -117,19 +117,20 @@ export const listUserChats = (userId: number, limit = 50, offset = 0): ChatDto[]
   const safeLimit = Math.max(1, Math.min(100, parsedLimit));
   const safeOffset = Math.max(0, parsedOffset);
   const rows = db.prepare(`
-    SELECT id, title, created_at, updated_at
+    SELECT id, title, created_at, updated_at, bot_hidden
     FROM user_chats
     WHERE user_id = ?
     ORDER BY updated_at DESC, id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; title: string; created_at: string; updated_at: string }>;
+  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; title: string; created_at: string; updated_at: string; bot_hidden: number }>;
 
   return rows.map(row => ({
     id: row.id,
     title: row.title,
     created_at: toUnix(row.created_at),
     updated_at: toUnix(row.updated_at),
-    is_active: row.id === activeId
+    is_active: row.id === activeId,
+    bot_hidden: row.bot_hidden === 1
   }));
 };
 
@@ -2036,7 +2037,12 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
   // Use MATCH with prefix search (trailing *) for partial word matches
   const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
 
-  // Step 1: get distinct chat_ids sorted by rank
+  // Step 1: get distinct chat_ids sorted by rank.
+  // Desktop UI search returns ALL chats (including bot_hidden) so users
+  // can find their own conversations. The bot tool uses searchChatHistory()
+  // which applies the bot_hidden filter separately.
+  // NOTE: FTS5 MATCH requires the bare table name on the left side;
+  // table aliases (e.g. "messages_fts mfts ... mfts MATCH") are NOT supported.
   const chatHits = db.prepare(`
     SELECT chat_id, MIN(rank) as best_rank
     FROM messages_fts
@@ -2178,4 +2184,234 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
       ?? (row.messages_tokens + system_prompt_tokens),
   };
 };
+
+// ── Bot chat search tool helpers ─────────────────────────────────────────────
+
+export type ChatMessageSearchHit = {
+  message_id: number;
+  chat_id: number;
+  chat_title: string;
+  role: ChatRole;
+  snippet: string;
+  created_at: number;
+  rank: number;
+};
+
+/**
+ * Search across all non-bot-hidden chats at message level.
+ * Returns individual matching messages (not just chats) with FTS snippets.
+ * Used by the `search_chat_history` AI tool.
+ */
+export const searchChatHistory = (
+  userId: number,
+  query: string,
+  limit = 20,
+): ChatMessageSearchHit[] => {
+  const safeQuery = query.replace(/[^\w\sа-яА-ЯёЁ]/g, ' ').trim();
+  if (safeQuery.length < 3) return [];
+
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+
+  // Step 1: FTS5 search (no table alias — MATCH requires bare table name).
+  const rawHits = db.prepare(`
+    SELECT
+      chat_id,
+      message_id,
+      snippet(messages_fts, 0, '<<', '>>', '...', 12) as snippet,
+      rank
+    FROM messages_fts
+    WHERE user_id = ? AND messages_fts MATCH ?
+    ORDER BY rank
+    LIMIT ?
+  `).all(userId, ftsQuery, safeLimit) as Array<{
+    chat_id: number;
+    message_id: number;
+    snippet: string;
+    rank: number;
+  }>;
+
+  if (rawHits.length === 0) return [];
+
+  // Step 2: filter out bot_hidden chats and enrich with role/created_at.
+  const chatIds = [...new Set(rawHits.map(h => h.chat_id))];
+  const hiddenChats = new Set(
+    (db.prepare(`SELECT id FROM user_chats WHERE user_id = ? AND id IN (${chatIds.map(() => '?').join(',')}) AND bot_hidden = 1`)
+      .all(userId, ...chatIds) as Array<{ id: number }>)
+      .map(r => r.id)
+  );
+
+  const visibleHits = rawHits.filter(h => !hiddenChats.has(h.chat_id));
+  if (visibleHits.length === 0) return [];
+
+  const messageIds = visibleHits.map(h => h.message_id);
+  const msgMetaRows = db.prepare(`SELECT id, role, created_at FROM chat_messages WHERE id IN (${messageIds.map(() => '?').join(',')})`)
+    .all(...messageIds) as Array<{ id: number; role: string; created_at: string }>;
+  const msgMeta = new Map(msgMetaRows.map(r => [r.id, r]));
+
+  // Cache chat titles to avoid repeated lookups.
+  const titleCache = new Map<number, string>();
+  const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
+
+  return visibleHits.map(hit => {
+    let title = titleCache.get(hit.chat_id);
+    if (title === undefined) {
+      const chat = db.prepare('SELECT title FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string } | undefined;
+      title = chat?.title || formatAutomaticChatTitle(userLanguage, hit.chat_id);
+      titleCache.set(hit.chat_id, title);
+    }
+    const meta = msgMeta.get(hit.message_id);
+    return {
+      message_id: hit.message_id,
+      chat_id: hit.chat_id,
+      chat_title: title,
+      role: (meta?.role ?? 'user') as ChatRole,
+      snippet: hit.snippet,
+      created_at: meta ? toUnix(meta.created_at) : 0,
+      rank: hit.rank,
+    };
+  });
+};
+
+export type ChatContextMessage = {
+  id: number;
+  role: ChatRole;
+  content: string;
+  created_at: number;
+};
+
+export type ChatContextResult = {
+  chat_id: number;
+  chat_title: string;
+  anchor_message_id: number | null;
+  messages: ChatContextMessage[];
+  has_more_before: boolean;
+  has_more_after: boolean;
+};
+
+/**
+ * Get ±n messages around a given message ID (or the latest messages if no anchor).
+ * Used by the `read_chat_context` AI tool to navigate chat history.
+ */
+export const getChatMessagesAround = (
+  userId: number,
+  chatId: number,
+  fromMessageId: number | null,
+  before = 5,
+  after = 5,
+): ChatContextResult | null => {
+  // Validate chat belongs to user and is not bot_hidden.
+  const chat = db.prepare('SELECT title, bot_hidden FROM user_chats WHERE id = ? AND user_id = ?').get(chatId, userId) as { title: string; bot_hidden: number } | undefined;
+  if (!chat) return null;
+
+  const safeBefore = Math.max(0, Math.min(50, Math.floor(before)));
+  const safeAfter = Math.max(0, Math.min(50, Math.floor(after)));
+
+  let anchorId = fromMessageId;
+
+  // If no anchor provided, use the latest message in the chat.
+  if (anchorId === null) {
+    const latest = db.prepare(`
+      SELECT id FROM chat_messages
+      WHERE user_id = ? AND chat_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(userId, chatId) as { id: number } | undefined;
+    anchorId = latest?.id ?? null;
+  }
+
+  const messages: ChatContextMessage[] = [];
+
+  if (anchorId !== null) {
+    // Messages AFTER the anchor (newer, ascending). Fetch LIMIT+1 to detect has_more.
+    const afterRows = db.prepare(`
+      SELECT id, role, content, created_at
+      FROM chat_messages
+      WHERE user_id = ? AND chat_id = ? AND id > ?
+      ORDER BY id ASC
+      LIMIT ?
+    `).all(userId, chatId, anchorId, safeAfter + 1) as Array<{ id: number; role: string; content: string; created_at: string }>;
+
+    // The anchor message itself.
+    const anchorRow = db.prepare(`
+      SELECT id, role, content, created_at
+      FROM chat_messages
+      WHERE user_id = ? AND chat_id = ? AND id = ?
+    `).get(userId, chatId, anchorId) as { id: number; role: string; content: string; created_at: string } | undefined;
+
+    // Messages BEFORE the anchor (older, descending → then reversed). Fetch LIMIT+1 to detect has_more.
+    const beforeRows = db.prepare(`
+      SELECT id, role, content, created_at
+      FROM chat_messages
+      WHERE user_id = ? AND chat_id = ? AND id < ?
+      ORDER BY id DESC
+      LIMIT ?
+    `).all(userId, chatId, anchorId, safeBefore + 1) as Array<{ id: number; role: string; content: string; created_at: string }>;
+
+    // Detect if there are more messages beyond what was requested.
+    const hasMoreBefore = safeBefore > 0 && beforeRows.length > safeBefore;
+    const hasMoreAfter = safeAfter > 0 && afterRows.length > safeAfter;
+
+    // Trim the extra row used for has_more detection.
+    const trimmedBefore = beforeRows.slice(0, safeBefore);
+    const trimmedAfter = afterRows.slice(0, safeAfter);
+
+    // Assemble: [..before (reversed), anchor, after..]
+    const beforeMsgs: ChatContextMessage[] = trimmedBefore.reverse().map(r => ({
+      id: r.id,
+      role: r.role as ChatRole,
+      content: r.content,
+      created_at: toUnix(r.created_at),
+    }));
+
+    const afterMsgs: ChatContextMessage[] = trimmedAfter.map(r => ({
+      id: r.id,
+      role: r.role as ChatRole,
+      content: r.content,
+      created_at: toUnix(r.created_at),
+    }));
+
+    if (anchorRow) {
+      messages.push(...beforeMsgs, {
+        id: anchorRow.id,
+        role: anchorRow.role as ChatRole,
+        content: anchorRow.content,
+        created_at: toUnix(anchorRow.created_at),
+      }, ...afterMsgs);
+    } else {
+      // Anchor not found in this chat — just use what we have.
+      messages.push(...beforeMsgs, ...afterMsgs);
+    }
+
+    return {
+      chat_id: chatId,
+      chat_title: chat.title,
+      anchor_message_id: anchorId,
+      messages,
+      has_more_before: hasMoreBefore,
+      has_more_after: hasMoreAfter,
+    };
+  }
+
+  // No messages in chat at all.
+  return {
+    chat_id: chatId,
+    chat_title: chat.title,
+    anchor_message_id: null,
+    messages: [],
+    has_more_before: false,
+    has_more_after: false,
+  };
+};
+
+/**
+ * Toggle the bot_hidden flag on a chat.
+ * When bot_hidden = 1, the chat is excluded from the bot's search_chat_history tool.
+ */
+export const setChatBotHidden = (userId: number, chatId: number, hidden: boolean): boolean => {
+  const result = db.prepare(`
+    UPDATE user_chats SET bot_hidden = ? WHERE id = ? AND user_id = ?
+  `).run(hidden ? 1 : 0, chatId, userId);
+  return result.changes > 0;
+};
+
 

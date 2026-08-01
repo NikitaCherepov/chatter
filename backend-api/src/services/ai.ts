@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
@@ -2058,6 +2058,56 @@ export const toolDefinitions = [
         }
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_chat_history',
+      description: 'Search the user\'s chat history by keywords. Returns matching individual messages with snippet, chat title, chat_id, and message_id. Use when the user asks to find something discussed previously, locate a past conversation, or recall details. Pick diverse keywords to maximize coverage. Chats marked as bot-hidden are excluded.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search keywords (space-separated). Can use partial words. Examples: "docker compose", "react hooks", "пароль от wifi".'
+          },
+          limit: {
+            type: 'number',
+            description: 'Max results to return (default 20, max 50).'
+          }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_chat_context',
+      description: 'Read a window of messages around a specific position in a chat. Use after search_chat_history to read surrounding context of a found message, or to browse recent messages. Returns messages with ±n range, has_more flags to know if you can scroll further, and the anchor message_id for subsequent calls.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chat_id: {
+            type: 'number',
+            description: 'Chat ID from search_chat_history results.'
+          },
+          from_message_id: {
+            type: 'number',
+            description: 'Message ID to center the window on. If omitted, returns the latest messages in the chat.'
+          },
+          before: {
+            type: 'number',
+            description: 'Number of messages to read before the anchor (default 5, max 50).'
+          },
+          after: {
+            type: 'number',
+            description: 'Number of messages to read after the anchor (default 5, max 50).'
+          }
+        },
+        required: ['chat_id']
+      }
+    }
   }
 ] as const;
 
@@ -3504,6 +3554,34 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     return `Record [${result.record_id}] successfully deleted from memory (${result.chunks_deleted} fragments).`;
   }
   if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
+
+  // ── Chat history search tools ───────────────────────────────────────────────
+
+  if (toolName === 'search_chat_history') {
+    const query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
+    if (!query) return 'No results: empty search query.';
+    const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 20;
+    const hits = searchChatHistory(user.id, query, limit);
+    if (hits.length === 0) return `No messages found for "${query}".`;
+    const lines = hits.map(h =>
+      `[chat_id: ${h.chat_id}] [message_id: ${h.message_id}]\nChat: "${h.chat_title}" (${h.role})\n…${h.snippet}…`
+    );
+    return `Found ${hits.length} message(s):\n\n${lines.join('\n\n')}`;
+  }
+
+  if (toolName === 'read_chat_context') {
+    const chatId = Number(parsed.chat_id);
+    if (!Number.isFinite(chatId)) return 'Error: chat_id must be a number.';
+    const fromMessageId = Number.isFinite(Number(parsed.from_message_id)) ? Number(parsed.from_message_id) : null;
+    const before = Number.isFinite(Number(parsed.before)) ? Number(parsed.before) : 5;
+    const after = Number.isFinite(Number(parsed.after)) ? Number(parsed.after) : 5;
+    const result = getChatMessagesAround(user.id, chatId, fromMessageId, before, after);
+    if (!result) return 'Chat not found or access denied.';
+    if (result.messages.length === 0) return `Chat "${result.chat_title}" has no messages.`;
+    const lines = result.messages.map(m => `[${m.id}] ${m.role}: ${m.content}`);
+    const header = `Chat: "${result.chat_title}" (chat_id: ${chatId}, anchor: ${result.anchor_message_id})${result.has_more_before ? ' ← more before' : ''}${result.has_more_after ? ' more after →' : ''}`;
+    return `${header}\n${lines.join('\n')}`;
+  }
 
   if (toolName === 'generate_image') {
     const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';

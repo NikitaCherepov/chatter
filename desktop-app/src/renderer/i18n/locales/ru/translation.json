@@ -419,6 +419,8 @@
       "noChats": "Нет чатов",
       "rename": "Изменить название",
       "downloadDocx": "Скачать docx",
+      "hideFromBot": "Скрыть от бота",
+      "showInBot": "Показать боту",
       "unlinkTelegram": "Отвязать Telegram",
       "linkTelegram": "Привязать Telegram",
       "logout": "Выйти"
@@ -451,6 +453,10 @@
     "macro": {
       "title": "Предложение макроса",
       "save": "Сохранить в настройки"
+    },
+    "chatLink": {
+      "title": "Найденный чат",
+      "open": "Открыть чат"
     },
     "confirm": {
       "commandTitle": "Подтверждение команды",

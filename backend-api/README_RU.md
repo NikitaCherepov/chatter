@@ -1008,6 +1008,8 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `search_cold_memory` | Поиск по векторному архиву |
 | `save_to_cold_memory` | Сохранение в векторный архив |
 | `delete_from_cold_memory` | Удаление из векторного архива |
+| `search_chat_history` | Полнотекстовый поиск по истории чатов (FTS5). Возвращает сообщения со сниппетом, chat_id, message_id. Чаты с `bot_hidden=1` исключаются. |
+| `read_chat_context` | Чтение окна сообщений (±n) вокруг message_id. Для навигации по найденным в `search_chat_history` результатам. |
 | `random_roll` | Бросок монетки/кубиков |
 | `generate_image` | Генерация изображения через OpenRouter и Grok Imagine. Автоматически маршрутизируется через PRO. |
 | `get_exchange_rates` | Курсы валют ЦБ РФ с динамикой изменения. По умолчанию возвращает USD и EUR. |

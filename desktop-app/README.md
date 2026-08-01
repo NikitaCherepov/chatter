@@ -442,6 +442,7 @@ The bot can control the interface via the `desktop_action` tool. Same pattern as
 | `edit_file_lines_confirmation` | `edit_file_lines` (always) confirmation. Card shows path, line range, and a **diff preview**: red "Removed" block (old lines) + green "Added" block (new lines). TG bot renders a similar diff via inline buttons `fileconfirm:allow`/`fileconfirm:reject`. |
 | `email_confirmation` | `send_email` confirmation — card with From, To, Subject, and Body preview (via MarkdownRenderer). "Send" / "Reject" buttons. Deduplication by `confirmation_id`. |
 | `suggest_devops_runbook` | Runbook suggestion — card with "Save"/"Check"/"Reject" buttons |
+| `suggest_chat_link` | Inline card suggesting to open a found chat (value: `{ chat_id, title }`). Rendered like `suggest_macro` — stays until user clicks "Open chat" or "Reject". Used by AI after `search_chat_history` to let the user jump to a found conversation. |
 
 Reject UX: desktop confirmation cards use a shared `RejectWithComment`; clicking reject opens a short textarea. The comment is sent as `rejection_comment`, and the backend returns it to the AI as `user_comment` in the rejected tool result.
 

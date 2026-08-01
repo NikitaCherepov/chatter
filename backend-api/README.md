@@ -1093,6 +1093,8 @@ A numeric prefix `[N]` is added:
 | `search_cold_memory` | Search the vector archive |
 | `save_to_cold_memory` | Save to the vector archive |
 | `delete_from_cold_memory` | Delete from the vector archive |
+| `search_chat_history` | Full-text search across chat history (FTS5). Returns messages with snippet, chat_id, message_id. Chats with `bot_hidden=1` are excluded. |
+| `read_chat_context` | Read a window of messages (±n) around a message_id. Used to navigate `search_chat_history` results. |
 | `random_roll` | Coin/dice roll |
 | `generate_image` | Generate an image through OpenRouter and Grok Imagine. Automatically routed through PRO. |
 | `get_exchange_rates` | Central Bank of Russia exchange rates with change dynamics. Returns USD and EUR by default. |

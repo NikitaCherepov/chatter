@@ -326,6 +326,12 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     return;
   }
 
+  if (a === 'suggest_chat_link') {
+    // Handled by ChatPage via handleIncomingDesktopAction
+    // Renders an inline card with a button to open the chat
+    return;
+  }
+
   if (a === 'suggest_devops_runbook') {
     // Handled by ChatPage via the suggestDevopsRunbook callback
     return;
