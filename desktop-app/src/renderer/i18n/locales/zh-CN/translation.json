@@ -406,7 +406,9 @@
       "downloadDocx": "下载 docx",
       "unlinkTelegram": "解除 Telegram 绑定",
       "linkTelegram": "绑定 Telegram",
-      "logout": "退出登录"
+      "logout": "退出登录",
+      "hideFromBot": "从机器人搜索中隐藏",
+      "showInBot": "在机器人搜索中显示"
     },
     "empty": {
       "selectOrCreate": "选择一个聊天或新建一个"
@@ -560,7 +562,11 @@
       "generatedAlt": "生成的图像",
       "photoAlt": "照片"
     },
-    "connectionLostBeforeSend": "连接在服务器接受消息前关闭。请重新发送。"
+    "connectionLostBeforeSend": "连接在服务器接受消息前关闭。请重新发送。",
+    "chatLink": {
+      "title": "找到的聊天",
+      "open": "打开聊天"
+    }
   },
   "promptSelector": {
     "placeholder": "选择提示...",

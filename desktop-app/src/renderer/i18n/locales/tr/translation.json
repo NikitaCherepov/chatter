@@ -718,7 +718,9 @@
       "downloadDocx": "DOCX İndir",
       "unlinkTelegram": "Telegram Bağlantısını Kaldır",
       "linkTelegram": "Telegram'ı Bağla",
-      "logout": "Çıkış Yap"
+      "logout": "Çıkış Yap",
+      "hideFromBot": "Bot aramasından gizle",
+      "showInBot": "Bot aramasında göster"
     },
     "empty": {
       "selectOrCreate": "Bir sohbet seçin veya yeni bir tane oluşturun"
@@ -872,7 +874,11 @@
       "generatedAlt": "Oluşturulan görsel",
       "photoAlt": "Fotoğraf"
     },
-    "connectionLostBeforeSend": "Sunucu mesajı kabul etmeden bağlantı kapandı. Lütfen tekrar gönderin."
+    "connectionLostBeforeSend": "Sunucu mesajı kabul etmeden bağlantı kapandı. Lütfen tekrar gönderin.",
+    "chatLink": {
+      "title": "Bulunan sohbet",
+      "open": "Sohbeti aç"
+    }
   },
   "promptSelector": {
     "placeholder": "Bir prompt seçin...",

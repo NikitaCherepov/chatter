@@ -718,7 +718,9 @@
       "downloadDocx": "Pobierz docx",
       "unlinkTelegram": "Odłącz Telegram",
       "linkTelegram": "Połącz Telegram",
-      "logout": "Wyloguj się"
+      "logout": "Wyloguj się",
+      "hideFromBot": "Ukryj przed wyszukiwaniem bota",
+      "showInBot": "Pokaż w wyszukiwaniu bota"
     },
     "empty": {
       "selectOrCreate": "Wybierz czat lub utwórz nowy"
@@ -872,7 +874,11 @@
       "generatedAlt": "Wygenerowany obraz",
       "photoAlt": "Zdjęcie"
     },
-    "connectionLostBeforeSend": "Połączenie zostało zamknięte, zanim serwer zaakceptował wiadomość. Wyślij ją ponownie."
+    "connectionLostBeforeSend": "Połączenie zostało zamknięte, zanim serwer zaakceptował wiadomość. Wyślij ją ponownie.",
+    "chatLink": {
+      "title": "Znaleziono czat",
+      "open": "Otwórz czat"
+    }
   },
   "promptSelector": {
     "placeholder": "Wybierz prompt...",

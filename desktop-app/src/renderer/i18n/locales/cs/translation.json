@@ -718,7 +718,9 @@
       "downloadDocx": "Stáhnout DOCX",
       "unlinkTelegram": "Odpojit Telegram",
       "linkTelegram": "Propojit Telegram",
-      "logout": "Odhlásit se"
+      "logout": "Odhlásit se",
+      "hideFromBot": "Skrýt z vyhledávání botem",
+      "showInBot": "Zobrazit ve vyhledávání botem"
     },
     "empty": {
       "selectOrCreate": "Vyberte chat nebo vytvořte nový"
@@ -872,7 +874,11 @@
       "generatedAlt": "Vygenerovaný obrázek",
       "photoAlt": "Fotografie"
     },
-    "connectionLostBeforeSend": "Spojení se uzavřelo dříve, než server přijal zprávu. Pošlete ji prosím znovu."
+    "connectionLostBeforeSend": "Spojení se uzavřelo dříve, než server přijal zprávu. Pošlete ji prosím znovu.",
+    "chatLink": {
+      "title": "Nalezený chat",
+      "open": "Otevřít chat"
+    }
   },
   "promptSelector": {
     "placeholder": "Vyberte prompt...",

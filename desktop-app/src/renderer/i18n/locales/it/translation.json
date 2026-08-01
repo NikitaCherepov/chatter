@@ -718,7 +718,9 @@
       "downloadDocx": "Scarica docx",
       "unlinkTelegram": "Scollega Telegram",
       "linkTelegram": "Collega Telegram",
-      "logout": "Esci"
+      "logout": "Esci",
+      "hideFromBot": "Nascondi dalla ricerca bot",
+      "showInBot": "Mostra nella ricerca bot"
     },
     "empty": {
       "selectOrCreate": "Seleziona una chat o creane una nuova"
@@ -872,7 +874,11 @@
       "generatedAlt": "Immagine generata",
       "photoAlt": "Foto"
     },
-    "connectionLostBeforeSend": "La connessione si è chiusa prima che il server accettasse il messaggio. Per favore, invialo di nuovo."
+    "connectionLostBeforeSend": "La connessione si è chiusa prima che il server accettasse il messaggio. Per favore, invialo di nuovo.",
+    "chatLink": {
+      "title": "Chat trovata",
+      "open": "Apri chat"
+    }
   },
   "promptSelector": {
     "placeholder": "Seleziona un prompt...",

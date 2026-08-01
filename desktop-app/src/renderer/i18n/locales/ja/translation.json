@@ -406,7 +406,9 @@
       "downloadDocx": "docxをダウンロード",
       "unlinkTelegram": "Telegramの連携を解除",
       "linkTelegram": "Telegramと連携",
-      "logout": "ログアウト"
+      "logout": "ログアウト",
+      "hideFromBot": "ボット検索から非表示",
+      "showInBot": "ボット検索に表示"
     },
     "empty": {
       "selectOrCreate": "チャットを選択するか、新しく作成してください"
@@ -560,7 +562,11 @@
       "generatedAlt": "生成された画像",
       "photoAlt": "写真"
     },
-    "connectionLostBeforeSend": "サーバーがメッセージを受け入れる前に接続が閉じられました。もう一度送信してください。"
+    "connectionLostBeforeSend": "サーバーがメッセージを受け入れる前に接続が閉じられました。もう一度送信してください。",
+    "chatLink": {
+      "title": "チャットが見つかりました",
+      "open": "チャットを開く"
+    }
   },
   "promptSelector": {
     "placeholder": "プロンプトを選択...",

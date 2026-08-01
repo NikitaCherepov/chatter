@@ -718,7 +718,9 @@
       "downloadDocx": "docx 다운로드",
       "unlinkTelegram": "Telegram 연결 해제",
       "linkTelegram": "Telegram 연결",
-      "logout": "로그아웃"
+      "logout": "로그아웃",
+      "hideFromBot": "봇 검색에서 숨기기",
+      "showInBot": "봇 검색에 표시"
     },
     "empty": {
       "selectOrCreate": "채팅을 선택하거나 새로 만드세요"
@@ -872,7 +874,11 @@
       "generatedAlt": "생성된 이미지",
       "photoAlt": "사진"
     },
-    "connectionLostBeforeSend": "서버가 메시지를 수락하기 전에 연결이 종료되었습니다. 다시 보내주세요."
+    "connectionLostBeforeSend": "서버가 메시지를 수락하기 전에 연결이 종료되었습니다. 다시 보내주세요.",
+    "chatLink": {
+      "title": "채팅 찾음",
+      "open": "채팅 열기"
+    }
   },
   "promptSelector": {
     "placeholder": "프롬프트 선택...",

@@ -406,7 +406,9 @@
       "downloadDocx": "DOCX herunterladen",
       "unlinkTelegram": "Telegram trennen",
       "linkTelegram": "Telegram verbinden",
-      "logout": "Abmelden"
+      "logout": "Abmelden",
+      "hideFromBot": "Vor Botsuche ausblenden",
+      "showInBot": "In Botsuche anzeigen"
     },
     "empty": {
       "selectOrCreate": "Wählen Sie einen Chat aus oder erstellen Sie einen neuen"
@@ -560,7 +562,11 @@
       "generatedAlt": "Generiertes Bild",
       "photoAlt": "Foto"
     },
-    "connectionLostBeforeSend": "Die Verbindung wurde geschlossen, bevor der Server die Nachricht akzeptiert hat. Bitte senden Sie sie erneut."
+    "connectionLostBeforeSend": "Die Verbindung wurde geschlossen, bevor der Server die Nachricht akzeptiert hat. Bitte senden Sie sie erneut.",
+    "chatLink": {
+      "title": "Chat gefunden",
+      "open": "Chat öffnen"
+    }
   },
   "promptSelector": {
     "placeholder": "Prompt auswählen...",

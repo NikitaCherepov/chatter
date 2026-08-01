@@ -406,7 +406,9 @@
       "downloadDocx": "Télécharger docx",
       "unlinkTelegram": "Délier Telegram",
       "linkTelegram": "Lier Telegram",
-      "logout": "Se déconnecter"
+      "logout": "Se déconnecter",
+      "hideFromBot": "Masquer de la recherche du bot",
+      "showInBot": "Afficher dans la recherche du bot"
     },
     "empty": {
       "selectOrCreate": "Sélectionnez un chat ou créez-en un nouveau"
@@ -560,7 +562,11 @@
       "generatedAlt": "Image générée",
       "photoAlt": "Photo"
     },
-    "connectionLostBeforeSend": "La connexion s'est fermée avant que le serveur n'accepte le message. Veuillez le renvoyer."
+    "connectionLostBeforeSend": "La connexion s'est fermée avant que le serveur n'accepte le message. Veuillez le renvoyer.",
+    "chatLink": {
+      "title": "Chat trouvé",
+      "open": "Ouvrir le chat"
+    }
   },
   "promptSelector": {
     "placeholder": "Sélectionnez un prompt...",

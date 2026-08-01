@@ -1,43 +1,43 @@
 {
   "changes": {
     "ru": [
-      "Сервер Chatter готов к первому публичному релизу."
+      "Добавлен инструмент поиска в чате для бота"
     ],
     "en": [
-      "Chatter Server is ready for its first public release."
+      "Added search chat tool for bot"
     ],
     "cs": [
-      "Chatter Server je připraven na své první veřejné vydání."
+      "Přidán nástroj pro vyhledávání v chatu pro bota"
     ],
     "de": [
-      "Chatter Server ist bereit für seine erste öffentliche Veröffentlichung."
+      "Such-Chat-Tool für Bot hinzugefügt"
     ],
     "es": [
-      "El servidor Chatter está listo para su primera versión pública."
+      "Se añadió la herramienta de búsqueda en el chat para el bot"
     ],
     "fr": [
-      "Le serveur Chatter est prêt pour sa première version publique."
+      "Outil de recherche ajouté au chat du bot"
     ],
     "it": [
-      "Chatter Server è pronto per la sua prima versione pubblica."
+      "Aggiunto strumento di ricerca chat per il bot"
     ],
     "ja": [
-      "Chatter Server は最初の公開リリースの準備ができています。"
+      "ボット用の検索チャットツールを追加しました"
     ],
     "ko": [
-      "Chatter 서버가 첫 번째 공개 릴리스를 준비했습니다."
+      "봇을 위한 검색 채팅 도구가 추가되었습니다"
     ],
     "pl": [
-      "Serwer Chatter jest gotowy do pierwszej publicznej wersji."
+      "Dodano narzędzie wyszukiwania czatu dla bota"
     ],
     "pt-BR": [
-      "O Chatter Server está pronto para seu primeiro lançamento público."
+      "Ferramenta de pesquisa em chat adicionada para o bot"
     ],
     "tr": [
-      "Chatter Sunucusu ilk halka açık sürümüne hazır."
+      "Bot için arama sohbet aracı eklendi"
     ],
     "zh-CN": [
-      "Chatter Server 已准备好首次公开发布。"
+      "为机器人添加了搜索聊天工具"
     ]
   }
 }

@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Fixed voice recognition bug."
+      "Added search chat tool for bot"
     ],
     "ru": [
-      "Исправлена ошибка распознавания голоса."
+      "Добавлен инструмент поиска в чате для бота"
     ],
     "de": [
-      "Fehler bei der Spracherkennung behoben."
+      "Such-Chat-Tool für Bot hinzugefügt"
     ],
     "es": [
-      "Se corrigió el error de reconocimiento de voz."
+      "Herramienta de búsqueda en chat añadida para el bot"
     ],
     "fr": [
-      "Correction d'un bug de reconnaissance vocale."
+      "Outil de recherche ajouté au chat du bot"
     ],
     "it": [
-      "Corretto bug di riconoscimento vocale."
+      "Aggiunto strumento di ricerca chat per il bot"
     ],
     "ja": [
-      "音声認識のバグを修正しました。"
+      "ボット用の検索チャットツールを追加しました"
     ],
     "ko": [
-      "음성 인식 버그를 수정했습니다."
+      "봇을 위한 검색 채팅 도구 추가됨"
     ],
     "pl": [
-      "Naprawiono błąd rozpoznawania głosu."
+      "Dodano narzędzie wyszukiwania czatu dla bota"
     ],
     "pt-BR": [
-      "Corrigido bug de reconhecimento de voz."
+      "Ferramenta de pesquisa em chat adicionada para o bot"
     ],
     "zh-CN": [
-      "修复了语音识别错误。"
+      "为机器人添加了搜索聊天工具"
     ],
     "tr": [
-      "Ses tanıma hatası düzeltildi."
+      "Bot için arama sohbet aracı eklendi"
     ],
     "cs": [
-      "Opravena chyba rozpoznávání hlasu."
+      "Přidán nástroj pro vyhledávání v chatu pro bota"
     ]
   }
 }
