@@ -23,6 +23,8 @@ services:
       - "127.0.0.1:${BACKEND_PORT:-3050}:3050"
     volumes:
       - chatter_backend_data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test:
         - CMD

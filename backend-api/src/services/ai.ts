@@ -1,5 +1,8 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import nodeFetch from 'node-fetch';
+import { ProxyAgent } from 'proxy-agent';
+import { Readable } from 'node:stream';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
@@ -199,17 +202,35 @@ const parseModelChain = (raw: string | undefined, fallback: string[]) => {
 
 const sanitizeProviderErrorBody = (value: string): string => value
   .replace(/AIza[0-9A-Za-z_-]{20,}/g, '[REDACTED_API_KEY]')
+  .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+(?::[^\s/@]*)?@/gi, '$1[REDACTED]@')
   .slice(0, 4000);
 
 /** Capture upstream validation errors before the OpenAI SDK consumes the body. */
-const createOpenAIClient = (apiKey: string, baseURL: string): OpenAI => {
+const createOpenAIClient = (apiKey: string, baseURL: string, proxyUrl = ''): OpenAI => {
   let providerHost = 'unknown';
   try {
     providerHost = new URL(baseURL).hostname || providerHost;
   } catch { /* invalid URL will be reported by the SDK itself */ }
 
+  const normalizedProxyUrl = proxyUrl.trim();
+  const proxyAgent = normalizedProxyUrl
+    ? new ProxyAgent({ getProxyForUrl: () => normalizedProxyUrl })
+    : null;
+
   const diagnosticFetch: typeof fetch = async (input, init) => {
-    const response = await fetch(input, init);
+    let response: Response;
+    if (proxyAgent) {
+      const requestUrl = typeof input === 'string' || input instanceof URL ? input : input.url;
+      const upstreamResponse = await nodeFetch(requestUrl, { ...(init as any), agent: proxyAgent });
+      const body = upstreamResponse.body ? Readable.toWeb(upstreamResponse.body as Readable) : null;
+      response = new Response(body as BodyInit | null, {
+        status: upstreamResponse.status,
+        statusText: upstreamResponse.statusText,
+        headers: upstreamResponse.headers as any,
+      });
+    } else {
+      response = await fetch(input, init);
+    }
     if (!response.ok) {
       const responseBody = await response.clone().text().catch(() => '');
       console.warn('[ai] upstream error response', {
@@ -275,7 +296,7 @@ type SetTimezoneArgs = {
 const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
 const PRO_API_KEY = `${process.env.TIMEWEB_API_KEY || ''}`.trim();
 const PRO_CLIENT = PRO_API_KEY
-  ? createOpenAIClient(PRO_API_KEY, `${process.env.TIMEWEB_BASE_URL || ''}`)
+  ? createOpenAIClient(PRO_API_KEY, `${process.env.TIMEWEB_BASE_URL || ''}`, `${process.env.TIMEWEB_PROXY_URL || ''}`)
   : null;
 
 const slugifyModelId = (value: string) => {
@@ -323,7 +344,7 @@ const parseProProviders = (): LiteProvider[] => {
     providers.push({
       name: `pro-${providerIdx + 1}`,
       baseURL: base,
-      client: createOpenAIClient(key, base),
+      client: createOpenAIClient(key, base, parts[4] || process.env.TIMEWEB_PROXY_URL || ''),
       modelChain: models,
       uniqueIds,
     });
@@ -344,7 +365,7 @@ const parseLiteProviders = (): LiteProvider[] => {
     return [{
       name: 'lite-1',
       baseURL: defaultBase,
-      client: createOpenAIClient(defaultKey, defaultBase),
+      client: createOpenAIClient(defaultKey, defaultBase, process.env.TIMEWEB_LITE_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
       modelChain: defaultModels,
       uniqueIds: defaultModels.map((m, i) => `lite-${slugifyModelId(m)}-0-${i}`),
     }];
@@ -362,7 +383,7 @@ const parseLiteProviders = (): LiteProvider[] => {
     providers.push({
       name: `lite-${providerIdx + 1}`,
       baseURL: base,
-      client: createOpenAIClient(key, base),
+      client: createOpenAIClient(key, base, parts[4] || process.env.TIMEWEB_LITE_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
       modelChain: models,
       uniqueIds,
     });
@@ -383,7 +404,7 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
     proProviders.push({
       name: 'vision-pro-1',
       baseURL: proDefaultBase,
-      client: createOpenAIClient(proDefaultKey, proDefaultBase),
+      client: createOpenAIClient(proDefaultKey, proDefaultBase, process.env.TIMEWEB_VISION_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
       modelChain: proDefaultModels,
       uniqueIds: proDefaultModels.map((m, i) => i === 0 ? visionUniqueId : `vision-${slugifyModelId(m)}-${i}`),
     });
@@ -398,7 +419,7 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
     liteProviders.push({
       name: 'vision-lite-1',
       baseURL: liteDefaultBase,
-      client: createOpenAIClient(liteDefaultKey, liteDefaultBase),
+      client: createOpenAIClient(liteDefaultKey, liteDefaultBase, process.env.TIMEWEB_LITE_VISION_PROXY_URL || process.env.TIMEWEB_LITE_PROXY_URL || process.env.TIMEWEB_VISION_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
       modelChain: liteDefaultModels,
       uniqueIds: liteDefaultModels.map((m, i) => i === 0 ? `${visionUniqueId}-lite` : `vision-lite-${slugifyModelId(m)}-${i}`),
     });
@@ -410,7 +431,7 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
 const VISION_PROVIDERS = parseVisionProviders();
 
 // ── MODELS_MANUAL: manual model selection by user ──────────────────────────
-// Env format: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only;...
+// Env format: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only|proxy_url;...
 // supports_vision: optional, "1" or "0" (default "0")
 // admin_only: optional, "1" or "0" (default "0")
 const parseManualModelFlag = (value: unknown): boolean => {
@@ -425,14 +446,14 @@ const parseManualModels = (): ManualModelEntry[] => {
   const models: ManualModelEntry[] = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const parts = chunks[i].split('|').map(v => `${v || ''}`.trim());
-    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw, adminOnlyRaw] = parts;
+    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw, adminOnlyRaw, proxyUrl] = parts;
     if (!baseURL || !apiKey || !apiModelName || !uniqueId) continue;
     models.push({
       id: uniqueId,
       apiModelName,
       name: displayName || apiModelName,
       description: description || '',
-      client: createOpenAIClient(apiKey, baseURL),
+      client: createOpenAIClient(apiKey, baseURL, proxyUrl),
       baseURL,
       supportsVision: parseManualModelFlag(supportsVisionRaw),
       adminOnly: parseManualModelFlag(adminOnlyRaw),
@@ -702,7 +723,8 @@ const getProviderErrorSummary = (err: any) => {
   const status = Number(err?.status || err?.response?.status || 0) || undefined;
   const code = `${err?.code || err?.error?.code || err?.response?.data?.error?.code || ''}`.trim() || undefined;
   const type = `${err?.type || err?.error?.type || err?.response?.data?.error?.type || ''}`.trim() || undefined;
-  const message = `${err?.message || err?.error?.message || err?.response?.data?.error?.message || ''}`.trim() || undefined;
+  const rawMessage = `${err?.message || err?.error?.message || err?.response?.data?.error?.message || ''}`.trim();
+  const message = rawMessage ? sanitizeProviderErrorBody(rawMessage) : undefined;
   const data = err?.response?.data;
 
   return {
@@ -710,7 +732,7 @@ const getProviderErrorSummary = (err: any) => {
     code,
     type,
     message,
-    data: typeof data === 'object' && data ? JSON.stringify(data).slice(0, 1500) : undefined
+    data: typeof data === 'object' && data ? sanitizeProviderErrorBody(JSON.stringify(data)).slice(0, 1500) : undefined
   };
 };
 

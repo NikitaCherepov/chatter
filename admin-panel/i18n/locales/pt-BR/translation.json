@@ -134,6 +134,8 @@
     },
     "providerFields": {
       "baseUrl": "URL do provedor",
+      "proxyUrl": "URL do proxy",
+      "proxyUrlHint": "Opcional. Somente as solicitações deste modelo usarão o proxy.",
       "modelName": "Nome do modelo",
       "quotaId": "ID do modelo para rastreamento de cota",
       "quotaIdHint": "Identificador estável usado para consultar o coeficiente. Se vazio, gerado automaticamente ao salvar.",

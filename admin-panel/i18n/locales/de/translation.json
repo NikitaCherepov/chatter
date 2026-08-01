@@ -134,6 +134,8 @@
     },
     "providerFields": {
       "baseUrl": "Anbieter-URL",
+      "proxyUrl": "Proxy-URL",
+      "proxyUrlHint": "Optional. Nur Anfragen dieses Modells verwenden den Proxy.",
       "modelName": "Modellname",
       "quotaId": "Modell-ID für Kontingentverfolgung",
       "quotaIdHint": "Stabile Kennung zur Suche des Koeffizienten. Wenn leer, wird beim Speichern automatisch generiert.",

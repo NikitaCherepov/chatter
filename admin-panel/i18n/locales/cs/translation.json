@@ -140,6 +140,8 @@
     },
     "providerFields": {
       "baseUrl": "URL poskytovatele",
+      "proxyUrl": "URL proxy",
+      "proxyUrlHint": "Volitelné. Proxy budou používat pouze požadavky tohoto modelu.",
       "modelName": "Název modelu",
       "quotaId": "ID modelu pro sledování kvót",
       "quotaIdHint": "Stabilní identifikátor používaný k vyhledání koeficientu. Pokud je prázdný, při uložení se vygeneruje automaticky.",

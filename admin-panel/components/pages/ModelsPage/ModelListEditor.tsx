@@ -45,6 +45,7 @@ type Props = {
 const newModel = (): ProviderModelConfig => ({
   id: `new-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   baseUrl: '',
+  proxyUrl: '',
   model: '',
   apiKey: '',
   hasApiKey: false,
@@ -454,6 +455,12 @@ export function ProviderModelFields({
         <input type="url" value={model.baseUrl}
           onChange={e => onChange({ baseUrl: e.target.value })}
           placeholder={PROVIDER_URLS[providerKind ?? 'custom'] || 'https://…'} required={required} readOnly={!isCustom} />
+      </FormField>
+
+      <FormField label={t('models.providerFields.proxyUrl')} hint={t('models.providerFields.proxyUrlHint')}>
+        <input value={model.proxyUrl ?? ''}
+          onChange={e => onChange({ proxyUrl: e.target.value })}
+          placeholder="socks5://host.docker.internal:1080" />
       </FormField>
 
       {/* Row 3: quota id */}

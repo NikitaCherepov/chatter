@@ -134,6 +134,8 @@
     },
     "providerFields": {
       "baseUrl": "提供商 URL",
+      "proxyUrl": "代理 URL",
+      "proxyUrlHint": "可选。只有此模型的请求会使用代理。",
       "modelName": "模型名称",
       "quotaId": "用于配额跟踪的模型 ID",
       "quotaIdHint": "用于查找系数的稳定标识符。如果为空，保存时自动生成。",

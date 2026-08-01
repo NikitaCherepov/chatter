@@ -320,11 +320,11 @@ function splitModelChain(value, fallback = []) {
   return models.length ? models : fallback;
 }
 
-function parseProviderModels(raw, prefix, fallbackBase, fallbackKey, fallbackModels) {
+function parseProviderModels(raw, prefix, fallbackBase, fallbackKey, fallbackModels, fallbackProxy = '') {
   const chunks = `${raw || ''}`.trim()
     ? `${raw}`.split(';').map(value => value.trim()).filter(Boolean)
     : fallbackBase && fallbackModels.length
-      ? [`${fallbackBase}|${fallbackKey}|${fallbackModels.join(',')}`]
+      ? [`${fallbackBase}|${fallbackKey}|${fallbackModels.join(',')}||${fallbackProxy}`]
       : [];
   const result = [];
   chunks.forEach((chunk, providerIndex) => {
@@ -335,13 +335,14 @@ function parseProviderModels(raw, prefix, fallbackBase, fallbackKey, fallbackMod
     // 4th field: comma-separated uniqueIds, one per model in modelsRaw.
     // Backward-compat: if absent or fewer entries than models, synthesize from prefix+model.
     const uniqueIdsRaw = parts[3] || '';
+    const proxyUrl = parts[4] || '';
     const uniqueIdCandidates = uniqueIdsRaw ? uniqueIdsRaw.split(',').map(value => value.trim()) : [];
     const models = splitModelChain(modelsRaw);
     models.forEach((model, modelIndex) => {
       if (!baseUrl || !model) return;
       const explicitId = uniqueIdCandidates[modelIndex];
       const uniqueId = explicitId || `${prefix}-${slugifyModelId(model)}-${providerIndex}-${modelIndex}`;
-      result.push({ id: `${prefix}-${providerIndex}-${modelIndex}`, uniqueId, baseUrl, apiKey, model });
+      result.push({ id: `${prefix}-${providerIndex}-${modelIndex}`, uniqueId, baseUrl, apiKey, model, proxyUrl });
     });
   });
   return result;
@@ -361,14 +362,16 @@ function getProviderModels(backendEnv) {
     'pro',
     backendEnv.TIMEWEB_BASE_URL,
     backendEnv.TIMEWEB_API_KEY,
-    splitModelChain(backendEnv.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview'])
+    splitModelChain(backendEnv.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']),
+    backendEnv.TIMEWEB_PROXY_URL
   );
   const liteModels = parseProviderModels(
     backendEnv.TIMEWEB_LITE_ENDPOINTS,
     'lite',
     backendEnv.TIMEWEB_LITE_BASE_URL || backendEnv.TIMEWEB_BASE_URL,
     backendEnv.TIMEWEB_LITE_API_KEY || backendEnv.TIMEWEB_API_KEY,
-    splitModelChain(backendEnv.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite'])
+    splitModelChain(backendEnv.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite']),
+    backendEnv.TIMEWEB_LITE_PROXY_URL || backendEnv.TIMEWEB_PROXY_URL
   );
   const hasExplicitVision = Boolean(
     backendEnv.TIMEWEB_VISION_BASE_URL
@@ -381,18 +384,19 @@ function getProviderModels(backendEnv) {
         uniqueId: backendEnv.TIMEWEB_VISION_UNIQUE_ID || 'vision',
         baseUrl: backendEnv.TIMEWEB_VISION_BASE_URL || proModels[0]?.baseUrl || backendEnv.TIMEWEB_BASE_URL || '',
         apiKey: backendEnv.TIMEWEB_VISION_API_KEY || proModels[0]?.apiKey || backendEnv.TIMEWEB_API_KEY || '',
+        proxyUrl: backendEnv.TIMEWEB_VISION_PROXY_URL || proModels[0]?.proxyUrl || backendEnv.TIMEWEB_PROXY_URL || '',
         model: splitModelChain(
           backendEnv.TIMEWEB_VISION_MODEL,
           proModels[0]?.model ? [proModels[0].model] : []
         )[0] || ''
       }
-    : { id: 'vision', uniqueId: 'vision', baseUrl: '', apiKey: '', model: '' };
+    : { id: 'vision', uniqueId: 'vision', baseUrl: '', apiKey: '', model: '', proxyUrl: '' };
   return { proModels, liteModels, visionModel };
 }
 
 function parseManualModels(raw) {
   return `${raw || ''}`.split(';').map(value => value.trim()).filter(Boolean).map((chunk, index) => {
-    const [baseUrl = '', apiKey = '', model = '', name = '', description = '', uniqueId = '', supportsVision = '0', adminOnly = '0'] = chunk.split('|').map(value => value.trim());
+    const [baseUrl = '', apiKey = '', model = '', name = '', description = '', uniqueId = '', supportsVision = '0', adminOnly = '0', proxyUrl = ''] = chunk.split('|').map(value => value.trim());
     return {
       id: uniqueId || `manual-${index}`,
       baseUrl,
@@ -402,7 +406,8 @@ function parseManualModels(raw) {
       description,
       uniqueId: uniqueId || `manual-${index}`,
       supportsVision: ['1', 'true'].includes(supportsVision.toLowerCase()),
-      adminOnly: ['1', 'true'].includes(adminOnly.toLowerCase())
+      adminOnly: ['1', 'true'].includes(adminOnly.toLowerCase()),
+      proxyUrl
     };
   }).filter(model => model.baseUrl && model.apiKey && model.model && model.uniqueId);
 }
@@ -417,6 +422,18 @@ function validateEnvPart(value, fieldName) {
   return normalized;
 }
 
+function normalizeProxyUrl(value, fieldName = 'Proxy URL') {
+  const normalized = `${value || ''}`.trim();
+  if (!normalized) return '';
+  if (/[|;\r\n\0]/.test(normalized)) throw new Error(`${fieldName} contains invalid characters`);
+  let parsed;
+  try { parsed = new URL(normalized); } catch { throw new Error(`${fieldName} must be a valid proxy URL`); }
+  if (!['http:', 'https:', 'socks:', 'socks4:', 'socks4a:', 'socks5:', 'socks5h:'].includes(parsed.protocol)) {
+    throw new Error(`${fieldName} must use http, https, socks4 or socks5`);
+  }
+  return normalized;
+}
+
 function mergeSecret(value, existing, fieldName) {
   const secret = `${value || ''}`.trim() || `${existing || ''}`;
   if (/[\r\n\0]/.test(secret)) throw new Error(`${fieldName} contains invalid characters`);
@@ -427,13 +444,18 @@ function mergeProviderModels(input, existing, label, { required = false } = {}) 
   if (!Array.isArray(input)) return existing;
   if (required && input.length === 0) throw new Error(`${label} requires at least one model`);
   const existingKeys = new Map(existing.map(item => [item.id, item.apiKey]));
+  const existingProxies = new Map(existing.map(item => [item.id, item.proxyUrl || '']));
   return input.map((item, index) => {
     const id = `${item?.id || `${label}-${index}`}`;
     const baseUrl = normalizeUrl(item?.baseUrl, `${label} provider URL`, { allowEmpty: false });
     const model = validateEnvPart(item?.model, `${label} model`);
     const apiKey = `${item?.apiKey || ''}`.trim() || existingKeys.get(id) || '';
     if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error(`${label} API key is required`);
-    return { id, baseUrl, apiKey, model };
+    const proxyUrl = normalizeProxyUrl(
+      item?.proxyUrl === undefined ? existingProxies.get(id) : item.proxyUrl,
+      `${label} proxy URL`
+    );
+    return { id, baseUrl, apiKey, model, proxyUrl };
   });
 }
 
@@ -448,13 +470,18 @@ function mergeProviderModel(input, existing, label, { required = true } = {}) {
     id: existing.id,
     baseUrl: normalizeUrl(input.baseUrl, `${label} provider URL`, { allowEmpty: false }),
     apiKey,
-    model: validateEnvPart(input.model, `${label} model`)
+    model: validateEnvPart(input.model, `${label} model`),
+    proxyUrl: normalizeProxyUrl(
+      input.proxyUrl === undefined ? existing.proxyUrl : input.proxyUrl,
+      `${label} proxy URL`
+    )
   };
 }
 
 function mergeManualModels(input, existing) {
   if (!Array.isArray(input)) return existing;
   const existingKeys = new Map(existing.map(item => [item.id, item.apiKey]));
+  const existingProxies = new Map(existing.map(item => [item.id, item.proxyUrl || '']));
   const uniqueIds = new Set();
   return input.map((item, index) => {
     const id = `${item?.id || `manual-new-${index}`}`;
@@ -472,7 +499,11 @@ function mergeManualModels(input, existing) {
       description: `${item?.description || ''}`.trim(),
       uniqueId,
       supportsVision: Boolean(item?.supportsVision),
-      adminOnly: Boolean(item?.adminOnly)
+      adminOnly: Boolean(item?.adminOnly),
+      proxyUrl: normalizeProxyUrl(
+        item?.proxyUrl === undefined ? existingProxies.get(id) : item.proxyUrl,
+        'Manual model proxy URL'
+      )
     };
   });
 }
@@ -480,12 +511,11 @@ function mergeManualModels(input, existing) {
 const serializeProviderModels = models => models
   .map(model => {
     const uniqueId = `${model.uniqueId || ''}`.trim();
-    return uniqueId
-      ? `${model.baseUrl}|${model.apiKey}|${model.model}|${uniqueId}`
-      : `${model.baseUrl}|${model.apiKey}|${model.model}`;
+    const proxyUrl = `${model.proxyUrl || ''}`.trim();
+    return [model.baseUrl, model.apiKey, model.model, uniqueId, proxyUrl].join('|');
   })
   .join(';');
-const serializeManualModels = models => models.map(model => [model.baseUrl, model.apiKey, model.model, model.name, model.description.replace(/[|;\r\n]/g, ' '), model.uniqueId, model.supportsVision ? '1' : '0', model.adminOnly ? '1' : '0'].join('|')).join(';');
+const serializeManualModels = models => models.map(model => [model.baseUrl, model.apiKey, model.model, model.name, model.description.replace(/[|;\r\n]/g, ' '), model.uniqueId, model.supportsVision ? '1' : '0', model.adminOnly ? '1' : '0', model.proxyUrl || ''].join('|')).join(';');
 
 function saveSettings(input) {
   const previous = loadSettings();
@@ -544,6 +574,7 @@ function saveSettings(input) {
     ENCRYPTION_KEY: backendEnv.ENCRYPTION_KEY || randomSecret(32),
     TIMEWEB_API_KEY: proModels[0]?.apiKey || legacyAiApiKey,
     TIMEWEB_BASE_URL: proModels[0]?.baseUrl || legacyAiBaseUrl,
+    TIMEWEB_PROXY_URL: proModels[0]?.proxyUrl || '',
     TELEGRAM_TOKEN: telegramToken,
     BACKEND_VOICE_API_ENABLED: voiceMode === 'off' ? '0' : '1',
     VOICE_TRANSCRIBE_URL: voiceMode === 'local' ? 'http://voice:3030/api/voice' : voiceMode === 'remote' ? voiceExternalUrl : '',
@@ -564,11 +595,13 @@ function saveSettings(input) {
     backendEnv.TIMEWEB_LITE_BASE_URL = liteModels[0].baseUrl;
     backendEnv.TIMEWEB_LITE_API_KEY = liteModels[0].apiKey;
     backendEnv.TIMEWEB_LITE_MODEL = liteModels[0].model;
+    backendEnv.TIMEWEB_LITE_PROXY_URL = liteModels[0].proxyUrl || '';
     backendEnv.TIMEWEB_LITE_ENDPOINTS = serializeProviderModels(liteModels);
   } else {
     delete backendEnv.TIMEWEB_LITE_BASE_URL;
     delete backendEnv.TIMEWEB_LITE_API_KEY;
     delete backendEnv.TIMEWEB_LITE_MODEL;
+    delete backendEnv.TIMEWEB_LITE_PROXY_URL;
     delete backendEnv.TIMEWEB_LITE_ENDPOINTS;
   }
   backendEnv.TIMEWEB_LITE_ROUTER_ENABLED = '1';
@@ -576,6 +609,7 @@ function saveSettings(input) {
     backendEnv.TIMEWEB_VISION_BASE_URL = visionModel.baseUrl;
     backendEnv.TIMEWEB_VISION_API_KEY = visionModel.apiKey;
     backendEnv.TIMEWEB_VISION_MODEL = visionModel.model;
+    backendEnv.TIMEWEB_VISION_PROXY_URL = visionModel.proxyUrl || '';
     if (visionModel.uniqueId) {
       backendEnv.TIMEWEB_VISION_UNIQUE_ID = visionModel.uniqueId;
     } else {
@@ -585,6 +619,7 @@ function saveSettings(input) {
     delete backendEnv.TIMEWEB_VISION_BASE_URL;
     delete backendEnv.TIMEWEB_VISION_API_KEY;
     delete backendEnv.TIMEWEB_VISION_MODEL;
+    delete backendEnv.TIMEWEB_VISION_PROXY_URL;
     delete backendEnv.TIMEWEB_VISION_UNIQUE_ID;
   }
   // These variables were briefly introduced for a Vision cascade, but the

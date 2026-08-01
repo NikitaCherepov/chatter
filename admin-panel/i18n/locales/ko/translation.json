@@ -134,6 +134,8 @@
     },
     "providerFields": {
       "baseUrl": "공급자 URL",
+      "proxyUrl": "프록시 URL",
+      "proxyUrlHint": "선택 사항입니다. 이 모델의 요청만 프록시를 사용합니다.",
       "modelName": "모델 이름",
       "quotaId": "할당량 추적용 모델 ID",
       "quotaIdHint": "계수를 조회하는 데 사용되는 안정적인 식별자입니다. 비어 있으면 저장 시 자동으로 생성됩니다.",

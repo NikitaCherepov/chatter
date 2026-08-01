@@ -1,6 +1,7 @@
 export type ProviderModelConfig = {
   id: string;
   baseUrl: string;
+  proxyUrl?: string;
   model: string;
   apiKey: string;
   hasApiKey: boolean;
@@ -128,6 +129,7 @@ export const emptySettings: Settings = {
   visionModel: {
     id: 'vision',
     baseUrl: '',
+    proxyUrl: '',
     model: '',
     apiKey: '',
     hasApiKey: false,

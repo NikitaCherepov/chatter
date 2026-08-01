@@ -134,6 +134,8 @@
     },
     "providerFields": {
       "baseUrl": "URL dostawcy",
+      "proxyUrl": "URL proxy",
+      "proxyUrlHint": "Opcjonalne. Tylko żądania tego modelu będą korzystać z proxy.",
       "modelName": "Nazwa modelu",
       "quotaId": "ID modelu do śledzenia limitów",
       "quotaIdHint": "Stały identyfikator używany do wyszukiwania współczynnika. Jeśli pusty, generowany automatycznie przy zapisie.",

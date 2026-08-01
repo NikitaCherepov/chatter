@@ -134,6 +134,8 @@
     },
     "providerFields": {
       "baseUrl": "URL del provider",
+      "proxyUrl": "URL proxy",
+      "proxyUrlHint": "Opzionale. Solo le richieste di questo modello useranno il proxy.",
       "modelName": "Nome del modello",
       "quotaId": "ID modello per il tracciamento delle quote",
       "quotaIdHint": "Identificatore stabile utilizzato per cercare il coefficiente. Se vuoto, generato automaticamente al salvataggio.",

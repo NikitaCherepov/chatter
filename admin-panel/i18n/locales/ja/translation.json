@@ -134,6 +134,8 @@
     },
     "providerFields": {
       "baseUrl": "プロバイダーURL",
+      "proxyUrl": "プロキシURL",
+      "proxyUrlHint": "任意。このモデルのリクエストのみプロキシを使用します。",
       "modelName": "モデル名",
       "quotaId": "クォータ追跡用のモデルID",
       "quotaIdHint": "係数を検索するために使用される安定した識別子。空の場合は、保存時に自動生成されます。",

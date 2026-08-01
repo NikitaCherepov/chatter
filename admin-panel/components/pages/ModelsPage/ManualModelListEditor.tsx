@@ -13,6 +13,7 @@ const newManualModel = (): ManualModelConfig => {
     id: `manual-new-${suffix}`,
     uniqueId: `manual-${suffix}`,
     baseUrl: '',
+    proxyUrl: '',
     model: '',
     apiKey: '',
     hasApiKey: false,

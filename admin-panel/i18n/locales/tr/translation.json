@@ -139,6 +139,8 @@
     },
     "providerFields": {
       "baseUrl": "Sağlayıcı URL'si",
+      "proxyUrl": "Proxy URL'si",
+      "proxyUrlHint": "İsteğe bağlı. Yalnızca bu modelin istekleri proxy kullanır.",
       "modelName": "Model adı",
       "quotaId": "Kota takibi için model kimliği",
       "quotaIdHint": "Katsayıyı aramak için kullanılan sabit tanımlayıcı. Boş bırakılırsa, kaydedildiğinde otomatik olarak oluşturulur.",

@@ -140,6 +140,8 @@
     "providerFields": {
       "providerKind": "API provider",
       "baseUrl": "Provider URL",
+      "proxyUrl": "Proxy URL",
+      "proxyUrlHint": "Optional. Only this model's requests will use the proxy.",
       "modelName": "Model name",
       "quotaId": "Model ID for quota tracking",
       "quotaIdHint": "Stable identifier used to look up the coefficient. If empty, generated automatically on save.",
