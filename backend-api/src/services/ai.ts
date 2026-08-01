@@ -872,10 +872,15 @@ const adaptRequestBodyForProvider = (
       delete body.top_k;
     }
 
+    const normalizedModel = model.toLowerCase();
     if (level && level !== 'auto') {
       if (level === 'none') {
-        // Gemini 2.5 Flash can disable thinking; Gemini 3.x cannot.
-        body.reasoning_effort = model.toLowerCase().startsWith('gemini-2.5-') ? 'none' : 'minimal';
+        body.reasoning_effort = 'none';
+      } else if (level === 'minimal') {
+        // Google's OpenAI-compatible endpoint intermittently rejects the
+        // documented "minimal" value. For Gemini 3, "none" maps to minimal;
+        // Gemini 2.5 has no minimal level, so use its lowest supported level.
+        body.reasoning_effort = normalizedModel.startsWith('gemini-2.5-') ? 'low' : 'none';
       } else {
         body.reasoning_effort = level === 'xhigh' ? 'high' : level;
       }
