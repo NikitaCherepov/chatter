@@ -872,19 +872,37 @@ const adaptRequestBodyForProvider = (
       delete body.top_k;
     }
 
+    // Do not use Google's broken reasoning_effort translation layer. Send the
+    // native Gemini thinking config through the documented extension instead.
     const normalizedModel = model.toLowerCase();
+    const thinkingConfig: Record<string, unknown> = { include_thoughts: true };
     if (level && level !== 'auto') {
-      if (level === 'none') {
-        body.reasoning_effort = 'none';
-      } else if (level === 'minimal') {
-        // Google's OpenAI-compatible endpoint intermittently rejects the
-        // documented "minimal" value. For Gemini 3, "none" maps to minimal;
-        // Gemini 2.5 has no minimal level, so use its lowest supported level.
-        body.reasoning_effort = normalizedModel.startsWith('gemini-2.5-') ? 'low' : 'none';
+      if (normalizedModel.startsWith('gemini-2.5-')) {
+        const isPro = normalizedModel.includes('-pro');
+        thinkingConfig.thinking_budget = level === 'none'
+          ? (isPro ? 1024 : 0)
+          : level === 'minimal' || level === 'low'
+            ? 1024
+            : level === 'medium'
+              ? 8192
+              : 24576;
       } else {
-        body.reasoning_effort = level === 'xhigh' ? 'high' : level;
+        const isPro = normalizedModel.includes('-pro') || normalizedModel.includes('pro-latest');
+        const isLegacyGemini3Pro = normalizedModel.startsWith('gemini-3-pro');
+        if (level === 'none' || level === 'minimal') {
+          thinkingConfig.thinking_level = isPro ? 'low' : 'minimal';
+        } else if (level === 'medium' && isLegacyGemini3Pro) {
+          thinkingConfig.thinking_level = 'high';
+        } else {
+          thinkingConfig.thinking_level = level === 'xhigh' ? 'high' : level;
+        }
       }
     }
+    body.extra_body = {
+      google: {
+        thinking_config: thinkingConfig,
+      },
+    };
 
     return modelSettings ? applyModelSettingsToBody(body, baseURL, modelSettings) : body;
   }
@@ -1001,6 +1019,60 @@ const streamAndAssemble = async (
     reasoning_content: '',
     tool_calls: [] as any[],
   };
+  const parseGoogleThoughtTags = Boolean(
+    (payload as any)?.extra_body?.google?.thinking_config?.include_thoughts
+  );
+  let insideGoogleThought = false;
+  let googleThoughtTagCarry = '';
+
+  const appendContent = (text: string) => {
+    if (!text) return;
+    assembledMessage.content += text;
+    if (callbacks?.onToken) {
+      textBuffer += text;
+      scheduleFlush();
+    }
+  };
+
+  const appendReasoning = (text: string) => {
+    if (!text) return;
+    assembledMessage.reasoning_content += text;
+    if (callbacks?.onReasoningToken) {
+      reasoningBuffer += text;
+      scheduleFlush();
+    }
+  };
+
+  const splitGoogleThoughtContent = (chunk: string) => {
+    let remaining = googleThoughtTagCarry + chunk;
+    googleThoughtTagCarry = '';
+    while (remaining) {
+      const tag = insideGoogleThought ? '</thought>' : '<thought>';
+      const tagIndex = remaining.indexOf(tag);
+      if (tagIndex >= 0) {
+        const text = remaining.slice(0, tagIndex);
+        if (insideGoogleThought) appendReasoning(text);
+        else appendContent(text);
+        remaining = remaining.slice(tagIndex + tag.length);
+        insideGoogleThought = !insideGoogleThought;
+        continue;
+      }
+
+      let carryLength = 0;
+      const maxCarry = Math.min(tag.length - 1, remaining.length);
+      for (let length = maxCarry; length > 0; length -= 1) {
+        if (tag.startsWith(remaining.slice(-length))) {
+          carryLength = length;
+          break;
+        }
+      }
+      const text = carryLength > 0 ? remaining.slice(0, -carryLength) : remaining;
+      if (insideGoogleThought) appendReasoning(text);
+      else appendContent(text);
+      googleThoughtTagCarry = carryLength > 0 ? remaining.slice(-carryLength) : '';
+      break;
+    }
+  };
   let finalUsage: any = undefined;
   // Temporary storage for tool_calls по index
   const toolCallMap = new Map<number, {
@@ -1030,21 +1102,14 @@ const streamAndAssemble = async (
 
       // 1. Content
       if (typeof delta.content === 'string' && delta.content) {
-        assembledMessage.content += delta.content;
-        if (callbacks?.onToken) {
-          textBuffer += delta.content;
-          scheduleFlush();
-        }
+        if (parseGoogleThoughtTags) splitGoogleThoughtContent(delta.content);
+        else appendContent(delta.content);
       }
 
       // 2. Reasoning (DeepSeek: reasoning_content, OpenRouter: reasoning)
       const reasoningChunk = delta.reasoning_content ?? delta.reasoning;
       if (typeof reasoningChunk === 'string' && reasoningChunk) {
-        assembledMessage.reasoning_content += reasoningChunk;
-        if (callbacks?.onReasoningToken) {
-          reasoningBuffer += reasoningChunk;
-          scheduleFlush();
-        }
+        appendReasoning(reasoningChunk);
       }
 
       // 3. Tool calls — collect by index
@@ -1065,6 +1130,12 @@ const streamAndAssemble = async (
           if (tc.extra_content !== undefined) slot.extra_content = tc.extra_content;
         }
       }
+    }
+
+    if (googleThoughtTagCarry) {
+      if (insideGoogleThought) appendReasoning(googleThoughtTagCarry);
+      else appendContent(googleThoughtTagCarry);
+      googleThoughtTagCarry = '';
     }
 
     // Final flush — flush everything accumulated
