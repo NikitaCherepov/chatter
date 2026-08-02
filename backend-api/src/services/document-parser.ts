@@ -80,10 +80,14 @@ export const parseDocument = async (
     raw = result.value || '';
   } else if (PDF_EXTENSIONS.has(ext)) {
     // pdf-parse — извлекает текст из .pdf
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-    const result = await pdfParse(buffer);
-    raw = result.text || '';
+    const { PDFParse } = await import('pdf-parse');
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    try {
+      const result = await parser.getText();
+      raw = result.text || '';
+    } finally {
+      await parser.destroy();
+    }
   } else {
     // defensive
     throw new Error(`Неподдерживаемый формат документа: .${ext}`);
