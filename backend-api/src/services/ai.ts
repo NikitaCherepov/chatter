@@ -6239,10 +6239,10 @@ export const sendMessageThroughAi = async (
 
   const images = options?.images?.filter(img => img.base64) ?? [];
   const hasImages = images.length > 0;
+  const hasAttachments = Boolean(options?.userAttachments?.length);
   const requestedRegenerateFromHistory = Boolean(options?.regenerateFromHistory);
   let text = (inputText || '').trim();
-  if (!text && !hasImages) throw new Error('empty_text');
-  if (!text) text = hasImages ? (images.length === 1 ? 'What is in this picture?' : `What is in these ${images.length} pictures?`) : '';
+  if (!text && !hasImages && !hasAttachments) throw new Error('empty_text');
   // Фото форсирует PRO-маршрут (минуя LITE-роутер), но не переключает модель на vision-pro/lite.
   // Если основная модель поддерживает vision — фото пойдёт напрямую. Если нет — будет доступен tool describe_image.
   const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!') || hasImages;

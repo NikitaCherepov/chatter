@@ -5737,11 +5737,6 @@ setInterval(() => {
 
 async function handleWsChatSend(client: WsClient, msg: any) {
   const { text, chat_id, images, documents, display_manifest, is_voice, preferred_model, regenerate_hint, regenerate_from_history } = msg;
-  if (!text?.trim()) {
-    client.ws.send(JSON.stringify({ type: 'error', error: 'empty_text' }));
-    return;
-  }
-
   const userId = client.accountId;
 
   // Parse & validate images
@@ -5834,6 +5829,14 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       client.ws.send(JSON.stringify({ type: 'error', error: 'document_parse_failed', detail: err?.message || String(err) }));
       return;
     }
+  }
+
+  // A desktop message may consist only of images or documents. Validate the
+  // request after parsing attachments so an empty text does not reject a
+  // legitimate attachment-only message.
+  if (!`${text || ''}`.trim() && parsedImages.length === 0 && !savedUserAttachments?.length) {
+    client.ws.send(JSON.stringify({ type: 'error', error: 'empty_text' }));
+    return;
   }
 
   const currentClient = wsClients.get(userId);
