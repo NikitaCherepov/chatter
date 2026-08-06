@@ -1,43 +1,95 @@
 {
   "changes": {
     "ru": [
-      "Добавлен инструмент поиска в чате для бота"
+      "Добавлен учёт квот и стоимости вспомогательных AI-вызовов, включая генерацию подсказок, проверку команд, runbooks, макросы и заголовки чатов.",
+      "Исправлен разбор PDF-документов.",
+      "Исправлена отправка изображений и документов без сопроводительного текста.",
+      "Исправлены ссылки на изображения при регенерации сообщений с использованием стабильных URL вместо временных индексов.",
+      "Исправлено немедленное удаление только что загруженных изображений."
     ],
     "en": [
-      "Added search chat tool for bot"
+      "Added quota and cost accounting for auxiliary AI calls, including prompt generation, command reviews, runbooks, macros, and chat titles.",
+      "Fixed PDF document parsing.",
+      "Fixed sending images and documents without accompanying text.",
+      "Fixed image references during message regeneration by using stable URLs instead of temporary indexes.",
+      "Fixed immediate deletion of newly uploaded images."
     ],
     "cs": [
-      "Přidán nástroj pro vyhledávání v chatu pro bota"
+      "Přidáno účtování kvót a nákladů pro pomocná volání AI, včetně generování výzev, revizí příkazů, runbooků, maker a titulků chatu.",
+      "Opraveno parsování PDF dokumentů.",
+      "Opraveno odesílání obrázků a dokumentů bez doprovodného textu.",
+      "Opraveny odkazy na obrázky při regeneraci zpráv pomocí stabilních URL místo dočasných indexů.",
+      "Opraveno okamžité smazání nově nahraných obrázků."
     ],
     "de": [
-      "Such-Chat-Tool für Bot hinzugefügt"
+      "Kontingent- und Kostenabrechnung für zusätzliche KI-Aufrufe hinzugefügt, einschließlich Prompt-Generierung, Befehlsüberprüfungen, Runbooks, Makros und Chat-Titel.",
+      "Fehler beim Parsen von PDF-Dokumenten behoben.",
+      "Fehler beim Senden von Bildern und Dokumenten ohne begleitenden Text behoben.",
+      "Fehler bei Bildreferenzen während der Nachrichtenregenerierung behoben, indem stabile URLs anstelle temporärer Indizes verwendet werden.",
+      "Fehler beim sofortigen Löschen neu hochgeladener Bilder behoben."
     ],
     "es": [
-      "Se añadió la herramienta de búsqueda en el chat para el bot"
+      "Se agregó contabilidad de cuotas y costos para llamadas auxiliares de IA, incluida la generación de indicaciones, revisiones de comandos, runbooks, macros y títulos de chat.",
+      "Se corrigió el análisis de documentos PDF.",
+      "Se corrigió el envío de imágenes y documentos sin texto adjunto.",
+      "Se corrigieron las referencias a imágenes durante la regeneración de mensajes mediante el uso de URL estables en lugar de índices temporales.",
+      "Se corrigió la eliminación inmediata de imágenes recién subidas."
     ],
     "fr": [
-      "Outil de recherche ajouté au chat du bot"
+      "Ajout de la comptabilité des quotas et des coûts pour les appels IA auxiliaires, y compris la génération de prompts, les revues de commandes, les runbooks, les macros et les titres de chat.",
+      "Correction de l'analyse des documents PDF.",
+      "Correction de l'envoi d'images et de documents sans texte d'accompagnement.",
+      "Correction des références d'images lors de la régénération de messages en utilisant des URL stables au lieu d'index temporaires.",
+      "Correction de la suppression immédiate des images nouvellement téléchargées."
     ],
     "it": [
-      "Aggiunto strumento di ricerca chat per il bot"
+      "Aggiunta la contabilità di quota e costi per le chiamate AI ausiliarie, inclusa la generazione di prompt, le revisioni dei comandi, i runbook, le macro e i titoli delle chat.",
+      "Corretta l'analisi dei documenti PDF.",
+      "Corretto l'invio di immagini e documenti senza testo di accompagnamento.",
+      "Corretti i riferimenti alle immagini durante la rigenerazione dei messaggi utilizzando URL stabili invece di indici temporanei.",
+      "Corretta l'eliminazione immediata delle immagini appena caricate."
     ],
     "ja": [
-      "ボット用の検索チャットツールを追加しました"
+      "補助AI呼び出し（プロンプト生成、コマンドレビュー、ランブック、マクロ、チャットタイトルを含む）のクォータとコスト計算を追加しました。",
+      "PDF文書の解析を修正しました。",
+      "テキストを伴わない画像や文書の送信を修正しました。",
+      "一時的なインデックスではなく安定したURLを使用することで、メッセージ再生成時の画像参照を修正しました。",
+      "新しくアップロードされた画像の即時削除を修正しました。"
     ],
     "ko": [
-      "봇을 위한 검색 채팅 도구가 추가되었습니다"
+      "보조 AI 호출에 대한 할당량 및 비용 회계를 추가했습니다(프롬프트 생성, 명령 검토, 런북, 매크로, 채팅 제목 포함).",
+      "PDF 문서 파싱을 수정했습니다.",
+      "텍스트 없이 이미지와 문서를 보내는 문제를 수정했습니다.",
+      "임시 인덱스 대신 안정적인 URL을 사용하여 메시지 재생성 중 이미지 참조를 수정했습니다.",
+      "새로 업로드한 이미지가 즉시 삭제되는 문제를 수정했습니다."
     ],
     "pl": [
-      "Dodano narzędzie wyszukiwania czatu dla bota"
+      "Dodano rozliczanie limitów i kosztów dla pomocniczych wywołań AI, w tym generowania promptów, przeglądów poleceń, runbooków, makr i tytułów czatów.",
+      "Naprawiono analizowanie dokumentów PDF.",
+      "Naprawiono wysyłanie obrazów i dokumentów bez towarzyszącego tekstu.",
+      "Naprawiono odwołania do obrazów podczas regeneracji wiadomości, używając stabilnych adresów URL zamiast tymczasowych indeksów.",
+      "Naprawiono natychmiastowe usuwanie nowo przesłanych obrazów."
     ],
     "pt-BR": [
-      "Ferramenta de pesquisa em chat adicionada para o bot"
+      "Adicionada contabilidade de cota e custo para chamadas auxiliares de IA, incluindo geração de prompts, revisões de comandos, runbooks, macros e títulos de chat.",
+      "Corrigida a análise de documentos PDF.",
+      "Corrigido o envio de imagens e documentos sem texto de acompanhamento.",
+      "Corrigidas as referências de imagens durante a regeneração de mensagens usando URLs estáveis em vez de índices temporários.",
+      "Corrigida a exclusão imediata de imagens recém-carregadas."
     ],
     "tr": [
-      "Bot için arama sohbet aracı eklendi"
+      "Yardımcı yapay zeka çağrıları için kota ve maliyet muhasebesi eklendi: istem oluşturma, komut incelemeleri, runbook'lar, makrolar ve sohbet başlıkları dahil.",
+      "PDF belge ayrıştırma düzeltildi.",
+      "Metin olmadan görsel ve belge gönderme düzeltildi.",
+      "Geçici dizinler yerine kararlı URL'ler kullanılarak mesaj yeniden oluşturma sırasında görsel referansları düzeltildi.",
+      "Yeni yüklenen görsellerin hemen silinmesi düzeltildi."
     ],
     "zh-CN": [
-      "为机器人添加了搜索聊天工具"
+      "为辅助AI调用添加了配额和成本核算，包括提示生成、命令审查、运行手册、宏和聊天标题。",
+      "修复了PDF文档解析。",
+      "修复了发送无附带文本的图片和文档的问题。",
+      "通过使用稳定URL而非临时索引，修复了消息重新生成期间的图片引用问题。",
+      "修复了新上传图片被立即删除的问题。"
     ]
   }
 }
