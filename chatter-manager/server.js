@@ -737,16 +737,20 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000) {
       env: { ...process.env, BACKEND_ENV_FILE, TELEGRAM_ENV_FILE, VOICE_ENV_FILE },
       stdio: ['ignore', 'pipe', 'pipe']
     });
-    let output = '';
-    const append = (chunk) => { output += chunk.toString(); if (output.length > 20000) output = output.slice(-20000); };
-    child.stdout.on('data', append);
-    child.stderr.on('data', append);
+    let stdout = '';
+    let stderr = '';
+    const append = (current, chunk) => {
+      const next = current + chunk.toString();
+      return next.length > 20000 ? next.slice(-20000) : next;
+    };
+    child.stdout.on('data', (chunk) => { stdout = append(stdout, chunk); });
+    child.stderr.on('data', (chunk) => { stderr = append(stderr, chunk); });
     const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('Docker operation timed out')); }, timeoutMs);
     child.on('error', (error) => { clearTimeout(timer); reject(error); });
     child.on('close', (code) => {
       clearTimeout(timer);
-      if (code === 0) resolve(output.trim());
-      else reject(new Error(output.trim() || `docker exited with code ${code}`));
+      if (code === 0) resolve(stdout.trim());
+      else reject(new Error([stderr.trim(), stdout.trim()].filter(Boolean).join('\n') || `docker exited with code ${code}`));
     });
   });
 }
@@ -1482,7 +1486,13 @@ async function getServiceStatus() {
     let rows;
     try { rows = JSON.parse(output); if (!Array.isArray(rows)) rows = [rows]; }
     catch { rows = output.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)); }
-    return rows.map((row) => ({ service: row.Service || '', name: row.Name || '', state: row.State || '', health: row.Health || '', status: row.Status || '' }));
+    return rows.map((row) => ({
+      service: row.Service || row.service || '',
+      name: row.Name || row.name || '',
+      state: row.State || row.state || '',
+      health: row.Health || row.health || '',
+      status: row.Status || row.status || ''
+    }));
   } catch (error) {
     return [{ service: 'docker', state: 'error', status: error.message }];
   }
