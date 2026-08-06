@@ -165,6 +165,14 @@ export class ApiError extends Error {
   }
 }
 
+/** Prefer a localized message returned by the backend, then fall back to UI text. */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && typeof error.body?.message === 'string' && error.body.message.trim()) {
+    return error.body.message.trim();
+  }
+  return fallback;
+}
+
 // ---------- Auth ----------
 
 export type AuthResponse = Tokens & { user: User };

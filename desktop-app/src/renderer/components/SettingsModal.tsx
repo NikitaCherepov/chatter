@@ -863,7 +863,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
       setAiGenerated(res.generated_prompt);
     } catch (err) {
       console.error('AI prompt generation failed:', err);
-      toast.error(t('settings.toasts.promptGenerateFailed'));
+      toast.error(api.getApiErrorMessage(err, t('settings.toasts.promptGenerateFailed')));
     } finally {
       setAiGenerating(false);
     }

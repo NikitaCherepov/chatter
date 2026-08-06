@@ -3740,8 +3740,8 @@ export function ChatPage() {
                             body: JSON.stringify({ commands: [conf.command] }),
                           });
                           setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
-                        } catch {
-                          toast.error(t('chat.toasts.commandReviewFailed'));
+                        } catch (err) {
+                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandReviewFailed')));
                           setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
                         }
                       }}
@@ -3865,8 +3865,8 @@ export function ChatPage() {
                             body: JSON.stringify({ commands: [conf.command] }),
                           });
                           setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
-                        } catch {
-                          toast.error(t('chat.toasts.commandReviewFailed'));
+                        } catch (err) {
+                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandReviewFailed')));
                           setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
                         }
                       }}
@@ -4268,8 +4268,8 @@ export function ChatPage() {
                             body: JSON.stringify({ commands: rb.commands }),
                           });
                           setPendingRunbooks(prev => prev.map((r, i) => i === rbIdx ? { ...r, _reviewing: false, _verdict: res.verdict } : r));
-                        } catch {
-                          toast.error(t('chat.toasts.commandsReviewFailed'));
+                        } catch (err) {
+                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandsReviewFailed')));
                           setPendingRunbooks(prev => prev.map((r, i) => i === rbIdx ? { ...r, _reviewing: false } : r));
                         }
                       }}

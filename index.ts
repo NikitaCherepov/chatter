@@ -4994,13 +4994,14 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
                     `${BACKEND_API_BASE_URL}/internal/ai/lite`,
                     {
                         text: ctx.t('confirmations.reviewPcPrompt', { command: cmd }),
+                        user_id: ctx.state.accountId,
                     },
                     { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 30000 }
                 );
                 const verdict = liteResp.data?.reply_text || liteResp.data?.text || ctx.t('confirmations.noResponse');
                 await ctx.reply(ctx.t('confirmations.reviewResult', { verdict }));
             } catch (err: any) {
-                const msg = err?.message || ctx.t('confirmations.error');
+                const msg = err?.response?.data?.message || err?.message || ctx.t('confirmations.error');
                 await ctx.reply(ctx.t('confirmations.reviewFailed', { error: msg })).catch(() => {});
             }
         })();
@@ -5378,7 +5379,7 @@ bot.action(/^devops:review:(.+)$/, async (ctx) => {
             const verdict = liteResp.data?.reply_text || liteResp.data?.text || ctx.t('confirmations.noResponse');
             await ctx.reply(ctx.t('confirmations.reviewResult', { verdict }));
         } catch (err: any) {
-            const msg = err?.message || ctx.t('confirmations.error');
+            const msg = err?.response?.data?.message || err?.message || ctx.t('confirmations.error');
             await ctx.reply(ctx.t('confirmations.reviewFailed', { error: msg })).catch(() => {});
         }
     })();

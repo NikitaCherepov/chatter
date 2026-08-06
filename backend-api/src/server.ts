@@ -12,7 +12,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, cl
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -2382,6 +2382,7 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
       console.warn(`[prompts/generate] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
     }
 
+    ensureUtilityAiQuota(userId, manualModel?.id || null, 'pro');
     const result = await runCompletion('pro', {
       messages: [
         { role: 'system', content: systemPrompt },
@@ -2389,6 +2390,11 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
       ],
       max_tokens: 25000,
     }, manualModel);
+    chargeUtilityAiCompletion({
+      userId,
+      route: 'utility:prompt-generation',
+      preferredModelId: manualModel?.id || null,
+    }, result);
     console.log('[prompts/generate] completion route', {
       usedProvider: result.usedProvider,
       usedModel: result.usedModel,
@@ -2403,8 +2409,11 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
       return res.status(500).json({ error: 'empty_ai_response' });
     }
     return res.json({ generated_prompt: generated.trim() });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[prompts/generate]', formatSafeError(err));
+    if (err?.message === 'quota_exceeded') {
+      return res.status(429).json(buildLocalizedAiError(err, userId));
+    }
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -4456,9 +4465,10 @@ app.delete('/api/v1/macros/:id', (req: AuthedRequest, res: any) => {
   return res.json({ ok: true });
 });
 
-// ─── Macro helpers (lightweight AI, no DB) ────────────────────────────────────
+// ─── Macro helpers (lightweight AI, usage charged to the current user) ────────
 
 app.post('/api/v1/macro/explain', async (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
   const commands: unknown = req.body?.commands;
   if (!Array.isArray(commands) || commands.length === 0 || commands.some(c => typeof c !== 'string')) {
     return res.status(400).json({ error: 'commands_required_array_of_strings' });
@@ -4467,16 +4477,21 @@ app.post('/api/v1/macro/explain', async (req: AuthedRequest, res) => {
   try {
     const text = await callLiteAi(
       'Ты — системный администратор. Кратко (2-4 предложения) объясни, что делает этот набор команд в консоли Windows/Linux. Отвечай на русском, без лишних вводных слов.',
-      commands.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')
+      commands.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n'),
+      { accounting: { userId, route: 'utility:macro-explain' } }
     );
     return res.json({ explanation: text });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[macro/explain]', formatSafeError(err));
+    if (err?.message === 'quota_exceeded') {
+      return res.status(429).json(buildLocalizedAiError(err, userId));
+    }
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
 
 app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
   const commands: unknown = req.body?.commands;
   if (!Array.isArray(commands) || commands.length === 0 || commands.some(c => typeof c !== 'string')) {
     return res.status(400).json({ error: 'commands_required_array_of_strings' });
@@ -4493,7 +4508,8 @@ app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
 
     const raw = await callLiteAi(
       'Ты — системный администратор. Придумай короткое, ёмкое название (до 5 слов) и описание (1-2 предложения) для этого скрипта. Ответь СТРОГО JSON-объектом: { "title": "...", "description": "..." }. Без markdown, без пояснений, только JSON.',
-      `${commandList}${currentInfo}`
+      `${commandList}${currentInfo}`,
+      { accounting: { userId, route: 'utility:macro-describe' } }
     );
 
     // Try to extract JSON from the response (AI might wrap it in ```json ... ```)
@@ -4509,8 +4525,11 @@ app.post('/api/v1/macro/describe', async (req: AuthedRequest, res) => {
       title: parsed.title || '',
       description: parsed.description || ''
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[macro/describe]', formatSafeError(err));
+    if (err?.message === 'quota_exceeded') {
+      return res.status(429).json(buildLocalizedAiError(err, userId));
+    }
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -4850,7 +4869,8 @@ app.post('/api/v1/devops/runbooks/extract-commands', async (req: AuthedRequest, 
   try {
     const text = await callLiteAi(
       'Ты — системный администратор. Извлеки все shell-команды из текста инструкции. Верни СТРОГО JSON-массив строк: ["command1", "command2"]. Без markdown, без пояснений, только JSON. Каждая команда — готовая к выполнению в терминале Linux.',
-      content
+      content,
+      { accounting: { userId, route: 'utility:runbook-extract' } }
     );
     try {
       const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -4859,8 +4879,11 @@ app.post('/api/v1/devops/runbooks/extract-commands', async (req: AuthedRequest, 
     } catch {
       return res.json({ commands: [] });
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('[runbooks/extract-commands]', formatSafeError(err));
+    if (err?.message === 'quota_exceeded') {
+      return res.status(429).json(buildLocalizedAiError(err, userId));
+    }
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -4880,11 +4903,15 @@ app.post('/api/v1/devops/runbooks/review-commands', async (req: AuthedRequest, r
     const systemPrompt = translateForLanguage(user?.language, 'confirmations.reviewCommandsSystem', { language: normalizeSupportedLanguage(user?.language) || 'English' });
     const verdict = await callLiteAi(
       systemPrompt,
-      cmdList
+      cmdList,
+      { accounting: { userId, route: 'utility:command-review' } }
     );
     return res.json({ verdict });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[runbooks/review-commands]', formatSafeError(err));
+    if (err?.message === 'quota_exceeded') {
+      return res.status(429).json(buildLocalizedAiError(err, userId));
+    }
     return res.status(500).json({ error: 'ai_call_failed' });
   }
 });
@@ -5362,19 +5389,31 @@ app.post('/internal/ai/lite', internalAuth, async (req, res) => {
     const systemPrompt = translateForLanguage(user?.language, 'confirmations.reviewSshSystem');
     const userPrompt = translateForLanguage(user?.language, 'confirmations.reviewSshPrompt', { command: command.trim(), language: normalizeSupportedLanguage(user?.language) || 'English' });
     try {
-      const reply = await callLiteAi(systemPrompt, userPrompt);
+      const reply = await callLiteAi(systemPrompt, userPrompt, {
+        accounting: { userId, route: 'utility:command-review' },
+      });
       return res.json({ reply_text: reply });
     } catch (err: any) {
+      if (err?.message === 'quota_exceeded') {
+        return res.status(429).json(buildLocalizedAiError(err, userId));
+      }
       return res.status(500).json({ error: 'lite_ai_failed', details: err?.message });
     }
   }
 
   if (!text.trim()) return res.status(400).json({ error: 'empty_text' });
 
+  const userId = resolveInternalAccountId(req.body?.user_id);
   try {
-    const reply = await callLiteAi('Ты — эксперт по безопасности. Ответь кратко.', text);
+    const accounting = Number.isSafeInteger(userId) && userId > 0
+      ? { userId, route: 'utility:command-review' }
+      : undefined;
+    const reply = await callLiteAi('Ты — эксперт по безопасности. Ответь кратко.', text, { accounting });
     return res.json({ reply_text: reply });
   } catch (err: any) {
+    if (err?.message === 'quota_exceeded' && Number.isSafeInteger(userId) && userId > 0) {
+      return res.status(429).json(buildLocalizedAiError(err, userId));
+    }
     return res.status(500).json({ error: 'lite_ai_failed', details: err?.message });
   }
 });

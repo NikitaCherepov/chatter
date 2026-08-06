@@ -187,8 +187,8 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
       } else {
         toast.info(t('advanced.runbook.noCommandsFound'));
       }
-    } catch {
-      toast.error(t('advanced.runbook.extractFailed'));
+    } catch (err) {
+      toast.error(api.getApiErrorMessage(err, t('advanced.runbook.extractFailed')));
     } finally {
       setExtracting(false);
     }
@@ -315,8 +315,8 @@ export function RunbookSettings({ isAdmin = 0 }: { isAdmin?: number }) {
         body: JSON.stringify({ commands }),
       });
       setReviewResult(res.verdict);
-    } catch {
-      toast.error(t('advanced.runbook.reviewFailed'));
+    } catch (err) {
+      toast.error(api.getApiErrorMessage(err, t('advanced.runbook.reviewFailed')));
     } finally {
       setReviewingId(null);
     }

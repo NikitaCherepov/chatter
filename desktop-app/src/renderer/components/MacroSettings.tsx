@@ -183,7 +183,7 @@ export function MacroSettings({ onChange }: Props) {
       });
       setExplainResult(res.explanation);
     } catch (err) {
-      toast.error(t('advanced.macros.explainFailed'));
+      toast.error(api.getApiErrorMessage(err, t('advanced.macros.explainFailed')));
       console.error(err);
     } finally {
       setExplaining(null);
@@ -207,7 +207,7 @@ export function MacroSettings({ onChange }: Props) {
       fetchMacros();
       toast.success(t('advanced.macros.descriptionUpdated'));
     } catch (err) {
-      toast.error(t('advanced.macros.descriptionFailed'));
+      toast.error(api.getApiErrorMessage(err, t('advanced.macros.descriptionFailed')));
       console.error(err);
     } finally {
       setDescribing(null);

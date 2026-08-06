@@ -1377,12 +1377,100 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
   throw Object.assign(new Error('lite_providers_failed'), { failedProviders, failedModels });
 };
 
+type UtilityAiAccounting = {
+  userId: number;
+  route: string;
+  /** Model selected before the request. Used to let explicitly free models bypass an exhausted quota. */
+  preferredModelId?: string | null;
+};
+
+const getPrimaryAutoModelId = (mode: 'pro' | 'lite'): string | null => {
+  const providers = mode === 'pro' ? PRO_PROVIDERS : LITE_PROVIDERS;
+  const provider = providers[0];
+  if (provider) return provider.uniqueIds[0] || provider.modelChain[0] || null;
+  if (mode === 'pro' && PRO_MODEL_CHAIN[0]) return `pro-${slugifyModelId(PRO_MODEL_CHAIN[0])}-0-0`;
+  return null;
+};
+
+/** Checks a utility AI request against the same weekly quota as the main chat. */
+export const ensureUtilityAiQuota = (
+  userId: number,
+  preferredModelId?: string | null,
+  mode: 'pro' | 'lite' = 'lite',
+) => {
+  const user = getUserById(userId);
+  if (!user) throw new Error('user_not_found');
+
+  const quotaModelId = preferredModelId || getPrimaryAutoModelId(mode);
+  if (quotaModelId && isModelFree(quotaModelId)) return;
+
+  const quota = checkQuota(userId, user.is_admin === 1, getPlanLimits(user.plan).billing_mode);
+  if (quota.ok) return;
+
+  const err = new Error('quota_exceeded') as Error & {
+    code?: string;
+    quota?: number;
+    used?: number;
+    resetsAt?: number;
+  };
+  err.code = 'quota_exceeded';
+  err.quota = quota.quota;
+  err.used = quota.used;
+  err.resetsAt = (quota as { resetsAt: number }).resetsAt;
+  throw err;
+};
+
+/** Records one utility completion in the common user_token_usage ledger. */
+export const chargeUtilityAiCompletion = (
+  accounting: UtilityAiAccounting,
+  completion: {
+    response?: any;
+    usedModel?: string | null;
+    usedProvider?: string | null;
+    usedUniqueId?: string | null;
+    modelUsed?: string | null;
+    providerUsed?: string | null;
+    uniqueIdUsed?: string | null;
+    upstreamProviderSlug?: string | null;
+    actualCostUsd?: number | null;
+  },
+) => {
+  const usage = normalizeTokenUsage(completion.response?.usage);
+  if (usage.total_tokens <= 0) return;
+
+  const modelName = completion.usedModel || completion.modelUsed || null;
+  const providerName = completion.usedProvider || completion.providerUsed || null;
+  const modelId = completion.usedUniqueId || completion.uniqueIdUsed || modelName || accounting.preferredModelId || null;
+  chargeTokens({
+    userId: accounting.userId,
+    route: accounting.route,
+    modelId,
+    modelName,
+    providerName,
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    cacheHitTokens: usage.cache_hit_tokens,
+    cacheMissTokens: usage.cache_miss_tokens,
+    reasoningTokens: usage.reasoning_tokens,
+    totalTokens: usage.total_tokens,
+    upstreamProviderSlug: completion.upstreamProviderSlug ?? null,
+    actualCostUsd: completion.actualCostUsd ?? null,
+  });
+};
+
 /**
- * Lightweight AI call — single-turn, no tools, no DB, no streaming.
- * Uses LITE providers for speed. Returns the text content of the first choice.
+ * Lightweight AI call — single-turn, no tools and no streaming.
+ * When accounting is supplied, checks and charges the user's common quota.
  */
-export const callLiteAi = async (systemPrompt: string, userPrompt: string, options?: { max_tokens?: number }): Promise<string> => {
+export const callLiteAi = async (
+  systemPrompt: string,
+  userPrompt: string,
+  options?: { max_tokens?: number; accounting?: UtilityAiAccounting },
+): Promise<string> => {
   const maxTokens = options?.max_tokens ?? 4096;
+  if (options?.accounting) {
+    ensureUtilityAiQuota(options.accounting.userId, options.accounting.preferredModelId, 'lite');
+  }
   const requestBody: Record<string, unknown> = {
     messages: [
       { role: 'system', content: systemPrompt },
@@ -1393,6 +1481,7 @@ export const callLiteAi = async (systemPrompt: string, userPrompt: string, optio
   };
 
   const meta = await createCompletionWithLiteProviderFallback(requestBody, undefined, 'none');
+  if (options?.accounting) chargeUtilityAiCompletion(options.accounting, meta);
   const msg = meta.response?.choices?.[0]?.message;
   const content = msg?.content;
   if (typeof content !== 'string' || !content.trim()) {
@@ -6635,7 +6724,10 @@ export const sendMessageThroughAi = async (
         + 'Output NOTHING except the raw title itself — no quotes, no markdown, no explanations, no extra text. '
         + `Write the title in the user's language (${user.language || 'en'}).`,
         userTextForHistory.trim().slice(0, 500),
-        { max_tokens: 64 }
+        {
+          max_tokens: 64,
+          accounting: { userId, route: 'utility:chat-title' },
+        }
       ).then(raw => raw
         .split(/\r?\n/, 1)[0]
         .replace(/^["'«»]+|["'«»]+$/g, '')
