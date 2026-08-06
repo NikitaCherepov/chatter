@@ -2114,6 +2114,14 @@ export function ChatPage() {
           streamAppenderRef.current.flushNow();
           setStreamingState('done');
           setStreamingMsgId(null);
+          const responseMetadata = {
+            prompt_name: res.prompt_name ?? null,
+            model_name: res.model_name ?? null,
+            provider_name: res.provider_name ?? null,
+            usage: res.message_usage ?? null,
+            ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
+            ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}),
+          };
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
@@ -2128,6 +2136,7 @@ export function ChatPage() {
                       reasoning_content: res.reasoning_content ?? null,
                       tool_calls: res.tool_calls ?? null,
                       subagents: res.subagents ?? null,
+                      ...responseMetadata,
                     };
                   }
                   return m;
@@ -2140,6 +2149,7 @@ export function ChatPage() {
                   reasoning_content: res.reasoning_content ?? null,
                   tool_calls: res.tool_calls ?? null,
                   subagents: res.subagents ?? null,
+                  ...responseMetadata,
                 }]);
               }
             } else if (assistantMsgCreatedRef.current) {
@@ -2166,7 +2176,7 @@ export function ChatPage() {
           if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}), ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}), ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, subagents: res.subagents ?? null, ...(genImages ? { images: genImages } : {}), ...responseMetadata }
                 : m
             ));
           } else {
@@ -2174,14 +2184,15 @@ export function ChatPage() {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
               reasoning_content: res.reasoning_content ?? null,
               tool_calls: res.tool_calls ?? null,
+              subagents: res.subagents ?? null,
               images: genImages,
-              ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
-              ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
+              ...responseMetadata,
             }]);
           }
           setShowTyping(false);
           setSending(false);
           if (res.display_state) applyAvatarState(res.display_state);
+          refreshContextTokens(res.chat_id);
         },
         onError: (err, message) => {
           console.error('Regenerate error:', err);
@@ -2284,6 +2295,14 @@ export function ChatPage() {
           streamAppenderRef.current.flushNow();
           setStreamingState('done');
           setStreamingMsgId(null);
+          const responseMetadata = {
+            prompt_name: res.prompt_name ?? null,
+            model_name: res.model_name ?? null,
+            provider_name: res.provider_name ?? null,
+            usage: res.message_usage ?? null,
+            ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
+            ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}),
+          };
           // Fallback: если событие dice_roll потерялось, используем done-поле (только если ещё крутится)
           if (typeof res.dice_roll === 'number' && diceRolling) finishDiceRoll(res.dice_roll);
           if (res.aborted) {
@@ -2298,6 +2317,7 @@ export function ChatPage() {
                       reasoning_content: res.reasoning_content ?? null,
                       tool_calls: res.tool_calls ?? null,
                       subagents: res.subagents ?? null,
+                      ...responseMetadata,
                     };
                   }
                   return m;
@@ -2310,6 +2330,7 @@ export function ChatPage() {
                   reasoning_content: res.reasoning_content ?? null,
                   tool_calls: res.tool_calls ?? null,
                   subagents: res.subagents ?? null,
+                  ...responseMetadata,
                 }]);
               }
             } else if (assistantMsgCreatedRef.current) {
@@ -2336,7 +2357,7 @@ export function ChatPage() {
           if (assistantMsgCreatedRef.current) {
             setMessages((prev) => prev.map(m =>
               m.id === tempAssistantId
-                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, ...(genImages ? { images: genImages } : {}), ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}), ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}) }
+                ? { ...m, id: res.message_id, ...(res.reply_text ? { content: res.reply_text } : {}), reasoning_content: res.reasoning_content ?? null, tool_calls: res.tool_calls ?? null, subagents: res.subagents ?? null, ...(genImages ? { images: genImages } : {}), ...responseMetadata }
                 : m
             ));
           } else {
@@ -2344,14 +2365,15 @@ export function ChatPage() {
               id: res.message_id, role: 'assistant', content: res.reply_text, created_at: Math.floor(Date.now() / 1000),
               reasoning_content: res.reasoning_content ?? null,
               tool_calls: res.tool_calls ?? null,
+              subagents: res.subagents ?? null,
               images: genImages,
-              ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
-              ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {})
+              ...responseMetadata,
             }]);
           }
           setShowTyping(false);
           setSending(false);
           if (res.display_state) applyAvatarState(res.display_state);
+          refreshContextTokens(res.chat_id);
         },
         onError: (err) => {
           console.error('Regenerate with hint error:', err);
