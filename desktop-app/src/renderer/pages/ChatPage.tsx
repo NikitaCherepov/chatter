@@ -9,7 +9,7 @@ import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
-import { AttachModal } from '../components/AttachModal';
+import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
 import { RejectWithComment } from '../components/RejectWithComment';
 import { FileEditDiff } from '../components/FileEditDiff/FileEditDiff';
 import type { ImageItem, DocumentItem } from '../components/AttachModal';
@@ -658,6 +658,7 @@ export function ChatPage() {
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [attachedDocuments, setAttachedDocuments] = useState<DocumentItem[]>([]);
+  const [draggingFiles, setDraggingFiles] = useState(false);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -1726,6 +1727,47 @@ export function ChatPage() {
       startRecording();
     }
   }, [isRecording, startRecording, stopRecording]);
+
+  useEffect(() => {
+    const containsFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+    const handleWindowDragOver = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    };
+    const clearWindowDrag = (event: DragEvent) => {
+      if (containsFiles(event)) event.preventDefault();
+      setDraggingFiles(false);
+    };
+
+    window.addEventListener('dragover', handleWindowDragOver);
+    window.addEventListener('drop', clearWindowDrag);
+    window.addEventListener('dragend', clearWindowDrag);
+    return () => {
+      window.removeEventListener('dragover', handleWindowDragOver);
+      window.removeEventListener('drop', clearWindowDrag);
+      window.removeEventListener('dragend', clearWindowDrag);
+    };
+  }, []);
+
+  const handleDroppedFiles = useCallback(async (files: FileList) => {
+    if (sending || files.length === 0) return;
+    const result = await prepareAttachmentFiles(files, {
+      currentImageCount: attachedImages.length,
+      maxImageCount,
+      currentImageBytes: attachedImageBytes,
+      maxTotalImageBytes: maxImageBytes,
+    });
+    if (result.images.length > 0) {
+      setAttachedImages((prev) => [...prev, ...result.images]);
+    }
+    if (result.documents.length > 0) {
+      setAttachedDocuments((prev) => [...prev, ...result.documents]);
+    }
+    if (result.error) {
+      toast.error(t(result.error.key, result.error.values));
+    }
+  }, [attachedImageBytes, attachedImages.length, maxImageBytes, maxImageCount, sending, t]);
 
   // Ctrl+V / paste handler for images
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
@@ -4477,17 +4519,53 @@ export function ChatPage() {
                 </svg>
               )}
 
-              <textarea
-                ref={textareaRef}
-                className={s.textarea}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                placeholder={t('chat.composer.placeholder')}
-                rows={1}
-                disabled={sending}
-              />
+              <div
+                className={s.composerInputSlot}
+                onDragEnter={(event) => {
+                  if (!Array.from(event.dataTransfer.types).includes('Files') || sending) return;
+                  event.preventDefault();
+                  setDraggingFiles(true);
+                }}
+                onDragOver={(event) => {
+                  if (!Array.from(event.dataTransfer.types).includes('Files') || sending) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'copy';
+                  setDraggingFiles(true);
+                }}
+                onDragLeave={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  if (event.clientX <= rect.left || event.clientX >= rect.right || event.clientY <= rect.top || event.clientY >= rect.bottom) {
+                    setDraggingFiles(false);
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setDraggingFiles(false);
+                  void handleDroppedFiles(event.dataTransfer.files);
+                }}
+              >
+                <textarea
+                  ref={textareaRef}
+                  className={s.textarea}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  placeholder={t('chat.composer.placeholder')}
+                  rows={1}
+                  disabled={sending}
+                />
+                {draggingFiles && !sending && (
+                  <div className={s.composerDropTarget}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14" />
+                      <path d="m19 12-7 7-7-7" />
+                    </svg>
+                    <span>{t('attach.drop')}</span>
+                  </div>
+                )}
+              </div>
 
               {sending ? (
                 <svg

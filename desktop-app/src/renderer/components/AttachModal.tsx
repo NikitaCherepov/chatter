@@ -58,6 +58,78 @@ export type DocumentItem = {
   size_bytes: number;
 };
 
+export type AttachmentProcessingError = {
+  key: string;
+  values?: Record<string, string | number>;
+};
+
+export async function prepareAttachmentFiles(
+  files: FileList | File[],
+  options: {
+    currentImageCount: number;
+    maxImageCount: number;
+    currentImageBytes: number;
+    maxTotalImageBytes: number;
+  },
+): Promise<{
+  images: ImageItem[];
+  documents: DocumentItem[];
+  error?: AttachmentProcessingError;
+}> {
+  const images: ImageItem[] = [];
+  const documents: DocumentItem[] = [];
+  let error: AttachmentProcessingError | undefined;
+
+  for (const file of Array.from(files)) {
+    if (ALLOWED_IMAGE_FORMATS.includes(file.type)) {
+      if (options.currentImageCount + images.length >= options.maxImageCount) {
+        error = { key: 'attach.error.imageLimit', values: { count: options.maxImageCount } };
+        break;
+      }
+      try {
+        const prepared = await prepareImageForUpload(file);
+        const pendingBytes = images.reduce((sum, image) => sum + image.size_bytes, 0);
+        if (options.currentImageBytes + pendingBytes + prepared.size_bytes > options.maxTotalImageBytes) {
+          URL.revokeObjectURL(prepared.preview);
+          error = {
+            key: 'attach.error.imageTotalTooLarge',
+            values: { size: formatSize(options.maxTotalImageBytes) },
+          };
+          continue;
+        }
+        images.push(prepared);
+      } catch {
+        error = { key: 'attach.error.imagePrepare', values: { name: file.name } };
+      }
+      continue;
+    }
+
+    const ext = getExt(file.name);
+    if (ALLOWED_DOC_EXTENSIONS.includes(ext)) {
+      if (file.size > MAX_DOC_SIZE) {
+        error = { key: 'attach.error.documentTooLarge', values: { name: file.name } };
+        continue;
+      }
+      try {
+        const base64 = await fileToBase64(file);
+        documents.push({
+          file,
+          base64: base64.split(',')[1] || base64,
+          filename: file.name,
+          size_bytes: file.size,
+        });
+      } catch {
+        error = { key: 'attach.error.read', values: { name: file.name } };
+      }
+      continue;
+    }
+
+    error = { key: 'attach.error.unsupported', values: { name: file.name } };
+  }
+
+  return { images, documents, error };
+}
+
 type Props = {
   onClose: () => void;
   onAttach: (items: { images: ImageItem[]; documents: DocumentItem[] }) => void;
@@ -110,65 +182,21 @@ export function AttachModal({
 
   const processFiles = async (files: FileList | File[]) => {
     setError('');
-    const validImages: ImageItem[] = [];
-    const validDocs: DocumentItem[] = [];
-    const fileArr = Array.from(files);
+    const result = await prepareAttachmentFiles(files, {
+      currentImageCount: currentImageCount + images.length,
+      maxImageCount,
+      currentImageBytes: currentImageBytes + images.reduce((sum, image) => sum + image.size_bytes, 0),
+      maxTotalImageBytes,
+    });
 
-    for (const file of fileArr) {
-      // Try image first
-      if (ALLOWED_IMAGE_FORMATS.includes(file.type)) {
-        if (currentImageCount + images.length + validImages.length >= maxImageCount) {
-          setError(t('attach.error.imageLimit', { count: maxImageCount }));
-          break;
-        }
-        try {
-          const prepared = await prepareImageForUpload(file);
-          const pendingBytes = images.reduce((sum, image) => sum + image.size_bytes, 0)
-            + validImages.reduce((sum, image) => sum + image.size_bytes, 0);
-          if (currentImageBytes + pendingBytes + prepared.size_bytes > maxTotalImageBytes) {
-            URL.revokeObjectURL(prepared.preview);
-            setError(t('attach.error.imageTotalTooLarge', {
-              size: formatSize(maxTotalImageBytes),
-            }));
-            continue;
-          }
-          validImages.push(prepared);
-        } catch {
-          setError(t('attach.error.imagePrepare', { name: file.name }));
-        }
-        continue;
-      }
-
-      // Try document
-      const ext = getExt(file.name);
-      if (ALLOWED_DOC_EXTENSIONS.includes(ext)) {
-        if (file.size > MAX_DOC_SIZE) {
-          setError(t('attach.error.documentTooLarge', { name: file.name }));
-          continue;
-        }
-        try {
-          const base64 = await fileToBase64(file);
-          validDocs.push({
-            file,
-            base64: base64.split(',')[1] || base64,
-            filename: file.name,
-            size_bytes: file.size,
-          });
-        } catch {
-          setError(t('attach.error.read', { name: file.name }));
-        }
-        continue;
-      }
-
-      // Neither image nor document
-      setError(t('attach.error.unsupported', { name: file.name }));
+    if (result.images.length > 0) {
+      setImages((prev) => [...prev, ...result.images]);
     }
-
-    if (validImages.length > 0) {
-      setImages((prev) => [...prev, ...validImages]);
+    if (result.documents.length > 0) {
+      setDocuments((prev) => [...prev, ...result.documents]);
     }
-    if (validDocs.length > 0) {
-      setDocuments((prev) => [...prev, ...validDocs]);
+    if (result.error) {
+      setError(t(result.error.key, result.error.values));
     }
   };
 
