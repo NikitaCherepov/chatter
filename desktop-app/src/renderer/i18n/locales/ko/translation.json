@@ -760,7 +760,8 @@
       "reviewing": "검토 중...",
       "review": "검토",
       "pcCommand": "PC 명령",
-      "newPassword": "새 비밀번호"
+      "newPassword": "새 비밀번호",
+      "executing": "실행 중..."
     },
     "file": {
       "appendMarker": "(추가)",

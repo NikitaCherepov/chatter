@@ -760,7 +760,8 @@
       "reviewing": "Kontroluji...",
       "review": "Zkontrolovat",
       "pcCommand": "Příkaz PC",
-      "newPassword": "Nové heslo"
+      "newPassword": "Nové heslo",
+      "executing": "Provádím..."
     },
     "file": {
       "appendMarker": "(připojit)",

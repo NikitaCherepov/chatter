@@ -448,7 +448,8 @@
       "reviewing": "Prüfe...",
       "review": "Prüfen",
       "pcCommand": "PC-Befehl",
-      "newPassword": "Neues Passwort"
+      "newPassword": "Neues Passwort",
+      "executing": "Wird ausgeführt..."
     },
     "file": {
       "appendMarker": "(Anhängen)",

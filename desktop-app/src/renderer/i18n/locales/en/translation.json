@@ -464,6 +464,7 @@
       "saveSudoPassword": "Save the sudo password in server settings",
       "allow": "Allow",
       "alwaysAllow": "Always allow",
+      "executing": "Executing...",
       "reviewing": "Reviewing...",
       "review": "Review",
       "pcCommand": "PC command",

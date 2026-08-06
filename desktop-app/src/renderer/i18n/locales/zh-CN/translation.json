@@ -448,7 +448,8 @@
       "reviewing": "正在检查...",
       "review": "检查",
       "pcCommand": "PC命令",
-      "newPassword": "新密码"
+      "newPassword": "新密码",
+      "executing": "正在执行..."
     },
     "file": {
       "appendMarker": "(追加)",

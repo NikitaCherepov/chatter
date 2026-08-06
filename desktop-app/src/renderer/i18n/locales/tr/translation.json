@@ -760,7 +760,8 @@
       "reviewing": "İnceleniyor...",
       "review": "İncele",
       "pcCommand": "PC komutu",
-      "newPassword": "Yeni şifre"
+      "newPassword": "Yeni şifre",
+      "executing": "Yürütülüyor..."
     },
     "file": {
       "appendMarker": "(ekle)",

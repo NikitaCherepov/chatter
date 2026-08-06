@@ -448,7 +448,8 @@
       "reviewing": "Revisando...",
       "review": "Revisar",
       "pcCommand": "Comando en PC",
-      "newPassword": "Nueva contraseña"
+      "newPassword": "Nueva contraseña",
+      "executing": "Ejecutando..."
     },
     "file": {
       "appendMarker": "(añadiendo)",

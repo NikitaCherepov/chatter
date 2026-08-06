@@ -760,7 +760,8 @@
       "reviewing": "Verifico...",
       "review": "Verifica",
       "pcCommand": "Comando su PC",
-      "newPassword": "Nuova password"
+      "newPassword": "Nuova password",
+      "executing": "Esecuzione in corso..."
     },
     "file": {
       "appendMarker": "(aggiunta)",

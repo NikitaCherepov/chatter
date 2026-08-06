@@ -467,7 +467,8 @@
       "reviewing": "Проверяю...",
       "review": "Проверить",
       "pcCommand": "Команда на ПК",
-      "newPassword": "Новый пароль"
+      "newPassword": "Новый пароль",
+      "executing": "Выполняется..."
     },
     "file": {
       "appendMarker": "(добавление)",

@@ -448,7 +448,8 @@
       "reviewing": "Vérification...",
       "review": "Vérifier",
       "pcCommand": "Commande sur PC",
-      "newPassword": "Nouveau mot de passe"
+      "newPassword": "Nouveau mot de passe",
+      "executing": "Exécution..."
     },
     "file": {
       "appendMarker": "(ajout)",

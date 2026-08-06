@@ -706,6 +706,8 @@ export function ChatPage() {
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
+  const confirmationSubmissionsRef = useRef(new Set<string>());
+  const [submittingConfirmationIds, setSubmittingConfirmationIds] = useState<Set<string>>(new Set());
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
   const [editFileLinesConfirmations, setEditFileLinesConfirmations] = useState<Array<{ confirmation_id: string; file_path: string; start_line: number; end_line: number; old_content_preview?: string; new_content_preview?: string }>>([]);
   const autoApprovingFileIdsRef = useRef(new Set<string>());
@@ -749,6 +751,18 @@ export function ChatPage() {
   // Ref flag: when true, the next handleSend() call originated from voice input (wake word)
   const isVoiceInputRef = useRef(false);
   const currentAvatarStateRef = useRef<SetDisplayStatePayload | null>(null);
+
+  const beginConfirmationSubmission = useCallback((confirmationId: string) => {
+    if (confirmationSubmissionsRef.current.has(confirmationId)) return false;
+    confirmationSubmissionsRef.current.add(confirmationId);
+    setSubmittingConfirmationIds(new Set(confirmationSubmissionsRef.current));
+    return true;
+  }, []);
+
+  const finishConfirmationSubmission = useCallback((confirmationId: string) => {
+    confirmationSubmissionsRef.current.delete(confirmationId);
+    setSubmittingConfirmationIds(new Set(confirmationSubmissionsRef.current));
+  }, []);
 
   const applyAvatarState = useCallback((state: SetDisplayStatePayload) => {
     currentAvatarStateRef.current = {
@@ -3493,6 +3507,7 @@ export function ChatPage() {
                     <span className={s.suggestMacroTitle}>{t('chat.confirm.commandTitle')}</span>
                     <button
                       className={s.suggestMacroClose}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       onClick={() => setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -3511,6 +3526,7 @@ export function ChatPage() {
                       <input
                         type="password"
                         placeholder={t('chat.confirm.newPassword')}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                         value={conf.new_password || ''}
                         onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, new_password: e.target.value } : c))}
                         style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', width: '100%' }}
@@ -3523,6 +3539,7 @@ export function ChatPage() {
                           <input
                             type="password"
                             placeholder={t('chat.confirm.sudoPassword')}
+                            disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                             value={conf.sudo_password || ''}
                             onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
                             style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
@@ -3531,6 +3548,7 @@ export function ChatPage() {
                             <input
                               className={s.devopsCheckbox}
                               type="checkbox"
+                              disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                               checked={conf.save_sudo_password || false}
                               onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, save_sudo_password: e.target.checked } : c))}
                             />
@@ -3542,38 +3560,47 @@ export function ChatPage() {
                   {conf._verdict && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
                   )}
+                  {submittingConfirmationIds.has(conf.confirmation_id) && (
+                    <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+                      {t('chat.confirm.executing')}
+                    </div>
+                  )}
                   <div className={s.suggestMacroActions}>
                     <button
                       className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       onClick={async () => {
+                        const body: Record<string, unknown> = {
+                          confirmation_id: conf.confirmation_id,
+                          approved: true,
+                        };
+                        if (conf.needs_sudo_password) {
+                          if (!conf.sudo_password?.trim()) {
+                            toast.error(t('chat.toasts.enterSudoPassword'));
+                            return;
+                          }
+                          body.sudo_password = conf.sudo_password;
+                          body.save_sudo_password = conf.save_sudo_password === true;
+                        }
+                        if (conf.needs_new_password) {
+                          if (!conf.new_password?.trim()) {
+                            toast.error(t('chat.toasts.enterNewPassword'));
+                            return;
+                          }
+                          body.new_password = conf.new_password;
+                        }
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
                         try {
-                          const body: Record<string, unknown> = {
-                            confirmation_id: conf.confirmation_id,
-                            approved: true,
-                          };
-                          if (conf.needs_sudo_password) {
-                            if (!conf.sudo_password?.trim()) {
-                              toast.error(t('chat.toasts.enterSudoPassword'));
-                              return;
-                            }
-                            body.sudo_password = conf.sudo_password;
-                            body.save_sudo_password = conf.save_sudo_password === true;
-                          }
-                          if (conf.needs_new_password) {
-                            if (!conf.new_password?.trim()) {
-                              toast.error(t('chat.toasts.enterNewPassword'));
-                              return;
-                            }
-                            body.new_password = conf.new_password;
-                          }
                           await api.apiFetch('/api/v1/devops/approve', {
                             method: 'POST',
                             body: JSON.stringify(body),
                           });
                           toast.success(t('chat.toasts.commandApproved'));
-                          setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
                         } catch {
                           toast.error(t('chat.toasts.commandApprovalFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
                         }
                       }}
                     >
@@ -3581,17 +3608,19 @@ export function ChatPage() {
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
                       onClick={async () => {
+                        if (conf.needs_sudo_password && !conf.sudo_password?.trim()) {
+                          toast.error(t('chat.toasts.enterSudoPassword'));
+                          return;
+                        }
+                        if (conf.needs_new_password && !conf.new_password?.trim()) {
+                          toast.error(t('chat.toasts.enterNewPassword'));
+                          return;
+                        }
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
                         try {
-                          if (conf.needs_sudo_password && !conf.sudo_password?.trim()) {
-                            toast.error(t('chat.toasts.enterSudoPassword'));
-                            return;
-                          }
-                          if (conf.needs_new_password && !conf.new_password?.trim()) {
-                            toast.error(t('chat.toasts.enterNewPassword'));
-                            return;
-                          }
                           // Create auto-approve policy for this exact command
                           const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                           await api.apiFetch(`/api/v1/devops/servers/${conf.server_id}/policies`, {
@@ -3612,9 +3641,11 @@ export function ChatPage() {
                             body: JSON.stringify(body),
                           });
                           toast.success(t('chat.toasts.commandAlwaysApproved'));
-                          setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
                         } catch {
                           toast.error(t('chat.toasts.policySaveFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
                         }
                       }}
                     >
@@ -3622,7 +3653,8 @@ export function ChatPage() {
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing ? 0.6 : 1, minWidth: '80px' }}
+                      disabled={conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id)}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id) ? 0.6 : 1, minWidth: '80px' }}
                       onClick={async () => {
                         setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
                         try {
@@ -3641,14 +3673,20 @@ export function ChatPage() {
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       onReject={async (comment) => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
                         try {
                           await api.apiFetch('/api/v1/devops/approve', {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
-                        } catch {}
-                        setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandApprovalFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
                       }}
                     />
                   </div>
@@ -3667,6 +3705,7 @@ export function ChatPage() {
                     <span className={s.suggestMacroTitle}>{t('chat.confirm.pcCommand')}</span>
                     <button
                       className={s.suggestMacroClose}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       onClick={() => setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -3681,19 +3720,28 @@ export function ChatPage() {
                   {conf._verdict && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
                   )}
+                  {submittingConfirmationIds.has(conf.confirmation_id) && (
+                    <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+                      {t('chat.confirm.executing')}
+                    </div>
+                  )}
                   <div className={s.suggestMacroActions}>
                     <button
                       className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       onClick={async () => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
                         try {
                           await api.apiFetch('/api/v1/pc-commands/approve', {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
                           toast.success(t('chat.toasts.commandExecuted'));
-                          setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
                         } catch {
                           toast.error(t('chat.toasts.commandExecutionFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
                         }
                       }}
                     >
@@ -3701,8 +3749,10 @@ export function ChatPage() {
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
                       onClick={async () => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
                         try {
                           // Create auto-approve policy for this exact command
                           const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -3716,9 +3766,11 @@ export function ChatPage() {
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
                           });
                           toast.success(t('chat.toasts.commandAlwaysApproved'));
-                          setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
                         } catch {
                           toast.error(t('chat.toasts.policySaveFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
                         }
                       }}
                     >
@@ -3726,7 +3778,8 @@ export function ChatPage() {
                     </button>
                     <button
                       className={s.suggestMacroSaveBtn}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing ? 0.6 : 1, minWidth: '80px' }}
+                      disabled={conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id)}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id) ? 0.6 : 1, minWidth: '80px' }}
                       onClick={async () => {
                         setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
                         try {
@@ -3745,14 +3798,20 @@ export function ChatPage() {
                     </button>
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                       onReject={async (comment) => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
                         try {
                           await api.apiFetch('/api/v1/pc-commands/approve', {
                             method: 'POST',
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
-                        } catch {}
-                        setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx));
+                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
                       }}
                     />
                   </div>

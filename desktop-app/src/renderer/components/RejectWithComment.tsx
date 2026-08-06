@@ -5,9 +5,10 @@ import s from './RejectWithComment.module.scss';
 type RejectWithCommentProps = {
   className?: string;
   onReject: (comment: string) => Promise<void> | void;
+  disabled?: boolean;
 };
 
-export function RejectWithComment({ className, onReject }: RejectWithCommentProps) {
+export function RejectWithComment({ className, onReject, disabled = false }: RejectWithCommentProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
@@ -18,7 +19,7 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
       <>
         <button
           className={className}
-          disabled={sending}
+          disabled={disabled || sending}
           onClick={async () => {
             setSending(true);
             try {
@@ -30,7 +31,7 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
         >
           {sending ? t('review.rejecting') : t('review.reject')}
         </button>
-        <button className={className} disabled={sending} onClick={() => setOpen(true)}>
+        <button className={className} disabled={disabled || sending} onClick={() => setOpen(true)}>
           {t('review.rejectWithComment')}
         </button>
       </>
@@ -42,6 +43,7 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
       <textarea
         className={s.rejectInput}
         value={comment}
+        disabled={disabled || sending}
         onChange={(event) => setComment(event.target.value)}
         placeholder={t('review.commentPlaceholder')}
         rows={3}
@@ -50,7 +52,7 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
       <div className={s.rejectActions}>
         <button
           className={s.sendBtn}
-          disabled={sending}
+          disabled={disabled || sending}
           onClick={async () => {
             setSending(true);
             try {
@@ -62,7 +64,7 @@ export function RejectWithComment({ className, onReject }: RejectWithCommentProp
         >
           {sending ? t('common.sending') : t('common.send')}
         </button>
-        <button className={s.cancelBtn} disabled={sending} onClick={() => setOpen(false)}>
+        <button className={s.cancelBtn} disabled={disabled || sending} onClick={() => setOpen(false)}>
           {t('common.back')}
         </button>
       </div>
