@@ -2799,10 +2799,6 @@ const buildDescribeImageTool = () => {
           image_url: {
             type: 'string',
             description: 'Image URL from [Attached image N: URL] markers. Leave empty to analyze images from the current user message.'
-          },
-          image_index: {
-            type: 'number',
-            description: 'Image index (0-based) in the current message. Ignored if image_url is provided.'
           }
         },
         required: ['question']
@@ -4439,7 +4435,6 @@ If the task is a description, return a detailed text response.`
 
   if (toolName === 'describe_image') {
     const question: string = typeof parsed.question === 'string' ? parsed.question.trim() : '';
-    const imageIndex: number | undefined = typeof parsed.image_index === 'number' ? Math.floor(parsed.image_index) : undefined;
     const imageUrl: string | undefined = typeof parsed.image_url === 'string' ? parsed.image_url.trim() || undefined : undefined;
 
     if (!question) return JSON.stringify({ status: 'error', message: 'question is required — specify what you need to know about the image.' });
@@ -4469,9 +4464,7 @@ If the task is a description, return a detailed text response.`
         imagesToAnalyze = [{ base64: buf.toString('base64'), mimeType }];
       } else if (userImages && userImages.length > 0) {
         // From current request
-        imagesToAnalyze = (imageIndex !== undefined && imageIndex >= 0 && imageIndex < userImages.length)
-          ? [userImages[imageIndex]]
-          : userImages;
+        imagesToAnalyze = userImages;
       }
 
       if (imagesToAnalyze.length === 0) {
@@ -6652,17 +6645,17 @@ export const sendMessageThroughAi = async (
         return null;
       })
     : null;
-  let regenerateUserText: string | null = null;
+  let regenerateUserMessage: any | null = null;
   if (requestedRegenerateFromHistory) {
     history = [...history];
     while (history.length > 0 && history[history.length - 1]?.role === 'assistant') {
       history.pop();
     }
     if (history[history.length - 1]?.role === 'user') {
-      regenerateUserText = history.pop()?.content || null;
+      regenerateUserMessage = history.pop() ?? null;
     }
   }
-  const isRegeneratingFromHistory = Boolean(regenerateUserText);
+  const isRegeneratingFromHistory = Boolean(regenerateUserMessage);
 
   // ── Persist the user message EARLY, before any long AI work begins ──
   // This guarantees the user's request survives even if generation is
@@ -6975,15 +6968,17 @@ User request: "${text}"`;
     ? imageUrls.map((url, i) => `[Attached image ${i + 1}: ${url}]`).join('\n')
     : '';
 
-  let userMessageContent: any = (hasImages && currentModelSupportsVision)
-    ? [
-        { type: 'text', text: (regenerateUserText || text) + (imageMarker ? '\n' + imageMarker : '') },
-        ...images.map(img => ({
-          type: 'image_url',
-          image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
-        }))
-      ]
-    : ((regenerateUserText || text) + (imageMarker ? '\n' + imageMarker : ''));
+  let userMessageContent: any = regenerateUserMessage
+    ? regenerateUserMessage.content
+    : (hasImages && currentModelSupportsVision)
+      ? [
+          { type: 'text', text: text + (imageMarker ? '\n' + imageMarker : '') },
+          ...images.map(img => ({
+            type: 'image_url',
+            image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+          }))
+        ]
+      : (text + (imageMarker ? '\n' + imageMarker : ''));
 
   // Append regeneration hint to the current request (not saved to DB).
   if (options?.regenerateHint) {
