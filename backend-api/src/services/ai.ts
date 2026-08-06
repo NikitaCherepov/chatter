@@ -6178,6 +6178,7 @@ export const sendMessageThroughAi = async (
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
+    onUserMessageSaved?: (data: { message_id: number; images?: Array<{ url: string; type: 'user_photo' }> }) => Promise<void> | void;
     /** Стрим токенов контента в реальном времени (уже оттроттлено в streamAndAssemble). */
     onStreamToken?: (text: string) => Promise<void> | void;
     /** Стрим reasoning-токенов в реальном времени. */
@@ -6675,6 +6676,14 @@ export const sendMessageThroughAi = async (
     const userMessageImages = options?.userImages?.length ? options.userImages : null;
     const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
     userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
+    if (options?.onUserMessageSaved) {
+      await Promise.resolve(options.onUserMessageSaved({
+        message_id: userMessageId,
+        ...(userMessageImages ? { images: userMessageImages } : {}),
+      })).catch((err: any) => {
+        console.warn('[chat] failed to notify client that user message was saved:', err?.message || String(err));
+      });
+    }
     notifyDesktopChatUpdated('user', userMessageId);
   }
 
@@ -7560,6 +7569,7 @@ iterations.push(currentIteration);
     chat_id: chatId,
     message_id: assistantMessageId,
     user_message_id: userMessageId,
+    user_message_images: options?.userImages?.length ? options.userImages : undefined,
     model_fallback_notice: modelFallbackNotice,
     tool_user_messages: toolUserMessages,
     generated_images: generatedImages.length > 0 ? generatedImages : undefined,
@@ -7644,6 +7654,8 @@ iterations.push(currentIteration);
         reasoning_content: abortedReasoning,
         chat_id: chatId,
         message_id: abortedMessageId,
+        user_message_id: userMessageId,
+        user_message_images: options?.userImages?.length ? options.userImages : undefined,
         aborted: true,
         tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
         subagents: subagentTraces.length > 0 ? subagentTraces : undefined,

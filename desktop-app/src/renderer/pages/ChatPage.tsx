@@ -310,12 +310,12 @@ const MessageItem = React.memo(function MessageItem({
                 return (
                   <div key={i} className={s.messageImageWrap}>
                     <img className={s.messageImage} src={src} alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
-                    <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title={t('common.delete')}>
+                    {msg.id > 0 && <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title={t('common.delete')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
-                    </button>
+                    </button>}
                     <button className={s.messageImageDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(src); }} title={t('common.download')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1435,6 +1435,18 @@ export function ChatPage() {
           // Сервер прислал результат броска — сразу останавливаем анимацию на значении.
           finishDiceRoll(roll);
         },
+        onUserMessageSaved: ({ message_id, images }) => {
+          setMessages((prev) => prev.map((m) => m.id === tempUserMsg.id
+            ? { ...m, id: message_id, ...(images ? { images } : {}) }
+            : m));
+          setViewerImageMsgId((current) => current === tempUserMsg.id ? message_id : current);
+          if (images && tempUserImages) {
+            setViewerImageUrl((current) => {
+              const index = tempUserImages.findIndex((image) => image.url === current);
+              return index >= 0 ? (images[index]?.url ?? current) : current;
+            });
+          }
+        },
         onDone: (res) => {
           // Финализируем стрим-буфер перед обработкой done
           streamAppenderRef.current.flushNow();
@@ -1465,8 +1477,12 @@ export function ChatPage() {
                       usage: res.message_usage ?? null,
                     };
                   }
-                  if (res.user_message_id && m.id === tempUserMsg.id) {
-                    return { ...m, id: res.user_message_id };
+                  if (res.user_message_id && (m.id === tempUserMsg.id || m.id === res.user_message_id)) {
+                    return {
+                      ...m,
+                      id: res.user_message_id,
+                      ...(res.user_message_images ? { images: res.user_message_images } : {}),
+                    };
                   }
                   return m;
                 }));
@@ -1474,7 +1490,11 @@ export function ChatPage() {
                 // Не было промежуточных — добавляем как новое
                 setMessages((prev) => {
                   const updated = res.user_message_id
-                    ? prev.map(m => m.id === tempUserMsg.id ? { ...m, id: res.user_message_id! } : m)
+                    ? prev.map(m => (m.id === tempUserMsg.id || m.id === res.user_message_id) ? {
+                        ...m,
+                        id: res.user_message_id!,
+                        ...(res.user_message_images ? { images: res.user_message_images } : {}),
+                      } : m)
                     : prev;
                   return [...updated, {
                     id: res.message_id, role: 'assistant' as const,
@@ -1508,13 +1528,10 @@ export function ChatPage() {
             toast.warning(res.model_fallback_notice, { duration: 5000 });
           }
           // Build images array from generated_images
-          const currentTokens = api.loadTokens();
           const genImages: api.MessageImage[] | undefined = res.generated_images?.length
             ? res.generated_images.map(img => ({
                 url: img.image_url
-                  ? (img.image_url.startsWith('http')
-                      ? img.image_url
-                      : `${api.API_BASE}${img.image_url}${currentTokens?.access_token ? `?token=${currentTokens.access_token}` : ''}`)
+                  ? img.image_url
                   : `data:image/png;base64,${img.image_base64}`,
                 type: 'generated' as const
               }))
@@ -1540,10 +1557,11 @@ export function ChatPage() {
                 };
               }
               // Replace temp user message id with real one from server
-              if (res.user_message_id && m.id === tempUserMsg.id) {
+              if (res.user_message_id && (m.id === tempUserMsg.id || m.id === res.user_message_id)) {
                 return {
                   ...m,
                   id: res.user_message_id,
+                  ...(res.user_message_images ? { images: res.user_message_images } : {}),
                   ...(typeof res.user_token_count === 'number' ? { token_count: res.user_token_count } : {}),
                 };
               }
@@ -1553,9 +1571,10 @@ export function ChatPage() {
             // Ни одного промежуточного сообщения не было — добавляем финальный ответ
             setMessages((prev) => {
               const updated = res.user_message_id
-                ? prev.map(m => m.id === tempUserMsg.id ? {
+                ? prev.map(m => (m.id === tempUserMsg.id || m.id === res.user_message_id) ? {
                     ...m,
                     id: res.user_message_id!,
+                    ...(res.user_message_images ? { images: res.user_message_images } : {}),
                     ...(typeof res.user_token_count === 'number' ? { token_count: res.user_token_count } : {}),
                   } : m)
                 : prev;
@@ -2093,13 +2112,10 @@ export function ChatPage() {
           if (res.model_fallback_notice) {
             toast.warning(res.model_fallback_notice, { duration: 5000 });
           }
-          const currentTokens = api.loadTokens();
           const genImages: api.MessageImage[] | undefined = res.generated_images?.length
             ? res.generated_images.map(img => ({
                 url: img.image_url
-                  ? (img.image_url.startsWith('http')
-                      ? img.image_url
-                      : `${api.API_BASE}${img.image_url}${currentTokens?.access_token ? `?token=${currentTokens.access_token}` : ''}`)
+                  ? img.image_url
                   : `data:image/png;base64,${img.image_base64}`,
                 type: 'generated' as const
               }))
@@ -2266,13 +2282,10 @@ export function ChatPage() {
           if (res.model_fallback_notice) {
             toast.warning(res.model_fallback_notice, { duration: 5000 });
           }
-          const currentTokens = api.loadTokens();
           const genImages: api.MessageImage[] | undefined = res.generated_images?.length
             ? res.generated_images.map(img => ({
                 url: img.image_url
-                  ? (img.image_url.startsWith('http')
-                      ? img.image_url
-                      : `${api.API_BASE}${img.image_url}${currentTokens?.access_token ? `?token=${currentTokens.access_token}` : ''}`)
+                  ? img.image_url
                   : `data:image/png;base64,${img.image_base64}`,
                 type: 'generated' as const
               }))
@@ -3266,7 +3279,7 @@ export function ChatPage() {
                                     <line x1="12" y1="15" x2="12" y2="3" />
                                   </svg>
                                 </button>
-                                <button
+                                {msg.id > 0 && <button
                                   className={s.messageImageDelete}
                                   onClick={(e) => { e.stopPropagation(); setImageDeleteTarget({ messageId: msg.id, url: img.url }); }}
                                   title={t('common.delete')}
@@ -3275,7 +3288,7 @@ export function ChatPage() {
                                     <polyline points="3 6 5 6 21 6" />
                                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                                   </svg>
-                                </button>
+                                </button>}
                               </div>
                             );
                           })}
@@ -4590,7 +4603,7 @@ export function ChatPage() {
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </button>
-            {viewerImageMsgId !== null && viewerImageUrl && (
+            {viewerImageMsgId !== null && viewerImageMsgId > 0 && viewerImageUrl && (
               <button
                 className={s.imageViewerDelete}
                 onClick={(e) => { e.stopPropagation(); setImageDeleteTarget({ messageId: viewerImageMsgId, url: viewerImageUrl }); }}

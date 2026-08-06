@@ -445,6 +445,7 @@ export type ChatSendResponse = {
   reasoning_content?: string | null;
   message_id: number;
   user_message_id?: number;
+  user_message_images?: MessageImage[];
   chat_id: number;
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;
@@ -556,6 +557,7 @@ export type StreamCallbacks = {
   onToolStatus?: (text: string) => void;
   onMapUpdate?: (data: MapUpdatePayload) => void;
   onDiceRoll?: (roll: number) => void;
+  onUserMessageSaved?: (data: { message_id: number; images?: MessageImage[] }) => void;
   /** Стрим текстовых токенов от модели в реальном времени (оттроттлено бэкендом). */
   onStreamToken?: (text: string) => void;
   /** Стрим reasoning-токенов в реальном времени. */
@@ -762,6 +764,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'tool_status': (activeStreamCallbacks.onToolStatus ?? wsCallbacks.onToolStatus)?.(msg.text); break;
         case 'map_update': (activeStreamCallbacks.onMapUpdate ?? wsCallbacks.onMapUpdate)?.(msg); break;
         case 'dice_roll': (activeStreamCallbacks.onDiceRoll ?? wsCallbacks.onDiceRoll)?.(Number(msg.roll)); break;
+        case 'user_message_saved': (activeStreamCallbacks.onUserMessageSaved ?? wsCallbacks.onUserMessageSaved)?.(msg); break;
         case 'done': {
           (activeStreamCallbacks.onDone ?? wsCallbacks.onDone)?.(msg);
           activeStreamCallbacks = {};
@@ -1051,6 +1054,7 @@ async function streamChatMessageSSE(
             else if (eventName === 'desktop_action' && callbacks?.onDesktopAction) callbacks.onDesktopAction(data);
             else if (eventName === 'map_update' && callbacks?.onMapUpdate) callbacks.onMapUpdate(data);
             else if (eventName === 'dice_roll' && callbacks?.onDiceRoll) callbacks.onDiceRoll(Number(data.roll));
+            else if (eventName === 'user_message_saved' && callbacks?.onUserMessageSaved) callbacks.onUserMessageSaved(data);
             else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
             else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
             else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error, data.message);

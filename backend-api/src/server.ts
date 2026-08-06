@@ -587,6 +587,9 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       onDiceRoll: (roll) => {
         res.write(`event: dice_roll\ndata: ${JSON.stringify({ roll })}\n\n`);
       },
+      onUserMessageSaved: (data) => {
+        res.write(`event: user_message_saved\ndata: ${JSON.stringify(data)}\n\n`);
+      },
       onStreamToken: (text) => {
         res.write(`event: stream_token\ndata: ${JSON.stringify({ text })}\n\n`);
       },
@@ -1871,6 +1874,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       },
       onDiceRoll: (roll) => {
         res.write(`event: dice_roll\ndata: ${JSON.stringify({ roll })}\n\n`);
+      },
+      onUserMessageSaved: (data) => {
+        res.write(`event: user_message_saved\ndata: ${JSON.stringify(data)}\n\n`);
       },
       onStreamToken: (text) => {
         res.write(`event: stream_token\ndata: ${JSON.stringify({ text })}\n\n`);
@@ -5917,6 +5923,9 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       },
       onDiceRoll: async (roll) => {
         await sendWsJson({ type: 'dice_roll', roll });
+      },
+      onUserMessageSaved: async (data) => {
+        await sendWsJson({ type: 'user_message_saved', ...data });
       },
       onStreamToken: async (text) => {
         await sendWsJson({ type: 'stream_token', text });
