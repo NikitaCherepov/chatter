@@ -9,6 +9,7 @@ import util from 'util';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
+import { ChatterBrowser, type BrowserControlPayload } from './browser';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -303,6 +304,7 @@ function normalizeWhisperLanguage(value: unknown) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let chatterBrowser: ChatterBrowser | null = null;
 
 function getRendererEntryPath(): string {
   return path.join(__dirname, '../renderer/index.html');
@@ -420,6 +422,8 @@ function createWindow() {
     },
   });
 
+  chatterBrowser = new ChatterBrowser(mainWindow);
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalHttpUrl(url);
     return { action: 'deny' };
@@ -439,7 +443,38 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    chatterBrowser?.destroy();
+    chatterBrowser = null;
     mainWindow = null;
+  });
+
+  // ── Embedded browser ────────────────────────────────────────────────────
+  ipcMain.handle('browser:get-state', (event) => {
+    assertTrustedIpcSender(event);
+    if (!chatterBrowser) throw new Error('browser_unavailable');
+    return chatterBrowser.getState();
+  });
+
+  ipcMain.handle('browser:set-visible', (event, payload: {
+    visible?: boolean;
+    bounds?: Electron.Rectangle;
+  }) => {
+    assertTrustedIpcSender(event);
+    if (!chatterBrowser) throw new Error('browser_unavailable');
+    return chatterBrowser.setVisible(payload?.visible === true, payload?.bounds);
+  });
+
+  ipcMain.handle('browser:set-bounds', (event, bounds: Electron.Rectangle) => {
+    assertTrustedIpcSender(event);
+    if (!chatterBrowser) throw new Error('browser_unavailable');
+    chatterBrowser.setBounds(bounds);
+    return chatterBrowser.getState();
+  });
+
+  ipcMain.handle('browser:control', async (event, payload: BrowserControlPayload) => {
+    assertTrustedIpcSender(event);
+    if (!chatterBrowser) throw new Error('browser_unavailable');
+    return chatterBrowser.control(payload);
   });
 
   // ── IPC: save-file (shows save dialog, writes blob to disk) ─────────────

@@ -2,12 +2,14 @@
  * Shared in-memory store for pending PC action confirmations.
  * Used by ai.ts (registers) and server.ts (resolves/rejects via /approve endpoint).
  *
- * Supports two kinds of pending actions:
+ * Supports these pending action kinds:
  *  - 'pc_command': execute a shell command on user's PC
  *  - 'file_action': read or write a file on user's PC via native fs
+ *  - 'webcam_capture': capture a photo after explicit approval
+ *  - 'browser_action': click or fill a previously-read browser element
  */
 
-export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture';
+export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture' | 'browser_action';
 
 type ExecutePayload = {
   ipcType: 'execute_commands';
@@ -24,7 +26,16 @@ type WebcamCapturePayload = {
   ipcPayload: { camera_name?: string; purpose?: string };
 };
 
-type ActionPayload = ExecutePayload | FileActionPayload | WebcamCapturePayload;
+type BrowserActionPayload = {
+  ipcType: 'browser_control';
+  ipcPayload: {
+    action: 'click' | 'fill';
+    ref: string;
+    text?: string;
+  };
+};
+
+type ActionPayload = ExecutePayload | FileActionPayload | WebcamCapturePayload | BrowserActionPayload;
 
 export type PendingPcCommandConfirmation = {
   userId: number;

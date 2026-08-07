@@ -16,6 +16,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearTrustedServer: () =>
     ipcRenderer.invoke('security:clear-server'),
 
+  // Embedded browser: isolated WebContentsView controlled by the trusted renderer.
+  browserGetState: () =>
+    ipcRenderer.invoke('browser:get-state'),
+  browserSetVisible: (payload: { visible: boolean; bounds?: { x: number; y: number; width: number; height: number } }) =>
+    ipcRenderer.invoke('browser:set-visible', payload),
+  browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
+    ipcRenderer.invoke('browser:set-bounds', bounds),
+  browserControl: (payload: {
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill';
+    url?: string;
+    ref?: string;
+    text?: string;
+    mode?: 'viewport' | 'delta' | 'full';
+    direction?: 'up' | 'down';
+    amount?: number;
+  }) => ipcRenderer.invoke('browser:control', payload),
+  onBrowserState: (callback: (payload: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('browser:state', handler);
+    return () => ipcRenderer.removeListener('browser:state', handler);
+  },
+
   // PixelAvatar: listen for avatar state pushes from main process
   onAvatarState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

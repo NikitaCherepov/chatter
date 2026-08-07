@@ -250,6 +250,12 @@ export function handleDesktopAction(action: { action: string; target?: string; v
 
   if (a === 'open_widget') {
     const toolId = action.target === 'notebook' ? 'notebook' : action.target;
+    if (toolId === 'browser') {
+      setToolLayout('browser', { mode: 'sidebar' });
+      openTool(toolId);
+      setToolsPanelState({ isOpen: true });
+      return;
+    }
     openTool(toolId);
     return;
   }
@@ -355,6 +361,11 @@ export function handleDesktopAction(action: { action: string; target?: string; v
   if (a === 'pc_command_confirmation') {
     // Handled by ChatPage via the pcCommandConfirmation callback
     // Renders a confirmation card: [Approve] [Reject]
+    return;
+  }
+
+  if (a === 'browser_action_confirmation') {
+    // Handled by ChatPage with a dedicated confirmation card.
     return;
   }
 

@@ -498,6 +498,13 @@
       "cameraValue": "Camera: {{camera}}",
       "taskValue": "Task: {{task}}"
     },
+    "browser": {
+      "confirmTitle": "Browser action",
+      "click": "Click: {{target}}",
+      "fill": "Enter text in: {{target}}",
+      "executed": "Browser action completed",
+      "failed": "Browser action failed"
+    },
     "email": {
       "title": "Send email",
       "from": "From:",
@@ -603,10 +610,22 @@
       "chatPhotos": "Chat photos",
       "documents": "Documents",
       "chatFiles": "Chat files",
+      "browser": "Browser",
+      "webPages": "Web pages",
       "tools": "Tools",
       "floating": "Floating window",
       "fullscreen": "Full screen",
       "collapse": "Collapse"
+    },
+    "browser": {
+      "title": "Browser",
+      "forward": "Forward",
+      "reload": "Reload",
+      "secureSession": "Isolated browser session",
+      "addressPlaceholder": "Search or enter an address",
+      "loadingPage": "Browser page",
+      "actionFailed": "Browser action failed",
+      "navigationFailed": "Could not open the page"
     },
     "documents": {
       "selectChat": "Select a chat",

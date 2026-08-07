@@ -21,6 +21,7 @@ import { TasksTool } from './TasksTool';
 import { MapTool } from './MapTool';
 import { GalleryTool } from './GalleryTool';
 import { DocumentsTool } from './DocumentsTool';
+import { BrowserTool } from './BrowserTool';
 import { FloatingWidget } from './FloatingWidget';
 import s from './ToolsPanel.module.scss';
 
@@ -76,6 +77,15 @@ const TOOL_ICON_DOCUMENTS = (
   </svg>
 );
 
+const TOOL_ICON_BROWSER = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18" />
+    <path d="M12 3a15 15 0 0 1 0 18" />
+    <path d="M12 3a15 15 0 0 0 0 18" />
+  </svg>
+);
+
 const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[] => [
   {
     id: 'notebook',
@@ -107,6 +117,12 @@ const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[]
     title: t('tools.panel.documents'),
     description: t('tools.panel.chatFiles'),
     icon: TOOL_ICON_DOCUMENTS,
+  },
+  {
+    id: 'browser',
+    title: t('tools.panel.browser'),
+    description: t('tools.panel.webPages'),
+    icon: TOOL_ICON_BROWSER,
   },
 ];
 
@@ -167,7 +183,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
   const sidebarTool = tools.find(t => t.id === sidebarToolId);
 
   // Sidebar panel width: expanded when open (regardless of whether a tool is active)
-  const panelWidth = isOpen ? 260 : 65;
+  const panelWidth = isOpen ? (sidebarToolId === 'browser' ? 420 : 260) : 65;
 
   const handleToggle = () => {
     setToolsPanelState({ isOpen: !isOpen });
@@ -235,6 +251,9 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
     }
     if (toolId === 'documents') {
       return <DocumentsTool chatId={activeChatId ?? null} />;
+    }
+    if (toolId === 'browser') {
+      return <BrowserTool />;
     }
     return null;
   };

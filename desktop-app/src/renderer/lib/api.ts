@@ -521,7 +521,7 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
 // ---------- SSE Streaming (fallback, kept for reference) ----------
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'pc_command_confirmation' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'pc_command_confirmation' | 'browser_action_confirmation' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
   target?: string;
   value?: { title?: string; content?: string; note_id?: number; macro_name?: string; target_path?: string; description?: string; commands?: string[]; confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean; chat_id?: number; from?: string; to?: string; subject?: string; body?: string; purpose?: string; camera_name?: string };
 };
@@ -1172,6 +1172,14 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         filePath: payload?.file_path,
       });
       result = await (window as any).electronAPI?.grantDetectedSessionWriteFolder(payload?.file_path);
+    } else if (ipc_type === 'browser_control') {
+      console.log('[ipc] renderer invoke browserControl', {
+        requestId: request_id,
+        action: payload?.action,
+        ref: payload?.ref,
+        url: payload?.url,
+      });
+      result = await (window as any).electronAPI?.browserControl(payload);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }

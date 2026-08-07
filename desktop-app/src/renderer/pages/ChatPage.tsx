@@ -707,6 +707,7 @@ export function ChatPage() {
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'click' | 'fill'; description: string; text?: string }>>([]);
   const confirmationSubmissionsRef = useRef(new Set<string>());
   const [submittingConfirmationIds, setSubmittingConfirmationIds] = useState<Set<string>>(new Set());
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
@@ -1084,6 +1085,20 @@ export function ChatPage() {
           return [...prev, {
             confirmation_id: val.confirmation_id!,
             command: val.command!,
+          }];
+        });
+      }
+    }
+    if (action.action === 'browser_action_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; action_type?: 'click' | 'fill'; description?: string; text?: string };
+      if (val.confirmation_id && val.action_type && val.description) {
+        setBrowserActionConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            action_type: val.action_type!,
+            description: val.description!,
+            text: val.text,
           }];
         });
       }
@@ -3761,6 +3776,77 @@ export function ChatPage() {
                           setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
                         } catch {
                           toast.error(t('chat.toasts.commandApprovalFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {/* Browser action confirmation cards */}
+              {browserActionConfirmations.map((conf) => (
+                <div key={`browser-${conf.confirmation_id}`} className={s.suggestMacroCard}>
+                  <div className={s.suggestMacroHeader}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M3 12h18" />
+                      <path d="M12 3a15 15 0 0 1 0 18" />
+                      <path d="M12 3a15 15 0 0 0 0 18" />
+                    </svg>
+                    <span className={s.suggestMacroTitle}>{t('chat.browser.confirmTitle')}</span>
+                  </div>
+                  <div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>
+                      {conf.action_type === 'fill' ? t('chat.browser.fill', { target: conf.description }) : t('chat.browser.click', { target: conf.description })}
+                    </code>
+                  </div>
+                  {conf.text && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', whiteSpace: 'pre-wrap' }}>
+                      {conf.text}
+                    </div>
+                  )}
+                  {submittingConfirmationIds.has(conf.confirmation_id) && (
+                    <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                      {t('chat.confirm.executing')}
+                    </div>
+                  )}
+                  <div className={s.suggestMacroActions}>
+                    <button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onClick={async () => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(t('chat.browser.executed'));
+                          setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.browser.failed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    >
+                      {t('chat.confirm.allow')}
+                    </button>
+                    <RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onReject={async (comment) => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                          setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.browser.failed'));
                         } finally {
                           finishConfirmationSubmission(conf.confirmation_id);
                         }

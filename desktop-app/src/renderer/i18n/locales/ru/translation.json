@@ -498,6 +498,13 @@
       "cameraValue": "Камера: {{camera}}",
       "taskValue": "Задача: {{task}}"
     },
+    "browser": {
+      "confirmTitle": "Действие в браузере",
+      "click": "Нажать: {{target}}",
+      "fill": "Ввести текст в: {{target}}",
+      "executed": "Действие в браузере выполнено",
+      "failed": "Не удалось выполнить действие в браузере"
+    },
     "email": {
       "title": "Отправка письма",
       "from": "От:",
@@ -603,10 +610,22 @@
       "chatPhotos": "Фото из чата",
       "documents": "Документы",
       "chatFiles": "Файлы чата",
+      "browser": "Браузер",
+      "webPages": "Веб-страницы",
       "tools": "Инструменты",
       "floating": "Плавающее окно",
       "fullscreen": "На весь экран",
       "collapse": "Свернуть"
+    },
+    "browser": {
+      "title": "Браузер",
+      "forward": "Вперёд",
+      "reload": "Обновить",
+      "secureSession": "Изолированная сессия браузера",
+      "addressPlaceholder": "Поиск или адрес",
+      "loadingPage": "Страница браузера",
+      "actionFailed": "Не удалось выполнить действие",
+      "navigationFailed": "Не удалось открыть страницу"
     },
     "documents": {
       "selectChat": "Выберите чат",

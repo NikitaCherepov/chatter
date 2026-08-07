@@ -1,108 +1,43 @@
 {
   "changes": {
     "ru": [
-      "Добавлен учёт квот и стоимости вспомогательных вызовов ИИ, включая генерацию подсказок, проверку команд, runbooks, макросы и заголовки чатов.",
-      "Исправлен разбор PDF-документов.",
-      "Исправлена отправка изображений и документов без сопроводительного текста.",
-      "Исправлены ссылки на изображения при регенерации сообщений с использованием стабильных URL вместо временных индексов.",
-      "Исправлено немедленное удаление недавно загруженных изображений.",
-      "Исправлено некорректное отображение запущенных сервисов как остановленных."
+      "Добавлена поддержка встроенного браузера: Chatter может читать страницы, прокручивать их и после подтверждения пользователя нажимать элементы и заполнять безопасные поля."
     ],
     "en": [
-      "Added quota and cost accounting for auxiliary AI calls, including prompt generation, command reviews, runbooks, macros, and chat titles.",
-      "Fixed PDF document parsing.",
-      "Fixed sending images and documents without accompanying text.",
-      "Fixed image references during message regeneration by using stable URLs instead of temporary indexes.",
-      "Fixed immediate deletion of newly uploaded images.",
-      "Fixed running services being incorrectly shown as stopped."
+      "Added embedded browser support: Chatter can read and scroll pages and, after user confirmation, click elements and fill safe fields."
     ],
     "cs": [
-      "Přidáno účtování kvót a nákladů pro pomocná volání AI, včetně generování výzev, kontroly příkazů, runbooků, maker a titulků chatů.",
-      "Opraveno parsování PDF dokumentů.",
-      "Opraveno odesílání obrázků a dokumentů bez doprovodného textu.",
-      "Opraveny odkazy na obrázky při regeneraci zpráv pomocí stabilních URL místo dočasných indexů.",
-      "Opraveno okamžité mazání nově nahraných obrázků.",
-      "Opraveno nesprávné zobrazení běžících služeb jako zastavených."
+      "Přidána podpora vestavěného prohlížeče: Chatter může číst a posouvat stránky a po potvrzení uživatelem klikat na prvky a vyplňovat bezpečná pole."
     ],
     "de": [
-      "Kontingent- und Kostenabrechnung für zusätzliche KI-Aufrufe hinzugefügt, einschließlich Prompt-Generierung, Befehlsüberprüfungen, Runbooks, Makros und Chat-Titel.",
-      "Fehler beim Parsen von PDF-Dokumenten behoben.",
-      "Fehler beim Senden von Bildern und Dokumenten ohne begleitenden Text behoben.",
-      "Fehler bei Bildreferenzen während der Nachrichtenregenerierung behoben, indem stabile URLs anstelle temporärer Indizes verwendet werden.",
-      "Fehler beim sofortigen Löschen neu hochgeladener Bilder behoben.",
-      "Fehler behoben, bei dem laufende Dienste fälschlicherweise als gestoppt angezeigt wurden."
+      "Unterstützung für den integrierten Browser hinzugefügt: Chatter kann Seiten lesen und scrollen sowie nach Bestätigung durch den Benutzer Elemente anklicken und sichere Felder ausfüllen."
     ],
     "es": [
-      "Se agregó contabilidad de cuotas y costos para llamadas auxiliares de IA, incluida la generación de avisos, revisiones de comandos, runbooks, macros y títulos de chat.",
-      "Se corrigió el análisis de documentos PDF.",
-      "Se corrigió el envío de imágenes y documentos sin texto adjunto.",
-      "Se corrigieron las referencias a imágenes durante la regeneración de mensajes mediante el uso de URL estables en lugar de índices temporales.",
-      "Se corrigió la eliminación inmediata de imágenes recién subidas.",
-      "Se corrigió que los servicios en ejecución se mostraran incorrectamente como detenidos."
+      "Se añadió compatibilidad con el navegador integrado: Chatter puede leer y desplazar páginas y, tras la confirmación del usuario, hacer clic en elementos y rellenar campos seguros."
     ],
     "fr": [
-      "Ajout de la comptabilité des quotas et des coûts pour les appels IA auxiliaires, y compris la génération de prompts, les revues de commandes, les runbooks, les macros et les titres de chat.",
-      "Correction de l'analyse des documents PDF.",
-      "Correction de l'envoi d'images et de documents sans texte d'accompagnement.",
-      "Correction des références d'images lors de la régénération de messages en utilisant des URL stables au lieu d'index temporaires.",
-      "Correction de la suppression immédiate des images nouvellement téléchargées.",
-      "Correction de l'affichage incorrect des services en cours d'exécution comme étant arrêtés."
+      "Ajout de la prise en charge du navigateur intégré : Chatter peut lire et faire défiler les pages et, après confirmation de l’utilisateur, cliquer sur des éléments et remplir les champs sécurisés."
     ],
     "it": [
-      "Aggiunta la contabilità di quota e costi per le chiamate AI ausiliarie, inclusa la generazione di prompt, le revisioni dei comandi, i runbook, le macro e i titoli delle chat.",
-      "Corretta l'analisi dei documenti PDF.",
-      "Corretto l'invio di immagini e documenti senza testo di accompagnamento.",
-      "Corretti i riferimenti alle immagini durante la rigenerazione dei messaggi utilizzando URL stabili invece di indici temporanei.",
-      "Corretta l'eliminazione immediata delle immagini appena caricate.",
-      "Corretta la visualizzazione errata dei servizi in esecuzione come arrestati."
+      "Aggiunto il supporto per il browser integrato: Chatter può leggere e scorrere le pagine e, dopo la conferma dell’utente, fare clic sugli elementi e compilare i campi sicuri."
     ],
     "ja": [
-      "補助AI呼び出し（プロンプト生成、コマンドレビュー、ランブック、マクロ、チャットタイトルを含む）のクォータとコスト計算を追加しました。",
-      "PDF文書の解析を修正しました。",
-      "テキストを伴わない画像や文書の送信を修正しました。",
-      "一時的なインデックスではなく安定したURLを使用することで、メッセージ再生成時の画像参照を修正しました。",
-      "新しくアップロードされた画像が即座に削除される問題を修正しました。",
-      "実行中のサービスが誤って停止と表示される問題を修正しました。"
+      "内蔵ブラウザのサポートを追加しました。Chatter はページの読み取りとスクロールを行い、ユーザーの確認後に要素をクリックして安全なフィールドへ入力できます。"
     ],
     "ko": [
-      "보조 AI 호출에 대한 할당량 및 비용 회계를 추가했습니다(프롬프트 생성, 명령 검토, 런북, 매크로, 채팅 제목 포함).",
-      "PDF 문서 파싱을 수정했습니다.",
-      "텍스트 없이 이미지와 문서를 보내는 문제를 수정했습니다.",
-      "임시 인덱스 대신 안정적인 URL을 사용하여 메시지 재생성 중 이미지 참조를 수정했습니다.",
-      "새로 업로드한 이미지가 즉시 삭제되는 문제를 수정했습니다.",
-      "실행 중인 서비스가 중지된 것으로 잘못 표시되는 문제를 수정했습니다."
+      "내장 브라우저 지원이 추가되었습니다. Chatter는 페이지를 읽고 스크롤할 수 있으며, 사용자 확인 후 요소를 클릭하고 안전한 필드를 입력할 수 있습니다."
     ],
     "pl": [
-      "Dodano rozliczanie limitów i kosztów dla pomocniczych wywołań AI, w tym generowania promptów, przeglądów poleceń, runbooków, makr i tytułów czatów.",
-      "Naprawiono parsowanie dokumentów PDF.",
-      "Naprawiono wysyłanie obrazów i dokumentów bez towarzyszącego tekstu.",
-      "Naprawiono odwołania do obrazów podczas regeneracji wiadomości, używając stabilnych adresów URL zamiast tymczasowych indeksów.",
-      "Naprawiono natychmiastowe usuwanie nowo przesłanych obrazów.",
-      "Naprawiono błędne wyświetlanie działających usług jako zatrzymanych."
+      "Dodano obsługę wbudowanej przeglądarki: Chatter może odczytywać i przewijać strony, a po potwierdzeniu przez użytkownika klikać elementy i wypełniać bezpieczne pola."
     ],
     "pt-BR": [
-      "Adicionada contabilidade de cota e custo para chamadas auxiliares de IA, incluindo geração de prompts, revisões de comandos, runbooks, macros e títulos de chat.",
-      "Corrigida a análise de documentos PDF.",
-      "Corrigido o envio de imagens e documentos sem texto acompanhante.",
-      "Corrigidas as referências de imagem durante a regeneração de mensagens usando URLs estáveis em vez de índices temporários.",
-      "Corrigida a exclusão imediata de imagens recém-carregadas.",
-      "Corrigidos serviços em execução que eram exibidos incorretamente como parados."
+      "Adicionado suporte ao navegador integrado: o Chatter pode ler e rolar páginas e, após a confirmação do usuário, clicar em elementos e preencher campos seguros."
     ],
     "tr": [
-      "Yardımcı yapay zeka çağrıları için kota ve maliyet muhasebesi eklendi; istem oluşturma, komut incelemeleri, runbook'lar, makrolar ve sohbet başlıkları dahil.",
-      "PDF belge ayrıştırma düzeltildi.",
-      "Metin içermeyen görsellerin ve belgelerin gönderilmesi düzeltildi.",
-      "Geçici dizinler yerine kararlı URL'ler kullanılarak mesaj yeniden oluşturma sırasında görsel referansları düzeltildi.",
-      "Yeni yüklenen görsellerin hemen silinmesi düzeltildi.",
-      "Çalışan hizmetlerin yanlışlıkla durdurulmuş olarak gösterilmesi düzeltildi."
+      "Yerleşik tarayıcı desteği eklendi: Chatter sayfaları okuyup kaydırabilir ve kullanıcı onayından sonra öğelere tıklayıp güvenli alanları doldurabilir."
     ],
     "zh-CN": [
-      "为辅助AI调用添加了配额和成本核算，包括提示生成、命令审查、运行手册、宏和聊天标题。",
-      "修复了PDF文档解析。",
-      "修复了发送图片和文档时没有附带文本的问题。",
-      "通过使用稳定URL而不是临时索引，修复了消息重新生成期间的图片引用。",
-      "修复了新上传图片被立即删除的问题。",
-      "修复了运行中的服务被错误显示为已停止的问题。"
+      "新增内置浏览器支持：Chatter 可以读取和滚动页面，并在用户确认后点击元素和填写安全字段。"
     ]
   }
 }

@@ -10,6 +10,11 @@ declare global {
       setTitleBarOverlay: (colors: { color: string; symbolColor: string }) => Promise<void>;
       authorizeServer: (server: string, key: string, forceValidation?: boolean) => Promise<{ apiBase: string; reloadRequired: boolean }>;
       clearTrustedServer: () => Promise<{ reloadRequired: boolean }>;
+      browserGetState: () => Promise<BrowserState>;
+      browserSetVisible: (payload: { visible: boolean; bounds?: BrowserBounds }) => Promise<BrowserState>;
+      browserSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
+      browserControl: (payload: BrowserControlPayload) => Promise<any>;
+      onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       onAvatarState: (callback: (payload: unknown) => void) => () => void;
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;
@@ -58,3 +63,24 @@ declare global {
     };
   }
 }
+
+type BrowserBounds = { x: number; y: number; width: number; height: number };
+
+type BrowserState = {
+  url: string;
+  title: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+  visible: boolean;
+};
+
+type BrowserControlPayload = {
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill';
+  url?: string;
+  ref?: string;
+  text?: string;
+  mode?: 'viewport' | 'delta' | 'full';
+  direction?: 'up' | 'down';
+  amount?: number;
+};
