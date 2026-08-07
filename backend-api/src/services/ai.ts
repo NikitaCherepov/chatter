@@ -6027,10 +6027,10 @@ Respond in the user's language. Be detailed and precise.`
     if (action !== 'click' && action !== 'fill') {
       try {
         const result = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, 30000, signal);
-        return JSON.stringify({
+        return wrapUntrustedContent(JSON.stringify({
           status: 'success',
           ...(typeof result === 'object' && result !== null ? result : { result }),
-        });
+        }));
       } catch (err: any) {
         return JSON.stringify({ status: 'error', message: err?.message || String(err) });
       }
@@ -6090,10 +6090,10 @@ Respond in the user's language. Be detailed and precise.`
 
     try {
       const result = await waitForHitlConfirmation(user.id, confirmationPromise);
-      return JSON.stringify({
+      return wrapUntrustedContent(JSON.stringify({
         status: 'success',
         ...(typeof result === 'object' && result !== null ? result : { result }),
-      });
+      }));
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
         return JSON.stringify(withRejectionComment({ status: 'rejected', message: `User rejected browser ${action}.` }, err));
