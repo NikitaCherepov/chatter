@@ -223,9 +223,45 @@ export class ChatterBrowser {
     if (action === 'read') return this.readPage(payload.mode || 'viewport');
     if (action === 'scroll') {
       const direction = payload.direction === 'up' ? -1 : 1;
-      const amount = Math.max(100, Math.min(4000, Math.floor(Number(payload.amount) || 700)));
-      await this.executeInBrowserWorld(`window.scrollBy({ top: ${direction * amount}, behavior: 'auto' }); true;`);
-      return { status: 'success', ...this.getState() };
+      const requestedAmount = Math.max(100, Math.min(4000, Math.floor(Number(payload.amount) || 700)));
+      const distanceVariance = 0.86 + Math.random() * 0.28;
+      const distance = direction * Math.max(80, Math.round(requestedAmount * distanceVariance));
+      const duration = Math.round(Math.max(280, Math.min(950, 260 + Math.abs(distance) * 0.16 + Math.random() * 180)));
+      const scroll = await this.executeInBrowserWorld<{
+        requested: number;
+        actual: number;
+        startY: number;
+        endY: number;
+        duration: number;
+      }>(`(() => new Promise((resolve) => {
+        const requested = ${direction * requestedAmount};
+        const distance = ${distance};
+        const duration = ${duration};
+        const startY = window.scrollY;
+        const maxY = Math.max(0, (document.documentElement?.scrollHeight || document.body?.scrollHeight || 0) - window.innerHeight);
+        const targetY = Math.max(0, Math.min(maxY, startY + distance));
+        const actual = targetY - startY;
+        if (Math.abs(actual) < 1) {
+          resolve({ requested, actual: 0, startY, endY: startY, duration: 0 });
+          return;
+        }
+
+        const startedAt = performance.now();
+        const animate = (now) => {
+          const progress = Math.min(1, (now - startedAt) / duration);
+          const eased = progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+          window.scrollTo({ top: startY + actual * eased, behavior: 'auto' });
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+            return;
+          }
+          resolve({ requested, actual, startY, endY: window.scrollY, duration });
+        };
+        requestAnimationFrame(animate);
+      }))()`);
+      return { status: 'success', scroll, ...this.getState() };
     }
     if (action === 'click') return this.clickElement(`${payload.ref || ''}`);
     if (action === 'fill') return this.fillElement(`${payload.ref || ''}`, `${payload.text || ''}`);

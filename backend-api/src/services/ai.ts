@@ -2500,7 +2500,7 @@ open/read/back/forward/reload/scroll are read-only navigation actions. click and
         mode: { type: 'string', enum: ['viewport', 'delta', 'full'], description: 'Read mode. viewport (default) returns the current screen, delta returns only changes since the previous read, full returns up to 30,000 characters and should be rare.' },
         description: { type: 'string', description: 'Short human-readable description of the target element, used in the confirmation card.' },
         direction: { type: 'string', enum: ['up', 'down'], description: 'Scroll direction.' },
-        amount: { type: 'number', description: 'Scroll distance in CSS pixels (100–4000).' }
+        amount: { type: 'number', description: 'Approximate scroll distance in CSS pixels (100–4000). The desktop varies it slightly and scrolls smoothly.' }
       },
       required: ['action']
     }
