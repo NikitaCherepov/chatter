@@ -457,11 +457,12 @@ function createWindow() {
 
   ipcMain.handle('browser:set-visible', (event, payload: {
     visible?: boolean;
+    ownerId?: string;
     bounds?: Electron.Rectangle;
   }) => {
     assertTrustedIpcSender(event);
     if (!chatterBrowser) throw new Error('browser_unavailable');
-    return chatterBrowser.setVisible(payload?.visible === true, payload?.bounds);
+    return chatterBrowser.setVisible(payload?.visible === true, payload?.bounds, payload?.ownerId);
   });
 
   ipcMain.handle('browser:set-bounds', (event, bounds: Electron.Rectangle) => {

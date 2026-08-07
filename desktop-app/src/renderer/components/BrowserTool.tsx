@@ -34,6 +34,7 @@ function getBounds(element: HTMLElement) {
 export function BrowserTool() {
   const { t } = useTranslation();
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const ownerIdRef = useRef(`browser-tool-${crypto.randomUUID()}`);
   const lastBoundsRef = useRef('');
   const [state, setState] = useState<BrowserState>(EMPTY_STATE);
   const [address, setAddress] = useState('');
@@ -61,10 +62,10 @@ export function BrowserTool() {
       const element = viewportRef.current;
       if (element) {
         const bounds = getBounds(element);
-        const key = `${bounds.x}:${bounds.y}:${bounds.width}:${bounds.height}`;
+        const key = `${bounds.x}:${bounds.y}:${bounds.width}:${bounds.height}:${window.devicePixelRatio}`;
         if (key !== lastBoundsRef.current) {
           lastBoundsRef.current = key;
-          void api.browserSetVisible({ visible: true, bounds }).catch(console.error);
+          void api.browserSetVisible({ visible: true, ownerId: ownerIdRef.current, bounds }).catch(console.error);
         }
       }
       frame = requestAnimationFrame(syncBounds);
@@ -75,7 +76,7 @@ export function BrowserTool() {
       disposed = true;
       cancelAnimationFrame(frame);
       lastBoundsRef.current = '';
-      void api.browserSetVisible({ visible: false }).catch(console.error);
+      void api.browserSetVisible({ visible: false, ownerId: ownerIdRef.current }).catch(console.error);
     };
   }, []);
 

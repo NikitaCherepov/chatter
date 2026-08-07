@@ -90,6 +90,9 @@ export class ChatterBrowser {
   private readonly host: BrowserWindow;
   private readonly view: WebContentsView;
   private visible = false;
+  private activeLayoutOwner = '';
+  private nextLayoutOwnerRank = 0;
+  private readonly layoutOwnerRanks = new Map<string, number>();
   private snapshotUrl = '';
   private snapshotElements = new Map<string, BrowserElement>();
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
@@ -153,7 +156,26 @@ export class ChatterBrowser {
     };
   }
 
-  setVisible(visible: boolean, bounds?: Rectangle): BrowserState {
+  setVisible(visible: boolean, bounds?: Rectangle, ownerId?: string): BrowserState {
+    const owner = `${ownerId || ''}`.trim();
+    if (owner) {
+      let rank = this.layoutOwnerRanks.get(owner);
+      if (rank === undefined) {
+        rank = ++this.nextLayoutOwnerRank;
+        this.layoutOwnerRanks.set(owner, rank);
+      }
+
+      const activeRank = this.layoutOwnerRanks.get(this.activeLayoutOwner) || 0;
+      if (visible && rank < activeRank) return this.getState();
+      if (!visible) {
+        this.layoutOwnerRanks.delete(owner);
+        if (this.activeLayoutOwner !== owner) return this.getState();
+        this.activeLayoutOwner = '';
+      } else {
+        this.activeLayoutOwner = owner;
+      }
+    }
+
     this.visible = visible;
     if (bounds) this.setBounds(bounds);
     this.view.setVisible(visible);
@@ -168,10 +190,11 @@ export class ChatterBrowser {
 
   setBounds(bounds: Rectangle): void {
     const windowBounds = this.host.getContentBounds();
-    const x = Math.max(0, Math.floor(Number(bounds?.x) || 0));
-    const y = Math.max(0, Math.floor(Number(bounds?.y) || 0));
-    const width = Math.max(1, Math.min(Math.floor(Number(bounds?.width) || 1), windowBounds.width - x));
-    const height = Math.max(1, Math.min(Math.floor(Number(bounds?.height) || 1), windowBounds.height - y));
+    const zoomFactor = this.host.webContents.getZoomFactor();
+    const x = Math.max(0, Math.min(Math.floor((Number(bounds?.x) || 0) * zoomFactor), windowBounds.width - 1));
+    const y = Math.max(0, Math.min(Math.floor((Number(bounds?.y) || 0) * zoomFactor), windowBounds.height - 1));
+    const width = Math.max(1, Math.min(Math.floor((Number(bounds?.width) || 1) * zoomFactor), windowBounds.width - x));
+    const height = Math.max(1, Math.min(Math.floor((Number(bounds?.height) || 1) * zoomFactor), windowBounds.height - y));
     this.view.setBounds({ x, y, width, height });
   }
 

@@ -11,7 +11,7 @@ declare global {
       authorizeServer: (server: string, key: string, forceValidation?: boolean) => Promise<{ apiBase: string; reloadRequired: boolean }>;
       clearTrustedServer: () => Promise<{ reloadRequired: boolean }>;
       browserGetState: () => Promise<BrowserState>;
-      browserSetVisible: (payload: { visible: boolean; bounds?: BrowserBounds }) => Promise<BrowserState>;
+      browserSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
       browserSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
       browserControl: (payload: BrowserControlPayload) => Promise<any>;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;

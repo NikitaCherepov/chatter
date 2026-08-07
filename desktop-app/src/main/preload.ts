@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Embedded browser: isolated WebContentsView controlled by the trusted renderer.
   browserGetState: () =>
     ipcRenderer.invoke('browser:get-state'),
-  browserSetVisible: (payload: { visible: boolean; bounds?: { x: number; y: number; width: number; height: number } }) =>
+  browserSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: { x: number; y: number; width: number; height: number } }) =>
     ipcRenderer.invoke('browser:set-visible', payload),
   browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('browser:set-bounds', bounds),
