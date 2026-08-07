@@ -1481,18 +1481,19 @@ async function applyConfiguration() {
 
 async function getServiceStatus() {
   try {
-    const output = await runDocker(composeArgs('--profile', 'telegram', '--profile', 'notes', '--profile', 'voice', '--profile', 'admin', 'ps', '-a', '--format', 'json'), 30000);
+    const output = await runDocker(composeArgs(
+      '--profile', 'telegram',
+      '--profile', 'notes',
+      '--profile', 'voice',
+      '--profile', 'admin',
+      'ps', '-a',
+      '--format', '{{.Service}}\t{{.Name}}\t{{.State}}\t{{.Health}}\t{{.Status}}'
+    ), 30000);
     if (!output) return [];
-    let rows;
-    try { rows = JSON.parse(output); if (!Array.isArray(rows)) rows = [rows]; }
-    catch { rows = output.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)); }
-    return rows.map((row) => ({
-      service: row.Service || row.service || '',
-      name: row.Name || row.name || '',
-      state: row.State || row.state || '',
-      health: row.Health || row.health || '',
-      status: row.Status || row.status || ''
-    }));
+    return output.split(/\r?\n/).filter(Boolean).map((line) => {
+      const [service = '', name = '', state = '', health = '', ...statusParts] = line.split('\t');
+      return { service, name, state: state.toLowerCase(), health: health.toLowerCase(), status: statusParts.join('\t') };
+    });
   } catch (error) {
     return [{ service: 'docker', state: 'error', status: error.message }];
   }
