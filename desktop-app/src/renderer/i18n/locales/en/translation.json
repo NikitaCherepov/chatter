@@ -159,6 +159,7 @@
   "settings": {
     "title": "Settings",
     "sections": {
+      "browser": "Browser",
       "account": "Account",
       "connections": "Linked accounts",
       "prompt": "Prompt",
@@ -176,6 +177,17 @@
       "billing": "Billing",
       "app": "Application",
       "about": "About"
+    },
+    "browser": {
+      "help": "Choose which AI browser actions require your approval. Manual browser actions are not affected.",
+      "confirmationsTitle": "Action confirmations",
+      "open": "Opening an address",
+      "openHelp": "Ask before the AI opens a URL or search query.",
+      "click": "Clicking page elements",
+      "clickHelp": "Ask before the AI clicks links, buttons, or other page elements.",
+      "fill": "Entering text",
+      "fillHelp": "Ask before the AI enters text into a page field.",
+      "sensitiveFieldsNote": "Passwords, authentication codes, and payment fields always remain manual-only."
     },
     "language": {
       "system": "System",

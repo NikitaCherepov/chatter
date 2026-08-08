@@ -456,6 +456,7 @@
   "settings": {
     "title": "Nastavení",
     "sections": {
+      "browser": "Prohlížeč",
       "account": "Účet",
       "connections": "Propojené účty",
       "prompt": "Výzva",
@@ -473,6 +474,17 @@
       "app": "Aplikace",
       "billing": "Fakturace",
       "about": "O aplikaci"
+    },
+    "browser": {
+      "help": "Vyberte, které akce AI v prohlížeči vyžadují vaše potvrzení. Ruční akce nejsou ovlivněny.",
+      "confirmationsTitle": "Potvrzení akcí",
+      "open": "Otevření adresy",
+      "openHelp": "Zeptat se před otevřením URL nebo vyhledávacího dotazu pomocí AI.",
+      "click": "Kliknutí na prvky stránky",
+      "clickHelp": "Zeptat se před kliknutím AI na odkazy, tlačítka nebo jiné prvky.",
+      "fill": "Zadávání textu",
+      "fillHelp": "Zeptat se před zadáním textu pomocí AI do pole stránky.",
+      "sensitiveFieldsNote": "Hesla, ověřovací kódy a platební pole vždy zůstávají pouze pro ruční zadání."
     },
     "language": {
       "system": "Systém",

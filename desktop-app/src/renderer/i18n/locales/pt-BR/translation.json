@@ -144,6 +144,7 @@
   "settings": {
     "title": "Configurações",
     "sections": {
+      "browser": "Navegador",
       "account": "Conta",
       "prompt": "Prompt",
       "voice": "Voz",
@@ -161,6 +162,17 @@
       "mail": "Email",
       "billing": "Faturamento",
       "about": "Sobre"
+    },
+    "browser": {
+      "help": "Escolha quais ações do navegador realizadas pela IA exigem sua aprovação. As ações manuais não são afetadas.",
+      "confirmationsTitle": "Confirmações de ações",
+      "open": "Abrir um endereço",
+      "openHelp": "Perguntar antes que a IA abra uma URL ou pesquisa.",
+      "click": "Clicar em elementos",
+      "clickHelp": "Perguntar antes que a IA clique em links, botões ou outros elementos.",
+      "fill": "Inserir texto",
+      "fillHelp": "Perguntar antes que a IA insira texto em um campo da página.",
+      "sensitiveFieldsNote": "Senhas, códigos de autenticação e campos de pagamento sempre permanecem disponíveis apenas para entrada manual."
     },
     "language": {
       "system": "Sistema",

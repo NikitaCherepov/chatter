@@ -2485,7 +2485,7 @@ Workflow for interaction:
 2. Use click or fill with an exact ref from the latest read result.
 3. After an in-page change, prefer read with mode=delta. After navigation, use mode=viewport. Use mode=full only when the user explicitly needs the whole document.
 
-open, click, and fill always require a separate explicit user confirmation. read/back/forward/reload/scroll do not submit data. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Passwords, authentication codes, and payment-card fields cannot be read or filled by the agent.`,
+Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Passwords, authentication codes, and payment-card fields cannot be read or filled by the agent.`,
     parameters: {
       type: 'object',
       properties: {
@@ -6022,9 +6022,24 @@ Respond in the user's language. Be detailed and precise.`
       ipcPayload.amount = amount;
     }
 
-    // Reading and passive navigation cannot submit data. Opening a model-chosen URL,
-    // clicking and filling always require a one-time, exact user confirmation.
-    if (action !== 'open' && action !== 'click' && action !== 'fill') {
+    let browserConfirmationSettings: Record<string, unknown> = {};
+    try {
+      const parsedUiSettings: unknown = JSON.parse(user.ui_settings || '{}');
+      if (parsedUiSettings && typeof parsedUiSettings === 'object' && !Array.isArray(parsedUiSettings)) {
+        browserConfirmationSettings = parsedUiSettings as Record<string, unknown>;
+      }
+    } catch { /* use confirmation defaults */ }
+    const confirmationRequired = action === 'open'
+      ? browserConfirmationSettings.browser_confirm_open !== false
+      : action === 'click'
+        ? browserConfirmationSettings.browser_confirm_click !== false
+        : action === 'fill'
+          ? browserConfirmationSettings.browser_confirm_fill !== false
+          : false;
+
+    // Reading and passive navigation cannot submit data. Opening, clicking and filling
+    // use the user's per-account confirmation preferences (safe default: confirm).
+    if (!confirmationRequired) {
       try {
         const result = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, 30000, signal);
         return wrapUntrustedContent(JSON.stringify({

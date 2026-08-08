@@ -456,6 +456,7 @@
   "settings": {
     "title": "Ustawienia",
     "sections": {
+      "browser": "Przeglądarka",
       "account": "Konto",
       "prompt": "Prompt",
       "voice": "Głos",
@@ -473,6 +474,17 @@
       "mail": "Poczta",
       "billing": "Rozliczenia",
       "about": "O aplikacji"
+    },
+    "browser": {
+      "help": "Wybierz, które działania AI w przeglądarce wymagają Twojego potwierdzenia. Działania ręczne pozostają bez zmian.",
+      "confirmationsTitle": "Potwierdzanie działań",
+      "open": "Otwieranie adresu",
+      "openHelp": "Pytaj przed otwarciem adresu URL lub wyszukiwania przez AI.",
+      "click": "Klikanie elementów strony",
+      "clickHelp": "Pytaj przed kliknięciem przez AI linków, przycisków lub innych elementów.",
+      "fill": "Wprowadzanie tekstu",
+      "fillHelp": "Pytaj przed wpisaniem tekstu przez AI w pole na stronie.",
+      "sensitiveFieldsNote": "Hasła, kody uwierzytelniające i pola płatności zawsze pozostają dostępne wyłącznie ręcznie."
     },
     "language": {
       "system": "Systemowy",

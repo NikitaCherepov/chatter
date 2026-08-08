@@ -144,6 +144,7 @@
   "settings": {
     "title": "設定",
     "sections": {
+      "browser": "ブラウザ",
       "account": "アカウント",
       "prompt": "プロンプト",
       "voice": "音声",
@@ -161,6 +162,17 @@
       "mail": "メール",
       "billing": "請求",
       "about": "概要"
+    },
+    "browser": {
+      "help": "AIによるブラウザ操作のうち、確認が必要なものを選択します。手動操作には影響しません。",
+      "confirmationsTitle": "操作の確認",
+      "open": "アドレスを開く",
+      "openHelp": "AIがURLや検索語句を開く前に確認します。",
+      "click": "ページ要素をクリック",
+      "clickHelp": "AIがリンク、ボタン、その他の要素をクリックする前に確認します。",
+      "fill": "テキストを入力",
+      "fillHelp": "AIがページの入力欄にテキストを入力する前に確認します。",
+      "sensitiveFieldsNote": "パスワード、認証コード、支払い欄は常に手動入力のみです。"
     },
     "language": {
       "system": "システム",

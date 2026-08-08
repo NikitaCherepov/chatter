@@ -842,6 +842,9 @@ export const parseUiSettings = (user: UserRecord): {
   show_tokens?: boolean;
   dice_roll_enabled?: boolean;
   seen_announcements?: string[];
+  browser_confirm_open: boolean;
+  browser_confirm_click: boolean;
+  browser_confirm_fill: boolean;
 } => {
   try {
     const parsed = JSON.parse(user.ui_settings || '{}');
@@ -851,8 +854,17 @@ export const parseUiSettings = (user: UserRecord): {
       ...(Array.isArray(parsed.seen_announcements) && parsed.seen_announcements.every((id: unknown) => typeof id === 'string')
         ? { seen_announcements: parsed.seen_announcements as string[] }
         : {}),
+      browser_confirm_open: typeof parsed.browser_confirm_open === 'boolean' ? parsed.browser_confirm_open : true,
+      browser_confirm_click: typeof parsed.browser_confirm_click === 'boolean' ? parsed.browser_confirm_click : true,
+      browser_confirm_fill: typeof parsed.browser_confirm_fill === 'boolean' ? parsed.browser_confirm_fill : true,
     };
-  } catch { return {}; }
+  } catch {
+    return {
+      browser_confirm_open: true,
+      browser_confirm_click: true,
+      browser_confirm_fill: true,
+    };
+  }
 };
 
 const toAuthUserDto = (user: UserRecord) => {
@@ -4291,7 +4303,14 @@ app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
 
 // ─── UI settings (display options stored per user) ──────────────────────────
 
-const VALID_UI_KEYS = ['show_tokens', 'dice_roll_enabled', 'seen_announcements'] as const;
+const VALID_UI_KEYS = [
+  'show_tokens',
+  'dice_roll_enabled',
+  'seen_announcements',
+  'browser_confirm_open',
+  'browser_confirm_click',
+  'browser_confirm_fill',
+] as const;
 
 type UiSettingValue = boolean | string[];
 
@@ -4313,7 +4332,14 @@ app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  const settings: Record<string, UiSettingValue> = { show_tokens: true, dice_roll_enabled: false, seen_announcements: [] };
+  const settings: Record<string, UiSettingValue> = {
+    show_tokens: true,
+    dice_roll_enabled: false,
+    seen_announcements: [],
+    browser_confirm_open: true,
+    browser_confirm_click: true,
+    browser_confirm_fill: true,
+  };
   try {
     const raw = JSON.parse(user.ui_settings || '{}');
     for (const key of VALID_UI_KEYS) {
@@ -4331,7 +4357,11 @@ app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
   }
   // load-merge: читаем существующие и мержим только валидные ключи
   const user = getUserById(userId);
-  const existing: Record<string, UiSettingValue> = {};
+  const existing: Record<string, UiSettingValue> = {
+    browser_confirm_open: true,
+    browser_confirm_click: true,
+    browser_confirm_fill: true,
+  };
   try {
     const raw = JSON.parse(user?.ui_settings || '{}');
     for (const key of VALID_UI_KEYS) {

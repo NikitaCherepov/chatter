@@ -56,6 +56,9 @@ export type UiSettings = {
   show_tokens?: boolean;
   dice_roll_enabled?: boolean;
   seen_announcements?: string[];
+  browser_confirm_open?: boolean;
+  browser_confirm_click?: boolean;
+  browser_confirm_fill?: boolean;
 };
 
 type User = {

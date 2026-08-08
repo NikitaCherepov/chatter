@@ -31,6 +31,7 @@ import { SshKeySettings } from './SshKeySettings';
 import { SmartHomeSettings } from './SmartHomeSettings';
 import { MailSettings } from './MailSettings';
 import { PCSettings } from './PCSettings';
+import { BrowserSettings } from './BrowserSettings';
 import { LinkTelegramModal } from './LinkTelegramModal';
 import { QuotaWidget } from './QuotaWidget';
 import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSettings';
@@ -46,7 +47,7 @@ type Props = {
   onAuthInvalidated?: () => void;
 };
 
-type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
+type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
 
 const CUSTOM_PROMPT_ID = -1;
 
@@ -74,6 +75,7 @@ const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'voice', labelKey: 'settings.sections.voice' },
   { key: 'macros', labelKey: 'settings.sections.macros' },
   { key: 'pc', labelKey: 'settings.sections.pc' },
+  { key: 'browser', labelKey: 'settings.sections.browser' },
   { key: 'servers', labelKey: 'settings.sections.servers' },
   { key: 'runbooks', labelKey: 'settings.sections.runbooks' },
   { key: 'sshkeys', labelKey: 'settings.sections.sshkeys' },
@@ -1508,6 +1510,10 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
 
           {section === 'pc' && (
             <PCSettings />
+          )}
+
+          {section === 'browser' && (
+            <BrowserSettings />
           )}
 
           {section === 'servers' && (

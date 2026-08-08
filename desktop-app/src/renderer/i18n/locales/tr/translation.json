@@ -456,6 +456,7 @@
   "settings": {
     "title": "Ayarlar",
     "sections": {
+      "browser": "Tarayıcı",
       "account": "Hesap",
       "connections": "Bağlı hesaplar",
       "prompt": "İstem",
@@ -473,6 +474,17 @@
       "app": "Uygulama",
       "billing": "Faturalandırma",
       "about": "Hakkında"
+    },
+    "browser": {
+      "help": "Yapay zekânın hangi tarayıcı işlemleri için onayınızı isteyeceğini seçin. Manuel işlemler etkilenmez.",
+      "confirmationsTitle": "İşlem onayları",
+      "open": "Adres açma",
+      "openHelp": "Yapay zekâ bir URL veya arama sorgusu açmadan önce sor.",
+      "click": "Sayfa öğelerine tıklama",
+      "clickHelp": "Yapay zekâ bağlantılara, düğmelere veya diğer öğelere tıklamadan önce sor.",
+      "fill": "Metin girme",
+      "fillHelp": "Yapay zekâ sayfadaki bir alana metin girmeden önce sor.",
+      "sensitiveFieldsNote": "Parolalar, kimlik doğrulama kodları ve ödeme alanları her zaman yalnızca manuel olarak kullanılabilir."
     },
     "language": {
       "system": "Sistem",
