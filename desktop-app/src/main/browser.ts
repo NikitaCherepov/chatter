@@ -97,6 +97,8 @@ export class ChatterBrowser {
   private snapshotElements = new Map<string, BrowserElement>();
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
   private interactionInProgress = false;
+  private initialNavigationStarted = false;
+  private explicitNavigationRequested = false;
 
   constructor(host: BrowserWindow) {
     this.host = host;
@@ -194,9 +196,19 @@ export class ChatterBrowser {
     this.visible = visible;
     if (bounds) this.setBounds(bounds);
     this.view.setVisible(visible);
-    if (visible && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')) {
+    if (
+      visible
+      && !this.explicitNavigationRequested
+      && !this.initialNavigationStarted
+      && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')
+    ) {
+      this.initialNavigationStarted = true;
       void this.view.webContents.loadURL(HOME_URL).catch((error) => {
-        console.error('[browser] initial navigation failed:', error);
+        if (error?.code !== 'ERR_ABORTED') console.error('[browser] initial navigation failed:', error);
+      }).finally(() => {
+        if (!this.view.webContents.isDestroyed() && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')) {
+          this.initialNavigationStarted = false;
+        }
       });
     }
     this.emitState();
@@ -221,6 +233,7 @@ export class ChatterBrowser {
     if (action === 'open') {
       if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
       this.interactionInProgress = true;
+      this.explicitNavigationRequested = true;
       const url = normalizeBrowserUrl(`${payload.url || ''}`);
       try {
         await contents.loadURL(url);
