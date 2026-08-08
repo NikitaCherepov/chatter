@@ -707,7 +707,7 @@ export function ChatPage() {
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
-  const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'open' | 'click' | 'fill'; description: string; url?: string; text?: string }>>([]);
+  const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'open' | 'click' | 'fill'; description: string; url?: string; text?: string; origin?: string }>>([]);
   const confirmationSubmissionsRef = useRef(new Set<string>());
   const [submittingConfirmationIds, setSubmittingConfirmationIds] = useState<Set<string>>(new Set());
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
@@ -1090,7 +1090,7 @@ export function ChatPage() {
       }
     }
     if (action.action === 'browser_action_confirmation' && action.value) {
-      const val = action.value as { confirmation_id?: string; action_type?: 'open' | 'click' | 'fill'; description?: string; url?: string; text?: string };
+      const val = action.value as { confirmation_id?: string; action_type?: 'open' | 'click' | 'fill'; description?: string; url?: string; text?: string; origin?: string };
       if (val.confirmation_id && val.action_type && val.description) {
         setBrowserActionConfirmations(prev => {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
@@ -1100,6 +1100,7 @@ export function ChatPage() {
             description: val.description!,
             url: val.url,
             text: val.text,
+            origin: val.origin,
           }];
         });
       }
@@ -3840,6 +3841,11 @@ export function ChatPage() {
                       {conf.text}
                     </div>
                   )}
+                  {conf.origin && conf.action_type !== 'open' && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-hint)', marginTop: '6px' }}>
+                      {t('chat.browser.currentSite', { site: conf.origin })}
+                    </div>
+                  )}
                   {submittingConfirmationIds.has(conf.confirmation_id) && (
                     <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
                       {t('chat.confirm.executing')}
@@ -3870,6 +3876,38 @@ export function ChatPage() {
                     >
                       {t('chat.confirm.allow')}
                     </button>
+                    {conf.origin && conf.action_type !== 'open' && (
+                      <button
+                        className={s.suggestMacroSaveBtn}
+                        style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                        title={t('chat.browser.allowSiteSessionHint', { site: conf.origin })}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                        onClick={async () => {
+                          if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                          try {
+                            await api.apiFetch('/api/v1/pc-commands/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                confirmation_id: conf.confirmation_id,
+                                approved: true,
+                                allow_browser_site_session: true,
+                              }),
+                            });
+                            toast.success(t('chat.browser.siteAllowedSession', { site: conf.origin }));
+                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                          } catch (error) {
+                            toast.error(t('chat.browser.failed'));
+                            if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
+                              setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                            }
+                          } finally {
+                            finishConfirmationSubmission(conf.confirmation_id);
+                          }
+                        }}
+                      >
+                        {t('chat.browser.allowSiteSession')}
+                      </button>
+                    )}
                     <RejectWithComment
                       className={s.suggestMacroDismissBtn}
                       disabled={submittingConfirmationIds.has(conf.confirmation_id)}

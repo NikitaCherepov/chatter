@@ -5252,10 +5252,18 @@ const dismissMissingBrowserConfirmation = (userId: number, confirmationId: strin
   });
 };
 
+const getBrowserSessionPermissionGrant = (pending: PendingPcCommandConfirmation) => {
+  if (pending.kind !== 'browser_action' || pending.payload.ipcType !== 'browser_control') return null;
+  const { action, expected_origin: origin } = pending.payload.ipcPayload;
+  if ((action !== 'click' && action !== 'fill') || typeof origin !== 'string' || !origin) return null;
+  return { action, origin };
+};
+
 app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
   const approved = req.body?.approved === true;
+  const allowBrowserSiteSession = req.body?.allow_browser_site_session === true;
   const rejectionComment = req.body?.rejection_comment;
 
   console.log('[pc_command] approve request', { userId, confirmationId, approved });
@@ -5281,10 +5289,24 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     return res.json({ ok: true, status: 'rejected' });
   }
 
+  const browserPermissionGrant = allowBrowserSiteSession
+    ? getBrowserSessionPermissionGrant(pending)
+    : null;
+  if (allowBrowserSiteSession && !browserPermissionGrant) {
+    return res.status(400).json({ error: 'browser_site_session_not_available_for_action' });
+  }
+
   // Execute the approved command on user's PC via WS IPC
   try {
     deletePendingPcConfirmation(confirmationId);
     const { sendIpcToDesktop } = await import('./ws-clients.js');
+    if (browserPermissionGrant) {
+      await sendIpcToDesktop(userId, 'browser_control', {
+        action: 'grant_site_permission',
+        permission_action: browserPermissionGrant.action,
+        origin: browserPermissionGrant.origin,
+      }, 15000);
+    }
     console.log('[pc_action] approved, executing via desktop ipc', {
       userId,
       confirmationId,
@@ -5300,7 +5322,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     });
     pending.resolve(result);
     notifyBrowserConfirmationResolved(pending, confirmationId, 'executed');
-    return res.json({ ok: true, status: 'executed', result });
+    return res.json({ ok: true, status: 'executed', result, site_permission: browserPermissionGrant });
   } catch (err: any) {
     console.error('[pc_action] desktop ipc failed', {
       userId,
@@ -5319,6 +5341,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     const confirmationId = `${req.body?.confirmation_id || ''}`;
     const approved = req.body?.approved === true;
     const allowWorkspaceSession = req.body?.allow_workspace_session === true;
+    const allowBrowserSiteSession = req.body?.allow_browser_site_session === true;
     const userId = resolveInternalAccountId(req.body?.user_id);
     const rejectionComment = req.body?.rejection_comment;
 
@@ -5348,6 +5371,13 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     return res.status(400).json({ error: 'workspace_session_not_available_for_action' });
   }
 
+  const browserPermissionGrant = allowBrowserSiteSession
+    ? getBrowserSessionPermissionGrant(pending)
+    : null;
+  if (allowBrowserSiteSession && !browserPermissionGrant) {
+    return res.status(400).json({ error: 'browser_site_session_not_available_for_action' });
+  }
+
   try {
     deletePendingPcConfirmation(confirmationId);
     const { sendIpcToDesktop } = await import('./ws-clients.js');
@@ -5367,11 +5397,18 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
         workspace = { granted: false, reason: error?.message || 'workspace_grant_failed' };
       }
     }
+    if (browserPermissionGrant) {
+      await sendIpcToDesktop(pending.userId, 'browser_control', {
+        action: 'grant_site_permission',
+        permission_action: browserPermissionGrant.action,
+        origin: browserPermissionGrant.origin,
+      }, 15000);
+    }
     const ipcTimeout = pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
     const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout);
     pending.resolve(result);
     notifyBrowserConfirmationResolved(pending, confirmationId, 'executed');
-    return res.json({ ok: true, status: 'executed', result, workspace });
+    return res.json({ ok: true, status: 'executed', result, workspace, site_permission: browserPermissionGrant });
   } catch (err: any) {
     pending.reject(err);
     notifyBrowserConfirmationResolved(pending, confirmationId, 'failed');

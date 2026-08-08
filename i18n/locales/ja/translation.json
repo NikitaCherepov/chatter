@@ -691,6 +691,9 @@
     "textPreview": "\n\nテキスト：\n{{text}}",
     "completed": "✅ ブラウザー操作が完了しました。",
     "rejected": "❌ ブラウザー操作が拒否されました。",
+    "currentSite": "\n\n現在のサイト：{{site}}",
+    "allowSiteSession": "このサイトで許可",
+    "siteAllowedSession": "✅ Chatterを閉じるまでこのサイトで許可されました。",
     "actions": { "open": "アドレスを開く", "click": "要素をクリック", "fill": "テキストを入力" }
   },
   "generated": {

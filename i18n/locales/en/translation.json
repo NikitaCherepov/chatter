@@ -603,6 +603,9 @@
     "textPreview": "\n\nText:\n{{text}}",
     "completed": "✅ Browser action completed.",
     "rejected": "❌ Browser action rejected.",
+    "currentSite": "\n\nCurrent site: {{site}}",
+    "allowSiteSession": "Allow on this site",
+    "siteAllowedSession": "✅ Allowed on this site until Chatter closes.",
     "actions": {
       "open": "Open address",
       "click": "Click element",

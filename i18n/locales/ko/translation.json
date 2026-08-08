@@ -691,6 +691,9 @@
     "textPreview": "\n\n텍스트:\n{{text}}",
     "completed": "✅ 브라우저 작업이 완료되었습니다.",
     "rejected": "❌ 브라우저 작업이 거부되었습니다.",
+    "currentSite": "\n\n현재 사이트: {{site}}",
+    "allowSiteSession": "이 사이트에서 허용",
+    "siteAllowedSession": "✅ Chatter를 닫을 때까지 이 사이트에서 허용되었습니다.",
     "actions": { "open": "주소 열기", "click": "요소 클릭", "fill": "텍스트 입력" }
   },
   "generated": {

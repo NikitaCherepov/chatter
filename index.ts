@@ -4919,7 +4919,7 @@ const rejectWithOptionalComment = async (
 
 // ── PC Command Confirmation (Telegram inline buttons) ─────────────────────
 
-bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async (ctx) => {
+bot.action(/^pcconfirm:(allow|site|always|review|reject|reject_comment):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const confirmationId = ctx.match[2];
     const userId = ctx.state.accountId;
@@ -4950,7 +4950,7 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
         return;
     }
 
-    if (action === 'allow') {
+    if (action === 'allow' || action === 'site') {
         const pendingLabel = pendingPcCommandTexts.get(confirmationId) || '';
         const isBrowserAction = pendingLabel.startsWith('browser:');
         await ctx.answerCbQuery(ctx.t('confirmations.executing'));
@@ -4959,14 +4959,19 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
             try {
                 const resp = await axios.post(
                     `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
-                    { confirmation_id: confirmationId, approved: true, user_id: userId },
+                    {
+                        confirmation_id: confirmationId,
+                        approved: true,
+                        user_id: userId,
+                        ...(action === 'site' ? { allow_browser_site_session: true } : {}),
+                    },
                     { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 120000 }
                 );
                 const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
                 const preview = output.slice(0, 500) || ctx.t('confirmations.noOutput');
                 pendingPcCommandTexts.delete(confirmationId);
                 if (isBrowserAction) {
-                    await ctx.editMessageText(ctx.t('browserConfirmation.completed')).catch(() => {});
+                    await ctx.editMessageText(ctx.t(action === 'site' ? 'browserConfirmation.siteAllowedSession' : 'browserConfirmation.completed')).catch(() => {});
                 } else {
                     await ctx.editMessageText(ctx.t('confirmations.commandDoneMarkdown', { output: preview.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
                         ctx.editMessageText(ctx.t('confirmations.commandDone', { output: preview })).catch(() => {});
@@ -6112,6 +6117,9 @@ const processUserTextThroughAi = async (
                     const textPreview = actionType === 'fill' && typeof action.value.text === 'string'
                         ? action.value.text.slice(0, 800)
                         : '';
+                    const origin = actionType !== 'open' && typeof action.value.origin === 'string'
+                        ? action.value.origin
+                        : '';
                     pendingPcCommandTexts.set(confirmationId, `browser:${actionLabel}: ${target}`);
 
                     const keyboard = Markup.inlineKeyboard([
@@ -6119,6 +6127,9 @@ const processUserTextThroughAi = async (
                             Markup.button.callback(ctx.t('confirmations.buttons.allow'), `pcconfirm:allow:${confirmationId}`),
                             Markup.button.callback(ctx.t('admin.buttons.reject'), `pcconfirm:reject:${confirmationId}`),
                         ],
+                        ...(origin ? [[
+                            Markup.button.callback(ctx.t('browserConfirmation.allowSiteSession'), `pcconfirm:site:${confirmationId}`),
+                        ]] : []),
                         [
                             Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `pcconfirm:reject_comment:${confirmationId}`),
                         ]
@@ -6132,6 +6143,9 @@ const processUserTextThroughAi = async (
                         let message = ctx.t('browserConfirmation.prompt', { action: actionLabel, target });
                         if (textPreview) {
                             message += ctx.t('browserConfirmation.textPreview', { text: textPreview });
+                        }
+                        if (origin) {
+                            message += ctx.t('browserConfirmation.currentSite', { site: origin });
                         }
                         await ctx.reply(message, keyboard);
                     } catch (err: any) {

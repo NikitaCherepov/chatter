@@ -721,6 +721,9 @@
     "textPreview": "\n\nMetin:\n{{text}}",
     "completed": "✅ Tarayıcı eylemi tamamlandı.",
     "rejected": "❌ Tarayıcı eylemi reddedildi.",
+    "currentSite": "\n\nGeçerli site: {{site}}",
+    "allowSiteSession": "Bu sitede izin ver",
+    "siteAllowedSession": "✅ Chatter kapanana kadar bu sitede izin verildi.",
     "actions": { "open": "Adresi aç", "click": "Öğeye tıkla", "fill": "Metin gir" }
   },
   "generated": {

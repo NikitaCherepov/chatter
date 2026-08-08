@@ -11,10 +11,13 @@ export type BrowserState = {
 };
 
 export type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission';
   url?: string;
   ref?: string;
   text?: string;
+  permission_action?: 'click' | 'fill';
+  origin?: string;
+  expected_origin?: string;
   mode?: 'viewport' | 'delta' | 'full';
   direction?: 'up' | 'down';
   amount?: number;
@@ -100,6 +103,8 @@ export class ChatterBrowser {
   private interactionInProgress = false;
   private initialNavigationStarted = false;
   private explicitNavigationRequested = false;
+  private readonly sessionClickOrigins = new Set<string>();
+  private readonly sessionFillOrigins = new Set<string>();
 
   /** Last known pointer position inside the WebContentsView (local CSS px). */
   private cursorPos: Point = { x: 0, y: 0 };
@@ -245,6 +250,31 @@ export class ChatterBrowser {
     const contents = this.view.webContents;
     if (contents.isDestroyed()) throw new Error('browser_unavailable');
 
+    if (action === 'check_site_permission') {
+      const permissionAction = payload.permission_action;
+      if (permissionAction !== 'click' && permissionAction !== 'fill') {
+        throw new Error('browser_permission_action_required');
+      }
+      const origin = this.getCurrentHttpOrigin();
+      return {
+        allowed: Boolean(origin && this.getPermissionOrigins(permissionAction).has(origin)),
+        origin,
+      };
+    }
+    if (action === 'grant_site_permission') {
+      const permissionAction = payload.permission_action;
+      if (permissionAction !== 'click' && permissionAction !== 'fill') {
+        throw new Error('browser_permission_action_required');
+      }
+      const currentOrigin = this.getCurrentHttpOrigin();
+      const requestedOrigin = this.normalizeHttpOrigin(payload.origin);
+      if (!currentOrigin || !requestedOrigin || currentOrigin !== requestedOrigin) {
+        throw new Error('browser_origin_changed');
+      }
+      this.getPermissionOrigins(permissionAction).add(currentOrigin);
+      return { granted: true, origin: currentOrigin, permission_action: permissionAction };
+    }
+
     if (action === 'open') {
       if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
       this.interactionInProgress = true;
@@ -318,10 +348,34 @@ export class ChatterBrowser {
         this.interactionInProgress = false;
       }
     }
-    if (action === 'click') return this.clickElement(`${payload.ref || ''}`);
-    if (action === 'fill') return this.fillElement(`${payload.ref || ''}`, `${payload.text || ''}`);
+    if (action === 'click' || action === 'fill') {
+      const expectedOrigin = payload.expected_origin ? this.normalizeHttpOrigin(payload.expected_origin) : null;
+      if (payload.expected_origin && (!expectedOrigin || expectedOrigin !== this.getCurrentHttpOrigin())) {
+        throw new Error('browser_origin_changed');
+      }
+      if (action === 'click') return this.clickElement(`${payload.ref || ''}`);
+      return this.fillElement(`${payload.ref || ''}`, `${payload.text || ''}`);
+    }
 
     throw new Error('unsupported_browser_action');
+  }
+
+  private normalizeHttpOrigin(value: unknown): string | null {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private getCurrentHttpOrigin(): string | null {
+    return this.normalizeHttpOrigin(this.view.webContents.getURL());
+  }
+
+  private getPermissionOrigins(action: 'click' | 'fill'): Set<string> {
+    return action === 'click' ? this.sessionClickOrigins : this.sessionFillOrigins;
   }
 
   private clearSnapshot(): void {

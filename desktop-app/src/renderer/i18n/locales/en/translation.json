@@ -517,7 +517,11 @@
       "click": "Click: {{target}}",
       "fill": "Enter text in: {{target}}",
       "executed": "Browser action completed",
-      "failed": "Browser action failed"
+      "failed": "Browser action failed",
+      "currentSite": "Current site: {{site}}",
+      "allowSiteSession": "Allow on this site",
+      "allowSiteSessionHint": "Allow this type of action on {{site}} until Chatter closes",
+      "siteAllowedSession": "Allowed on this site for the current session: {{site}}"
     },
     "email": {
       "title": "Send email",

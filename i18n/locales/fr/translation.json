@@ -691,6 +691,9 @@
     "textPreview": "\n\nTexte :\n{{text}}",
     "completed": "✅ Action du navigateur terminée.",
     "rejected": "❌ Action du navigateur refusée.",
+    "currentSite": "\n\nSite actuel : {{site}}",
+    "allowSiteSession": "Autoriser sur ce site",
+    "siteAllowedSession": "✅ Autorisé sur ce site jusqu’à la fermeture de Chatter.",
     "actions": { "open": "Ouvrir l’adresse", "click": "Cliquer sur l’élément", "fill": "Saisir du texte" }
   },
   "generated": {

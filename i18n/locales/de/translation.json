@@ -691,6 +691,9 @@
     "textPreview": "\n\nText:\n{{text}}",
     "completed": "✅ Browseraktion abgeschlossen.",
     "rejected": "❌ Browseraktion abgelehnt.",
+    "currentSite": "\n\nAktuelle Website: {{site}}",
+    "allowSiteSession": "Auf dieser Website erlauben",
+    "siteAllowedSession": "✅ Auf dieser Website bis zum Schließen von Chatter erlaubt.",
     "actions": { "open": "Adresse öffnen", "click": "Element anklicken", "fill": "Text eingeben" }
   },
   "generated": {

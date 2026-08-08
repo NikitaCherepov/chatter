@@ -33,6 +33,7 @@ type BrowserActionPayload = {
     url?: string;
     ref?: string;
     text?: string;
+    expected_origin?: string;
   };
 };
 

@@ -6029,13 +6029,30 @@ Respond in the user's language. Be detailed and precise.`
         browserConfirmationSettings = parsedUiSettings as Record<string, unknown>;
       }
     } catch { /* use confirmation defaults */ }
-    const confirmationRequired = action === 'open'
+    let confirmationRequired = action === 'open'
       ? browserConfirmationSettings.browser_confirm_open !== false
       : action === 'click'
         ? browserConfirmationSettings.browser_confirm_click !== false
         : action === 'fill'
           ? browserConfirmationSettings.browser_confirm_fill !== false
           : false;
+
+    let siteOrigin: string | undefined;
+    if (confirmationRequired && (action === 'click' || action === 'fill')) {
+      try {
+        const permission = await sendIpcToDesktop(user.id, 'browser_control', {
+          action: 'check_site_permission',
+          permission_action: action,
+        }, 15000, signal) as { allowed?: boolean; origin?: string | null };
+        if (typeof permission?.origin === 'string' && permission.origin) {
+          siteOrigin = permission.origin;
+          ipcPayload.expected_origin = siteOrigin;
+        }
+        if (permission?.allowed === true && siteOrigin) confirmationRequired = false;
+      } catch (error: any) {
+        console.warn('[browser_control] failed to check session site permission:', error?.message || String(error));
+      }
+    }
 
     // Reading and passive navigation cannot submit data. Opening, clicking and filling
     // use the user's per-account confirmation preferences (safe default: confirm).
@@ -6074,6 +6091,7 @@ Respond in the user's language. Be detailed and precise.`
             ...(url ? { url } : {}),
             ...(ref ? { ref } : {}),
             ...(text !== undefined ? { text } : {}),
+            ...(siteOrigin ? { expected_origin: siteOrigin } : {}),
           },
         },
         resolve,
@@ -6099,6 +6117,7 @@ Respond in the user's language. Be detailed and precise.`
           : (action === 'open' ? url : ref),
         ...(url ? { url } : {}),
         ...(text !== undefined ? { text } : {}),
+        ...(siteOrigin ? { origin: siteOrigin } : {}),
       },
     };
 

@@ -81,10 +81,13 @@ type BrowserState = {
 };
 
 type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission';
   url?: string;
   ref?: string;
   text?: string;
+  permission_action?: 'click' | 'fill';
+  origin?: string;
+  expected_origin?: string;
   mode?: 'viewport' | 'delta' | 'full';
   direction?: 'up' | 'down';
   amount?: number;

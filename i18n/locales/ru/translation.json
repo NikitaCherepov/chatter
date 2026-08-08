@@ -603,6 +603,9 @@
     "textPreview": "\n\nТекст:\n{{text}}",
     "completed": "✅ Действие в браузере выполнено.",
     "rejected": "❌ Действие в браузере отклонено.",
+    "currentSite": "\n\nТекущий сайт: {{site}}",
+    "allowSiteSession": "Разрешить на этом сайте",
+    "siteAllowedSession": "✅ Разрешено на этом сайте до закрытия Chatter.",
     "actions": {
       "open": "Открыть адрес",
       "click": "Нажать на элемент",

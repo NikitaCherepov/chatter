@@ -721,6 +721,9 @@
     "textPreview": "\n\nText:\n{{text}}",
     "completed": "✅ Akce v prohlížeči byla dokončena.",
     "rejected": "❌ Akce v prohlížeči byla zamítnuta.",
+    "currentSite": "\n\nAktuální web: {{site}}",
+    "allowSiteSession": "Povolit na tomto webu",
+    "siteAllowedSession": "✅ Na tomto webu povoleno do zavření Chatteru.",
     "actions": { "open": "Otevřít adresu", "click": "Kliknout na prvek", "fill": "Zadat text" }
   },
   "generated": {
