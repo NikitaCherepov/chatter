@@ -1,4 +1,5 @@
 import { BrowserWindow, WebContentsView, type Rectangle } from 'electron';
+import { click as naturalClick, generateTrajectory, pickTargetPoint, type CancellationToken, type Point } from './cursor-input';
 
 export type BrowserState = {
   url: string;
@@ -100,6 +101,11 @@ export class ChatterBrowser {
   private initialNavigationStarted = false;
   private explicitNavigationRequested = false;
 
+  /** Last known pointer position inside the WebContentsView (local CSS px). */
+  private cursorPos: Point = { x: 0, y: 0 };
+  /** Active cancellation token for the in-flight pointer sequence (if any). */
+  private clickToken: CancellationToken | null = null;
+
   constructor(host: BrowserWindow) {
     this.host = host;
     this.view = new WebContentsView({
@@ -131,6 +137,7 @@ export class ChatterBrowser {
     contents.on('did-start-loading', () => this.emitState());
     contents.on('did-stop-loading', () => this.emitState());
     contents.on('did-navigate', () => {
+      this.abortInteraction();
       this.clearSnapshot();
       this.emitState();
     });
@@ -143,6 +150,7 @@ export class ChatterBrowser {
   }
 
   destroy(): void {
+    this.abortInteraction();
     this.visible = false;
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
   }
@@ -307,6 +315,12 @@ export class ChatterBrowser {
     this.snapshotUrl = '';
     this.snapshotElements.clear();
     this.lastReadSnapshot = null;
+  }
+
+  /** Aborts any in-flight pointer sequence (called on navigation, destroy, etc.). */
+  private abortInteraction(): void {
+    if (this.clickToken) this.clickToken.cancelled = true;
+    this.clickToken = null;
   }
 
   private emitState(): void {
@@ -513,19 +527,47 @@ export class ChatterBrowser {
     if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
     const expected = this.getSnapshotElement(ref);
     this.interactionInProgress = true;
-    const script = `(async () => {
+
+    const contents = this.view.webContents;
+
+    // -- Phase 1: scroll element into view and read its rect --
+    const rectScript = `(async () => {
       const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
       if (!element) throw new Error('browser_element_not_found');
-
       element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
       await new Promise(resolve => setTimeout(resolve, 320));
       if (!element.isConnected) throw new Error('browser_element_not_found');
+      const r = element.getBoundingClientRect();
+      return {
+        x: r.left, y: r.top, width: r.width, height: r.height,
+        viewportW: window.innerWidth, viewportH: window.innerHeight,
+      };
+    })()`;
 
-      const rect = element.getBoundingClientRect();
-      const targetX = Math.max(8, Math.min(window.innerWidth - 8, rect.left + rect.width / 2));
-      const targetY = Math.max(8, Math.min(window.innerHeight - 8, rect.top + rect.height / 2));
-      const previous = globalThis.__chatterBrowserCursorPosition || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    let rect: { x: number; y: number; width: number; height: number; viewportW: number; viewportH: number };
+    try {
+      rect = await this.executeInBrowserWorld(rectScript);
+    } catch (error) {
+      this.interactionInProgress = false;
+      throw error;
+    }
 
+    const viewport = { width: rect.viewportW, height: rect.viewportH };
+
+    // Initialise cursor position if this is the first interaction.
+    if (this.cursorPos.x === 0 && this.cursorPos.y === 0) {
+      this.cursorPos = { x: viewport.width / 2, y: viewport.height / 2 };
+    }
+
+    // -- Phase 2: pick a single target (used by both visual + native) --
+    const elementRect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    // pickTargetPoint clips to viewport internally, so partially off-screen
+    // elements and tiny elements are handled correctly.
+    const target = pickTargetPoint(elementRect, viewport);
+    const trajectory = generateTrajectory(this.cursorPos, target);
+
+    // -- Phase 3: show visual cursor overlay --
+    const showCursorScript = `(() => {
       let cursor = document.getElementById('__chatter-browser-cursor');
       if (!cursor) {
         cursor = document.createElement('div');
@@ -539,48 +581,86 @@ export class ChatterBrowser {
         });
         document.documentElement.appendChild(cursor);
       }
-
+      cursor.style.left = ${this.cursorPos.x} + 'px';
+      cursor.style.top = ${this.cursorPos.y} + 'px';
       cursor.style.opacity = '1';
-      const duration = 460;
-      const curve = Math.max(-70, Math.min(70, (targetX - previous.x) * 0.12));
-      const startedAt = performance.now();
-      await new Promise(resolve => {
-        const animate = now => {
-          const progress = Math.min(1, (now - startedAt) / duration);
-          const eased = progress < 0.5
-            ? 4 * progress * progress * progress
-            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-          const arc = Math.sin(Math.PI * eased) * curve;
-          const x = previous.x + (targetX - previous.x) * eased;
-          const y = previous.y + (targetY - previous.y) * eased - arc;
-          cursor.style.left = x + 'px';
-          cursor.style.top = y + 'px';
-          if (progress < 1) requestAnimationFrame(animate);
-          else resolve(undefined);
-        };
-        requestAnimationFrame(animate);
-      });
-
-      globalThis.__chatterBrowserCursorPosition = { x: targetX, y: targetY };
-      const oldOutline = element.style.outline;
-      const oldOutlineOffset = element.style.outlineOffset;
-      element.style.outline = '2px solid rgba(34, 105, 225, .9)';
-      element.style.outlineOffset = '3px';
-      await new Promise(resolve => setTimeout(resolve, 180));
-      element.click();
-      setTimeout(() => {
-        if (element.isConnected) {
-          element.style.outline = oldOutline;
-          element.style.outlineOffset = oldOutlineOffset;
-        }
-        cursor.style.opacity = '0';
-      }, 220);
       return true;
     })()`;
+    await this.executeInBrowserWorld(showCursorScript).catch(() => {});
+
+    // Animate the DOM cursor along the same trajectory (best-effort, visual only).
+    const visualAnimation = this.executeInBrowserWorld(`(() => {
+      const cursor = document.getElementById('__chatter-browser-cursor');
+      if (!cursor) return false;
+      const points = ${JSON.stringify(trajectory)};
+      let i = 0;
+      const step = () => {
+        if (i >= points.length) return;
+        cursor.style.left = points[i].x + 'px';
+        cursor.style.top = points[i].y + 'px';
+        i++;
+        if (i < points.length) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      return true;
+    })()`).catch(() => {});
+
+    // -- Phase 4: stream native sendInputEvent via cursor-input module --
+    this.clickToken = { cancelled: false };
+    const token = this.clickToken;
+
+    // Highlight element outline — save original values for restoration.
+    this.executeInBrowserWorld(`(() => {
+      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+      if (!element) return false;
+      globalThis.__chatterBrowserSavedOutline = element.style.outline;
+      globalThis.__chatterBrowserSavedOutlineOffset = element.style.outlineOffset;
+      element.style.outline = '2px solid rgba(34, 105, 225, .9)';
+      element.style.outlineOffset = '3px';
+      return true;
+    })()`).catch(() => {});
+
     try {
-      await this.executeInBrowserWorld(script);
+      // Pass the pre-selected target AND trajectory so visual cursor and
+      // native events follow the exact same path and speed.
+      this.cursorPos = await naturalClick(contents, elementRect, this.cursorPos, token, target, trajectory);
+
+      // Brief settle, then restore outline + hide cursor.
+      await new Promise(resolve => setTimeout(resolve, 200));
+      await this.executeInBrowserWorld(`(() => {
+        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+        if (element && element.isConnected) {
+          element.style.outline = globalThis.__chatterBrowserSavedOutline || '';
+          element.style.outlineOffset = globalThis.__chatterBrowserSavedOutlineOffset || '';
+        }
+        delete globalThis.__chatterBrowserSavedOutline;
+        delete globalThis.__chatterBrowserSavedOutlineOffset;
+        const cursor = document.getElementById('__chatter-browser-cursor');
+        if (cursor) cursor.style.opacity = '0';
+        globalThis.__chatterBrowserCursorPosition = { x: ${target.x}, y: ${target.y} };
+        return true;
+      })()`).catch(() => {});
+
+      await visualAnimation;
+
       return { status: 'success', action: 'click', element: expected, ...this.getState() };
+    } catch (error) {
+      // Clean up: restore outline + hide visual cursor on error / cancellation.
+      await this.executeInBrowserWorld(`(() => {
+        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+        if (element && element.isConnected) {
+          element.style.outline = globalThis.__chatterBrowserSavedOutline || '';
+          element.style.outlineOffset = globalThis.__chatterBrowserSavedOutlineOffset || '';
+        }
+        delete globalThis.__chatterBrowserSavedOutline;
+        delete globalThis.__chatterBrowserSavedOutlineOffset;
+        const cursor = document.getElementById('__chatter-browser-cursor');
+        if (cursor) cursor.style.opacity = '0';
+        return true;
+      })()`).catch(() => {});
+      throw error;
     } finally {
+      this.clickToken = null;
       this.interactionInProgress = false;
     }
   }
