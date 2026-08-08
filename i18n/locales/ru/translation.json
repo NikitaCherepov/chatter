@@ -606,6 +606,7 @@
     "currentSite": "\n\nТекущий сайт: {{site}}",
     "allowSiteSession": "Разрешить на этом сайте",
     "siteAllowedSession": "✅ Разрешено на этом сайте до закрытия Chatter.",
+    "actualTarget": "Фактический элемент страницы",
     "actions": {
       "open": "Открыть адрес",
       "click": "Нажать на элемент",

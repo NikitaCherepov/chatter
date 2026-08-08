@@ -2485,7 +2485,7 @@ Workflow for interaction:
 2. Use click or fill with an exact ref from the latest read result.
 3. After an in-page change, prefer read with mode=delta. After navigation, use mode=viewport. Use mode=full only when the user explicitly needs the whole document.
 
-Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Passwords, authentication codes, and payment-card fields cannot be read or filled by the agent.`,
+Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.`,
     parameters: {
       type: 'object',
       properties: {
@@ -2498,7 +2498,7 @@ Depending on the user's Browser settings, open, click, and fill may require a se
         ref: { type: 'string', description: 'Temporary element ref from the latest read result. Required for click/fill.' },
         text: { type: 'string', description: 'Text to enter for action=fill. Never use for passwords or authentication codes.' },
         mode: { type: 'string', enum: ['viewport', 'delta', 'full'], description: 'Read mode. viewport (default) returns the current screen, delta returns only changes since the previous read, full returns up to 30,000 characters and should be rare.' },
-        description: { type: 'string', description: 'Short human-readable description of the target element, used in the confirmation card.' },
+        description: { type: 'string', description: 'Short human-readable description of the intended action target, used in the confirmation card.' },
         direction: { type: 'string', enum: ['up', 'down'], description: 'Scroll direction.' },
         amount: { type: 'number', description: 'Approximate scroll distance in CSS pixels (100–4000). The desktop varies it slightly and scrolls smoothly.' }
       },
@@ -6038,16 +6038,27 @@ Respond in the user's language. Be detailed and precise.`
           : false;
 
     let siteOrigin: string | undefined;
+    let siteTarget: {
+      tag?: string;
+      role?: string;
+      text?: string;
+      href?: string;
+      inputType?: string;
+      placeholder?: string;
+      sensitive?: boolean;
+    } | undefined;
     if (confirmationRequired && (action === 'click' || action === 'fill')) {
       try {
         const permission = await sendIpcToDesktop(user.id, 'browser_control', {
           action: 'check_site_permission',
           permission_action: action,
-        }, 15000, signal) as { allowed?: boolean; origin?: string | null };
+          ref,
+        }, 15000, signal) as { allowed?: boolean; origin?: string | null; target?: typeof siteTarget };
         if (typeof permission?.origin === 'string' && permission.origin) {
           siteOrigin = permission.origin;
           ipcPayload.expected_origin = siteOrigin;
         }
+        if (permission?.target && typeof permission.target === 'object') siteTarget = permission.target;
         if (permission?.allowed === true && siteOrigin) confirmationRequired = false;
       } catch (error: any) {
         console.warn('[browser_control] failed to check session site permission:', error?.message || String(error));
@@ -6118,6 +6129,7 @@ Respond in the user's language. Be detailed and precise.`
         ...(url ? { url } : {}),
         ...(text !== undefined ? { text } : {}),
         ...(siteOrigin ? { origin: siteOrigin } : {}),
+        ...(siteTarget ? { target_element: siteTarget } : {}),
       },
     };
 

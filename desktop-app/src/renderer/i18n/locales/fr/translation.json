@@ -172,7 +172,7 @@
       "clickHelp": "Demander avant que l’IA clique sur des liens, boutons ou autres éléments.",
       "fill": "Saisie de texte",
       "fillHelp": "Demander avant que l’IA saisisse du texte dans un champ de la page.",
-      "sensitiveFieldsNote": "Les mots de passe, codes d’authentification et champs de paiement restent toujours réservés à la saisie manuelle."
+      "sensitiveFieldsNote": "Les mots de passe ne peuvent être saisis que manuellement — le modèle n’y a pas accès."
     },
     "language": {
       "system": "Système",

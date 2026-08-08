@@ -172,7 +172,7 @@
       "clickHelp": "AI 点击链接、按钮或其他页面元素前询问。",
       "fill": "输入文本",
       "fillHelp": "AI 向页面字段输入文本前询问。",
-      "sensitiveFieldsNote": "密码、验证码和付款字段始终只能手动输入。"
+      "sensitiveFieldsNote": "密码只能手动输入，模型无法访问。"
     },
     "language": {
       "system": "系统",

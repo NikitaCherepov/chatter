@@ -694,6 +694,7 @@
     "currentSite": "\n\n現在のサイト：{{site}}",
     "allowSiteSession": "このサイトで許可",
     "siteAllowedSession": "✅ Chatterを閉じるまでこのサイトで許可されました。",
+    "actualTarget": "実際のページ要素",
     "actions": { "open": "アドレスを開く", "click": "要素をクリック", "fill": "テキストを入力" }
   },
   "generated": {

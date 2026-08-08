@@ -606,6 +606,7 @@
     "currentSite": "\n\nCurrent site: {{site}}",
     "allowSiteSession": "Allow on this site",
     "siteAllowedSession": "✅ Allowed on this site until Chatter closes.",
+    "actualTarget": "Actual page element",
     "actions": {
       "open": "Open address",
       "click": "Click element",

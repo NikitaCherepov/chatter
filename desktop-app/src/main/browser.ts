@@ -256,9 +256,21 @@ export class ChatterBrowser {
         throw new Error('browser_permission_action_required');
       }
       const origin = this.getCurrentHttpOrigin();
+      const target = payload.ref ? this.getSnapshotElement(payload.ref) : undefined;
       return {
         allowed: Boolean(origin && this.getPermissionOrigins(permissionAction).has(origin)),
         origin,
+        ...(target ? {
+          target: {
+            tag: target.tag,
+            role: target.role,
+            text: target.text,
+            href: target.href,
+            inputType: target.inputType,
+            placeholder: target.placeholder,
+            sensitive: target.sensitive === true,
+          },
+        } : {}),
       };
     }
     if (action === 'grant_site_permission') {

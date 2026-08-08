@@ -187,7 +187,7 @@
       "clickHelp": "Ask before the AI clicks links, buttons, or other page elements.",
       "fill": "Entering text",
       "fillHelp": "Ask before the AI enters text into a page field.",
-      "sensitiveFieldsNote": "Passwords, authentication codes, and payment fields always remain manual-only."
+      "sensitiveFieldsNote": "Passwords can only be entered manually — the model cannot access them."
     },
     "language": {
       "system": "System",
@@ -521,7 +521,8 @@
       "currentSite": "Current site: {{site}}",
       "allowSiteSession": "Allow on this site",
       "allowSiteSessionHint": "Allow this type of action on {{site}} until Chatter closes",
-      "siteAllowedSession": "Allowed on this site for the current session: {{site}}"
+      "siteAllowedSession": "Allowed on this site for the current session: {{site}}",
+      "actualTarget": "Actual page element"
     },
     "email": {
       "title": "Send email",

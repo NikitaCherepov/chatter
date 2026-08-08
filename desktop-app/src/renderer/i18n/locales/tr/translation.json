@@ -484,7 +484,7 @@
       "clickHelp": "Yapay zekâ bağlantılara, düğmelere veya diğer öğelere tıklamadan önce sor.",
       "fill": "Metin girme",
       "fillHelp": "Yapay zekâ sayfadaki bir alana metin girmeden önce sor.",
-      "sensitiveFieldsNote": "Parolalar, kimlik doğrulama kodları ve ödeme alanları her zaman yalnızca manuel olarak kullanılabilir."
+      "sensitiveFieldsNote": "Parolalar yalnızca elle girilebilir — model bunlara erişemez."
     },
     "language": {
       "system": "Sistem",

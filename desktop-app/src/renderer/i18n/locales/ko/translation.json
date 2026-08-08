@@ -484,7 +484,7 @@
       "clickHelp": "AI가 링크, 버튼 또는 기타 요소를 클릭하기 전에 확인합니다.",
       "fill": "텍스트 입력",
       "fillHelp": "AI가 페이지 입력란에 텍스트를 입력하기 전에 확인합니다.",
-      "sensitiveFieldsNote": "비밀번호, 인증 코드 및 결제 필드는 항상 수동 입력만 가능합니다."
+      "sensitiveFieldsNote": "비밀번호는 수동으로만 입력할 수 있으며 모델은 비밀번호에 접근할 수 없습니다."
     },
     "language": {
       "system": "시스템",

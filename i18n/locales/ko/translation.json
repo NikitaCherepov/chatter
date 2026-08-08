@@ -694,6 +694,7 @@
     "currentSite": "\n\n현재 사이트: {{site}}",
     "allowSiteSession": "이 사이트에서 허용",
     "siteAllowedSession": "✅ Chatter를 닫을 때까지 이 사이트에서 허용되었습니다.",
+    "actualTarget": "실제 페이지 요소",
     "actions": { "open": "주소 열기", "click": "요소 클릭", "fill": "텍스트 입력" }
   },
   "generated": {

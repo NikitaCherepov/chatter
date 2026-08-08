@@ -172,7 +172,7 @@
       "clickHelp": "Perguntar antes que a IA clique em links, botões ou outros elementos.",
       "fill": "Inserir texto",
       "fillHelp": "Perguntar antes que a IA insira texto em um campo da página.",
-      "sensitiveFieldsNote": "Senhas, códigos de autenticação e campos de pagamento sempre permanecem disponíveis apenas para entrada manual."
+      "sensitiveFieldsNote": "As senhas só podem ser inseridas manualmente — o modelo não tem acesso a elas."
     },
     "language": {
       "system": "Sistema",

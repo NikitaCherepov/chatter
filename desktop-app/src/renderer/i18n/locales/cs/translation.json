@@ -484,7 +484,7 @@
       "clickHelp": "Zeptat se před kliknutím AI na odkazy, tlačítka nebo jiné prvky.",
       "fill": "Zadávání textu",
       "fillHelp": "Zeptat se před zadáním textu pomocí AI do pole stránky.",
-      "sensitiveFieldsNote": "Hesla, ověřovací kódy a platební pole vždy zůstávají pouze pro ruční zadání."
+      "sensitiveFieldsNote": "Hesla lze zadávat pouze ručně — model k nim nemá přístup."
     },
     "language": {
       "system": "Systém",

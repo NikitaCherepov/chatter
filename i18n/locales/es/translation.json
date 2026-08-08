@@ -694,6 +694,7 @@
     "currentSite": "\n\nSitio actual: {{site}}",
     "allowSiteSession": "Permitir en este sitio",
     "siteAllowedSession": "✅ Permitido en este sitio hasta cerrar Chatter.",
+    "actualTarget": "Elemento real de la página",
     "actions": { "open": "Abrir dirección", "click": "Hacer clic en el elemento", "fill": "Introducir texto" }
   },
   "generated": {

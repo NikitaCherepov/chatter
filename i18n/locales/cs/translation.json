@@ -724,6 +724,7 @@
     "currentSite": "\n\nAktuální web: {{site}}",
     "allowSiteSession": "Povolit na tomto webu",
     "siteAllowedSession": "✅ Na tomto webu povoleno do zavření Chatteru.",
+    "actualTarget": "Skutečný prvek stránky",
     "actions": { "open": "Otevřít adresu", "click": "Kliknout na prvek", "fill": "Zadat text" }
   },
   "generated": {

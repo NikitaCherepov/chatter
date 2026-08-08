@@ -724,6 +724,7 @@
     "currentSite": "\n\nGeçerli site: {{site}}",
     "allowSiteSession": "Bu sitede izin ver",
     "siteAllowedSession": "✅ Chatter kapanana kadar bu sitede izin verildi.",
+    "actualTarget": "Gerçek sayfa öğesi",
     "actions": { "open": "Adresi aç", "click": "Öğeye tıkla", "fill": "Metin gir" }
   },
   "generated": {

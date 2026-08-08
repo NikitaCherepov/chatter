@@ -694,6 +694,7 @@
     "currentSite": "\n\nBieżąca witryna: {{site}}",
     "allowSiteSession": "Zezwól w tej witrynie",
     "siteAllowedSession": "✅ Zezwolono w tej witrynie do zamknięcia Chattera.",
+    "actualTarget": "Rzeczywisty element strony",
     "actions": { "open": "Otwórz adres", "click": "Kliknij element", "fill": "Wprowadź tekst" }
   },
   "generated": {

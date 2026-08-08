@@ -172,7 +172,7 @@
       "clickHelp": "Vor Klicks auf Links, Schaltflächen oder andere Seitenelemente nachfragen.",
       "fill": "Text eingeben",
       "fillHelp": "Vor der Texteingabe in ein Seitenfeld durch die KI nachfragen.",
-      "sensitiveFieldsNote": "Passwörter, Bestätigungscodes und Zahlungsfelder bleiben immer ausschließlich manuell bedienbar."
+      "sensitiveFieldsNote": "Passwörter können nur manuell eingegeben werden — das Modell hat keinen Zugriff darauf."
     },
     "language": {
       "system": "System",

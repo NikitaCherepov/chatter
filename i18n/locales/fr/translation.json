@@ -694,6 +694,7 @@
     "currentSite": "\n\nSite actuel : {{site}}",
     "allowSiteSession": "Autoriser sur ce site",
     "siteAllowedSession": "✅ Autorisé sur ce site jusqu’à la fermeture de Chatter.",
+    "actualTarget": "Élément réel de la page",
     "actions": { "open": "Ouvrir l’adresse", "click": "Cliquer sur l’élément", "fill": "Saisir du texte" }
   },
   "generated": {

@@ -6113,7 +6113,24 @@ const processUserTextThroughAi = async (
                             ? 'fill'
                             : 'click';
                     const actionLabel = ctx.t(`browserConfirmation.actions.${actionType}`);
-                    const target = `${action.value.url || action.value.description || ''}`.slice(0, 1000);
+                    const targetElement = action.value.target_element && typeof action.value.target_element === 'object'
+                        ? action.value.target_element
+                        : null;
+                    const targetElementTag = targetElement
+                        ? `<${targetElement.tag || 'element'}${targetElement.inputType ? ` type="${targetElement.inputType}"` : ''}${targetElement.role ? ` role="${targetElement.role}"` : ''}>`
+                        : '';
+                    const targetElementLabel = targetElement
+                        ? `${targetElement.text || targetElement.placeholder || ''}`.trim()
+                        : '';
+                    const targetElementHref = targetElement && typeof targetElement.href === 'string'
+                        ? targetElement.href
+                        : '';
+                    const authoritativeTarget = [targetElementTag, targetElementLabel, targetElementHref].filter(Boolean).join('\n');
+                    const describedTarget = `${action.value.url || action.value.description || ''}`.trim();
+                    const target = [
+                        describedTarget,
+                        authoritativeTarget ? `${ctx.t('browserConfirmation.actualTarget')}:\n${authoritativeTarget}` : '',
+                    ].filter(Boolean).join('\n\n').slice(0, 1000);
                     const textPreview = actionType === 'fill' && typeof action.value.text === 'string'
                         ? action.value.text.slice(0, 800)
                         : '';

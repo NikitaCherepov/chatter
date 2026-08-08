@@ -484,7 +484,7 @@
       "clickHelp": "Pytaj przed kliknięciem przez AI linków, przycisków lub innych elementów.",
       "fill": "Wprowadzanie tekstu",
       "fillHelp": "Pytaj przed wpisaniem tekstu przez AI w pole na stronie.",
-      "sensitiveFieldsNote": "Hasła, kody uwierzytelniające i pola płatności zawsze pozostają dostępne wyłącznie ręcznie."
+      "sensitiveFieldsNote": "Hasła można wprowadzać tylko ręcznie — model nie ma do nich dostępu."
     },
     "language": {
       "system": "Systemowy",
