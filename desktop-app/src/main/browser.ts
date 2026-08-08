@@ -1,5 +1,5 @@
 import { BrowserWindow, WebContentsView, type Rectangle } from 'electron';
-import { click as naturalClick, generateTrajectory, pickTargetPoint, type CancellationToken, type Point } from './cursor-input';
+import { click as naturalClick, generateTrajectory, pickTargetPoint, scrollWheel, type CancellationToken, type Point } from './cursor-input';
 
 export type BrowserState = {
   url: string;
@@ -271,46 +271,52 @@ export class ChatterBrowser {
     }
     if (action === 'read') return this.readPage(payload.mode || 'viewport');
     if (action === 'scroll') {
-      const direction = payload.direction === 'up' ? -1 : 1;
-      const requestedAmount = Math.max(100, Math.min(4000, Math.floor(Number(payload.amount) || 700)));
-      const distanceVariance = 0.86 + Math.random() * 0.28;
-      const distance = direction * Math.max(80, Math.round(requestedAmount * distanceVariance));
-      const duration = Math.round(Math.max(280, Math.min(950, 260 + Math.abs(distance) * 0.16 + Math.random() * 180)));
-      const scroll = await this.executeInBrowserWorld<{
-        requested: number;
-        actual: number;
-        startY: number;
-        endY: number;
-        duration: number;
-      }>(`(() => new Promise((resolve) => {
-        const requested = ${direction * requestedAmount};
-        const distance = ${distance};
-        const duration = ${duration};
-        const startY = window.scrollY;
-        const maxY = Math.max(0, (document.documentElement?.scrollHeight || document.body?.scrollHeight || 0) - window.innerHeight);
-        const targetY = Math.max(0, Math.min(maxY, startY + distance));
-        const actual = targetY - startY;
-        if (Math.abs(actual) < 1) {
-          resolve({ requested, actual: 0, startY, endY: startY, duration: 0 });
-          return;
+      if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
+      this.interactionInProgress = true;
+
+      try {
+        const direction = payload.direction === 'up' ? -1 : 1;
+        const requestedAmount = Math.max(100, Math.min(4000, Math.floor(Number(payload.amount) || 700)));
+        const distanceVariance = 0.86 + Math.random() * 0.28;
+        const distance = direction * Math.max(80, Math.round(requestedAmount * distanceVariance));
+
+        // Read scroll position and viewport before scrolling.
+        const before = await this.executeInBrowserWorld<{ startY: number; viewportW: number; viewportH: number }>(
+          `(() => ({ startY: Math.round(window.scrollY), viewportW: window.innerWidth, viewportH: window.innerHeight }))()`,
+        );
+
+        // Ensure cursor is positioned within the viewport.
+        const wheelCursorPos: Point = (this.cursorPos.x > 0 && this.cursorPos.y > 0)
+          ? {
+              x: Math.min(this.cursorPos.x, before.viewportW - 1),
+              y: Math.min(this.cursorPos.y, before.viewportH - 1),
+            }
+          : { x: before.viewportW / 2, y: before.viewportH / 2 };
+
+        this.clickToken = { cancelled: false };
+        try {
+          await scrollWheel(this.view.webContents, distance, wheelCursorPos, this.clickToken);
+        } finally {
+          this.clickToken = null;
         }
 
-        const startedAt = performance.now();
-        const animate = (now) => {
-          const progress = Math.min(1, (now - startedAt) / duration);
-          const eased = progress < 0.5
-            ? 4 * progress * progress * progress
-            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-          window.scrollTo({ top: startY + actual * eased, behavior: 'auto' });
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-            return;
-          }
-          resolve({ requested, actual, startY, endY: window.scrollY, duration });
+        // Read scroll position after to report actual delta.
+        const endY = await this.executeInBrowserWorld<number>(`(window.scrollY)`);
+        const actual = endY - before.startY;
+
+        return {
+          status: 'success',
+          scroll: {
+            requested: distance,
+            actual,
+            startY: before.startY,
+            endY,
+          },
+          ...this.getState(),
         };
-        requestAnimationFrame(animate);
-      }))()`);
-      return { status: 'success', scroll, ...this.getState() };
+      } finally {
+        this.interactionInProgress = false;
+      }
     }
     if (action === 'click') return this.clickElement(`${payload.ref || ''}`);
     if (action === 'fill') return this.fillElement(`${payload.ref || ''}`, `${payload.text || ''}`);

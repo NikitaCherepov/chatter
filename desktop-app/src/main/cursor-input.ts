@@ -13,50 +13,37 @@ export type ElementRect = {
 
 export type Point = { x: number; y: number };
 
-/**
- * Lightweight cancellation token. Set `cancelled = true` externally to abort
- * an in-flight click sequence as early as possible.
- */
 export type CancellationToken = { cancelled: boolean };
 
 // ──────────────────────────────────────────────────────────────────────────
-// Configuration constants
+// Configuration
 // ──────────────────────────────────────────────────────────────────────────
 
-/** Maximum padding (px) — gives the random offset more room on large elements. */
 const MAX_EDGE_PADDING = 14;
-
-/** Base delay (ms) between mouseMove frames. */
 const BASE_FRAME_DELAY = 12;
-
-/** Extra random jitter (ms) added to each frame delay. */
 const FRAME_JITTER = 8;
-
-/** Minimum number of trajectory points regardless of distance. */
 const MIN_POINTS = 24;
-
-/** Extra trajectory points per pixel of distance. */
 const POINTS_PER_PX = 0.06;
-
-/** Maximum number of trajectory points (safety cap). */
 const MAX_POINTS = 220;
-
-/** Pixels (from target) within which the cursor slows down (micro-tremor). */
 const TREMOR_ZONE = 14;
-
-/** Frame delay multiplier inside the tremor zone. */
 const TREMOR_SLOWDOWN = 2.4;
-
-/** Pause before mouseDown after arriving at target (ms). */
 const PRE_CLICK_MIN = 50;
 const PRE_CLICK_MAX = 150;
-
-/** Duration of mouse button hold before mouseUp (ms). */
 const HOLD_MIN = 50;
 const HOLD_MAX = 100;
-
-/** Maximum perpendicular deviation of Bezier control points (px). */
 const MAX_CURVE_DEVIATION = 80;
+
+// Scroll
+const SCROLL_PIXELS_PER_TICK = 110;
+const SCROLL_TICK_DELAY = 14;
+const SCROLL_TICK_JITTER = 10;
+const SCROLL_BURST_MIN = 3;
+const SCROLL_BURST_MAX = 8;
+const SCROLL_BURST_PAUSE_MIN = 40;
+const SCROLL_BURST_PAUSE_MAX = 120;
+const SCROLL_OVERSHOOT_PROBABILITY = 0.22;
+const SCROLL_OVERSHOOT_MIN = 30;
+const SCROLL_OVERSHOOT_MAX = 80;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -76,26 +63,17 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 1. Target coordinate calculation
+// 1. Target point
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
- * Picks a random point inside `rect` (intersected with `viewport` if given)
- * with a random margin from the edges so the click doesn't always land dead
- * centre.
- *
- * If `viewport` is provided, the rect is clipped to the visible area first,
- * so partially off-screen or oversized elements still produce valid coords.
- * Padding is automatically reduced for very small elements.
- *
- * Coordinates are **local to the WebContentsView** (i.e. CSS pixels relative
- * to the page origin), which is what `sendInputEvent` expects.
+ * Returns a random point inside `rect`, clipped to `viewport` if provided.
+ * Padding adapts to small elements and is capped at half the visible size.
  */
 export function pickTargetPoint(
   rect: ElementRect,
   viewport?: { width: number; height: number },
 ): Point {
-  // Intersect rect with viewport so we never pick a point off-screen.
   const clipX1 = viewport ? Math.max(0, viewport.width - 1) : Infinity;
   const clipY1 = viewport ? Math.max(0, viewport.height - 1) : Infinity;
 
@@ -110,8 +88,6 @@ export function pickTargetPoint(
     throw new Error('element_not_visible');
   }
 
-  // Adaptive padding: capped at half the visible dimension so the point
-  // always stays inside the element, even for very small ones.
   const padding = Math.min(
     MAX_EDGE_PADDING,
     Math.min(visibleW, visibleH) / 2,
@@ -129,12 +105,9 @@ export function pickTargetPoint(
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 2. Cubic Bezier trajectory generation
+// 2. Trajectory
 // ──────────────────────────────────────────────────────────────────────────
 
-/**
- * Cubic Bezier interpolation at parameter `t` (0 → 1).
- */
 function cubicBezier(
   p0: Point,
   p1: Point,
@@ -155,10 +128,8 @@ function cubicBezier(
 }
 
 /**
- * Generates an array of points describing a curved path from `start` to `end`
- * using a cubic Bezier with two randomly-offset control points.
- *
- * Point count scales with distance — longer movements get more samples.
+ * Generates a list of points along a cubic Bezier curve from `start` to `end`.
+ * Two control points add lateral curvature. Point count scales with distance.
  */
 export function generateTrajectory(start: Point, end: Point): Point[] {
   const dx = end.x - start.x;
@@ -167,18 +138,15 @@ export function generateTrajectory(start: Point, end: Point): Point[] {
 
   if (distance < 1) return [{ ...start }, { ...end }];
 
-  // Number of points scales with distance.
   const count = clamp(
     Math.round(MIN_POINTS + distance * POINTS_PER_PX),
     MIN_POINTS,
     MAX_POINTS,
   );
 
-  // Unit perpendicular vector for lateral offset.
   const perpX = -dy / distance;
   const perpY = dx / distance;
 
-  // Two control points at ~1/3 and ~2/3 along the line, offset sideways.
   const offset1 = randRange(-MAX_CURVE_DEVIATION, MAX_CURVE_DEVIATION);
   const offset2 = randRange(-MAX_CURVE_DEVIATION, MAX_CURVE_DEVIATION);
 
@@ -197,22 +165,14 @@ export function generateTrajectory(start: Point, end: Point): Point[] {
     points.push(cubicBezier(start, cp1, cp2, end, t));
   }
 
-  // Snap the final point exactly to target to avoid floating-point drift.
   points[points.length - 1] = { ...end };
   return points;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 3. Ease-Out timing (Fitts-style deceleration near target)
+// 3. Timing
 // ──────────────────────────────────────────────────────────────────────────
 
-/**
- * Returns the frame delay for a given point index considering ease-out and
- * micro-tremor near the target.
- *
- * Near the end of the trajectory (`TREMOR_ZONE` px from target) the delay
- * increases, simulating a user slowing down to "aim".
- */
 function frameDelayForPoint(
   points: Point[],
   index: number,
@@ -224,22 +184,17 @@ function frameDelayForPoint(
   const base = BASE_FRAME_DELAY + Math.random() * FRAME_JITTER;
 
   if (distToTarget <= TREMOR_ZONE) {
-    // Slow down progressively as we approach the target.
-    const tremorFactor = 1 + (1 - distToTarget / TREMOR_ZONE) * (TREMOR_SLOWDOWN - 1);
-    return base * tremorFactor;
+    const factor = 1 + (1 - distToTarget / TREMOR_ZONE) * (TREMOR_SLOWDOWN - 1);
+    return base * factor;
   }
 
   return base;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 4. Event execution
+// 4. Mouse events
 // ──────────────────────────────────────────────────────────────────────────
 
-/**
- * Sends a low-level mouse event to `webContents`.
- * Coordinates must be **local to the WebContentsView** (CSS pixels).
- */
 function sendMouseEvent(
   webContents: WebContents,
   type: 'mouseMove' | 'mouseDown' | 'mouseUp',
@@ -258,34 +213,114 @@ function sendMouseEvent(
   } as Electron.MouseInputEvent);
 }
 
+function sendWheelEvent(
+  webContents: WebContents,
+  x: number,
+  y: number,
+  deltaY: number,
+): void {
+  // Chromium's injected wheel delta is inverted relative to the public API
+  // (negative = scroll down). Flip the sign at the boundary.
+  const nativeDeltaY = -deltaY;
+  webContents.sendInputEvent({
+    type: 'mouseWheel',
+    x: Math.round(x * 100) / 100,
+    y: Math.round(y * 100) / 100,
+    deltaY: nativeDeltaY,
+    wheelTicksY: nativeDeltaY > 0 ? 1 : -1,
+    canScroll: true,
+  } as Electron.MouseWheelInputEvent);
+}
+
 // ──────────────────────────────────────────────────────────────────────────
-// 5. Main entry point — `click()`
+// 5. Scroll
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
- * Simulates a natural pointer interaction inside an isolated `WebContentsView`.
+ * Scrolls the view by `totalDeltaY` pixels via `mouseWheel` events.
+ * Events are grouped into bursts with pauses between them.
+ */
+export async function scrollWheel(
+  webContents: WebContents,
+  totalDeltaY: number,
+  cursorPos: Point,
+  token?: CancellationToken,
+): Promise<number> {
+  if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
+  if (Math.abs(totalDeltaY) < 1) return 0;
+
+  const direction = totalDeltaY > 0 ? 1 : -1;
+  let sent = 0;
+
+  let overshoot = 0;
+  if (Math.random() < SCROLL_OVERSHOOT_PROBABILITY && Math.abs(totalDeltaY) > SCROLL_OVERSHOOT_MAX * 2) {
+    overshoot = direction * randInt(SCROLL_OVERSHOOT_MIN, SCROLL_OVERSHOOT_MAX);
+  }
+
+  const totalTarget = Math.abs(totalDeltaY) + Math.abs(overshoot);
+
+  while (sent < totalTarget) {
+    const burstRemaining = totalTarget - sent;
+    const burstTicks = Math.min(
+      randInt(SCROLL_BURST_MIN, SCROLL_BURST_MAX),
+      Math.ceil(burstRemaining / SCROLL_PIXELS_PER_TICK),
+    );
+
+    for (let t = 0; t < burstTicks && sent < totalTarget; t++) {
+      if (token?.cancelled) throw new Error('scroll_cancelled');
+      if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
+
+      const tickVariance = 0.85 + Math.random() * 0.3;
+      const tickDelta = direction * Math.min(
+        SCROLL_PIXELS_PER_TICK * tickVariance,
+        totalTarget - sent,
+      );
+
+      sendWheelEvent(webContents, cursorPos.x, cursorPos.y, Math.round(tickDelta));
+      sent += Math.abs(tickDelta);
+
+      await sleep(SCROLL_TICK_DELAY + Math.random() * SCROLL_TICK_JITTER);
+    }
+
+    if (sent < totalTarget) {
+      await sleep(randInt(SCROLL_BURST_PAUSE_MIN, SCROLL_BURST_PAUSE_MAX));
+    }
+  }
+
+  if (overshoot !== 0) {
+    const correction = -overshoot;
+    const correctionTicks = Math.ceil(Math.abs(correction) / SCROLL_PIXELS_PER_TICK);
+
+    await sleep(randInt(120, 280));
+
+    for (let t = 0; t < correctionTicks; t++) {
+      if (token?.cancelled) throw new Error('scroll_cancelled');
+      if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
+
+      const tickDelta = -direction * Math.min(
+        SCROLL_PIXELS_PER_TICK * (0.7 + Math.random() * 0.3),
+        Math.abs(correction) - t * SCROLL_PIXELS_PER_TICK,
+      );
+
+      sendWheelEvent(webContents, cursorPos.x, cursorPos.y, Math.round(tickDelta));
+
+      await sleep(SCROLL_TICK_DELAY + Math.random() * SCROLL_TICK_JITTER);
+    }
+  }
+
+  return totalDeltaY;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 6. Click
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Moves the cursor along a trajectory to a target point, then sends
+ * `mouseDown` and `mouseUp` events via `sendInputEvent`.
  *
- * 1. Uses the provided `target` or picks a randomized one inside `elementRect`.
- * 2. Uses the provided `trajectory` or generates one from `currentMousePos`.
- * 3. Streams `mouseMove` events with ease-out + micro-tremor near target.
- * 4. Pauses briefly, then fires `mouseDown` → hold → `mouseUp`.
- *
- * After `mouseUp` **no script-level `.click()` is invoked** — the native
- * event sequence is sufficient and avoids race conditions.
- *
- * @param webContents       The target view's webContents.
- * @param elementRect       DOMRect of the element (from `getBoundingClientRect`).
- * @param currentMousePos   Current cursor position (local coords).
- * @param token             Optional cancellation token — set `cancelled = true`
- *                          to abort mid-flight.
- * @param target            Pre-selected target point. If omitted, one is
- *                          picked randomly inside `elementRect`.
- * @param trajectory        Pre-generated trajectory points. If omitted, a new
- *                          one is generated from `currentMousePos` to `target`.
- *                          Pass this when the caller has already generated a
- *                          trajectory for a visual cursor so both stay in sync.
- * @returns The final cursor position (reuse as `currentMousePos` for the
- *          next interaction).
+ * `target` and `trajectory` can be provided externally to keep them in sync
+ * with a visual cursor overlay.
  */
 export async function click(
   webContents: WebContents,
@@ -297,13 +332,9 @@ export async function click(
 ): Promise<Point> {
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
-  // ── Step 1: target (use provided or pick a new one) ──
   const resolvedTarget = target ?? pickTargetPoint(elementRect);
-
-  // ── Step 2: trajectory (use provided or generate a new one) ──
   const resolvedTrajectory = trajectory ?? generateTrajectory(currentMousePos, resolvedTarget);
 
-  // ── Step 3: stream mouseMove events ──
   for (let i = 1; i < resolvedTrajectory.length; i++) {
     if (token?.cancelled) throw new Error('click_cancelled');
     if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
@@ -314,25 +345,20 @@ export async function click(
     await sleep(frameDelayForPoint(resolvedTrajectory, i, resolvedTarget));
   }
 
-  // ── Step 4: final positioning — exactly on target ──
   if (token?.cancelled) throw new Error('click_cancelled');
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
   sendMouseEvent(webContents, 'mouseMove', resolvedTarget.x, resolvedTarget.y);
 
-  // Pre-click dwell (reaction pause).
   await sleep(randInt(PRE_CLICK_MIN, PRE_CLICK_MAX));
 
-  // mouseDown
   if (token?.cancelled) throw new Error('click_cancelled');
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
   sendMouseEvent(webContents, 'mouseDown', resolvedTarget.x, resolvedTarget.y, 'left', 1);
 
-  // Button hold duration.
   await sleep(randInt(HOLD_MIN, HOLD_MAX));
 
-  // mouseUp — this completes the native event sequence; no .click() needed.
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
   sendMouseEvent(webContents, 'mouseUp', resolvedTarget.x, resolvedTarget.y, 'left', 1);
