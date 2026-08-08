@@ -1104,6 +1104,13 @@ export function ChatPage() {
         });
       }
     }
+    if (action.action === 'browser_action_confirmation_resolved' && action.value) {
+      const val = action.value as { confirmation_id?: string };
+      if (val.confirmation_id) {
+        setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== val.confirmation_id));
+        finishConfirmationSubmission(val.confirmation_id);
+      }
+    }
     if (action.action === 'file_action_confirmation' && action.value) {
       const val = action.value as { confirmation_id?: string; action_type?: 'read' | 'write'; file_path?: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number };
       if (val.confirmation_id && val.file_path && val.action_type) {
@@ -3797,6 +3804,27 @@ export function ChatPage() {
                       <path d="M12 3a15 15 0 0 0 0 18" />
                     </svg>
                     <span className={s.suggestMacroTitle}>{t('chat.browser.confirmTitle')}</span>
+                    <button
+                      className={s.suggestMacroClose}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onClick={() => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        void api.apiFetch('/api/v1/pc-commands/approve', {
+                          method: 'POST',
+                          body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
+                        }).catch((error) => {
+                          if (!(error instanceof api.ApiError) || error.status !== 404) {
+                            toast.error(t('chat.browser.failed'));
+                          }
+                        }).finally(() => finishConfirmationSubmission(conf.confirmation_id));
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
                   </div>
                   <div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>
@@ -3830,8 +3858,11 @@ export function ChatPage() {
                           });
                           toast.success(t('chat.browser.executed'));
                           setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
+                        } catch (error) {
                           toast.error(t('chat.browser.failed'));
+                          if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
+                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                          }
                         } finally {
                           finishConfirmationSubmission(conf.confirmation_id);
                         }
@@ -3850,8 +3881,11 @@ export function ChatPage() {
                             body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
                           });
                           setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
+                        } catch (error) {
                           toast.error(t('chat.browser.failed'));
+                          if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
+                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                          }
                         } finally {
                           finishConfirmationSubmission(conf.confirmation_id);
                         }

@@ -419,6 +419,11 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     return;
   }
 
+  if (a === 'browser_action_confirmation_resolved') {
+    // Handled by ChatPage; removes a card resolved in Desktop or Telegram.
+    return;
+  }
+
   // ── Webcam Capture confirmation ──
 
   if (a === 'webcam_capture_confirmation') {

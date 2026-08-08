@@ -20,7 +20,7 @@ import { listServers, getServerById, createServer, updateServer, deleteServer, l
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { getPcCommandsSettings, updatePcCommandsSettings, listPcCommandPolicies, createPcCommandPolicy, deletePcCommandPolicy } from './services/pc-commands.js';
-import { getPendingPcConfirmation, deletePendingPcConfirmation } from './services/pc-command-confirmations.js';
+import { getPendingPcConfirmation, deletePendingPcConfirmation, type PendingPcCommandConfirmation } from './services/pc-command-confirmations.js';
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
@@ -5201,6 +5201,27 @@ app.delete('/api/v1/pc-commands/policies/:id', async (req: AuthedRequest, res: a
 
 // ─── PC Commands: Approve/reject pending command ───────────────────────────
 
+const notifyBrowserConfirmationResolved = (
+  pending: PendingPcCommandConfirmation,
+  confirmationId: string,
+  status: 'executed' | 'rejected' | 'failed' | 'expired',
+) => {
+  if (pending.kind !== 'browser_action') return;
+  sendToDesktop(pending.userId, {
+    type: 'desktop_action',
+    action: 'browser_action_confirmation_resolved',
+    value: { confirmation_id: confirmationId, status },
+  });
+};
+
+const dismissMissingBrowserConfirmation = (userId: number, confirmationId: string) => {
+  sendToDesktop(userId, {
+    type: 'desktop_action',
+    action: 'browser_action_confirmation_resolved',
+    value: { confirmation_id: confirmationId, status: 'expired' },
+  });
+};
+
 app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
@@ -5214,6 +5235,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   const pending = getPendingPcConfirmation(confirmationId);
   if (!pending) {
     console.warn('[pc_command] approve missing pending confirmation', { userId, confirmationId, approved });
+    dismissMissingBrowserConfirmation(userId, confirmationId);
     return res.status(404).json({ error: 'not_found_or_expired' });
   }
   if (pending.userId !== userId) {
@@ -5225,6 +5247,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     deletePendingPcConfirmation(confirmationId);
     console.log('[pc_command] rejected by user', { userId, confirmationId });
     pending.reject(buildRejectedByUserError(rejectionComment));
+    notifyBrowserConfirmationResolved(pending, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -5246,6 +5269,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
       resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
     });
     pending.resolve(result);
+    notifyBrowserConfirmationResolved(pending, confirmationId, 'executed');
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {
     console.error('[pc_action] desktop ipc failed', {
@@ -5254,6 +5278,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
       error: err?.message || String(err),
     });
     pending.reject(err);
+    notifyBrowserConfirmationResolved(pending, confirmationId, 'failed');
     return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
   }
 });
@@ -5272,6 +5297,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
 
   const pending = getPendingPcConfirmation(confirmationId);
   if (!pending) {
+    dismissMissingBrowserConfirmation(userId, confirmationId);
     return res.status(404).json({ error: 'not_found_or_expired' });
   }
   if (pending.userId !== userId) {
@@ -5281,6 +5307,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
   if (!approved) {
     deletePendingPcConfirmation(confirmationId);
     pending.reject(buildRejectedByUserError(rejectionComment));
+    notifyBrowserConfirmationResolved(pending, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -5313,9 +5340,11 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     const ipcTimeout = pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
     const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout);
     pending.resolve(result);
+    notifyBrowserConfirmationResolved(pending, confirmationId, 'executed');
     return res.json({ ok: true, status: 'executed', result, workspace });
   } catch (err: any) {
     pending.reject(err);
+    notifyBrowserConfirmationResolved(pending, confirmationId, 'failed');
     return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
   }
 });

@@ -48,6 +48,7 @@ export type PendingPcCommandConfirmation = {
   payload: ActionPayload;
   resolve: (result: any) => void;
   reject: (err: Error) => void;
+  onExpired?: () => void;
   createdAt: number;
 };
 
@@ -72,6 +73,7 @@ setInterval(() => {
     if (now - pending.createdAt > 5 * 60 * 1000) {
       pending.reject(new Error('confirmation_expired'));
       pendingConfirmations.delete(id);
+      pending.onExpired?.();
     }
   }
 }, 30_000);

@@ -6063,6 +6063,13 @@ Respond in the user's language. Be detailed and precise.`
         },
         resolve,
         reject,
+        onExpired: () => {
+          sendToDesktop(user.id, {
+            type: 'desktop_action',
+            action: 'browser_action_confirmation_resolved',
+            value: { confirmation_id: confirmationId, status: 'expired' },
+          });
+        },
         createdAt: Date.now(),
       });
     });
