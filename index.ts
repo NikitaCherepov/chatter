@@ -4876,6 +4876,7 @@ bot.action('model:cancel', async (ctx) => {
 
 // Store full commands by confirmationId — Telegram message text loses Markdown backticks
 const pendingPcCommandTexts = new Map<string, string>();
+const pendingBrowserDownloadMessages = new Map<string, { chatId: number; messageId: number }>();
 
 type PendingRejectionComment = {
     endpoint: string;
@@ -4918,6 +4919,39 @@ const rejectWithOptionalComment = async (
 );
 
 // ── PC Command Confirmation (Telegram inline buttons) ─────────────────────
+
+bot.action(/^browserdownload:(allow|reject):(.+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    const confirmationId = ctx.match[2];
+    const userId = ctx.state.accountId;
+    if (!userId) {
+        await ctx.answerCbQuery(ctx.t('confirmations.userUnknown'));
+        return;
+    }
+
+    await ctx.answerCbQuery(ctx.t(action === 'allow' ? 'confirmations.executing' : 'confirmations.rejected'));
+    (async () => {
+        try {
+            const response = await axios.post(
+                `${BACKEND_API_BASE_URL}/internal/pc-commands/approve`,
+                { confirmation_id: confirmationId, approved: action === 'allow', user_id: userId },
+                { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 300000 },
+            );
+            pendingBrowserDownloadMessages.delete(confirmationId);
+            if (action === 'reject' || response.data?.result?.status === 'cancelled') {
+                await ctx.editMessageText(ctx.t('browserDownloadConfirmation.cancelled')).catch(() => {});
+            } else {
+                await ctx.editMessageText(ctx.t('browserDownloadConfirmation.started')).catch(() => {});
+            }
+        } catch (err: any) {
+            pendingBrowserDownloadMessages.delete(confirmationId);
+            const expired = err?.response?.status === 404;
+            await ctx.editMessageText(ctx.t(expired
+                ? 'browserDownloadConfirmation.expired'
+                : 'browserDownloadConfirmation.failed')).catch(() => {});
+        }
+    })();
+});
 
 bot.action(/^pcconfirm:(allow|site|always|review|reject|reject_comment):(.+)$/, async (ctx) => {
     const action = ctx.match[1];
@@ -6167,6 +6201,55 @@ const processUserTextThroughAi = async (
                         await ctx.reply(message, keyboard);
                     } catch (err: any) {
                         console.warn('[tg][desktop_action] browser_action reply failed:', formatSafeError(err));
+                    }
+                }
+                if (action?.action === 'browser_download_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = `${action.value.confirmation_id}`;
+                    const filename = `${action.value.filename || 'download'}`.slice(0, 300);
+                    const url = `${action.value.url || ''}`.slice(0, 1500);
+                    const mimeType = `${action.value.mime_type || ''}`.slice(0, 200);
+                    const totalBytes = Number(action.value.total_bytes) || 0;
+                    const size = totalBytes > 0
+                        ? (totalBytes < 1024 * 1024
+                            ? `${(totalBytes / 1024).toFixed(1)} KB`
+                            : `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`)
+                        : ctx.t('browserDownloadConfirmation.unknownSize');
+                    const keyboard = Markup.inlineKeyboard([[
+                        Markup.button.callback(ctx.t('browserDownloadConfirmation.download'), `browserdownload:allow:${confirmationId}`),
+                        Markup.button.callback(ctx.t('browserDownloadConfirmation.cancel'), `browserdownload:reject:${confirmationId}`),
+                    ]]);
+                    let message = ctx.t('browserDownloadConfirmation.prompt', { filename, size });
+                    if (mimeType) message += ctx.t('browserDownloadConfirmation.typeLine', { type: mimeType });
+                    if (url) message += ctx.t('browserDownloadConfirmation.urlLine', { url });
+                    try {
+                        const sentMessage = await ctx.reply(message, keyboard);
+                        pendingBrowserDownloadMessages.set(confirmationId, {
+                            chatId: sentMessage.chat.id,
+                            messageId: sentMessage.message_id,
+                        });
+                    } catch (err: any) {
+                        console.warn('[tg][desktop_action] browser_download reply failed:', formatSafeError(err));
+                    }
+                }
+                if (action?.action === 'browser_download_confirmation_resolved' && action?.value?.confirmation_id) {
+                    const confirmationId = `${action.value.confirmation_id}`;
+                    const pendingMessage = pendingBrowserDownloadMessages.get(confirmationId);
+                    pendingBrowserDownloadMessages.delete(confirmationId);
+                    if (pendingMessage) {
+                        const status = `${action.value.status || ''}`;
+                        const translationKey = status === 'expired'
+                            ? 'browserDownloadConfirmation.expired'
+                            : status === 'executed'
+                                ? 'browserDownloadConfirmation.started'
+                                : status === 'failed'
+                                    ? 'browserDownloadConfirmation.failed'
+                                    : 'browserDownloadConfirmation.cancelled';
+                        await ctx.telegram.editMessageText(
+                            pendingMessage.chatId,
+                            pendingMessage.messageId,
+                            undefined,
+                            ctx.t(translationKey),
+                        ).catch(() => {});
                     }
                 }
                 if (action?.action === 'file_action_confirmation' && action?.value?.confirmation_id) {

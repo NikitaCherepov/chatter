@@ -697,6 +697,18 @@
     "actualTarget": "Elemento real da página",
     "actions": { "open": "Abrir endereço", "click": "Clicar no elemento", "fill": "Inserir texto" }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 Baixar este arquivo?\n\n{{filename}}\nTamanho: {{size}}",
+    "typeLine": "\nTipo: {{type}}",
+    "urlLine": "\n\nOrigem: {{url}}",
+    "unknownSize": "desconhecido",
+    "download": "Baixar",
+    "cancel": "Cancelar",
+    "started": "✅ Download iniciado.",
+    "cancelled": "❌ Download cancelado.",
+    "expired": "⌛ A solicitação de download expirou.",
+    "failed": "Não foi possível processar o download."
+  },
   "generated": {
     "freePlanButton": "GRÁTIS ({{value}}k tokens, web {{free}})",
     "standardPlanButton": "PADRÃO ({{value}}k tokens, web {{standart}})",

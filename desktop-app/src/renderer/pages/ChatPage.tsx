@@ -708,6 +708,7 @@ export function ChatPage() {
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'open' | 'click' | 'fill'; description: string; url?: string; text?: string; origin?: string; target_element?: { tag?: string; role?: string; text?: string; href?: string; inputType?: string; placeholder?: string; sensitive?: boolean } }>>([]);
+  const [browserDownloadConfirmations, setBrowserDownloadConfirmations] = useState<Array<{ confirmation_id: string; download_id: string; filename: string; url: string; mime_type?: string; total_bytes?: number; origin?: string | null; local?: boolean }>>([]);
   const confirmationSubmissionsRef = useRef(new Set<string>());
   const [submittingConfirmationIds, setSubmittingConfirmationIds] = useState<Set<string>>(new Set());
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
@@ -1113,6 +1114,32 @@ export function ChatPage() {
         finishConfirmationSubmission(val.confirmation_id);
       }
     }
+    if (action.action === 'browser_download_confirmation' && action.value) {
+      const val = action.value as { confirmation_id?: string; download_id?: string; filename?: string; url?: string; mime_type?: string; total_bytes?: number; origin?: string | null };
+      if (val.confirmation_id && val.download_id && val.filename) {
+        setBrowserDownloadConfirmations(prev => {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id || c.download_id === val.download_id)) return prev;
+          return [...prev, {
+            confirmation_id: val.confirmation_id!,
+            download_id: val.download_id!,
+            filename: val.filename!,
+            url: val.url || '',
+            mime_type: val.mime_type,
+            total_bytes: val.total_bytes,
+            origin: val.origin,
+          }];
+        });
+      }
+    }
+    if (action.action === 'browser_download_confirmation_resolved' && action.value) {
+      const val = action.value as { confirmation_id?: string; download_id?: string };
+      if (val.confirmation_id || val.download_id) {
+        setBrowserDownloadConfirmations(prev => prev.filter(c =>
+          c.confirmation_id !== val.confirmation_id && c.download_id !== val.download_id
+        ));
+        if (val.confirmation_id) finishConfirmationSubmission(val.confirmation_id);
+      }
+    }
     if (action.action === 'file_action_confirmation' && action.value) {
       const val = action.value as { confirmation_id?: string; action_type?: 'read' | 'write'; file_path?: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number };
       if (val.confirmation_id && val.file_path && val.action_type) {
@@ -1254,6 +1281,34 @@ export function ChatPage() {
   }, []);
 
   useEffect(() => api.onDesktopAction(handleIncomingDesktopAction), [handleIncomingDesktopAction]);
+
+  useEffect(() => {
+    const removeRequested = window.electronAPI.onBrowserDownloadRequested((download) => {
+      if (!download?.download_id || !download.filename) return;
+      setBrowserDownloadConfirmations(prev => {
+        if (prev.some(c => c.download_id === download.download_id)) return prev;
+        return [...prev, {
+          confirmation_id: `local:${download.download_id}`,
+          download_id: download.download_id,
+          filename: download.filename,
+          url: download.url || '',
+          mime_type: download.mime_type,
+          total_bytes: download.total_bytes,
+          origin: download.origin,
+          local: true,
+        }];
+      });
+    });
+    const removeResolved = window.electronAPI.onBrowserDownloadResolved(({ download_id }) => {
+      if (!download_id) return;
+      setBrowserDownloadConfirmations(prev => prev.filter(c => c.download_id !== download_id));
+      finishConfirmationSubmission(`local:${download_id}`);
+    });
+    return () => {
+      removeRequested();
+      removeResolved();
+    };
+  }, [finishConfirmationSubmission]);
 
   useEffect(() => api.onMapUpdate((data) => {
     openTool('map');
@@ -3943,6 +3998,94 @@ export function ChatPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Embedded browser download confirmation cards */}
+              {browserDownloadConfirmations.map((conf) => {
+                const submitDownloadDecision = async (approved: boolean) => {
+                  if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                  try {
+                    let decisionResult: any;
+                    if (conf.local) {
+                      decisionResult = await window.electronAPI.browserControl({
+                        action: 'resolve_download',
+                        download_id: conf.download_id,
+                        approved,
+                      });
+                    } else {
+                      const response = await api.apiFetch<any>('/api/v1/pc-commands/approve', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          confirmation_id: conf.confirmation_id,
+                          approved,
+                        }),
+                      });
+                      decisionResult = response?.result;
+                    }
+                    setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                    if (approved && decisionResult?.status === 'started') toast.success(t('chat.browserDownload.started'));
+                  } catch (error) {
+                    if (!(error instanceof api.ApiError) || (error.status !== 404 && error.status !== 500)) {
+                      toast.error(t('chat.browserDownload.failed'));
+                    }
+                    setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                  } finally {
+                    finishConfirmationSubmission(conf.confirmation_id);
+                  }
+                };
+                return (
+                  <div key={`browser-download-${conf.confirmation_id}`} className={s.suggestMacroCard}>
+                    <div className={s.suggestMacroHeader}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3v12" />
+                        <path d="m7 10 5 5 5-5" />
+                        <path d="M5 21h14" />
+                      </svg>
+                      <span className={s.suggestMacroTitle}>{t('chat.browserDownload.confirmTitle')}</span>
+                      <button
+                        className={s.suggestMacroClose}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                        onClick={() => void submitDownloadDecision(false)}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className={s.suggestMacroCommands}>
+                      <code className={s.suggestMacroCmd}>{conf.filename}</code>
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+                      {conf.total_bytes && conf.total_bytes > 0 && (
+                        <div>{t('chat.browserDownload.size', { size: conf.total_bytes < 1024 * 1024 ? `${(conf.total_bytes / 1024).toFixed(1)} KB` : `${(conf.total_bytes / (1024 * 1024)).toFixed(1)} MB` })}</div>
+                      )}
+                      {conf.mime_type && <div>{t('chat.browserDownload.type', { type: conf.mime_type })}</div>}
+                      {conf.url && <div style={{ marginTop: '4px', overflowWrap: 'anywhere' }}>{conf.url}</div>}
+                    </div>
+                    {submittingConfirmationIds.has(conf.confirmation_id) && (
+                      <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                        {t('chat.confirm.executing')}
+                      </div>
+                    )}
+                    <div className={s.suggestMacroActions}>
+                      <button
+                        className={s.suggestMacroSaveBtn}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                        onClick={() => void submitDownloadDecision(true)}
+                      >
+                        {t('chat.browserDownload.download')}
+                      </button>
+                      <button
+                        className={s.suggestMacroDismissBtn}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                        onClick={() => void submitDownloadDecision(false)}
+                      >
+                        {t('chat.browserDownload.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
 
               {/* PC Command Confirmation cards */}
               {pcCommandConfirmations.map((conf, confIdx) => (

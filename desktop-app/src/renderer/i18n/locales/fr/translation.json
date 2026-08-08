@@ -497,6 +497,15 @@
       "to": "À :",
       "subject": "Objet :"
     },
+    "browserDownload": {
+      "confirmTitle": "Télécharger le fichier ?",
+      "size": "Taille : {{size}}",
+      "type": "Type : {{type}}",
+      "download": "Télécharger",
+      "cancel": "Annuler",
+      "started": "Téléchargement démarré",
+      "failed": "Impossible de traiter le téléchargement"
+    },
     "runbook": {
       "title": "Proposition d'instruction"
     },

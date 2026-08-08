@@ -5236,10 +5236,13 @@ const notifyBrowserConfirmationResolved = (
   confirmationId: string,
   status: 'executed' | 'rejected' | 'failed' | 'expired',
 ) => {
-  if (pending.kind !== 'browser_action') return;
+  if (pending.kind !== 'browser_action' && pending.kind !== 'browser_download') return;
+  pending.onResolved?.(status);
   sendToDesktop(pending.userId, {
     type: 'desktop_action',
-    action: 'browser_action_confirmation_resolved',
+    action: pending.kind === 'browser_download'
+      ? 'browser_download_confirmation_resolved'
+      : 'browser_action_confirmation_resolved',
     value: { confirmation_id: confirmationId, status },
   });
 };
@@ -5250,6 +5253,23 @@ const dismissMissingBrowserConfirmation = (userId: number, confirmationId: strin
     action: 'browser_action_confirmation_resolved',
     value: { confirmation_id: confirmationId, status: 'expired' },
   });
+  sendToDesktop(userId, {
+    type: 'desktop_action',
+    action: 'browser_download_confirmation_resolved',
+    value: { confirmation_id: confirmationId, status: 'expired' },
+  });
+};
+
+const cancelRejectedBrowserDownload = (pending: PendingPcCommandConfirmation) => {
+  if (pending.kind !== 'browser_download' || pending.payload.ipcType !== 'browser_control') return;
+  const downloadId = pending.payload.ipcPayload.download_id;
+  if (typeof downloadId !== 'string' || !downloadId) return;
+  void import('./ws-clients.js').then(({ sendIpcToDesktop }) => sendIpcToDesktop(
+    pending.userId,
+    'browser_control',
+    { action: 'resolve_download', download_id: downloadId, approved: false },
+    15000,
+  )).catch(() => {});
 };
 
 const getBrowserSessionPermissionGrant = (pending: PendingPcCommandConfirmation) => {
@@ -5284,6 +5304,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   if (!approved) {
     deletePendingPcConfirmation(confirmationId);
     console.log('[pc_command] rejected by user', { userId, confirmationId });
+    cancelRejectedBrowserDownload(pending);
     pending.reject(buildRejectedByUserError(rejectionComment));
     notifyBrowserConfirmationResolved(pending, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
@@ -5313,7 +5334,9 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
       kind: pending.kind,
       label: pending.label.slice(0, 500),
     });
-    const ipcTimeout = pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
+    const ipcTimeout = pending.kind === 'browser_download'
+      ? 270000
+      : pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
     const result = await sendIpcToDesktop(userId, pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout);
     console.log('[pc_action] desktop ipc completed', {
       userId,
@@ -5321,7 +5344,11 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
       resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
     });
     pending.resolve(result);
-    notifyBrowserConfirmationResolved(pending, confirmationId, 'executed');
+    const resolvedStatus = pending.kind === 'browser_download'
+      && result && typeof result === 'object' && result.status === 'cancelled'
+      ? 'rejected'
+      : 'executed';
+    notifyBrowserConfirmationResolved(pending, confirmationId, resolvedStatus);
     return res.json({ ok: true, status: 'executed', result, site_permission: browserPermissionGrant });
   } catch (err: any) {
     console.error('[pc_action] desktop ipc failed', {
@@ -5359,6 +5386,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
 
   if (!approved) {
     deletePendingPcConfirmation(confirmationId);
+    cancelRejectedBrowserDownload(pending);
     pending.reject(buildRejectedByUserError(rejectionComment));
     notifyBrowserConfirmationResolved(pending, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
@@ -5404,10 +5432,16 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
         origin: browserPermissionGrant.origin,
       }, 15000);
     }
-    const ipcTimeout = pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
+    const ipcTimeout = pending.kind === 'browser_download'
+      ? 270000
+      : pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
     const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout);
     pending.resolve(result);
-    notifyBrowserConfirmationResolved(pending, confirmationId, 'executed');
+    const resolvedStatus = pending.kind === 'browser_download'
+      && result && typeof result === 'object' && result.status === 'cancelled'
+      ? 'rejected'
+      : 'executed';
+    notifyBrowserConfirmationResolved(pending, confirmationId, resolvedStatus);
     return res.json({ ok: true, status: 'executed', result, workspace, site_permission: browserPermissionGrant });
   } catch (err: any) {
     pending.reject(err);

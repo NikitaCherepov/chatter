@@ -7,9 +7,10 @@
  *  - 'file_action': read or write a file on user's PC via native fs
  *  - 'webcam_capture': capture a photo after explicit approval
  *  - 'browser_action': open a URL, or click/fill a previously-read browser element
+ *  - 'browser_download': resume or cancel a paused embedded-browser download
  */
 
-export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture' | 'browser_action';
+export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture' | 'browser_action' | 'browser_download';
 
 type ExecutePayload = {
   ipcType: 'execute_commands';
@@ -29,11 +30,13 @@ type WebcamCapturePayload = {
 type BrowserActionPayload = {
   ipcType: 'browser_control';
   ipcPayload: {
-    action: 'open' | 'click' | 'fill';
+    action: 'open' | 'click' | 'fill' | 'resolve_download';
     url?: string;
     ref?: string;
     text?: string;
     expected_origin?: string;
+    download_id?: string;
+    approved?: boolean;
   };
 };
 
@@ -50,6 +53,7 @@ export type PendingPcCommandConfirmation = {
   resolve: (result: any) => void;
   reject: (err: Error) => void;
   onExpired?: () => void;
+  onResolved?: (status: 'executed' | 'rejected' | 'failed' | 'expired') => void;
   createdAt: number;
 };
 

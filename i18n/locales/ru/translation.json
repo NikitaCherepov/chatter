@@ -613,6 +613,18 @@
       "fill": "Ввести текст"
     }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 Скачать этот файл?\n\n{{filename}}\nРазмер: {{size}}",
+    "typeLine": "\nТип: {{type}}",
+    "urlLine": "\n\nИсточник: {{url}}",
+    "unknownSize": "неизвестен",
+    "download": "Скачать",
+    "cancel": "Отменить",
+    "started": "✅ Загрузка началась.",
+    "cancelled": "❌ Загрузка отменена.",
+    "expired": "⌛ Запрос на загрузку истёк.",
+    "failed": "Не удалось обработать загрузку."
+  },
   "generated": {
     "freePlanButton": "FREE ({{value}}k tokens, web {{free}})",
     "standardPlanButton": "STANDART ({{value}}k tokens, web {{standart}})",

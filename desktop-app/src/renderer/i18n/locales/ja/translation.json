@@ -497,6 +497,15 @@
       "to": "宛先:",
       "subject": "件名:"
     },
+    "browserDownload": {
+      "confirmTitle": "ファイルをダウンロードしますか？",
+      "size": "サイズ：{{size}}",
+      "type": "種類：{{type}}",
+      "download": "ダウンロード",
+      "cancel": "キャンセル",
+      "started": "ダウンロードを開始しました",
+      "failed": "ダウンロードを処理できませんでした"
+    },
     "runbook": {
       "title": "手順書の提案"
     },

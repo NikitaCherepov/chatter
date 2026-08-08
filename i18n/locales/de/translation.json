@@ -697,6 +697,18 @@
     "actualTarget": "Tatsächliches Seitenelement",
     "actions": { "open": "Adresse öffnen", "click": "Element anklicken", "fill": "Text eingeben" }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 Diese Datei herunterladen?\n\n{{filename}}\nGröße: {{size}}",
+    "typeLine": "\nTyp: {{type}}",
+    "urlLine": "\n\nQuelle: {{url}}",
+    "unknownSize": "unbekannt",
+    "download": "Herunterladen",
+    "cancel": "Abbrechen",
+    "started": "✅ Download gestartet.",
+    "cancelled": "❌ Download abgebrochen.",
+    "expired": "⌛ Downloadanfrage ist abgelaufen.",
+    "failed": "Download konnte nicht verarbeitet werden."
+  },
   "generated": {
     "freePlanButton": "KOSTENLOS ({{value}}k Tokens, Web {{free}})",
     "standardPlanButton": "STANDARD ({{value}}k Tokens, Web {{standart}})",

@@ -202,6 +202,15 @@
       "sudoCleared": "Sudo şifresi temizlendi",
       "sudoClearFailed": "Sudo şifresi temizlenemedi"
     },
+    "browserDownload": {
+      "confirmTitle": "Dosya indirilsin mi?",
+      "size": "Boyut: {{size}}",
+      "type": "Tür: {{type}}",
+      "download": "İndir",
+      "cancel": "İptal",
+      "started": "İndirme başladı",
+      "failed": "İndirme işlenemedi"
+    },
     "runbook": {
       "enterText": "Runbook metnini girin",
       "noCommandsFound": "Metinde komut bulunamadı",

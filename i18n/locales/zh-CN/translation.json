@@ -697,6 +697,18 @@
     "actualTarget": "实际页面元素",
     "actions": { "open": "打开地址", "click": "点击元素", "fill": "输入文本" }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 下载此文件？\n\n{{filename}}\n大小：{{size}}",
+    "typeLine": "\n类型：{{type}}",
+    "urlLine": "\n\n来源：{{url}}",
+    "unknownSize": "未知",
+    "download": "下载",
+    "cancel": "取消",
+    "started": "✅ 下载已开始。",
+    "cancelled": "❌ 下载已取消。",
+    "expired": "⌛ 下载请求已过期。",
+    "failed": "无法处理下载。"
+  },
   "generated": {
     "freePlanButton": "免费（{{value}}k 令牌，网络 {{free}}）",
     "standardPlanButton": "标准（{{value}}k 令牌，网络 {{standart}}）",

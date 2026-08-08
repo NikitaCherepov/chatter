@@ -202,6 +202,15 @@
       "sudoCleared": "Password sudo rimossa",
       "sudoClearFailed": "Impossibile rimuovere la password sudo"
     },
+    "browserDownload": {
+      "confirmTitle": "Scaricare il file?",
+      "size": "Dimensione: {{size}}",
+      "type": "Tipo: {{type}}",
+      "download": "Scarica",
+      "cancel": "Annulla",
+      "started": "Download avviato",
+      "failed": "Impossibile elaborare il download"
+    },
     "runbook": {
       "enterText": "Inserisci il testo dell'istruzione",
       "noCommandsFound": "Nessun comando trovato nel testo",

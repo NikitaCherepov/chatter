@@ -202,6 +202,15 @@
       "sudoCleared": "Sudo heslo vymazáno",
       "sudoClearFailed": "Nepodařilo se vymazat sudo heslo"
     },
+    "browserDownload": {
+      "confirmTitle": "Stáhnout soubor?",
+      "size": "Velikost: {{size}}",
+      "type": "Typ: {{type}}",
+      "download": "Stáhnout",
+      "cancel": "Zrušit",
+      "started": "Stahování zahájeno",
+      "failed": "Stažení se nepodařilo zpracovat"
+    },
     "runbook": {
       "enterText": "Zadejte text runbooku",
       "noCommandsFound": "V textu nebyly nalezeny žádné příkazy",

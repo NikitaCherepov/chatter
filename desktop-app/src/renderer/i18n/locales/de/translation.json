@@ -497,6 +497,15 @@
       "to": "An:",
       "subject": "Betreff:"
     },
+    "browserDownload": {
+      "confirmTitle": "Datei herunterladen?",
+      "size": "Größe: {{size}}",
+      "type": "Typ: {{type}}",
+      "download": "Herunterladen",
+      "cancel": "Abbrechen",
+      "started": "Download gestartet",
+      "failed": "Download konnte nicht verarbeitet werden"
+    },
     "runbook": {
       "title": "Anleitungsvorschlag"
     },

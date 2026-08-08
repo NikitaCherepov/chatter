@@ -256,7 +256,7 @@ export type DisplayStatePayload = {
 };
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'pc_command_confirmation' | 'browser_action_confirmation' | 'browser_action_confirmation_resolved' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'pc_command_confirmation' | 'browser_action_confirmation' | 'browser_action_confirmation_resolved' | 'browser_download_confirmation' | 'browser_download_confirmation_resolved' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
   target?: 'notebook' | string;
   value?: unknown;
 };

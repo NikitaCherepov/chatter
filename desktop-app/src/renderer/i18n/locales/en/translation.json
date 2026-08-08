@@ -530,6 +530,15 @@
       "to": "To:",
       "subject": "Subject:"
     },
+    "browserDownload": {
+      "confirmTitle": "Download file?",
+      "size": "Size: {{size}}",
+      "type": "Type: {{type}}",
+      "download": "Download",
+      "cancel": "Cancel",
+      "started": "Download started",
+      "failed": "Could not process the download"
+    },
     "runbook": {
       "title": "Runbook suggestion"
     },

@@ -202,6 +202,15 @@
       "sudoCleared": "Hasło sudo usunięte",
       "sudoClearFailed": "Nie udało się usunąć hasła sudo"
     },
+    "browserDownload": {
+      "confirmTitle": "Pobrać plik?",
+      "size": "Rozmiar: {{size}}",
+      "type": "Typ: {{type}}",
+      "download": "Pobierz",
+      "cancel": "Anuluj",
+      "started": "Rozpoczęto pobieranie",
+      "failed": "Nie udało się obsłużyć pobierania"
+    },
     "runbook": {
       "enterText": "Wprowadź tekst instrukcji",
       "noCommandsFound": "Nie znaleziono komend w tekście",

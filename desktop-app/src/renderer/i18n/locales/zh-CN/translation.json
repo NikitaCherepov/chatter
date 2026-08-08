@@ -497,6 +497,15 @@
       "to": "收件人：",
       "subject": "主题："
     },
+    "browserDownload": {
+      "confirmTitle": "下载文件？",
+      "size": "大小：{{size}}",
+      "type": "类型：{{type}}",
+      "download": "下载",
+      "cancel": "取消",
+      "started": "下载已开始",
+      "failed": "无法处理下载"
+    },
     "runbook": {
       "title": "建议操作指南"
     },

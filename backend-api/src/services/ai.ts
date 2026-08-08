@@ -2485,7 +2485,7 @@ Workflow for interaction:
 2. Use click or fill with an exact ref from the latest read result.
 3. After an in-page change, prefer read with mode=delta. After navigation, use mode=viewport. Use mode=full only when the user explicitly needs the whole document.
 
-Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.`,
+Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If an action starts a file download, it is paused until the user approves or rejects it; wait for that result before continuing. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.`,
     parameters: {
       type: 'object',
       properties: {
@@ -6065,11 +6065,129 @@ Respond in the user's language. Be detailed and precise.`
       }
     }
 
+    const waitForBrowserDownload = async (ipcResult: any): Promise<any> => {
+      const download = ipcResult && typeof ipcResult === 'object'
+        && ipcResult.status === 'download_confirmation_required'
+        && ipcResult.download && typeof ipcResult.download === 'object'
+        ? ipcResult.download as Record<string, unknown>
+        : null;
+      const downloadId = typeof download?.download_id === 'string' ? download.download_id : '';
+      if (!download || !downloadId) return ipcResult;
+
+      if (autoRejectHitl) {
+        try {
+          await sendIpcToDesktop(user.id, 'browser_control', {
+            action: 'resolve_download',
+            download_id: downloadId,
+            approved: false,
+          }, 15000, signal);
+        } catch { /* local timeout also cancels the paused download */ }
+        return { status: 'rejected', message: 'Browser download was automatically rejected because no user confirmation is available in auto-mode.' };
+      }
+
+      const { randomUUID } = await import('node:crypto');
+      const confirmationId = randomUUID();
+      const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
+      const confirmationPromise = new Promise<any>((resolve, reject) => {
+        registerPendingPcConfirmation(confirmationId, {
+          userId: user.id,
+          kind: 'browser_download',
+          label: `Download browser file ${typeof download.filename === 'string' ? download.filename : downloadId}`,
+          payload: {
+            ipcType: 'browser_control',
+            ipcPayload: {
+              action: 'resolve_download',
+              download_id: downloadId,
+              approved: true,
+            },
+          },
+          resolve,
+          reject,
+          onExpired: () => {
+            void sendIpcToDesktop(user.id, 'browser_control', {
+              action: 'resolve_download',
+              download_id: downloadId,
+              approved: false,
+            }, 15000).catch(() => {});
+            sendToDesktop(user.id, {
+              type: 'desktop_action',
+              action: 'browser_download_confirmation_resolved',
+              value: { confirmation_id: confirmationId, download_id: downloadId, status: 'expired' },
+            });
+            if (subagentExtra?.onDesktopAction) {
+              void Promise.resolve(subagentExtra.onDesktopAction({
+                action: 'browser_download_confirmation_resolved',
+                value: { confirmation_id: confirmationId, download_id: downloadId, status: 'expired' },
+              })).catch(() => {});
+            }
+          },
+          onResolved: (status) => {
+            if (subagentExtra?.onDesktopAction) {
+              void Promise.resolve(subagentExtra.onDesktopAction({
+                action: 'browser_download_confirmation_resolved',
+                value: { confirmation_id: confirmationId, download_id: downloadId, status },
+              })).catch(() => {});
+            }
+          },
+          createdAt: Date.now(),
+        });
+      });
+
+      const confirmationAction: DesktopActionPayload = {
+        action: 'browser_download_confirmation',
+        value: {
+          confirmation_id: confirmationId,
+          download_id: downloadId,
+          filename: typeof download.filename === 'string' ? download.filename : 'download',
+          url: typeof download.url === 'string' ? download.url : '',
+          mime_type: typeof download.mime_type === 'string' ? download.mime_type : '',
+          total_bytes: typeof download.total_bytes === 'number' ? download.total_bytes : 0,
+          origin: typeof download.origin === 'string' ? download.origin : undefined,
+        },
+      };
+
+      let sent = false;
+      try {
+        if (subagentExtra?.onDesktopAction) {
+          await subagentExtra.onDesktopAction(confirmationAction);
+          sent = true;
+          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        } else {
+          sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
+        }
+      } catch (err) {
+        console.error('[browser_control] failed to send download confirmation:', err);
+      }
+
+      if (!sent) {
+        deletePendingPcConfirmation(confirmationId);
+        void sendIpcToDesktop(user.id, 'browser_control', {
+          action: 'resolve_download',
+          download_id: downloadId,
+          approved: false,
+        }, 15000).catch(() => {});
+        return { status: 'error', message: 'Failed to deliver browser download confirmation.' };
+      }
+
+      try {
+        return await waitForHitlConfirmation(user.id, confirmationPromise);
+      } catch (err: any) {
+        if (err?.message?.startsWith('rejected_by_user')) {
+          return withRejectionComment({ status: 'rejected', message: 'User rejected the browser download.' }, err);
+        }
+        if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
+          return { status: 'timeout', message: 'Browser download confirmation expired.' };
+        }
+        return { status: 'error', message: err?.message || String(err) };
+      }
+    };
+
     // Reading and passive navigation cannot submit data. Opening, clicking and filling
     // use the user's per-account confirmation preferences (safe default: confirm).
     if (!confirmationRequired) {
       try {
-        const result = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, 30000, signal);
+        const ipcResult = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, 30000, signal);
+        const result = await waitForBrowserDownload(ipcResult);
         return wrapUntrustedContent(JSON.stringify({
           status: 'success',
           ...(typeof result === 'object' && result !== null ? result : { result }),
@@ -6152,7 +6270,8 @@ Respond in the user's language. Be detailed and precise.`
     }
 
     try {
-      const result = await waitForHitlConfirmation(user.id, confirmationPromise);
+      const ipcResult = await waitForHitlConfirmation(user.id, confirmationPromise);
+      const result = await waitForBrowserDownload(ipcResult);
       return wrapUntrustedContent(JSON.stringify({
         status: 'success',
         ...(typeof result === 'object' && result !== null ? result : { result }),

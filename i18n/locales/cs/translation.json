@@ -727,6 +727,18 @@
     "actualTarget": "Skutečný prvek stránky",
     "actions": { "open": "Otevřít adresu", "click": "Kliknout na prvek", "fill": "Zadat text" }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 Stáhnout tento soubor?\n\n{{filename}}\nVelikost: {{size}}",
+    "typeLine": "\nTyp: {{type}}",
+    "urlLine": "\n\nZdroj: {{url}}",
+    "unknownSize": "neznámá",
+    "download": "Stáhnout",
+    "cancel": "Zrušit",
+    "started": "✅ Stahování zahájeno.",
+    "cancelled": "❌ Stahování zrušeno.",
+    "expired": "⌛ Požadavek na stažení vypršel.",
+    "failed": "Stažení se nepodařilo zpracovat."
+  },
   "generated": {
     "freePlanButton": "ZDARMA ({{value}}k tokenů, web {{free}})",
     "standardPlanButton": "STANDARD ({{value}}k tokenů, web {{standart}})",

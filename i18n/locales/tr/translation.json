@@ -727,6 +727,18 @@
     "actualTarget": "Gerçek sayfa öğesi",
     "actions": { "open": "Adresi aç", "click": "Öğeye tıkla", "fill": "Metin gir" }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 Bu dosya indirilsin mi?\n\n{{filename}}\nBoyut: {{size}}",
+    "typeLine": "\nTür: {{type}}",
+    "urlLine": "\n\nKaynak: {{url}}",
+    "unknownSize": "bilinmiyor",
+    "download": "İndir",
+    "cancel": "İptal",
+    "started": "✅ İndirme başladı.",
+    "cancelled": "❌ İndirme iptal edildi.",
+    "expired": "⌛ İndirme isteğinin süresi doldu.",
+    "failed": "İndirme işlenemedi."
+  },
   "generated": {
     "freePlanButton": "ÜCRETSİZ ({{value}}k token, web {{free}})",
     "standardPlanButton": "STANDART ({{value}}k token, web {{standart}})",

@@ -697,6 +697,18 @@
     "actualTarget": "実際のページ要素",
     "actions": { "open": "アドレスを開く", "click": "要素をクリック", "fill": "テキストを入力" }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 このファイルをダウンロードしますか？\n\n{{filename}}\nサイズ：{{size}}",
+    "typeLine": "\n種類：{{type}}",
+    "urlLine": "\n\n提供元：{{url}}",
+    "unknownSize": "不明",
+    "download": "ダウンロード",
+    "cancel": "キャンセル",
+    "started": "✅ ダウンロードを開始しました。",
+    "cancelled": "❌ ダウンロードをキャンセルしました。",
+    "expired": "⌛ ダウンロード要求の期限が切れました。",
+    "failed": "ダウンロードを処理できませんでした。"
+  },
   "generated": {
     "freePlanButton": "無料 ({{value}}k トークン、ウェブ {{free}})",
     "standardPlanButton": "スタンダード ({{value}}k トークン、ウェブ {{standart}})",

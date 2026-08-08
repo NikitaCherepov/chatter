@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('browser:set-bounds', bounds),
   browserControl: (payload: {
-    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission';
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download';
     url?: string;
     ref?: string;
     text?: string;
@@ -34,11 +34,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     mode?: 'viewport' | 'delta' | 'full';
     direction?: 'up' | 'down';
     amount?: number;
+    download_id?: string;
+    approved?: boolean;
   }) => ipcRenderer.invoke('browser:control', payload),
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('browser:state', handler);
     return () => ipcRenderer.removeListener('browser:state', handler);
+  },
+  onBrowserDownloadRequested: (callback: (payload: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('browser:download-requested', handler);
+    return () => ipcRenderer.removeListener('browser:download-requested', handler);
+  },
+  onBrowserDownloadResolved: (callback: (payload: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('browser:download-resolved', handler);
+    return () => ipcRenderer.removeListener('browser:download-resolved', handler);
   },
   openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null }) =>
     ipcRenderer.invoke('tool-window:open', payload),

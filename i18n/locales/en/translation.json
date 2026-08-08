@@ -613,6 +613,18 @@
       "fill": "Enter text"
     }
   },
+  "browserDownloadConfirmation": {
+    "prompt": "📥 Download this file?\n\n{{filename}}\nSize: {{size}}",
+    "typeLine": "\nType: {{type}}",
+    "urlLine": "\n\nSource: {{url}}",
+    "unknownSize": "unknown",
+    "download": "Download",
+    "cancel": "Cancel",
+    "started": "✅ Download started.",
+    "cancelled": "❌ Download cancelled.",
+    "expired": "⌛ Download request expired.",
+    "failed": "Could not process the download."
+  },
   "generated": {
     "freePlanButton": "FREE ({{value}}k tokens, web {{free}})",
     "standardPlanButton": "STANDART ({{value}}k tokens, web {{standart}})",

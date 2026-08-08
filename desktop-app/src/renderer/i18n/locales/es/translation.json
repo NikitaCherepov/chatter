@@ -497,6 +497,15 @@
       "to": "Para:",
       "subject": "Asunto:"
     },
+    "browserDownload": {
+      "confirmTitle": "¿Descargar el archivo?",
+      "size": "Tamaño: {{size}}",
+      "type": "Tipo: {{type}}",
+      "download": "Descargar",
+      "cancel": "Cancelar",
+      "started": "Descarga iniciada",
+      "failed": "No se pudo procesar la descarga"
+    },
     "runbook": {
       "title": "Sugerencia de instrucciones"
     },

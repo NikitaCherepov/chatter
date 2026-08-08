@@ -424,6 +424,11 @@ export function handleDesktopAction(action: { action: string; target?: string; v
     return;
   }
 
+  if (a === 'browser_download_confirmation' || a === 'browser_download_confirmation_resolved') {
+    // Handled by ChatPage with a dedicated download confirmation card.
+    return;
+  }
+
   // ── Webcam Capture confirmation ──
 
   if (a === 'webcam_capture_confirmation') {

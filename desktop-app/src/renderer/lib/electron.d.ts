@@ -15,6 +15,8 @@ declare global {
       browserSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
       browserControl: (payload: BrowserControlPayload) => Promise<any>;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
+      onBrowserDownloadRequested: (callback: (payload: BrowserDownloadRequest) => void) => () => void;
+      onBrowserDownloadResolved: (callback: (payload: { download_id: string; status: string; file_path?: string }) => void) => () => void;
       openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null }) => Promise<{ opened: boolean }>;
       dockToolWindow: (toolId: string) => Promise<{ docked: boolean }>;
       updateToolWindowContext: (payload: { toolId: string; activeChatId?: number | null }) => Promise<{ updated: boolean }>;
@@ -81,7 +83,7 @@ type BrowserState = {
 };
 
 type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download';
   url?: string;
   ref?: string;
   text?: string;
@@ -91,4 +93,16 @@ type BrowserControlPayload = {
   mode?: 'viewport' | 'delta' | 'full';
   direction?: 'up' | 'down';
   amount?: number;
+  download_id?: string;
+  approved?: boolean;
+};
+
+type BrowserDownloadRequest = {
+  download_id: string;
+  filename: string;
+  url: string;
+  mime_type: string;
+  total_bytes: number;
+  origin: string | null;
+  created_at: number;
 };
