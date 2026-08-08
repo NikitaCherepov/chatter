@@ -1976,6 +1976,8 @@ function setupGithubDesktopUpdater() {
   }, 3000);
 }
 
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+
 app.whenReady().then(() => {
   loadTrustedServerOrigin();
   setupContentSecurityPolicy();

@@ -124,6 +124,13 @@ export class ChatterBrowser {
 
     const contents = this.view.webContents;
     const browserSession = contents.session;
+
+    const defaultUA = browserSession.getUserAgent();
+    const cleanedUA = defaultUA
+      .replace(/\s*Electron\/[\d.]+/gi, '')
+      .replace(/\s*chatter\/[\d.a-z-]+/gi, '');
+    browserSession.setUserAgent(cleanedUA.trim());
+
     browserSession.setPermissionCheckHandler(() => false);
     browserSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
 
