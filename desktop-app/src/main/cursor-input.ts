@@ -329,6 +329,7 @@ export async function click(
   token?: CancellationToken,
   target?: Point,
   trajectory?: Point[],
+  validateTarget?: () => boolean | Promise<boolean>,
 ): Promise<Point> {
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
@@ -351,6 +352,10 @@ export async function click(
   sendMouseEvent(webContents, 'mouseMove', resolvedTarget.x, resolvedTarget.y);
 
   await sleep(randInt(PRE_CLICK_MIN, PRE_CLICK_MAX));
+
+  if (token?.cancelled) throw new Error('click_cancelled');
+  if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
+  if (validateTarget && !(await validateTarget())) throw new Error('click_target_moved');
 
   if (token?.cancelled) throw new Error('click_cancelled');
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');

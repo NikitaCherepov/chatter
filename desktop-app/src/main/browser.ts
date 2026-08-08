@@ -543,14 +543,21 @@ export class ChatterBrowser {
 
     const contents = this.view.webContents;
 
-    // -- Phase 1: scroll element into view and read its rect --
+    // -- Phase 1: bring the element into view and read a stable clickable rect --
     const rectScript = `(async () => {
       const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
       if (!element) throw new Error('browser_element_not_found');
       element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-      await new Promise(resolve => setTimeout(resolve, 320));
+      await new Promise(resolve => setTimeout(resolve, 350));
       if (!element.isConnected) throw new Error('browser_element_not_found');
-      const r = element.getBoundingClientRect();
+
+      const visibleRects = Array.from(element.getClientRects()).filter(r =>
+        r.width > 0 && r.height > 0
+        && r.bottom > 0 && r.right > 0
+        && r.top < window.innerHeight && r.left < window.innerWidth
+      );
+      const r = visibleRects.sort((a, b) => (b.width * b.height) - (a.width * a.height))[0]
+        || element.getBoundingClientRect();
       return {
         x: r.left, y: r.top, width: r.width, height: r.height,
         viewportW: window.innerWidth, viewportH: window.innerHeight,
@@ -636,7 +643,21 @@ export class ChatterBrowser {
     try {
       // Pass the pre-selected target AND trajectory so visual cursor and
       // native events follow the exact same path and speed.
-      this.cursorPos = await naturalClick(contents, elementRect, this.cursorPos, token, target, trajectory);
+      const validateTarget = () => this.executeInBrowserWorld<boolean>(`(() => {
+        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+        if (!element || !element.isConnected) return false;
+        const hit = document.elementFromPoint(${target.x}, ${target.y});
+        return !!hit && (hit === element || element.contains(hit));
+      })()`);
+      this.cursorPos = await naturalClick(
+        contents,
+        elementRect,
+        this.cursorPos,
+        token,
+        target,
+        trajectory,
+        validateTarget,
+      );
 
       // Brief settle, then restore outline + hide cursor.
       await new Promise(resolve => setTimeout(resolve, 200));
