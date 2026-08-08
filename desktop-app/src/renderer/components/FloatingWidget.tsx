@@ -98,6 +98,17 @@ export function FloatingWidget({
         <div className={s.headerBtns}>
           <button
             className={s.modeBtn}
+            onClick={() => onLayoutChange('external')}
+            title={t('widget.external', { defaultValue: 'Open in separate window' })}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 3h7v7" />
+              <path d="M10 14L21 3" />
+              <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+            </svg>
+          </button>
+          <button
+            className={s.modeBtn}
             onClick={() => onLayoutChange('sidebar')}
             title={t('widget.toSidebar')}
           >

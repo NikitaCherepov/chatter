@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 Zezwól na folder projektu dla sesji"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Działanie w przeglądarce\n\n{{action}}\n{{target}}\n\nZezwolić na to działanie?",
+    "textPreview": "\n\nTekst:\n{{text}}",
+    "completed": "✅ Działanie w przeglądarce zakończone.",
+    "rejected": "❌ Działanie w przeglądarce odrzucone.",
+    "actions": { "open": "Otwórz adres", "click": "Kliknij element", "fill": "Wprowadź tekst" }
+  },
   "generated": {
     "freePlanButton": "DARMOWY ({{value}}k tokenów, web {{free}})",
     "standardPlanButton": "STANDARD ({{value}}k tokenów, web {{standart}})",

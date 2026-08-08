@@ -4931,10 +4931,13 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
 
     // Answer callback query immediately — Telegram requires it within ~15s
     if (action === 'reject') {
+        const pendingLabel = pendingPcCommandTexts.get(confirmationId) || '';
+        const isBrowserAction = pendingLabel.startsWith('browser:');
         await ctx.answerCbQuery(ctx.t('confirmations.rejected'));
         try {
             await rejectWithOptionalComment('/internal/pc-commands/approve', confirmationId, userId);
-            await ctx.editMessageText(ctx.t('confirmations.commandRejected'));
+            pendingPcCommandTexts.delete(confirmationId);
+            await ctx.editMessageText(ctx.t(isBrowserAction ? 'browserConfirmation.rejected' : 'confirmations.commandRejected'));
         } catch {
             await ctx.editMessageText(ctx.t('confirmations.rejectFailed')).catch(() => {});
         }
@@ -4942,12 +4945,14 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
     }
 
     if (action === 'reject_comment') {
-        const cmd = pendingPcCommandTexts.get(confirmationId) || ctx.t('confirmations.labels.pcCommand');
+        const cmd = (pendingPcCommandTexts.get(confirmationId) || ctx.t('confirmations.labels.pcCommand')).replace(/^browser:/, '');
         await requestRejectionComment(ctx, '/internal/pc-commands/approve', confirmationId, cmd.slice(0, 120));
         return;
     }
 
     if (action === 'allow') {
+        const pendingLabel = pendingPcCommandTexts.get(confirmationId) || '';
+        const isBrowserAction = pendingLabel.startsWith('browser:');
         await ctx.answerCbQuery(ctx.t('confirmations.executing'));
         // Run in background — don't block Telegraf
         (async () => {
@@ -4959,9 +4964,14 @@ bot.action(/^pcconfirm:(allow|always|review|reject|reject_comment):(.+)$/, async
                 );
                 const output = typeof resp.data?.result === 'string' ? resp.data.result : '';
                 const preview = output.slice(0, 500) || ctx.t('confirmations.noOutput');
-                await ctx.editMessageText(ctx.t('confirmations.commandDoneMarkdown', { output: preview.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
-                    ctx.editMessageText(ctx.t('confirmations.commandDone', { output: preview })).catch(() => {});
-                });
+                pendingPcCommandTexts.delete(confirmationId);
+                if (isBrowserAction) {
+                    await ctx.editMessageText(ctx.t('browserConfirmation.completed')).catch(() => {});
+                } else {
+                    await ctx.editMessageText(ctx.t('confirmations.commandDoneMarkdown', { output: preview.replace(/```/g, "'''") }), { parse_mode: 'Markdown' }).catch(() => {
+                        ctx.editMessageText(ctx.t('confirmations.commandDone', { output: preview })).catch(() => {});
+                    });
+                }
             } catch (err: any) {
                 const msg = err?.response?.data?.error || err?.message || ctx.t('confirmations.unknownError');
                 await ctx.editMessageText(ctx.t('confirmations.executionError', { error: msg })).catch(() => {});
@@ -6088,6 +6098,44 @@ const processUserTextThroughAi = async (
                         } catch {
                             // ignore
                         }
+                    }
+                }
+                if (action?.action === 'browser_action_confirmation' && action?.value?.confirmation_id) {
+                    const confirmationId = action.value.confirmation_id;
+                    const actionType = action.value.action_type === 'open'
+                        ? 'open'
+                        : action.value.action_type === 'fill'
+                            ? 'fill'
+                            : 'click';
+                    const actionLabel = ctx.t(`browserConfirmation.actions.${actionType}`);
+                    const target = `${action.value.url || action.value.description || ''}`.slice(0, 1000);
+                    const textPreview = actionType === 'fill' && typeof action.value.text === 'string'
+                        ? action.value.text.slice(0, 800)
+                        : '';
+                    pendingPcCommandTexts.set(confirmationId, `browser:${actionLabel}: ${target}`);
+
+                    const keyboard = Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback(ctx.t('confirmations.buttons.allow'), `pcconfirm:allow:${confirmationId}`),
+                            Markup.button.callback(ctx.t('admin.buttons.reject'), `pcconfirm:reject:${confirmationId}`),
+                        ],
+                        [
+                            Markup.button.callback(ctx.t('confirmations.buttons.rejectWithComment'), `pcconfirm:reject_comment:${confirmationId}`),
+                        ]
+                    ]);
+
+                    console.log('[tg][desktop_action] browser_action_confirmation', {
+                        confirmationId,
+                        actionType,
+                    });
+                    try {
+                        let message = ctx.t('browserConfirmation.prompt', { action: actionLabel, target });
+                        if (textPreview) {
+                            message += ctx.t('browserConfirmation.textPreview', { text: textPreview });
+                        }
+                        await ctx.reply(message, keyboard);
+                    } catch (err: any) {
+                        console.warn('[tg][desktop_action] browser_action reply failed:', formatSafeError(err));
                     }
                 }
                 if (action?.action === 'file_action_confirmation' && action?.value?.confirmation_id) {

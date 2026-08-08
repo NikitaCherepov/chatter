@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 Consenti cartella di progetto per la sessione"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Azione del browser\n\n{{action}}\n{{target}}\n\nConsentire questa azione?",
+    "textPreview": "\n\nTesto:\n{{text}}",
+    "completed": "✅ Azione del browser completata.",
+    "rejected": "❌ Azione del browser rifiutata.",
+    "actions": { "open": "Apri indirizzo", "click": "Fai clic sull’elemento", "fill": "Inserisci testo" }
+  },
   "generated": {
     "freePlanButton": "GRATUITO ({{value}}k token, web {{free}})",
     "standardPlanButton": "STANDARD ({{value}}k token, web {{standart}})",

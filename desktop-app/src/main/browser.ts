@@ -87,7 +87,7 @@ function isAllowedRemoteUrl(value: string): boolean {
 }
 
 export class ChatterBrowser {
-  private readonly host: BrowserWindow;
+  private host: BrowserWindow;
   private readonly view: WebContentsView;
   private visible = false;
   private activeLayoutOwner = '';
@@ -96,6 +96,7 @@ export class ChatterBrowser {
   private snapshotUrl = '';
   private snapshotElements = new Map<string, BrowserElement>();
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
+  private interactionInProgress = false;
 
   constructor(host: BrowserWindow) {
     this.host = host;
@@ -144,6 +145,19 @@ export class ChatterBrowser {
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
   }
 
+  private attachToHost(host: BrowserWindow): void {
+    if (host === this.host || host.isDestroyed()) return;
+    if (!this.host.isDestroyed()) this.host.contentView.removeChildView(this.view);
+    host.contentView.addChildView(this.view);
+    this.host = host;
+  }
+
+  moveToHost(host: BrowserWindow): void {
+    this.visible = false;
+    this.view.setVisible(false);
+    this.attachToHost(host);
+  }
+
   getState(): BrowserState {
     const contents = this.view.webContents;
     return {
@@ -156,7 +170,7 @@ export class ChatterBrowser {
     };
   }
 
-  setVisible(visible: boolean, bounds?: Rectangle, ownerId?: string): BrowserState {
+  setVisible(visible: boolean, bounds?: Rectangle, ownerId?: string, host?: BrowserWindow): BrowserState {
     const owner = `${ownerId || ''}`.trim();
     if (owner) {
       let rank = this.layoutOwnerRanks.get(owner);
@@ -176,6 +190,7 @@ export class ChatterBrowser {
       }
     }
 
+    if (visible && host) this.attachToHost(host);
     this.visible = visible;
     if (bounds) this.setBounds(bounds);
     this.view.setVisible(visible);
@@ -204,9 +219,15 @@ export class ChatterBrowser {
     if (contents.isDestroyed()) throw new Error('browser_unavailable');
 
     if (action === 'open') {
+      if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
+      this.interactionInProgress = true;
       const url = normalizeBrowserUrl(`${payload.url || ''}`);
-      await contents.loadURL(url);
-      return this.getState();
+      try {
+        await contents.loadURL(url);
+        return this.getState();
+      } finally {
+        this.interactionInProgress = false;
+      }
     }
     if (action === 'back') {
       if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
@@ -476,22 +497,93 @@ export class ChatterBrowser {
   }
 
   private async clickElement(ref: string): Promise<unknown> {
+    if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
     const expected = this.getSnapshotElement(ref);
-    const script = `(() => {
+    this.interactionInProgress = true;
+    const script = `(async () => {
       const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
       if (!element) throw new Error('browser_element_not_found');
-      element.scrollIntoView({ block: 'center', inline: 'center' });
+
+      element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      await new Promise(resolve => setTimeout(resolve, 320));
+      if (!element.isConnected) throw new Error('browser_element_not_found');
+
+      const rect = element.getBoundingClientRect();
+      const targetX = Math.max(8, Math.min(window.innerWidth - 8, rect.left + rect.width / 2));
+      const targetY = Math.max(8, Math.min(window.innerHeight - 8, rect.top + rect.height / 2));
+      const previous = globalThis.__chatterBrowserCursorPosition || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+      let cursor = document.getElementById('__chatter-browser-cursor');
+      if (!cursor) {
+        cursor = document.createElement('div');
+        cursor.id = '__chatter-browser-cursor';
+        Object.assign(cursor.style, {
+          position: 'fixed', width: '14px', height: '14px', borderRadius: '50%',
+          background: 'rgba(34, 105, 225, 0.92)', border: '2px solid white',
+          boxShadow: '0 2px 9px rgba(0,0,0,.4)', pointerEvents: 'none',
+          zIndex: '2147483647', left: '0', top: '0', transform: 'translate(-50%, -50%)',
+          opacity: '0', transition: 'opacity 120ms ease'
+        });
+        document.documentElement.appendChild(cursor);
+      }
+
+      cursor.style.opacity = '1';
+      const duration = 460;
+      const curve = Math.max(-70, Math.min(70, (targetX - previous.x) * 0.12));
+      const startedAt = performance.now();
+      await new Promise(resolve => {
+        const animate = now => {
+          const progress = Math.min(1, (now - startedAt) / duration);
+          const eased = progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+          const arc = Math.sin(Math.PI * eased) * curve;
+          const x = previous.x + (targetX - previous.x) * eased;
+          const y = previous.y + (targetY - previous.y) * eased - arc;
+          cursor.style.left = x + 'px';
+          cursor.style.top = y + 'px';
+          if (progress < 1) requestAnimationFrame(animate);
+          else resolve(undefined);
+        };
+        requestAnimationFrame(animate);
+      });
+
+      globalThis.__chatterBrowserCursorPosition = { x: targetX, y: targetY };
+      const oldOutline = element.style.outline;
+      const oldOutlineOffset = element.style.outlineOffset;
+      element.style.outline = '2px solid rgba(34, 105, 225, .9)';
+      element.style.outlineOffset = '3px';
+      await new Promise(resolve => setTimeout(resolve, 180));
       element.click();
+      setTimeout(() => {
+        if (element.isConnected) {
+          element.style.outline = oldOutline;
+          element.style.outlineOffset = oldOutlineOffset;
+        }
+        cursor.style.opacity = '0';
+      }, 220);
       return true;
     })()`;
-    await this.executeInBrowserWorld(script);
-    return { status: 'success', action: 'click', element: expected, ...this.getState() };
+    try {
+      await this.executeInBrowserWorld(script);
+      return { status: 'success', action: 'click', element: expected, ...this.getState() };
+    } finally {
+      this.interactionInProgress = false;
+    }
   }
 
   private async fillElement(ref: string, text: string): Promise<unknown> {
+    if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
     const expected = this.getSnapshotElement(ref);
-    if (expected.sensitive) throw new Error('browser_sensitive_fields_are_manual_only');
-    if (text.length > 10_000) throw new Error('browser_input_too_large');
+    this.interactionInProgress = true;
+    if (expected.sensitive) {
+      this.interactionInProgress = false;
+      throw new Error('browser_sensitive_fields_are_manual_only');
+    }
+    if (text.length > 10_000) {
+      this.interactionInProgress = false;
+      throw new Error('browser_input_too_large');
+    }
 
     const script = `(() => {
       const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
@@ -516,7 +608,11 @@ export class ChatterBrowser {
       }
       return true;
     })()`;
-    await this.executeInBrowserWorld(script);
-    return { status: 'success', action: 'fill', element: expected, characters: text.length, ...this.getState() };
+    try {
+      await this.executeInBrowserWorld(script);
+      return { status: 'success', action: 'fill', element: expected, characters: text.length, ...this.getState() };
+    } finally {
+      this.interactionInProgress = false;
+    }
   }
 }

@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 允许会话的项目文件夹"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 浏览器操作\n\n{{action}}\n{{target}}\n\n允许此操作吗？",
+    "textPreview": "\n\n文本：\n{{text}}",
+    "completed": "✅ 浏览器操作已完成。",
+    "rejected": "❌ 浏览器操作已拒绝。",
+    "actions": { "open": "打开地址", "click": "点击元素", "fill": "输入文本" }
+  },
   "generated": {
     "freePlanButton": "免费（{{value}}k 令牌，网络 {{free}}）",
     "standardPlanButton": "标准（{{value}}k 令牌，网络 {{standart}}）",

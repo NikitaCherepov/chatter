@@ -707,7 +707,7 @@ export function ChatPage() {
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
-  const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'click' | 'fill'; description: string; text?: string }>>([]);
+  const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'open' | 'click' | 'fill'; description: string; url?: string; text?: string }>>([]);
   const confirmationSubmissionsRef = useRef(new Set<string>());
   const [submittingConfirmationIds, setSubmittingConfirmationIds] = useState<Set<string>>(new Set());
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
@@ -1090,7 +1090,7 @@ export function ChatPage() {
       }
     }
     if (action.action === 'browser_action_confirmation' && action.value) {
-      const val = action.value as { confirmation_id?: string; action_type?: 'click' | 'fill'; description?: string; text?: string };
+      const val = action.value as { confirmation_id?: string; action_type?: 'open' | 'click' | 'fill'; description?: string; url?: string; text?: string };
       if (val.confirmation_id && val.action_type && val.description) {
         setBrowserActionConfirmations(prev => {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
@@ -1098,6 +1098,7 @@ export function ChatPage() {
             confirmation_id: val.confirmation_id!,
             action_type: val.action_type!,
             description: val.description!,
+            url: val.url,
             text: val.text,
           }];
         });
@@ -3799,7 +3800,11 @@ export function ChatPage() {
                   </div>
                   <div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>
-                      {conf.action_type === 'fill' ? t('chat.browser.fill', { target: conf.description }) : t('chat.browser.click', { target: conf.description })}
+                      {conf.action_type === 'open'
+                        ? t('chat.browser.open', { target: conf.url || conf.description })
+                        : conf.action_type === 'fill'
+                          ? t('chat.browser.fill', { target: conf.description })
+                          : t('chat.browser.click', { target: conf.description })}
                     </code>
                   </div>
                   {conf.text && (

@@ -716,6 +716,13 @@
       "allowFolderSession": "📁 Povolit složku projektu pro relaci"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Akce v prohlížeči\n\n{{action}}\n{{target}}\n\nPovolit tuto akci?",
+    "textPreview": "\n\nText:\n{{text}}",
+    "completed": "✅ Akce v prohlížeči byla dokončena.",
+    "rejected": "❌ Akce v prohlížeči byla zamítnuta.",
+    "actions": { "open": "Otevřít adresu", "click": "Kliknout na prvek", "fill": "Zadat text" }
+  },
   "generated": {
     "freePlanButton": "ZDARMA ({{value}}k tokenů, web {{free}})",
     "standardPlanButton": "STANDARD ({{value}}k tokenů, web {{standart}})",

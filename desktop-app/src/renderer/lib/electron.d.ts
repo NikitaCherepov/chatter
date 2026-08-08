@@ -15,6 +15,11 @@ declare global {
       browserSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
       browserControl: (payload: BrowserControlPayload) => Promise<any>;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
+      openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null }) => Promise<{ opened: boolean }>;
+      dockToolWindow: (toolId: string) => Promise<{ docked: boolean }>;
+      updateToolWindowContext: (payload: { toolId: string; activeChatId?: number | null }) => Promise<{ updated: boolean }>;
+      onToolWindowContext: (callback: (payload: { activeChatId?: number | null }) => void) => () => void;
+      onToolWindowClosed: (callback: (payload: { toolId: string }) => void) => () => void;
       onAvatarState: (callback: (payload: unknown) => void) => () => void;
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;

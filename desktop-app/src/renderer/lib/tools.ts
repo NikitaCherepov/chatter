@@ -82,7 +82,7 @@ export function toggleToolsPanel() {
 
 // ── Tool Layout Mode ─────────────────────────────────────────────────────
 
-export type LayoutMode = 'sidebar' | 'fullscreen' | 'floating';
+export type LayoutMode = 'sidebar' | 'fullscreen' | 'floating' | 'external';
 
 export type ToolLayoutState = {
   mode: LayoutMode;
@@ -149,6 +149,17 @@ type WidgetDataListener = (cmd: WidgetDataCommand) => void;
 const widgetListeners = new Map<string, Set<WidgetDataListener>>();
 // Pending commands that arrived before any listener subscribed
 const pendingCommands = new Map<string, WidgetDataCommand[]>();
+const WIDGET_COMMAND_KEY_PREFIX = 'chatter_widget_command:';
+
+function deliverWidgetData(widgetId: string, cmd: WidgetDataCommand) {
+  const listeners = widgetListeners.get(widgetId);
+  if (listeners && listeners.size > 0) {
+    listeners.forEach((fn) => fn(cmd));
+  } else {
+    if (!pendingCommands.has(widgetId)) pendingCommands.set(widgetId, []);
+    pendingCommands.get(widgetId)!.push(cmd);
+  }
+}
 
 export function subscribeWidgetData(widgetId: string, fn: WidgetDataListener): () => void {
   if (!widgetListeners.has(widgetId)) widgetListeners.set(widgetId, new Set());
@@ -163,14 +174,21 @@ export function subscribeWidgetData(widgetId: string, fn: WidgetDataListener): (
 }
 
 export function dispatchWidgetData(widgetId: string, cmd: WidgetDataCommand) {
-  const listeners = widgetListeners.get(widgetId);
-  if (listeners && listeners.size > 0) {
-    listeners.forEach((fn) => fn(cmd));
-  } else {
-    // No listener yet — queue it
-    if (!pendingCommands.has(widgetId)) pendingCommands.set(widgetId, []);
-    pendingCommands.get(widgetId)!.push(cmd);
-  }
+  deliverWidgetData(widgetId, cmd);
+  try {
+    localStorage.setItem(`${WIDGET_COMMAND_KEY_PREFIX}${widgetId}`, JSON.stringify({ nonce: crypto.randomUUID(), cmd }));
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (!event.key?.startsWith(WIDGET_COMMAND_KEY_PREFIX) || !event.newValue) return;
+    try {
+      const widgetId = event.key.slice(WIDGET_COMMAND_KEY_PREFIX.length);
+      const payload = JSON.parse(event.newValue) as { cmd?: WidgetDataCommand };
+      if (payload.cmd) deliverWidgetData(widgetId, payload.cmd);
+    } catch {}
+  });
 }
 
 // ── Map Data (bot → map widget via SSE) ────────────────────────────────────
@@ -210,11 +228,25 @@ export type MapData = {
 type MapDataListener = (data: MapData) => void;
 
 const mapListeners = new Set<MapDataListener>();
-let currentMapData: MapData | null = null;
+const MAP_DATA_STORAGE_KEY = 'chatter_tool_map_data';
+let currentMapData: MapData | null = (() => {
+  try { return JSON.parse(localStorage.getItem(MAP_DATA_STORAGE_KEY) || 'null') as MapData | null; } catch { return null; }
+})();
 
 export function dispatchMapData(data: MapData) {
   currentMapData = data;
+  try { localStorage.setItem(MAP_DATA_STORAGE_KEY, JSON.stringify(data)); } catch {}
   mapListeners.forEach(fn => fn(data));
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== MAP_DATA_STORAGE_KEY || !event.newValue) return;
+    try {
+      currentMapData = JSON.parse(event.newValue) as MapData;
+      mapListeners.forEach((fn) => fn(currentMapData!));
+    } catch {}
+  });
 }
 
 export function getMapData(): MapData | null {
@@ -228,10 +260,19 @@ export function subscribeMapData(fn: MapDataListener): () => void {
 
 // ── Widget State Queries (bot reads widget state) ─────────────────────────
 
-let notebookDraftState: { title: string; content: string; isOpen: boolean } = { title: '', content: '', isOpen: false };
+const NOTEBOOK_DRAFT_STORAGE_KEY = 'chatter_tool_notebook_draft';
+let notebookDraftState: { title: string; content: string; isOpen: boolean } = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(NOTEBOOK_DRAFT_STORAGE_KEY) || 'null')
+      || { title: '', content: '', isOpen: false };
+  } catch {
+    return { title: '', content: '', isOpen: false };
+  }
+})();
 
 export function setNotebookDraftState(state: { title: string; content: string; isOpen: boolean }) {
   notebookDraftState = state;
+  try { localStorage.setItem(NOTEBOOK_DRAFT_STORAGE_KEY, JSON.stringify(state)); } catch {}
 }
 
 export function getNotebookDraftState() {
@@ -250,6 +291,15 @@ export function handleDesktopAction(action: { action: string; target?: string; v
 
   if (a === 'open_widget') {
     const toolId = action.target === 'notebook' ? 'notebook' : action.target;
+    if (!toolId) return;
+    const panelState = getToolsPanelState();
+    const existingLayout = getToolLayout(toolId);
+    if (panelState.openTools.includes(toolId) && existingLayout.mode === 'external') {
+      void window.electronAPI.openToolWindow({ toolId, title: toolId }).catch((error) => {
+        console.error('[tools] failed to focus detached tool window:', error);
+      });
+      return;
+    }
     if (toolId === 'browser') {
       setToolLayout('browser', { mode: 'sidebar' });
       openTool(toolId);

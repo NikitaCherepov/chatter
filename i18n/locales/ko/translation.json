@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 세션에 프로젝트 폴더 허용"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 브라우저 작업\n\n{{action}}\n{{target}}\n\n이 작업을 허용할까요?",
+    "textPreview": "\n\n텍스트:\n{{text}}",
+    "completed": "✅ 브라우저 작업이 완료되었습니다.",
+    "rejected": "❌ 브라우저 작업이 거부되었습니다.",
+    "actions": { "open": "주소 열기", "click": "요소 클릭", "fill": "텍스트 입력" }
+  },
   "generated": {
     "freePlanButton": "무료 ({{value}}k 토큰, 웹 {{free}})",
     "standardPlanButton": "스탠다드 ({{value}}k 토큰, 웹 {{standart}})",

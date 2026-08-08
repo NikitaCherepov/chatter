@@ -598,6 +598,17 @@
     "allowReadQuestion": "Разрешить чтение?",
     "buttons": { "write": "✅ Записать", "read": "✅ Прочитать", "allowFolderSession": "📁 Разрешить папку проекта на сессию" }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Действие в браузере\n\n{{action}}\n{{target}}\n\nРазрешить это действие?",
+    "textPreview": "\n\nТекст:\n{{text}}",
+    "completed": "✅ Действие в браузере выполнено.",
+    "rejected": "❌ Действие в браузере отклонено.",
+    "actions": {
+      "open": "Открыть адрес",
+      "click": "Нажать на элемент",
+      "fill": "Ввести текст"
+    }
+  },
   "generated": {
     "freePlanButton": "FREE ({{value}}k tokens, web {{free}})",
     "standardPlanButton": "STANDART ({{value}}k tokens, web {{standart}})",

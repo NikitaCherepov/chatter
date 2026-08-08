@@ -6,7 +6,7 @@
  *  - 'pc_command': execute a shell command on user's PC
  *  - 'file_action': read or write a file on user's PC via native fs
  *  - 'webcam_capture': capture a photo after explicit approval
- *  - 'browser_action': click or fill a previously-read browser element
+ *  - 'browser_action': open a URL, or click/fill a previously-read browser element
  */
 
 export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture' | 'browser_action';
@@ -29,8 +29,9 @@ type WebcamCapturePayload = {
 type BrowserActionPayload = {
   ipcType: 'browser_control';
   ipcPayload: {
-    action: 'click' | 'fill';
-    ref: string;
+    action: 'open' | 'click' | 'fill';
+    url?: string;
+    ref?: string;
     text?: string;
   };
 };

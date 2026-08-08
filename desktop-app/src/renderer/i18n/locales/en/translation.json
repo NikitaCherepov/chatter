@@ -111,7 +111,8 @@
   "widget": {
     "toSidebar": "Move to sidebar",
     "floating": "Floating window",
-    "fullscreen": "Full screen"
+    "fullscreen": "Full screen",
+    "external": "Open in separate window"
   },
   "telegram": {
     "title": "Link Telegram",
@@ -500,6 +501,7 @@
     },
     "browser": {
       "confirmTitle": "Browser action",
+      "open": "Open: {{target}}",
       "click": "Click: {{target}}",
       "fill": "Enter text in: {{target}}",
       "executed": "Browser action completed",

@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 Permitir pasta do projeto para a sessão"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Ação do navegador\n\n{{action}}\n{{target}}\n\nPermitir esta ação?",
+    "textPreview": "\n\nTexto:\n{{text}}",
+    "completed": "✅ Ação do navegador concluída.",
+    "rejected": "❌ Ação do navegador rejeitada.",
+    "actions": { "open": "Abrir endereço", "click": "Clicar no elemento", "fill": "Inserir texto" }
+  },
   "generated": {
     "freePlanButton": "GRÁTIS ({{value}}k tokens, web {{free}})",
     "standardPlanButton": "PADRÃO ({{value}}k tokens, web {{standart}})",

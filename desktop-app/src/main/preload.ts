@@ -37,6 +37,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('browser:state', handler);
     return () => ipcRenderer.removeListener('browser:state', handler);
   },
+  openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null }) =>
+    ipcRenderer.invoke('tool-window:open', payload),
+  dockToolWindow: (toolId: string) =>
+    ipcRenderer.invoke('tool-window:dock', { toolId }),
+  updateToolWindowContext: (payload: { toolId: string; activeChatId?: number | null }) =>
+    ipcRenderer.invoke('tool-window:update-context', payload),
+  onToolWindowContext: (callback: (payload: { activeChatId?: number | null }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { activeChatId?: number | null }) => callback(payload);
+    ipcRenderer.on('tool-window:context', handler);
+    return () => ipcRenderer.removeListener('tool-window:context', handler);
+  },
+  onToolWindowClosed: (callback: (payload: { toolId: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { toolId: string }) => callback(payload);
+    ipcRenderer.on('tool-window:closed', handler);
+    return () => ipcRenderer.removeListener('tool-window:closed', handler);
+  },
 
   // PixelAvatar: listen for avatar state pushes from main process
   onAvatarState: (callback: (payload: unknown) => void) => {

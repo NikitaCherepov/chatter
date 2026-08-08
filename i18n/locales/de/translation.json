@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 Projektordner für Sitzung erlauben"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Browseraktion\n\n{{action}}\n{{target}}\n\nDiese Aktion erlauben?",
+    "textPreview": "\n\nText:\n{{text}}",
+    "completed": "✅ Browseraktion abgeschlossen.",
+    "rejected": "❌ Browseraktion abgelehnt.",
+    "actions": { "open": "Adresse öffnen", "click": "Element anklicken", "fill": "Text eingeben" }
+  },
   "generated": {
     "freePlanButton": "KOSTENLOS ({{value}}k Tokens, Web {{free}})",
     "standardPlanButton": "STANDARD ({{value}}k Tokens, Web {{standart}})",

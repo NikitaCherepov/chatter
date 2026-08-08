@@ -305,6 +305,7 @@ function normalizeWhisperLanguage(value: unknown) {
 
 let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
+const detachedToolWindows = new Map<string, BrowserWindow>();
 
 function getRendererEntryPath(): string {
   return path.join(__dirname, '../renderer/index.html');
@@ -334,10 +335,11 @@ function isTrustedRendererUrl(rawUrl: string): boolean {
 
 function isTrustedIpcSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
   const senderFrame = event.senderFrame;
-  return mainWindow !== null
-    && event.sender === mainWindow.webContents
+  const belongsToAppWindow = event.sender === mainWindow?.webContents
+    || [...detachedToolWindows.values()].some((window) => !window.isDestroyed() && event.sender === window.webContents);
+  return belongsToAppWindow
     && senderFrame !== null
-    && senderFrame === mainWindow.webContents.mainFrame
+    && senderFrame === event.sender.mainFrame
     && isTrustedRendererUrl(senderFrame.url);
 }
 
@@ -443,6 +445,10 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    for (const window of detachedToolWindows.values()) {
+      if (!window.isDestroyed()) window.close();
+    }
+    detachedToolWindows.clear();
     chatterBrowser?.destroy();
     chatterBrowser = null;
     mainWindow = null;
@@ -462,7 +468,8 @@ function createWindow() {
   }) => {
     assertTrustedIpcSender(event);
     if (!chatterBrowser) throw new Error('browser_unavailable');
-    return chatterBrowser.setVisible(payload?.visible === true, payload?.bounds, payload?.ownerId);
+    const host = BrowserWindow.fromWebContents(event.sender) || undefined;
+    return chatterBrowser.setVisible(payload?.visible === true, payload?.bounds, payload?.ownerId, host);
   });
 
   ipcMain.handle('browser:set-bounds', (event, bounds: Electron.Rectangle) => {
@@ -476,6 +483,103 @@ function createWindow() {
     assertTrustedIpcSender(event);
     if (!chatterBrowser) throw new Error('browser_unavailable');
     return chatterBrowser.control(payload);
+  });
+
+  // ── Detached tool windows ────────────────────────────────────────────────
+  const detachableToolIds = new Set(['notebook', 'tasks', 'map', 'gallery', 'documents', 'browser']);
+
+  ipcMain.handle('tool-window:open', async (event, payload: {
+    toolId?: string;
+    title?: string;
+    activeChatId?: number | null;
+  }) => {
+    assertTrustedIpcSender(event);
+    const toolId = `${payload?.toolId || ''}`.trim();
+    if (!detachableToolIds.has(toolId)) throw new Error('unknown_tool');
+
+    const existing = detachedToolWindows.get(toolId);
+    if (existing && !existing.isDestroyed()) {
+      if (existing.isMinimized()) existing.restore();
+      existing.show();
+      existing.focus();
+      return { opened: true };
+    }
+
+    const title = `${payload?.title || 'Chatter'}`.trim().slice(0, 120) || 'Chatter';
+    const activeChatId = Number.isInteger(payload?.activeChatId) && Number(payload.activeChatId) > 0
+      ? Number(payload.activeChatId)
+      : undefined;
+    const toolWindow = new BrowserWindow({
+      width: toolId === 'browser' ? 920 : 720,
+      height: 760,
+      minWidth: 380,
+      minHeight: 420,
+      title,
+      icon: getAppIconPath(),
+      show: false,
+      backgroundColor: '#dfe6ef',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    detachedToolWindows.set(toolId, toolWindow);
+
+    toolWindow.webContents.setWindowOpenHandler(({ url }) => {
+      openExternalHttpUrl(url);
+      return { action: 'deny' };
+    });
+    toolWindow.webContents.on('will-navigate', (navigationEvent, url) => {
+      if (isTrustedRendererUrl(url)) return;
+      navigationEvent.preventDefault();
+      openExternalHttpUrl(url);
+    });
+    toolWindow.once('ready-to-show', () => toolWindow.show());
+    toolWindow.on('close', () => {
+      if (toolId === 'browser' && mainWindow && !mainWindow.isDestroyed()) {
+        chatterBrowser?.moveToHost(mainWindow);
+      }
+    });
+    toolWindow.on('closed', () => {
+      detachedToolWindows.delete(toolId);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tool-window:closed', { toolId });
+      }
+    });
+
+    const query: Record<string, string> = { toolWindow: toolId, title };
+    if (activeChatId) query.activeChatId = String(activeChatId);
+    if (isDev) {
+      const search = new URLSearchParams(query).toString();
+      await toolWindow.loadURL(`http://localhost:5173/?${search}`);
+    } else {
+      await toolWindow.loadFile(rendererEntryPath, { query });
+    }
+    return { opened: true };
+  });
+
+  ipcMain.handle('tool-window:dock', (event, payload: { toolId?: string }) => {
+    assertTrustedIpcSender(event);
+    const toolId = `${payload?.toolId || ''}`.trim();
+    const toolWindow = detachedToolWindows.get(toolId);
+    if (toolWindow && !toolWindow.isDestroyed()) toolWindow.close();
+    return { docked: true };
+  });
+
+  ipcMain.handle('tool-window:update-context', (event, payload: {
+    toolId?: string;
+    activeChatId?: number | null;
+  }) => {
+    assertTrustedIpcSender(event);
+    const toolId = `${payload?.toolId || ''}`.trim();
+    const toolWindow = detachedToolWindows.get(toolId);
+    if (!toolWindow || toolWindow.isDestroyed()) return { updated: false };
+    const activeChatId = Number.isInteger(payload?.activeChatId) && Number(payload.activeChatId) > 0
+      ? Number(payload.activeChatId)
+      : null;
+    toolWindow.webContents.send('tool-window:context', { activeChatId });
+    return { updated: true };
   });
 
   // ── IPC: save-file (shows save dialog, writes blob to disk) ─────────────

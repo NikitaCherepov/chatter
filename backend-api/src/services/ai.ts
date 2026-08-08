@@ -2485,7 +2485,7 @@ Workflow for interaction:
 2. Use click or fill with an exact ref from the latest read result.
 3. After an in-page change, prefer read with mode=delta. After navigation, use mode=viewport. Use mode=full only when the user explicitly needs the whole document.
 
-open/read/back/forward/reload/scroll are read-only navigation actions. click and fill always require explicit user confirmation. Values of ordinary text fields and drafts may be returned by read. Passwords, authentication codes, and payment-card fields cannot be read or filled by the agent.`,
+open, click, and fill always require a separate explicit user confirmation. read/back/forward/reload/scroll do not submit data. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Passwords, authentication codes, and payment-card fields cannot be read or filled by the agent.`,
     parameters: {
       type: 'object',
       properties: {
@@ -6022,9 +6022,9 @@ Respond in the user's language. Be detailed and precise.`
       ipcPayload.amount = amount;
     }
 
-    // Navigation, reading and scrolling cannot submit data. Clicks and form fills
-    // always require a one-time, exact user confirmation.
-    if (action !== 'click' && action !== 'fill') {
+    // Reading and passive navigation cannot submit data. Opening a model-chosen URL,
+    // clicking and filling always require a one-time, exact user confirmation.
+    if (action !== 'open' && action !== 'click' && action !== 'fill') {
       try {
         const result = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, 30000, signal);
         return wrapUntrustedContent(JSON.stringify({
@@ -6047,10 +6047,19 @@ Respond in the user's language. Be detailed and precise.`
       registerPendingPcConfirmation(confirmationId, {
         userId: user.id,
         kind: 'browser_action',
-        label: action === 'fill' ? `Fill browser element ${ref}` : `Click browser element ${ref}`,
+        label: action === 'open'
+          ? `Open browser URL ${url}`
+          : action === 'fill'
+            ? `Fill browser element ${ref}`
+            : `Click browser element ${ref}`,
         payload: {
           ipcType: 'browser_control',
-          ipcPayload: { action: action as 'click' | 'fill', ref: ref!, ...(text !== undefined ? { text } : {}) },
+          ipcPayload: {
+            action: action as 'open' | 'click' | 'fill',
+            ...(url ? { url } : {}),
+            ...(ref ? { ref } : {}),
+            ...(text !== undefined ? { text } : {}),
+          },
         },
         resolve,
         reject,
@@ -6065,7 +6074,8 @@ Respond in the user's language. Be detailed and precise.`
         action_type: action,
         description: typeof parsed.description === 'string' && parsed.description.trim()
           ? parsed.description.trim()
-          : ref,
+          : (action === 'open' ? url : ref),
+        ...(url ? { url } : {}),
         ...(text !== undefined ? { text } : {}),
       },
     };

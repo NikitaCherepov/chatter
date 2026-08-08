@@ -598,6 +598,17 @@
     "allowReadQuestion": "Allow reading?",
     "buttons": { "write": "✅ Write", "read": "✅ Read", "allowFolderSession": "📁 Allow project folder for session" }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Browser action\n\n{{action}}\n{{target}}\n\nAllow this action?",
+    "textPreview": "\n\nText:\n{{text}}",
+    "completed": "✅ Browser action completed.",
+    "rejected": "❌ Browser action rejected.",
+    "actions": {
+      "open": "Open address",
+      "click": "Click element",
+      "fill": "Enter text"
+    }
+  },
   "generated": {
     "freePlanButton": "FREE ({{value}}k tokens, web {{free}})",
     "standardPlanButton": "STANDART ({{value}}k tokens, web {{standart}})",

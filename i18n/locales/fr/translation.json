@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 Autoriser le dossier du projet pour la session"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Action du navigateur\n\n{{action}}\n{{target}}\n\nAutoriser cette action ?",
+    "textPreview": "\n\nTexte :\n{{text}}",
+    "completed": "✅ Action du navigateur terminée.",
+    "rejected": "❌ Action du navigateur refusée.",
+    "actions": { "open": "Ouvrir l’adresse", "click": "Cliquer sur l’élément", "fill": "Saisir du texte" }
+  },
   "generated": {
     "freePlanButton": "GRATUIT ({{value}}k tokens, web {{free}})",
     "standardPlanButton": "STANDARD ({{value}}k tokens, web {{standart}})",

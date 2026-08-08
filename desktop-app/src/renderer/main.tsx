@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './global.scss';
 import { App } from './App';
+import { ToolWindowApp } from './ToolWindowApp';
 import { initializeI18n } from './i18n';
 
 async function bootstrap() {
@@ -10,7 +11,8 @@ async function bootstrap() {
   const rootEl = document.getElementById('root');
   if (rootEl) {
     const root = createRoot(rootEl);
-    root.render(<App />);
+    const isToolWindow = new URLSearchParams(window.location.search).has('toolWindow');
+    root.render(isToolWindow ? <ToolWindowApp /> : <App />);
   }
 }
 

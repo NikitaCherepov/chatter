@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
-import { subscribeWidgetData, setNotebookDraftState, registerToolNav } from '../lib/tools';
+import { getNotebookDraftState, subscribeWidgetData, setNotebookDraftState, registerToolNav } from '../lib/tools';
 import s from './NotebookTool.module.scss';
 
 const TITLE_MAX = 120;
@@ -24,7 +24,8 @@ const slideTransition = { duration: 0.18, ease: 'easeOut' as const };
 
 export function NotebookTool({ contentMax }: Props) {
   const { t, i18n } = useTranslation();
-  const [view, setView] = useState<View>('list');
+  const initialDraftRef = useRef(getNotebookDraftState());
+  const [view, setView] = useState<View>(initialDraftRef.current.isOpen ? 'editor' : 'list');
   const [notes, setNotes] = useState<api.NoteDto[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -33,8 +34,8 @@ export function NotebookTool({ contentMax }: Props) {
 
   // Editor state
   const [editId, setEditId] = useState<number | null>(null);
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const [title, setTitle] = useState(initialDraftRef.current.title);
+  const [content, setContent] = useState(initialDraftRef.current.content);
   const [originalTitle, setOriginalTitle] = useState('');
   const [originalContent, setOriginalContent] = useState('');
 

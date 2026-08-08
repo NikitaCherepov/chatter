@@ -716,6 +716,13 @@
       "allowFolderSession": "📁 Oturum için proje klasörüne izin ver"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 Tarayıcı eylemi\n\n{{action}}\n{{target}}\n\nBu eyleme izin verilsin mi?",
+    "textPreview": "\n\nMetin:\n{{text}}",
+    "completed": "✅ Tarayıcı eylemi tamamlandı.",
+    "rejected": "❌ Tarayıcı eylemi reddedildi.",
+    "actions": { "open": "Adresi aç", "click": "Öğeye tıkla", "fill": "Metin gir" }
+  },
   "generated": {
     "freePlanButton": "ÜCRETSİZ ({{value}}k token, web {{free}})",
     "standardPlanButton": "STANDART ({{value}}k token, web {{standart}})",

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
+import { toast } from 'sonner';
 import { DndContext, type DragEndEvent } from '@dnd-kit/core';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import {
@@ -16,12 +17,7 @@ import {
   type LayoutMode,
   type ToolLayoutState,
 } from '../lib/tools';
-import { NotebookTool } from './NotebookTool';
-import { TasksTool } from './TasksTool';
-import { MapTool } from './MapTool';
-import { GalleryTool } from './GalleryTool';
-import { DocumentsTool } from './DocumentsTool';
-import { BrowserTool } from './BrowserTool';
+import { ToolContent } from './ToolContent';
 import { FloatingWidget } from './FloatingWidget';
 import s from './ToolsPanel.module.scss';
 
@@ -175,6 +171,20 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
     return () => { unsubs.forEach(fn => fn()); };
   }, [openTools]);
 
+  useEffect(() => window.electronAPI.onToolWindowClosed(({ toolId }) => {
+    setToolLayout(toolId, { mode: 'sidebar' });
+    const state = getToolsPanelState();
+    if (state.openTools.includes(toolId)) setToolsPanelState({ isOpen: true });
+  }), []);
+
+  useEffect(() => {
+    for (const toolId of openTools) {
+      if ((toolLayouts[toolId]?.mode ?? 'sidebar') === 'external') {
+        void window.electronAPI.updateToolWindowContext({ toolId, activeChatId }).catch(() => {});
+      }
+    }
+  }, [activeChatId, openTools, toolLayouts]);
+
   const contentMax = isAdmin === 1 ? 3000 : (CONTENT_LIMITS[plan] || 400);
   const tools = useMemo(() => buildTools(contentMax, t), [contentMax, t]);
 
@@ -210,13 +220,21 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
 
   const handleLayoutChange = useCallback((toolId: ToolId, mode: LayoutMode) => {
     setToolLayout(toolId, { mode });
-    if (mode === 'fullscreen' || mode === 'floating') {
+    if (mode === 'external') {
+      setToolsPanelState({ isOpen: false });
+      const title = tools.find((tool) => tool.id === toolId)?.title || toolId;
+      void window.electronAPI.openToolWindow({ toolId, title, activeChatId }).catch((error) => {
+        setToolLayout(toolId, { mode: 'sidebar' });
+        setToolsPanelState({ isOpen: true });
+        toast.error(error?.message || 'Could not open tool window');
+      });
+    } else if (mode === 'fullscreen' || mode === 'floating') {
       // Collapse sidebar when going out of sidebar mode
       setToolsPanelState({ isOpen: false });
     } else {
       setToolsPanelState({ isOpen: true });
     }
-  }, []);
+  }, [activeChatId, tools]);
 
   const handleFloatingPosChange = useCallback((toolId: ToolId, pos: { x: number; y: number }) => {
     setToolLayout(toolId, { floatingPos: pos });
@@ -236,30 +254,14 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
   }, []);
 
   const renderToolContent = (toolId: ToolId) => {
-    const tool = tools.find(t => t.id === toolId);
-    if (toolId === 'notebook') {
-      return <NotebookTool contentMax={tool?.contentMax ?? contentMax} />;
-    }
-    if (toolId === 'tasks') {
-      return <TasksTool />;
-    }
-    if (toolId === 'map') {
-      return <MapTool />;
-    }
-    if (toolId === 'gallery') {
-      return <GalleryTool chatId={activeChatId ?? null} onImageClick={onImageClick} onChatSelect={onChatSelect} />;
-    }
-    if (toolId === 'documents') {
-      return <DocumentsTool chatId={activeChatId ?? null} />;
-    }
-    if (toolId === 'browser') {
-      return <BrowserTool />;
-    }
-    return null;
+    return <ToolContent toolId={toolId} contentMax={contentMax} activeChatId={activeChatId} onImageClick={onImageClick} onChatSelect={onChatSelect} />;
   };
 
   // Non-sidebar open tools (for floating/fullscreen windows)
-  const floatingTools = openTools.filter(id => (toolLayouts[id]?.mode ?? 'sidebar') !== 'sidebar');
+  const floatingTools = openTools.filter(id => {
+    const mode = toolLayouts[id]?.mode ?? 'sidebar';
+    return mode === 'floating' || mode === 'fullscreen';
+  });
 
   return (
     <DndContext
@@ -308,6 +310,13 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
                     <polyline points="9 21 3 21 3 15" />
                     <line x1="21" y1="3" x2="14" y2="10" />
                     <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                </button>
+                <button className={s.layoutBtn} onClick={() => handleLayoutChange(sidebarToolId, 'external')} title={t('widget.external', { defaultValue: 'Open in separate window' })}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 3h7v7" />
+                    <path d="M10 14L21 3" />
+                    <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
                   </svg>
                 </button>
               </div>

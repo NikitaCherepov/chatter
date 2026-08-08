@@ -686,6 +686,13 @@
       "allowFolderSession": "📁 セッションでプロジェクトフォルダを許可"
     }
   },
+  "browserConfirmation": {
+    "prompt": "🌐 ブラウザー操作\n\n{{action}}\n{{target}}\n\nこの操作を許可しますか？",
+    "textPreview": "\n\nテキスト：\n{{text}}",
+    "completed": "✅ ブラウザー操作が完了しました。",
+    "rejected": "❌ ブラウザー操作が拒否されました。",
+    "actions": { "open": "アドレスを開く", "click": "要素をクリック", "fill": "テキストを入力" }
+  },
   "generated": {
     "freePlanButton": "無料 ({{value}}k トークン、ウェブ {{free}})",
     "standardPlanButton": "スタンダード ({{value}}k トークン、ウェブ {{standart}})",

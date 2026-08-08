@@ -111,7 +111,8 @@
   "widget": {
     "toSidebar": "В сайдбар",
     "floating": "Плавающее окно",
-    "fullscreen": "На весь экран"
+    "fullscreen": "На весь экран",
+    "external": "Открыть в отдельном окне"
   },
   "telegram": {
     "title": "Привязать Telegram",
@@ -500,6 +501,7 @@
     },
     "browser": {
       "confirmTitle": "Действие в браузере",
+      "open": "Открыть: {{target}}",
       "click": "Нажать: {{target}}",
       "fill": "Ввести текст в: {{target}}",
       "executed": "Действие в браузере выполнено",
