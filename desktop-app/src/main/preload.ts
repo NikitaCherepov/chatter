@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     amount?: number;
     download_id?: string;
     approved?: boolean;
+    destination?: 'prompt' | 'downloads';
   }) => ipcRenderer.invoke('browser:control', payload),
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

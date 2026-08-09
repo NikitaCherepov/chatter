@@ -1118,8 +1118,8 @@ export function ChatPage() {
       const val = action.value as { confirmation_id?: string; download_id?: string; filename?: string; url?: string; mime_type?: string; total_bytes?: number; origin?: string | null };
       if (val.confirmation_id && val.download_id && val.filename) {
         setBrowserDownloadConfirmations(prev => {
-          if (prev.some(c => c.confirmation_id === val.confirmation_id || c.download_id === val.download_id)) return prev;
-          return [...prev, {
+          if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
+          return [...prev.filter(c => c.download_id !== val.download_id), {
             confirmation_id: val.confirmation_id!,
             download_id: val.download_id!,
             filename: val.filename!,
@@ -1283,29 +1283,12 @@ export function ChatPage() {
   useEffect(() => api.onDesktopAction(handleIncomingDesktopAction), [handleIncomingDesktopAction]);
 
   useEffect(() => {
-    const removeRequested = window.electronAPI.onBrowserDownloadRequested((download) => {
-      if (!download?.download_id || !download.filename) return;
-      setBrowserDownloadConfirmations(prev => {
-        if (prev.some(c => c.download_id === download.download_id)) return prev;
-        return [...prev, {
-          confirmation_id: `local:${download.download_id}`,
-          download_id: download.download_id,
-          filename: download.filename,
-          url: download.url || '',
-          mime_type: download.mime_type,
-          total_bytes: download.total_bytes,
-          origin: download.origin,
-          local: true,
-        }];
-      });
-    });
     const removeResolved = window.electronAPI.onBrowserDownloadResolved(({ download_id }) => {
       if (!download_id) return;
       setBrowserDownloadConfirmations(prev => prev.filter(c => c.download_id !== download_id));
       finishConfirmationSubmission(`local:${download_id}`);
     });
     return () => {
-      removeRequested();
       removeResolved();
     };
   }, [finishConfirmationSubmission]);

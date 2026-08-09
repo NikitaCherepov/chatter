@@ -95,6 +95,7 @@ type BrowserControlPayload = {
   amount?: number;
   download_id?: string;
   approved?: boolean;
+  destination?: 'prompt' | 'downloads';
 };
 
 type BrowserDownloadRequest = {

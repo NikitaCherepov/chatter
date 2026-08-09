@@ -37,6 +37,7 @@ type BrowserActionPayload = {
     expected_origin?: string;
     download_id?: string;
     approved?: boolean;
+    destination?: 'prompt' | 'downloads';
   };
 };
 
@@ -58,6 +59,22 @@ export type PendingPcCommandConfirmation = {
 };
 
 const pendingConfirmations = new Map<string, PendingPcCommandConfirmation>();
+const emptyWaiters = new Map<number, Set<() => void>>();
+
+const hasPendingForUser = (userId: number) => {
+  for (const pending of pendingConfirmations.values()) {
+    if (pending.userId === userId) return true;
+  }
+  return false;
+};
+
+const notifyIfUserHasNoPending = (userId: number) => {
+  if (hasPendingForUser(userId)) return;
+  const waiters = emptyWaiters.get(userId);
+  if (!waiters) return;
+  emptyWaiters.delete(userId);
+  for (const resolve of waiters) resolve();
+};
 
 export const registerPendingPcConfirmation = (id: string, pending: PendingPcCommandConfirmation) => {
   pendingConfirmations.set(id, pending);
@@ -68,7 +85,22 @@ export const getPendingPcConfirmation = (id: string): PendingPcCommandConfirmati
 };
 
 export const deletePendingPcConfirmation = (id: string): boolean => {
-  return pendingConfirmations.delete(id);
+  const pending = pendingConfirmations.get(id);
+  const deleted = pendingConfirmations.delete(id);
+  if (deleted && pending) notifyIfUserHasNoPending(pending.userId);
+  return deleted;
+};
+
+export const waitForNoPendingPcConfirmations = (userId: number): Promise<void> => {
+  if (!hasPendingForUser(userId)) return Promise.resolve();
+  return new Promise(resolve => {
+    let waiters = emptyWaiters.get(userId);
+    if (!waiters) {
+      waiters = new Set();
+      emptyWaiters.set(userId, waiters);
+    }
+    waiters.add(resolve);
+  });
 };
 
 // Auto-cleanup expired (5 min TTL)
@@ -79,6 +111,7 @@ setInterval(() => {
       pending.reject(new Error('confirmation_expired'));
       pendingConfirmations.delete(id);
       pending.onExpired?.();
+      notifyIfUserHasNoPending(pending.userId);
     }
   }
 }, 30_000);

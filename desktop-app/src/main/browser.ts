@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, WebContentsView, type DownloadItem, type Rectangle, type WebContents } from 'electron';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, statfsSync, unlinkSync } from 'node:fs';
 import { copyFile, rename, unlink } from 'node:fs/promises';
 import { click as naturalClick, generateTrajectory, pickTargetPoint, scrollWheel, type CancellationToken, type Point } from './cursor-input';
 
@@ -27,6 +27,7 @@ export type BrowserControlPayload = {
   amount?: number;
   download_id?: string;
   approved?: boolean;
+  destination?: 'prompt' | 'downloads';
 };
 
 export type BrowserDownloadRequest = {
@@ -48,12 +49,6 @@ type PendingBrowserDownload = {
   approved: boolean;
 };
 
-type DownloadCapture = {
-  request: BrowserDownloadRequest | null;
-  resolve: (request: BrowserDownloadRequest) => void;
-  promise: Promise<BrowserDownloadRequest>;
-};
-
 type BrowserElement = {
   ref: string;
   tag: string;
@@ -73,7 +68,6 @@ const MAX_ELEMENTS = 160;
 const MAX_VIEWPORT_ELEMENTS = 80;
 const BROWSER_WORLD_ID = 1004;
 const DOWNLOAD_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
-const DOWNLOAD_CAPTURE_GRACE_MS = 900;
 
 type BrowserReadSnapshot = {
   url: string;
@@ -139,7 +133,6 @@ export class ChatterBrowser {
   private readonly sessionClickOrigins = new Set<string>();
   private readonly sessionFillOrigins = new Set<string>();
   private readonly pendingDownloads = new Map<string, PendingBrowserDownload>();
-  private activeDownloadCapture: DownloadCapture | null = null;
   private readonly willDownloadHandler: (event: Electron.Event, item: DownloadItem, webContents: WebContents) => void;
 
   /** Last known pointer position inside the WebContentsView (local CSS px). */
@@ -333,7 +326,11 @@ export class ChatterBrowser {
       return { granted: true, origin: currentOrigin, permission_action: permissionAction };
     }
     if (action === 'resolve_download') {
-      return this.resolveDownload(`${payload.download_id || ''}`, payload.approved === true);
+      return this.resolveDownload(
+        `${payload.download_id || ''}`,
+        payload.approved === true,
+        payload.destination === 'downloads' ? 'downloads' : 'prompt',
+      );
     }
 
     if (action === 'open') {
@@ -341,22 +338,16 @@ export class ChatterBrowser {
       this.interactionInProgress = true;
       this.explicitNavigationRequested = true;
       const url = normalizeBrowserUrl(`${payload.url || ''}`);
-      const downloadCapture = this.beginDownloadCapture();
       try {
-        let navigationError: unknown;
         try {
           await contents.loadURL(url);
-        } catch (error) {
-          navigationError = error;
+        } catch (error: any) {
+          // Chromium aborts the navigation when the response becomes a file
+          // download. will-download already owns that flow and asks the user.
+          if (error?.code !== -3 && !`${error?.message || ''}`.includes('ERR_ABORTED')) throw error;
         }
-        const download = await this.waitForDownloadCapture(downloadCapture);
-        if (download) {
-          return { status: 'download_confirmation_required', download, ...this.getState() };
-        }
-        if (navigationError) throw navigationError;
         return this.getState();
       } finally {
-        this.endDownloadCapture(downloadCapture);
         this.interactionInProgress = false;
       }
     }
@@ -474,27 +465,6 @@ export class ChatterBrowser {
     }
   }
 
-  private beginDownloadCapture(): DownloadCapture {
-    let resolve!: (request: BrowserDownloadRequest) => void;
-    const promise = new Promise<BrowserDownloadRequest>((done) => { resolve = done; });
-    const capture: DownloadCapture = { request: null, resolve, promise };
-    this.activeDownloadCapture = capture;
-    return capture;
-  }
-
-  private endDownloadCapture(capture: DownloadCapture): void {
-    if (this.activeDownloadCapture === capture) this.activeDownloadCapture = null;
-  }
-
-  private async waitForDownloadCapture(capture: DownloadCapture): Promise<BrowserDownloadRequest | null> {
-    if (capture.request) return capture.request;
-    const request = await Promise.race([
-      capture.promise,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), DOWNLOAD_CAPTURE_GRACE_MS)),
-    ]);
-    return request;
-  }
-
   private handleWillDownload(item: DownloadItem): void {
     const rawUrl = item.getURL();
     let displayUrl = rawUrl;
@@ -543,15 +513,8 @@ export class ChatterBrowser {
       void this.finishPendingDownload(request.download_id, state);
     });
 
-    const capture = this.activeDownloadCapture;
-    if (capture && !capture.request) {
-      capture.request = request;
-      capture.resolve(request);
-      return;
-    }
-
-    // A download initiated manually in the embedded browser still requires a
-    // local confirmation even when no model tool call is active.
+    // Every download follows the same confirmation route, regardless of what
+    // initiated it (model action, direct URL, page script, or manual click).
     this.emitDownloadEvent('browser:download-requested', request);
   }
 
@@ -590,7 +553,21 @@ export class ChatterBrowser {
     });
   }
 
-  private async resolveDownload(downloadId: string, approved: boolean): Promise<unknown> {
+  private getAvailableDownloadPath(filename: string): string {
+    const directory = app.getPath('downloads');
+    const parsed = path.parse(filename);
+    let candidate = path.join(directory, filename);
+    for (let suffix = 1; existsSync(candidate); suffix += 1) {
+      candidate = path.join(directory, `${parsed.name} (${suffix})${parsed.ext}`);
+    }
+    return candidate;
+  }
+
+  private async resolveDownload(
+    downloadId: string,
+    approved: boolean,
+    destination: 'prompt' | 'downloads',
+  ): Promise<unknown> {
     const pending = this.pendingDownloads.get(downloadId);
     if (!downloadId || !pending) throw new Error('browser_download_not_found_or_expired');
     if (pending.approved) {
@@ -607,34 +584,53 @@ export class ChatterBrowser {
       return { status: 'cancelled', download_id: downloadId };
     }
 
-    const saveDialogOptions = {
-      defaultPath: path.join(app.getPath('downloads'), pending.request.filename),
-    };
-    const result = this.host.isDestroyed()
-      ? await dialog.showSaveDialog(saveDialogOptions)
-      : await dialog.showSaveDialog(this.host, saveDialogOptions);
+    let finalPath: string | undefined;
+    if (destination === 'downloads') {
+      const downloadsDirectory = app.getPath('downloads');
+      try {
+        if (pending.request.total_bytes > 0) {
+          const stats = statfsSync(downloadsDirectory);
+          const availableBytes = Number(stats.bavail) * Number(stats.bsize);
+          if (Number.isFinite(availableBytes) && availableBytes < pending.request.total_bytes) {
+            throw new Error('browser_download_insufficient_space');
+          }
+        }
+        finalPath = this.getAvailableDownloadPath(pending.request.filename);
+      } catch (error) {
+        this.cancelPendingDownload(downloadId, 'failed');
+        throw error;
+      }
+    } else {
+      const saveDialogOptions = {
+        defaultPath: path.join(app.getPath('downloads'), pending.request.filename),
+      };
+      const result = this.host.isDestroyed()
+        ? await dialog.showSaveDialog(saveDialogOptions)
+        : await dialog.showSaveDialog(this.host, saveDialogOptions);
+      if (!result.canceled && result.filePath) finalPath = result.filePath;
+    }
 
     const current = this.pendingDownloads.get(downloadId);
     if (!current || current !== pending) throw new Error('browser_download_not_found_or_expired');
-    if (result.canceled || !result.filePath) {
+    if (!finalPath) {
       this.cancelPendingDownload(downloadId, 'cancelled');
       return { status: 'cancelled', download_id: downloadId };
     }
 
     clearTimeout(pending.timer);
     pending.approved = true;
-    pending.finalPath = result.filePath;
+    pending.finalPath = finalPath;
     pending.item.resume();
     this.emitDownloadEvent('browser:download-resolved', {
       download_id: downloadId,
       status: 'started',
-      file_path: result.filePath,
+      file_path: finalPath,
     });
     return {
       status: 'started',
       download_id: downloadId,
       filename: pending.request.filename,
-      file_path: result.filePath,
+      file_path: finalPath,
     };
   }
 
@@ -862,7 +858,6 @@ export class ChatterBrowser {
     })()`;
 
     let rect: { x: number; y: number; width: number; height: number; viewportW: number; viewportH: number };
-    const downloadCapture = this.beginDownloadCapture();
     try {
       rect = await this.executeInBrowserWorld(rectScript);
     } catch (error) {
@@ -975,11 +970,6 @@ export class ChatterBrowser {
 
       await visualAnimation;
 
-      const download = await this.waitForDownloadCapture(downloadCapture);
-      if (download) {
-        return { status: 'download_confirmation_required', action: 'click', element: expected, download, ...this.getState() };
-      }
-
       return { status: 'success', action: 'click', element: expected, ...this.getState() };
     } catch (error) {
       // Clean up: restore outline + hide visual cursor on error / cancellation.
@@ -995,13 +985,8 @@ export class ChatterBrowser {
         if (cursor) cursor.style.opacity = '0';
         return true;
       })()`).catch(() => {});
-      const download = await this.waitForDownloadCapture(downloadCapture);
-      if (download) {
-        return { status: 'download_confirmation_required', action: 'click', element: expected, download, ...this.getState() };
-      }
       throw error;
     } finally {
-      this.endDownloadCapture(downloadCapture);
       this.clickToken = null;
       this.interactionInProgress = false;
     }

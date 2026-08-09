@@ -580,6 +580,8 @@ export type StreamCallbacks = {
 // ---------- WebSocket ----------
 
 let ws: WebSocket | null = null;
+const pendingBrowserDownloadEvents = new Map<string, Record<string, unknown>>();
+let browserDownloadBridgeInitialized = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let wsTokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let wsAuthRefreshAckTimer: ReturnType<typeof setTimeout> | null = null;
@@ -599,6 +601,26 @@ type WsCallbacks = StreamCallbacks & {
 };
 
 let wsCallbacks: WsCallbacks = {};
+
+const flushBrowserDownloadEvents = (socket: WebSocket) => {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  for (const download of pendingBrowserDownloadEvents.values()) {
+    socket.send(JSON.stringify({ type: 'browser_download_requested', download }));
+  }
+};
+
+const ensureBrowserDownloadBridge = () => {
+  if (browserDownloadBridgeInitialized || !window.electronAPI?.onBrowserDownloadRequested) return;
+  browserDownloadBridgeInitialized = true;
+  window.electronAPI.onBrowserDownloadRequested((download) => {
+    if (!download?.download_id) return;
+    pendingBrowserDownloadEvents.set(download.download_id, download as unknown as Record<string, unknown>);
+    if (ws?.readyState === WebSocket.OPEN) flushBrowserDownloadEvents(ws);
+  });
+  window.electronAPI.onBrowserDownloadResolved(({ download_id }) => {
+    if (download_id) pendingBrowserDownloadEvents.delete(download_id);
+  });
+};
 let activeStreamCallbacks: StreamCallbacks = {};
 let activeChatRequestAccepted = false;
 
@@ -732,6 +754,7 @@ export function onMapUpdate(cb: StreamCallbacks['onMapUpdate']) {
 
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = { ...wsCallbacks, ...callbacks };
+  ensureBrowserDownloadBridge();
 
   // Already connecting or open — skip
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
@@ -750,6 +773,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     console.log('[ws] connected');
     scheduleWebSocketTokenRefresh(socket);
     wsCallbacks.onConnect?.();
+    flushBrowserDownloadEvents(socket);
   };
 
   socket.onmessage = (ev) => {

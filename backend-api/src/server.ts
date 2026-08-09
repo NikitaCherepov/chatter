@@ -6,13 +6,13 @@ import { getEncryptionKey } from './utils/encryption.js';
 
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
-import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
+import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, activeHitlWaits, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -20,7 +20,7 @@ import { listServers, getServerById, createServer, updateServer, deleteServer, l
 import { execSshCommand, testSshConnection } from './services/ssh.js';
 import { getPendingConfirmation, deletePendingConfirmation } from './services/devops-confirmations.js';
 import { getPcCommandsSettings, updatePcCommandsSettings, listPcCommandPolicies, createPcCommandPolicy, deletePcCommandPolicy } from './services/pc-commands.js';
-import { getPendingPcConfirmation, deletePendingPcConfirmation, type PendingPcCommandConfirmation } from './services/pc-command-confirmations.js';
+import { registerPendingPcConfirmation, getPendingPcConfirmation, deletePendingPcConfirmation, type PendingPcCommandConfirmation } from './services/pc-command-confirmations.js';
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
@@ -34,7 +34,7 @@ import { migratePendingAccountNamespaces, VectorMemoryService } from './services
 import { seedPlanLimitsIfEmpty, loadPlanLimitsFromDb, savePlanLimitsToDb, DEFAULT_PLAN_LIMITS, PLAN_IDS, type PlanLimits } from './services/plan-limits.js';
 import { refreshCoefficientCache, setCoefficient, setModelProvider, getModelOverride, getOverrideMap } from './services/token-quota.js';
 import type { ProviderKind, PricingMode, ModelOverride } from './services/token-quota.js';
-import { sendTelegramMessage } from './services/telegram-send.js';
+import { editTelegramMessage, sendTelegramInlineMessage, sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
@@ -5435,7 +5435,10 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     const ipcTimeout = pending.kind === 'browser_download'
       ? 270000
       : pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
-    const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout);
+    const ipcPayload = pending.kind === 'browser_download' && pending.payload.ipcType === 'browser_control'
+      ? { ...pending.payload.ipcPayload, destination: 'downloads' as const }
+      : pending.payload.ipcPayload;
+    const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, ipcPayload, ipcTimeout);
     pending.resolve(result);
     const resolvedStatus = pending.kind === 'browser_download'
       && result && typeof result === 'object' && result.status === 'cancelled'
@@ -5694,6 +5697,136 @@ server.headersTimeout = 5 * 60 * 1000 + 1000;
 
 // ── WebSocket Server ─────────────────────────────────────────────────────────
 
+type BrowserDownloadEvent = {
+  download_id: string;
+  filename: string;
+  url: string;
+  mime_type: string;
+  total_bytes: number;
+  origin: string | null;
+};
+
+const browserDownloadConfirmationIds = new Map<string, string>();
+
+const parseBrowserDownloadEvent = (raw: unknown): BrowserDownloadEvent | null => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const downloadId = typeof value.download_id === 'string' ? value.download_id.trim() : '';
+  const filename = typeof value.filename === 'string' ? path.basename(value.filename).slice(0, 300) : '';
+  if (!downloadId || downloadId.length > 200 || !filename) return null;
+  return {
+    download_id: downloadId,
+    filename,
+    url: typeof value.url === 'string' ? value.url.slice(0, 1500) : '',
+    mime_type: typeof value.mime_type === 'string' ? value.mime_type.slice(0, 200) : '',
+    total_bytes: Math.max(0, Number(value.total_bytes) || 0),
+    origin: typeof value.origin === 'string' ? value.origin.slice(0, 1000) : null,
+  };
+};
+
+const handleBrowserDownloadEvent = async (userId: number, raw: unknown) => {
+  const download = parseBrowserDownloadEvent(raw);
+  if (!download) return;
+
+  const existingId = browserDownloadConfirmationIds.get(download.download_id);
+  if (existingId && getPendingPcConfirmation(existingId)) return;
+
+  const confirmationId = crypto.randomUUID();
+  const user = getUserById(userId);
+  let telegramMessage: { chatId: number; messageId: number } | null = null;
+  browserDownloadConfirmationIds.set(download.download_id, confirmationId);
+
+  const editTelegramStatus = (key: 'started' | 'cancelled' | 'expired' | 'failed') => {
+    if (!telegramMessage) return;
+    void editTelegramMessage(
+      telegramMessage.chatId,
+      telegramMessage.messageId,
+      translateForLanguage(user?.language, `browserDownloadConfirmation.${key}`),
+    ).catch(() => {});
+  };
+
+  const confirmationPromise = new Promise<unknown>((resolve, reject) => {
+    registerPendingPcConfirmation(confirmationId, {
+      userId,
+      kind: 'browser_download',
+      label: `Download browser file ${download.filename}`,
+      payload: {
+        ipcType: 'browser_control',
+        ipcPayload: {
+          action: 'resolve_download',
+          download_id: download.download_id,
+          approved: true,
+        },
+      },
+      resolve,
+      reject,
+      onExpired: () => {
+        browserDownloadConfirmationIds.delete(download.download_id);
+        void sendIpcToDesktop(userId, 'browser_control', {
+          action: 'resolve_download',
+          download_id: download.download_id,
+          approved: false,
+        }, 15000).catch(() => {});
+        sendToDesktop(userId, {
+          type: 'desktop_action',
+          action: 'browser_download_confirmation_resolved',
+          value: { confirmation_id: confirmationId, download_id: download.download_id, status: 'expired' },
+        });
+        editTelegramStatus('expired');
+      },
+      onResolved: (status) => {
+        browserDownloadConfirmationIds.delete(download.download_id);
+        editTelegramStatus(status === 'executed' ? 'started' : status === 'rejected' ? 'cancelled' : 'failed');
+      },
+      createdAt: Date.now(),
+    });
+  });
+  activeHitlWaits.add(userId);
+  void confirmationPromise.catch(() => {}).finally(() => activeHitlWaits.delete(userId));
+
+  sendToDesktop(userId, {
+    type: 'desktop_action',
+    action: 'browser_download_confirmation',
+    value: { confirmation_id: confirmationId, ...download },
+  });
+
+  const telegramIdentity = getTelegramIdentityForAccount(userId);
+  const telegramId = Number(telegramIdentity?.provider_subject);
+  if (!Number.isFinite(telegramId) || telegramId <= 0) return;
+
+  const size = download.total_bytes > 0
+    ? download.total_bytes < 1024 * 1024
+      ? `${(download.total_bytes / 1024).toFixed(1)} KB`
+      : `${(download.total_bytes / (1024 * 1024)).toFixed(1)} MB`
+    : translateForLanguage(user?.language, 'browserDownloadConfirmation.unknownSize');
+  let message = translateForLanguage(user?.language, 'browserDownloadConfirmation.prompt', {
+    filename: download.filename,
+    size,
+  });
+  if (download.mime_type) {
+    message += translateForLanguage(user?.language, 'browserDownloadConfirmation.typeLine', { type: download.mime_type });
+  }
+  if (download.url) {
+    message += translateForLanguage(user?.language, 'browserDownloadConfirmation.urlLine', { url: download.url });
+  }
+  message += translateForLanguage(user?.language, 'browserDownloadConfirmation.downloadsFolderNote');
+
+  try {
+    telegramMessage = await sendTelegramInlineMessage(telegramId, message, [[
+      {
+        text: translateForLanguage(user?.language, 'browserDownloadConfirmation.download'),
+        callback_data: `browserdownload:allow:${confirmationId}`,
+      },
+      {
+        text: translateForLanguage(user?.language, 'browserDownloadConfirmation.cancel'),
+        callback_data: `browserdownload:reject:${confirmationId}`,
+      },
+    ]]);
+  } catch (error) {
+    console.warn('[browser_download] failed to send Telegram confirmation:', formatSafeError(error));
+  }
+};
+
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws, req) => {
@@ -5815,6 +5948,8 @@ wss.on('connection', (ws, req) => {
         // Ответ не нужен — клиент получит done с aborted: true
       } else if (msg.type === 'ipc_result') {
         handleIpcResult(client, msg);
+      } else if (msg.type === 'browser_download_requested') {
+        await handleBrowserDownloadEvent(client.accountId, msg.download);
       } else if (msg.type === 'ping') {
         client.lastPongAt = Date.now();
         client.missedPongs = 0;

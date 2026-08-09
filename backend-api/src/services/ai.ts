@@ -18,6 +18,7 @@ import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl, wrapUntrustedContent } from './web-reader.js';
 import { runImageGeneration } from './image-generation.js';
 import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
+import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
 import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
@@ -6065,129 +6066,12 @@ Respond in the user's language. Be detailed and precise.`
       }
     }
 
-    const waitForBrowserDownload = async (ipcResult: any): Promise<any> => {
-      const download = ipcResult && typeof ipcResult === 'object'
-        && ipcResult.status === 'download_confirmation_required'
-        && ipcResult.download && typeof ipcResult.download === 'object'
-        ? ipcResult.download as Record<string, unknown>
-        : null;
-      const downloadId = typeof download?.download_id === 'string' ? download.download_id : '';
-      if (!download || !downloadId) return ipcResult;
-
-      if (autoRejectHitl) {
-        try {
-          await sendIpcToDesktop(user.id, 'browser_control', {
-            action: 'resolve_download',
-            download_id: downloadId,
-            approved: false,
-          }, 15000, signal);
-        } catch { /* local timeout also cancels the paused download */ }
-        return { status: 'rejected', message: 'Browser download was automatically rejected because no user confirmation is available in auto-mode.' };
-      }
-
-      const { randomUUID } = await import('node:crypto');
-      const confirmationId = randomUUID();
-      const { registerPendingPcConfirmation, deletePendingPcConfirmation } = await import('./pc-command-confirmations.js');
-      const confirmationPromise = new Promise<any>((resolve, reject) => {
-        registerPendingPcConfirmation(confirmationId, {
-          userId: user.id,
-          kind: 'browser_download',
-          label: `Download browser file ${typeof download.filename === 'string' ? download.filename : downloadId}`,
-          payload: {
-            ipcType: 'browser_control',
-            ipcPayload: {
-              action: 'resolve_download',
-              download_id: downloadId,
-              approved: true,
-            },
-          },
-          resolve,
-          reject,
-          onExpired: () => {
-            void sendIpcToDesktop(user.id, 'browser_control', {
-              action: 'resolve_download',
-              download_id: downloadId,
-              approved: false,
-            }, 15000).catch(() => {});
-            sendToDesktop(user.id, {
-              type: 'desktop_action',
-              action: 'browser_download_confirmation_resolved',
-              value: { confirmation_id: confirmationId, download_id: downloadId, status: 'expired' },
-            });
-            if (subagentExtra?.onDesktopAction) {
-              void Promise.resolve(subagentExtra.onDesktopAction({
-                action: 'browser_download_confirmation_resolved',
-                value: { confirmation_id: confirmationId, download_id: downloadId, status: 'expired' },
-              })).catch(() => {});
-            }
-          },
-          onResolved: (status) => {
-            if (subagentExtra?.onDesktopAction) {
-              void Promise.resolve(subagentExtra.onDesktopAction({
-                action: 'browser_download_confirmation_resolved',
-                value: { confirmation_id: confirmationId, download_id: downloadId, status },
-              })).catch(() => {});
-            }
-          },
-          createdAt: Date.now(),
-        });
-      });
-
-      const confirmationAction: DesktopActionPayload = {
-        action: 'browser_download_confirmation',
-        value: {
-          confirmation_id: confirmationId,
-          download_id: downloadId,
-          filename: typeof download.filename === 'string' ? download.filename : 'download',
-          url: typeof download.url === 'string' ? download.url : '',
-          mime_type: typeof download.mime_type === 'string' ? download.mime_type : '',
-          total_bytes: typeof download.total_bytes === 'number' ? download.total_bytes : 0,
-          origin: typeof download.origin === 'string' ? download.origin : undefined,
-        },
-      };
-
-      let sent = false;
-      try {
-        if (subagentExtra?.onDesktopAction) {
-          await subagentExtra.onDesktopAction(confirmationAction);
-          sent = true;
-          sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
-        } else {
-          sent = sendToDesktop(user.id, { type: 'desktop_action', ...confirmationAction });
-        }
-      } catch (err) {
-        console.error('[browser_control] failed to send download confirmation:', err);
-      }
-
-      if (!sent) {
-        deletePendingPcConfirmation(confirmationId);
-        void sendIpcToDesktop(user.id, 'browser_control', {
-          action: 'resolve_download',
-          download_id: downloadId,
-          approved: false,
-        }, 15000).catch(() => {});
-        return { status: 'error', message: 'Failed to deliver browser download confirmation.' };
-      }
-
-      try {
-        return await waitForHitlConfirmation(user.id, confirmationPromise);
-      } catch (err: any) {
-        if (err?.message?.startsWith('rejected_by_user')) {
-          return withRejectionComment({ status: 'rejected', message: 'User rejected the browser download.' }, err);
-        }
-        if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
-          return { status: 'timeout', message: 'Browser download confirmation expired.' };
-        }
-        return { status: 'error', message: err?.message || String(err) };
-      }
-    };
-
     // Reading and passive navigation cannot submit data. Opening, clicking and filling
     // use the user's per-account confirmation preferences (safe default: confirm).
     if (!confirmationRequired) {
       try {
         const ipcResult = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, 30000, signal);
-        const result = await waitForBrowserDownload(ipcResult);
+        const result = ipcResult;
         return wrapUntrustedContent(JSON.stringify({
           status: 'success',
           ...(typeof result === 'object' && result !== null ? result : { result }),
@@ -6271,7 +6155,7 @@ Respond in the user's language. Be detailed and precise.`
 
     try {
       const ipcResult = await waitForHitlConfirmation(user.id, confirmationPromise);
-      const result = await waitForBrowserDownload(ipcResult);
+      const result = ipcResult;
       return wrapUntrustedContent(JSON.stringify({
         status: 'success',
         ...(typeof result === 'object' && result !== null ? result : { result }),
@@ -7500,6 +7384,7 @@ User request: "${text}"`;
 
   while (loop < effectiveMaxLoops) {
     loop += 1;
+    await withAbort(waitForNoPendingPcConfirmations(userId), abortController.signal);
 
     const latestUsage = latestRequestUsage;
     const finalizeForQuota = !quotaFinalizationIssued
@@ -7641,6 +7526,7 @@ User request: "${text}"`;
     };
 
     if (!message.tool_calls?.length) {
+      await withAbort(waitForNoPendingPcConfirmations(userId), abortController.signal);
       const finishReason = response?.choices?.[0]?.finish_reason;
 
       // Form response на выход из функции
