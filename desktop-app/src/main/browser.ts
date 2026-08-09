@@ -61,6 +61,7 @@ type BrowserElement = {
   value?: string;
   checked?: boolean;
   disabled?: boolean;
+  expanded?: boolean;
 };
 
 const HOME_URL = 'https://www.google.com/';
@@ -744,50 +745,202 @@ export class ChatterBrowser {
       const maxElements = ${maxElements};
       const clean = (value, max = 500) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
       const clipValue = (value, max = 4000) => String(value ?? '').slice(0, max);
+      const getComposedParent = (element) => {
+        if (element.assignedSlot) return element.assignedSlot;
+        if (element.parentElement) return element.parentElement;
+        const root = element.getRootNode?.();
+        return root instanceof ShadowRoot ? root.host : null;
+      };
+      const hasVisibleStyles = (element) => {
+        if (typeof element.checkVisibility === 'function') {
+          try {
+            if (!element.checkVisibility({
+              checkOpacity: true,
+              checkVisibilityCSS: true,
+              opacityProperty: true,
+              visibilityProperty: true,
+            })) return false;
+          } catch { /* fall through to the explicit checks below */ }
+        }
+        let current = element;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (
+            style.display === 'none'
+            || style.visibility === 'hidden'
+            || style.visibility === 'collapse'
+            || style.contentVisibility === 'hidden'
+            || Number.parseFloat(style.opacity || '1') <= 0
+          ) return false;
+          current = getComposedParent(current);
+        }
+        return true;
+      };
+      const clipRectToAncestors = (element, sourceRect) => {
+        let left = sourceRect.left;
+        let top = sourceRect.top;
+        let right = sourceRect.right;
+        let bottom = sourceRect.bottom;
+        let ancestor = getComposedParent(element);
+        while (ancestor) {
+          const style = window.getComputedStyle(ancestor);
+          const clipsX = /^(hidden|clip|auto|scroll)$/.test(style.overflowX);
+          const clipsY = /^(hidden|clip|auto|scroll)$/.test(style.overflowY);
+          if (clipsX || clipsY) {
+            const ancestorRect = ancestor.getBoundingClientRect();
+            if (clipsX) {
+              left = Math.max(left, ancestorRect.left);
+              right = Math.min(right, ancestorRect.right);
+            }
+            if (clipsY) {
+              top = Math.max(top, ancestorRect.top);
+              bottom = Math.min(bottom, ancestorRect.bottom);
+            }
+            if (right - left <= 0.5 || bottom - top <= 0.5) return null;
+          }
+          ancestor = getComposedParent(ancestor);
+        }
+        return { left, top, right, bottom, width: right - left, height: bottom - top };
+      };
+      const getVisibleRects = (element) => {
+        if (!hasVisibleStyles(element)) return [];
+        return Array.from(element.getClientRects())
+          .filter((rect) => rect.width > 0.5 && rect.height > 0.5)
+          .map((rect) => clipRectToAncestors(element, rect))
+          .filter(Boolean);
+      };
+      const deepElementFromPoint = (x, y) => {
+        let hit = document.elementFromPoint(x, y);
+        const visitedRoots = new Set();
+        while (hit?.shadowRoot && !visitedRoots.has(hit.shadowRoot)) {
+          visitedRoots.add(hit.shadowRoot);
+          const shadowHit = hit.shadowRoot.elementFromPoint(x, y);
+          if (!shadowHit || shadowHit === hit) break;
+          hit = shadowHit;
+        }
+        return hit;
+      };
+      const composedContains = (ancestor, node) => {
+        let current = node;
+        while (current) {
+          if (current === ancestor) return true;
+          if (current.parentNode) {
+            current = current.parentNode;
+          } else if (current instanceof ShadowRoot) {
+            current = current.host;
+          } else {
+            const root = current.getRootNode?.();
+            current = root instanceof ShadowRoot ? root.host : null;
+          }
+        }
+        return false;
+      };
+      const isHitTestVisible = (element, visibleRects) => {
+        let hasViewportRect = false;
+        for (const rect of visibleRects) {
+          const left = Math.max(0, rect.left);
+          const top = Math.max(0, rect.top);
+          const right = Math.min(window.innerWidth, rect.right);
+          const bottom = Math.min(window.innerHeight, rect.bottom);
+          if (right - left <= 0.5 || bottom - top <= 0.5) continue;
+          hasViewportRect = true;
+          const insetX = Math.min(3, (right - left) / 4);
+          const insetY = Math.min(3, (bottom - top) / 4);
+          const points = [
+            [(left + right) / 2, (top + bottom) / 2],
+            [left + insetX, top + insetY],
+            [right - insetX, top + insetY],
+            [left + insetX, bottom - insetY],
+            [right - insetX, bottom - insetY],
+          ];
+          if (points.some(([x, y]) => composedContains(element, deepElementFromPoint(x, y)))) return true;
+        }
+        return !hasViewportRect;
+      };
       const isVisible = (element) => {
-        const style = window.getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+        const visibleRects = getVisibleRects(element);
+        if (visibleRects.length === 0) return false;
+        return mode === 'full' || isHitTestVisible(element, visibleRects);
       };
       const isNearViewport = (element) => {
         const rect = element.getBoundingClientRect();
         const margin = 300;
         return rect.bottom >= -margin && rect.top <= window.innerHeight + margin && rect.right >= -margin && rect.left <= window.innerWidth + margin;
       };
-      const viewportText = () => {
-        if (!document.body) return '';
-        const parts = [];
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        let node;
-        while ((node = walker.nextNode())) {
-          const parent = node.parentElement;
-          if (!parent || parent.closest('script,style,noscript,template')) continue;
-          const value = clean(node.nodeValue || '', 4000);
-          if (!value) continue;
-          const style = window.getComputedStyle(parent);
-          if (style.visibility === 'hidden' || style.display === 'none') continue;
-          const range = document.createRange();
-          range.selectNodeContents(node);
-          const intersects = Array.from(range.getClientRects()).some((rect) => rect.bottom >= -100 && rect.top <= window.innerHeight + 100 && rect.right >= 0 && rect.left <= window.innerWidth);
-          if (!intersects) continue;
-          if (parts[parts.length - 1] !== value) parts.push(value);
-          if (parts.join('\\n').length >= maxText) break;
+      const getComposedChildren = (node) => {
+        if (node instanceof HTMLSlotElement) {
+          const assigned = node.assignedNodes({ flatten: true });
+          return assigned.length > 0 ? assigned : Array.from(node.childNodes);
         }
-        return parts.join('\\n');
+        if (node instanceof Element && node.shadowRoot) {
+          return Array.from(node.shadowRoot.childNodes);
+        }
+        return Array.from(node.childNodes || []);
+      };
+      const collectText = (root, viewportOnly) => {
+        const parts = [];
+        let totalLength = 0;
+        let truncated = false;
+        const stack = getComposedChildren(root).reverse();
+        while (stack.length > 0) {
+          if (totalLength >= maxText) {
+            truncated = true;
+            break;
+          }
+          const node = stack.pop();
+          if (node.nodeType === Node.TEXT_NODE) {
+            const parent = node.parentElement;
+            if (!parent || parent.closest('script,style,noscript,template')) continue;
+            const value = clean(node.nodeValue || '', 4000);
+            if (!value || !hasVisibleStyles(parent)) continue;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            const rects = Array.from(range.getClientRects())
+              .map((rect) => clipRectToAncestors(parent, rect))
+              .filter(Boolean);
+            if (rects.length === 0) continue;
+            if (viewportOnly && !rects.some((rect) => rect.bottom >= -100 && rect.top <= window.innerHeight + 100 && rect.right >= 0 && rect.left <= window.innerWidth)) continue;
+            if (parts[parts.length - 1] !== value) {
+              parts.push(value);
+              totalLength += value.length + (parts.length > 1 ? 1 : 0);
+            }
+            continue;
+          }
+          if (node instanceof Element && node.matches('script,style,noscript,template')) continue;
+          const children = getComposedChildren(node);
+          for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]);
+        }
+        return { text: parts.join('\\n'), truncated };
       };
 
       globalThis.__chatterBrowserDocumentId ||= documentSeed;
       globalThis.__chatterBrowserRefCounter ||= 0;
       globalThis.__chatterBrowserRefByElement ||= new WeakMap();
       globalThis.__chatterBrowserElements = new Map();
-      const selectors = 'a,button,input,textarea,select,label,[onclick],[role="button"],[role="link"],[role="radio"],[role="checkbox"],[contenteditable="true"]';
-      const candidates = Array.from(document.querySelectorAll(selectors)).filter((element) => {
-        if (element instanceof HTMLLabelElement) {
-          const control = element.control;
-          if (!(control instanceof HTMLInputElement) || !['radio', 'checkbox'].includes((control.type || '').toLowerCase())) return false;
+      const selectors = 'a,button,input,textarea,select,label,[onclick],[role="button"],[role="link"],[role="radio"],[role="checkbox"],[role="switch"],[contenteditable="true"]';
+      const candidates = [];
+      const seenCandidates = new WeakSet();
+      const collectCandidates = (root) => {
+        const stack = getComposedChildren(root).reverse();
+        while (stack.length > 0) {
+          const element = stack.pop();
+          if (!(element instanceof Element)) continue;
+          if (element.matches(selectors) && !seenCandidates.has(element)) {
+            let supported = true;
+            if (element instanceof HTMLLabelElement) {
+              const control = element.control;
+              supported = control instanceof HTMLInputElement && ['radio', 'checkbox'].includes((control.type || '').toLowerCase());
+            }
+            if (supported && isVisible(element) && (mode === 'full' || isNearViewport(element))) {
+              seenCandidates.add(element);
+              candidates.push(element);
+            }
+          }
+          const children = getComposedChildren(element);
+          for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]);
         }
-        return isVisible(element) && (mode === 'full' || isNearViewport(element));
-      });
+      };
+      collectCandidates(document.body);
       const elements = candidates.slice(0, maxElements).map((element) => {
         let ref = globalThis.__chatterBrowserRefByElement.get(element);
         if (!ref) {
@@ -824,6 +977,7 @@ export class ChatterBrowser {
           ? clean(associatedInput.parentElement?.innerText || associatedInput.parentElement?.textContent || '', 500)
           : '';
         const ariaChecked = element.getAttribute('aria-checked');
+        const ariaExpanded = element.getAttribute('aria-expanded');
         const role = clean(
           element.getAttribute('role')
           || (element.hasAttribute('onclick') || buttonInputTypes.has(inputType || '') ? 'button' : '')
@@ -859,15 +1013,17 @@ export class ChatterBrowser {
             ? associatedInput.checked
             : ariaChecked === 'true' ? true : ariaChecked === 'false' ? false : undefined,
           disabled,
+          expanded: ariaExpanded === 'true' ? true : ariaExpanded === 'false' ? false : undefined,
         };
       });
-      const rawText = mode === 'full' ? String(document.body?.innerText || '') : viewportText();
+      const textResult = collectText(document.body, mode !== 'full');
+      const rawText = textResult.text;
       return {
         title: clean(document.title, 500),
         url: location.href,
         text: rawText.slice(0, maxText),
         elements,
-        truncated: rawText.length > maxText,
+        truncated: textResult.truncated,
         scroll: {
           y: Math.round(window.scrollY),
           viewport_height: Math.round(window.innerHeight),
@@ -1046,8 +1202,30 @@ export class ChatterBrowser {
       const validateTarget = () => this.executeInBrowserWorld<boolean>(`(() => {
         const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
         if (!element || !element.isConnected) return false;
-        const hit = document.elementFromPoint(${target.x}, ${target.y});
-        return !!hit && (hit === element || element.contains(hit));
+        let hit = document.elementFromPoint(${target.x}, ${target.y});
+        const visitedRoots = new Set();
+        while (hit?.shadowRoot && !visitedRoots.has(hit.shadowRoot)) {
+          visitedRoots.add(hit.shadowRoot);
+          const shadowHit = hit.shadowRoot.elementFromPoint(${target.x}, ${target.y});
+          if (!shadowHit || shadowHit === hit) break;
+          hit = shadowHit;
+        }
+        const composedContains = (ancestor, node) => {
+          let current = node;
+          while (current) {
+            if (current === ancestor) return true;
+            if (current.parentNode) {
+              current = current.parentNode;
+            } else if (current instanceof ShadowRoot) {
+              current = current.host;
+            } else {
+              const root = current.getRootNode?.();
+              current = root instanceof ShadowRoot ? root.host : null;
+            }
+          }
+          return false;
+        };
+        return !!hit && composedContains(element, hit);
       })()`);
       this.cursorPos = await naturalClick(
         contents,
