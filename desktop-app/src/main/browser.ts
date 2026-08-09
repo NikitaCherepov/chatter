@@ -59,6 +59,8 @@ type BrowserElement = {
   placeholder?: string;
   sensitive?: boolean;
   value?: string;
+  checked?: boolean;
+  disabled?: boolean;
 };
 
 const HOME_URL = 'https://www.google.com/';
@@ -117,6 +119,12 @@ function isAllowedRemoteUrl(value: string): boolean {
   }
 }
 
+function isAbortedNavigationError(error: any): boolean {
+  return error?.code === -3
+    || error?.code === 'ERR_ABORTED'
+    || `${error?.message || ''}`.includes('ERR_ABORTED');
+}
+
 export class ChatterBrowser {
   private host: BrowserWindow;
   private readonly view: WebContentsView;
@@ -129,6 +137,7 @@ export class ChatterBrowser {
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
   private interactionInProgress = false;
   private initialNavigationStarted = false;
+  private initialNavigationPromise: Promise<void> | null = null;
   private explicitNavigationRequested = false;
   private readonly sessionClickOrigins = new Set<string>();
   private readonly sessionFillOrigins = new Set<string>();
@@ -262,13 +271,15 @@ export class ChatterBrowser {
       && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')
     ) {
       this.initialNavigationStarted = true;
-      void this.view.webContents.loadURL(HOME_URL).catch((error) => {
-        if (error?.code !== 'ERR_ABORTED') console.error('[browser] initial navigation failed:', error);
+      const initialNavigation = this.view.webContents.loadURL(HOME_URL).catch((error) => {
+        if (!isAbortedNavigationError(error)) console.error('[browser] initial navigation failed:', error);
       }).finally(() => {
+        if (this.initialNavigationPromise === initialNavigation) this.initialNavigationPromise = null;
         if (!this.view.webContents.isDestroyed() && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')) {
           this.initialNavigationStarted = false;
         }
       });
+      this.initialNavigationPromise = initialNavigation;
     }
     this.emitState();
     return this.getState();
@@ -339,13 +350,12 @@ export class ChatterBrowser {
       this.explicitNavigationRequested = true;
       const url = normalizeBrowserUrl(`${payload.url || ''}`);
       try {
-        try {
-          await contents.loadURL(url);
-        } catch (error: any) {
-          // Chromium aborts the navigation when the response becomes a file
-          // download. will-download already owns that flow and asks the user.
-          if (error?.code !== -3 && !`${error?.message || ''}`.includes('ERR_ABORTED')) throw error;
+        const initialNavigation = this.initialNavigationPromise;
+        if (initialNavigation) {
+          contents.stop();
+          await initialNavigation;
         }
+        await this.navigateToUrl(url);
         return this.getState();
       } finally {
         this.interactionInProgress = false;
@@ -642,6 +652,66 @@ export class ChatterBrowser {
     ) as Promise<T>;
   }
 
+  private async navigateToUrl(url: string): Promise<void> {
+    const contents = this.view.webContents;
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let navigationStarted = false;
+      const cleanup = () => {
+        contents.removeListener('did-start-navigation', onDidStartNavigation);
+        contents.removeListener('did-navigate', onDidNavigate);
+        contents.removeListener('did-navigate-in-page', onDidNavigateInPage);
+        contents.removeListener('did-fail-load', onDidFailLoad);
+      };
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (error) reject(error);
+        else resolve();
+      };
+      const onDidStartNavigation = (
+        _event: Electron.Event,
+        _navigationUrl: string,
+        _isInPlace: boolean,
+        isMainFrame: boolean,
+      ) => {
+        if (isMainFrame) navigationStarted = true;
+      };
+      const onDidNavigate = () => {
+        if (navigationStarted) finish();
+      };
+      const onDidNavigateInPage = (_event: Electron.Event, _navigatedUrl: string, isMainFrame: boolean) => {
+        if (navigationStarted && isMainFrame) finish();
+      };
+      const onDidFailLoad = (
+        _event: Electron.Event,
+        errorCode: number,
+        errorDescription: string,
+        _validatedUrl: string,
+        isMainFrame: boolean,
+      ) => {
+        if (!navigationStarted || !isMainFrame) return;
+        // Chromium aborts the navigation when the response becomes a file
+        // download. will-download already owns that flow and asks the user.
+        if (errorCode === -3 || errorDescription.includes('ERR_ABORTED')) finish();
+        else finish(new Error(`${errorDescription} (${errorCode})`));
+      };
+
+      contents.on('did-start-navigation', onDidStartNavigation);
+      contents.on('did-navigate', onDidNavigate);
+      contents.on('did-navigate-in-page', onDidNavigateInPage);
+      contents.on('did-fail-load', onDidFailLoad);
+      void contents.loadURL(url).then(
+        () => finish(),
+        (error: any) => {
+          if (isAbortedNavigationError(error)) finish();
+          else finish(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
+    });
+  }
+
   private async ensureReadablePage(): Promise<void> {
     const contents = this.view.webContents;
     if (!contents.getURL() || contents.getURL() === 'about:blank') {
@@ -710,8 +780,14 @@ export class ChatterBrowser {
       globalThis.__chatterBrowserRefCounter ||= 0;
       globalThis.__chatterBrowserRefByElement ||= new WeakMap();
       globalThis.__chatterBrowserElements = new Map();
-      const selectors = 'a,button,input,textarea,select,[role="button"],[role="link"],[contenteditable="true"]';
-      const candidates = Array.from(document.querySelectorAll(selectors)).filter((element) => isVisible(element) && (mode === 'full' || isNearViewport(element)));
+      const selectors = 'a,button,input,textarea,select,label,[onclick],[role="button"],[role="link"],[role="radio"],[role="checkbox"],[contenteditable="true"]';
+      const candidates = Array.from(document.querySelectorAll(selectors)).filter((element) => {
+        if (element instanceof HTMLLabelElement) {
+          const control = element.control;
+          if (!(control instanceof HTMLInputElement) || !['radio', 'checkbox'].includes((control.type || '').toLowerCase())) return false;
+        }
+        return isVisible(element) && (mode === 'full' || isNearViewport(element));
+      });
       const elements = candidates.slice(0, maxElements).map((element) => {
         let ref = globalThis.__chatterBrowserRefByElement.get(element);
         if (!ref) {
@@ -721,21 +797,48 @@ export class ChatterBrowser {
         }
         globalThis.__chatterBrowserElements.set(ref, element);
         const tag = element.tagName.toLowerCase();
-        const inputType = tag === 'input' ? clean(element.getAttribute('type') || 'text', 40).toLowerCase() : undefined;
+        const associatedInput = element instanceof HTMLInputElement
+          ? element
+          : element instanceof HTMLLabelElement && element.control instanceof HTMLInputElement
+            ? element.control
+            : undefined;
+        const inputType = associatedInput ? clean(associatedInput.getAttribute('type') || 'text', 40).toLowerCase() : undefined;
+        const attributeSource = associatedInput || element;
         const sensitiveHint = [
           inputType,
-          element.getAttribute('autocomplete'),
-          element.getAttribute('name'),
-          element.getAttribute('id'),
-          element.getAttribute('aria-label'),
-          element.getAttribute('placeholder'),
+          attributeSource.getAttribute('autocomplete'),
+          attributeSource.getAttribute('name'),
+          attributeSource.getAttribute('id'),
+          attributeSource.getAttribute('aria-label'),
+          attributeSource.getAttribute('placeholder'),
         ].filter(Boolean).join(' ').toLowerCase();
         const sensitive = inputType === 'password' || /current-password|new-password|one-time-code|\\botp\\b|\\btotp\\b|\\b2fa\\b|verification.?code|auth(?:entication)?.?code|cc-number|cc-csc|cc-exp|credit.?card|card.?number|\\bcvv\\b|\\bcvc\\b|security.?code/.test(sensitiveHint);
         const readableInputTypes = new Set(['text', 'search', 'email', 'url', 'tel']);
+        const buttonInputTypes = new Set(['button', 'submit', 'reset']);
+        const toggleInputTypes = new Set(['radio', 'checkbox']);
+        const associatedLabelText = associatedInput?.labels
+          ? Array.from(associatedInput.labels).map(label => clean(label.innerText || label.textContent || '', 500)).filter(Boolean).join(' ')
+          : '';
+        const inputButtonText = associatedInput && buttonInputTypes.has(inputType || '') ? associatedInput.value : '';
+        const nearbyToggleText = associatedInput && toggleInputTypes.has(inputType || '') && !associatedLabelText
+          ? clean(associatedInput.parentElement?.innerText || associatedInput.parentElement?.textContent || '', 500)
+          : '';
+        const ariaChecked = element.getAttribute('aria-checked');
+        const role = clean(
+          element.getAttribute('role')
+          || (element.hasAttribute('onclick') || buttonInputTypes.has(inputType || '') ? 'button' : '')
+          || (toggleInputTypes.has(inputType || '') ? inputType : ''),
+          60,
+        );
+        const disabled = associatedInput
+          ? associatedInput.disabled
+          : element instanceof HTMLButtonElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement
+            ? element.disabled
+            : element.getAttribute('aria-disabled') === 'true';
         let value;
         if (!sensitive) {
-          if (element instanceof HTMLInputElement && readableInputTypes.has(inputType || 'text')) {
-            value = clipValue(element.value);
+          if (associatedInput && readableInputTypes.has(inputType || 'text')) {
+            value = clipValue(associatedInput.value);
           } else if (element instanceof HTMLTextAreaElement) {
             value = clipValue(element.value);
           } else if (element.isContentEditable) {
@@ -745,13 +848,17 @@ export class ChatterBrowser {
         return {
           ref,
           tag,
-          role: clean(element.getAttribute('role') || '', 60),
-          text: clean(element.getAttribute('aria-label') || element.innerText || element.textContent || element.getAttribute('title') || element.getAttribute('name') || '', 500),
+          role,
+          text: clean(element.getAttribute('aria-label') || element.innerText || element.textContent || associatedLabelText || inputButtonText || nearbyToggleText || element.getAttribute('title') || attributeSource.getAttribute('name') || '', 500),
           href: tag === 'a' ? clean(element.href || '', 1000) : undefined,
           inputType,
-          placeholder: (tag === 'input' || tag === 'textarea') ? clean(element.getAttribute('placeholder') || '', 300) : undefined,
+          placeholder: associatedInput || element instanceof HTMLTextAreaElement ? clean(attributeSource.getAttribute('placeholder') || '', 300) : undefined,
           sensitive,
           value,
+          checked: associatedInput && toggleInputTypes.has(inputType || '')
+            ? associatedInput.checked
+            : ariaChecked === 'true' ? true : ariaChecked === 'false' ? false : undefined,
+          disabled,
         };
       });
       const rawText = mode === 'full' ? String(document.body?.innerText || '') : viewportText();
