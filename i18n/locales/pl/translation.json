@@ -701,6 +701,7 @@
     "prompt": "📥 Pobrać ten plik?\n\n{{filename}}\nRozmiar: {{size}}",
     "typeLine": "\nTyp: {{type}}",
     "urlLine": "\n\nŹródło: {{url}}",
+    "downloadsFolderNote": "\n\nPo potwierdzeniu plik zostanie zapisany w folderze Pobrane, jeśli na dysku jest wystarczająco dużo miejsca.",
     "unknownSize": "nieznany",
     "download": "Pobierz",
     "cancel": "Anuluj",

@@ -12,7 +12,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, cl
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, activeHitlWaits, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -34,7 +34,7 @@ import { migratePendingAccountNamespaces, VectorMemoryService } from './services
 import { seedPlanLimitsIfEmpty, loadPlanLimitsFromDb, savePlanLimitsToDb, DEFAULT_PLAN_LIMITS, PLAN_IDS, type PlanLimits } from './services/plan-limits.js';
 import { refreshCoefficientCache, setCoefficient, setModelProvider, getModelOverride, getOverrideMap } from './services/token-quota.js';
 import type { ProviderKind, PricingMode, ModelOverride } from './services/token-quota.js';
-import { editTelegramMessage, sendTelegramInlineMessage, sendTelegramMessage } from './services/telegram-send.js';
+import { sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
@@ -49,7 +49,7 @@ import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from
 import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
 import { resolveAudioFile, saveTtsAudio } from './services/audio-storage.js';
 import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './services/tts-cartesia.js';
-import type { UserRecord } from './types.js';
+import type { DesktopActionPayload, UserRecord } from './types.js';
 import {
   getAccountIdByTelegramId,
   getAccountIdentities,
@@ -81,6 +81,12 @@ db.transaction(() => {
 })();
 
 const formatSafeError = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+type ExternalDesktopActionRoute = {
+  deliver: (action: DesktopActionPayload) => Promise<void> | void;
+};
+
+const activeExternalDesktopActionRoutes = new Map<number, ExternalDesktopActionRoute>();
 
 /** Build a localized error payload for AI send failures (quota, etc.). */
 const buildLocalizedAiError = (err: any, userId: number): { error: string; message?: string } => {
@@ -559,6 +565,13 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.write(': connected\n\n');
 
+  const externalDesktopActionRoute: ExternalDesktopActionRoute = {
+    deliver: (action) => {
+      res.write(`event: desktop_action\ndata: ${JSON.stringify(action)}\n\n`);
+    },
+  };
+  activeExternalDesktopActionRoutes.set(userId, externalDesktopActionRoute);
+
   try {
     const enabledMacros = getEnabledMacros(userId);
     const tgUser = getUserById(Math.floor(userId));
@@ -574,10 +587,7 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
       onToolStatus: (statusText) => {
         res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);
       },
-      onDesktopAction: (action) => {
-        // Forward ALL desktop_actions (including pc_command_confirmation) to TG via SSE
-        res.write(`event: desktop_action\ndata: ${JSON.stringify(action)}\n\n`);
-      },
+      onDesktopAction: externalDesktopActionRoute.deliver,
       onStateChange: (state) => {
         res.write(`event: display_state\ndata: ${JSON.stringify(state)}\n\n`);
       },
@@ -612,6 +622,10 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
     const payload = buildLocalizedAiError(err, userId);
     res.write(`event: error\ndata: ${JSON.stringify(payload)}\n\n`);
     res.end();
+  } finally {
+    if (activeExternalDesktopActionRoutes.get(userId) === externalDesktopActionRoute) {
+      activeExternalDesktopActionRoutes.delete(userId);
+    }
   }
 });
 
@@ -5732,17 +5746,14 @@ const handleBrowserDownloadEvent = async (userId: number, raw: unknown) => {
   if (existingId && getPendingPcConfirmation(existingId)) return;
 
   const confirmationId = crypto.randomUUID();
-  const user = getUserById(userId);
-  let telegramMessage: { chatId: number; messageId: number } | null = null;
+  const externalActionRoute = activeExternalDesktopActionRoutes.get(userId)?.deliver ?? null;
   browserDownloadConfirmationIds.set(download.download_id, confirmationId);
 
-  const editTelegramStatus = (key: 'started' | 'cancelled' | 'expired' | 'failed') => {
-    if (!telegramMessage) return;
-    void editTelegramMessage(
-      telegramMessage.chatId,
-      telegramMessage.messageId,
-      translateForLanguage(user?.language, `browserDownloadConfirmation.${key}`),
-    ).catch(() => {});
+  const notifyExternalOrigin = (action: 'browser_download_confirmation' | 'browser_download_confirmation_resolved', value: Record<string, unknown>) => {
+    if (!externalActionRoute) return;
+    void Promise.resolve(externalActionRoute({ action, value })).catch((error) => {
+      console.warn('[browser_download] failed to notify originating client:', formatSafeError(error));
+    });
   };
 
   const confirmationPromise = new Promise<unknown>((resolve, reject) => {
@@ -5772,59 +5783,35 @@ const handleBrowserDownloadEvent = async (userId: number, raw: unknown) => {
           action: 'browser_download_confirmation_resolved',
           value: { confirmation_id: confirmationId, download_id: download.download_id, status: 'expired' },
         });
-        editTelegramStatus('expired');
+        notifyExternalOrigin('browser_download_confirmation_resolved', {
+          confirmation_id: confirmationId,
+          download_id: download.download_id,
+          status: 'expired',
+        });
       },
       onResolved: (status) => {
         browserDownloadConfirmationIds.delete(download.download_id);
-        editTelegramStatus(status === 'executed' ? 'started' : status === 'rejected' ? 'cancelled' : 'failed');
+        notifyExternalOrigin('browser_download_confirmation_resolved', {
+          confirmation_id: confirmationId,
+          download_id: download.download_id,
+          status,
+        });
       },
       createdAt: Date.now(),
     });
   });
-  activeHitlWaits.add(userId);
-  void confirmationPromise.catch(() => {}).finally(() => activeHitlWaits.delete(userId));
+  beginActiveHitlWait(userId);
+  void confirmationPromise.catch(() => {}).finally(() => endActiveHitlWait(userId));
 
+  const confirmationAction = {
+    action: 'browser_download_confirmation' as const,
+    value: { confirmation_id: confirmationId, ...download },
+  };
   sendToDesktop(userId, {
     type: 'desktop_action',
-    action: 'browser_download_confirmation',
-    value: { confirmation_id: confirmationId, ...download },
+    ...confirmationAction,
   });
-
-  const telegramIdentity = getTelegramIdentityForAccount(userId);
-  const telegramId = Number(telegramIdentity?.provider_subject);
-  if (!Number.isFinite(telegramId) || telegramId <= 0) return;
-
-  const size = download.total_bytes > 0
-    ? download.total_bytes < 1024 * 1024
-      ? `${(download.total_bytes / 1024).toFixed(1)} KB`
-      : `${(download.total_bytes / (1024 * 1024)).toFixed(1)} MB`
-    : translateForLanguage(user?.language, 'browserDownloadConfirmation.unknownSize');
-  let message = translateForLanguage(user?.language, 'browserDownloadConfirmation.prompt', {
-    filename: download.filename,
-    size,
-  });
-  if (download.mime_type) {
-    message += translateForLanguage(user?.language, 'browserDownloadConfirmation.typeLine', { type: download.mime_type });
-  }
-  if (download.url) {
-    message += translateForLanguage(user?.language, 'browserDownloadConfirmation.urlLine', { url: download.url });
-  }
-  message += translateForLanguage(user?.language, 'browserDownloadConfirmation.downloadsFolderNote');
-
-  try {
-    telegramMessage = await sendTelegramInlineMessage(telegramId, message, [[
-      {
-        text: translateForLanguage(user?.language, 'browserDownloadConfirmation.download'),
-        callback_data: `browserdownload:allow:${confirmationId}`,
-      },
-      {
-        text: translateForLanguage(user?.language, 'browserDownloadConfirmation.cancel'),
-        callback_data: `browserdownload:reject:${confirmationId}`,
-      },
-    ]]);
-  } catch (error) {
-    console.warn('[browser_download] failed to send Telegram confirmation:', formatSafeError(error));
-  }
+  notifyExternalOrigin(confirmationAction.action, confirmationAction.value);
 };
 
 const wss = new WebSocketServer({ server, path: '/ws' });

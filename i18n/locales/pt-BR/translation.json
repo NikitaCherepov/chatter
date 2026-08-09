@@ -701,6 +701,7 @@
     "prompt": "📥 Baixar este arquivo?\n\n{{filename}}\nTamanho: {{size}}",
     "typeLine": "\nTipo: {{type}}",
     "urlLine": "\n\nOrigem: {{url}}",
+    "downloadsFolderNote": "\n\nApós a confirmação, o arquivo será salvo na pasta Downloads se houver espaço suficiente no disco.",
     "unknownSize": "desconhecido",
     "download": "Baixar",
     "cancel": "Cancelar",

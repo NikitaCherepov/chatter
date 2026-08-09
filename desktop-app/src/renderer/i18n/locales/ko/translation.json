@@ -418,7 +418,8 @@
   "widget": {
     "toSidebar": "사이드바로",
     "floating": "플로팅 창",
-    "fullscreen": "전체 화면"
+    "fullscreen": "전체 화면",
+    "external": "별도 창에서 열기"
   },
   "telegram": {
     "title": "Telegram 연결",
@@ -900,6 +901,28 @@
     "chatLink": {
       "title": "채팅 찾음",
       "open": "채팅 열기"
+    },
+    "browser": {
+      "confirmTitle": "브라우저 작업",
+      "open": "열기: {{target}}",
+      "click": "클릭: {{target}}",
+      "fill": "텍스트 입력: {{target}}",
+      "executed": "브라우저 작업 완료",
+      "failed": "브라우저 작업 실패",
+      "currentSite": "현재 사이트: {{site}}",
+      "allowSiteSession": "이 사이트에서 허용",
+      "allowSiteSessionHint": "Chatter가 닫힐 때까지 {{site}}에서 이 유형의 작업을 허용합니다",
+      "siteAllowedSession": "현재 세션에서 이 사이트에 허용됨: {{site}}",
+      "actualTarget": "실제 페이지 요소"
+    },
+    "browserDownload": {
+      "confirmTitle": "파일을 다운로드하시겠습니까?",
+      "size": "크기: {{size}}",
+      "type": "유형: {{type}}",
+      "download": "다운로드",
+      "cancel": "취소",
+      "started": "다운로드 시작됨",
+      "failed": "다운로드를 처리할 수 없습니다"
     }
   },
   "promptSelector": {
@@ -925,7 +948,9 @@
       "tools": "도구",
       "floating": "플로팅 창",
       "fullscreen": "전체 화면",
-      "collapse": "접기"
+      "collapse": "접기",
+      "browser": "브라우저",
+      "webPages": "웹 페이지"
     },
     "documents": {
       "selectChat": "채팅 선택",
@@ -987,6 +1012,16 @@
       "color": "색상",
       "brightness": "밝기",
       "empty": "작업 없음"
+    },
+    "browser": {
+      "title": "브라우저",
+      "forward": "앞으로",
+      "reload": "새로고침",
+      "secureSession": "격리된 브라우저 세션",
+      "addressPlaceholder": "검색 또는 주소 입력",
+      "loadingPage": "브라우저 페이지",
+      "actionFailed": "브라우저 작업 실패",
+      "navigationFailed": "페이지를 열 수 없습니다"
     }
   },
   "tts": {

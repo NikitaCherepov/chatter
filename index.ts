@@ -6221,6 +6221,7 @@ const processUserTextThroughAi = async (
                     let message = ctx.t('browserDownloadConfirmation.prompt', { filename, size });
                     if (mimeType) message += ctx.t('browserDownloadConfirmation.typeLine', { type: mimeType });
                     if (url) message += ctx.t('browserDownloadConfirmation.urlLine', { url });
+                    message += ctx.t('browserDownloadConfirmation.downloadsFolderNote');
                     try {
                         const sentMessage = await ctx.reply(message, keyboard);
                         pendingBrowserDownloadMessages.set(confirmationId, {

@@ -731,6 +731,7 @@
     "prompt": "📥 Stáhnout tento soubor?\n\n{{filename}}\nVelikost: {{size}}",
     "typeLine": "\nTyp: {{type}}",
     "urlLine": "\n\nZdroj: {{url}}",
+    "downloadsFolderNote": "\n\nPo potvrzení bude soubor uložen do složky Stažené soubory, pokud je na disku dostatek místa.",
     "unknownSize": "neznámá",
     "download": "Stáhnout",
     "cancel": "Zrušit",

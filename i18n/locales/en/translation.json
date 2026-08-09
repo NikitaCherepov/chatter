@@ -617,6 +617,7 @@
     "prompt": "📥 Download this file?\n\n{{filename}}\nSize: {{size}}",
     "typeLine": "\nType: {{type}}",
     "urlLine": "\n\nSource: {{url}}",
+    "downloadsFolderNote": "\n\nAfter approval, the file will be saved to Downloads if there is enough free space.",
     "unknownSize": "unknown",
     "download": "Download",
     "cancel": "Cancel",

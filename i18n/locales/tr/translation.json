@@ -731,6 +731,7 @@
     "prompt": "📥 Bu dosya indirilsin mi?\n\n{{filename}}\nBoyut: {{size}}",
     "typeLine": "\nTür: {{type}}",
     "urlLine": "\n\nKaynak: {{url}}",
+    "downloadsFolderNote": "\n\nOnaylandıktan sonra, diskte yeterli alan varsa dosya İndirilenler klasörüne kaydedilir.",
     "unknownSize": "bilinmiyor",
     "download": "İndir",
     "cancel": "İptal",

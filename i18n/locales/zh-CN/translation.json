@@ -701,6 +701,7 @@
     "prompt": "📥 下载此文件？\n\n{{filename}}\n大小：{{size}}",
     "typeLine": "\n类型：{{type}}",
     "urlLine": "\n\n来源：{{url}}",
+    "downloadsFolderNote": "\n\n确认后，如果磁盘空间充足，文件将保存到“下载”文件夹。",
     "unknownSize": "未知",
     "download": "下载",
     "cancel": "取消",

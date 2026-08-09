@@ -1,43 +1,43 @@
 {
   "changes": {
     "ru": [
-      "Добавлена поддержка встроенного браузера: Chatter может читать страницы, прокручивать их и после подтверждения пользователя нажимать элементы и заполнять безопасные поля."
+      "Добавлена поддержка встроенного браузера: Chatter может читать и прокручивать страницы, а после подтверждения пользователем — нажимать на элементы и заполнять безопасные поля."
     ],
     "en": [
       "Added embedded browser support: Chatter can read and scroll pages and, after user confirmation, click elements and fill safe fields."
     ],
     "cs": [
-      "Přidána podpora vestavěného prohlížeče: Chatter může číst a posouvat stránky a po potvrzení uživatelem klikat na prvky a vyplňovat bezpečná pole."
+      "Přidána podpora vestavěného prohlížeče: Chatter umí číst a procházet stránky a po potvrzení uživatelem klikat na prvky a vyplňovat bezpečná pole."
     ],
     "de": [
-      "Unterstützung für den integrierten Browser hinzugefügt: Chatter kann Seiten lesen und scrollen sowie nach Bestätigung durch den Benutzer Elemente anklicken und sichere Felder ausfüllen."
+      "Unterstützung für eingebetteten Browser hinzugefügt: Chatter kann Seiten lesen und scrollen und nach Bestätigung durch den Benutzer Elemente anklicken und sichere Felder ausfüllen."
     ],
     "es": [
-      "Se añadió compatibilidad con el navegador integrado: Chatter puede leer y desplazar páginas y, tras la confirmación del usuario, hacer clic en elementos y rellenar campos seguros."
+      "Se agregó soporte para navegador integrado: Chatter puede leer y desplazarse por las páginas y, tras la confirmación del usuario, hacer clic en elementos y completar campos seguros."
     ],
     "fr": [
-      "Ajout de la prise en charge du navigateur intégré : Chatter peut lire et faire défiler les pages et, après confirmation de l’utilisateur, cliquer sur des éléments et remplir les champs sécurisés."
+      "Prise en charge du navigateur intégré ajoutée : Chatter peut lire et faire défiler les pages et, après confirmation de l'utilisateur, cliquer sur les éléments et remplir les champs sûrs."
     ],
     "it": [
-      "Aggiunto il supporto per il browser integrato: Chatter può leggere e scorrere le pagine e, dopo la conferma dell’utente, fare clic sugli elementi e compilare i campi sicuri."
+      "Aggiunto supporto per browser integrato: Chatter può leggere e scorrere le pagine e, dopo la conferma dell'utente, fare clic sugli elementi e compilare campi sicuri."
     ],
     "ja": [
-      "内蔵ブラウザのサポートを追加しました。Chatter はページの読み取りとスクロールを行い、ユーザーの確認後に要素をクリックして安全なフィールドへ入力できます。"
+      "埋め込みブラウザのサポートを追加: Chatter はページの読み取りとスクロールができ、ユーザーの確認後に要素をクリックして安全なフィールドに入力できます。"
     ],
     "ko": [
-      "내장 브라우저 지원이 추가되었습니다. Chatter는 페이지를 읽고 스크롤할 수 있으며, 사용자 확인 후 요소를 클릭하고 안전한 필드를 입력할 수 있습니다."
+      "임베디드 브라우저 지원 추가: Chatter는 페이지를 읽고 스크롤할 수 있으며, 사용자 확인 후 요소를 클릭하고 안전한 필드를 채울 수 있습니다."
     ],
     "pl": [
-      "Dodano obsługę wbudowanej przeglądarki: Chatter może odczytywać i przewijać strony, a po potwierdzeniu przez użytkownika klikać elementy i wypełniać bezpieczne pola."
+      "Dodano obsługę wbudowanej przeglądarki: Chatter może czytać i przewijać strony oraz, po potwierdzeniu przez użytkownika, klikać elementy i wypełniać bezpieczne pola."
     ],
     "pt-BR": [
-      "Adicionado suporte ao navegador integrado: o Chatter pode ler e rolar páginas e, após a confirmação do usuário, clicar em elementos e preencher campos seguros."
+      "Adicionado suporte a navegador embutido: o Chatter pode ler e rolar páginas e, após confirmação do usuário, clicar em elementos e preencher campos seguros."
     ],
     "tr": [
-      "Yerleşik tarayıcı desteği eklendi: Chatter sayfaları okuyup kaydırabilir ve kullanıcı onayından sonra öğelere tıklayıp güvenli alanları doldurabilir."
+      "Gömülü tarayıcı desteği eklendi: Chatter sayfaları okuyup kaydırabilir ve kullanıcı onayından sonra öğelere tıklayıp güvenli alanları doldurabilir."
     ],
     "zh-CN": [
-      "新增内置浏览器支持：Chatter 可以读取和滚动页面，并在用户确认后点击元素和填写安全字段。"
+      "新增嵌入式浏览器支持：Chatter 可以阅读和滚动页面，并在用户确认后点击元素和填写安全字段。"
     ]
   }
 }

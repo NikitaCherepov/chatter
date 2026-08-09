@@ -701,6 +701,7 @@
     "prompt": "📥 Diese Datei herunterladen?\n\n{{filename}}\nGröße: {{size}}",
     "typeLine": "\nTyp: {{type}}",
     "urlLine": "\n\nQuelle: {{url}}",
+    "downloadsFolderNote": "\n\nNach der Bestätigung wird die Datei im Ordner „Downloads“ gespeichert, sofern genügend Speicherplatz vorhanden ist.",
     "unknownSize": "unbekannt",
     "download": "Herunterladen",
     "cancel": "Abbrechen",

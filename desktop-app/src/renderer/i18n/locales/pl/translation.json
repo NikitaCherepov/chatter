@@ -418,7 +418,8 @@
   "widget": {
     "toSidebar": "Do paska bocznego",
     "floating": "Okno pływające",
-    "fullscreen": "Pełny ekran"
+    "fullscreen": "Pełny ekran",
+    "external": "Otwórz w osobnym oknie"
   },
   "telegram": {
     "title": "Połącz Telegram",
@@ -900,6 +901,28 @@
     "chatLink": {
       "title": "Znaleziono czat",
       "open": "Otwórz czat"
+    },
+    "browser": {
+      "confirmTitle": "Akcja przeglądarki",
+      "open": "Otwórz: {{target}}",
+      "click": "Kliknij: {{target}}",
+      "fill": "Wpisz tekst w: {{target}}",
+      "executed": "Akcja przeglądarki zakończona",
+      "failed": "Akcja przeglądarki nie powiodła się",
+      "currentSite": "Bieżąca witryna: {{site}}",
+      "allowSiteSession": "Zezwól na tej witrynie",
+      "allowSiteSessionHint": "Zezwól na ten typ akcji na {{site}} do zamknięcia Chattera",
+      "siteAllowedSession": "Dozwolone na tej stronie w bieżącej sesji: {{site}}",
+      "actualTarget": "Rzeczywisty element strony"
+    },
+    "browserDownload": {
+      "confirmTitle": "Pobrać plik?",
+      "size": "Rozmiar: {{size}}",
+      "type": "Typ: {{type}}",
+      "download": "Pobierz",
+      "cancel": "Anuluj",
+      "started": "Pobieranie rozpoczęte",
+      "failed": "Nie udało się przetworzyć pobierania"
     }
   },
   "promptSelector": {
@@ -925,7 +948,9 @@
       "tools": "Narzędzia",
       "floating": "Okno pływające",
       "fullscreen": "Pełny ekran",
-      "collapse": "Zwiń"
+      "collapse": "Zwiń",
+      "browser": "Przeglądarka",
+      "webPages": "Strony internetowe"
     },
     "documents": {
       "selectChat": "Wybierz czat",
@@ -987,6 +1012,16 @@
       "color": "Kolor",
       "brightness": "Jasność",
       "empty": "Brak zadań"
+    },
+    "browser": {
+      "title": "Przeglądarka",
+      "forward": "Do przodu",
+      "reload": "Odśwież",
+      "secureSession": "Izolowana sesja przeglądarki",
+      "addressPlaceholder": "Szukaj lub wpisz adres",
+      "loadingPage": "Strona przeglądarki",
+      "actionFailed": "Działanie przeglądarki nie powiodło się",
+      "navigationFailed": "Nie udało się otworzyć strony"
     }
   },
   "tts": {

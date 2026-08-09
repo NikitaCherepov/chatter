@@ -1,95 +1,43 @@
 {
   "changes": {
     "en": [
-      "Added drag and drop for images and documents.",
-      "Fixed message regeneration metadata, including the model, prompt, and token usage.",
-      "Fixed deleting newly uploaded images without reopening the chat.",
-      "Prevented command confirmation actions from being submitted more than once.",
-      "Added clear quota errors for prompt generation, command reviews, runbooks, and macros."
+      "Added built-in web-browser"
     ],
     "ru": [
-      "Добавлена функция перетаскивания для изображений и документов.",
-      "Исправлены метаданные регенерации сообщений, включая модель, запрос и использование токенов.",
-      "Исправлено удаление недавно загруженных изображений без повторного открытия чата.",
-      "Предотвращена повторная отправка действий подтверждения команд.",
-      "Добавлены понятные ошибки квоты для генерации запросов, проверки команд, runbook'ов и макросов."
+      "Добавлен встроенный веб-браузер"
     ],
     "de": [
-      "Drag & Drop für Bilder und Dokumente hinzugefügt.",
-      "Metadaten der Nachrichtenregenerierung korrigiert, einschließlich Modell, Prompt und Token-Verbrauch.",
-      "Löschen neu hochgeladener Bilder behoben, ohne den Chat erneut zu öffnen.",
-      "Verhindert, dass Befehlsbestätigungsaktionen mehr als einmal gesendet werden.",
-      "Klare Kontingentfehler für Prompt-Generierung, Befehlsüberprüfungen, Runbooks und Makros hinzugefügt."
+      "Integrierter Webbrowser hinzugefügt"
     ],
     "es": [
-      "Se agregó arrastrar y soltar para imágenes y documentos.",
-      "Se corrigieron los metadatos de regeneración de mensajes, incluidos el modelo, el prompt y el uso de tokens.",
-      "Se corrigió la eliminación de imágenes recién subidas sin reabrir el chat.",
-      "Se evitó que las acciones de confirmación de comandos se enviaran más de una vez.",
-      "Se agregaron errores de cuota claros para la generación de prompts, revisiones de comandos, runbooks y macros."
+      "Se agregó navegador web integrado"
     ],
     "fr": [
-      "Ajout du glisser-déposer pour les images et les documents.",
-      "Correction des métadonnées de régénération des messages, y compris le modèle, l'invite et l'utilisation des jetons.",
-      "Correction de la suppression des images nouvellement téléchargées sans rouvrir la conversation.",
-      "Empêchement de la soumission multiple des actions de confirmation de commande.",
-      "Ajout d'erreurs de quota claires pour la génération d'invites, les revues de commandes, les runbooks et les macros."
+      "Navigateur web intégré ajouté"
     ],
     "it": [
-      "Aggiunto trascinamento per immagini e documenti.",
-      "Corretta la rigenerazione dei metadati dei messaggi, inclusi modello, prompt e utilizzo dei token.",
-      "Corretta l'eliminazione delle immagini appena caricate senza riaprire la chat.",
-      "Impedito l'invio di azioni di conferma dei comandi più di una volta.",
-      "Aggiunti errori di quota chiari per la generazione di prompt, revisioni di comandi, runbook e macro."
+      "Aggiunto browser web integrato"
     ],
     "ja": [
-      "画像とドキュメントのドラッグ＆ドロップを追加しました。",
-      "メッセージ再生成のメタデータ（モデル、プロンプト、トークン使用量）を修正しました。",
-      "チャットを開き直さずに、新しくアップロードした画像を削除できるよう修正しました。",
-      "コマンド確認アクションが複数回送信されないようにしました。",
-      "プロンプト生成、コマンドレビュー、ランブック、マクロの明確なクォータエラーを追加しました。"
+      "内蔵ウェブブラウザを追加しました"
     ],
     "ko": [
-      "이미지 및 문서에 대한 끌어서 놓기 기능이 추가되었습니다.",
-      "모델, 프롬프트 및 토큰 사용량을 포함한 메시지 재생성 메타데이터가 수정되었습니다.",
-      "채팅을 다시 열지 않고 새로 업로드한 이미지를 삭제하는 문제가 수정되었습니다.",
-      "명령 확인 작업이 두 번 이상 제출되지 않도록 방지했습니다.",
-      "프롬프트 생성, 명령 검토, 런북 및 매크로에 대한 명확한 할당량 오류가 추가되었습니다."
+      "내장 웹 브라우저 추가됨"
     ],
     "pl": [
-      "Dodano przeciąganie i upuszczanie obrazów oraz dokumentów.",
-      "Naprawiono metadane regeneracji wiadomości, w tym model, prompt i użycie tokenów.",
-      "Naprawiono usuwanie nowo przesłanych obrazów bez ponownego otwierania czatu.",
-      "Zapobieżono wielokrotnemu wysyłaniu akcji potwierdzania poleceń.",
-      "Dodano jasne błędy limitu dla generowania promptów, przeglądów poleceń, runbooków i makr."
+      "Dodano wbudowaną przeglądarkę internetową"
     ],
     "pt-BR": [
-      "Adicionado arrastar e soltar para imagens e documentos.",
-      "Corrigidos os metadados de regeneração de mensagens, incluindo modelo, prompt e uso de tokens.",
-      "Corrigida a exclusão de imagens recém-carregadas sem reabrir o chat.",
-      "Impedido que ações de confirmação de comando fossem enviadas mais de uma vez.",
-      "Adicionados erros claros de cota para geração de prompts, revisões de comandos, runbooks e macros."
+      "Adicionado navegador web integrado"
     ],
     "zh-CN": [
-      "添加了图片和文档的拖放功能。",
-      "修复了消息重新生成的元数据，包括模型、提示词和令牌使用情况。",
-      "修复了无需重新打开聊天即可删除新上传图片的问题。",
-      "防止命令确认操作被多次提交。",
-      "为提示词生成、命令审查、运行手册和宏添加了明确的配额错误提示。"
+      "新增内置网页浏览器"
     ],
     "tr": [
-      "Görseller ve belgeler için sürükle ve bırak eklendi.",
-      "Model, istem ve token kullanımı dahil olmak üzere mesaj yeniden oluşturma meta verileri düzeltildi.",
-      "Sohbeti yeniden açmadan yeni yüklenen görsellerin silinmesi düzeltildi.",
-      "Komut onay işlemlerinin birden fazla kez gönderilmesi engellendi.",
-      "İstem oluşturma, komut incelemeleri, runbook'lar ve makrolar için net kota hataları eklendi."
+      "Yerleşik web tarayıcı eklendi"
     ],
     "cs": [
-      "Přidáno přetahování myší pro obrázky a dokumenty.",
-      "Opravena metadata regenerace zpráv, včetně modelu, výzvy a využití tokenů.",
-      "Opraveno mazání nově nahraných obrázků bez znovuotevření chatu.",
-      "Zabráněno odeslání potvrzovacích akcí příkazů více než jednou.",
-      "Přidány jasné chyby kvóty pro generování výzev, kontroly příkazů, runbooky a makra."
+      "Přidán vestavěný webový prohlížeč"
     ]
   }
 }

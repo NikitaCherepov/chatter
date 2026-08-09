@@ -701,6 +701,7 @@
     "prompt": "📥 このファイルをダウンロードしますか？\n\n{{filename}}\nサイズ：{{size}}",
     "typeLine": "\n種類：{{type}}",
     "urlLine": "\n\n提供元：{{url}}",
+    "downloadsFolderNote": "\n\n確認後、ディスクに十分な空き容量があれば、ファイルは「ダウンロード」フォルダーに保存されます。",
     "unknownSize": "不明",
     "download": "ダウンロード",
     "cancel": "キャンセル",

@@ -137,31 +137,6 @@ const sendTelegramJson = async (method: string, payload: Record<string, unknown>
   return assertTelegramOk(response, method);
 };
 
-export const sendTelegramInlineMessage = async (
-  chatId: number,
-  text: string,
-  inlineKeyboard: Array<Array<{ text: string; callback_data: string }>>,
-): Promise<{ chatId: number; messageId: number }> => {
-  if (!TELEGRAM_TOKEN) throw new Error('telegram_not_configured');
-  const data = await sendTelegramJson('sendMessage', {
-    chat_id: chatId,
-    text,
-    reply_markup: { inline_keyboard: inlineKeyboard },
-  });
-  const messageId = Number(data?.result?.message_id);
-  if (!Number.isSafeInteger(messageId)) throw new Error('telegram_message_id_missing');
-  return { chatId, messageId };
-};
-
-export const editTelegramMessage = async (chatId: number, messageId: number, text: string): Promise<void> => {
-  if (!TELEGRAM_TOKEN) return;
-  await sendTelegramJson('editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-  });
-};
-
 /** Split text into chunks ≤ maxLen, preferring to break at newlines. */
 export const splitTextForTelegram = (text: string, maxLen = 4000): string[] => {
   const source = typeof text === 'string' ? text : String(text ?? '');

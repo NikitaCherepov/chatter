@@ -97,7 +97,8 @@
   "widget": {
     "toSidebar": "Dans la barre latérale",
     "floating": "Fenêtre flottante",
-    "fullscreen": "Plein écran"
+    "fullscreen": "Plein écran",
+    "external": "Ouvrir dans une fenêtre séparée"
   },
   "telegram": {
     "title": "Lier Telegram",
@@ -588,6 +589,19 @@
     "chatLink": {
       "title": "Chat trouvé",
       "open": "Ouvrir le chat"
+    },
+    "browser": {
+      "confirmTitle": "Action du navigateur",
+      "open": "Ouvrir : {{target}}",
+      "click": "Cliquer : {{target}}",
+      "fill": "Saisir du texte dans : {{target}}",
+      "executed": "Action du navigateur terminée",
+      "failed": "Échec de l'action du navigateur",
+      "currentSite": "Site actuel : {{site}}",
+      "allowSiteSession": "Autoriser sur ce site",
+      "allowSiteSessionHint": "Autoriser ce type d'action sur {{site}} jusqu'à la fermeture de Chatter",
+      "siteAllowedSession": "Autorisé sur ce site pour la session actuelle : {{site}}",
+      "actualTarget": "Élément de page réel"
     }
   },
   "promptSelector": {
@@ -613,7 +627,9 @@
       "tools": "Outils",
       "floating": "Fenêtre flottante",
       "fullscreen": "Plein écran",
-      "collapse": "Réduire"
+      "collapse": "Réduire",
+      "browser": "Navigateur",
+      "webPages": "Pages web"
     },
     "documents": {
       "selectChat": "Sélectionnez un chat",
@@ -675,6 +691,16 @@
       "color": "Couleur",
       "brightness": "Luminosité",
       "empty": "Aucune tâche"
+    },
+    "browser": {
+      "title": "Navigateur",
+      "forward": "Avancer",
+      "reload": "Recharger",
+      "secureSession": "Session navigateur isolée",
+      "addressPlaceholder": "Rechercher ou saisir une adresse",
+      "loadingPage": "Page du navigateur",
+      "actionFailed": "L'action du navigateur a échoué",
+      "navigationFailed": "Impossible d'ouvrir la page"
     }
   },
   "advanced": {

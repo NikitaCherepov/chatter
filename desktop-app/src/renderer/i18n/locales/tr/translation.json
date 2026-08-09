@@ -418,7 +418,8 @@
   "widget": {
     "toSidebar": "Kenar çubuğuna taşı",
     "floating": "Kayan pencere",
-    "fullscreen": "Tam ekran"
+    "fullscreen": "Tam ekran",
+    "external": "Ayrı pencerede aç"
   },
   "telegram": {
     "title": "Telegram'ı Bağla",
@@ -900,6 +901,28 @@
     "chatLink": {
       "title": "Bulunan sohbet",
       "open": "Sohbeti aç"
+    },
+    "browser": {
+      "confirmTitle": "Tarayıcı işlemi",
+      "open": "Aç: {{target}}",
+      "click": "Tıkla: {{target}}",
+      "fill": "Şuraya metin gir: {{target}}",
+      "executed": "Tarayıcı işlemi tamamlandı",
+      "failed": "Tarayıcı işlemi başarısız oldu",
+      "currentSite": "Geçerli site: {{site}}",
+      "allowSiteSession": "Bu sitede izin ver",
+      "allowSiteSessionHint": "Chatter kapanana kadar {{site}} üzerinde bu tür işlemlere izin ver",
+      "siteAllowedSession": "Bu sitede oturum için izin verildi: {{site}}",
+      "actualTarget": "Gerçek sayfa öğesi"
+    },
+    "browserDownload": {
+      "confirmTitle": "Dosya indirilsin mi?",
+      "size": "Boyut: {{size}}",
+      "type": "Tür: {{type}}",
+      "download": "İndir",
+      "cancel": "İptal",
+      "started": "İndirme başladı",
+      "failed": "İndirme işlenemedi"
     }
   },
   "promptSelector": {
@@ -925,7 +948,9 @@
       "tools": "Araçlar",
       "floating": "Hareketli pencere",
       "fullscreen": "Tam ekran",
-      "collapse": "Daralt"
+      "collapse": "Daralt",
+      "browser": "Tarayıcı",
+      "webPages": "Web sayfaları"
     },
     "documents": {
       "selectChat": "Bir sohbet seçin",
@@ -987,6 +1012,16 @@
       "color": "Renk",
       "brightness": "Parlaklık",
       "empty": "Görev yok"
+    },
+    "browser": {
+      "title": "Tarayıcı",
+      "forward": "İleri",
+      "reload": "Yenile",
+      "secureSession": "İzole tarayıcı oturumu",
+      "addressPlaceholder": "Ara veya adres girin",
+      "loadingPage": "Tarayıcı sayfası",
+      "actionFailed": "Tarayıcı işlemi başarısız oldu",
+      "navigationFailed": "Sayfa açılamadı"
     }
   },
   "tts": {

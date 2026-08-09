@@ -708,7 +708,7 @@ export function ChatPage() {
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'open' | 'click' | 'fill'; description: string; url?: string; text?: string; origin?: string; target_element?: { tag?: string; role?: string; text?: string; href?: string; inputType?: string; placeholder?: string; sensitive?: boolean } }>>([]);
-  const [browserDownloadConfirmations, setBrowserDownloadConfirmations] = useState<Array<{ confirmation_id: string; download_id: string; filename: string; url: string; mime_type?: string; total_bytes?: number; origin?: string | null; local?: boolean }>>([]);
+  const [browserDownloadConfirmations, setBrowserDownloadConfirmations] = useState<Array<{ confirmation_id: string; download_id: string; filename: string; url: string; mime_type?: string; total_bytes?: number; origin?: string | null }>>([]);
   const confirmationSubmissionsRef = useRef(new Set<string>());
   const [submittingConfirmationIds, setSubmittingConfirmationIds] = useState<Set<string>>(new Set());
   const [fileActionConfirmations, setFileActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'read' | 'write'; file_path: string; mode?: string; size_bytes?: number; content_preview?: string; start_line?: number; max_lines?: number }>>([]);
@@ -1286,12 +1286,11 @@ export function ChatPage() {
     const removeResolved = window.electronAPI.onBrowserDownloadResolved(({ download_id }) => {
       if (!download_id) return;
       setBrowserDownloadConfirmations(prev => prev.filter(c => c.download_id !== download_id));
-      finishConfirmationSubmission(`local:${download_id}`);
     });
     return () => {
       removeResolved();
     };
-  }, [finishConfirmationSubmission]);
+  }, []);
 
   useEffect(() => api.onMapUpdate((data) => {
     openTool('map');
@@ -3987,23 +3986,14 @@ export function ChatPage() {
                 const submitDownloadDecision = async (approved: boolean) => {
                   if (!beginConfirmationSubmission(conf.confirmation_id)) return;
                   try {
-                    let decisionResult: any;
-                    if (conf.local) {
-                      decisionResult = await window.electronAPI.browserControl({
-                        action: 'resolve_download',
-                        download_id: conf.download_id,
+                    const response = await api.apiFetch<any>('/api/v1/pc-commands/approve', {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        confirmation_id: conf.confirmation_id,
                         approved,
-                      });
-                    } else {
-                      const response = await api.apiFetch<any>('/api/v1/pc-commands/approve', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                          confirmation_id: conf.confirmation_id,
-                          approved,
-                        }),
-                      });
-                      decisionResult = response?.result;
-                    }
+                      }),
+                    });
+                    const decisionResult = response?.result;
                     setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
                     if (approved && decisionResult?.status === 'started') toast.success(t('chat.browserDownload.started'));
                   } catch (error) {

@@ -418,7 +418,8 @@
   "widget": {
     "toSidebar": "Alla barra laterale",
     "floating": "Finestra fluttuante",
-    "fullscreen": "A schermo intero"
+    "fullscreen": "A schermo intero",
+    "external": "Apri in una finestra separata"
   },
   "telegram": {
     "title": "Collega Telegram",
@@ -900,6 +901,28 @@
     "chatLink": {
       "title": "Chat trovata",
       "open": "Apri chat"
+    },
+    "browser": {
+      "confirmTitle": "Azione del browser",
+      "open": "Apri: {{target}}",
+      "click": "Clicca: {{target}}",
+      "fill": "Inserisci testo in: {{target}}",
+      "executed": "Azione del browser completata",
+      "failed": "Azione del browser non riuscita",
+      "currentSite": "Sito corrente: {{site}}",
+      "allowSiteSession": "Consenti su questo sito",
+      "allowSiteSessionHint": "Consenti questo tipo di azione su {{site}} finché Chatter non viene chiuso",
+      "siteAllowedSession": "Consentito su questo sito per la sessione corrente: {{site}}",
+      "actualTarget": "Elemento effettivo della pagina"
+    },
+    "browserDownload": {
+      "confirmTitle": "Scaricare il file?",
+      "size": "Dimensione: {{size}}",
+      "type": "Tipo: {{type}}",
+      "download": "Scarica",
+      "cancel": "Annulla",
+      "started": "Download avviato",
+      "failed": "Impossibile elaborare il download"
     }
   },
   "promptSelector": {
@@ -925,7 +948,9 @@
       "tools": "Strumenti",
       "floating": "Finestra fluttuante",
       "fullscreen": "A schermo intero",
-      "collapse": "Comprimi"
+      "collapse": "Comprimi",
+      "browser": "Browser",
+      "webPages": "Pagine web"
     },
     "documents": {
       "selectChat": "Seleziona chat",
@@ -987,6 +1012,16 @@
       "color": "Colore",
       "brightness": "Luminosità",
       "empty": "Nessun compito"
+    },
+    "browser": {
+      "title": "Browser",
+      "forward": "Avanti",
+      "reload": "Ricarica",
+      "secureSession": "Sessione browser isolata",
+      "addressPlaceholder": "Cerca o inserisci un indirizzo",
+      "loadingPage": "Pagina del browser",
+      "actionFailed": "Azione del browser non riuscita",
+      "navigationFailed": "Impossibile aprire la pagina"
     }
   },
   "tts": {

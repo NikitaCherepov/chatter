@@ -97,7 +97,8 @@
   "widget": {
     "toSidebar": "移至侧边栏",
     "floating": "浮动窗口",
-    "fullscreen": "全屏"
+    "fullscreen": "全屏",
+    "external": "在单独窗口中打开"
   },
   "telegram": {
     "title": "绑定Telegram",
@@ -588,6 +589,19 @@
     "chatLink": {
       "title": "找到的聊天",
       "open": "打开聊天"
+    },
+    "browser": {
+      "confirmTitle": "浏览器操作",
+      "open": "打开：{{target}}",
+      "click": "点击：{{target}}",
+      "fill": "在{{target}}中输入文本",
+      "executed": "浏览器操作已完成",
+      "failed": "浏览器操作失败",
+      "currentSite": "当前站点：{{site}}",
+      "allowSiteSession": "允许在此站点上操作",
+      "allowSiteSessionHint": "允许在{{site}}上执行此类操作，直到Chatter关闭",
+      "siteAllowedSession": "当前会话中允许在此网站上使用：{{site}}",
+      "actualTarget": "实际页面元素"
     }
   },
   "promptSelector": {
@@ -613,7 +627,9 @@
       "tools": "工具",
       "floating": "浮动窗口",
       "fullscreen": "全屏",
-      "collapse": "折叠"
+      "collapse": "折叠",
+      "browser": "浏览器",
+      "webPages": "网页"
     },
     "documents": {
       "selectChat": "选择聊天",
@@ -675,6 +691,16 @@
       "color": "颜色",
       "brightness": "亮度",
       "empty": "没有任务"
+    },
+    "browser": {
+      "title": "浏览器",
+      "forward": "前进",
+      "reload": "刷新",
+      "secureSession": "隔离的浏览器会话",
+      "addressPlaceholder": "搜索或输入地址",
+      "loadingPage": "浏览器页面",
+      "actionFailed": "浏览器操作失败",
+      "navigationFailed": "无法打开页面"
     }
   },
   "advanced": {

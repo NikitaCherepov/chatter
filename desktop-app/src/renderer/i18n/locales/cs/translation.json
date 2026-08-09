@@ -418,7 +418,8 @@
   "widget": {
     "toSidebar": "Přesunout na postranní panel",
     "floating": "Plovoucí okno",
-    "fullscreen": "Celá obrazovka"
+    "fullscreen": "Celá obrazovka",
+    "external": "Otevřít v samostatném okně"
   },
   "telegram": {
     "title": "Propojit Telegram",
@@ -900,6 +901,28 @@
     "chatLink": {
       "title": "Nalezený chat",
       "open": "Otevřít chat"
+    },
+    "browser": {
+      "confirmTitle": "Akce prohlížeče",
+      "open": "Otevřít: {{target}}",
+      "click": "Kliknout: {{target}}",
+      "fill": "Zadat text do: {{target}}",
+      "executed": "Akce prohlížeče dokončena",
+      "failed": "Akce prohlížeče selhala",
+      "currentSite": "Aktuální web: {{site}}",
+      "allowSiteSession": "Povolit na tomto webu",
+      "allowSiteSessionHint": "Povolit tento typ akce na {{site}}, dokud se Chatter nezavře",
+      "siteAllowedSession": "Povoleno na tomto webu pro aktuální relaci: {{site}}",
+      "actualTarget": "Skutečný prvek stránky"
+    },
+    "browserDownload": {
+      "confirmTitle": "Stáhnout soubor?",
+      "size": "Velikost: {{size}}",
+      "type": "Typ: {{type}}",
+      "download": "Stáhnout",
+      "cancel": "Zrušit",
+      "started": "Stahování zahájeno",
+      "failed": "Stahování se nezdařilo zpracovat"
     }
   },
   "promptSelector": {
@@ -925,7 +948,9 @@
       "tools": "Nástroje",
       "floating": "Plovoucí okno",
       "fullscreen": "Celá obrazovka",
-      "collapse": "Sbalit"
+      "collapse": "Sbalit",
+      "browser": "Prohlížeč",
+      "webPages": "Webové stránky"
     },
     "documents": {
       "selectChat": "Vyberte chat",
@@ -987,6 +1012,16 @@
       "color": "Barva",
       "brightness": "Jas",
       "empty": "Žádné úkoly"
+    },
+    "browser": {
+      "title": "Prohlížeč",
+      "forward": "Vpřed",
+      "reload": "Obnovit",
+      "secureSession": "Izolovaná relace prohlížeče",
+      "addressPlaceholder": "Hledat nebo zadat adresu",
+      "loadingPage": "Stránka prohlížeče",
+      "actionFailed": "Akce prohlížeče selhala",
+      "navigationFailed": "Nelze otevřít stránku"
     }
   },
   "tts": {

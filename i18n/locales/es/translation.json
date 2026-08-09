@@ -701,6 +701,7 @@
     "prompt": "📥 ¿Descargar este archivo?\n\n{{filename}}\nTamaño: {{size}}",
     "typeLine": "\nTipo: {{type}}",
     "urlLine": "\n\nOrigen: {{url}}",
+    "downloadsFolderNote": "\n\nTras la confirmación, el archivo se guardará en la carpeta Descargas si hay suficiente espacio en disco.",
     "unknownSize": "desconocido",
     "download": "Descargar",
     "cancel": "Cancelar",

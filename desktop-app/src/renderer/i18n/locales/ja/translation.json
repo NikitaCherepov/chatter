@@ -97,7 +97,8 @@
   "widget": {
     "toSidebar": "サイドバーへ",
     "floating": "フローティングウィンドウ",
-    "fullscreen": "全画面表示"
+    "fullscreen": "全画面表示",
+    "external": "別ウィンドウで開く"
   },
   "telegram": {
     "title": "Telegramを連携",
@@ -588,6 +589,19 @@
     "chatLink": {
       "title": "チャットが見つかりました",
       "open": "チャットを開く"
+    },
+    "browser": {
+      "confirmTitle": "ブラウザー操作",
+      "open": "開く: {{target}}",
+      "click": "クリック: {{target}}",
+      "fill": "テキストを入力: {{target}}",
+      "executed": "ブラウザー操作が完了しました",
+      "failed": "ブラウザー操作に失敗しました",
+      "currentSite": "現在のサイト: {{site}}",
+      "allowSiteSession": "このサイトで許可",
+      "allowSiteSessionHint": "Chatterが閉じるまで{{site}}でこの種類の操作を許可",
+      "siteAllowedSession": "このサイトでは現在のセッション中に許可されています: {{site}}",
+      "actualTarget": "実際のページ要素"
     }
   },
   "promptSelector": {
@@ -613,7 +627,9 @@
       "tools": "ツール",
       "floating": "フローティングウィンドウ",
       "fullscreen": "全画面表示",
-      "collapse": "折りたたむ"
+      "collapse": "折りたたむ",
+      "browser": "ブラウザ",
+      "webPages": "ウェブページ"
     },
     "documents": {
       "selectChat": "チャットを選択",
@@ -675,6 +691,16 @@
       "color": "色",
       "brightness": "明るさ",
       "empty": "タスクなし"
+    },
+    "browser": {
+      "title": "ブラウザ",
+      "forward": "進む",
+      "reload": "再読み込み",
+      "secureSession": "隔離されたブラウザセッション",
+      "addressPlaceholder": "検索またはアドレスを入力",
+      "loadingPage": "ブラウザページ",
+      "actionFailed": "ブラウザ操作に失敗しました",
+      "navigationFailed": "ページを開けませんでした"
     }
   },
   "advanced": {

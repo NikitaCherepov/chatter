@@ -132,6 +132,22 @@ export type ToolIteration = {
 // Registry of active generations для остановки по userId
 export const activeGenerations = new Map<number, AbortController>();
 export const activeHitlWaits = new Set<number>();
+const activeHitlWaitCounts = new Map<number, number>();
+
+export const beginActiveHitlWait = (userId: number) => {
+  activeHitlWaitCounts.set(userId, (activeHitlWaitCounts.get(userId) || 0) + 1);
+  activeHitlWaits.add(userId);
+};
+
+export const endActiveHitlWait = (userId: number) => {
+  const remaining = (activeHitlWaitCounts.get(userId) || 1) - 1;
+  if (remaining > 0) {
+    activeHitlWaitCounts.set(userId, remaining);
+    return;
+  }
+  activeHitlWaitCounts.delete(userId);
+  activeHitlWaits.delete(userId);
+};
 
 // Server update drain lock — rejects new requests while preparing for update
 let updatePreparing = false;
@@ -1897,11 +1913,11 @@ const withRejectionComment = <T extends Record<string, unknown>>(payload: T, err
 };
 
 const waitForHitlConfirmation = async <T>(userId: number, promise: Promise<T>): Promise<T> => {
-  activeHitlWaits.add(userId);
+  beginActiveHitlWait(userId);
   try {
     return await promise;
   } finally {
-    activeHitlWaits.delete(userId);
+    endActiveHitlWait(userId);
   }
 };
 
