@@ -166,6 +166,17 @@ export class ChatterBrowser {
   private snapshotUrl = '';
   private snapshotElements = new Map<string, BrowserElement>();
   private snapshotFrames = new Map<string, BrowserFrameSnapshot>();
+  /**
+   * Cached isolated execution contexts for child frames. Keyed by
+   * frameTreeNodeId. The world is created lazily on first access and
+   * disposed when the snapshot is invalidated.
+   */
+  private oopifWorlds = new Map<number, {
+    sessionId: string;
+    contextId: number;
+    ownsDebugger: boolean;
+    dispose: () => Promise<void>;
+  }>();
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
   private interactionInProgress = false;
   private initialNavigationStarted = false;
@@ -239,6 +250,7 @@ export class ChatterBrowser {
 
   destroy(): void {
     this.abortInteraction();
+    void this.disposeOopifWorlds();
     this.view.webContents.session.removeListener('will-download', this.willDownloadHandler);
     for (const downloadId of [...this.pendingDownloads.keys()]) {
       this.cancelPendingDownload(downloadId, 'browser_destroyed');
@@ -489,6 +501,8 @@ export class ChatterBrowser {
     this.snapshotElements.clear();
     this.snapshotFrames.clear();
     this.lastReadSnapshot = null;
+    // Dispose any cached frame worlds.
+    void this.disposeOopifWorlds();
   }
 
   /** Aborts any in-flight pointer sequence (called on navigation, destroy, etc.). */
@@ -696,12 +710,143 @@ export class ChatterBrowser {
     ) || null;
   }
 
-  private executeInFrame<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
+  /**
+   * Runs `code` in the parent frame of `frame`. Used for layout queries that
+   * require access to the iframe owner element (getBoundingClientRect,
+   * contentWindow). Executes in the same world as `executeInBrowserWorld`
+   * for the main frame, or in the child frame's main world otherwise.
+   */
+  private executeInFrameLayout<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
     if (frame.isDestroyed()) return Promise.reject(new Error('browser_frame_stale'));
     if (frame.frameTreeNodeId === this.view.webContents.mainFrame.frameTreeNodeId) {
       return this.executeInBrowserWorld<T>(code);
     }
     return frame.executeJavaScript(code, true) as Promise<T>;
+  }
+
+  /**
+   * Runs `code` in an isolated execution context of `frame`. The main frame
+   * uses world 1004 (via executeInBrowserWorld). Child frames use a cached
+   * CDP-attached isolated world created on demand.
+   */
+  private async executeInFrameIsolated<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
+    if (frame.isDestroyed()) return Promise.reject(new Error('browser_frame_stale'));
+    if (frame.frameTreeNodeId === this.view.webContents.mainFrame.frameTreeNodeId) {
+      return this.executeInBrowserWorld<T>(code);
+    }
+    return this.executeInOopifIsolated<T>(frame, code);
+  }
+
+  private async executeInOopifIsolated<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
+    const contents = this.view.webContents;
+    if (contents.isDestroyed()) throw new Error('webcontents_destroyed');
+
+    // Reuse the cached world for this frame if one exists. Otherwise open
+    // a new CDP session and create the isolated world.
+    const frameKey = frame.frameTreeNodeId;
+    let entry = this.oopifWorlds.get(frameKey);
+    let entryCreated = false;
+
+    if (!entry) {
+      entry = await this.createOopifWorld(frame);
+      entryCreated = !!entry;
+      if (entry) this.oopifWorlds.set(frameKey, entry);
+    }
+    if (!entry) throw new Error('browser_isolated_world_unavailable');
+
+    try {
+      const evaluateResp = await contents.debugger.sendCommand('Runtime.evaluate', {
+        expression: code,
+        contextId: entry.contextId,
+        returnByValue: true,
+        awaitPromise: true,
+        silent: true,
+      }, entry.sessionId) as { result?: { value?: T }; exceptionDetails?: unknown };
+
+      if (evaluateResp.exceptionDetails) throw new Error('browser_frame_eval_failed');
+      return evaluateResp.result?.value as T;
+    } catch (error) {
+      // Context may be stale after navigation. Drop the cached entry so the
+      // next call rebuilds it.
+      if (entryCreated) {
+        await entry.dispose().catch(() => {});
+        this.oopifWorlds.delete(frameKey);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Attaches a CDP session to the OOPIF target, creates an isolated world,
+   * and returns the session/contextId. The caller disposes via the returned
+   * `dispose` callback when the snapshot is invalidated.
+   */
+  private async createOopifWorld(frame: WebFrameMain): Promise<{
+    sessionId: string;
+    contextId: number;
+    ownsDebugger: boolean;
+    dispose: () => Promise<void>;
+  }> {
+    const contents = this.view.webContents;
+    const debuggerApi = contents.debugger;
+    const ownsDebugger = !debuggerApi.isAttached();
+    let sessionId = '';
+    let disposed = false;
+
+    const dispose = async () => {
+      if (disposed) return;
+      disposed = true;
+      if (sessionId && debuggerApi.isAttached()) {
+        await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId }).catch(() => {});
+        sessionId = '';
+      }
+      if (ownsDebugger && debuggerApi.isAttached()) debuggerApi.detach();
+    };
+
+    try {
+      if (ownsDebugger) debuggerApi.attach('1.3');
+
+      const targets = await debuggerApi.sendCommand('Target.getTargets') as {
+        targetInfos?: Array<{ targetId?: string; type?: string; url?: string }>;
+      };
+      const frameUrl = `${frame.url || ''}`;
+      const candidates = (targets.targetInfos || []).filter(
+        (target) => target.type === 'iframe' && target.url === frameUrl && target.targetId,
+      );
+      if (candidates.length === 0) throw new Error('browser_frame_target_not_found');
+
+      const attached = await debuggerApi.sendCommand('Target.attachToTarget', {
+        targetId: candidates[0].targetId,
+        flatten: true,
+      }) as { sessionId?: string };
+      sessionId = `${attached.sessionId || ''}`;
+      if (!sessionId) throw new Error('browser_frame_attach_failed');
+
+      const frameTreeResp = await debuggerApi.sendCommand('Page.getFrameTree', {}, sessionId) as {
+        frameTree?: { frame?: { id?: string } };
+      };
+      const cdpFrameId = frameTreeResp.frameTree?.frame?.id;
+      if (!cdpFrameId) throw new Error('browser_frame_tree_unavailable');
+
+      const worldResp = await debuggerApi.sendCommand('Page.createIsolatedWorld', {
+        frameId: cdpFrameId,
+        worldName: '',
+        grantUniveralAccess: false,
+      }, sessionId) as { executionContextId?: number };
+      const contextId = worldResp.executionContextId;
+      if (typeof contextId !== 'number') throw new Error('browser_isolated_world_unavailable');
+
+      return { sessionId, contextId, ownsDebugger, dispose };
+    } catch (error) {
+      await dispose();
+      throw error;
+    }
+  }
+
+  private async disposeOopifWorlds(): Promise<void> {
+    const entries = Array.from(this.oopifWorlds.values());
+    this.oopifWorlds.clear();
+    await Promise.allSettled(entries.map((entry) => entry.dispose()));
   }
 
   private async navigateToUrl(url: string): Promise<void> {
@@ -785,7 +930,7 @@ export class ChatterBrowser {
 
   private async readPage(mode: 'viewport' | 'delta' | 'full'): Promise<unknown> {
     await this.ensureReadablePage();
-    const documentSeed = `chatter-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const documentSeed = `e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     const effectiveMode = mode === 'full' ? 'full' : 'viewport';
     const maxText = effectiveMode === 'full' ? MAX_PAGE_TEXT : MAX_VIEWPORT_TEXT;
     const maxElements = effectiveMode === 'full' ? MAX_ELEMENTS : MAX_VIEWPORT_ELEMENTS;
@@ -984,10 +1129,10 @@ export class ChatterBrowser {
         return { text: parts.join('\\n'), truncated };
       };
 
-      globalThis.__chatterBrowserDocumentId ||= documentSeed;
-      globalThis.__chatterBrowserRefCounter ||= 0;
-      globalThis.__chatterBrowserRefByElement ||= new WeakMap();
-      globalThis.__chatterBrowserElements = new Map();
+      globalThis.__cb_di ||= documentSeed;
+      globalThis.__cb_rc ||= 0;
+      globalThis.__cb_rbe ||= new WeakMap();
+      globalThis.__cb_e = new Map();
       const selectors = 'a,button,input,textarea,select,label,[onclick],[role="button"],[role="link"],[role="radio"],[role="checkbox"],[role="switch"],[contenteditable="true"]';
       const candidates = [];
       const seenCandidates = new WeakSet();
@@ -1013,13 +1158,13 @@ export class ChatterBrowser {
       };
       collectCandidates(document.body);
       const elements = candidates.slice(0, maxElements).map((element) => {
-        let ref = globalThis.__chatterBrowserRefByElement.get(element);
+        let ref = globalThis.__cb_rbe.get(element);
         if (!ref) {
-          globalThis.__chatterBrowserRefCounter += 1;
-          ref = globalThis.__chatterBrowserDocumentId + '-' + globalThis.__chatterBrowserRefCounter;
-          globalThis.__chatterBrowserRefByElement.set(element, ref);
+          globalThis.__cb_rc += 1;
+          ref = globalThis.__cb_di + '-' + globalThis.__cb_rc;
+          globalThis.__cb_rbe.set(element, ref);
         }
-        globalThis.__chatterBrowserElements.set(ref, element);
+        globalThis.__cb_e.set(ref, element);
         const tag = element.tagName.toLowerCase();
         const associatedInput = element instanceof HTMLInputElement
           ? element
@@ -1117,7 +1262,7 @@ export class ChatterBrowser {
     const frames = allFrames.slice(0, MAX_BROWSER_FRAMES);
     const frameReads = await Promise.allSettled(frames.map(async (frame) => ({
       frame,
-      result: await this.executeInFrame<BrowserFrameReadResult>(frame, script),
+      result: await this.executeInFrameIsolated<BrowserFrameReadResult>(frame, script),
     })));
 
     const successfulReads = frameReads.flatMap((read) => read.status === 'fulfilled' ? [read.value] : []);
@@ -1274,8 +1419,8 @@ export class ChatterBrowser {
   }
 
   private async getTargetCheckedState(frame: WebFrameMain, internalRef: string): Promise<boolean | undefined> {
-    return this.executeInFrame<boolean | undefined>(frame, `(() => {
-      const target = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+    return this.executeInFrameIsolated<boolean | undefined>(frame, `(() => {
+      const target = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
       if (!target || !target.isConnected) return undefined;
       const element = target instanceof HTMLLabelElement && target.control ? target.control : target;
       if (element instanceof HTMLInputElement && ['checkbox', 'radio'].includes(element.type.toLowerCase())) {
@@ -1371,7 +1516,7 @@ export class ChatterBrowser {
         visible,
       };
     })()`;
-    return this.executeInFrame(parent, script);
+    return this.executeInFrameLayout(parent, script);
   }
 
   private async scrollFrameChainIntoView(frame: WebFrameMain): Promise<void> {
@@ -1432,70 +1577,40 @@ export class ChatterBrowser {
     const contents = this.view.webContents;
     if (frame.frameTreeNodeId === contents.mainFrame.frameTreeNodeId) return null;
 
-    const debuggerApi = contents.debugger;
-    const ownsDebugger = !debuggerApi.isAttached();
-    let sessionId = '';
+    // Reuse the cached world for this frame. If none exists yet (frame was
+    // not visited during the read phase), open one on demand.
+    const entry = this.oopifWorlds.get(frame.frameTreeNodeId)
+      ?? await this.createOopifWorld(frame).catch(() => null);
+    if (!entry) throw new Error('browser_frame_input_unavailable');
+    this.oopifWorlds.set(frame.frameTreeNodeId, entry);
 
-    const dispose = async () => {
-      if (sessionId && debuggerApi.isAttached()) {
-        await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId }).catch(() => {});
-        sessionId = '';
-      }
-      if (ownsDebugger && debuggerApi.isAttached()) debuggerApi.detach();
+    // Verify the ref is present in the element map before dispatching.
+    const probe = await contents.debugger.sendCommand('Runtime.evaluate', {
+      expression: `Boolean(globalThis.__cb_e?.has(${JSON.stringify(internalRef)}))`,
+      contextId: entry.contextId,
+      returnByValue: true,
+      silent: true,
+    }, entry.sessionId) as { result?: { value?: boolean } };
+    if (probe?.result?.value !== true) {
+      throw new Error('browser_frame_input_unavailable');
+    }
+
+    // Input session shares the CDP connection owned by `oopifWorlds`.
+    const dispatch: MouseEventDispatcher = async (type, x, y, button = 'left', clickCount = 1) => {
+      const localX = (x - transform.offsetX) / transform.scaleX;
+      const localY = (y - transform.offsetY) / transform.scaleY;
+      const cdpType = type === 'mouseMove' ? 'mouseMoved' : type === 'mouseDown' ? 'mousePressed' : 'mouseReleased';
+      await contents.debugger.sendCommand('Input.dispatchMouseEvent', {
+        type: cdpType,
+        x: localX,
+        y: localY,
+        button: type === 'mouseMove' ? 'none' : button,
+        buttons: type === 'mouseDown' ? 1 : 0,
+        clickCount,
+      }, entry.sessionId);
     };
 
-    try {
-      if (ownsDebugger) debuggerApi.attach('1.3');
-      const targets = await debuggerApi.sendCommand('Target.getTargets') as {
-        targetInfos?: Array<{ targetId?: string; type?: string; url?: string }>;
-      };
-      const candidates = (targets.targetInfos || []).filter(
-        (target) => target.type === 'iframe' && target.url === frame.url && target.targetId,
-      );
-
-      for (const candidate of candidates) {
-        const attached = await debuggerApi.sendCommand('Target.attachToTarget', {
-          targetId: candidate.targetId,
-          flatten: true,
-        }) as { sessionId?: string };
-        const candidateSessionId = `${attached.sessionId || ''}`;
-        if (!candidateSessionId) continue;
-        const probe = await debuggerApi.sendCommand('Runtime.evaluate', {
-          expression: `Boolean(globalThis.__chatterBrowserElements?.has(${JSON.stringify(internalRef)}))`,
-          returnByValue: true,
-        }, candidateSessionId).catch(() => null) as { result?: { value?: boolean } } | null;
-        if (probe?.result?.value === true) {
-          sessionId = candidateSessionId;
-          break;
-        }
-        await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId: candidateSessionId }).catch(() => {});
-      }
-
-      if (!sessionId) {
-        await dispose();
-        if (candidates.length > 0) throw new Error('browser_frame_input_unavailable');
-        return null;
-      }
-
-      const dispatch: MouseEventDispatcher = async (type, x, y, button = 'left', clickCount = 1) => {
-        const localX = (x - transform.offsetX) / transform.scaleX;
-        const localY = (y - transform.offsetY) / transform.scaleY;
-        const cdpType = type === 'mouseMove' ? 'mouseMoved' : type === 'mouseDown' ? 'mousePressed' : 'mouseReleased';
-        await debuggerApi.sendCommand('Input.dispatchMouseEvent', {
-          type: cdpType,
-          x: localX,
-          y: localY,
-          button: type === 'mouseMove' ? 'none' : button,
-          buttons: type === 'mouseDown' ? 1 : 0,
-          clickCount,
-        }, sessionId);
-      };
-
-      return { dispatch, dispose };
-    } catch (error) {
-      await dispose();
-      throw error;
-    }
+    return { dispatch, dispose: async () => {} };
   }
 
   private async clickElement(ref: string): Promise<unknown> {
@@ -1507,7 +1622,7 @@ export class ChatterBrowser {
 
     // -- Phase 1: bring the element into view and read a stable clickable rect --
     const rectScript = `(async () => {
-      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
       if (!element) throw new Error('browser_element_not_found');
       element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
       await new Promise(resolve => setTimeout(resolve, 350));
@@ -1530,7 +1645,7 @@ export class ChatterBrowser {
     let transform: Awaited<ReturnType<ChatterBrowser['getFrameTransform']>>;
     try {
       await this.scrollFrameChainIntoView(frame);
-      rect = await this.executeInFrame(frame, rectScript);
+      rect = await this.executeInFrameIsolated(frame, rectScript);
       transform = await this.getFrameTransform(frame);
       if (!transform.visible || Math.abs(transform.scaleX) < 0.001 || Math.abs(transform.scaleY) < 0.001) {
         throw new Error('click_target_moved');
@@ -1565,10 +1680,10 @@ export class ChatterBrowser {
 
     // -- Phase 3: show visual cursor overlay --
     const showCursorScript = `(() => {
-      let cursor = document.getElementById('__chatter-browser-cursor');
+      let cursor = document.getElementById('__cb-c');
       if (!cursor) {
         cursor = document.createElement('div');
-        cursor.id = '__chatter-browser-cursor';
+        cursor.id = '__cb-c';
         Object.assign(cursor.style, {
           position: 'fixed', width: '14px', height: '14px', borderRadius: '50%',
           background: 'rgba(34, 105, 225, 0.92)', border: '2px solid white',
@@ -1587,7 +1702,7 @@ export class ChatterBrowser {
 
     // Animate the DOM cursor along the same trajectory (best-effort, visual only).
     const visualAnimation = this.executeInBrowserWorld(`(() => {
-      const cursor = document.getElementById('__chatter-browser-cursor');
+      const cursor = document.getElementById('__cb-c');
       if (!cursor) return false;
       const points = ${JSON.stringify(trajectory)};
       let i = 0;
@@ -1609,11 +1724,11 @@ export class ChatterBrowser {
     let actualChecked = expected.checked;
 
     // Highlight element outline — save original values for restoration.
-    this.executeInFrame(frame, `(() => {
-      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+    this.executeInFrameIsolated(frame, `(() => {
+      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
       if (!element) return false;
-      globalThis.__chatterBrowserSavedOutline = element.style.outline;
-      globalThis.__chatterBrowserSavedOutlineOffset = element.style.outlineOffset;
+      globalThis.__cb_so = element.style.outline;
+      globalThis.__cb_soo = element.style.outlineOffset;
       element.style.outline = '2px solid rgba(34, 105, 225, .9)';
       element.style.outlineOffset = '3px';
       return true;
@@ -1624,8 +1739,8 @@ export class ChatterBrowser {
       // Pass the pre-selected target AND trajectory so visual cursor and
       // native events follow the exact same path and speed.
       const validateTarget = async () => {
-        const localTargetValid = await this.executeInFrame<boolean>(frame, `(() => {
-        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+        const localTargetValid = await this.executeInFrameIsolated<boolean>(frame, `(() => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
         if (!element || !element.isConnected) return false;
         let hit = document.elementFromPoint(${localTarget.x}, ${localTarget.y});
         const visitedRoots = new Set();
@@ -1688,20 +1803,20 @@ export class ChatterBrowser {
 
       // Brief settle, then restore outline + hide cursor.
       await new Promise(resolve => setTimeout(resolve, 200));
-      await this.executeInFrame(frame, `(() => {
-        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+      await this.executeInFrameIsolated(frame, `(() => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
         if (element && element.isConnected) {
-          element.style.outline = globalThis.__chatterBrowserSavedOutline || '';
-          element.style.outlineOffset = globalThis.__chatterBrowserSavedOutlineOffset || '';
+          element.style.outline = globalThis.__cb_so || '';
+          element.style.outlineOffset = globalThis.__cb_soo || '';
         }
-        delete globalThis.__chatterBrowserSavedOutline;
-        delete globalThis.__chatterBrowserSavedOutlineOffset;
+        delete globalThis.__cb_so;
+        delete globalThis.__cb_soo;
         return true;
       })()`).catch(() => {});
       await this.executeInBrowserWorld(`(() => {
-        const cursor = document.getElementById('__chatter-browser-cursor');
+        const cursor = document.getElementById('__cb-c');
         if (cursor) cursor.style.opacity = '0';
-        globalThis.__chatterBrowserCursorPosition = { x: ${target.x}, y: ${target.y} };
+        globalThis.__cb_cp = { x: ${target.x}, y: ${target.y} };
         return true;
       })()`).catch(() => {});
 
@@ -1718,18 +1833,18 @@ export class ChatterBrowser {
       };
     } catch (error) {
       // Clean up: restore outline + hide visual cursor on error / cancellation.
-      await this.executeInFrame(frame, `(() => {
-        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+      await this.executeInFrameIsolated(frame, `(() => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
         if (element && element.isConnected) {
-          element.style.outline = globalThis.__chatterBrowserSavedOutline || '';
-          element.style.outlineOffset = globalThis.__chatterBrowserSavedOutlineOffset || '';
+          element.style.outline = globalThis.__cb_so || '';
+          element.style.outlineOffset = globalThis.__cb_soo || '';
         }
-        delete globalThis.__chatterBrowserSavedOutline;
-        delete globalThis.__chatterBrowserSavedOutlineOffset;
+        delete globalThis.__cb_so;
+        delete globalThis.__cb_soo;
         return true;
       })()`).catch(() => {});
       await this.executeInBrowserWorld(`(() => {
-        const cursor = document.getElementById('__chatter-browser-cursor');
+        const cursor = document.getElementById('__cb-c');
         if (cursor) cursor.style.opacity = '0';
         return true;
       })()`).catch(() => {});
@@ -1755,7 +1870,7 @@ export class ChatterBrowser {
     }
 
     const script = `(() => {
-      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
       if (!element) throw new Error('browser_element_not_found');
       if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element.isContentEditable)) {
         throw new Error('browser_element_not_editable');
@@ -1778,7 +1893,7 @@ export class ChatterBrowser {
       return true;
     })()`;
     try {
-      await this.executeInFrame(frame, script);
+      await this.executeInFrameIsolated(frame, script);
       return { status: 'success', action: 'fill', element: expected, characters: text.length, ...this.getState() };
     } finally {
       this.interactionInProgress = false;
