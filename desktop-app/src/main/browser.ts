@@ -115,25 +115,37 @@ type CdpFrameTree = {
 };
 
 /**
- * Walks a CDP frame tree (returned by Page.getFrameTree) looking for a frame
- * whose URL and/or name matches `targetUrl`/`targetName`. Returns the CDP
- * frameId, or undefined if not found.
+ * Locates the CDP frameId for `frame` inside `tree`. We first build the index
+ * path from main frame to `frame` via parent.frames[], then walk the same
+ * path through the CDP frame tree. Index-based matching disambiguates
+ * multiple iframes that share the same URL or name.
  */
-function findCdpFrameId(
+function findCdpFrameIdFor(
+  frame: WebFrameMain,
   tree: CdpFrameTree | undefined,
-  targetUrl: string,
-  targetName: string,
 ): string | undefined {
   if (!tree?.frame) return undefined;
-  const f = tree.frame;
-  if ((targetUrl && f.url === targetUrl) || (targetName && f.name === targetName)) {
-    return f.id;
+
+  // Build the chain of frame indices from main frame down to `frame`.
+  const chain: number[] = [];
+  let child: WebFrameMain | null = frame;
+  // Walk up via parent.frames[] and reverse to get top-down ordering.
+  while (child && child.parent) {
+    const parent: WebFrameMain = child.parent;
+    const childId = child.frameTreeNodeId;
+    const idx = parent.frames.findIndex((f: WebFrameMain) => f.frameTreeNodeId === childId);
+    if (idx < 0) return undefined;
+    chain.unshift(idx);
+    child = parent;
   }
-  for (const child of tree.childFrames || []) {
-    const found = findCdpFrameId(child, targetUrl, targetName);
-    if (found) return found;
+  // `child` is now the top-level (main) frame; the chain is complete.
+
+  let node: CdpFrameTree | undefined = tree;
+  for (const idx of chain) {
+    if (!node?.childFrames || idx >= node.childFrames.length) return undefined;
+    node = node.childFrames[idx];
   }
-  return undefined;
+  return node?.frame?.id;
 }
 
 function buildTextDelta(previous: string, current: string): string {
@@ -201,9 +213,22 @@ export class ChatterBrowser {
   private oopifWorlds = new Map<number, {
     sessionId: string;
     contextId: number;
-    ownsDebugger: boolean;
-    dispose: () => Promise<void>;
+    sameOrigin: boolean;
+    released: boolean;
   }>();
+  /**
+   * Refcount for the top-level CDP debugger attachment. We attach once on
+   * the first isolated-world request and detach when the last consumer
+   * releases. Each cached world holds one ref while alive.
+   */
+  private debuggerRefs = 0;
+  private debuggerAttachPromise: Promise<void> | null = null;
+  /**
+   * True only when we attached the top-level debugger ourselves. If the
+   * debugger was already attached by an external caller we ride on their
+   * attachment and never detach it.
+   */
+  private debuggerOwnedByBrowser = false;
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
   private interactionInProgress = false;
   private initialNavigationStarted = false;
@@ -753,9 +778,9 @@ export class ChatterBrowser {
 
   /**
    * Runs `code` in an isolated execution context of `frame`. The main frame
-   * uses world 1004 (via executeInBrowserWorld). Same-origin child frames
-   * reuse the main frame's isolated world via window.frames[]. Cross-origin
-   * (OOPIF) frames use a cached CDP-attached isolated world.
+   * uses world 1004 (via executeInBrowserWorld). Same-origin and cross-origin
+   * (OOPIF) child frames use a CDP-attached isolated world created via
+   * Page.createIsolatedWorld on the appropriate CDP session.
    */
   private async executeInFrameIsolated<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
     if (frame.isDestroyed()) return Promise.reject(new Error('browser_frame_stale'));
@@ -807,19 +832,13 @@ export class ChatterBrowser {
     if (!entry) throw new Error('browser_isolated_world_unavailable');
 
     try {
-      const evaluateResp = await contents.debugger.sendCommand('Runtime.evaluate', {
-        expression: code,
-        contextId: entry.contextId,
-        returnByValue: true,
-        awaitPromise: true,
-        silent: true,
-      }, entry.sessionId) as { result?: { value?: T }; exceptionDetails?: unknown };
-
+      const evaluateResp = await this.cdpEval(code, entry.contextId, entry.sessionId) as {
+        result?: { value?: T }; exceptionDetails?: unknown;
+      };
       if (evaluateResp.exceptionDetails) throw new Error('browser_frame_eval_failed');
       return evaluateResp.result?.value as T;
     } catch (error) {
-      await entry.dispose().catch(() => {});
-      this.oopifWorlds.delete(frameKey);
+      await this.releaseFrameWorld(frameKey, entry).catch(() => {});
       throw error;
     }
   }
@@ -843,22 +862,87 @@ export class ChatterBrowser {
     if (!entry) throw new Error('browser_isolated_world_unavailable');
 
     try {
-      const evaluateResp = await contents.debugger.sendCommand('Runtime.evaluate', {
-        expression: code,
-        contextId: entry.contextId,
-        returnByValue: true,
-        awaitPromise: true,
-        silent: true,
-      }, entry.sessionId) as { result?: { value?: T }; exceptionDetails?: unknown };
-
+      const evaluateResp = await this.cdpEval(code, entry.contextId, entry.sessionId) as {
+        result?: { value?: T }; exceptionDetails?: unknown;
+      };
       if (evaluateResp.exceptionDetails) throw new Error('browser_frame_eval_failed');
       return evaluateResp.result?.value as T;
     } catch (error) {
       // Context may be stale after navigation. Drop the cached entry so the
       // next call rebuilds it.
-      await entry.dispose().catch(() => {});
-      this.oopifWorlds.delete(frameKey);
+      await this.releaseFrameWorld(frameKey, entry).catch(() => {});
       throw error;
+    }
+  }
+
+  /**
+   * Wrapper around debugger.sendCommand for Runtime.evaluate that calls the
+   * two-argument form when sessionId is empty. Electron does not document
+   * an empty-string sessionId as equivalent to "no sessionId".
+   */
+  private async cdpEval(
+    code: string,
+    contextId: number,
+    sessionId: string,
+  ): Promise<{ result?: { value?: unknown }; exceptionDetails?: unknown }> {
+    const debuggerApi = this.view.webContents.debugger;
+    const params = {
+      expression: code,
+      contextId,
+      returnByValue: true,
+      awaitPromise: true,
+      silent: true,
+    };
+    type EvalResp = { result?: { value?: unknown }; exceptionDetails?: unknown };
+    if (sessionId) {
+      return debuggerApi.sendCommand('Runtime.evaluate', params, sessionId) as Promise<EvalResp>;
+    }
+    return debuggerApi.sendCommand('Runtime.evaluate', params) as Promise<EvalResp>;
+  }
+
+  /**
+   * Acquires the top-level CDP debugger attachment. Concurrent callers share
+   * the same attach promise. Each successful acquire bumps the refcount; the
+   * matching release in `releaseDebugger` decrements it and detaches when it
+   * reaches zero.
+   */
+  private async acquireDebugger(): Promise<void> {
+    if (this.debuggerAttachPromise) {
+      await this.debuggerAttachPromise;
+      this.debuggerRefs += 1;
+      return;
+    }
+    const debuggerApi = this.view.webContents.debugger;
+    if (debuggerApi.isAttached()) {
+      // Someone else (not us) owns the debugger. We ride on the existing
+      // attachment without taking ownership and never detach it ourselves.
+      if (!this.debuggerOwnedByBrowser) {
+        // Externally owned: do not increment our refcount.
+        return;
+      }
+      this.debuggerRefs += 1;
+      return;
+    }
+    this.debuggerAttachPromise = (async () => {
+      debuggerApi.attach('1.3');
+    })();
+    try {
+      await this.debuggerAttachPromise;
+      this.debuggerOwnedByBrowser = true;
+      this.debuggerRefs += 1;
+    } finally {
+      this.debuggerAttachPromise = null;
+    }
+  }
+
+  private async releaseDebugger(): Promise<void> {
+    if (!this.debuggerOwnedByBrowser) return;
+    if (this.debuggerRefs <= 0) return;
+    this.debuggerRefs -= 1;
+    if (this.debuggerRefs === 0) {
+      const debuggerApi = this.view.webContents.debugger;
+      if (debuggerApi.isAttached()) debuggerApi.detach();
+      this.debuggerOwnedByBrowser = false;
     }
   }
 
@@ -870,28 +954,19 @@ export class ChatterBrowser {
   private async createSameOriginWorld(frame: WebFrameMain): Promise<{
     sessionId: string;
     contextId: number;
-    ownsDebugger: boolean;
-    dispose: () => Promise<void>;
+    sameOrigin: boolean;
+    released: boolean;
   } | undefined> {
-    const contents = this.view.webContents;
-    const debuggerApi = contents.debugger;
-    const ownsDebugger = !debuggerApi.isAttached();
-    let attached = false;
-
-    const dispose = async () => {
-      if (ownsDebugger && debuggerApi.isAttached()) debuggerApi.detach();
-      attached = false;
-    };
-
+    const debuggerApi = this.view.webContents.debugger;
+    await this.acquireDebugger();
     try {
-      if (ownsDebugger) debuggerApi.attach('1.3');
-      attached = true;
-
-      // Find the CDP frameId for `frame` by walking the frame tree.
+      // Walk the full CDP frame tree and locate the node whose path matches
+      // `frame`. We compare by index-path from main frame, so multiple
+      // same-url frames are disambiguated by their position in the tree.
       const frameTreeResp = await debuggerApi.sendCommand('Page.getFrameTree') as {
         frameTree?: CdpFrameTree;
       };
-      const cdpFrameId = findCdpFrameId(frameTreeResp.frameTree, frame.url, frame.name);
+      const cdpFrameId = findCdpFrameIdFor(frame, frameTreeResp.frameTree);
       if (!cdpFrameId) throw new Error('browser_frame_id_not_found');
 
       const worldResp = await debuggerApi.sendCommand('Page.createIsolatedWorld', {
@@ -902,46 +977,33 @@ export class ChatterBrowser {
       const contextId = worldResp.executionContextId;
       if (typeof contextId !== 'number') throw new Error('browser_isolated_world_unavailable');
 
-      // sessionId is empty: we use the top-level (main frame) CDP session.
-      return { sessionId: '', contextId, ownsDebugger, dispose };
+      return { sessionId: '', contextId, sameOrigin: true, released: false };
     } catch (error) {
-      if (attached) await dispose();
+      await this.releaseDebugger();
       throw error;
     }
   }
 
   /**
    * Attaches a CDP session to the OOPIF target, creates an isolated world,
-   * and returns the session/contextId. The caller disposes via the returned
-   * `dispose` callback when the snapshot is invalidated.
+   * and returns the session/contextId.
    */
   private async createOopifWorld(frame: WebFrameMain): Promise<{
     sessionId: string;
     contextId: number;
-    ownsDebugger: boolean;
-    dispose: () => Promise<void>;
-  }> {
-    const contents = this.view.webContents;
-    const debuggerApi = contents.debugger;
-    const ownsDebugger = !debuggerApi.isAttached();
+    sameOrigin: boolean;
+    released: boolean;
+  } | undefined> {
+    const debuggerApi = this.view.webContents.debugger;
+    await this.acquireDebugger();
     let sessionId = '';
-    let disposed = false;
-
-    const dispose = async () => {
-      if (disposed) return;
-      disposed = true;
-      if (sessionId && debuggerApi.isAttached()) {
-        await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId }).catch(() => {});
-        sessionId = '';
-      }
-      if (ownsDebugger && debuggerApi.isAttached()) debuggerApi.detach();
-    };
-
     try {
-      if (ownsDebugger) debuggerApi.attach('1.3');
-
       const targets = await debuggerApi.sendCommand('Target.getTargets') as {
-        targetInfos?: Array<{ targetId?: string; type?: string; url?: string }>;
+        targetInfos?: Array<{
+          targetId?: string;
+          type?: string;
+          url?: string;
+        }>;
       };
       const frameUrl = `${frame.url || ''}`;
       const candidates = (targets.targetInfos || []).filter(
@@ -949,18 +1011,53 @@ export class ChatterBrowser {
       );
       if (candidates.length === 0) throw new Error('browser_frame_target_not_found');
 
-      const attached = await debuggerApi.sendCommand('Target.attachToTarget', {
-        targetId: candidates[0].targetId,
-        flatten: true,
-      }) as { sessionId?: string };
-      sessionId = `${attached.sessionId || ''}`;
-      if (!sessionId) throw new Error('browser_frame_attach_failed');
+      let targetFrameId: string | undefined;
+      if (candidates.length > 1) {
+        const mainTreeResp = await debuggerApi.sendCommand('Page.getFrameTree') as {
+          frameTree?: CdpFrameTree;
+        };
+        targetFrameId = findCdpFrameIdFor(frame, mainTreeResp.frameTree);
+        if (!targetFrameId) throw new Error('browser_frame_id_not_found');
+      }
 
-      const frameTreeResp = await debuggerApi.sendCommand('Page.getFrameTree', {}, sessionId) as {
-        frameTree?: { frame?: { id?: string } };
-      };
-      const cdpFrameId = frameTreeResp.frameTree?.frame?.id;
-      if (!cdpFrameId) throw new Error('browser_frame_tree_unavailable');
+      let cdpFrameId = '';
+      for (const candidate of candidates) {
+        const attached = await debuggerApi.sendCommand('Target.attachToTarget', {
+          targetId: candidate.targetId,
+          flatten: true,
+        }) as { sessionId?: string };
+        const candidateSessionId = `${attached.sessionId || ''}`;
+        if (!candidateSessionId) continue;
+
+        try {
+          // The attached target's frame tree is rooted at the OOPIF itself.
+          // Compare that root id with the target frame id from the main tree;
+          // unlike URL/parent matching, this also distinguishes identical
+          // sibling iframes.
+          const frameTreeResp = await debuggerApi.sendCommand(
+            'Page.getFrameTree',
+            {},
+            candidateSessionId,
+          ) as { frameTree?: CdpFrameTree };
+          const candidateFrameId = frameTreeResp.frameTree?.frame?.id;
+          const matches = candidates.length === 1
+            ? typeof candidateFrameId === 'string'
+            : candidateFrameId === targetFrameId;
+          if (matches && candidateFrameId) {
+            sessionId = candidateSessionId;
+            cdpFrameId = candidateFrameId;
+            break;
+          }
+        } catch {
+          // Detach this candidate below and continue probing the others.
+        }
+
+        await debuggerApi.sendCommand(
+          'Target.detachFromTarget',
+          { sessionId: candidateSessionId },
+        ).catch(() => {});
+      }
+      if (!sessionId || !cdpFrameId) throw new Error('browser_frame_attach_failed');
 
       const worldResp = await debuggerApi.sendCommand('Page.createIsolatedWorld', {
         frameId: cdpFrameId,
@@ -970,17 +1067,46 @@ export class ChatterBrowser {
       const contextId = worldResp.executionContextId;
       if (typeof contextId !== 'number') throw new Error('browser_isolated_world_unavailable');
 
-      return { sessionId, contextId, ownsDebugger, dispose };
+      return { sessionId, contextId, sameOrigin: false, released: false };
     } catch (error) {
-      await dispose();
+      if (sessionId) {
+        await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId }).catch(() => {});
+      }
+      await this.releaseDebugger();
       throw error;
     }
   }
 
+  /**
+   * Releases a single cached frame world: detaches OOPIF Target session if
+   * applicable, and decrements the shared debugger refcount. Idempotent —
+   * a second release on the same entry is a no-op.
+   */
+  private async releaseFrameWorld(
+    frameKey: number,
+    entry: { sessionId: string; contextId: number; sameOrigin: boolean; released: boolean },
+  ): Promise<void> {
+    if (entry.released) return;
+    entry.released = true;
+    // Only delete the map entry if it still points at `entry`. A newer
+    // entry may have been inserted under the same frameKey during the
+    // async release chain (e.g. read after navigation).
+    if (this.oopifWorlds.get(frameKey) === entry) {
+      this.oopifWorlds.delete(frameKey);
+    }
+    const debuggerApi = this.view.webContents.debugger;
+    if (!entry.sameOrigin && entry.sessionId && debuggerApi.isAttached()) {
+      await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId: entry.sessionId }).catch(() => {});
+    }
+    await this.releaseDebugger();
+  }
+
   private async disposeOopifWorlds(): Promise<void> {
-    const entries = Array.from(this.oopifWorlds.values());
+    const entries = Array.from(this.oopifWorlds.entries());
     this.oopifWorlds.clear();
-    await Promise.allSettled(entries.map((entry) => entry.dispose()));
+    for (const [key, entry] of entries) {
+      await this.releaseFrameWorld(key, entry).catch(() => {});
+    }
   }
 
   private async navigateToUrl(url: string): Promise<void> {
@@ -1712,36 +1838,47 @@ export class ChatterBrowser {
     if (frame.frameTreeNodeId === contents.mainFrame.frameTreeNodeId) return null;
 
     // Reuse the cached world for this frame. If none exists yet (frame was
-    // not visited during the read phase), open one on demand.
-    const entry = this.oopifWorlds.get(frame.frameTreeNodeId)
-      ?? await this.createOopifWorld(frame).catch(() => null);
+    // not visited during the read phase), open one on demand. The branch
+    // matches the same-origin / OOPIF decision used by executeInFrameIsolated.
+    const sameOrigin = this.isSameOriginWithMain(frame);
+    let entry = this.oopifWorlds.get(frame.frameTreeNodeId);
+    if (!entry) {
+      entry = sameOrigin
+        ? await this.createSameOriginWorld(frame).catch(() => undefined)
+        : await this.createOopifWorld(frame).catch(() => undefined);
+      if (entry) this.oopifWorlds.set(frame.frameTreeNodeId, entry);
+    }
     if (!entry) throw new Error('browser_frame_input_unavailable');
-    this.oopifWorlds.set(frame.frameTreeNodeId, entry);
 
     // Verify the ref is present in the element map before dispatching.
-    const probe = await contents.debugger.sendCommand('Runtime.evaluate', {
-      expression: `Boolean(globalThis.__cb_e?.has(${JSON.stringify(internalRef)}))`,
-      contextId: entry.contextId,
-      returnByValue: true,
-      silent: true,
-    }, entry.sessionId) as { result?: { value?: boolean } };
+    const probe = await this.cdpEval(
+      `Boolean(globalThis.__cb_e?.has(${JSON.stringify(internalRef)}))`,
+      entry.contextId,
+      entry.sessionId,
+    ) as { result?: { value?: boolean } };
     if (probe?.result?.value !== true) {
       throw new Error('browser_frame_input_unavailable');
     }
 
-    // Input session shares the CDP connection owned by `oopifWorlds`.
+    // For same-origin frames we dispatch via the main CDP session using
+    // global viewport coordinates (x, y as-is). For OOPIFs we dispatch via
+    // the child session using local frame coordinates (transformed).
+    const debuggerApi = contents.debugger;
     const dispatch: MouseEventDispatcher = async (type, x, y, button = 'left', clickCount = 1) => {
-      const localX = (x - transform.offsetX) / transform.scaleX;
-      const localY = (y - transform.offsetY) / transform.scaleY;
       const cdpType = type === 'mouseMove' ? 'mouseMoved' : type === 'mouseDown' ? 'mousePressed' : 'mouseReleased';
-      await contents.debugger.sendCommand('Input.dispatchMouseEvent', {
+      const params = {
         type: cdpType,
-        x: localX,
-        y: localY,
+        x: sameOrigin ? x : (x - transform.offsetX) / transform.scaleX,
+        y: sameOrigin ? y : (y - transform.offsetY) / transform.scaleY,
         button: type === 'mouseMove' ? 'none' : button,
         buttons: type === 'mouseDown' ? 1 : 0,
         clickCount,
-      }, entry.sessionId);
+      };
+      if (sameOrigin) {
+        await debuggerApi.sendCommand('Input.dispatchMouseEvent', params);
+      } else {
+        await debuggerApi.sendCommand('Input.dispatchMouseEvent', params, entry.sessionId);
+      }
     };
 
     return { dispatch, dispose: async () => {} };
