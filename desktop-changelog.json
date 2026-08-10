@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Added built-in web-browser"
+      "Fixed an issue with browser iframes"
     ],
     "ru": [
-      "Добавлен встроенный веб-браузер"
+      "Исправлена проблема с iframe во встроенном браузере"
     ],
     "de": [
-      "Integrierter Webbrowser hinzugefügt"
+      "Ein Problem mit iframes im Browser wurde behoben"
     ],
     "es": [
-      "Se agregó navegador web integrado"
+      "Se corrigió un problema con los iframes del navegador"
     ],
     "fr": [
-      "Navigateur web intégré ajouté"
+      "Correction d’un problème avec les iframes du navigateur"
     ],
     "it": [
-      "Aggiunto browser web integrato"
+      "Risolto un problema con gli iframe del browser"
     ],
     "ja": [
-      "内蔵ウェブブラウザを追加しました"
+      "ブラウザーのiframeに関する問題を修正しました"
     ],
     "ko": [
-      "내장 웹 브라우저 추가됨"
+      "브라우저 iframe 관련 문제를 수정했습니다"
     ],
     "pl": [
-      "Dodano wbudowaną przeglądarkę internetową"
+      "Naprawiono problem z elementami iframe w przeglądarce"
     ],
     "pt-BR": [
-      "Adicionado navegador web integrado"
+      "Corrigido um problema com iframes no navegador"
     ],
     "zh-CN": [
-      "新增内置网页浏览器"
+      "修复了浏览器 iframe 的问题"
     ],
     "tr": [
-      "Yerleşik web tarayıcı eklendi"
+      "Tarayıcı iframe'leriyle ilgili bir sorun düzeltildi"
     ],
     "cs": [
-      "Přidán vestavěný webový prohlížeč"
+      "Opraven problém s prvky iframe v prohlížeči"
     ]
   }
 }
