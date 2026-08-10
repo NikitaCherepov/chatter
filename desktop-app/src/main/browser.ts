@@ -109,6 +109,33 @@ type BrowserReadSnapshot = {
   mode: 'viewport' | 'full';
 };
 
+type CdpFrameTree = {
+  frame?: { id?: string; url?: string; name?: string };
+  childFrames?: CdpFrameTree[];
+};
+
+/**
+ * Walks a CDP frame tree (returned by Page.getFrameTree) looking for a frame
+ * whose URL and/or name matches `targetUrl`/`targetName`. Returns the CDP
+ * frameId, or undefined if not found.
+ */
+function findCdpFrameId(
+  tree: CdpFrameTree | undefined,
+  targetUrl: string,
+  targetName: string,
+): string | undefined {
+  if (!tree?.frame) return undefined;
+  const f = tree.frame;
+  if ((targetUrl && f.url === targetUrl) || (targetName && f.name === targetName)) {
+    return f.id;
+  }
+  for (const child of tree.childFrames || []) {
+    const found = findCdpFrameId(child, targetUrl, targetName);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 function buildTextDelta(previous: string, current: string): string {
   if (previous === current) return '';
   let prefix = 0;
@@ -726,30 +753,91 @@ export class ChatterBrowser {
 
   /**
    * Runs `code` in an isolated execution context of `frame`. The main frame
-   * uses world 1004 (via executeInBrowserWorld). Child frames use a cached
-   * CDP-attached isolated world created on demand.
+   * uses world 1004 (via executeInBrowserWorld). Same-origin child frames
+   * reuse the main frame's isolated world via window.frames[]. Cross-origin
+   * (OOPIF) frames use a cached CDP-attached isolated world.
    */
   private async executeInFrameIsolated<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
     if (frame.isDestroyed()) return Promise.reject(new Error('browser_frame_stale'));
-    if (frame.frameTreeNodeId === this.view.webContents.mainFrame.frameTreeNodeId) {
+    const mainFrame = this.view.webContents.mainFrame;
+    if (frame.frameTreeNodeId === mainFrame.frameTreeNodeId) {
       return this.executeInBrowserWorld<T>(code);
+    }
+    if (this.isSameOriginWithMain(frame)) {
+      return this.executeInSameOriginFrame<T>(frame, code);
     }
     return this.executeInOopifIsolated<T>(frame, code);
   }
 
+  /**
+   * Walks the parent chain from `frame` to the main frame and returns true
+   * only if every hop is same-origin. A single cross-origin boundary makes
+   * the frame tree cross-origin from the main frame's perspective.
+   */
+  private isSameOriginWithMain(frame: WebFrameMain): boolean {
+    const mainFrame = this.view.webContents.mainFrame;
+    const mainOrigin = mainFrame.origin;
+    let current: WebFrameMain | null = frame;
+    while (current) {
+      if (current.origin !== mainOrigin) return false;
+      if (current.frameTreeNodeId === mainFrame.frameTreeNodeId) break;
+      current = current.parent;
+    }
+    return true;
+  }
+
+  /**
+   * Executes `code` in an isolated world of the same-origin child `frame`.
+   * Same-origin iframes live in the same renderer process as the main frame,
+   * so we reuse the main frame's CDP session: no separate Target.attach is
+   * needed. We look up the child's CDP frameId via Page.getFrameTree on the
+   * main session, then call Page.createIsolatedWorld with that frameId.
+   */
+  private async executeInSameOriginFrame<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
+    const contents = this.view.webContents;
+    if (contents.isDestroyed()) throw new Error('webcontents_destroyed');
+
+    const frameKey = frame.frameTreeNodeId;
+    let entry = this.oopifWorlds.get(frameKey);
+
+    if (!entry) {
+      entry = await this.createSameOriginWorld(frame);
+      if (entry) this.oopifWorlds.set(frameKey, entry);
+    }
+    if (!entry) throw new Error('browser_isolated_world_unavailable');
+
+    try {
+      const evaluateResp = await contents.debugger.sendCommand('Runtime.evaluate', {
+        expression: code,
+        contextId: entry.contextId,
+        returnByValue: true,
+        awaitPromise: true,
+        silent: true,
+      }, entry.sessionId) as { result?: { value?: T }; exceptionDetails?: unknown };
+
+      if (evaluateResp.exceptionDetails) throw new Error('browser_frame_eval_failed');
+      return evaluateResp.result?.value as T;
+    } catch (error) {
+      await entry.dispose().catch(() => {});
+      this.oopifWorlds.delete(frameKey);
+      throw error;
+    }
+  }
+
+  /**
+   * Same as executeInSameOriginFrame but for cross-origin (OOPIF) child
+   * frames. OOPIFs run in a separate renderer process and need their own
+   * Target.attachToTarget before Page.createIsolatedWorld can be called.
+   */
   private async executeInOopifIsolated<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
     const contents = this.view.webContents;
     if (contents.isDestroyed()) throw new Error('webcontents_destroyed');
 
-    // Reuse the cached world for this frame if one exists. Otherwise open
-    // a new CDP session and create the isolated world.
     const frameKey = frame.frameTreeNodeId;
     let entry = this.oopifWorlds.get(frameKey);
-    let entryCreated = false;
 
     if (!entry) {
       entry = await this.createOopifWorld(frame);
-      entryCreated = !!entry;
       if (entry) this.oopifWorlds.set(frameKey, entry);
     }
     if (!entry) throw new Error('browser_isolated_world_unavailable');
@@ -768,10 +856,56 @@ export class ChatterBrowser {
     } catch (error) {
       // Context may be stale after navigation. Drop the cached entry so the
       // next call rebuilds it.
-      if (entryCreated) {
-        await entry.dispose().catch(() => {});
-        this.oopifWorlds.delete(frameKey);
-      }
+      await entry.dispose().catch(() => {});
+      this.oopifWorlds.delete(frameKey);
+      throw error;
+    }
+  }
+
+  /**
+   * Creates an isolated world for a same-origin child frame via the main
+   * CDP session. No Target.attach is needed because same-origin frames run
+   * in the same renderer process as the main frame.
+   */
+  private async createSameOriginWorld(frame: WebFrameMain): Promise<{
+    sessionId: string;
+    contextId: number;
+    ownsDebugger: boolean;
+    dispose: () => Promise<void>;
+  } | undefined> {
+    const contents = this.view.webContents;
+    const debuggerApi = contents.debugger;
+    const ownsDebugger = !debuggerApi.isAttached();
+    let attached = false;
+
+    const dispose = async () => {
+      if (ownsDebugger && debuggerApi.isAttached()) debuggerApi.detach();
+      attached = false;
+    };
+
+    try {
+      if (ownsDebugger) debuggerApi.attach('1.3');
+      attached = true;
+
+      // Find the CDP frameId for `frame` by walking the frame tree.
+      const frameTreeResp = await debuggerApi.sendCommand('Page.getFrameTree') as {
+        frameTree?: CdpFrameTree;
+      };
+      const cdpFrameId = findCdpFrameId(frameTreeResp.frameTree, frame.url, frame.name);
+      if (!cdpFrameId) throw new Error('browser_frame_id_not_found');
+
+      const worldResp = await debuggerApi.sendCommand('Page.createIsolatedWorld', {
+        frameId: cdpFrameId,
+        worldName: '',
+        grantUniveralAccess: false,
+      }) as { executionContextId?: number };
+      const contextId = worldResp.executionContextId;
+      if (typeof contextId !== 'number') throw new Error('browser_isolated_world_unavailable');
+
+      // sessionId is empty: we use the top-level (main frame) CDP session.
+      return { sessionId: '', contextId, ownsDebugger, dispose };
+    } catch (error) {
+      if (attached) await dispose();
       throw error;
     }
   }
