@@ -230,6 +230,8 @@ export class ChatterBrowser {
    */
   private debuggerOwnedByBrowser = false;
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
+  /** True once the current main document is usable by browser tools. */
+  private mainDocumentReady = false;
   private interactionInProgress = false;
   private initialNavigationStarted = false;
   private initialNavigationPromise: Promise<void> | null = null;
@@ -286,7 +288,14 @@ export class ChatterBrowser {
       if (!isAllowedRemoteUrl(url)) event.preventDefault();
     });
     contents.on('did-start-loading', () => this.emitState());
-    contents.on('did-stop-loading', () => this.emitState());
+    contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) this.setMainDocumentReady(false);
+    });
+    contents.on('dom-ready', () => this.setMainDocumentReady(true));
+    contents.on('did-stop-loading', () => {
+      this.setMainDocumentReady(true);
+      this.emitState();
+    });
     contents.on('did-navigate', () => {
       this.abortInteraction();
       this.clearSnapshot();
@@ -331,7 +340,9 @@ export class ChatterBrowser {
       title: contents.isDestroyed() ? '' : contents.getTitle(),
       canGoBack: !contents.isDestroyed() && contents.navigationHistory.canGoBack(),
       canGoForward: !contents.isDestroyed() && contents.navigationHistory.canGoForward(),
-      isLoading: !contents.isDestroyed() && contents.isLoading(),
+      // Background ads and analytics can keep Chromium's raw loading flag
+      // active after the main document is already usable.
+      isLoading: !contents.isDestroyed() && contents.isLoading() && !this.mainDocumentReady,
       visible: this.visible,
     };
   }
@@ -566,6 +577,12 @@ export class ChatterBrowser {
   private emitState(): void {
     if (this.host.isDestroyed()) return;
     this.host.webContents.send('browser:state', this.getState());
+  }
+
+  private setMainDocumentReady(ready: boolean): void {
+    if (this.mainDocumentReady === ready) return;
+    this.mainDocumentReady = ready;
+    this.emitState();
   }
 
   private emitDownloadEvent(channel: 'browser:download-requested' | 'browser:download-resolved', payload: unknown): void {
@@ -1172,19 +1189,59 @@ export class ChatterBrowser {
   private async ensureReadablePage(): Promise<void> {
     const contents = this.view.webContents;
     if (!contents.getURL() || contents.getURL() === 'about:blank') {
-      await contents.loadURL(HOME_URL);
-      return;
+      await this.navigateToUrl(HOME_URL);
     }
     if (!contents.isLoading()) return;
+
+    const isDomReady = async (): Promise<boolean> => {
+      if (contents.isDestroyed()) return false;
+      try {
+        return await this.executeInBrowserWorld<boolean>(
+          `Boolean(document.body && (document.readyState === 'interactive' || document.readyState === 'complete'))`,
+        );
+      } catch {
+        // The frame can be briefly unavailable while a navigation commits.
+        return false;
+      }
+    };
+
+    // Chromium's loading state includes subresources, ads and analytics.
+    // Those may remain pending long after the main DOM is interactive, so
+    // don't block browser tools on did-stop-loading alone.
+    if (await isDomReady()) {
+      this.setMainDocumentReady(true);
+      return;
+    }
+
     await new Promise<void>((resolve) => {
+      let settled = false;
       let timer: ReturnType<typeof setTimeout>;
+      let poller: ReturnType<typeof setInterval>;
       const done = () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
+        clearInterval(poller);
+        contents.removeListener('dom-ready', onDomReady);
         contents.removeListener('did-stop-loading', done);
+        // Even if a broken page never reaches DOMContentLoaded, browser tools
+        // proceed after the safety timeout instead of advertising an endless
+        // loading state to the model.
+        this.setMainDocumentReady(true);
         resolve();
       };
+      const check = () => {
+        void isDomReady().then((ready) => {
+          if (ready) done();
+        });
+      };
+      const onDomReady = () => done();
+
+      contents.once('dom-ready', onDomReady);
       contents.once('did-stop-loading', done);
-      timer = setTimeout(done, 15_000);
+      poller = setInterval(check, 100);
+      timer = setTimeout(done, 3_000);
+      check();
     });
   }
 
