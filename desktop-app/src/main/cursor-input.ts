@@ -15,6 +15,14 @@ export type Point = { x: number; y: number };
 
 export type CancellationToken = { cancelled: boolean };
 
+export type MouseEventDispatcher = (
+  type: 'mouseMove' | 'mouseDown' | 'mouseUp',
+  x: number,
+  y: number,
+  button?: 'left' | 'right',
+  clickCount?: number,
+) => void | Promise<void>;
+
 // ──────────────────────────────────────────────────────────────────────────
 // Configuration
 // ──────────────────────────────────────────────────────────────────────────
@@ -330,18 +338,21 @@ export async function click(
   target?: Point,
   trajectory?: Point[],
   validateTarget?: () => boolean | Promise<boolean>,
+  eventDispatcher?: MouseEventDispatcher,
 ): Promise<Point> {
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
   const resolvedTarget = target ?? pickTargetPoint(elementRect);
   const resolvedTrajectory = trajectory ?? generateTrajectory(currentMousePos, resolvedTarget);
+  const dispatch: MouseEventDispatcher = eventDispatcher
+    || ((type, x, y, button, clickCount) => sendMouseEvent(webContents, type, x, y, button, clickCount));
 
   for (let i = 1; i < resolvedTrajectory.length; i++) {
     if (token?.cancelled) throw new Error('click_cancelled');
     if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
     const point = resolvedTrajectory[i];
-    sendMouseEvent(webContents, 'mouseMove', point.x, point.y);
+    await dispatch('mouseMove', point.x, point.y);
 
     await sleep(frameDelayForPoint(resolvedTrajectory, i, resolvedTarget));
   }
@@ -349,7 +360,7 @@ export async function click(
   if (token?.cancelled) throw new Error('click_cancelled');
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
-  sendMouseEvent(webContents, 'mouseMove', resolvedTarget.x, resolvedTarget.y);
+  await dispatch('mouseMove', resolvedTarget.x, resolvedTarget.y);
 
   await sleep(randInt(PRE_CLICK_MIN, PRE_CLICK_MAX));
 
@@ -360,13 +371,13 @@ export async function click(
   if (token?.cancelled) throw new Error('click_cancelled');
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
-  sendMouseEvent(webContents, 'mouseDown', resolvedTarget.x, resolvedTarget.y, 'left', 1);
+  await dispatch('mouseDown', resolvedTarget.x, resolvedTarget.y, 'left', 1);
 
   await sleep(randInt(HOLD_MIN, HOLD_MAX));
 
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
 
-  sendMouseEvent(webContents, 'mouseUp', resolvedTarget.x, resolvedTarget.y, 'left', 1);
+  await dispatch('mouseUp', resolvedTarget.x, resolvedTarget.y, 'left', 1);
 
   return resolvedTarget;
 }

@@ -1,9 +1,9 @@
-import { app, BrowserWindow, dialog, WebContentsView, type DownloadItem, type Rectangle, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, WebContentsView, type DownloadItem, type Rectangle, type WebContents, type WebFrameMain } from 'electron';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, statfsSync, unlinkSync } from 'node:fs';
 import { copyFile, rename, unlink } from 'node:fs/promises';
-import { click as naturalClick, generateTrajectory, pickTargetPoint, scrollWheel, type CancellationToken, type Point } from './cursor-input';
+import { click as naturalClick, generateTrajectory, pickTargetPoint, scrollWheel, type CancellationToken, type MouseEventDispatcher, type Point } from './cursor-input';
 
 export type BrowserState = {
   url: string;
@@ -62,6 +62,35 @@ type BrowserElement = {
   checked?: boolean;
   disabled?: boolean;
   expanded?: boolean;
+  frame?: string;
+};
+
+type BrowserFrameSnapshot = {
+  frameTreeNodeId: number;
+  frameUrl: string;
+  internalRef: string;
+};
+
+type BrowserFrameInfo = {
+  id: string;
+  parent_id: string | null;
+  url: string;
+  name: string;
+  title: string;
+};
+
+type BrowserFrameReadResult = {
+  title?: string;
+  url?: string;
+  text?: string;
+  elements?: BrowserElement[];
+  truncated?: boolean;
+  scroll?: { y: number; viewport_width: number; viewport_height: number; document_height: number };
+};
+
+type BrowserFrameInputSession = {
+  dispatch: MouseEventDispatcher;
+  dispose: () => Promise<void>;
 };
 
 const HOME_URL = 'https://www.google.com/';
@@ -69,6 +98,7 @@ const MAX_PAGE_TEXT = 30_000;
 const MAX_VIEWPORT_TEXT = 10_000;
 const MAX_ELEMENTS = 160;
 const MAX_VIEWPORT_ELEMENTS = 80;
+const MAX_BROWSER_FRAMES = 20;
 const BROWSER_WORLD_ID = 1004;
 const DOWNLOAD_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
 
@@ -135,6 +165,7 @@ export class ChatterBrowser {
   private readonly layoutOwnerRanks = new Map<string, number>();
   private snapshotUrl = '';
   private snapshotElements = new Map<string, BrowserElement>();
+  private snapshotFrames = new Map<string, BrowserFrameSnapshot>();
   private lastReadSnapshot: BrowserReadSnapshot | null = null;
   private interactionInProgress = false;
   private initialNavigationStarted = false;
@@ -456,6 +487,7 @@ export class ChatterBrowser {
   private clearSnapshot(): void {
     this.snapshotUrl = '';
     this.snapshotElements.clear();
+    this.snapshotFrames.clear();
     this.lastReadSnapshot = null;
   }
 
@@ -651,6 +683,25 @@ export class ChatterBrowser {
       [{ code }],
       true,
     ) as Promise<T>;
+  }
+
+  private findFrame(frameTreeNodeId: number): WebFrameMain | null {
+    const contents = this.view.webContents;
+    if (contents.isDestroyed()) return null;
+    if (!contents.mainFrame.isDestroyed() && contents.mainFrame.frameTreeNodeId === frameTreeNodeId) {
+      return contents.mainFrame;
+    }
+    return contents.mainFrame.framesInSubtree.find(
+      (frame) => !frame.isDestroyed() && frame.frameTreeNodeId === frameTreeNodeId,
+    ) || null;
+  }
+
+  private executeInFrame<T = unknown>(frame: WebFrameMain, code: string): Promise<T> {
+    if (frame.isDestroyed()) return Promise.reject(new Error('browser_frame_stale'));
+    if (frame.frameTreeNodeId === this.view.webContents.mainFrame.frameTreeNodeId) {
+      return this.executeInBrowserWorld<T>(code);
+    }
+    return frame.executeJavaScript(code, true) as Promise<T>;
   }
 
   private async navigateToUrl(url: string): Promise<void> {
@@ -853,7 +904,10 @@ export class ChatterBrowser {
             [left + insetX, bottom - insetY],
             [right - insetX, bottom - insetY],
           ];
-          if (points.some(([x, y]) => composedContains(element, deepElementFromPoint(x, y)))) return true;
+          if (points.some(([x, y]) => {
+            const hit = deepElementFromPoint(x, y);
+            return composedContains(element, hit) || (hit?.shadowRoot && composedContains(hit, element));
+          })) return true;
         }
         return !hasViewportRect;
       };
@@ -876,6 +930,23 @@ export class ChatterBrowser {
           return Array.from(node.shadowRoot.childNodes);
         }
         return Array.from(node.childNodes || []);
+      };
+      const getComposedText = (root) => {
+        const parts = [];
+        const stack = getComposedChildren(root).reverse();
+        while (stack.length > 0) {
+          const node = stack.pop();
+          if (node.nodeType === Node.TEXT_NODE) {
+            const value = clean(node.nodeValue || '', 500);
+            if (value && parts[parts.length - 1] !== value) parts.push(value);
+            if (parts.join(' ').length >= 500) break;
+            continue;
+          }
+          if (node instanceof Element && node.matches('script,style,noscript,template')) continue;
+          const children = getComposedChildren(node);
+          for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]);
+        }
+        return clean(parts.join(' '), 500);
       };
       const collectText = (root, viewportOnly) => {
         const parts = [];
@@ -978,6 +1049,8 @@ export class ChatterBrowser {
           : '';
         const ariaChecked = element.getAttribute('aria-checked');
         const ariaExpanded = element.getAttribute('aria-expanded');
+        const directText = clean(element.innerText || element.textContent || '', 500);
+        const composedText = directText || getComposedText(element);
         const role = clean(
           element.getAttribute('role')
           || (element.hasAttribute('onclick') || buttonInputTypes.has(inputType || '') ? 'button' : '')
@@ -1003,7 +1076,7 @@ export class ChatterBrowser {
           ref,
           tag,
           role,
-          text: clean(element.getAttribute('aria-label') || element.innerText || element.textContent || associatedLabelText || inputButtonText || nearbyToggleText || element.getAttribute('title') || attributeSource.getAttribute('name') || '', 500),
+          text: clean(element.getAttribute('aria-label') || composedText || associatedLabelText || inputButtonText || nearbyToggleText || element.getAttribute('title') || attributeSource.getAttribute('name') || '', 500),
           href: tag === 'a' ? clean(element.href || '', 1000) : undefined,
           inputType,
           placeholder: associatedInput || element instanceof HTMLTextAreaElement ? clean(attributeSource.getAttribute('placeholder') || '', 300) : undefined,
@@ -1026,37 +1099,132 @@ export class ChatterBrowser {
         truncated: textResult.truncated,
         scroll: {
           y: Math.round(window.scrollY),
+          viewport_width: Math.round(window.innerWidth),
           viewport_height: Math.round(window.innerHeight),
           document_height: Math.round(document.documentElement?.scrollHeight || document.body?.scrollHeight || 0),
         },
       };
     })()`;
 
-    const result = await this.executeInBrowserWorld<{
-      title?: string;
-      url?: string;
-      text?: string;
-      elements?: BrowserElement[];
-      truncated?: boolean;
-      scroll?: { y: number; viewport_height: number; document_height: number };
-    }>(script);
+    const contents = this.view.webContents;
+    const mainFrame = contents.mainFrame;
+    const allFrames = [
+      mainFrame,
+      ...mainFrame.framesInSubtree.filter(
+        (frame) => !frame.isDestroyed() && frame.frameTreeNodeId !== mainFrame.frameTreeNodeId,
+      ),
+    ];
+    const frames = allFrames.slice(0, MAX_BROWSER_FRAMES);
+    const frameReads = await Promise.allSettled(frames.map(async (frame) => ({
+      frame,
+      result: await this.executeInFrame<BrowserFrameReadResult>(frame, script),
+    })));
 
-    const url = `${result.url || this.view.webContents.getURL()}`;
-    const text = result.text || '';
-    const elements = result.elements || [];
+    const successfulReads = frameReads.flatMap((read) => read.status === 'fulfilled' ? [read.value] : []);
+    const mainRead = successfulReads.find(({ frame }) => frame.frameTreeNodeId === mainFrame.frameTreeNodeId);
+    if (!mainRead) throw new Error('browser_main_frame_unreadable');
+
+    const frameLayouts = await Promise.allSettled(successfulReads.map(async (read) => {
+      if (read.frame.frameTreeNodeId === mainFrame.frameTreeNodeId) return { ...read, include: true };
+      const transform = await this.getFrameTransform(read.frame);
+      const frameViewportWidth = Math.max(0, read.result.scroll?.viewport_width || 0) * Math.abs(transform.scaleX);
+      const frameViewportHeight = Math.max(0, read.result.scroll?.viewport_height || 0) * Math.abs(transform.scaleY);
+      const margin = 300;
+      const nearViewport = transform.offsetX + frameViewportWidth >= -margin
+        && transform.offsetY + frameViewportHeight >= -margin
+        && transform.offsetX <= transform.viewportW + margin
+        && transform.offsetY <= transform.viewportH + margin;
+      return {
+        ...read,
+        include: transform.visible && (effectiveMode === 'full' || nearViewport),
+      };
+    }));
+    const readableReads = frameLayouts.flatMap((layout) => (
+      layout.status === 'fulfilled' && layout.value.include ? [layout.value] : []
+    ));
+
+    const url = `${mainRead.result.url || contents.getURL()}`;
+    const textParts: string[] = [];
+    const elements: BrowserElement[] = [];
+    const frameInfos: BrowserFrameInfo[] = [];
+    const frameSnapshots = new Map<string, BrowserFrameSnapshot>();
+    let textLength = 0;
+    let truncated = allFrames.length > frames.length
+      || frameReads.some((read) => read.status === 'rejected')
+      || frameLayouts.some((layout) => layout.status === 'rejected');
+
+    for (const { frame, result } of readableReads) {
+      const isMainFrame = frame.frameTreeNodeId === mainFrame.frameTreeNodeId;
+      const frameId = isMainFrame ? 'main' : `frame-${frame.frameTreeNodeId}`;
+      const liveFrameUrl = `${frame.url || ''}`;
+      const frameUrl = `${result.url || liveFrameUrl}`;
+      const frameTitle = `${result.title || ''}`;
+      const frameText = `${result.text || ''}`;
+
+      if (!isMainFrame && (frameText || (result.elements?.length || 0) > 0)) {
+        frameInfos.push({
+          id: frameId,
+          parent_id: frame.parent && frame.parent.frameTreeNodeId !== mainFrame.frameTreeNodeId
+            ? `frame-${frame.parent.frameTreeNodeId}`
+            : 'main',
+          url: frameUrl.slice(0, 1000),
+          name: `${frame.name || ''}`.slice(0, 200),
+          title: frameTitle.slice(0, 500),
+        });
+      }
+
+      if (frameText && textLength < maxText) {
+        const prefix = isMainFrame
+          ? ''
+          : `[iframe ${frameId}${frameTitle ? ` title=${JSON.stringify(frameTitle)}` : ''}${frameUrl ? ` url=${JSON.stringify(frameUrl)}` : ''}]\n`;
+        const separator = textParts.length > 0 ? '\n' : '';
+        const segment = `${separator}${prefix}${frameText}`;
+        const remaining = maxText - textLength;
+        textParts.push(segment.slice(0, remaining));
+        textLength += Math.min(segment.length, remaining);
+        if (segment.length > remaining) truncated = true;
+      } else if (frameText) {
+        truncated = true;
+      }
+
+      if (result.truncated === true) truncated = true;
+      for (const element of result.elements || []) {
+        if (elements.length >= maxElements) {
+          truncated = true;
+          break;
+        }
+        const internalRef = element.ref;
+        const externalRef = isMainFrame ? internalRef : `${frameId}:${internalRef}`;
+        const externalElement: BrowserElement = {
+          ...element,
+          ref: externalRef,
+          ...(isMainFrame ? {} : { frame: frameId }),
+        };
+        elements.push(externalElement);
+        frameSnapshots.set(externalRef, {
+          frameTreeNodeId: frame.frameTreeNodeId,
+          frameUrl: liveFrameUrl,
+          internalRef,
+        });
+      }
+    }
+
+    const text = textParts.join('');
     const previous = this.lastReadSnapshot;
     const current: BrowserReadSnapshot = { url, text, elements, mode: effectiveMode };
 
     this.snapshotUrl = url;
     this.snapshotElements = new Map(elements.map((element) => [element.ref, element]));
+    this.snapshotFrames = frameSnapshots;
     this.lastReadSnapshot = current;
 
     const common = {
       status: 'success',
-      title: result.title || '',
+      title: mainRead.result.title || '',
       url,
-      scroll: result.scroll,
-      truncated: result.truncated === true,
+      scroll: mainRead.result.scroll,
+      truncated,
+      ...(frameInfos.length > 0 ? { frames: frameInfos } : {}),
     };
 
     if (mode === 'delta' && previous?.url === url && previous.mode === effectiveMode) {
@@ -1092,16 +1260,254 @@ export class ChatterBrowser {
     return element;
   }
 
+  private getSnapshotTarget(ref: string): {
+    element: BrowserElement;
+    frame: WebFrameMain;
+    internalRef: string;
+  } {
+    const element = this.getSnapshotElement(ref);
+    const snapshot = this.snapshotFrames.get(ref);
+    if (!snapshot) throw new Error('browser_snapshot_stale');
+    const frame = this.findFrame(snapshot.frameTreeNodeId);
+    if (!frame || frame.url !== snapshot.frameUrl) throw new Error('browser_frame_stale');
+    return { element, frame, internalRef: snapshot.internalRef };
+  }
+
+  private async getTargetCheckedState(frame: WebFrameMain, internalRef: string): Promise<boolean | undefined> {
+    return this.executeInFrame<boolean | undefined>(frame, `(() => {
+      const target = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
+      if (!target || !target.isConnected) return undefined;
+      const element = target instanceof HTMLLabelElement && target.control ? target.control : target;
+      if (element instanceof HTMLInputElement && ['checkbox', 'radio'].includes(element.type.toLowerCase())) {
+        return element.checked;
+      }
+      const ariaChecked = element.getAttribute?.('aria-checked');
+      return ariaChecked === 'true' ? true : ariaChecked === 'false' ? false : undefined;
+    })()`);
+  }
+
+  private getChildFrameIndex(parent: WebFrameMain, child: WebFrameMain): number {
+    const index = parent.frames.findIndex((frame) => frame.frameTreeNodeId === child.frameTreeNodeId);
+    if (index < 0) throw new Error('browser_frame_stale');
+    return index;
+  }
+
+  private async getFrameOwnerMetrics(
+    parent: WebFrameMain,
+    child: WebFrameMain,
+    scrollIntoView: boolean,
+  ): Promise<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    clientLeft: number;
+    clientTop: number;
+    offsetWidth: number;
+    offsetHeight: number;
+    visible: boolean;
+  }> {
+    const childIndex = this.getChildFrameIndex(parent, child);
+    const script = `(async () => {
+      const childWindow = window.frames[${childIndex}];
+      const childUrl = ${JSON.stringify(child.url)};
+      const getComposedChildren = (node) => {
+        if (node instanceof HTMLSlotElement) {
+          const assigned = node.assignedNodes({ flatten: true });
+          return assigned.length > 0 ? assigned : Array.from(node.childNodes);
+        }
+        if (node instanceof Element && node.shadowRoot) return Array.from(node.shadowRoot.childNodes);
+        return Array.from(node.childNodes || []);
+      };
+      const frameElements = [];
+      const stack = getComposedChildren(document).reverse();
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (!(node instanceof Element)) continue;
+        if (node instanceof HTMLIFrameElement || node instanceof HTMLFrameElement) frameElements.push(node);
+        const children = getComposedChildren(node);
+        for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]);
+      }
+      let owner = frameElements.find((element) => childWindow && element.contentWindow === childWindow) || null;
+      if (!owner && childUrl) {
+        const urlMatches = frameElements.filter((element) => element.src === childUrl);
+        if (urlMatches.length === 1) owner = urlMatches[0];
+      }
+      if (!owner) owner = frameElements[${childIndex}] || null;
+      if (!owner) throw new Error('browser_frame_owner_not_found');
+      if (${scrollIntoView ? 'true' : 'false'}) {
+        owner.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 350));
+      }
+      if (!owner.isConnected) throw new Error('browser_frame_stale');
+      const rect = owner.getBoundingClientRect();
+      const style = window.getComputedStyle(owner);
+      let visible = rect.width > 0.5
+        && rect.height > 0.5
+        && style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && style.visibility !== 'collapse'
+        && style.contentVisibility !== 'hidden'
+        && Number.parseFloat(style.opacity || '1') > 0;
+      if (visible && typeof owner.checkVisibility === 'function') {
+        try {
+          visible = owner.checkVisibility({
+            checkOpacity: true,
+            checkVisibilityCSS: true,
+            opacityProperty: true,
+            visibilityProperty: true,
+          });
+        } catch { /* explicit checks above are the fallback */ }
+      }
+      return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        clientLeft: owner.clientLeft,
+        clientTop: owner.clientTop,
+        offsetWidth: owner.offsetWidth,
+        offsetHeight: owner.offsetHeight,
+        visible,
+      };
+    })()`;
+    return this.executeInFrame(parent, script);
+  }
+
+  private async scrollFrameChainIntoView(frame: WebFrameMain): Promise<void> {
+    const chain: Array<{ parent: WebFrameMain; child: WebFrameMain }> = [];
+    let child: WebFrameMain | null = frame;
+    while (child) {
+      const parent: WebFrameMain | null = child.parent;
+      if (!parent) break;
+      chain.push({ parent, child });
+      child = parent;
+    }
+    for (const pair of chain.reverse()) {
+      await this.getFrameOwnerMetrics(pair.parent, pair.child, true);
+    }
+  }
+
+  private async getFrameTransform(frame: WebFrameMain): Promise<{
+    offsetX: number;
+    offsetY: number;
+    scaleX: number;
+    scaleY: number;
+    viewportW: number;
+    viewportH: number;
+    visible: boolean;
+  }> {
+    let offsetX = 0;
+    let offsetY = 0;
+    let scaleX = 1;
+    let scaleY = 1;
+    let visible = true;
+    let child: WebFrameMain | null = frame;
+
+    while (child) {
+      const parent: WebFrameMain | null = child.parent;
+      if (!parent) break;
+      const owner = await this.getFrameOwnerMetrics(parent, child, false);
+      const ownerScaleX = owner.offsetWidth > 0 ? owner.width / owner.offsetWidth : 1;
+      const ownerScaleY = owner.offsetHeight > 0 ? owner.height / owner.offsetHeight : 1;
+      offsetX = owner.left + owner.clientLeft * ownerScaleX + offsetX * ownerScaleX;
+      offsetY = owner.top + owner.clientTop * ownerScaleY + offsetY * ownerScaleY;
+      scaleX *= ownerScaleX;
+      scaleY *= ownerScaleY;
+      visible = visible && owner.visible;
+      child = parent;
+    }
+
+    const viewport = await this.executeInBrowserWorld<{ width: number; height: number }>(
+      `({ width: window.innerWidth, height: window.innerHeight })`,
+    );
+    return { offsetX, offsetY, scaleX, scaleY, viewportW: viewport.width, viewportH: viewport.height, visible };
+  }
+
+  private async createFrameInputSession(
+    frame: WebFrameMain,
+    internalRef: string,
+    transform: Awaited<ReturnType<ChatterBrowser['getFrameTransform']>>,
+  ): Promise<BrowserFrameInputSession | null> {
+    const contents = this.view.webContents;
+    if (frame.frameTreeNodeId === contents.mainFrame.frameTreeNodeId) return null;
+
+    const debuggerApi = contents.debugger;
+    const ownsDebugger = !debuggerApi.isAttached();
+    let sessionId = '';
+
+    const dispose = async () => {
+      if (sessionId && debuggerApi.isAttached()) {
+        await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId }).catch(() => {});
+        sessionId = '';
+      }
+      if (ownsDebugger && debuggerApi.isAttached()) debuggerApi.detach();
+    };
+
+    try {
+      if (ownsDebugger) debuggerApi.attach('1.3');
+      const targets = await debuggerApi.sendCommand('Target.getTargets') as {
+        targetInfos?: Array<{ targetId?: string; type?: string; url?: string }>;
+      };
+      const candidates = (targets.targetInfos || []).filter(
+        (target) => target.type === 'iframe' && target.url === frame.url && target.targetId,
+      );
+
+      for (const candidate of candidates) {
+        const attached = await debuggerApi.sendCommand('Target.attachToTarget', {
+          targetId: candidate.targetId,
+          flatten: true,
+        }) as { sessionId?: string };
+        const candidateSessionId = `${attached.sessionId || ''}`;
+        if (!candidateSessionId) continue;
+        const probe = await debuggerApi.sendCommand('Runtime.evaluate', {
+          expression: `Boolean(globalThis.__chatterBrowserElements?.has(${JSON.stringify(internalRef)}))`,
+          returnByValue: true,
+        }, candidateSessionId).catch(() => null) as { result?: { value?: boolean } } | null;
+        if (probe?.result?.value === true) {
+          sessionId = candidateSessionId;
+          break;
+        }
+        await debuggerApi.sendCommand('Target.detachFromTarget', { sessionId: candidateSessionId }).catch(() => {});
+      }
+
+      if (!sessionId) {
+        await dispose();
+        if (candidates.length > 0) throw new Error('browser_frame_input_unavailable');
+        return null;
+      }
+
+      const dispatch: MouseEventDispatcher = async (type, x, y, button = 'left', clickCount = 1) => {
+        const localX = (x - transform.offsetX) / transform.scaleX;
+        const localY = (y - transform.offsetY) / transform.scaleY;
+        const cdpType = type === 'mouseMove' ? 'mouseMoved' : type === 'mouseDown' ? 'mousePressed' : 'mouseReleased';
+        await debuggerApi.sendCommand('Input.dispatchMouseEvent', {
+          type: cdpType,
+          x: localX,
+          y: localY,
+          button: type === 'mouseMove' ? 'none' : button,
+          buttons: type === 'mouseDown' ? 1 : 0,
+          clickCount,
+        }, sessionId);
+      };
+
+      return { dispatch, dispose };
+    } catch (error) {
+      await dispose();
+      throw error;
+    }
+  }
+
   private async clickElement(ref: string): Promise<unknown> {
     if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
-    const expected = this.getSnapshotElement(ref);
+    const { element: expected, frame, internalRef } = this.getSnapshotTarget(ref);
     this.interactionInProgress = true;
 
     const contents = this.view.webContents;
 
     // -- Phase 1: bring the element into view and read a stable clickable rect --
     const rectScript = `(async () => {
-      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
       if (!element) throw new Error('browser_element_not_found');
       element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
       await new Promise(resolve => setTimeout(resolve, 350));
@@ -1121,14 +1527,20 @@ export class ChatterBrowser {
     })()`;
 
     let rect: { x: number; y: number; width: number; height: number; viewportW: number; viewportH: number };
+    let transform: Awaited<ReturnType<ChatterBrowser['getFrameTransform']>>;
     try {
-      rect = await this.executeInBrowserWorld(rectScript);
+      await this.scrollFrameChainIntoView(frame);
+      rect = await this.executeInFrame(frame, rectScript);
+      transform = await this.getFrameTransform(frame);
+      if (!transform.visible || Math.abs(transform.scaleX) < 0.001 || Math.abs(transform.scaleY) < 0.001) {
+        throw new Error('click_target_moved');
+      }
     } catch (error) {
       this.interactionInProgress = false;
       throw error;
     }
 
-    const viewport = { width: rect.viewportW, height: rect.viewportH };
+    const viewport = { width: transform.viewportW, height: transform.viewportH };
 
     // Initialise cursor position if this is the first interaction.
     if (this.cursorPos.x === 0 && this.cursorPos.y === 0) {
@@ -1136,10 +1548,19 @@ export class ChatterBrowser {
     }
 
     // -- Phase 2: pick a single target (used by both visual + native) --
-    const elementRect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    const elementRect = {
+      x: transform.offsetX + rect.x * transform.scaleX,
+      y: transform.offsetY + rect.y * transform.scaleY,
+      width: rect.width * transform.scaleX,
+      height: rect.height * transform.scaleY,
+    };
     // pickTargetPoint clips to viewport internally, so partially off-screen
     // elements and tiny elements are handled correctly.
     const target = pickTargetPoint(elementRect, viewport);
+    const localTarget = {
+      x: (target.x - transform.offsetX) / transform.scaleX,
+      y: (target.y - transform.offsetY) / transform.scaleY,
+    };
     const trajectory = generateTrajectory(this.cursorPos, target);
 
     // -- Phase 3: show visual cursor overlay --
@@ -1184,10 +1605,12 @@ export class ChatterBrowser {
     // -- Phase 4: stream native sendInputEvent via cursor-input module --
     this.clickToken = { cancelled: false };
     const token = this.clickToken;
+    let frameInputSession: BrowserFrameInputSession | null = null;
+    let actualChecked = expected.checked;
 
     // Highlight element outline — save original values for restoration.
-    this.executeInBrowserWorld(`(() => {
-      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+    this.executeInFrame(frame, `(() => {
+      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
       if (!element) return false;
       globalThis.__chatterBrowserSavedOutline = element.style.outline;
       globalThis.__chatterBrowserSavedOutlineOffset = element.style.outlineOffset;
@@ -1197,16 +1620,18 @@ export class ChatterBrowser {
     })()`).catch(() => {});
 
     try {
+      frameInputSession = await this.createFrameInputSession(frame, internalRef, transform);
       // Pass the pre-selected target AND trajectory so visual cursor and
       // native events follow the exact same path and speed.
-      const validateTarget = () => this.executeInBrowserWorld<boolean>(`(() => {
-        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+      const validateTarget = async () => {
+        const localTargetValid = await this.executeInFrame<boolean>(frame, `(() => {
+        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
         if (!element || !element.isConnected) return false;
-        let hit = document.elementFromPoint(${target.x}, ${target.y});
+        let hit = document.elementFromPoint(${localTarget.x}, ${localTarget.y});
         const visitedRoots = new Set();
         while (hit?.shadowRoot && !visitedRoots.has(hit.shadowRoot)) {
           visitedRoots.add(hit.shadowRoot);
-          const shadowHit = hit.shadowRoot.elementFromPoint(${target.x}, ${target.y});
+          const shadowHit = hit.shadowRoot.elementFromPoint(${localTarget.x}, ${localTarget.y});
           if (!shadowHit || shadowHit === hit) break;
           hit = shadowHit;
         }
@@ -1225,8 +1650,18 @@ export class ChatterBrowser {
           }
           return false;
         };
-        return !!hit && composedContains(element, hit);
-      })()`);
+        return !!hit && (
+          composedContains(element, hit)
+          || (hit.shadowRoot && composedContains(hit, element))
+        );
+        })()`);
+        if (!localTargetValid) return false;
+        const currentTransform = await this.getFrameTransform(frame);
+        if (!currentTransform.visible) return false;
+        const currentTargetX = currentTransform.offsetX + localTarget.x * currentTransform.scaleX;
+        const currentTargetY = currentTransform.offsetY + localTarget.y * currentTransform.scaleY;
+        return Math.abs(currentTargetX - target.x) <= 2 && Math.abs(currentTargetY - target.y) <= 2;
+      };
       this.cursorPos = await naturalClick(
         contents,
         elementRect,
@@ -1235,18 +1670,35 @@ export class ChatterBrowser {
         target,
         trajectory,
         validateTarget,
+        frameInputSession?.dispatch,
       );
+
+      if (expected.checked !== undefined) {
+        const shouldChange = expected.inputType === 'checkbox'
+          || expected.role === 'checkbox'
+          || expected.role === 'switch'
+          || ((expected.inputType === 'radio' || expected.role === 'radio') && expected.checked === false);
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          actualChecked = await this.getTargetCheckedState(frame, internalRef);
+          if (!shouldChange || actualChecked === undefined || actualChecked !== expected.checked) break;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (shouldChange && actualChecked === expected.checked) throw new Error('browser_click_no_effect');
+      }
 
       // Brief settle, then restore outline + hide cursor.
       await new Promise(resolve => setTimeout(resolve, 200));
-      await this.executeInBrowserWorld(`(() => {
-        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+      await this.executeInFrame(frame, `(() => {
+        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
         if (element && element.isConnected) {
           element.style.outline = globalThis.__chatterBrowserSavedOutline || '';
           element.style.outlineOffset = globalThis.__chatterBrowserSavedOutlineOffset || '';
         }
         delete globalThis.__chatterBrowserSavedOutline;
         delete globalThis.__chatterBrowserSavedOutlineOffset;
+        return true;
+      })()`).catch(() => {});
+      await this.executeInBrowserWorld(`(() => {
         const cursor = document.getElementById('__chatter-browser-cursor');
         if (cursor) cursor.style.opacity = '0';
         globalThis.__chatterBrowserCursorPosition = { x: ${target.x}, y: ${target.y} };
@@ -1255,23 +1707,35 @@ export class ChatterBrowser {
 
       await visualAnimation;
 
-      return { status: 'success', action: 'click', element: expected, ...this.getState() };
+      const resultElement = actualChecked === undefined ? expected : { ...expected, checked: actualChecked };
+      this.snapshotElements.set(ref, resultElement);
+
+      return {
+        status: 'success',
+        action: 'click',
+        element: resultElement,
+        ...this.getState(),
+      };
     } catch (error) {
       // Clean up: restore outline + hide visual cursor on error / cancellation.
-      await this.executeInBrowserWorld(`(() => {
-        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+      await this.executeInFrame(frame, `(() => {
+        const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
         if (element && element.isConnected) {
           element.style.outline = globalThis.__chatterBrowserSavedOutline || '';
           element.style.outlineOffset = globalThis.__chatterBrowserSavedOutlineOffset || '';
         }
         delete globalThis.__chatterBrowserSavedOutline;
         delete globalThis.__chatterBrowserSavedOutlineOffset;
+        return true;
+      })()`).catch(() => {});
+      await this.executeInBrowserWorld(`(() => {
         const cursor = document.getElementById('__chatter-browser-cursor');
         if (cursor) cursor.style.opacity = '0';
         return true;
       })()`).catch(() => {});
       throw error;
     } finally {
+      await frameInputSession?.dispose();
       this.clickToken = null;
       this.interactionInProgress = false;
     }
@@ -1279,7 +1743,7 @@ export class ChatterBrowser {
 
   private async fillElement(ref: string, text: string): Promise<unknown> {
     if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
-    const expected = this.getSnapshotElement(ref);
+    const { element: expected, frame, internalRef } = this.getSnapshotTarget(ref);
     this.interactionInProgress = true;
     if (expected.sensitive) {
       this.interactionInProgress = false;
@@ -1291,7 +1755,7 @@ export class ChatterBrowser {
     }
 
     const script = `(() => {
-      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(ref)});
+      const element = globalThis.__chatterBrowserElements?.get(${JSON.stringify(internalRef)});
       if (!element) throw new Error('browser_element_not_found');
       if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element.isContentEditable)) {
         throw new Error('browser_element_not_editable');
@@ -1314,7 +1778,7 @@ export class ChatterBrowser {
       return true;
     })()`;
     try {
-      await this.executeInBrowserWorld(script);
+      await this.executeInFrame(frame, script);
       return { status: 'success', action: 'fill', element: expected, characters: text.length, ...this.getState() };
     } finally {
       this.interactionInProgress = false;
