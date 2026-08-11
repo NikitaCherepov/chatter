@@ -177,6 +177,7 @@ Voce sempre pode ver se alguem compartilhou sua chave e pode revoga-la a qualque
 27. Transcrever mensagens de voz do Telegram! (requer um servidor potente com pelo menos 2 nucleos, 2 GB de RAM e voice-api ativado)
 28. Criacao conveniente e rapida de ramificacoes de chat, alem de regeneracao com instrucoes.
 29. O bot sugere um comando mas voce nao sabe o que ele faz? Pressione o botao Review e o modelo Lite avalia seus riscos.
+30. Usar o navegador integrado ao Chatter Desktop. O assistente pode ler a página que você abriu, rolá-la, abrir links, clicar em controles e preencher campos comuns. As ações do navegador podem exigir sua confirmação, os downloads são sempre pausados para aprovação e os campos de senha não ficam disponíveis para o modelo.
 
 ---
 

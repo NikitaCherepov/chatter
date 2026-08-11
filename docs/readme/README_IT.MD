@@ -177,6 +177,7 @@ Puoi sempre vedere se qualcuno ha condiviso la tua chiave e puoi revocarla in qu
  27. Trascrivere messaggi vocali da Telegram! (richiede un server potente con almeno 2 core, 2 GB di RAM e voice-api abilitato)
  28. Creazione comoda e veloce di rami di chat, più rigenerazione con istruzioni.
  29. Il bot suggerisce un comando ma non sai cosa fa? Premi il pulsante Review e il modello Lite ne valuta i rischi.
+ 30. Usare il browser integrato in Chatter Desktop. L’assistente può leggere la pagina che hai aperto, scorrerla, aprire link, fare clic sui controlli e compilare i campi normali. Le azioni del browser possono richiedere la tua conferma, i download vengono sempre messi in pausa per l’approvazione e i campi password non sono accessibili al modello.
 
 ---
 

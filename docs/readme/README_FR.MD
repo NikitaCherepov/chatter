@@ -177,6 +177,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 27. Transcrire les messages vocaux de Telegram! (necessite un serveur puissant avec au moins 2 curs, 2 Go de RAM et voice-api active)
 28. Creation pratique et rapide de branches de discussion, ainsi que regeneration avec instructions.
 29. Le bot suggere une commande mais vous ne savez pas ce quelle fait? Appuyez sur le bouton Review et le modele Lite evalue ses risques.
+30. Utiliser le navigateur intégré à Chatter Desktop. L’assistant peut lire la page que vous avez ouverte, la faire défiler, ouvrir des liens, cliquer sur des contrôles et remplir des champs ordinaires. Les actions du navigateur peuvent nécessiter votre confirmation, les téléchargements sont toujours suspendus pour approbation et les champs de mot de passe restent inaccessibles au modèle.
 
 ---
 

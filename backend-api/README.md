@@ -963,6 +963,19 @@ Local estimation of message and context size via `gpt-tokenizer` (BPE `o200k_bas
 
 Tools are available to the AI via tool calling. Defined in `services/ai.ts` in `toolDefinitions`.
 
+### Embedded browser (`browser_control`)
+
+`browser_control` lets the model work with the browser running inside Chatter Desktop. The Desktop client must be online; requests from either Desktop or a linked Telegram account are routed to it through WebSocket IPC.
+
+- Actions: `open`, `read`, `back`, `forward`, `reload`, `scroll`, `click`, and `fill`.
+- `read` returns page text and temporary element refs in `viewport`, `delta`, or `full` mode. Results are wrapped in `<untrusted_web_content>` before they return to the model.
+- `open`, `click`, and `fill` use the user's confirmation settings (safe default: ask). A confirmed click or fill can also be allowed for the current site until Chatter closes.
+- Downloads are intercepted independently of the action that started them. The download waits for approval for up to five minutes and is then saved to a chosen path or the Downloads folder; rejection or expiry cancels it.
+- Password and other sensitive fields cannot be read or filled by the model. Ordinary visible text fields and drafts can be included in a page read.
+- `disable_pc_control_full` or `disable_internet` removes the tool from the model's available tools.
+
+The backend never receives the browser's cookie jar or site storage. It receives only the structured result of the requested browser action.
+
 The agent loop is limited by constants in `services/ai.ts`: `MAX_TOOL_LOOPS = 80`, `MAX_TOOL_LOOPS_VOICE = 10`. This is a limit on "model → tool calls → model" iterations, not a strict limit on the number of individual tool calls: the model can return multiple tool calls in a single iteration.
 
 ### Reasoning and tool-call metadata

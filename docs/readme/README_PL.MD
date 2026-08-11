@@ -177,6 +177,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 27. Transkrybuje wiadomości głosowe z Telegramu! (wymaga wydajnego serwera z co najmniej 2 rdzeniami, 2 GB RAM i włączonym voice-api)
 28. Wygodne i szybkie tworzenie gałęzi czatu oraz regeneracja z instrukcjami.
 29. Bot sugeruje polecenie, ale nie wiesz, co robi? Naciśnij przycisk Review, a model Lite oceni jego ryzyko.
+30. Korzystać z przeglądarki wbudowanej w Chatter Desktop. Asystent może czytać otwartą przez użytkownika stronę, przewijać ją, otwierać linki, klikać elementy sterujące i wypełniać zwykłe pola. Działania przeglądarki mogą wymagać potwierdzenia, pobieranie plików jest zawsze wstrzymywane do zatwierdzenia, a pola haseł są niedostępne dla modelu.
 
 ---
 

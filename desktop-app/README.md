@@ -369,6 +369,39 @@ Leaflet map with three layers (light/satellite/standard), controlled via a custo
 
 **Pins API:** `GET/POST/PUT/DELETE /api/v1/map-pins[/:id]`. Coordinates are encrypted on the backend via `MAP_PINS_ENCRYPTION_KEY`.
 
+## Browser (BrowserTool)
+
+The ToolsPanel contains a real Chromium page rendered by Electron's `WebContentsView`. It supports sidebar, floating, fullscreen, and detached-window layouts; the same browser view and session move between layouts instead of creating a new tab.
+
+**User features:**
+- Address/search field, back, forward, and reload controls.
+- Persistent sign-in session in the local `persist:chatter-browser` partition.
+- The user can open a page manually and ask the assistant to read or operate it.
+- Separate Settings toggles control confirmations for opening URLs, clicking, and filling fields. A click or fill can be allowed for the current origin until Chatter closes.
+- Every file download is intercepted and waits for an approval card. Unapproved temporary downloads expire after five minutes.
+
+**Model control:**
+- `browser_control` supports `open`, `read`, `back`, `forward`, `reload`, `scroll`, `click`, and `fill` through renderer → main-process IPC.
+- Reads return structured visible text and interactive elements with temporary refs. `viewport`, `delta`, and `full` modes avoid repeatedly sending the whole document.
+- Main-frame and iframe content is parsed in isolated JavaScript worlds. Cross-origin OOPIF frames use their own CDP session; isolation ensures that the parser does not affect page state.
+- Clicks use the latest element ref and verify that the target and origin have not changed. Input is performed through trusted input events.
+
+**Security and storage:**
+- The browser uses `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, `webSecurity: true`, and denies site permission requests by default.
+- Cookies, localStorage, IndexedDB, and the browsing session stay in the local Electron profile. Browser-cookie encryption is enabled in development and packaged builds. Page reads send extracted content to the backend/model, not the cookie jar or site storage.
+- Password and other sensitive fields are excluded from reads and cannot be filled by the model. Ordinary text fields may be visible to it.
+- Only `http:` and `https:` navigation is accepted. New-window requests are kept inside the embedded browser.
+
+**Key files:**
+
+| File | Role |
+|---|---|
+| `src/main/browser.ts` | WebContentsView lifecycle, navigation, DOM/frame parsing, input, permissions, and downloads |
+| `src/main/cursor-input.ts` | Programmatic mouse input and scrolling |
+| `src/renderer/components/BrowserTool.tsx` | Browser toolbar and viewport inside ToolsPanel |
+| `src/renderer/components/BrowserSettings.tsx` | Per-account confirmation settings |
+| `src/renderer/lib/api.ts` | WebSocket IPC bridge for remote browser actions |
+
 ## Documents (DocumentsTool)
 
 A right-panel tool for viewing and managing attached documents in a chat. A mirror of the photo "Gallery".

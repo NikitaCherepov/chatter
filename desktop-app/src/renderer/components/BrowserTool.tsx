@@ -110,8 +110,8 @@ export function BrowserTool() {
         <button type="button" className={s.navButton} disabled={!state.canGoForward} onClick={() => void run('forward')} title={t('tools.browser.forward', { defaultValue: 'Forward' })}>
           &rarr;
         </button>
-        <button type="button" className={`${s.navButton} ${state.isLoading ? s.loading : ''}`} onClick={() => void run('reload')} title={t('tools.browser.reload', { defaultValue: 'Reload' })}>
-          &#x21bb;
+        <button type="button" className={s.navButton} onClick={() => void run('reload')} title={t('tools.browser.reload', { defaultValue: 'Reload' })}>
+          <span className={state.isLoading ? s.loading : ''}>&#x21bb;</span>
         </button>
         <form className={s.addressForm} onSubmit={navigate}>
           <span className={s.securityIcon} title={t('tools.browser.secureSession', { defaultValue: 'Isolated browser session' })}>&#x1f512;</span>

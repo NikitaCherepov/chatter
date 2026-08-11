@@ -177,6 +177,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 27. Přepisovat hlasové zprávy z Telegramu! (vyžaduje výkonný server s alespoň 2 jádry, 2 GB RAM a povoleným voice-api)
 28. Pohodlné a rychlé vytváření větví chatu a regenerace s instrukcemi.
 29. Bot navrhne příkaz, ale nevíte, co dělá? Stiskněte tlačítko Review a Lite model posoudí jeho rizika.
+30. Používat prohlížeč zabudovaný do Chatter Desktop. Asistent může číst otevřenou stránku, posouvat ji, otevírat odkazy, klikat na ovládací prvky a vyplňovat běžná pole. Akce prohlížeče mohou vyžadovat vaše potvrzení, stahování souborů se vždy pozastaví ke schválení a pole s hesly nejsou modelu přístupná.
 
 ---
 

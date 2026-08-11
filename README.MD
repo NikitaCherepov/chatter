@@ -179,6 +179,7 @@ You can always see if someone has shared your key, and you can revoke it at any 
  27. Transcribe voice messages from Telegram! (requires a powerful server with at least 2 cores, 2 GB RAM, and voice-api enabled)
  28. Convenient and fast creation of chat branches, plus regeneration with instructions.
  29. The bot suggests a command but you don't know what it does? Press the Review button and the Lite model assesses its risks.
+ 30. Use the browser built into Chatter Desktop. The assistant can read the page you opened, scroll it, follow links, click controls, and fill ordinary fields. Browser actions can require your confirmation, downloads are always paused for approval, and password fields are unavailable to the model.
 
 ---
 

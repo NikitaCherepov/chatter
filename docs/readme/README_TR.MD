@@ -177,6 +177,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 27. Telegram'dan sesli mesajları yazıya dökün! (en az 2 çekirdek, 2 GB RAM ve voice-api etkin olan güçlü bir sunucu gerektirir)
 28. Kullanışlı ve hızlı sohbet dalları oluşturma ve talimatlarla yeniden oluşturma.
 29. Bot bir komut öneriyor ama ne işe yaradığını bilmiyor musunuz? İncele düğmesine basın ve Lite model risklerini değerlendirsin.
+30. Chatter Desktop’a yerleşik tarayıcıyı kullanabilirsiniz. Asistan açtığınız sayfayı okuyabilir, kaydırabilir, bağlantıları açabilir, denetimlere tıklayabilir ve normal alanları doldurabilir. Tarayıcı işlemleri onayınızı gerektirebilir, indirmeler onay için her zaman duraklatılır ve parola alanlarına model erişemez.
 
 ---
 

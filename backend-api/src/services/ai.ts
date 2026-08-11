@@ -2502,7 +2502,9 @@ Workflow for interaction:
 2. Use click or fill with an exact ref from the latest read result.
 3. After an in-page change, prefer read with mode=delta. After navigation, use mode=viewport. Use mode=full only when the user explicitly needs the whole document.
 
-Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If an action starts a file download, it is paused until the user approves or rejects it; wait for that result before continuing. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.`,
+Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If an action starts a file download, it is paused until the user approves or rejects it; wait for that result before continuing. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.
+
+If browser reading, scrolling, or interaction fails, do not call list_monitors or capture_screen. Tell the user; ask them to scroll manually or send a screenshot themselves if needed.`,
     parameters: {
       type: 'object',
       properties: {
@@ -2972,7 +2974,7 @@ const buildCaptureScreenTool = () => {
     type: 'function' as const,
     function: {
       name: 'capture_screen',
-      description: 'Takes a screenshot and analyzes it. Returns a description or normalized coordinates (0.0-1.0) for execute_visual_click.',
+      description: 'Takes a screenshot and analyzes it. Returns a description or normalized coordinates (0.0-1.0) for execute_visual_click. Never use it as a fallback for browser_control unless the user explicitly asks for a screen capture.',
       parameters: {
         type: 'object',
         properties: {

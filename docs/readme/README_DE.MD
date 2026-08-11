@@ -177,6 +177,7 @@ Du kannst jederzeit sehen, ob jemand deinen Schlüssel geteilt hat, und ihn jede
 27. Sprachnachrichten von Telegram transkribieren! (erfordert einen leistungsstarken Server mit mindestens 2 Kernen, 2 GB RAM und aktiviertem voice-api)
 28. Praktische und schnelle Erstellung von Chat-Zweigen sowie Neugenerierung mit Anweisungen.
 29. Der Bot schlägt einen Befehl vor, aber du weißt nicht, was er tut? Drücke die Review-Taste, und das Lite-Modell bewertet seine Risiken.
+30. Den in Chatter Desktop integrierten Browser verwenden. Der Assistent kann die von dir geöffnete Seite lesen, scrollen, Links öffnen, Bedienelemente anklicken und normale Felder ausfüllen. Browseraktionen können deine Bestätigung erfordern, Downloads werden immer zur Genehmigung angehalten und Passwortfelder sind für das Modell nicht zugänglich.
 
 ---
 
