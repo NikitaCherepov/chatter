@@ -29,18 +29,18 @@ export const DEEPSEEK_PRESET_MODELS: PresetModel[] = [
     id: 'deepseek-v4-flash',
     name: 'DeepSeek V4 Flash',
     prices: {
-      inputPricePerMillion: 0.14,
-      outputPricePerMillion: 0.28,
-      cacheReadPricePerMillion: 0.0028,
+      inputPricePerMillion: 0.22,
+      outputPricePerMillion: 0.66,
+      cacheReadPricePerMillion: 0.007,
     },
   },
   {
     id: 'deepseek-v4-pro',
     name: 'DeepSeek V4 Pro',
     prices: {
-      inputPricePerMillion: 0.435,
-      outputPricePerMillion: 0.87,
-      cacheReadPricePerMillion: 0.0036,
+      inputPricePerMillion: 0.66,
+      outputPricePerMillion: 1.98,
+      cacheReadPricePerMillion: 0.022,
     },
   },
 ];
