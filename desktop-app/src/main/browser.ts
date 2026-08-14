@@ -413,7 +413,15 @@ export class ChatterBrowser {
         throw new Error('browser_permission_action_required');
       }
       const origin = this.getCurrentHttpOrigin();
-      const target = payload.ref ? this.getSnapshotElement(payload.ref) : undefined;
+      let target: BrowserElement | undefined;
+      if (payload.ref) {
+        try {
+          target = this.getSnapshotElement(payload.ref);
+        } catch {
+          // Site permission belongs to the current origin, not to a DOM
+          // snapshot. The action itself still validates the ref strictly.
+        }
+      }
       return {
         allowed: Boolean(origin && this.getPermissionOrigins(permissionAction).has(origin)),
         origin,
