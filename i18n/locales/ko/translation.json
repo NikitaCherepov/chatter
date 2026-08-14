@@ -13,7 +13,13 @@
     "yes": "예",
     "no": "아니오",
     "serviceUnavailable": "서비스를 일시적으로 사용할 수 없습니다. 몇 초 후에 다시 시도하세요.",
-    "requestInProgress": "⏳ 이전 요청이 아직 처리 중입니다. 응답을 기다린 후 다시 시도하세요."
+    "requestInProgress": "⏳ 이전 요청이 아직 처리 중입니다. 응답을 기다리거나 /stop을 보내 중지하세요.",
+    "stopStreamingPrompt": "응답이 생성 중입니다.",
+    "stopButton": "⏹ 중지",
+    "stopRequested": "현재 요청을 중지하는 중…",
+    "stopSuccess": "⏹ 현재 요청이 중지되었습니다.",
+    "stopNoActive": "중지할 활성 요청이 없습니다.",
+    "stopFailed": "현재 요청을 중지하지 못했습니다. 다시 시도하세요."
   },
   "roles": {
     "admin": "관리자",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "현재 요청 중지",
     "start": "메뉴 표시",
     "menu": "버튼 메뉴 열기",
     "clear": "대화 메모리 지우기",

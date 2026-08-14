@@ -13,7 +13,13 @@
     "yes": "Tak",
     "no": "Nie",
     "serviceUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie za kilka sekund.",
-    "requestInProgress": "⏳ Twoje poprzednie żądanie jest nadal przetwarzane. Poczekaj na odpowiedź i spróbuj ponownie."
+    "requestInProgress": "⏳ Twoje poprzednie żądanie jest nadal przetwarzane. Poczekaj na odpowiedź lub wyślij /stop, aby je zatrzymać.",
+    "stopStreamingPrompt": "Trwa generowanie odpowiedzi.",
+    "stopButton": "⏹ Zatrzymaj",
+    "stopRequested": "Zatrzymywanie bieżącego żądania…",
+    "stopSuccess": "⏹ Bieżące żądanie zostało zatrzymane.",
+    "stopNoActive": "Brak aktywnego żądania do zatrzymania.",
+    "stopFailed": "Nie udało się zatrzymać bieżącego żądania. Spróbuj ponownie."
   },
   "roles": {
     "admin": "Admin",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "Zatrzymaj bieżące żądanie",
     "start": "Pokaż menu",
     "menu": "Otwórz menu przycisków",
     "clear": "Wyczyść pamięć rozmowy",

@@ -13,7 +13,13 @@
     "yes": "Ja",
     "no": "Nein",
     "serviceUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Versuchen Sie es in einigen Sekunden erneut.",
-    "requestInProgress": "⏳ Ihre vorherige Anfrage wird noch verarbeitet. Warten Sie auf die Antwort und versuchen Sie es erneut."
+    "requestInProgress": "⏳ Ihre vorherige Anfrage wird noch verarbeitet. Warten Sie auf die Antwort oder senden Sie /stop, um sie zu stoppen.",
+    "stopStreamingPrompt": "Die Antwort wird generiert.",
+    "stopButton": "⏹ Stopp",
+    "stopRequested": "Die aktuelle Anfrage wird gestoppt …",
+    "stopSuccess": "⏹ Die aktuelle Anfrage wurde gestoppt.",
+    "stopNoActive": "Es gibt keine aktive Anfrage zum Stoppen.",
+    "stopFailed": "Die aktuelle Anfrage konnte nicht gestoppt werden. Bitte versuchen Sie es erneut."
   },
   "roles": {
     "admin": "Admin",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "Stoppen Sie die aktuelle Anfrage",
     "start": "Menü anzeigen",
     "menu": "Button-Menü öffnen",
     "clear": "Unterhaltungsverlauf löschen",

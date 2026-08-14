@@ -13,7 +13,13 @@
     "yes": "Yes",
     "no": "No",
     "serviceUnavailable": "The service is temporarily unavailable. Try again in a few seconds.",
-    "requestInProgress": "⏳ Your previous request is still being processed. Wait for the response and try again."
+    "requestInProgress": "⏳ Your previous request is still being processed. Wait for the response or send /stop to stop it.",
+    "stopStreamingPrompt": "The response is being generated.",
+    "stopButton": "⏹ Stop",
+    "stopRequested": "Stopping the current request…",
+    "stopSuccess": "⏹ The current request was stopped.",
+    "stopNoActive": "There is no active request to stop.",
+    "stopFailed": "Failed to stop the current request. Please try again."
   },
   "roles": {
     "admin": "Admin",
@@ -421,6 +427,7 @@
     "error": "Failed to recover data. Please try again later."
   },
   "commands": {
+    "stop": "Stop the current request",
     "start": "Show menu", "menu": "Open button menu", "clear": "Clear conversation memory",
     "tz": "Time zone: /tz <UTC>", "tasks": "My reminders", "task_delete": "Delete task by ID",
     "note_add": "Add a note", "notes": "List notes", "note_find": "Search notes", "note_delete": "Delete a note",

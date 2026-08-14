@@ -13,7 +13,13 @@
     "yes": "Sì",
     "no": "No",
     "serviceUnavailable": "Il servizio non è al momento disponibile. Riprova tra qualche secondo.",
-    "requestInProgress": "⏳ La tua richiesta precedente è ancora in elaborazione. Attendi la risposta e riprova."
+    "requestInProgress": "⏳ La tua richiesta precedente è ancora in elaborazione. Attendi la risposta oppure invia /stop per interromperla.",
+    "stopStreamingPrompt": "La risposta è in fase di generazione.",
+    "stopButton": "⏹ Interrompi",
+    "stopRequested": "Interruzione della richiesta corrente…",
+    "stopSuccess": "⏹ La richiesta corrente è stata interrotta.",
+    "stopNoActive": "Non c'è alcuna richiesta attiva da interrompere.",
+    "stopFailed": "Impossibile interrompere la richiesta corrente. Riprova."
   },
   "roles": {
     "admin": "Amministratore",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "Interrompi la richiesta corrente",
     "start": "Mostra menu",
     "menu": "Apri menu pulsanti",
     "clear": "Cancella memoria conversazione",

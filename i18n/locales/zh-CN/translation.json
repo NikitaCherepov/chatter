@@ -13,7 +13,13 @@
     "yes": "是",
     "no": "否",
     "serviceUnavailable": "服务暂时不可用。请几秒后重试。",
-    "requestInProgress": "⏳ 您之前的请求仍在处理中。请等待响应后重试。"
+    "requestInProgress": "⏳ 您之前的请求仍在处理中。请等待响应，或发送 /stop 将其停止。",
+    "stopStreamingPrompt": "正在生成响应。",
+    "stopButton": "⏹ 停止",
+    "stopRequested": "正在停止当前请求…",
+    "stopSuccess": "⏹ 当前请求已停止。",
+    "stopNoActive": "没有正在进行的请求可停止。",
+    "stopFailed": "停止当前请求失败。请重试。"
   },
   "roles": {
     "admin": "管理员",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "停止当前请求",
     "start": "显示菜单",
     "menu": "打开按钮菜单",
     "clear": "清除对话记忆",

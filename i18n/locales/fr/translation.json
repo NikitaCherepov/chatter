@@ -13,7 +13,13 @@
     "yes": "Oui",
     "no": "Non",
     "serviceUnavailable": "Le service est temporairement indisponible. Réessayez dans quelques secondes.",
-    "requestInProgress": "⏳ Votre demande précédente est encore en cours de traitement. Attendez la réponse et réessayez."
+    "requestInProgress": "⏳ Votre demande précédente est encore en cours de traitement. Attendez la réponse ou envoyez /stop pour l’arrêter.",
+    "stopStreamingPrompt": "La réponse est en cours de génération.",
+    "stopButton": "⏹ Arrêter",
+    "stopRequested": "Arrêt de la requête en cours…",
+    "stopSuccess": "⏹ La requête en cours a été arrêtée.",
+    "stopNoActive": "Aucune requête active à arrêter.",
+    "stopFailed": "Échec de l'arrêt de la requête en cours. Veuillez réessayer."
   },
   "roles": {
     "admin": "Admin",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "Arrêter la requête en cours",
     "start": "Afficher le menu",
     "menu": "Ouvrir le menu des boutons",
     "clear": "Effacer la mémoire de la conversation",

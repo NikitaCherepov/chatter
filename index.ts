@@ -102,7 +102,7 @@ const TG_USE_RICH_STREAMING = process.env.TG_USE_RICH_STREAMING === '1';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_SOURCE).digest();
 const ENCRYPTION_IV_LENGTH = 16;
 const BASE_COMMANDS = [
-    'start', 'menu', 'clear', 'tz', 'tasks', 'task_delete', 'note_add', 'notes',
+    'start', 'menu', 'clear', 'stop', 'tz', 'tasks', 'task_delete', 'note_add', 'notes',
     'note_find', 'note_delete', 'mail_setup', 'mail_use', 'mail_forget',
     'chats', 'chat_new', 'chat_use', 'link', 'unlink', 'rename', 'prompts', 'prompt_use'
 ] as const;
@@ -916,6 +916,22 @@ const runBackendAiStream = async (
     });
 };
 
+const runBackendStopGeneration = async (userId: number) => {
+    if (!BACKEND_INTERNAL_TOKEN) {
+        throw new Error('BACKEND_INTERNAL_TOKEN is not configured.');
+    }
+
+    const response = await axios.post(
+        `${BACKEND_API_BASE_URL}/internal/ai/stop`,
+        { user_id: userId },
+        {
+            headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` },
+            timeout: BACKEND_TIMEOUT_DEFAULT_MS
+        }
+    );
+    return response.data as { ok: boolean; message?: string };
+};
+
 const runBackendVoiceTurn = async (
     userId: number,
     audioBuffer: Buffer,
@@ -1492,6 +1508,30 @@ const detectImageMimeType = (url: string, fallback: string | null = null) => {
 
 const photoAlbumBuffer = new Map<string, { images: Array<{ buffer: Buffer; mimeType: string }>; caption: string; timer: ReturnType<typeof setTimeout>; ctx: any }>();
 const activeUserRequests = new Set<number>();
+const activeUserRequestIds = new Map<number, string>();
+
+const stopActiveUserRequest = async (ctx: any, expectedRequestId?: string) => {
+    const userId = Number(ctx.state.accountId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+        return { ok: false, reason: 'no_user' as const };
+    }
+
+    // Inline buttons are tied to the request that created them. A delayed click
+    // must never stop a newer request from the same user.
+    if (expectedRequestId && activeUserRequestIds.get(userId) !== expectedRequestId) {
+        return { ok: false, reason: 'stale' as const };
+    }
+
+    try {
+        const result = await runBackendStopGeneration(userId);
+        return result.ok
+            ? { ok: true as const }
+            : { ok: false as const, reason: 'inactive' as const };
+    } catch (error) {
+        console.error('[tg] Failed to stop active request:', formatSafeError(error));
+        return { ok: false as const, reason: 'error' as const };
+    }
+};
 
 const withUserRequestLock = async <T>(
     ctx: any,
@@ -1511,10 +1551,12 @@ const withUserRequestLock = async <T>(
     }
 
     activeUserRequests.add(userId);
+    activeUserRequestIds.set(userId, crypto.randomUUID());
     try {
         return await action();
     } finally {
         activeUserRequests.delete(userId);
+        activeUserRequestIds.delete(userId);
     }
 };
 
@@ -3247,6 +3289,32 @@ bot.command('history_delete', async (ctx) => {
 
 bot.command('clear', (ctx) => {
     return handleClear(ctx);
+});
+
+bot.command('stop', async (ctx) => {
+    const result = await stopActiveUserRequest(ctx);
+    if (result.ok) {
+        await ctx.reply(ctx.t('common.stopSuccess'));
+        return;
+    }
+    await ctx.reply(ctx.t(result.reason === 'error' ? 'common.stopFailed' : 'common.stopNoActive'));
+});
+
+bot.action(/^ai_stop:([0-9a-f-]{36})$/, async (ctx) => {
+    const requestId = ctx.match[1];
+    const result = await stopActiveUserRequest(ctx, requestId);
+
+    if (result.ok) {
+        await ctx.answerCbQuery(ctx.t('common.stopRequested'));
+        await ctx.deleteMessage().catch(() => {});
+        return;
+    }
+
+    await ctx.answerCbQuery(
+        ctx.t(result.reason === 'error' ? 'common.stopFailed' : 'common.stopNoActive'),
+        { show_alert: result.reason === 'error' }
+    ).catch(() => {});
+    await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
 });
 
 // ── /link — привязка к desktop-аккаунту ──
@@ -6047,6 +6115,7 @@ const processUserTextThroughAi = async (
         return null;
     }
 
+    let streamStopMessage: { chatId: number; messageId: number } | null = null;
     try {
         await ctx.sendChatAction('typing');
         const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
@@ -6060,6 +6129,25 @@ const processUserTextThroughAi = async (
         const richStream = (TG_USE_RICH_STREAMING && userChatId && !options?.suppressFinalReply)
             ? new RichStreamSession(ctx.telegram, userChatId, threadId)
             : null;
+
+        const activeRequestId = activeUserRequestIds.get(userId);
+        if (richStream && activeRequestId) {
+            try {
+                const sent = await ctx.reply(
+                    ctx.t('common.stopStreamingPrompt'),
+                    Markup.inlineKeyboard([[
+                        Markup.button.callback(ctx.t('common.stopButton'), `ai_stop:${activeRequestId}`)
+                    ]])
+                );
+                streamStopMessage = {
+                    chatId: Number(sent.chat.id),
+                    messageId: Number(sent.message_id)
+                };
+            } catch (error) {
+                // A missing control message must not break the generation itself.
+                console.warn('[tg] Failed to send streaming stop button:', formatSafeError(error));
+            }
+        }
 
         const backend = await runBackendAiStream(userId, userText, {
             forcePro: forceProRoute,
@@ -6609,6 +6697,13 @@ const processUserTextThroughAi = async (
             await ctx.reply(localized);
         }
         return null;
+    } finally {
+        if (streamStopMessage) {
+            await ctx.telegram.deleteMessage(
+                streamStopMessage.chatId,
+                streamStopMessage.messageId
+            ).catch(() => {});
+        }
     }
     }
 

@@ -13,7 +13,13 @@
     "yes": "Sí",
     "no": "No",
     "serviceUnavailable": "El servicio no está disponible temporalmente. Inténtalo de nuevo en unos segundos.",
-    "requestInProgress": "⏳ Tu solicitud anterior aún se está procesando. Espera la respuesta y vuelve a intentarlo."
+    "requestInProgress": "⏳ Tu solicitud anterior aún se está procesando. Espera la respuesta o envía /stop para detenerla.",
+    "stopStreamingPrompt": "La respuesta se está generando.",
+    "stopButton": "⏹ Detener",
+    "stopRequested": "Deteniendo la solicitud actual…",
+    "stopSuccess": "⏹ La solicitud actual se detuvo.",
+    "stopNoActive": "No hay ninguna solicitud activa para detener.",
+    "stopFailed": "No se pudo detener la solicitud actual. Inténtalo de nuevo."
   },
   "roles": {
     "admin": "Admin",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "Detener la solicitud actual",
     "start": "Mostrar menú",
     "menu": "Abrir menú de botones",
     "clear": "Borrar memoria de conversación",

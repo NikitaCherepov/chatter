@@ -1921,6 +1921,24 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   }
 });
 
+// Telegram uses the same generation AbortController as the desktop client.
+// The bot validates its request ID before calling this internal endpoint, so a
+// stale inline button can't stop a newer generation for the same user.
+app.post('/internal/ai/stop', internalAuth, (req, res) => {
+  const userId = resolveInternalAccountId(req.body?.user_id);
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return res.status(400).json({ ok: false, error: 'bad_user_id' });
+  }
+
+  const controller = activeGenerations.get(userId);
+  if (!controller || controller.signal.aborted) {
+    return res.json({ ok: false, message: 'no_active_generation' });
+  }
+
+  controller.abort();
+  return res.json({ ok: true, message: 'stopped' });
+});
+
 // ── Остановка генерации ────────────────────────────────────────────────────
 app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);

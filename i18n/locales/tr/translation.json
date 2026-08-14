@@ -13,7 +13,13 @@
     "yes": "Evet",
     "no": "Hayır",
     "serviceUnavailable": "Hizmet geçici olarak kullanılamıyor. Birkaç saniye içinde tekrar deneyin.",
-    "requestInProgress": "⏳ Önceki isteğiniz hâlâ işleniyor. Yanıtı bekleyin ve tekrar deneyin."
+    "requestInProgress": "⏳ Önceki isteğiniz hâlâ işleniyor. Yanıtı bekleyin veya durdurmak için /stop gönderin.",
+    "stopStreamingPrompt": "Yanıt oluşturuluyor.",
+    "stopButton": "⏹ Durdur",
+    "stopRequested": "Geçerli istek durduruluyor…",
+    "stopSuccess": "⏹ Geçerli istek durduruldu.",
+    "stopNoActive": "Durdurulacak etkin bir istek yok.",
+    "stopFailed": "Geçerli istek durdurulamadı. Lütfen tekrar deneyin."
   },
   "roles": {
     "admin": "Yönetici",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "Geçerli isteği durdur",
     "start": "Menüyü göster",
     "menu": "Buton menüsünü aç",
     "clear": "Konuşma geçmişini temizle",

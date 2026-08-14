@@ -13,7 +13,13 @@
     "yes": "Ano",
     "no": "Ne",
     "serviceUnavailable": "Služba je dočasně nedostupná. Zkuste to znovu za několik sekund.",
-    "requestInProgress": "⏳ Vaše předchozí žádost se stále zpracovává. Počkejte na odpověď a zkuste to znovu."
+    "requestInProgress": "⏳ Vaše předchozí žádost se stále zpracovává. Počkejte na odpověď nebo ji zastavte odesláním /stop.",
+    "stopStreamingPrompt": "Odpověď se generuje.",
+    "stopButton": "⏹ Zastavit",
+    "stopRequested": "Zastavuji aktuální požadavek…",
+    "stopSuccess": "⏹ Aktuální požadavek byl zastaven.",
+    "stopNoActive": "Neexistuje žádný aktivní požadavek, který by bylo možné zastavit.",
+    "stopFailed": "Zastavení aktuálního požadavku se nezdařilo. Zkuste to prosím znovu."
   },
   "roles": {
     "admin": "Správce",
@@ -408,6 +414,7 @@
     }
   },
   "commands": {
+    "stop": "Zastavit aktuální požadavek",
     "start": "Zobrazit menu",
     "menu": "Otevřít tlačítkové menu",
     "clear": "Vymazat paměť konverzace",
