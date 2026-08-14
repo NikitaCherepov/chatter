@@ -1,43 +1,56 @@
 {
   "changes": {
     "en": [
-      "Fixed an issue with browser iframes"
-    ],
-    "ru": [
-      "Исправлена проблема с iframe во встроенном браузере"
-    ],
-    "de": [
-      "Ein Problem mit iframes im Browser wurde behoben"
-    ],
-    "es": [
-      "Se corrigió un problema con los iframes del navegador"
-    ],
-    "fr": [
-      "Correction d’un problème avec les iframes du navigateur"
-    ],
-    "it": [
-      "Risolto un problema con gli iframe del browser"
-    ],
-    "ja": [
-      "ブラウザーのiframeに関する問題を修正しました"
-    ],
-    "ko": [
-      "브라우저 iframe 관련 문제를 수정했습니다"
-    ],
-    "pl": [
-      "Naprawiono problem z elementami iframe w przeglądarce"
-    ],
-    "pt-BR": [
-      "Corrigido um problema com iframes no navegador"
-    ],
-    "zh-CN": [
-      "修复了浏览器 iframe 的问题"
-    ],
-    "tr": [
-      "Tarayıcı iframe'leriyle ilgili bir sorun düzeltildi"
+      "Fixed the browser refresh button.",
+      "Fixed an issue with click permissions."
     ],
     "cs": [
-      "Opraven problém s prvky iframe v prohlížeči"
+      "Opraveno tlačítko obnovení prohlížeče.",
+      "Opraven problém s oprávněními pro kliknutí."
+    ],
+    "de": [
+      "Browser-Aktualisierungsschaltfläche korrigiert.",
+      "Problem mit Klickberechtigungen behoben."
+    ],
+    "es": [
+      "Se corrigió el botón de actualizar del navegador.",
+      "Se corrigió un problema con los permisos de clic."
+    ],
+    "fr": [
+      "Correction du bouton d'actualisation du navigateur.",
+      "Correction d'un problème avec les autorisations de clic."
+    ],
+    "it": [
+      "Corretto il pulsante di aggiornamento del browser.",
+      "Corretto un problema con i permessi di clic."
+    ],
+    "ja": [
+      "ブラウザの更新ボタンを修正しました。",
+      "クリック権限に関する問題を修正しました。"
+    ],
+    "ko": [
+      "브라우저 새로 고침 버튼을 수정했습니다.",
+      "클릭 권한 문제를 수정했습니다."
+    ],
+    "pl": [
+      "Naprawiono przycisk odświeżania przeglądarki.",
+      "Naprawiono problem z uprawnieniami do klikania."
+    ],
+    "pt-BR": [
+      "Corrigido o botão de atualização do navegador.",
+      "Corrigido um problema com permissões de clique."
+    ],
+    "ru": [
+      "Исправлена кнопка обновления браузера.",
+      "Исправлена проблема с разрешениями на клики."
+    ],
+    "tr": [
+      "Tarayıcı yenileme düğmesi düzeltildi.",
+      "Tıklama izinleriyle ilgili bir sorun düzeltildi."
+    ],
+    "zh-CN": [
+      "修复了浏览器刷新按钮。",
+      "修复了点击权限的问题。"
     ]
   }
 }
