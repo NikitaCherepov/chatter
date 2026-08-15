@@ -202,6 +202,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     actions?: { open: string; allow: string; decline: string };
   }) => ipcRenderer.invoke('notifications:show', payload),
 
+  dismissDesktopNotification: (id: string) =>
+    ipcRenderer.invoke('notifications:dismiss', id),
+
   onNotificationsEnabledChanged: (callback: (enabled: boolean) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, enabled: boolean) => callback(enabled);
     ipcRenderer.on('notifications:enabled-changed', handler);

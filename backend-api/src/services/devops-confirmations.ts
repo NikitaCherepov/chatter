@@ -3,6 +3,8 @@
  * Used by ai.ts (registers) and server.ts (resolves/rejects via /approve endpoint).
  */
 
+import { sendToDesktop } from '../ws-clients.js';
+
 export type PendingDevopsConfirmation = {
   userId: number;
   serverId: number;
@@ -36,6 +38,11 @@ setInterval(() => {
     if (now - pending.createdAt > 5 * 60 * 1000) {
       pending.reject(new Error('confirmation_expired'));
       pendingConfirmations.delete(id);
+      sendToDesktop(pending.userId, {
+        type: 'desktop_action',
+        action: 'confirmation_resolved',
+        value: { confirmation_id: id, status: 'expired' },
+      });
     }
   }
 }, 30_000);

@@ -402,6 +402,16 @@ function closeConfirmationNotificationWindows() {
   confirmationNotificationWindows.clear();
 }
 
+function dismissDesktopNotification(id: string) {
+  const confirmationWindow = confirmationNotificationWindows.get(id);
+  if (confirmationWindow && !confirmationWindow.isDestroyed()) confirmationWindow.close();
+  confirmationNotificationWindows.delete(id);
+
+  const notification = activeNotifications.get(id);
+  if (notification) notification.close();
+  activeNotifications.delete(id);
+}
+
 function createTray() {
   if (tray) return;
   tray = new Tray(getAppIconPath());
@@ -719,6 +729,12 @@ ipcMain.handle('notifications:show', (event, payload: DesktopNotificationPayload
     throw new Error('invalid_notification_payload');
   }
   return showDesktopNotification(payload);
+});
+
+ipcMain.handle('notifications:dismiss', (event, id: unknown) => {
+  assertTrustedIpcSender(event);
+  if (typeof id !== 'string' || !id.trim()) throw new Error('invalid_notification_id');
+  dismissDesktopNotification(id.trim());
 });
 
 function createWindow() {

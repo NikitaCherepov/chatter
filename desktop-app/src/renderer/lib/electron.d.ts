@@ -61,6 +61,7 @@ declare global {
         reviewOnly?: boolean;
         actions?: { open: string; allow: string; decline: string };
       }) => Promise<boolean>;
+      dismissDesktopNotification: (id: string) => Promise<void>;
       onNotificationsEnabledChanged: (callback: (enabled: boolean) => void) => () => void;
       onNotificationOpenChat: (callback: (payload: { chatId: number }) => void) => () => void;
       onNotificationConfirmationAction: (callback: (payload: { confirmationId: string; action: 'allow' | 'decline' }) => void) => () => void;

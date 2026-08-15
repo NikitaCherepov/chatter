@@ -10,6 +10,8 @@
  *  - 'browser_download': resume or cancel a paused embedded-browser download
  */
 
+import { sendToDesktop } from '../ws-clients.js';
+
 export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture' | 'browser_action' | 'browser_download';
 
 type ExecutePayload = {
@@ -111,6 +113,11 @@ setInterval(() => {
       pending.reject(new Error('confirmation_expired'));
       pendingConfirmations.delete(id);
       pending.onExpired?.();
+      sendToDesktop(pending.userId, {
+        type: 'desktop_action',
+        action: 'confirmation_resolved',
+        value: { confirmation_id: id, status: 'expired' },
+      });
       notifyIfUserHasNoPending(pending.userId);
     }
   }

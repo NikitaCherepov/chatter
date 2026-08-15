@@ -1376,6 +1376,23 @@ export function ChatPage() {
   }, [activeChatId, notificationActions, showNativeNotification, t]);
 
   const handleIncomingDesktopAction = useCallback((action: api.DesktopActionPayload) => {
+    if (action.action === 'confirmation_resolved' && action.value) {
+      const val = action.value as { confirmation_id?: string };
+      const confirmationId = val.confirmation_id;
+      if (!confirmationId) return;
+      setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setPendingCredsUpdates(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setEditFileLinesConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setWebcamCaptureConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setEmailConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      finishConfirmationSubmission(confirmationId);
+      void window.electronAPI.dismissDesktopNotification(`confirmation:${confirmationId}`).catch(() => {});
+      return;
+    }
     if (action.action !== 'file_action_confirmation' && action.action !== 'edit_file_lines_confirmation') {
       notifyConfirmationAction(action);
     }

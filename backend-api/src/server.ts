@@ -5218,6 +5218,20 @@ app.post('/api/v1/smart-home/sync', async (req: AuthedRequest, res: any) => {
 
 // ─── DevOps: Approve/reject pending command (from desktop via WS) ───────────
 
+type ConfirmationResolutionStatus = 'executing' | 'executed' | 'rejected' | 'failed' | 'expired';
+
+const notifyConfirmationResolved = (
+  userId: number,
+  confirmationId: string,
+  status: ConfirmationResolutionStatus,
+) => {
+  sendToDesktop(userId, {
+    type: 'desktop_action',
+    action: 'confirmation_resolved',
+    value: { confirmation_id: confirmationId, status },
+  });
+};
+
 app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
   const confirmationId = `${req.body?.confirmation_id || ''}`;
@@ -5237,6 +5251,7 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   if (!approved) {
     deletePendingConfirmation(confirmationId);
     pending.reject(buildRejectedByUserError(rejectionComment));
+    notifyConfirmationResolved(userId, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -5258,14 +5273,17 @@ app.post('/api/v1/devops/approve', async (req: AuthedRequest, res: any) => {
   // Execute the approved command
   try {
     deletePendingConfirmation(confirmationId);
+    notifyConfirmationResolved(userId, confirmationId, 'executing');
     const execOptions = (sudoPassword || newPassword) ? { sudoPasswordOverride: sudoPassword, newPasswordOverride: newPassword } : undefined;
     const result = pending.execute
       ? await pending.execute(execOptions)
       : await execSshCommand(userId, pending.serverId, pending.command, execOptions);
     pending.resolve(result);
+    notifyConfirmationResolved(userId, confirmationId, 'executed');
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {
     pending.reject(err);
+    notifyConfirmationResolved(userId, confirmationId, 'failed');
     return res.status(500).json({ error: 'ssh_exec_failed', details: err?.message });
   }
 });
@@ -5288,17 +5306,21 @@ app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
   if (!approved) {
     deletePendingEmailConfirmation(confirmationId);
     pending.reject(buildRejectedByUserError(rejectionComment));
+    notifyConfirmationResolved(userId, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
   // Send the approved email
   try {
     deletePendingEmailConfirmation(confirmationId);
+    notifyConfirmationResolved(userId, confirmationId, 'executing');
     const result = await runEmailSend(userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId);
     pending.resolve(result);
+    notifyConfirmationResolved(userId, confirmationId, 'executed');
     return res.json({ ok: true, status: 'sent', result });
   } catch (err: any) {
     pending.reject(err);
+    notifyConfirmationResolved(userId, confirmationId, 'failed');
     return res.status(500).json({ error: 'email_send_failed', details: err?.message });
   }
 });
@@ -5348,13 +5370,14 @@ app.delete('/api/v1/pc-commands/policies/:id', async (req: AuthedRequest, res: a
 
 // ─── PC Commands: Approve/reject pending command ───────────────────────────
 
-const notifyBrowserConfirmationResolved = (
+const notifyPcConfirmationResolved = (
   pending: PendingPcCommandConfirmation,
   confirmationId: string,
-  status: 'executed' | 'rejected' | 'failed' | 'expired',
+  status: Exclude<ConfirmationResolutionStatus, 'executing'>,
 ) => {
-  if (pending.kind !== 'browser_action' && pending.kind !== 'browser_download') return;
   pending.onResolved?.(status);
+  notifyConfirmationResolved(pending.userId, confirmationId, status);
+  if (pending.kind !== 'browser_action' && pending.kind !== 'browser_download') return;
   sendToDesktop(pending.userId, {
     type: 'desktop_action',
     action: pending.kind === 'browser_download'
@@ -5365,6 +5388,7 @@ const notifyBrowserConfirmationResolved = (
 };
 
 const dismissMissingBrowserConfirmation = (userId: number, confirmationId: string) => {
+  notifyConfirmationResolved(userId, confirmationId, 'expired');
   sendToDesktop(userId, {
     type: 'desktop_action',
     action: 'browser_action_confirmation_resolved',
@@ -5423,7 +5447,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     console.log('[pc_command] rejected by user', { userId, confirmationId });
     cancelRejectedBrowserDownload(pending);
     pending.reject(buildRejectedByUserError(rejectionComment));
-    notifyBrowserConfirmationResolved(pending, confirmationId, 'rejected');
+    notifyPcConfirmationResolved(pending, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -5437,6 +5461,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   // Execute the approved command on user's PC via WS IPC
   try {
     deletePendingPcConfirmation(confirmationId);
+    notifyConfirmationResolved(userId, confirmationId, 'executing');
     const { sendIpcToDesktop } = await import('./ws-clients.js');
     if (browserPermissionGrant) {
       await sendIpcToDesktop(userId, 'browser_control', {
@@ -5465,7 +5490,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
       && result && typeof result === 'object' && result.status === 'cancelled'
       ? 'rejected'
       : 'executed';
-    notifyBrowserConfirmationResolved(pending, confirmationId, resolvedStatus);
+    notifyPcConfirmationResolved(pending, confirmationId, resolvedStatus);
     return res.json({ ok: true, status: 'executed', result, site_permission: browserPermissionGrant });
   } catch (err: any) {
     console.error('[pc_action] desktop ipc failed', {
@@ -5474,7 +5499,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
       error: err?.message || String(err),
     });
     pending.reject(err);
-    notifyBrowserConfirmationResolved(pending, confirmationId, 'failed');
+    notifyPcConfirmationResolved(pending, confirmationId, 'failed');
     return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
   }
 });
@@ -5505,7 +5530,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     deletePendingPcConfirmation(confirmationId);
     cancelRejectedBrowserDownload(pending);
     pending.reject(buildRejectedByUserError(rejectionComment));
-    notifyBrowserConfirmationResolved(pending, confirmationId, 'rejected');
+    notifyPcConfirmationResolved(pending, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -5525,6 +5550,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
 
   try {
     deletePendingPcConfirmation(confirmationId);
+    notifyConfirmationResolved(userId, confirmationId, 'executing');
     const { sendIpcToDesktop } = await import('./ws-clients.js');
     let workspace: unknown;
     if (allowWorkspaceSession) {
@@ -5561,11 +5587,11 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
       && result && typeof result === 'object' && result.status === 'cancelled'
       ? 'rejected'
       : 'executed';
-    notifyBrowserConfirmationResolved(pending, confirmationId, resolvedStatus);
+    notifyPcConfirmationResolved(pending, confirmationId, resolvedStatus);
     return res.json({ ok: true, status: 'executed', result, workspace, site_permission: browserPermissionGrant });
   } catch (err: any) {
     pending.reject(err);
-    notifyBrowserConfirmationResolved(pending, confirmationId, 'failed');
+    notifyPcConfirmationResolved(pending, confirmationId, 'failed');
     return res.status(500).json({ error: 'pc_exec_failed', details: err?.message });
   }
 });
@@ -5605,11 +5631,13 @@ app.post('/internal/visual-click/approve', internalAuth, async (req, res) => {
   if (!approved) {
     deletePendingVisualClick(confirmationId);
     pending.reject(new Error('rejected_by_user'));
+    notifyConfirmationResolved(userId, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
   try {
     deletePendingVisualClick(confirmationId);
+    notifyConfirmationResolved(userId, confirmationId, 'executing');
     const { sendIpcToDesktop } = await import('./ws-clients.js');
     const result = await sendIpcToDesktop(
       pending.userId,
@@ -5618,9 +5646,11 @@ app.post('/internal/visual-click/approve', internalAuth, async (req, res) => {
       15000
     );
     pending.resolve(result);
+    notifyConfirmationResolved(userId, confirmationId, 'executed');
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {
     pending.reject(err);
+    notifyConfirmationResolved(userId, confirmationId, 'failed');
     return res.status(500).json({ error: 'visual_click_failed', details: err?.message });
   }
 });
@@ -5688,6 +5718,7 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
   if (!approved) {
     deletePendingConfirmation(confirmationId);
     pending.reject(buildRejectedByUserError(rejectionComment));
+    notifyConfirmationResolved(userId, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
@@ -5703,14 +5734,17 @@ app.post('/internal/devops/approve', internalAuth, async (req, res) => {
 
   try {
     deletePendingConfirmation(confirmationId);
+    notifyConfirmationResolved(userId, confirmationId, 'executing');
     const execOptions = (sudoPassword || newPassword) ? { sudoPasswordOverride: sudoPassword, newPasswordOverride: newPassword } : undefined;
     const result = pending.execute
       ? await pending.execute(execOptions)
       : await execSshCommand(pending.userId, pending.serverId, pending.command, execOptions);
     pending.resolve(result);
+    notifyConfirmationResolved(userId, confirmationId, 'executed');
     return res.json({ ok: true, status: 'executed', result });
   } catch (err: any) {
     pending.reject(err);
+    notifyConfirmationResolved(userId, confirmationId, 'failed');
     return res.status(500).json({ error: 'ssh_exec_failed', details: err?.message });
   }
 });
@@ -5733,16 +5767,20 @@ app.post('/internal/email/approve', internalAuth, async (req, res) => {
   if (!approved) {
     deletePendingEmailConfirmation(confirmationId);
     pending.reject(buildRejectedByUserError(rejectionComment));
+    notifyConfirmationResolved(userId, confirmationId, 'rejected');
     return res.json({ ok: true, status: 'rejected' });
   }
 
   try {
     deletePendingEmailConfirmation(confirmationId);
+    notifyConfirmationResolved(userId, confirmationId, 'executing');
     const result = await runEmailSend(pending.userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId);
     pending.resolve(result);
+    notifyConfirmationResolved(userId, confirmationId, 'executed');
     return res.json({ ok: true, status: 'sent', result });
   } catch (err: any) {
     pending.reject(err);
+    notifyConfirmationResolved(userId, confirmationId, 'failed');
     return res.status(500).json({ error: 'email_send_failed', details: err?.message });
   }
 });
