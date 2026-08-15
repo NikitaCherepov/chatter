@@ -115,6 +115,7 @@ export type ChatListFilters = {
   modelName?: string;
   hasFiles?: boolean;
   hasImages?: boolean;
+  folderId?: number | null;
 };
 
 const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
@@ -150,6 +151,12 @@ const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
         AND TRIM(cm.images) NOT IN ('', '[]', 'null')
     )`);
   }
+  if (filters.folderId === null) {
+    conditions.push('uc.folder_id IS NULL');
+  } else if (Number.isSafeInteger(filters.folderId) && Number(filters.folderId) > 0) {
+    conditions.push('uc.folder_id = ?');
+    params.push(Number(filters.folderId));
+  }
   return { where: conditions.join('\n      AND '), params };
 };
 
@@ -177,6 +184,25 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
     is_active: row.id === activeId,
     bot_hidden: row.bot_hidden === 1
   }));
+};
+
+export const getUserChatListItem = (userId: number, chatId: number): ChatDto | undefined => {
+  const activeId = ensureActiveChat(userId);
+  const row = db.prepare(`
+    SELECT id, title, folder_id, created_at, updated_at, bot_hidden
+    FROM user_chats
+    WHERE user_id = ? AND id = ?
+  `).get(userId, chatId) as { id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number } | undefined;
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    title: row.title,
+    folder_id: row.folder_id,
+    created_at: toUnix(row.created_at),
+    updated_at: toUnix(row.updated_at),
+    is_active: row.id === activeId,
+    bot_hidden: row.bot_hidden === 1,
+  };
 };
 
 export const countUserChats = (userId: number, filters: ChatListFilters = {}): number => {
@@ -2201,6 +2227,7 @@ export const adminApplyGeneratedPassword = (accountId: number, plainPassword: st
 export type SearchResult = {
   chat_id: number;
   chat_title: string;
+  folder_id: number | null;
   created_at: number;
   snippet: string;
   rank: number;
@@ -2245,12 +2272,13 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
 
   const results: SearchResult[] = [];
   for (const hit of chatHits) {
-    const chat = db.prepare('SELECT title, created_at FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string; created_at: string } | undefined;
+    const chat = db.prepare('SELECT title, folder_id, created_at FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string; folder_id: number | null; created_at: string } | undefined;
     if (!chat) continue;
     const snip = snippetStmt.get(userId, hit.chat_id, ftsQuery) as { snippet: string } | undefined;
     results.push({
       chat_id: hit.chat_id,
       chat_title: chat.title || formatAutomaticChatTitle(userLanguage, hit.chat_id),
+      folder_id: chat.folder_id,
       created_at: toUnix(chat.created_at),
       snippet: snip?.snippet || '',
       rank: hit.best_rank,
