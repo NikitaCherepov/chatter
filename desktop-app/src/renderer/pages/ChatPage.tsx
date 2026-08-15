@@ -2,6 +2,15 @@ import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMe
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../lib/auth';
@@ -33,6 +42,72 @@ import {
   prepareImageForUpload,
 } from '../lib/imageCompression';
 import s from './ChatPage.module.scss';
+
+function DemoDraggableChat({
+  chatId,
+  children,
+}: {
+  chatId: number;
+  children: (dragHandleProps: any, isDragging: boolean) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `demo-chat-${chatId}`,
+    data: { chatId },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${s.demoDraggableChat} ${isDragging ? s.demoDraggableChatDragging : ''}`}
+    >
+      {children({ ...attributes, ...listeners }, isDragging)}
+    </div>
+  );
+}
+
+function DemoDroppableFolder({
+  folderId,
+  children,
+}: {
+  folderId: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `demo-folder-${folderId}`,
+    data: { folderId },
+  });
+
+  return (
+    <div ref={setNodeRef} className={`${s.demoDropTarget} ${isOver ? s.demoDropTargetOver : ''}`}>
+      {children}
+    </div>
+  );
+}
+
+function FolderIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 9C4 7.11438 4 6.17157 4.58579 5.58579C5.17157 5 6.11438 5 8 5H8.34315C9.16065 5 9.5694 5 9.93694 5.15224C10.3045 5.30448 10.5935 5.59351 11.1716 6.17157L11.8284 6.82843C12.4065 7.40649 12.6955 7.69552 13.0631 7.84776C13.4306 8 13.8394 8 14.6569 8H16C17.8856 8 18.8284 8 19.4142 8.58579C20 9.17157 20 10.1144 20 12V15C20 16.8856 20 17.8284 19.4142 18.4142C18.8284 19 17.8856 19 16 19H8C6.11438 19 5.17157 19 4.58579 18.4142C4 17.8284 4 16.8856 4 15V9Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function FolderAddIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M19 14V12C19 10.1144 19 9.17157 18.4142 8.58579C17.8284 8 16.8856 8 15 8H13.6569C12.8394 8 12.4306 8 12.0631 7.84776C11.6955 7.69552 11.4065 7.40649 10.8284 6.82843L10.1716 6.17157C9.59351 5.59351 9.30448 5.30448 8.93694 5.15224C8.5694 5 8.16065 5 7.34315 5H7C5.11438 5 4.17157 5 3.58579 5.58579C3 6.17157 3 7.11438 3 9V15C3 16.8856 3 17.8284 3.58579 18.4142C4.17157 19 5.11438 19 7 19H14"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path d="M16 19H22M19 16V22" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
 
 const ALLOWED_FORMATS: string[] = (() => {
   const raw = import.meta.env.VITE_ALLOWED_IMAGE_FORMATS || '';
@@ -678,6 +753,28 @@ export function ChatPage() {
   const chunksRef = useRef<Blob[]>([]);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Visual-only prototype for chat folders and filters. No values are persisted
+  // or sent to the backend until the final UX is approved.
+  const [demoFiltersOpen, setDemoFiltersOpen] = useState(false);
+  const [demoFolderCreatorOpen, setDemoFolderCreatorOpen] = useState(false);
+  const [demoFolderName, setDemoFolderName] = useState('Новая папка');
+  const [demoCustomFolder, setDemoCustomFolder] = useState<string | null>(null);
+  const [demoFolderNames, setDemoFolderNames] = useState<Record<string, string>>({ work: 'Работа', personal: 'Личное' });
+  const [demoDeletedFolders, setDemoDeletedFolders] = useState<Record<string, boolean>>({});
+  const [demoFolderMenuId, setDemoFolderMenuId] = useState<string | null>(null);
+  const [demoFolderMenuPos, setDemoFolderMenuPos] = useState({ x: 0, y: 0 });
+  const [demoRenamingFolderId, setDemoRenamingFolderId] = useState<string | null>(null);
+  const [demoRenamingFolderName, setDemoRenamingFolderName] = useState('');
+  const [demoExpandedFolders, setDemoExpandedFolders] = useState<Record<string, boolean>>({ work: true, personal: true });
+  const [demoChatFolders, setDemoChatFolders] = useState<Record<number, string>>({});
+  const [demoDraggingChatId, setDemoDraggingChatId] = useState<number | null>(null);
+  const [demoDraggingChatSize, setDemoDraggingChatSize] = useState<{ width: number; height: number } | null>(null);
+  const [demoMoveMenuOpen, setDemoMoveMenuOpen] = useState(false);
+  const demoFoldersSeededRef = useRef(false);
+  const [demoPromptFilter, setDemoPromptFilter] = useState('all');
+  const [demoModelFilter, setDemoModelFilter] = useState('all');
+  const [demoFilesFilter, setDemoFilesFilter] = useState(false);
+  const [demoTelegramFilter, setDemoTelegramFilter] = useState(false);
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
   const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const msgMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -687,6 +784,13 @@ export function ChatPage() {
   const [renamingTitle, setRenamingTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!demoFolderMenuId) return;
+    const closeFolderMenu = () => setDemoFolderMenuId(null);
+    window.addEventListener('click', closeFolderMenu);
+    return () => window.removeEventListener('click', closeFolderMenu);
+  }, [demoFolderMenuId]);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -853,6 +957,15 @@ export function ChatPage() {
   }, [loadMoreChats]);
 
   useEffect(() => { loadChats(); }, []);
+
+  useEffect(() => {
+    if (demoFoldersSeededRef.current || chats.length === 0) return;
+    demoFoldersSeededRef.current = true;
+    setDemoChatFolders({
+      ...(chats[0] ? { [chats[0].id]: 'work' } : {}),
+      ...(chats[1] ? { [chats[1].id]: 'personal' } : {}),
+    });
+  }, [chats]);
 
   useEffect(() => {
     if (activeChatId) {
@@ -1920,7 +2033,7 @@ export function ChatPage() {
 
   // Close context menu on outside click
   useEffect(() => {
-    const close = () => { setContextMenuChatId(null); closeMsgMenu(); };
+    const close = () => { setContextMenuChatId(null); setDemoMoveMenuOpen(false); closeMsgMenu(); };
     if (contextMenuChatId !== null || msgMenuId !== null) {
       document.addEventListener('click', close);
       return () => document.removeEventListener('click', close);
@@ -1931,6 +2044,7 @@ export function ChatPage() {
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setContextMenuPos({ x: rect.right, y: rect.bottom });
+    setDemoMoveMenuOpen(false);
     setContextMenuChatId(chatId);
   };
 
@@ -2812,6 +2926,164 @@ export function ChatPage() {
     return elements;
   };
 
+  const renderSidebarChat = (chat: api.ChatInfo, nested = false) => (
+    <DemoDraggableChat key={chat.id} chatId={chat.id}>
+      {(dragHandleProps) => <div
+        className={`${s.chatItem} ${nested ? s.chatItemNested : ''} ${chat.id === activeChatId ? s.chatItemActive : ''}`}
+        onClick={() => {
+          if (renamingChatId === chat.id) return;
+          selectChat(chat.id);
+        }}
+      >
+        <div className={s.chatItemRow}>
+        {renamingChatId === chat.id ? (
+          <input
+            className={s.renameInput}
+            value={renamingTitle}
+            onChange={(e) => setRenamingTitle(e.target.value)}
+            onKeyDown={handleRenameKeyDown}
+            onBlur={handleConfirmRename}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <Tooltip content={chat.title || t('chat.sidebar.newChat')} delayDuration={600} arrowAtPointer>
+            <div className={s.chatItemTitle}>
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={chat.title || t('chat.sidebar.newChat')}
+                  initial={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
+                  animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ display: 'inline-block' }}
+                >
+                  {chat.title || t('chat.sidebar.newChat')}
+                </motion.span>
+              </AnimatePresence>
+            </div>
+          </Tooltip>
+        )}
+        {getUnread(chat.id) > 0 && (
+          <span className={s.unreadBadge}>{getUnread(chat.id)}</span>
+        )}
+        <div className={s.chatItemControls}>
+          <button
+            className={s.kebabBtn}
+            onClick={(e) => handleKebabClick(e, chat.id)}
+            title={t('common.actions')}
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="8" cy="3" r="1.5" />
+              <circle cx="8" cy="8" r="1.5" />
+              <circle cx="8" cy="13" r="1.5" />
+            </svg>
+          </button>
+          <button
+            className={s.chatDragHandle}
+            {...dragHandleProps}
+            onClick={(event) => event.stopPropagation()}
+            title="Перетащить чат"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 1.5v13M1.5 8h13" />
+              <polyline points="5.7 3.8 8 1.5 10.3 3.8" />
+              <polyline points="5.7 12.2 8 14.5 10.3 12.2" />
+              <polyline points="3.8 5.7 1.5 8 3.8 10.3" />
+              <polyline points="12.2 5.7 14.5 8 12.2 10.3" />
+            </svg>
+          </button>
+        </div>
+        </div>
+        {renamingChatId !== chat.id && (
+          <div className={s.chatItemTime}>{formatTime(chat.created_at)}</div>
+        )}
+      </div>}
+    </DemoDraggableChat>
+  );
+
+  const demoFolders = [
+    { id: 'work', name: demoFolderNames.work, chats: chats.filter((chat) => demoChatFolders[chat.id] === 'work') },
+    { id: 'personal', name: demoFolderNames.personal, chats: chats.filter((chat) => demoChatFolders[chat.id] === 'personal') },
+  ].filter((folder) => !demoDeletedFolders[folder.id]);
+  const demoCustomFolderChats = chats.filter((chat) => demoChatFolders[chat.id] === 'custom');
+  const demoUnfiledChats = chats.filter((chat) => !demoChatFolders[chat.id]);
+  const demoDraggingChat = chats.find((chat) => chat.id === demoDraggingChatId) ?? null;
+
+  const toggleDemoFolder = (folderId: string) => {
+    setDemoExpandedFolders((current) => ({ ...current, [folderId]: current[folderId] === false }));
+  };
+
+  const startDemoFolderRename = (folderId: string, currentName: string) => {
+    setDemoFolderMenuId(null);
+    setDemoRenamingFolderId(folderId);
+    setDemoRenamingFolderName(currentName);
+  };
+
+  const toggleDemoFolderMenu = (event: React.MouseEvent<HTMLButtonElement>, folderId: string) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setDemoFolderMenuPos({ x: rect.right + 4, y: rect.top });
+    setDemoFolderMenuId((current) => current === folderId ? null : folderId);
+  };
+
+  const finishDemoFolderRename = () => {
+    if (!demoRenamingFolderId) return;
+    const nextName = demoRenamingFolderName.trim();
+    if (nextName) {
+      if (demoRenamingFolderId === 'custom') {
+        setDemoCustomFolder(nextName);
+      } else {
+        setDemoFolderNames((current) => ({ ...current, [demoRenamingFolderId]: nextName }));
+      }
+    }
+    setDemoRenamingFolderId(null);
+    setDemoRenamingFolderName('');
+  };
+
+  const deleteDemoFolder = (folderId: string) => {
+    setDemoChatFolders((current) => Object.fromEntries(
+      Object.entries(current).filter(([, assignedFolderId]) => assignedFolderId !== folderId),
+    ));
+    if (folderId === 'custom') {
+      setDemoCustomFolder(null);
+    } else {
+      setDemoDeletedFolders((current) => ({ ...current, [folderId]: true }));
+    }
+    setDemoFolderMenuId(null);
+    if (demoRenamingFolderId === folderId) setDemoRenamingFolderId(null);
+  };
+
+  const moveDemoChat = (chatId: number, folderId: string) => {
+    setDemoChatFolders((current) => {
+      if (folderId === 'unfiled') {
+        const next = { ...current };
+        delete next[chatId];
+        return next;
+      }
+      return { ...current, [chatId]: folderId };
+    });
+    setDemoExpandedFolders((current) => ({ ...current, [folderId]: true }));
+    setDemoMoveMenuOpen(false);
+    setContextMenuChatId(null);
+  };
+
+  const handleDemoChatDragStart = ({ active }: DragStartEvent) => {
+    const chatId = Number(active.data.current?.chatId);
+    setDemoDraggingChatId(Number.isSafeInteger(chatId) ? chatId : null);
+    const initialRect = active.rect.current.initial;
+    setDemoDraggingChatSize(initialRect ? { width: initialRect.width, height: initialRect.height } : null);
+  };
+
+  const handleDemoChatDragEnd = ({ active, over }: DragEndEvent) => {
+    setDemoDraggingChatId(null);
+    setDemoDraggingChatSize(null);
+    const chatId = Number(active.data.current?.chatId);
+    const folderId = String(over?.data.current?.folderId || '');
+    if (!Number.isSafeInteger(chatId) || !folderId) return;
+    moveDemoChat(chatId, folderId);
+  };
+
   return (
     <div className={s.layout}>
       {/* SIDEBAR */}
@@ -2835,18 +3107,41 @@ export function ChatPage() {
           >
             {t('chat.sidebar.chats')}
           </motion.span>
-          <motion.button
-            className={s.newChatBtn}
-            onClick={handleCreateChat}
+          <motion.div
+            className={s.sidebarHeaderActions}
             animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
             transition={{ duration: 0.15 }}
             style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="7" y1="1" x2="7" y2="13" />
-              <line x1="1" y1="7" x2="13" y2="7" />
-            </svg>
-          </motion.button>
+            <button
+              className={`${s.sidebarActionBtn} ${demoFiltersOpen ? s.sidebarActionBtnActive : ''}`}
+              onClick={() => {
+                setDemoFiltersOpen((value) => !value);
+                setDemoFolderCreatorOpen(false);
+              }}
+              title="Фильтры"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 5h16l-6.2 7.1v5.1l-3.6 1.8v-6.9L4 5z" />
+              </svg>
+            </button>
+            <button
+              className={`${s.newChatBtn} ${demoFolderCreatorOpen ? s.newChatBtnActive : ''}`}
+              onClick={() => {
+                setDemoFolderCreatorOpen((value) => !value);
+                setDemoFiltersOpen(false);
+              }}
+              title="Новая папка"
+            >
+              <FolderAddIcon />
+            </button>
+            <button className={s.newChatBtn} onClick={handleCreateChat} title={t('chat.sidebar.newChat')}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="7" y1="1" x2="7" y2="13" />
+                <line x1="1" y1="7" x2="13" y2="7" />
+              </svg>
+            </button>
+          </motion.div>
         </div>
 
         {/* Search input */}
@@ -2876,6 +3171,88 @@ export function ChatPage() {
             </button>
           )}
         </motion.div>
+
+        <AnimatePresence initial={false}>
+          {demoFiltersOpen && !sidebarCollapsed && (
+            <motion.div
+              className={s.demoFilterPanel}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+            >
+              <div className={s.demoFilterGrid}>
+                <label className={s.demoFilterField}>
+                  <span>Промпт</span>
+                  <Select
+                    value={demoPromptFilter}
+                    onChange={setDemoPromptFilter}
+                    options={[
+                      { value: 'all', label: 'Все' },
+                      { value: 'vega', label: 'Vega' },
+                      { value: 'default', label: 'Default' },
+                    ]}
+                  />
+                </label>
+                <label className={s.demoFilterField}>
+                  <span>Модель</span>
+                  <Select
+                    value={demoModelFilter}
+                    onChange={setDemoModelFilter}
+                    options={[
+                      { value: 'all', label: 'Все' },
+                      { value: 'deepseek', label: 'Deepseek V4 Flash' },
+                      { value: 'gemini', label: 'Gemini Flash' },
+                    ]}
+                  />
+                </label>
+              </div>
+              <div className={s.demoFilterChips}>
+                <button
+                  className={demoFilesFilter ? s.demoFilterChipActive : ''}
+                  onClick={() => setDemoFilesFilter((value) => !value)}
+                >
+                  С файлами
+                </button>
+                <button
+                  className={demoTelegramFilter ? s.demoFilterChipActive : ''}
+                  onClick={() => setDemoTelegramFilter((value) => !value)}
+                >
+                  Telegram
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence initial={false}>
+          {demoFolderCreatorOpen && !sidebarCollapsed && (
+            <motion.div
+              className={s.demoFolderCreator}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+            >
+              <FolderIcon />
+              <input value={demoFolderName} onChange={(event) => setDemoFolderName(event.target.value)} autoFocus />
+              <button
+                title="Создать"
+                onClick={() => {
+                  const value = demoFolderName.trim();
+                  if (value) {
+                    setDemoCustomFolder(value);
+                    setDemoDeletedFolders((current) => ({ ...current, custom: false }));
+                  }
+                  setDemoFolderCreatorOpen(false);
+                }}
+              >
+                ✓
+              </button>
+              <button title="Отмена" onClick={() => setDemoFolderCreatorOpen(false)}>×</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <motion.div
           className={s.sidebarContentBody}
@@ -2912,65 +3289,155 @@ export function ChatPage() {
               ))}
             </div>
           ) : (
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragStart={handleDemoChatDragStart}
+            onDragCancel={() => {
+              setDemoDraggingChatId(null);
+              setDemoDraggingChatSize(null);
+            }}
+            onDragEnd={handleDemoChatDragEnd}
+          >
           <div className={s.chatList}>
-            {chats.map((chat) => (
-              <div
-                key={chat.id}
-                className={`${s.chatItem} ${chat.id === activeChatId ? s.chatItemActive : ''}`}
-                onClick={() => {
-                  if (renamingChatId === chat.id) return;
-                  selectChat(chat.id);
-                }}
-              >
-                <div className={s.chatItemRow}>
-                  {renamingChatId === chat.id ? (
-                    <input
-                      className={s.renameInput}
-                      value={renamingTitle}
-                      onChange={(e) => setRenamingTitle(e.target.value)}
-                      onKeyDown={handleRenameKeyDown}
-                      onBlur={handleConfirmRename}
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <Tooltip content={chat.title || t('chat.sidebar.newChat')} delayDuration={600} arrowAtPointer>
-                      <div className={s.chatItemTitle}>
-                        <AnimatePresence mode="popLayout" initial={false}>
-                          <motion.span
-                            key={chat.title || t('chat.sidebar.newChat')}
-                            initial={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
-                            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                            exit={{ opacity: 0, x: 0, filter: 'blur(4px)' }}
-                            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                            style={{ display: 'inline-block' }}
-                          >
-                            {chat.title || t('chat.sidebar.newChat')}
-                          </motion.span>
-                        </AnimatePresence>
-                      </div>
-                    </Tooltip>
-                  )}
-                  {getUnread(chat.id) > 0 && (
-                    <span className={s.unreadBadge}>{getUnread(chat.id)}</span>
-                  )}
-                  <button
-                    className={s.kebabBtn}
-                    onClick={(e) => handleKebabClick(e, chat.id)}
-                    title={t('common.actions')}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                      <circle cx="8" cy="3" r="1.5" />
-                      <circle cx="8" cy="8" r="1.5" />
-                      <circle cx="8" cy="13" r="1.5" />
+            {demoFolders.map((folder) => {
+              const expanded = demoExpandedFolders[folder.id] !== false;
+              return (
+                <DemoDroppableFolder folderId={folder.id} key={folder.id}>
+                <div className={s.demoFolder}>
+                  <div className={s.demoFolderHeader} onClick={() => toggleDemoFolder(folder.id)}>
+                    <svg className={`${s.demoFolderChevron} ${expanded ? s.demoFolderChevronExpanded : ''}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
                     </svg>
-                  </button>
+                    <FolderIcon />
+                    {demoRenamingFolderId === folder.id ? (
+                      <input
+                        className={s.demoFolderRenameInput}
+                        value={demoRenamingFolderName}
+                        onChange={(event) => setDemoRenamingFolderName(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onBlur={finishDemoFolderRename}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') finishDemoFolderRename();
+                          if (event.key === 'Escape') {
+                            setDemoRenamingFolderId(null);
+                            setDemoRenamingFolderName('');
+                          }
+                        }}
+                        autoFocus
+                      />
+                    ) : <span className={s.demoFolderName}>{folder.name}</span>}
+                    <span className={s.demoFolderCount}>{folder.chats.length}</span>
+                    <div className={s.demoFolderActions}>
+                      <button
+                        className={s.kebabBtn}
+                        onClick={(event) => toggleDemoFolderMenu(event, folder.id)}
+                        title="Действия с папкой"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                          <circle cx="8" cy="3" r="1.5" />
+                          <circle cx="8" cy="8" r="1.5" />
+                          <circle cx="8" cy="13" r="1.5" />
+                        </svg>
+                      </button>
+                      {demoFolderMenuId === folder.id && (
+                        <div
+                          className={s.contextMenu}
+                          style={{ top: demoFolderMenuPos.y, left: demoFolderMenuPos.x }}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <button className={s.contextMenuItem} onClick={() => startDemoFolderRename(folder.id, folder.name)}>Переименовать</button>
+                          <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => deleteDemoFolder(folder.id)}>Удалить</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <AnimatePresence initial={false}>
+                    {expanded && (
+                      <motion.div
+                        className={s.demoFolderChats}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        {folder.chats.map((chat) => renderSidebarChat(chat, true))}
+                        {folder.chats.length === 0 && <div className={s.demoEmptyFolder}>Перетащите сюда чат</div>}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-                {renamingChatId !== chat.id && (
-                  <div className={s.chatItemTime}>{formatTime(chat.created_at)}</div>
+                </DemoDroppableFolder>
+              );
+            })}
+            {demoCustomFolder && (
+              <DemoDroppableFolder folderId="custom">
+              <div className={s.demoFolder}>
+                <div className={s.demoFolderHeader} onClick={() => toggleDemoFolder('custom')}>
+                  <svg className={`${s.demoFolderChevron} ${demoExpandedFolders.custom !== false ? s.demoFolderChevronExpanded : ''}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                  <FolderIcon />
+                  {demoRenamingFolderId === 'custom' ? (
+                    <input
+                      className={s.demoFolderRenameInput}
+                      value={demoRenamingFolderName}
+                      onChange={(event) => setDemoRenamingFolderName(event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      onBlur={finishDemoFolderRename}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') finishDemoFolderRename();
+                        if (event.key === 'Escape') {
+                          setDemoRenamingFolderId(null);
+                          setDemoRenamingFolderName('');
+                        }
+                      }}
+                      autoFocus
+                    />
+                  ) : <span className={s.demoFolderName}>{demoCustomFolder}</span>}
+                  <span className={s.demoFolderCount}>{demoCustomFolderChats.length}</span>
+                  <div className={s.demoFolderActions}>
+                    <button
+                      className={s.kebabBtn}
+                      onClick={(event) => toggleDemoFolderMenu(event, 'custom')}
+                      title="Действия с папкой"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                        <circle cx="8" cy="3" r="1.5" />
+                        <circle cx="8" cy="8" r="1.5" />
+                        <circle cx="8" cy="13" r="1.5" />
+                      </svg>
+                    </button>
+                    {demoFolderMenuId === 'custom' && (
+                      <div
+                        className={s.contextMenu}
+                        style={{ top: demoFolderMenuPos.y, left: demoFolderMenuPos.x }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button className={s.contextMenuItem} onClick={() => startDemoFolderRename('custom', demoCustomFolder)}>Переименовать</button>
+                        <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => deleteDemoFolder('custom')}>Удалить</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {demoExpandedFolders.custom !== false && (
+                  <div className={s.demoFolderChats}>
+                    {demoCustomFolderChats.map((chat) => renderSidebarChat(chat, true))}
+                    {demoCustomFolderChats.length === 0 && <div className={s.demoEmptyFolder}>Перетащите сюда чат</div>}
+                  </div>
                 )}
               </div>
-            ))}
+              </DemoDroppableFolder>
+            )}
+            <DemoDroppableFolder folderId="unfiled">
+              <div className={s.demoUnfiledDropZone}>
+              <div className={s.demoUnfiledHeader}>
+                <span>Без папки</span>
+                <span>{demoUnfiledChats.length}</span>
+              </div>
+              {demoUnfiledChats.map((chat) => renderSidebarChat(chat))}
+              {demoUnfiledChats.length === 0 && <div className={s.demoEmptyUnfiled}>Перетащите сюда чат</div>}
+              </div>
+            </DemoDroppableFolder>
             {chats.length === 0 && (
               <div className={s.emptyChats}>{loadingChats ? t('common.loading') : t('chat.sidebar.noChats')}</div>
             )}
@@ -2978,6 +3445,43 @@ export function ChatPage() {
               <div className={s.emptyChats}>{t('common.loading')}</div>
             )}
           </div>
+          <DragOverlay zIndex={10001} dropAnimation={{ duration: 150, easing: 'ease-out' }}>
+            {demoDraggingChat && (
+              <div
+                className={`${s.chatItem} ${demoChatFolders[demoDraggingChat.id] ? s.chatItemNested : ''} ${demoDraggingChat.id === activeChatId ? s.chatItemActive : ''} ${s.demoChatDragOverlay}`}
+                style={demoDraggingChatSize || undefined}
+              >
+                <div className={s.chatItemRow}>
+                  <div className={s.chatItemTitle}>
+                    {demoDraggingChat.title || t('chat.sidebar.newChat')}
+                  </div>
+                  {getUnread(demoDraggingChat.id) > 0 && (
+                    <span className={s.unreadBadge}>{getUnread(demoDraggingChat.id)}</span>
+                  )}
+                  <div className={s.chatItemControls} aria-hidden="true">
+                    <div className={s.kebabBtn}>
+                      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                        <circle cx="8" cy="3" r="1.5" />
+                        <circle cx="8" cy="8" r="1.5" />
+                        <circle cx="8" cy="13" r="1.5" />
+                      </svg>
+                    </div>
+                    <div className={s.chatDragHandle}>
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 1.5v13M1.5 8h13" />
+                        <polyline points="5.7 3.8 8 1.5 10.3 3.8" />
+                        <polyline points="5.7 12.2 8 14.5 10.3 12.2" />
+                        <polyline points="3.8 5.7 1.5 8 3.8 10.3" />
+                        <polyline points="12.2 5.7 14.5 8 12.2 10.3" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div className={s.chatItemTime}>{formatTime(demoDraggingChat.created_at)}</div>
+              </div>
+            )}
+          </DragOverlay>
+          </DndContext>
           )}
         </motion.div>
 
@@ -3003,6 +3507,45 @@ export function ChatPage() {
               </svg>
               {t('chat.sidebar.downloadDocx')}
             </button>
+            <div className={s.demoMoveMenuGroup}>
+              <button className={s.contextMenuItem} onClick={() => setDemoMoveMenuOpen((value) => !value)}>
+                <FolderIcon size={14} />
+                <span>Переместить в папку</span>
+                <svg className={`${s.demoMoveMenuChevron} ${demoMoveMenuOpen ? s.demoMoveMenuChevronOpen : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+              {demoMoveMenuOpen && (
+                <div className={s.demoMoveMenuOptions}>
+                  {demoFolders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      className={demoChatFolders[contextMenuChatId] === folder.id ? s.demoMoveMenuOptionActive : ''}
+                      onClick={() => moveDemoChat(contextMenuChatId, folder.id)}
+                    >
+                      <span>{folder.name}</span>
+                      {demoChatFolders[contextMenuChatId] === folder.id && <span>✓</span>}
+                    </button>
+                  ))}
+                  {demoCustomFolder && (
+                    <button
+                      className={demoChatFolders[contextMenuChatId] === 'custom' ? s.demoMoveMenuOptionActive : ''}
+                      onClick={() => moveDemoChat(contextMenuChatId, 'custom')}
+                    >
+                      <span>{demoCustomFolder}</span>
+                      {demoChatFolders[contextMenuChatId] === 'custom' && <span>✓</span>}
+                    </button>
+                  )}
+                  <button
+                    className={!demoChatFolders[contextMenuChatId] ? s.demoMoveMenuOptionActive : ''}
+                    onClick={() => moveDemoChat(contextMenuChatId, 'unfiled')}
+                  >
+                    <span>Без папки</span>
+                    {!demoChatFolders[contextMenuChatId] && <span>✓</span>}
+                  </button>
+                </div>
+              )}
+            </div>
             <button className={s.contextMenuItem} onClick={() => handleToggleBotHidden(contextMenuChatId)}>
               {chats.find(c => c.id === contextMenuChatId)?.bot_hidden ? (
                 <>

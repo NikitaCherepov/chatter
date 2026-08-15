@@ -48,9 +48,42 @@
 
 .sidebarTitle {
   flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.sidebarHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sidebarActionBtn {
+  width: 26px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.12s, background-color 0.12s;
+
+  &:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-modal-hover);
+  }
+}
+
+.sidebarActionBtnActive {
+  color: var(--accent);
+  background-color: var(--bg-modal-hover);
 }
 
 // ====== SEARCH ======
@@ -113,6 +146,118 @@
   }
 }
 
+.demoFilterPanel {
+  overflow: visible;
+  margin: 0 16px 12px;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+
+.demoFilterGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.demoFilterField {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  span {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  select {
+    min-width: 0;
+    width: 100%;
+    height: 28px;
+    padding: 0 22px 0 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    outline: none;
+    background: var(--bg-secondary);
+    color: var(--text-body);
+    font-size: 11px;
+
+    &:focus {
+      border-color: var(--accent);
+    }
+  }
+}
+
+.demoFilterChips {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+
+  button {
+    padding: 4px 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+
+    &:hover {
+      color: var(--text-primary);
+      border-color: var(--border-medium);
+    }
+
+    &.demoFilterChipActive {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--bg-bubble);
+    }
+  }
+}
+
+.demoFolderCreator {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 12px;
+  padding: 7px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text-body);
+    font-size: 12px;
+  }
+
+  button {
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--text-primary);
+      background: var(--bg-modal-hover);
+    }
+  }
+}
+
 .searchSnippet {
   font-size: 12px;
   color: var(--text-muted);
@@ -154,6 +299,151 @@
   }
 }
 
+.newChatBtnActive {
+  border-color: var(--accent);
+  color: var(--accent);
+  background-color: var(--bg-bubble);
+}
+
+.demoDropTarget {
+  transition: background-color 0.12s, box-shadow 0.12s;
+}
+
+.demoDropTargetOver {
+  background-color: var(--bg-bubble);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.demoDraggableChat {
+  position: relative;
+  z-index: 0;
+}
+
+.demoDraggableChatDragging {
+  opacity: 0.28;
+}
+
+.demoChatDragOverlay {
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+
+  .kebabBtn,
+  .chatDragHandle {
+    opacity: 1;
+  }
+}
+
+.demoFolder {
+  position: relative;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.demoFolderHeader {
+  width: 100%;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px 0 13px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color 0.1s, color 0.1s;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-bubble);
+  }
+
+  &:hover .kebabBtn {
+    opacity: 1;
+  }
+}
+
+.demoFolderName {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.demoFolderChevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.demoFolderChevronExpanded {
+  transform: rotate(90deg);
+}
+
+.demoFolderCount {
+  color: var(--text-hint);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.demoFolderActions {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.demoFolderRenameInput {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.demoFolderChats {
+  overflow: hidden;
+}
+
+.demoEmptyFolder {
+  padding: 7px 16px 10px 47px;
+  color: var(--text-hint);
+  font-size: 10px;
+}
+
+.demoUnfiledHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 16px 7px;
+  color: var(--text-hint);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  span:last-child {
+    font-weight: 500;
+  }
+}
+
+.demoUnfiledDropZone {
+  min-height: 35px;
+}
+
+.demoEmptyUnfiled {
+  padding: 0 16px 10px;
+  color: var(--text-hint);
+  font-size: 10px;
+}
+
 .chatList {
   flex: 1;
   overflow-y: auto;
@@ -162,7 +452,9 @@
 }
 
 .chatItem {
+  position: relative;
   padding: 12px 16px;
+  padding-right: 42px;
   cursor: pointer;
   border-bottom: 1px solid var(--border-light);
   transition: background-color 0.1s;
@@ -202,9 +494,20 @@
   flex-shrink: 0;
 }
 
+.chatItemControls {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
 .kebabBtn {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   border: none;
   background: transparent;
@@ -225,6 +528,38 @@
   &:hover {
     background-color: var(--bg-modal-hover);
     color: var(--text-primary);
+  }
+}
+
+.chatDragHandle {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  padding: 0;
+  touch-action: none;
+  transition: opacity 0.15s, background-color 0.1s, color 0.1s;
+
+  .chatItem:hover &,
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  &:hover {
+    background-color: var(--bg-modal-hover);
+    color: var(--text-primary);
+  }
+
+  &:active {
+    cursor: grabbing;
   }
 }
 
@@ -287,6 +622,61 @@
       color: var(--color-error);
     }
   }
+}
+
+.demoMoveMenuGroup {
+  position: relative;
+}
+
+.demoMoveMenuChevron {
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+
+.demoMoveMenuChevronOpen {
+  transform: rotate(90deg);
+}
+
+.demoMoveMenuOptions {
+  margin: 2px 8px 5px 30px;
+  padding-left: 7px;
+  border-left: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  button {
+    min-width: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 7px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--text-primary);
+      background: var(--bg-primary);
+    }
+
+    span:first-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+}
+
+.demoMoveMenuOptionActive {
+  color: var(--accent) !important;
 }
 
 .chatItemTitle {
@@ -1167,6 +1557,10 @@
   &:focus {
     border-color: var(--accent);
   }
+}
+
+.chatItemNested {
+  padding-left: 32px;
 }
 
 .composerInputSlot {
