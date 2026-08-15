@@ -743,6 +743,7 @@ export function ChatPage() {
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
   const [hasMoreChats, setHasMoreChats] = useState(false);
+  const loadedChatOffsetRef = useRef(0);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [attachedDocuments, setAttachedDocuments] = useState<DocumentItem[]>([]);
@@ -770,6 +771,7 @@ export function ChatPage() {
   const [demoFolderCreatorOpen, setDemoFolderCreatorOpen] = useState(false);
   const [demoFolderName, setDemoFolderName] = useState(() => t('chat.sidebar.folders.new'));
   const [chatFolders, setChatFolders] = useState<api.ChatFolder[]>([]);
+  const [unfiledChatCount, setUnfiledChatCount] = useState(0);
   const [demoFolderMenuId, setDemoFolderMenuId] = useState<number | null>(null);
   const [demoFolderMenuPos, setDemoFolderMenuPos] = useState({ x: 0, y: 0 });
   const [demoRenamingFolderId, setDemoRenamingFolderId] = useState<number | null>(null);
@@ -978,14 +980,25 @@ export function ChatPage() {
       };
       const [res, folderRes, filterOptions] = await Promise.all([
         api.getChats(CHAT_PAGE_SIZE, 0, filters),
-        api.getChatFolders().catch(() => ({ folders: [] as api.ChatFolder[] })),
+        api.getChatFolders(filters).catch(() => ({ folders: [] as api.ChatFolder[], unfiled_count: 0, total_count: 0 })),
         api.getChatFilterOptions().catch(() => ({ prompts: [] as string[], models: [] as string[] })),
       ]);
       const normalizedChats = res.chats.map((chat) => ({ ...chat, folder_id: chat.folder_id ?? null }));
+      loadedChatOffsetRef.current = res.chats.length;
       setChats(normalizedChats);
-      setChatFolders(folderRes.folders);
+      setChatFolders(folderRes.folders.map((folder) => ({
+        ...folder,
+        chat_count: Number.isFinite(folder.chat_count)
+          ? folder.chat_count
+          : normalizedChats.filter((chat) => chat.folder_id === folder.id).length,
+      })));
+      setUnfiledChatCount(Number.isFinite(folderRes.unfiled_count)
+        ? folderRes.unfiled_count
+        : normalizedChats.filter((chat) => chat.folder_id === null).length);
       setChatFilterOptions(filterOptions);
-      setHasMoreChats(res.chats.length === CHAT_PAGE_SIZE);
+      setHasMoreChats(Number.isFinite(res.total)
+        ? loadedChatOffsetRef.current < res.total
+        : res.chats.length === CHAT_PAGE_SIZE);
       if (res.active_chat_id) {
         setActiveChatId(res.active_chat_id);
       } else if (res.chats.length > 0) {
@@ -1002,13 +1015,16 @@ export function ChatPage() {
     if (loadingMoreChats || !hasMoreChats || searchQuery.trim().length >= 3) return;
     setLoadingMoreChats(true);
     try {
-      const res = await api.getChats(CHAT_PAGE_SIZE, chats.length, {
+      const res = await api.getChats(CHAT_PAGE_SIZE, loadedChatOffsetRef.current, {
         prompt: demoPromptFilter === 'all' ? undefined : demoPromptFilter,
         model: demoModelFilter === 'all' ? undefined : demoModelFilter,
         hasFiles: demoFilesFilter,
         hasImages: demoImagesFilter,
       });
-      setHasMoreChats(res.chats.length === CHAT_PAGE_SIZE);
+      loadedChatOffsetRef.current += res.chats.length;
+      setHasMoreChats(Number.isFinite(res.total)
+        ? loadedChatOffsetRef.current < res.total
+        : res.chats.length === CHAT_PAGE_SIZE);
       if (res.chats.length > 0) {
         setChats(prev => {
           const seen = new Set(prev.map(chat => chat.id));
@@ -1023,7 +1039,7 @@ export function ChatPage() {
     } finally {
       setLoadingMoreChats(false);
     }
-  }, [loadingMoreChats, hasMoreChats, searchQuery, chats.length, demoPromptFilter, demoModelFilter, demoFilesFilter, demoImagesFilter]);
+  }, [loadingMoreChats, hasMoreChats, searchQuery, demoPromptFilter, demoModelFilter, demoFilesFilter, demoImagesFilter]);
 
   const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -3288,7 +3304,9 @@ export function ChatPage() {
 
   const deleteDemoFolder = async (folderId: number) => {
     const previousFolders = chatFolders;
+    const deletedFolderCount = chatFolders.find((folder) => folder.id === folderId)?.chat_count || 0;
     setChatFolders((current) => current.filter((folder) => folder.id !== folderId));
+    setUnfiledChatCount((current) => current + deletedFolderCount);
     setChats((current) => current.map((chat) => chat.folder_id === folderId ? { ...chat, folder_id: null } : chat));
     setDemoFolderMenuId(null);
     if (demoRenamingFolderId === folderId) setDemoRenamingFolderId(null);
@@ -3303,6 +3321,21 @@ export function ChatPage() {
 
   const moveDemoChat = async (chatId: number, folderId: number | null) => {
     const previousFolderId = chats.find((chat) => chat.id === chatId)?.folder_id ?? null;
+    if (previousFolderId === folderId) {
+      setDemoMoveMenuOpen(false);
+      setContextMenuChatId(null);
+      return;
+    }
+    const adjustCounts = (from: number | null, to: number | null) => {
+      setChatFolders((current) => current.map((folder) => {
+        if (folder.id === from) return { ...folder, chat_count: Math.max(0, folder.chat_count - 1) };
+        if (folder.id === to) return { ...folder, chat_count: folder.chat_count + 1 };
+        return folder;
+      }));
+      if (from === null) setUnfiledChatCount((current) => Math.max(0, current - 1));
+      if (to === null) setUnfiledChatCount((current) => current + 1);
+    };
+    adjustCounts(previousFolderId, folderId);
     setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, folder_id: folderId } : chat));
     if (folderId !== null) setDemoExpandedFolders((current) => ({ ...current, [folderId]: true }));
     setDemoMoveMenuOpen(false);
@@ -3311,6 +3344,7 @@ export function ChatPage() {
       await api.moveChatToFolder(chatId, folderId);
     } catch (error) {
       console.error('Failed to move chat to folder:', error);
+      adjustCounts(folderId, previousFolderId);
       setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, folder_id: previousFolderId } : chat));
     }
   };
@@ -3583,7 +3617,7 @@ export function ChatPage() {
                         autoFocus
                       />
                     ) : <span className={s.demoFolderName}>{folder.name}</span>}
-                    <span className={s.demoFolderCount}>{folder.chats.length}</span>
+                    <span className={s.demoFolderCount}>{folder.chat_count}</span>
                     <div className={s.demoFolderActions}>
                       <button
                         className={s.kebabBtn}
@@ -3630,7 +3664,7 @@ export function ChatPage() {
               <div className={s.demoUnfiledDropZone}>
               <div className={s.demoUnfiledHeader}>
                 <span>{t('chat.sidebar.folders.unfiled')}</span>
-                <span>{demoUnfiledChats.length}</span>
+                <span>{unfiledChatCount}</span>
               </div>
               {demoUnfiledChats.map((chat) => renderSidebarChat(chat))}
               {demoUnfiledChats.length === 0 && <div className={s.demoEmptyUnfiled}>{t('chat.sidebar.folders.dropChat')}</div>}

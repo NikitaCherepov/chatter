@@ -329,6 +329,7 @@ export type ChatFolder = {
   sort_order: number;
   created_at: number;
   updated_at: number;
+  chat_count: number;
 };
 
 export type ChatListFilters = {
@@ -338,7 +339,7 @@ export type ChatListFilters = {
   hasImages?: boolean;
 };
 
-export async function getChats(limit = 25, offset = 0, filters: ChatListFilters = {}): Promise<{ chats: ChatInfo[]; active_chat_id: number | null }> {
+export async function getChats(limit = 25, offset = 0, filters: ChatListFilters = {}): Promise<{ chats: ChatInfo[]; active_chat_id: number | null; total: number }> {
   const params = new URLSearchParams({ limit: `${limit}`, offset: `${offset}` });
   if (filters.prompt) params.set('prompt', filters.prompt);
   if (filters.model) params.set('model', filters.model);
@@ -351,8 +352,14 @@ export async function getChatFilterOptions(): Promise<{ prompts: string[]; model
   return apiFetch('/api/v1/chat-filter-options');
 }
 
-export async function getChatFolders(): Promise<{ folders: ChatFolder[] }> {
-  return apiFetch('/api/v1/chat-folders');
+export async function getChatFolders(filters: ChatListFilters = {}): Promise<{ folders: ChatFolder[]; unfiled_count: number; total_count: number }> {
+  const params = new URLSearchParams();
+  if (filters.prompt) params.set('prompt', filters.prompt);
+  if (filters.model) params.set('model', filters.model);
+  if (filters.hasFiles) params.set('has_files', '1');
+  if (filters.hasImages) params.set('has_images', '1');
+  const query = params.toString();
+  return apiFetch(`/api/v1/chat-folders${query ? `?${query}` : ''}`);
 }
 
 export async function createChatFolder(name: string): Promise<{ folder: ChatFolder }> {

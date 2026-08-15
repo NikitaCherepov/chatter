@@ -117,12 +117,7 @@ export type ChatListFilters = {
   hasImages?: boolean;
 };
 
-export const listUserChats = (userId: number, limit = 50, offset = 0, filters: ChatListFilters = {}): ChatDto[] => {
-  const activeId = ensureActiveChat(userId);
-  const parsedLimit = Number.isFinite(limit) ? Math.floor(limit) : 50;
-  const parsedOffset = Number.isFinite(offset) ? Math.floor(offset) : 0;
-  const safeLimit = Math.max(1, Math.min(100, parsedLimit));
-  const safeOffset = Math.max(0, parsedOffset);
+const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
   const conditions = ['uc.user_id = ?'];
   const params: Array<string | number> = [userId];
   if (filters.promptName) {
@@ -155,10 +150,20 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
         AND TRIM(cm.images) NOT IN ('', '[]', 'null')
     )`);
   }
+  return { where: conditions.join('\n      AND '), params };
+};
+
+export const listUserChats = (userId: number, limit = 50, offset = 0, filters: ChatListFilters = {}): ChatDto[] => {
+  const activeId = ensureActiveChat(userId);
+  const parsedLimit = Number.isFinite(limit) ? Math.floor(limit) : 50;
+  const parsedOffset = Number.isFinite(offset) ? Math.floor(offset) : 0;
+  const safeLimit = Math.max(1, Math.min(100, parsedLimit));
+  const safeOffset = Math.max(0, parsedOffset);
+  const { where, params } = buildUserChatFilter(userId, filters);
   const rows = db.prepare(`
     SELECT uc.id, uc.title, uc.folder_id, uc.created_at, uc.updated_at, uc.bot_hidden
     FROM user_chats uc
-    WHERE ${conditions.join('\n      AND ')}
+    WHERE ${where}
     ORDER BY uc.updated_at DESC, uc.id DESC
     LIMIT ? OFFSET ?
   `).all(...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number }>;
@@ -172,6 +177,16 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
     is_active: row.id === activeId,
     bot_hidden: row.bot_hidden === 1
   }));
+};
+
+export const countUserChats = (userId: number, filters: ChatListFilters = {}): number => {
+  const { where, params } = buildUserChatFilter(userId, filters);
+  const row = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM user_chats uc
+    WHERE ${where}
+  `).get(...params) as { count: number };
+  return Number(row.count) || 0;
 };
 
 export type ChatFilterOptions = {
@@ -206,22 +221,41 @@ export type ChatFolderDto = {
   sort_order: number;
   created_at: number;
   updated_at: number;
+  chat_count: number;
 };
 
-export const listChatFolders = (userId: number): ChatFolderDto[] => {
+export const listChatFolders = (userId: number, filters: ChatListFilters = {}): {
+  folders: ChatFolderDto[];
+  unfiled_count: number;
+  total_count: number;
+} => {
+  const { where, params } = buildUserChatFilter(userId, filters);
+  const countRows = db.prepare(`
+    SELECT uc.folder_id, COUNT(*) AS count
+    FROM user_chats uc
+    WHERE ${where}
+    GROUP BY uc.folder_id
+  `).all(...params) as Array<{ folder_id: number | null; count: number }>;
+  const counts = new Map<number | null, number>(countRows.map((row) => [row.folder_id, Number(row.count) || 0]));
   const rows = db.prepare(`
     SELECT id, name, sort_order, created_at, updated_at
     FROM chat_folders
     WHERE user_id = ?
     ORDER BY sort_order ASC, id ASC
   `).all(userId) as Array<{ id: number; name: string; sort_order: number; created_at: string; updated_at: string }>;
-  return rows.map((row) => ({
+  const folders = rows.map((row) => ({
     id: row.id,
     name: row.name,
     sort_order: row.sort_order,
     created_at: toUnix(row.created_at),
     updated_at: toUnix(row.updated_at),
+    chat_count: counts.get(row.id) || 0,
   }));
+  return {
+    folders,
+    unfiled_count: counts.get(null) || 0,
+    total_count: [...counts.values()].reduce((total, count) => total + count, 0),
+  };
 };
 
 export const createChatFolder = (userId: number, name: string): ChatFolderDto => {
@@ -244,6 +278,7 @@ export const createChatFolder = (userId: number, name: string): ChatFolderDto =>
     ...row,
     created_at: toUnix(row.created_at),
     updated_at: toUnix(row.updated_at),
+    chat_count: 0,
   };
 };
 
