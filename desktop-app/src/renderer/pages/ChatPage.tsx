@@ -1107,6 +1107,36 @@ export function ChatPage() {
     }
   }, [getCurrentChatFilters, searchQuery, updateSectionPaging]);
 
+  const refreshChatListMetadata = useCallback(async () => {
+    try {
+      const folderRes = await api.getChatFolders(getCurrentChatFilters());
+      setChatFolders(folderRes.folders.map((folder) => ({
+        ...folder,
+        chat_count: Number.isFinite(folder.chat_count) ? folder.chat_count : 0,
+      })));
+      setUnfiledChatCount(Number.isFinite(folderRes.unfiled_count) ? folderRes.unfiled_count : 0);
+
+      const nextPaging = { ...sectionPagingRef.current };
+      const knownKeys = new Set<ChatSectionKey>(['unfiled']);
+      for (const folder of folderRes.folders) {
+        const key: ChatSectionKey = `folder:${folder.id}`;
+        knownKeys.add(key);
+        const total = Math.max(0, Number(folder.chat_count) || 0);
+        const current = nextPaging[key] ?? { offset: 0, total, hasMore: total > 0, loading: false };
+        nextPaging[key] = { ...current, total, hasMore: current.offset < total };
+      }
+      for (const key of Object.keys(nextPaging) as ChatSectionKey[]) {
+        if (!knownKeys.has(key)) delete nextPaging[key];
+      }
+      const unfiledTotal = Math.max(0, Number(folderRes.unfiled_count) || 0);
+      const currentUnfiled = nextPaging.unfiled ?? { offset: 0, total: unfiledTotal, hasMore: unfiledTotal > 0, loading: false };
+      nextPaging.unfiled = { ...currentUnfiled, total: unfiledTotal, hasMore: currentUnfiled.offset < unfiledTotal };
+      updateSectionPaging(nextPaging);
+    } catch (err) {
+      console.error('Failed to refresh chat list metadata:', err);
+    }
+  }, [getCurrentChatFilters, updateSectionPaging]);
+
   useEffect(() => { void loadChats(); }, [loadChats]);
 
   useEffect(() => {
@@ -1274,8 +1304,33 @@ export function ChatPage() {
   const handleCreateChat = async () => {
     try {
       const res = await api.createChat();
-      await loadChats();
+      const hasActiveFilters = Object.values(getCurrentChatFilters()).some((value) => value !== undefined && value !== false);
+      if (!hasActiveFilters) {
+        const createdChat: api.ChatInfo = res.chat ?? {
+          id: res.chat_id,
+          title: t('chat.sidebar.newChat'),
+          folder_id: null,
+          created_at: Math.floor(Date.now() / 1000),
+        };
+        setChats((current) => current.some((chat) => chat.id === createdChat.id)
+          ? current
+          : [createdChat, ...current]);
+        setUnfiledChatCount((current) => current + 1);
+        const paging = sectionPagingRef.current.unfiled;
+        if (paging) {
+          updateSectionPaging({
+            ...sectionPagingRef.current,
+            unfiled: {
+              ...paging,
+              offset: paging.offset + 1,
+              total: paging.total + 1,
+              hasMore: paging.offset + 1 < paging.total + 1,
+            },
+          });
+        }
+      }
       selectChat(res.chat_id);
+      void refreshChatListMetadata();
     } catch (err) {
       console.error('Failed to create chat:', err);
     }
@@ -2432,11 +2487,35 @@ export function ChatPage() {
     if (!deletingChatId) return;
     try {
       await api.deleteChat(deletingChatId);
+      const deletedChat = chats.find((chat) => chat.id === deletingChatId);
+      setChats(prev => prev.filter(c => c.id !== deletingChatId));
+      if (deletedChat) {
+        if (deletedChat.folder_id === null) {
+          setUnfiledChatCount((current) => Math.max(0, current - 1));
+        } else {
+          setChatFolders((current) => current.map((folder) => folder.id === deletedChat.folder_id
+            ? { ...folder, chat_count: Math.max(0, folder.chat_count - 1) }
+            : folder));
+        }
+        const key: ChatSectionKey = deletedChat.folder_id === null ? 'unfiled' : `folder:${deletedChat.folder_id}`;
+        const paging = sectionPagingRef.current[key];
+        if (paging) {
+          updateSectionPaging({
+            ...sectionPagingRef.current,
+            [key]: {
+              ...paging,
+              offset: Math.max(0, paging.offset - 1),
+              total: Math.max(0, paging.total - 1),
+              hasMore: Math.max(0, paging.offset - 1) < Math.max(0, paging.total - 1),
+            },
+          });
+        }
+      }
       if (activeChatId === deletingChatId) {
         setActiveChatId(null);
         setMessages([]);
       }
-      await loadChats();
+      void refreshChatListMetadata();
     } catch (err) {
       console.error('Failed to delete chat:', err);
     }

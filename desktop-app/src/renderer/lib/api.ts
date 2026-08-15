@@ -404,7 +404,7 @@ export async function searchChats(query: string, limit = 20): Promise<{ results:
   return apiFetch(`/api/v1/chats/search?q=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
-export async function createChat(title?: string): Promise<{ chat_id: number }> {
+export async function createChat(title?: string): Promise<{ chat_id: number; chat?: ChatInfo }> {
   return apiFetch('/api/v1/chats', {
     method: 'POST',
     body: JSON.stringify({ title }),

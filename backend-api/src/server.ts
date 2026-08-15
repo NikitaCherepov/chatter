@@ -1558,7 +1558,7 @@ app.post('/api/v1/chats', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const title = `${req.body?.title || ''}`;
   const chatId = createUserChat(userId, title);
-  res.status(201).json({ chat_id: chatId });
+  res.status(201).json({ chat_id: chatId, chat: getUserChatListItem(userId, chatId) });
 });
 
 app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
