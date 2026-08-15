@@ -437,6 +437,8 @@
       "unlinkTelegram": "Unlink Telegram",
       "linkTelegram": "Link Telegram",
       "logout": "Log out",
+      "notificationsOn": "Notifications on",
+      "notificationsOff": "Notifications off",
       "filters": {
         "title": "Filters",
         "prompt": "Prompt",
@@ -530,6 +532,28 @@
       "defaultTask": "Describe what the camera sees",
       "cameraValue": "Camera: {{camera}}",
       "taskValue": "Task: {{task}}"
+    },
+    "desktopNotifications": {
+      "openChatter": "Open Chatter",
+      "notifications": "Notifications",
+      "quit": "Quit",
+      "open": "Open",
+      "allow": "Allow",
+      "decline": "Decline",
+      "commandTitle": "Action confirmation",
+      "sensitiveTitle": "Sensitive action requires review",
+      "standardWarning": "Only allow this action if you recognize it.",
+      "sensitiveWarning": "Open Chatter and review the complete action before allowing it.",
+      "taskTitle": "Scheduled task completed",
+      "cameraAccess": "Camera access",
+      "emailSend": "Send email to {{to}}: {{subject}}",
+      "credentialsUpdate": "Update server credentials for {{server}}",
+      "downloadFile": "Download {{filename}}"
+    },
+    "logoutDialog": {
+      "title": "Log out?",
+      "message": "You will need to sign in again on this device.",
+      "confirm": "Log out"
     },
     "browser": {
       "confirmTitle": "Browser action",

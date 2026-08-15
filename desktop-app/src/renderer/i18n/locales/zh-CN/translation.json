@@ -441,7 +441,9 @@
         "dropChat": "将聊天拖到此处",
         "unfiled": "未归档",
         "moveTo": "移动到文件夹"
-      }
+      },
+      "notificationsOn": "通知已开启",
+      "notificationsOff": "通知已关闭"
     },
     "empty": {
       "selectOrCreate": "选择一个聊天或新建一个"
@@ -622,6 +624,28 @@
       "allowSiteSessionHint": "允许在{{site}}上执行此类操作，直到Chatter关闭",
       "siteAllowedSession": "当前会话中允许在此网站上使用：{{site}}",
       "actualTarget": "实际页面元素"
+    },
+    "desktopNotifications": {
+      "openChatter": "打开 Chatter",
+      "notifications": "通知",
+      "quit": "退出",
+      "open": "打开",
+      "allow": "允许",
+      "decline": "拒绝",
+      "commandTitle": "操作确认",
+      "sensitiveTitle": "敏感操作需要审核",
+      "standardWarning": "仅当您识别此操作时才允许执行。",
+      "sensitiveWarning": "打开 Chatter 并查看完整操作后再允许执行。",
+      "taskTitle": "计划任务已完成",
+      "cameraAccess": "摄像头访问",
+      "emailSend": "发送电子邮件至 {{to}}：{{subject}}",
+      "credentialsUpdate": "更新 {{server}} 的服务器凭据",
+      "downloadFile": "下载 {{filename}}"
+    },
+    "logoutDialog": {
+      "title": "退出登录？",
+      "message": "您需要在此设备上重新登录。",
+      "confirm": "退出登录"
     }
   },
   "promptSelector": {

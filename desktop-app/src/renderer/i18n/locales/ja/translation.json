@@ -441,7 +441,9 @@
         "dropChat": "ここにチャットをドラッグ",
         "unfiled": "未分類",
         "moveTo": "フォルダーに移動"
-      }
+      },
+      "notificationsOn": "通知オン",
+      "notificationsOff": "通知オフ"
     },
     "empty": {
       "selectOrCreate": "チャットを選択するか、新しく作成してください"
@@ -622,6 +624,28 @@
       "allowSiteSessionHint": "Chatterが閉じるまで{{site}}でこの種類の操作を許可",
       "siteAllowedSession": "このサイトでは現在のセッション中に許可されています: {{site}}",
       "actualTarget": "実際のページ要素"
+    },
+    "desktopNotifications": {
+      "openChatter": "チャッターを開く",
+      "notifications": "通知",
+      "quit": "終了",
+      "open": "開く",
+      "allow": "許可",
+      "decline": "拒否",
+      "commandTitle": "操作の確認",
+      "sensitiveTitle": "機密操作には確認が必要です",
+      "standardWarning": "この操作は、認識している場合のみ許可してください。",
+      "sensitiveWarning": "Chatterを開いて、許可する前に完全な操作を確認してください。",
+      "taskTitle": "スケジュールされたタスクが完了しました",
+      "cameraAccess": "カメラアクセス",
+      "emailSend": "{{to}} にメールを送信: {{subject}}",
+      "credentialsUpdate": "{{server}} のサーバー資格情報を更新",
+      "downloadFile": "{{filename}} をダウンロード"
+    },
+    "logoutDialog": {
+      "title": "ログアウトしますか?",
+      "message": "このデバイスで再度サインインする必要があります。",
+      "confirm": "ログアウト"
     }
   },
   "promptSelector": {

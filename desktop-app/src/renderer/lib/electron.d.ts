@@ -48,6 +48,21 @@ declare global {
       grantDetectedSessionWriteFolder: (filePath: string) => Promise<{ granted: boolean; folder?: string; reason?: string }>;
       editFileLines: (payload: { file_path: string; start_line: number; end_line: number; new_content: string; expected_content: string; expected_file_version: string }) => Promise<any>;
       readSshKeys: () => Promise<{ name: string; filename: string; publicKey?: string; privateKey?: string }[]>;
+      getNotificationsEnabled: () => Promise<boolean>;
+      setNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
+      setNotificationLabels: (labels: { open: string; notifications: string; quit: string }) => Promise<void>;
+      showDesktopNotification: (payload: {
+        id: string;
+        title: string;
+        body: string;
+        chatId?: number;
+        confirmationId?: string;
+        sensitive?: boolean;
+        actions?: { open: string; allow: string; decline: string };
+      }) => Promise<boolean>;
+      onNotificationsEnabledChanged: (callback: (enabled: boolean) => void) => () => void;
+      onNotificationOpenChat: (callback: (payload: { chatId: number }) => void) => () => void;
+      onNotificationConfirmationAction: (callback: (payload: { confirmationId: string; action: 'allow' | 'decline' }) => void) => () => void;
       updateCheck: () => Promise<{
         updateAvailable?: boolean;
         version?: string;

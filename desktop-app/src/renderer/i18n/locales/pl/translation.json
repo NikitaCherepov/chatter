@@ -762,7 +762,9 @@
         "dropChat": "Przeciągnij czat tutaj",
         "unfiled": "Bez kategorii",
         "moveTo": "Przenieś do folderu"
-      }
+      },
+      "notificationsOn": "Powiadomienia włączone",
+      "notificationsOff": "Powiadomienia wyłączone"
     },
     "empty": {
       "selectOrCreate": "Wybierz czat lub utwórz nowy"
@@ -943,6 +945,28 @@
       "cancel": "Anuluj",
       "started": "Pobieranie rozpoczęte",
       "failed": "Nie udało się przetworzyć pobierania"
+    },
+    "desktopNotifications": {
+      "openChatter": "Otwórz Chatter",
+      "notifications": "Powiadomienia",
+      "quit": "Zakończ",
+      "open": "Otwórz",
+      "allow": "Zezwól",
+      "decline": "Odrzuć",
+      "commandTitle": "Potwierdzenie akcji",
+      "sensitiveTitle": "Wrażliwa akcja wymaga przeglądu",
+      "standardWarning": "Zezwalaj na tę akcję tylko, jeśli ją rozpoznajesz.",
+      "sensitiveWarning": "Otwórz Chatter i przejrzyj całą akcję przed jej zezwoleniem.",
+      "taskTitle": "Zaplanowane zadanie zakończone",
+      "cameraAccess": "Dostęp do kamery",
+      "emailSend": "Wyślij e-mail do {{to}}: {{subject}}",
+      "credentialsUpdate": "Zaktualizuj poświadczenia serwera dla {{server}}",
+      "downloadFile": "Pobierz {{filename}}"
+    },
+    "logoutDialog": {
+      "title": "Wylogować się?",
+      "message": "Będziesz musiał się ponownie zalogować na tym urządzeniu.",
+      "confirm": "Wyloguj się"
     }
   },
   "promptSelector": {

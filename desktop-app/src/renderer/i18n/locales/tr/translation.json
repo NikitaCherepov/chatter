@@ -762,7 +762,9 @@
         "dropChat": "Bir sohbeti buraya sürükleyin",
         "unfiled": "Sınıflandırılmamış",
         "moveTo": "Klasöre taşı"
-      }
+      },
+      "notificationsOn": "Bildirimler açık",
+      "notificationsOff": "Bildirimler kapalı"
     },
     "empty": {
       "selectOrCreate": "Bir sohbet seçin veya yeni bir tane oluşturun"
@@ -943,6 +945,28 @@
       "cancel": "İptal",
       "started": "İndirme başladı",
       "failed": "İndirme işlenemedi"
+    },
+    "desktopNotifications": {
+      "openChatter": "Chatter'ı Aç",
+      "notifications": "Bildirimler",
+      "quit": "Çıkış",
+      "open": "Aç",
+      "allow": "İzin Ver",
+      "decline": "Reddet",
+      "commandTitle": "Eylem onayı",
+      "sensitiveTitle": "Hassas eylem inceleme gerektirir",
+      "standardWarning": "Bu işleme yalnızca tanıyorsanız izin verin.",
+      "sensitiveWarning": "İzin vermeden önce Chatter'ı açın ve tüm işlemi inceleyin.",
+      "taskTitle": "Zamanlanmış görev tamamlandı",
+      "cameraAccess": "Kamera erişimi",
+      "emailSend": "{{to}} adresine e-posta gönder: {{subject}}",
+      "credentialsUpdate": "{{server}} için sunucu kimlik bilgilerini güncelle",
+      "downloadFile": "{{filename}} dosyasını indir"
+    },
+    "logoutDialog": {
+      "title": "Çıkış yapılsın mı?",
+      "message": "Bu cihazda tekrar oturum açmanız gerekecek.",
+      "confirm": "Çıkış yap"
     }
   },
   "promptSelector": {

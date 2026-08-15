@@ -762,7 +762,9 @@
         "dropChat": "Trascina una chat qui",
         "unfiled": "Non archiviata",
         "moveTo": "Sposta nella cartella"
-      }
+      },
+      "notificationsOn": "Notifiche attive",
+      "notificationsOff": "Notifiche disattivate"
     },
     "empty": {
       "selectOrCreate": "Seleziona una chat o creane una nuova"
@@ -943,6 +945,28 @@
       "cancel": "Annulla",
       "started": "Download avviato",
       "failed": "Impossibile elaborare il download"
+    },
+    "desktopNotifications": {
+      "openChatter": "Apri Chatter",
+      "notifications": "Notifiche",
+      "quit": "Esci",
+      "open": "Apri",
+      "allow": "Consenti",
+      "decline": "Rifiuta",
+      "commandTitle": "Conferma azione",
+      "sensitiveTitle": "Azione sensibile richiede revisione",
+      "standardWarning": "Consenti questa azione solo se la riconosci.",
+      "sensitiveWarning": "Apri Chatter e rivedi l'azione completa prima di consentirla.",
+      "taskTitle": "Attività pianificata completata",
+      "cameraAccess": "Accesso alla fotocamera",
+      "emailSend": "Invia email a {{to}}: {{subject}}",
+      "credentialsUpdate": "Aggiorna le credenziali del server per {{server}}",
+      "downloadFile": "Scarica {{filename}}"
+    },
+    "logoutDialog": {
+      "title": "Disconnettersi?",
+      "message": "Dovrai accedere di nuovo su questo dispositivo.",
+      "confirm": "Disconnetti"
     }
   },
   "promptSelector": {

@@ -437,6 +437,8 @@
       "unlinkTelegram": "Отвязать Telegram",
       "linkTelegram": "Привязать Telegram",
       "logout": "Выйти",
+      "notificationsOn": "Уведомления включены",
+      "notificationsOff": "Уведомления выключены",
       "filters": {
         "title": "Фильтры",
         "prompt": "Промпт",
@@ -460,6 +462,28 @@
     },
     "empty": {
       "selectOrCreate": "Выберите чат или создайте новый"
+    },
+    "desktopNotifications": {
+      "openChatter": "Открыть Chatter",
+      "notifications": "Уведомления",
+      "quit": "Выйти",
+      "open": "Открыть",
+      "allow": "Разрешить",
+      "decline": "Отклонить",
+      "commandTitle": "Подтверждение действия",
+      "sensitiveTitle": "Чувствительное действие требует проверки",
+      "standardWarning": "Разрешайте действие, только если вы понимаете, что именно будет выполнено.",
+      "sensitiveWarning": "Откройте Chatter и полностью проверьте действие перед разрешением.",
+      "taskTitle": "Запланированная задача выполнена",
+      "cameraAccess": "Доступ к камере",
+      "emailSend": "Отправка письма для {{to}}: {{subject}}",
+      "credentialsUpdate": "Изменение данных доступа к серверу {{server}}",
+      "downloadFile": "Скачивание файла {{filename}}"
+    },
+    "logoutDialog": {
+      "title": "Выйти из аккаунта?",
+      "message": "На этом устройстве потребуется снова войти в аккаунт.",
+      "confirm": "Выйти"
     },
     "model": {
       "label": "Модель:",

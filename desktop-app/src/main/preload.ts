@@ -181,6 +181,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readSshKeys: () =>
     ipcRenderer.invoke('read-ssh-keys'),
 
+  // Tray and native desktop notifications
+  getNotificationsEnabled: () =>
+    ipcRenderer.invoke('notifications:get-enabled'),
+
+  setNotificationsEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('notifications:set-enabled', enabled),
+
+  setNotificationLabels: (labels: { open: string; notifications: string; quit: string }) =>
+    ipcRenderer.invoke('notifications:set-labels', labels),
+
+  showDesktopNotification: (payload: {
+    id: string;
+    title: string;
+    body: string;
+    chatId?: number;
+    confirmationId?: string;
+    sensitive?: boolean;
+    actions?: { open: string; allow: string; decline: string };
+  }) => ipcRenderer.invoke('notifications:show', payload),
+
+  onNotificationsEnabledChanged: (callback: (enabled: boolean) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, enabled: boolean) => callback(enabled);
+    ipcRenderer.on('notifications:enabled-changed', handler);
+    return () => ipcRenderer.removeListener('notifications:enabled-changed', handler);
+  },
+
+  onNotificationOpenChat: (callback: (payload: { chatId: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { chatId: number }) => callback(payload);
+    ipcRenderer.on('notification:open-chat', handler);
+    return () => ipcRenderer.removeListener('notification:open-chat', handler);
+  },
+
+  onNotificationConfirmationAction: (callback: (payload: { confirmationId: string; action: 'allow' | 'decline' }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { confirmationId: string; action: 'allow' | 'decline' }) => callback(payload);
+    ipcRenderer.on('notification:confirmation-action', handler);
+    return () => ipcRenderer.removeListener('notification:confirmation-action', handler);
+  },
+
   // ── Custom Updater ──────────────────────────────────────────────────────
 
   // Check server for available update

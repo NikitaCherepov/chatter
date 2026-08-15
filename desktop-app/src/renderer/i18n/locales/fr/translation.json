@@ -441,7 +441,9 @@
         "dropChat": "Glissez une conversation ici",
         "unfiled": "Non classé",
         "moveTo": "Déplacer vers le dossier"
-      }
+      },
+      "notificationsOn": "Notifications activées",
+      "notificationsOff": "Notifications désactivées"
     },
     "empty": {
       "selectOrCreate": "Sélectionnez un chat ou créez-en un nouveau"
@@ -622,6 +624,28 @@
       "allowSiteSessionHint": "Autoriser ce type d'action sur {{site}} jusqu'à la fermeture de Chatter",
       "siteAllowedSession": "Autorisé sur ce site pour la session actuelle : {{site}}",
       "actualTarget": "Élément de page réel"
+    },
+    "desktopNotifications": {
+      "openChatter": "Ouvrir Chatter",
+      "notifications": "Notifications",
+      "quit": "Quitter",
+      "open": "Ouvrir",
+      "allow": "Autoriser",
+      "decline": "Refuser",
+      "commandTitle": "Confirmation d'action",
+      "sensitiveTitle": "Action sensible nécessite une vérification",
+      "standardWarning": "N'autorisez cette action que si vous la reconnaissez.",
+      "sensitiveWarning": "Ouvrez Chatter et examinez l'action complète avant de l'autoriser.",
+      "taskTitle": "Tâche planifiée terminée",
+      "cameraAccess": "Accès à la caméra",
+      "emailSend": "Envoyer un e-mail à {{to}} : {{subject}}",
+      "credentialsUpdate": "Mettre à jour les identifiants du serveur pour {{server}}",
+      "downloadFile": "Télécharger {{filename}}"
+    },
+    "logoutDialog": {
+      "title": "Se déconnecter ?",
+      "message": "Vous devrez vous reconnecter sur cet appareil.",
+      "confirm": "Se déconnecter"
     }
   },
   "promptSelector": {

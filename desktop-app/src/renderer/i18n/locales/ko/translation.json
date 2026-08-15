@@ -762,7 +762,9 @@
         "dropChat": "여기에 채팅을 끌어다 놓으세요",
         "unfiled": "분류되지 않음",
         "moveTo": "폴더로 이동"
-      }
+      },
+      "notificationsOn": "알림 켜짐",
+      "notificationsOff": "알림 꺼짐"
     },
     "empty": {
       "selectOrCreate": "채팅을 선택하거나 새로 만드세요"
@@ -943,6 +945,28 @@
       "cancel": "취소",
       "started": "다운로드 시작됨",
       "failed": "다운로드를 처리할 수 없습니다"
+    },
+    "desktopNotifications": {
+      "openChatter": "채터 열기",
+      "notifications": "알림",
+      "quit": "종료",
+      "open": "열기",
+      "allow": "허용",
+      "decline": "거부",
+      "commandTitle": "작업 확인",
+      "sensitiveTitle": "민감한 작업은 검토가 필요합니다",
+      "standardWarning": "이 작업을 인식하는 경우에만 허용하세요.",
+      "sensitiveWarning": "Chatter를 열고 전체 작업을 검토한 후 허용하세요.",
+      "taskTitle": "예약된 작업 완료",
+      "cameraAccess": "카메라 액세스",
+      "emailSend": "{{to}}에게 이메일 보내기: {{subject}}",
+      "credentialsUpdate": "{{server}}의 서버 자격 증명 업데이트",
+      "downloadFile": "{{filename}} 다운로드"
+    },
+    "logoutDialog": {
+      "title": "로그아웃하시겠습니까?",
+      "message": "이 기기에서 다시 로그인해야 합니다.",
+      "confirm": "로그아웃"
     }
   },
   "promptSelector": {

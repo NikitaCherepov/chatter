@@ -441,7 +441,9 @@
         "dropChat": "Ziehen Sie einen Chat hierher",
         "unfiled": "Nicht abgelegt",
         "moveTo": "In Ordner verschieben"
-      }
+      },
+      "notificationsOn": "Benachrichtigungen aktiviert",
+      "notificationsOff": "Benachrichtigungen deaktiviert"
     },
     "empty": {
       "selectOrCreate": "Wählen Sie einen Chat aus oder erstellen Sie einen neuen"
@@ -622,6 +624,28 @@
       "allowSiteSessionHint": "Diese Art von Aktion auf {{site}} erlauben, bis Chatter geschlossen wird",
       "siteAllowedSession": "Für diese Website in der aktuellen Sitzung erlaubt: {{site}}",
       "actualTarget": "Tatsächliches Seitenelement"
+    },
+    "desktopNotifications": {
+      "openChatter": "Chatter öffnen",
+      "notifications": "Benachrichtigungen",
+      "quit": "Beenden",
+      "open": "Öffnen",
+      "allow": "Erlauben",
+      "decline": "Ablehnen",
+      "commandTitle": "Aktionsbestätigung",
+      "sensitiveTitle": "Sensible Aktion erfordert Überprüfung",
+      "standardWarning": "Erlauben Sie diese Aktion nur, wenn Sie sie erkennen.",
+      "sensitiveWarning": "Öffnen Sie Chatter und prüfen Sie die vollständige Aktion, bevor Sie sie zulassen.",
+      "taskTitle": "Geplante Aufgabe abgeschlossen",
+      "cameraAccess": "Kamerazugriff",
+      "emailSend": "E-Mail an {{to}} senden: {{subject}}",
+      "credentialsUpdate": "Serveranmeldeinformationen für {{server}} aktualisieren",
+      "downloadFile": "{{filename}} herunterladen"
+    },
+    "logoutDialog": {
+      "title": "Abmelden?",
+      "message": "Sie müssen sich auf diesem Gerät erneut anmelden.",
+      "confirm": "Abmelden"
     }
   },
   "promptSelector": {

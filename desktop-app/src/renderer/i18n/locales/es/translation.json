@@ -441,7 +441,9 @@
         "dropChat": "Arrastra un chat aquí",
         "unfiled": "Sin clasificar",
         "moveTo": "Mover a carpeta"
-      }
+      },
+      "notificationsOn": "Notificaciones activadas",
+      "notificationsOff": "Notificaciones desactivadas"
     },
     "empty": {
       "selectOrCreate": "Seleccione un chat o cree uno nuevo"
@@ -622,6 +624,28 @@
       "allowSiteSessionHint": "Permitir este tipo de acción en {{site}} hasta que Chatter se cierre",
       "siteAllowedSession": "Permitido en este sitio para la sesión actual: {{site}}",
       "actualTarget": "Elemento real de la página"
+    },
+    "desktopNotifications": {
+      "openChatter": "Abrir Chatter",
+      "notifications": "Notificaciones",
+      "quit": "Salir",
+      "open": "Abrir",
+      "allow": "Permitir",
+      "decline": "Rechazar",
+      "commandTitle": "Confirmación de acción",
+      "sensitiveTitle": "La acción sensible requiere revisión",
+      "standardWarning": "Solo permita esta acción si la reconoce.",
+      "sensitiveWarning": "Abra Chatter y revise la acción completa antes de permitirla.",
+      "taskTitle": "Tarea programada completada",
+      "cameraAccess": "Acceso a la cámara",
+      "emailSend": "Enviar correo a {{to}}: {{subject}}",
+      "credentialsUpdate": "Actualizar credenciales del servidor para {{server}}",
+      "downloadFile": "Descargar {{filename}}"
+    },
+    "logoutDialog": {
+      "title": "¿Cerrar sesión?",
+      "message": "Deberá iniciar sesión nuevamente en este dispositivo.",
+      "confirm": "Cerrar sesión"
     }
   },
   "promptSelector": {

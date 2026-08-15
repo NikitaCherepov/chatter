@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, session, shell, type OpenDialogOptions } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notification, screen, session, shell, Tray, type OpenDialogOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
@@ -306,6 +306,142 @@ function normalizeWhisperLanguage(value: unknown) {
 let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
+let tray: Tray | null = null;
+let isQuitting = false;
+let notificationsEnabled = true;
+const shownNotificationIds = new Set<string>();
+const activeNotifications = new Map<string, Notification>();
+let trayLabels = {
+  open: 'Open Chatter',
+  notifications: 'Notifications',
+  quit: 'Quit',
+};
+
+type DesktopNotificationPayload = {
+  id: string;
+  title: string;
+  body: string;
+  chatId?: number;
+  confirmationId?: string;
+  sensitive?: boolean;
+  actions?: { open: string; allow: string; decline: string };
+};
+
+function notificationSettingsPath() {
+  return path.join(app.getPath('userData'), 'notification-settings.json');
+}
+
+function loadNotificationSettings() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(notificationSettingsPath(), 'utf8')) as { enabled?: unknown };
+    notificationsEnabled = parsed.enabled !== false;
+  } catch {
+    notificationsEnabled = true;
+  }
+}
+
+function saveNotificationSettings() {
+  try {
+    fs.writeFileSync(notificationSettingsPath(), JSON.stringify({ enabled: notificationsEnabled }), 'utf8');
+  } catch (error) {
+    console.error('[notifications] failed to save settings:', error);
+  }
+}
+
+function showMainWindow(chatId?: number) {
+  if (!app.isReady()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  if (typeof chatId === 'number' && Number.isFinite(chatId)) {
+    mainWindow.webContents.send('notification:open-chat', { chatId });
+  }
+}
+
+function rebuildTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: trayLabels.open, click: () => showMainWindow() },
+    {
+      label: trayLabels.notifications,
+      type: 'checkbox',
+      checked: notificationsEnabled,
+      click: (item) => setNotificationsEnabled(item.checked),
+    },
+    { type: 'separator' },
+    {
+      label: trayLabels.quit,
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]));
+}
+
+function setNotificationsEnabled(enabled: boolean) {
+  notificationsEnabled = enabled;
+  saveNotificationSettings();
+  rebuildTrayMenu();
+  mainWindow?.webContents.send('notifications:enabled-changed', enabled);
+}
+
+function createTray() {
+  if (tray) return;
+  tray = new Tray(getAppIconPath());
+  tray.setToolTip('Chatter');
+  tray.on('click', () => showMainWindow());
+  rebuildTrayMenu();
+}
+
+function showDesktopNotification(payload: DesktopNotificationPayload) {
+  if (!notificationsEnabled || !Notification.isSupported()) return false;
+  if (mainWindow?.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()) return false;
+  if (!payload.id || shownNotificationIds.has(payload.id)) return false;
+  shownNotificationIds.add(payload.id);
+  if (shownNotificationIds.size > 2000) {
+    const oldestId = shownNotificationIds.values().next().value;
+    if (oldestId) shownNotificationIds.delete(oldestId);
+  }
+
+  const labels = payload.actions;
+  const actionNames = payload.confirmationId && labels
+    ? (payload.sensitive
+      ? [{ type: 'button' as const, text: labels.open }, { type: 'button' as const, text: labels.decline }]
+      : [{ type: 'button' as const, text: labels.open }, { type: 'button' as const, text: labels.allow }, { type: 'button' as const, text: labels.decline }])
+    : [];
+  const notification = new Notification({
+    title: payload.title.slice(0, 120),
+    body: payload.body.slice(0, 500),
+    icon: getAppIconPath(),
+    ...(process.platform === 'darwin'
+      ? { actions: actionNames, closeButtonText: labels?.decline }
+      : {}),
+  });
+  activeNotifications.set(payload.id, notification);
+
+  const open = () => showMainWindow(payload.chatId);
+  notification.on('click', open);
+  notification.on('action', (_event, index) => {
+    if (!payload.confirmationId) return open();
+    const action = payload.sensitive
+      ? (index === 0 ? 'open' : 'decline')
+      : (index === 0 ? 'open' : index === 1 ? 'allow' : 'decline');
+    if (action === 'open') return open();
+    mainWindow?.webContents.send('notification:confirmation-action', {
+      confirmationId: payload.confirmationId,
+      action,
+    });
+  });
+  notification.on('close', () => activeNotifications.delete(payload.id));
+  notification.on('failed', () => activeNotifications.delete(payload.id));
+  notification.show();
+  return true;
+}
 
 function getRendererEntryPath(): string {
   return path.join(__dirname, '../renderer/index.html');
@@ -387,6 +523,38 @@ ipcMain.handle('window:set-title-bar-overlay', (event, colors: { color?: unknown
   });
 });
 
+ipcMain.handle('notifications:get-enabled', (event) => {
+  assertTrustedIpcSender(event);
+  return notificationsEnabled;
+});
+
+ipcMain.handle('notifications:set-enabled', (event, enabled: unknown) => {
+  assertTrustedIpcSender(event);
+  if (typeof enabled !== 'boolean') throw new Error('invalid_notification_setting');
+  setNotificationsEnabled(enabled);
+  return notificationsEnabled;
+});
+
+ipcMain.handle('notifications:set-labels', (event, labels: Partial<typeof trayLabels>) => {
+  assertTrustedIpcSender(event);
+  const clean = (value: unknown, fallback: string) =>
+    typeof value === 'string' && value.trim() ? value.trim().slice(0, 80) : fallback;
+  trayLabels = {
+    open: clean(labels?.open, trayLabels.open),
+    notifications: clean(labels?.notifications, trayLabels.notifications),
+    quit: clean(labels?.quit, trayLabels.quit),
+  };
+  rebuildTrayMenu();
+});
+
+ipcMain.handle('notifications:show', (event, payload: DesktopNotificationPayload) => {
+  assertTrustedIpcSender(event);
+  if (!payload || typeof payload.id !== 'string' || typeof payload.title !== 'string' || typeof payload.body !== 'string') {
+    throw new Error('invalid_notification_payload');
+  }
+  return showDesktopNotification(payload);
+});
+
 function createWindow() {
   const isDev = !app.isPackaged;
   const rendererEntryPath = getRendererEntryPath();
@@ -443,6 +611,16 @@ function createWindow() {
   } else {
     mainWindow.loadFile(rendererEntryPath);
   }
+
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow?.hide();
+  });
+
+  mainWindow.on('session-end', () => {
+    isQuitting = true;
+  });
 
   mainWindow.on('closed', () => {
     for (const window of detachedToolWindows.values()) {
@@ -1959,7 +2137,10 @@ function setupGithubDesktopUpdater() {
     assertTrustedIpcSender(event);
     if (!enabled) return { error: 'updates_disabled' };
 
-    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    setImmediate(() => {
+      isQuitting = true;
+      autoUpdater.quitAndInstall(false, true);
+    });
     return { success: true };
   });
 
@@ -1977,27 +2158,37 @@ function setupGithubDesktopUpdater() {
 }
 
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
-app.whenReady().then(() => {
-  loadTrustedServerOrigin();
-  setupContentSecurityPolicy();
-  if (process.platform !== 'darwin') {
-    Menu.setApplicationMenu(null);
-  }
-  createWindow();
-  setupGithubDesktopUpdater();
-});
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => showMainWindow());
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+  app.whenReady().then(() => {
+    if (process.platform === 'win32') {
+      app.setAppUserModelId('com.ncherepov.chatter');
+    }
+    loadNotificationSettings();
+    loadTrustedServerOrigin();
+    setupContentSecurityPolicy();
+    if (process.platform !== 'darwin') {
+      Menu.setApplicationMenu(null);
+    }
+    createWindow();
+    createTray();
+    setupGithubDesktopUpdater();
+  });
 
-app.on('before-quit', () => {
-  for (const job of activeVideoConversions.values()) {
-    job.cancel();
-  }
-});
+  // The app intentionally remains alive in the tray when every window is hidden.
+  app.on('window-all-closed', () => undefined);
 
-app.on('activate', () => {
-  if (mainWindow === null) createWindow();
-});
+  app.on('before-quit', () => {
+    isQuitting = true;
+    for (const job of activeVideoConversions.values()) {
+      job.cancel();
+    }
+  });
+
+  app.on('activate', () => showMainWindow());
+}

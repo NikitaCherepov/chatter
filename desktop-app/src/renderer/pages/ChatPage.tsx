@@ -141,6 +141,19 @@ const formatToolValue = (value: unknown) => {
   return JSON.stringify(value, null, 2);
 };
 
+const cleanNotificationText = (value: string, maxLength = 240) => {
+  const clean = value
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_~`>#-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.length <= maxLength) return clean;
+  return `${clean.slice(0, maxLength - 1).trimEnd()}…`;
+};
+
 type MessageItemProps = {
   msg: api.Message;
   isLastAssistant: boolean;
@@ -794,6 +807,8 @@ export function ChatPage() {
   const [searchResults, setSearchResults] = useState<api.ChatSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
   const [viewerImageMsgId, setViewerImageMsgId] = useState<number | null>(null);
   const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
@@ -865,6 +880,51 @@ export function ChatPage() {
     confirmationSubmissionsRef.current.delete(confirmationId);
     setSubmittingConfirmationIds(new Set(confirmationSubmissionsRef.current));
   }, []);
+
+  const notificationActions = useMemo(() => ({
+    open: t('chat.desktopNotifications.open'),
+    allow: t('chat.desktopNotifications.allow'),
+    decline: t('chat.desktopNotifications.decline'),
+  }), [t]);
+
+  const showNativeNotification = useCallback((payload: {
+    id: string;
+    title: string;
+    body: string;
+    chatId?: number;
+    confirmationId?: string;
+    sensitive?: boolean;
+    actions?: { open: string; allow: string; decline: string };
+  }) => {
+    void window.electronAPI.showDesktopNotification(payload).catch((error) => {
+      console.warn('[notifications] failed to show:', error);
+    });
+  }, []);
+
+  const notifyAssistantResponse = useCallback((messageId: number, chatId: number, text: string) => {
+    const body = cleanNotificationText(text);
+    if (!body || messageId <= 0) return;
+    showNativeNotification({ id: `message:${messageId}`, title: 'Chatter', body, chatId });
+  }, [showNativeNotification]);
+
+  useEffect(() => {
+    void window.electronAPI.getNotificationsEnabled().then(setNotificationsEnabledState).catch(() => undefined);
+    void window.electronAPI.setNotificationLabels({
+      open: t('chat.desktopNotifications.openChatter'),
+      notifications: t('chat.desktopNotifications.notifications'),
+      quit: t('chat.desktopNotifications.quit'),
+    });
+    const removeEnabled = window.electronAPI.onNotificationsEnabledChanged(setNotificationsEnabledState);
+    const removeOpenChat = window.electronAPI.onNotificationOpenChat(({ chatId }) => {
+      if (!Number.isFinite(chatId)) return;
+      setActiveChatId(chatId);
+      void api.activateChat(chatId).catch(() => undefined);
+    });
+    return () => {
+      removeEnabled();
+      removeOpenChat();
+    };
+  }, [t]);
 
   const applyAvatarState = useCallback((state: SetDisplayStatePayload) => {
     currentAvatarStateRef.current = {
@@ -984,6 +1044,15 @@ export function ChatPage() {
   // Register global handler for scheduler task_result events
   useEffect(() => {
     api.onTaskResult((data) => {
+      const taskText = cleanNotificationText(data.text);
+      if (taskText) {
+        showNativeNotification({
+          id: `task:${data.chat_id}:${Date.now()}`,
+          title: t('chat.desktopNotifications.taskTitle'),
+          body: taskText,
+          chatId: data.chat_id,
+        });
+      }
       // If new chat was created — refresh sidebar
       if (data.is_new_chat) {
         loadChats();
@@ -997,7 +1066,7 @@ export function ChatPage() {
         incrementUnread(data.chat_id);
       }
     });
-  }, [activeChatId, chats, loadChats]);
+  }, [activeChatId, chats, loadChats, showNativeNotification, t]);
 
   // External clients write into the same backend chat. Refresh the open
   // conversation when their user message and final answer are persisted.
@@ -1151,7 +1220,73 @@ export function ChatPage() {
     });
   }, []);
 
+  const notifyConfirmationAction = useCallback((action: api.DesktopActionPayload) => {
+    const value = action.value as Record<string, unknown> | undefined;
+    const confirmationId = typeof value?.confirmation_id === 'string' ? value.confirmation_id : '';
+    if (!confirmationId) return;
+
+    let body = '';
+    let sensitive = false;
+    switch (action.action) {
+      case 'devops_confirmation':
+        body = String(value?.command || '');
+        sensitive = value?.needs_sudo_password === true || value?.needs_new_password === true;
+        break;
+      case 'pc_command_confirmation':
+        body = String(value?.command || '');
+        break;
+      case 'browser_action_confirmation': {
+        body = String(value?.description || value?.url || '');
+        const target = value?.target_element as { sensitive?: boolean; inputType?: string } | undefined;
+        sensitive = target?.sensitive === true || target?.inputType === 'password';
+        break;
+      }
+      case 'browser_download_confirmation':
+        body = t('chat.desktopNotifications.downloadFile', { filename: String(value?.filename || '') });
+        sensitive = true;
+        break;
+      case 'file_action_confirmation':
+        body = String(value?.file_path || '');
+        break;
+      case 'edit_file_lines_confirmation':
+        body = String(value?.file_path || '');
+        break;
+      case 'webcam_capture_confirmation':
+        body = t('chat.desktopNotifications.cameraAccess');
+        sensitive = true;
+        break;
+      case 'email_confirmation':
+        body = t('chat.desktopNotifications.emailSend', { to: String(value?.to || ''), subject: String(value?.subject || '') });
+        sensitive = true;
+        break;
+      case 'suggest_server_creds_update':
+        body = t('chat.desktopNotifications.credentialsUpdate', { server: String(value?.server_name || '') });
+        sensitive = true;
+        break;
+      default:
+        return;
+    }
+    if (!body.trim()) return;
+    const warning = sensitive
+      ? t('chat.desktopNotifications.sensitiveWarning')
+      : t('chat.desktopNotifications.standardWarning');
+    showNativeNotification({
+      id: `confirmation:${confirmationId}`,
+      title: sensitive
+        ? t('chat.desktopNotifications.sensitiveTitle')
+        : t('chat.desktopNotifications.commandTitle'),
+      body: `${cleanNotificationText(body, 300)}\n\n${warning}`,
+      chatId: activeChatId ?? undefined,
+      confirmationId,
+      sensitive,
+      actions: notificationActions,
+    });
+  }, [activeChatId, notificationActions, showNativeNotification, t]);
+
   const handleIncomingDesktopAction = useCallback((action: api.DesktopActionPayload) => {
+    if (action.action !== 'file_action_confirmation' && action.action !== 'edit_file_lines_confirmation') {
+      notifyConfirmationAction(action);
+    }
     if (action.action === 'suggest_macro' && action.value) {
       const val = action.value as { title?: string; description?: string; commands?: string[] };
       if (val.title && val.commands?.length) {
@@ -1282,6 +1417,7 @@ export function ChatPage() {
               autoApprovingFileIdsRef.current.delete(confirmationId);
             }
 
+            notifyConfirmationAction(action);
             setFileActionConfirmations(prev => {
               if (prev.some(c => c.confirmation_id === confirmationId)) return prev;
               return [...prev, {
@@ -1335,6 +1471,7 @@ export function ChatPage() {
             autoApprovingFileIdsRef.current.delete(confirmationId);
           }
 
+          notifyConfirmationAction(action);
           setEditFileLinesConfirmations(prev => {
             if (prev.some(c => c.confirmation_id === confirmationId)) return prev;
             return [...prev, {
@@ -1397,9 +1534,77 @@ export function ChatPage() {
       }
     }
     handleDesktopAction(action);
-  }, []);
+  }, [finishConfirmationSubmission, notifyConfirmationAction, t]);
+
+  const resolveNotificationConfirmation = useCallback(async (
+    confirmationId: string,
+    decision: 'allow' | 'decline',
+  ) => {
+    const devops = devopsConfirmations.find(c => c.confirmation_id === confirmationId);
+    const credentials = pendingCredsUpdates.find(c => c.confirmation_id === confirmationId);
+    const pcCommand = pcCommandConfirmations.find(c => c.confirmation_id === confirmationId);
+    const browserAction = browserActionConfirmations.find(c => c.confirmation_id === confirmationId);
+    const browserDownload = browserDownloadConfirmations.find(c => c.confirmation_id === confirmationId);
+    const fileAction = fileActionConfirmations.find(c => c.confirmation_id === confirmationId);
+    const fileEdit = editFileLinesConfirmations.find(c => c.confirmation_id === confirmationId);
+    const webcam = webcamCaptureConfirmations.find(c => c.confirmation_id === confirmationId);
+    const email = emailConfirmations.find(c => c.confirmation_id === confirmationId);
+    if (!devops && !credentials && !pcCommand && !browserAction && !browserDownload && !fileAction && !fileEdit && !webcam && !email) return;
+
+    const browserSensitive = browserAction?.target_element?.sensitive === true
+      || browserAction?.target_element?.inputType === 'password';
+    const sensitive = Boolean(
+      credentials || browserDownload || webcam || email || browserSensitive
+      || devops?.needs_sudo_password || devops?.needs_new_password,
+    );
+    // Sensitive actions intentionally cannot be approved directly from a notification.
+    if (decision === 'allow' && sensitive) return;
+    if (!beginConfirmationSubmission(confirmationId)) return;
+    try {
+      const endpoint = email
+        ? '/api/v1/email/approve'
+        : (devops || credentials)
+          ? '/api/v1/devops/approve'
+          : '/api/v1/pc-commands/approve';
+      await api.apiFetch(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ confirmation_id: confirmationId, approved: decision === 'allow' }),
+      });
+      setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setPendingCredsUpdates(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setEditFileLinesConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setWebcamCaptureConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setEmailConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      if (decision === 'allow') toast.success(t('chat.toasts.commandApproved'));
+    } catch (error) {
+      toast.error(api.getApiErrorMessage(error, t('chat.toasts.commandApprovalFailed')));
+    } finally {
+      finishConfirmationSubmission(confirmationId);
+    }
+  }, [
+    beginConfirmationSubmission,
+    browserActionConfirmations,
+    browserDownloadConfirmations,
+    devopsConfirmations,
+    editFileLinesConfirmations,
+    emailConfirmations,
+    fileActionConfirmations,
+    finishConfirmationSubmission,
+    pcCommandConfirmations,
+    pendingCredsUpdates,
+    t,
+    webcamCaptureConfirmations,
+  ]);
 
   useEffect(() => api.onDesktopAction(handleIncomingDesktopAction), [handleIncomingDesktopAction]);
+
+  useEffect(() => window.electronAPI.onNotificationConfirmationAction(({ confirmationId, action }) => {
+    void resolveNotificationConfirmation(confirmationId, action);
+  }), [resolveNotificationConfirmation]);
 
   useEffect(() => {
     const removeResolved = window.electronAPI.onBrowserDownloadResolved(({ download_id }) => {
@@ -1782,6 +1987,7 @@ export function ChatPage() {
             setActiveChatId(res.chat_id);
             loadChats();
           }
+          notifyAssistantResponse(res.message_id, res.chat_id, res.reply_text);
           refreshContextTokens(res.chat_id);
 
           // Auto-speak response when triggered by voice input
@@ -2030,7 +2236,17 @@ export function ChatPage() {
     }
   }, [activeChatId]);
 
-  const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
+  const performLogout = () => {
+    setShowLogoutConfirm(false);
+    logout();
+    navigate('/login', { replace: true });
+  };
+  const handleLogout = () => setShowLogoutConfirm(true);
+  const toggleNotifications = () => {
+    void window.electronAPI.setNotificationsEnabled(!notificationsEnabled)
+      .then(setNotificationsEnabledState)
+      .catch(() => toast.error(t('settings.toasts.saveSettingFailed')));
+  };
 
   const closeMsgMenu = useCallback(() => {
     setMsgMenuId(null);
@@ -2374,6 +2590,7 @@ export function ChatPage() {
           setShowTyping(false);
           setSending(false);
           if (res.display_state) applyAvatarState(res.display_state);
+          notifyAssistantResponse(res.message_id, res.chat_id, res.reply_text);
           refreshContextTokens(res.chat_id);
         },
         onError: (err, message) => {
@@ -2555,6 +2772,7 @@ export function ChatPage() {
           setShowTyping(false);
           setSending(false);
           if (res.display_state) applyAvatarState(res.display_state);
+          notifyAssistantResponse(res.message_id, res.chat_id, res.reply_text);
           refreshContextTokens(res.chat_id);
         },
         onError: (err) => {
@@ -3564,6 +3782,26 @@ export function ChatPage() {
             transition={{ duration: 0.15 }}
             style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
           >
+            <button
+              className={s.iconBtn}
+              onClick={toggleNotifications}
+              title={t(notificationsEnabled ? 'chat.sidebar.notificationsOn' : 'chat.sidebar.notificationsOff')}
+              aria-pressed={notificationsEnabled}
+            >
+              {notificationsEnabled ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  <path d="M18.63 18H3c0-2 3-2 3-9a6 6 0 0 1 .38-2.1" />
+                  <path d="M9.18 3.28A6 6 0 0 1 18 8c0 2.43.36 4.02.86 5.1" />
+                  <path d="m2 2 20 20" />
+                </svg>
+              )}
+            </button>
             <button className={s.iconBtn} onClick={handleLogout} title={t('chat.sidebar.logout')}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -5445,6 +5683,16 @@ export function ChatPage() {
             maxTotalImageBytes={maxImageBytes}
           />
         )}
+
+        <ConfirmDialog
+          key="confirm-logout"
+          open={showLogoutConfirm}
+          title={t('chat.logoutDialog.title')}
+          text={t('chat.logoutDialog.message')}
+          confirmLabel={t('chat.logoutDialog.confirm')}
+          onCancel={() => setShowLogoutConfirm(false)}
+          onConfirm={performLogout}
+        />
 
         <ConfirmDialog
           key="confirm-delete-chat"
