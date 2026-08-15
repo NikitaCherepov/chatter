@@ -6,8 +6,10 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
+  pointerWithin,
   useDraggable,
   useDroppable,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -78,11 +80,19 @@ function DemoDroppableFolder({
   });
 
   return (
-    <div ref={setNodeRef} className={`${s.demoDropTarget} ${isOver ? s.demoDropTargetOver : ''}`}>
+    <div
+      ref={setNodeRef}
+      className={`${s.demoDropTarget} ${folderId === 'unfiled' ? s.demoUnfiledTarget : ''} ${isOver ? s.demoDropTargetOver : ''}`}
+    >
       {children}
     </div>
   );
 }
+
+const chatFolderCollisionDetection: CollisionDetection = (args) => {
+  const pointerHits = pointerWithin(args);
+  return pointerHits.length > 0 ? pointerHits : closestCenter(args);
+};
 
 type ChatSectionKey = `folder:${number}` | 'unfiled';
 type ChatSectionPaging = {
@@ -3651,7 +3661,7 @@ export function ChatPage() {
             </div>
           ) : (
           <DndContext
-            collisionDetection={closestCenter}
+            collisionDetection={chatFolderCollisionDetection}
             onDragStart={handleDemoChatDragStart}
             onDragCancel={() => {
               setDemoDraggingChatId(null);
