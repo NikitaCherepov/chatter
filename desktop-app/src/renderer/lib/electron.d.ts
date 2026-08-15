@@ -58,6 +58,7 @@ declare global {
         chatId?: number;
         confirmationId?: string;
         sensitive?: boolean;
+        reviewOnly?: boolean;
         actions?: { open: string; allow: string; decline: string };
       }) => Promise<boolean>;
       onNotificationsEnabledChanged: (callback: (enabled: boolean) => void) => () => void;

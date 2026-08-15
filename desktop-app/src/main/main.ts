@@ -325,6 +325,7 @@ type DesktopNotificationPayload = {
   chatId?: number;
   confirmationId?: string;
   sensitive?: boolean;
+  reviewOnly?: boolean;
   actions?: { open: string; allow: string; decline: string };
 };
 
@@ -475,8 +476,8 @@ function showConfirmationNotificationWindow(payload: DesktopNotificationPayload)
     `<a class="button ${variant}" href="chatter-notification-action://${action}">${escapeNotificationHtml(label)}</a>`;
   const buttons = [
     button('open', labels.open, 'secondary'),
-    ...(payload.sensitive ? [] : [button('allow', labels.allow, 'primary')]),
-    button('decline', labels.decline, 'danger'),
+    ...(!payload.reviewOnly && !payload.sensitive ? [button('allow', labels.allow, 'primary')] : []),
+    ...(!payload.reviewOnly ? [button('decline', labels.decline, 'danger')] : []),
   ].join('');
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
@@ -522,6 +523,7 @@ function showConfirmationNotificationWindow(payload: DesktopNotificationPayload)
       return;
     }
     if (action !== 'allow' && action !== 'decline') return;
+    if (payload.reviewOnly) return;
     if (action === 'allow' && payload.sensitive) return;
     mainWindow?.webContents.send('notification:confirmation-action', {
       confirmationId,
@@ -570,7 +572,9 @@ function showDesktopNotification(payload: DesktopNotificationPayload) {
 
   const labels = payload.actions;
   const actionNames = payload.confirmationId && labels
-    ? (payload.sensitive
+    ? (payload.reviewOnly
+      ? [{ type: 'button' as const, text: labels.open }]
+      : payload.sensitive
       ? [{ type: 'button' as const, text: labels.open }, { type: 'button' as const, text: labels.decline }]
       : [{ type: 'button' as const, text: labels.open }, { type: 'button' as const, text: labels.allow }, { type: 'button' as const, text: labels.decline }])
     : [];
@@ -588,7 +592,9 @@ function showDesktopNotification(payload: DesktopNotificationPayload) {
   notification.on('click', open);
   notification.on('action', (_event, index) => {
     if (!payload.confirmationId) return open();
-    const action = payload.sensitive
+    const action = payload.reviewOnly
+      ? 'open'
+      : payload.sensitive
       ? (index === 0 ? 'open' : 'decline')
       : (index === 0 ? 'open' : index === 1 ? 'allow' : 'decline');
     if (action === 'open') return open();

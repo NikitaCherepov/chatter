@@ -198,6 +198,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chatId?: number;
     confirmationId?: string;
     sensitive?: boolean;
+    reviewOnly?: boolean;
     actions?: { open: string; allow: string; decline: string };
   }) => ipcRenderer.invoke('notifications:show', payload),
 

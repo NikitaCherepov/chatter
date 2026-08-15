@@ -894,6 +894,7 @@ export function ChatPage() {
     chatId?: number;
     confirmationId?: string;
     sensitive?: boolean;
+    reviewOnly?: boolean;
     actions?: { open: string; allow: string; decline: string };
   }) => {
     void window.electronAPI.showDesktopNotification(payload).catch((error) => {
@@ -1227,6 +1228,7 @@ export function ChatPage() {
 
     let body = '';
     let sensitive = false;
+    let reviewOnly = false;
     switch (action.action) {
       case 'devops_confirmation':
         body = String(value?.command || '');
@@ -1263,8 +1265,22 @@ export function ChatPage() {
         body = t('chat.desktopNotifications.credentialsUpdate', { server: String(value?.server_name || '') });
         sensitive = true;
         break;
-      default:
-        return;
+      default: {
+        if (!action.action.endsWith('_confirmation')) return;
+        body = String(
+          value?.description
+          || value?.title
+          || value?.command
+          || value?.reason
+          || value?.purpose
+          || value?.filename
+          || value?.file_path
+          || t('chat.desktopNotifications.sensitiveTitle'),
+        );
+        sensitive = true;
+        reviewOnly = true;
+        break;
+      }
     }
     if (!body.trim()) return;
     const warning = sensitive
@@ -1279,6 +1295,7 @@ export function ChatPage() {
       chatId: activeChatId ?? undefined,
       confirmationId,
       sensitive,
+      reviewOnly,
       actions: notificationActions,
     });
   }, [activeChatId, notificationActions, showNativeNotification, t]);
