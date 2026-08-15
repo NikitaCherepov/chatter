@@ -69,7 +69,7 @@ function DemoDroppableFolder({
   folderId,
   children,
 }: {
-  folderId: string;
+  folderId: number | 'unfiled';
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -758,19 +758,15 @@ export function ChatPage() {
   const [demoFiltersOpen, setDemoFiltersOpen] = useState(false);
   const [demoFolderCreatorOpen, setDemoFolderCreatorOpen] = useState(false);
   const [demoFolderName, setDemoFolderName] = useState('Новая папка');
-  const [demoCustomFolder, setDemoCustomFolder] = useState<string | null>(null);
-  const [demoFolderNames, setDemoFolderNames] = useState<Record<string, string>>({ work: 'Работа', personal: 'Личное' });
-  const [demoDeletedFolders, setDemoDeletedFolders] = useState<Record<string, boolean>>({});
-  const [demoFolderMenuId, setDemoFolderMenuId] = useState<string | null>(null);
+  const [chatFolders, setChatFolders] = useState<api.ChatFolder[]>([]);
+  const [demoFolderMenuId, setDemoFolderMenuId] = useState<number | null>(null);
   const [demoFolderMenuPos, setDemoFolderMenuPos] = useState({ x: 0, y: 0 });
-  const [demoRenamingFolderId, setDemoRenamingFolderId] = useState<string | null>(null);
+  const [demoRenamingFolderId, setDemoRenamingFolderId] = useState<number | null>(null);
   const [demoRenamingFolderName, setDemoRenamingFolderName] = useState('');
-  const [demoExpandedFolders, setDemoExpandedFolders] = useState<Record<string, boolean>>({ work: true, personal: true });
-  const [demoChatFolders, setDemoChatFolders] = useState<Record<number, string>>({});
+  const [demoExpandedFolders, setDemoExpandedFolders] = useState<Record<number, boolean>>({});
   const [demoDraggingChatId, setDemoDraggingChatId] = useState<number | null>(null);
   const [demoDraggingChatSize, setDemoDraggingChatSize] = useState<{ width: number; height: number } | null>(null);
   const [demoMoveMenuOpen, setDemoMoveMenuOpen] = useState(false);
-  const demoFoldersSeededRef = useRef(false);
   const [demoPromptFilter, setDemoPromptFilter] = useState('all');
   const [demoModelFilter, setDemoModelFilter] = useState('all');
   const [demoFilesFilter, setDemoFilesFilter] = useState(false);
@@ -914,8 +910,13 @@ export function ChatPage() {
   const loadChats = async () => {
     setLoadingChats(true);
     try {
-      const res = await api.getChats(CHAT_PAGE_SIZE);
-      setChats(res.chats);
+      const [res, folderRes] = await Promise.all([
+        api.getChats(CHAT_PAGE_SIZE),
+        api.getChatFolders().catch(() => ({ folders: [] as api.ChatFolder[] })),
+      ]);
+      const normalizedChats = res.chats.map((chat) => ({ ...chat, folder_id: chat.folder_id ?? null }));
+      setChats(normalizedChats);
+      setChatFolders(folderRes.folders);
       setHasMoreChats(res.chats.length === CHAT_PAGE_SIZE);
       if (res.active_chat_id) {
         setActiveChatId(res.active_chat_id);
@@ -938,7 +939,9 @@ export function ChatPage() {
       if (res.chats.length > 0) {
         setChats(prev => {
           const seen = new Set(prev.map(chat => chat.id));
-          const next = res.chats.filter(chat => !seen.has(chat.id));
+          const next = res.chats
+            .filter(chat => !seen.has(chat.id))
+            .map((chat) => ({ ...chat, folder_id: chat.folder_id ?? null }));
           return [...prev, ...next];
         });
       }
@@ -957,15 +960,6 @@ export function ChatPage() {
   }, [loadMoreChats]);
 
   useEffect(() => { loadChats(); }, []);
-
-  useEffect(() => {
-    if (demoFoldersSeededRef.current || chats.length === 0) return;
-    demoFoldersSeededRef.current = true;
-    setDemoChatFolders({
-      ...(chats[0] ? { [chats[0].id]: 'work' } : {}),
-      ...(chats[1] ? { [chats[1].id]: 'personal' } : {}),
-    });
-  }, [chats]);
 
   useEffect(() => {
     if (activeChatId) {
@@ -3002,70 +2996,76 @@ export function ChatPage() {
     </DemoDraggableChat>
   );
 
-  const demoFolders = [
-    { id: 'work', name: demoFolderNames.work, chats: chats.filter((chat) => demoChatFolders[chat.id] === 'work') },
-    { id: 'personal', name: demoFolderNames.personal, chats: chats.filter((chat) => demoChatFolders[chat.id] === 'personal') },
-  ].filter((folder) => !demoDeletedFolders[folder.id]);
-  const demoCustomFolderChats = chats.filter((chat) => demoChatFolders[chat.id] === 'custom');
-  const demoUnfiledChats = chats.filter((chat) => !demoChatFolders[chat.id]);
+  const demoFolders = chatFolders.map((folder) => ({
+    ...folder,
+    chats: chats.filter((chat) => chat.folder_id === folder.id),
+  }));
+  const demoUnfiledChats = chats.filter((chat) => chat.folder_id === null);
   const demoDraggingChat = chats.find((chat) => chat.id === demoDraggingChatId) ?? null;
 
-  const toggleDemoFolder = (folderId: string) => {
+  const toggleDemoFolder = (folderId: number) => {
     setDemoExpandedFolders((current) => ({ ...current, [folderId]: current[folderId] === false }));
   };
 
-  const startDemoFolderRename = (folderId: string, currentName: string) => {
+  const startDemoFolderRename = (folderId: number, currentName: string) => {
     setDemoFolderMenuId(null);
     setDemoRenamingFolderId(folderId);
     setDemoRenamingFolderName(currentName);
   };
 
-  const toggleDemoFolderMenu = (event: React.MouseEvent<HTMLButtonElement>, folderId: string) => {
+  const toggleDemoFolderMenu = (event: React.MouseEvent<HTMLButtonElement>, folderId: number) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     setDemoFolderMenuPos({ x: rect.right + 4, y: rect.top });
     setDemoFolderMenuId((current) => current === folderId ? null : folderId);
   };
 
-  const finishDemoFolderRename = () => {
+  const finishDemoFolderRename = async () => {
     if (!demoRenamingFolderId) return;
+    const folderId = demoRenamingFolderId;
     const nextName = demoRenamingFolderName.trim();
-    if (nextName) {
-      if (demoRenamingFolderId === 'custom') {
-        setDemoCustomFolder(nextName);
-      } else {
-        setDemoFolderNames((current) => ({ ...current, [demoRenamingFolderId]: nextName }));
-      }
-    }
     setDemoRenamingFolderId(null);
     setDemoRenamingFolderName('');
+    if (!nextName) return;
+    const previousName = chatFolders.find((folder) => folder.id === folderId)?.name;
+    setChatFolders((current) => current.map((folder) => folder.id === folderId ? { ...folder, name: nextName } : folder));
+    try {
+      await api.renameChatFolder(folderId, nextName);
+    } catch (error) {
+      console.error('Failed to rename chat folder:', error);
+      if (previousName) {
+        setChatFolders((current) => current.map((folder) => folder.id === folderId ? { ...folder, name: previousName } : folder));
+      }
+    }
   };
 
-  const deleteDemoFolder = (folderId: string) => {
-    setDemoChatFolders((current) => Object.fromEntries(
-      Object.entries(current).filter(([, assignedFolderId]) => assignedFolderId !== folderId),
-    ));
-    if (folderId === 'custom') {
-      setDemoCustomFolder(null);
-    } else {
-      setDemoDeletedFolders((current) => ({ ...current, [folderId]: true }));
-    }
+  const deleteDemoFolder = async (folderId: number) => {
+    const previousFolders = chatFolders;
+    setChatFolders((current) => current.filter((folder) => folder.id !== folderId));
+    setChats((current) => current.map((chat) => chat.folder_id === folderId ? { ...chat, folder_id: null } : chat));
     setDemoFolderMenuId(null);
     if (demoRenamingFolderId === folderId) setDemoRenamingFolderId(null);
+    try {
+      await api.deleteChatFolder(folderId);
+    } catch (error) {
+      console.error('Failed to delete chat folder:', error);
+      setChatFolders(previousFolders);
+      await loadChats();
+    }
   };
 
-  const moveDemoChat = (chatId: number, folderId: string) => {
-    setDemoChatFolders((current) => {
-      if (folderId === 'unfiled') {
-        const next = { ...current };
-        delete next[chatId];
-        return next;
-      }
-      return { ...current, [chatId]: folderId };
-    });
-    setDemoExpandedFolders((current) => ({ ...current, [folderId]: true }));
+  const moveDemoChat = async (chatId: number, folderId: number | null) => {
+    const previousFolderId = chats.find((chat) => chat.id === chatId)?.folder_id ?? null;
+    setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, folder_id: folderId } : chat));
+    if (folderId !== null) setDemoExpandedFolders((current) => ({ ...current, [folderId]: true }));
     setDemoMoveMenuOpen(false);
     setContextMenuChatId(null);
+    try {
+      await api.moveChatToFolder(chatId, folderId);
+    } catch (error) {
+      console.error('Failed to move chat to folder:', error);
+      setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, folder_id: previousFolderId } : chat));
+    }
   };
 
   const handleDemoChatDragStart = ({ active }: DragStartEvent) => {
@@ -3079,9 +3079,11 @@ export function ChatPage() {
     setDemoDraggingChatId(null);
     setDemoDraggingChatSize(null);
     const chatId = Number(active.data.current?.chatId);
-    const folderId = String(over?.data.current?.folderId || '');
-    if (!Number.isSafeInteger(chatId) || !folderId) return;
-    moveDemoChat(chatId, folderId);
+    const rawFolderId = over?.data.current?.folderId;
+    if (!Number.isSafeInteger(chatId) || rawFolderId === undefined) return;
+    const folderId = rawFolderId === 'unfiled' ? null : Number(rawFolderId);
+    if (folderId !== null && !Number.isSafeInteger(folderId)) return;
+    void moveDemoChat(chatId, folderId);
   };
 
   return (
@@ -3238,13 +3240,18 @@ export function ChatPage() {
               <input value={demoFolderName} onChange={(event) => setDemoFolderName(event.target.value)} autoFocus />
               <button
                 title="Создать"
-                onClick={() => {
+                onClick={async () => {
                   const value = demoFolderName.trim();
-                  if (value) {
-                    setDemoCustomFolder(value);
-                    setDemoDeletedFolders((current) => ({ ...current, custom: false }));
+                  if (!value) return;
+                  try {
+                    const { folder } = await api.createChatFolder(value);
+                    setChatFolders((current) => [...current, folder]);
+                    setDemoExpandedFolders((current) => ({ ...current, [folder.id]: true }));
+                    setDemoFolderName('New folder');
+                    setDemoFolderCreatorOpen(false);
+                  } catch (error) {
+                    console.error('Failed to create chat folder:', error);
                   }
-                  setDemoFolderCreatorOpen(false);
                 }}
               >
                 ✓
@@ -3276,7 +3283,7 @@ export function ChatPage() {
                   onClick={() => {
                     setChats(prev => prev.some(chat => chat.id === result.chat_id)
                       ? prev
-                      : [{ id: result.chat_id, title: result.chat_title, created_at: result.created_at }, ...prev]);
+                      : [{ id: result.chat_id, title: result.chat_title, created_at: result.created_at, folder_id: null }, ...prev]);
                     selectChat(result.chat_id);
                     handleSearchClear();
                   }}
@@ -3369,65 +3376,6 @@ export function ChatPage() {
                 </DemoDroppableFolder>
               );
             })}
-            {demoCustomFolder && (
-              <DemoDroppableFolder folderId="custom">
-              <div className={s.demoFolder}>
-                <div className={s.demoFolderHeader} onClick={() => toggleDemoFolder('custom')}>
-                  <svg className={`${s.demoFolderChevron} ${demoExpandedFolders.custom !== false ? s.demoFolderChevronExpanded : ''}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                  <FolderIcon />
-                  {demoRenamingFolderId === 'custom' ? (
-                    <input
-                      className={s.demoFolderRenameInput}
-                      value={demoRenamingFolderName}
-                      onChange={(event) => setDemoRenamingFolderName(event.target.value)}
-                      onClick={(event) => event.stopPropagation()}
-                      onBlur={finishDemoFolderRename}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') finishDemoFolderRename();
-                        if (event.key === 'Escape') {
-                          setDemoRenamingFolderId(null);
-                          setDemoRenamingFolderName('');
-                        }
-                      }}
-                      autoFocus
-                    />
-                  ) : <span className={s.demoFolderName}>{demoCustomFolder}</span>}
-                  <span className={s.demoFolderCount}>{demoCustomFolderChats.length}</span>
-                  <div className={s.demoFolderActions}>
-                    <button
-                      className={s.kebabBtn}
-                      onClick={(event) => toggleDemoFolderMenu(event, 'custom')}
-                      title="Действия с папкой"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                        <circle cx="8" cy="3" r="1.5" />
-                        <circle cx="8" cy="8" r="1.5" />
-                        <circle cx="8" cy="13" r="1.5" />
-                      </svg>
-                    </button>
-                    {demoFolderMenuId === 'custom' && (
-                      <div
-                        className={s.contextMenu}
-                        style={{ top: demoFolderMenuPos.y, left: demoFolderMenuPos.x }}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <button className={s.contextMenuItem} onClick={() => startDemoFolderRename('custom', demoCustomFolder)}>Переименовать</button>
-                        <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => deleteDemoFolder('custom')}>Удалить</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {demoExpandedFolders.custom !== false && (
-                  <div className={s.demoFolderChats}>
-                    {demoCustomFolderChats.map((chat) => renderSidebarChat(chat, true))}
-                    {demoCustomFolderChats.length === 0 && <div className={s.demoEmptyFolder}>Перетащите сюда чат</div>}
-                  </div>
-                )}
-              </div>
-              </DemoDroppableFolder>
-            )}
             <DemoDroppableFolder folderId="unfiled">
               <div className={s.demoUnfiledDropZone}>
               <div className={s.demoUnfiledHeader}>
@@ -3448,7 +3396,7 @@ export function ChatPage() {
           <DragOverlay zIndex={10001} dropAnimation={{ duration: 150, easing: 'ease-out' }}>
             {demoDraggingChat && (
               <div
-                className={`${s.chatItem} ${demoChatFolders[demoDraggingChat.id] ? s.chatItemNested : ''} ${demoDraggingChat.id === activeChatId ? s.chatItemActive : ''} ${s.demoChatDragOverlay}`}
+                className={`${s.chatItem} ${demoDraggingChat.folder_id !== null ? s.chatItemNested : ''} ${demoDraggingChat.id === activeChatId ? s.chatItemActive : ''} ${s.demoChatDragOverlay}`}
                 style={demoDraggingChatSize || undefined}
               >
                 <div className={s.chatItemRow}>
@@ -3520,28 +3468,19 @@ export function ChatPage() {
                   {demoFolders.map((folder) => (
                     <button
                       key={folder.id}
-                      className={demoChatFolders[contextMenuChatId] === folder.id ? s.demoMoveMenuOptionActive : ''}
-                      onClick={() => moveDemoChat(contextMenuChatId, folder.id)}
+                      className={chats.find((chat) => chat.id === contextMenuChatId)?.folder_id === folder.id ? s.demoMoveMenuOptionActive : ''}
+                      onClick={() => void moveDemoChat(contextMenuChatId, folder.id)}
                     >
                       <span>{folder.name}</span>
-                      {demoChatFolders[contextMenuChatId] === folder.id && <span>✓</span>}
+                      {chats.find((chat) => chat.id === contextMenuChatId)?.folder_id === folder.id && <span>✓</span>}
                     </button>
                   ))}
-                  {demoCustomFolder && (
-                    <button
-                      className={demoChatFolders[contextMenuChatId] === 'custom' ? s.demoMoveMenuOptionActive : ''}
-                      onClick={() => moveDemoChat(contextMenuChatId, 'custom')}
-                    >
-                      <span>{demoCustomFolder}</span>
-                      {demoChatFolders[contextMenuChatId] === 'custom' && <span>✓</span>}
-                    </button>
-                  )}
                   <button
-                    className={!demoChatFolders[contextMenuChatId] ? s.demoMoveMenuOptionActive : ''}
-                    onClick={() => moveDemoChat(contextMenuChatId, 'unfiled')}
+                    className={(chats.find((chat) => chat.id === contextMenuChatId)?.folder_id ?? null) === null ? s.demoMoveMenuOptionActive : ''}
+                    onClick={() => void moveDemoChat(contextMenuChatId, null)}
                   >
                     <span>Без папки</span>
-                    {!demoChatFolders[contextMenuChatId] && <span>✓</span>}
+                    {(chats.find((chat) => chat.id === contextMenuChatId)?.folder_id ?? null) === null && <span>✓</span>}
                   </button>
                 </div>
               )}

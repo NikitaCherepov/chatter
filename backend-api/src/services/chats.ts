@@ -117,21 +117,100 @@ export const listUserChats = (userId: number, limit = 50, offset = 0): ChatDto[]
   const safeLimit = Math.max(1, Math.min(100, parsedLimit));
   const safeOffset = Math.max(0, parsedOffset);
   const rows = db.prepare(`
-    SELECT id, title, created_at, updated_at, bot_hidden
+    SELECT id, title, folder_id, created_at, updated_at, bot_hidden
     FROM user_chats
     WHERE user_id = ?
     ORDER BY updated_at DESC, id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; title: string; created_at: string; updated_at: string; bot_hidden: number }>;
+  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number }>;
 
   return rows.map(row => ({
     id: row.id,
     title: row.title,
+    folder_id: row.folder_id,
     created_at: toUnix(row.created_at),
     updated_at: toUnix(row.updated_at),
     is_active: row.id === activeId,
     bot_hidden: row.bot_hidden === 1
   }));
+};
+
+export type ChatFolderDto = {
+  id: number;
+  name: string;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+};
+
+export const listChatFolders = (userId: number): ChatFolderDto[] => {
+  const rows = db.prepare(`
+    SELECT id, name, sort_order, created_at, updated_at
+    FROM chat_folders
+    WHERE user_id = ?
+    ORDER BY sort_order ASC, id ASC
+  `).all(userId) as Array<{ id: number; name: string; sort_order: number; created_at: string; updated_at: string }>;
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    sort_order: row.sort_order,
+    created_at: toUnix(row.created_at),
+    updated_at: toUnix(row.updated_at),
+  }));
+};
+
+export const createChatFolder = (userId: number, name: string): ChatFolderDto => {
+  const normalizedName = name.trim().slice(0, 80);
+  const nextOrder = (db.prepare(`
+    SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order
+    FROM chat_folders
+    WHERE user_id = ?
+  `).get(userId) as { next_order: number }).next_order;
+  const result = db.prepare(`
+    INSERT INTO chat_folders (user_id, name, sort_order)
+    VALUES (?, ?, ?)
+  `).run(userId, normalizedName, nextOrder);
+  const row = db.prepare(`
+    SELECT id, name, sort_order, created_at, updated_at
+    FROM chat_folders
+    WHERE id = ? AND user_id = ?
+  `).get(Number(result.lastInsertRowid), userId) as { id: number; name: string; sort_order: number; created_at: string; updated_at: string };
+  return {
+    ...row,
+    created_at: toUnix(row.created_at),
+    updated_at: toUnix(row.updated_at),
+  };
+};
+
+export const renameChatFolder = (userId: number, folderId: number, name: string): boolean => {
+  const result = db.prepare(`
+    UPDATE chat_folders
+    SET name = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND user_id = ?
+  `).run(name.trim().slice(0, 80), folderId, userId);
+  return result.changes > 0;
+};
+
+export const deleteChatFolder = (userId: number, folderId: number): boolean => db.transaction(() => {
+  const folder = db.prepare('SELECT id FROM chat_folders WHERE id = ? AND user_id = ?')
+    .get(folderId, userId) as { id: number } | undefined;
+  if (!folder) return false;
+  db.prepare('UPDATE user_chats SET folder_id = NULL WHERE user_id = ? AND folder_id = ?').run(userId, folderId);
+  db.prepare('DELETE FROM chat_folders WHERE id = ? AND user_id = ?').run(folderId, userId);
+  return true;
+})();
+
+export const moveUserChatToFolder = (userId: number, chatId: number, folderId: number | null): boolean => {
+  const chat = db.prepare('SELECT id FROM user_chats WHERE id = ? AND user_id = ?')
+    .get(chatId, userId) as { id: number } | undefined;
+  if (!chat) return false;
+  if (folderId !== null) {
+    const folder = db.prepare('SELECT id FROM chat_folders WHERE id = ? AND user_id = ?')
+      .get(folderId, userId) as { id: number } | undefined;
+    if (!folder) return false;
+  }
+  db.prepare('UPDATE user_chats SET folder_id = ? WHERE id = ? AND user_id = ?').run(folderId, chatId, userId);
+  return true;
 };
 
 export const createUserChat = (userId: number, title: string) => {
@@ -1700,6 +1779,7 @@ export const removeUser = (userId: number) => {
   userId = resolveAccountId(userId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM user_chats WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM chat_folders WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM notes WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM tasks WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM mail_accounts WHERE user_id = ?').run(userId);

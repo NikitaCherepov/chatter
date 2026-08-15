@@ -71,12 +71,25 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     title TEXT NOT NULL,
+    folder_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id
   ON user_chats(user_id, id DESC);
+
+  CREATE TABLE IF NOT EXISTS chat_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_folders_user_order
+  ON chat_folders(user_id, sort_order, id);
 
   CREATE TABLE IF NOT EXISTS prompts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -328,6 +341,10 @@ const hasUserChatColumn = (columnName: string) => {
 if (!hasUserChatColumn('bot_hidden')) {
   db.exec("ALTER TABLE user_chats ADD COLUMN bot_hidden INTEGER NOT NULL DEFAULT 0");
 }
+if (!hasUserChatColumn('folder_id')) {
+  db.exec('ALTER TABLE user_chats ADD COLUMN folder_id INTEGER');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_user_chats_user_folder ON user_chats(user_id, folder_id)');
 
 ensureTaskColumn('recurrence_type', "ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'");
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');

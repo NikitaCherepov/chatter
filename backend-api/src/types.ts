@@ -56,6 +56,7 @@ export type AccountIdentityDto = {
 export type ChatDto = {
   id: number;
   title: string;
+  folder_id: number | null;
   created_at: number;
   updated_at: number;
   is_active: boolean;

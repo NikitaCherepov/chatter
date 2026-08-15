@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -1471,6 +1471,36 @@ app.get('/api/v1/chats', (req: AuthedRequest, res) => {
   res.json({ chats, active_chat_id: activeChatId, limit: safeLimit, offset: safeOffset });
 });
 
+app.get('/api/v1/chat-folders', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  return res.json({ folders: listChatFolders(userId) });
+});
+
+app.post('/api/v1/chat-folders', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const name = `${req.body?.name || ''}`.trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  return res.status(201).json({ folder: createChatFolder(userId, name) });
+});
+
+app.put('/api/v1/chat-folders/:id', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const folderId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(folderId) || folderId <= 0) return res.status(400).json({ error: 'bad_folder_id' });
+  const name = `${req.body?.name || ''}`.trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  if (!renameChatFolder(userId, folderId, name)) return res.status(404).json({ error: 'folder_not_found' });
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/chat-folders/:id', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const folderId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(folderId) || folderId <= 0) return res.status(400).json({ error: 'bad_folder_id' });
+  if (!deleteChatFolder(userId, folderId)) return res.status(404).json({ error: 'folder_not_found' });
+  return res.json({ ok: true });
+});
+
 app.get('/api/v1/chats/search', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const query = `${req.query.q || ''}`.trim();
@@ -1523,6 +1553,19 @@ app.put('/api/v1/chats/:id/rename', (req: AuthedRequest, res) => {
   const ok = renameUserChat(userId, chatId, title);
   if (!ok) return res.status(404).json({ error: 'chat_not_found' });
   return res.json({ ok: true });
+});
+
+app.put('/api/v1/chats/:id/folder', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const rawFolderId = req.body?.folder_id;
+  const folderId = rawFolderId === null || rawFolderId === undefined ? null : Number.parseInt(`${rawFolderId}`, 10);
+  if (folderId !== null && (!Number.isFinite(folderId) || folderId <= 0)) {
+    return res.status(400).json({ error: 'bad_folder_id' });
+  }
+  if (!moveUserChatToFolder(userId, chatId, folderId)) return res.status(404).json({ error: 'chat_or_folder_not_found' });
+  return res.json({ ok: true, folder_id: folderId });
 });
 
 app.put('/api/v1/chats/:id/bot-hidden', (req: AuthedRequest, res) => {

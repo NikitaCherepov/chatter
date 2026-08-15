@@ -318,12 +318,50 @@ export type Message = {
 export type ChatInfo = {
   id: number;
   title: string;
+  folder_id: number | null;
   created_at: number;
   bot_hidden?: boolean;
 };
 
+export type ChatFolder = {
+  id: number;
+  name: string;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+};
+
 export async function getChats(limit = 25, offset = 0): Promise<{ chats: ChatInfo[]; active_chat_id: number | null }> {
   return apiFetch(`/api/v1/chats?limit=${limit}&offset=${offset}`);
+}
+
+export async function getChatFolders(): Promise<{ folders: ChatFolder[] }> {
+  return apiFetch('/api/v1/chat-folders');
+}
+
+export async function createChatFolder(name: string): Promise<{ folder: ChatFolder }> {
+  return apiFetch('/api/v1/chat-folders', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function renameChatFolder(folderId: number, name: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/chat-folders/${folderId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteChatFolder(folderId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/chat-folders/${folderId}`, { method: 'DELETE' });
+}
+
+export async function moveChatToFolder(chatId: number, folderId: number | null): Promise<{ ok: boolean; folder_id: number | null }> {
+  return apiFetch(`/api/v1/chats/${chatId}/folder`, {
+    method: 'PUT',
+    body: JSON.stringify({ folder_id: folderId }),
+  });
 }
 
 export type ChatSearchResult = {
