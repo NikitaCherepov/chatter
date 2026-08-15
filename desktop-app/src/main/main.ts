@@ -311,6 +311,7 @@ let isQuitting = false;
 let notificationsEnabled = true;
 const shownNotificationIds = new Set<string>();
 const activeNotifications = new Map<string, Notification>();
+const confirmationNotificationWindows = new Map<string, BrowserWindow>();
 let trayLabels = {
   open: 'Open Chatter',
   notifications: 'Notifications',
@@ -385,9 +386,19 @@ function rebuildTrayMenu() {
 
 function setNotificationsEnabled(enabled: boolean) {
   notificationsEnabled = enabled;
+  if (!enabled) {
+    closeConfirmationNotificationWindows();
+  }
   saveNotificationSettings();
   rebuildTrayMenu();
   mainWindow?.webContents.send('notifications:enabled-changed', enabled);
+}
+
+function closeConfirmationNotificationWindows() {
+  for (const window of confirmationNotificationWindows.values()) {
+    if (!window.isDestroyed()) window.close();
+  }
+  confirmationNotificationWindows.clear();
 }
 
 function createTray() {
@@ -398,8 +409,152 @@ function createTray() {
   rebuildTrayMenu();
 }
 
+function escapeNotificationHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character] || character);
+}
+
+function positionConfirmationNotificationWindows() {
+  const windows = [...confirmationNotificationWindows.values()].filter(window => !window.isDestroyed());
+  if (windows.length === 0) return;
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const margin = 16;
+  const gap = 12;
+  windows.slice(-3).forEach((window, index, visibleWindows) => {
+    const [width, height] = window.getSize();
+    const x = display.workArea.x + display.workArea.width - width - margin;
+    const fromBottom = visibleWindows.length - 1 - index;
+    const y = display.workArea.y + display.workArea.height - height - margin - fromBottom * (height + gap);
+    window.setPosition(x, Math.max(display.workArea.y + margin, y), false);
+  });
+}
+
+function showConfirmationNotificationWindow(payload: DesktopNotificationPayload) {
+  const confirmationId = payload.confirmationId;
+  const labels = payload.actions;
+  if (!confirmationId || !labels) return false;
+
+  const existing = confirmationNotificationWindows.get(payload.id);
+  if (existing && !existing.isDestroyed()) {
+    existing.showInactive();
+    return true;
+  }
+
+  const notificationWindow = new BrowserWindow({
+    width: 440,
+    height: 250,
+    show: false,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: true,
+    roundedCorners: true,
+    backgroundColor: '#dfe6ef',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  confirmationNotificationWindows.set(payload.id, notificationWindow);
+  if (confirmationNotificationWindows.size > 3) {
+    const oldestEntry = confirmationNotificationWindows.entries().next().value as [string, BrowserWindow] | undefined;
+    if (oldestEntry && oldestEntry[0] !== payload.id && !oldestEntry[1].isDestroyed()) oldestEntry[1].close();
+  }
+
+  const button = (action: 'open' | 'allow' | 'decline', label: string, variant: 'primary' | 'secondary' | 'danger') =>
+    `<a class="button ${variant}" href="chatter-notification-action://${action}">${escapeNotificationHtml(label)}</a>`;
+  const buttons = [
+    button('open', labels.open, 'secondary'),
+    ...(payload.sensitive ? [] : [button('allow', labels.allow, 'primary')]),
+    button('decline', labels.decline, 'danger'),
+  ].join('');
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<style>
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #dfe6ef;
+    --bg-modal-hover: #d6dee9;
+    --border-medium: #adbccf;
+    --text-primary: #080f1d;
+    --text-muted: #3d5a7a;
+    --accent: #122d4d;
+    --color-error: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; font-family: Inter, "Segoe UI", sans-serif; color: var(--text-primary); background: var(--bg-secondary); }
+  body { border: 1px solid var(--border-medium); border-radius: 12px; overflow: hidden; }
+  .card { height: 100%; padding: 22px; display: flex; flex-direction: column; }
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; }
+  .mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; background: ${payload.sensitive ? 'var(--color-error)' : 'var(--accent)'}; font-weight: 700; }
+  h1 { min-width: 0; margin: 0; font-size: 17px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .body { flex: 1; overflow: hidden; color: var(--text-muted); font-size: 14px; line-height: 1.45; white-space: pre-line; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .button { padding: 9px 15px; border: 1px solid var(--border-medium); border-radius: 8px; color: var(--text-primary); background: var(--bg-primary); text-decoration: none; font-size: 13px; font-weight: 600; }
+  .button:hover { background: var(--bg-modal-hover); }
+  .button.primary { color: #fff; border-color: var(--accent); background: var(--accent); }
+  .button.primary:hover { background: #0b223d; }
+  .button.danger { color: var(--color-error); border-color: #d99b9b; }
+  .button.danger:hover { background: #fff0ef; }
+</style></head><body><main class="card">
+  <div class="header"><div class="mark">C</div><h1>${escapeNotificationHtml(payload.title.slice(0, 120))}</h1></div>
+  <div class="body">${escapeNotificationHtml(payload.body.slice(0, 500))}</div>
+  <div class="actions">${buttons}</div>
+</main></body></html>`;
+
+  const closeWindow = () => {
+    if (!notificationWindow.isDestroyed()) notificationWindow.close();
+  };
+  const handleAction = (action: string) => {
+    if (action === 'open') {
+      closeWindow();
+      showMainWindow(payload.chatId);
+      return;
+    }
+    if (action !== 'allow' && action !== 'decline') return;
+    if (action === 'allow' && payload.sensitive) return;
+    mainWindow?.webContents.send('notification:confirmation-action', {
+      confirmationId,
+      action,
+    });
+    closeWindow();
+  };
+
+  notificationWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  notificationWindow.webContents.on('will-navigate', (event, rawUrl) => {
+    event.preventDefault();
+    try {
+      const url = new URL(rawUrl);
+      if (url.protocol === 'chatter-notification-action:') handleAction(url.hostname);
+    } catch {
+      // Ignore malformed navigation from the isolated notification document.
+    }
+  });
+  notificationWindow.once('ready-to-show', () => {
+    positionConfirmationNotificationWindows();
+    notificationWindow.showInactive();
+  });
+  notificationWindow.on('closed', () => {
+    confirmationNotificationWindows.delete(payload.id);
+    positionConfirmationNotificationWindows();
+  });
+  void notificationWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  positionConfirmationNotificationWindows();
+  return true;
+}
+
 function showDesktopNotification(payload: DesktopNotificationPayload) {
-  if (!notificationsEnabled || !Notification.isSupported()) return false;
+  if (!notificationsEnabled) return false;
   if (mainWindow?.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()) return false;
   if (!payload.id || shownNotificationIds.has(payload.id)) return false;
   shownNotificationIds.add(payload.id);
@@ -407,6 +562,11 @@ function showDesktopNotification(payload: DesktopNotificationPayload) {
     const oldestId = shownNotificationIds.values().next().value;
     if (oldestId) shownNotificationIds.delete(oldestId);
   }
+
+  if (process.platform === 'win32' && payload.confirmationId && payload.actions) {
+    return showConfirmationNotificationWindow(payload);
+  }
+  if (!Notification.isSupported()) return false;
 
   const labels = payload.actions;
   const actionNames = payload.confirmationId && labels
@@ -621,6 +781,8 @@ function createWindow() {
   mainWindow.on('session-end', () => {
     isQuitting = true;
   });
+
+  mainWindow.on('focus', closeConfirmationNotificationWindows);
 
   mainWindow.on('closed', () => {
     for (const window of detachedToolWindows.values()) {

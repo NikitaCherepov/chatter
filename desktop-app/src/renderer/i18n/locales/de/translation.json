@@ -633,7 +633,7 @@
       "allow": "Erlauben",
       "decline": "Ablehnen",
       "commandTitle": "Aktionsbestätigung",
-      "sensitiveTitle": "Sensible Aktion erfordert Überprüfung",
+      "sensitiveTitle": "Aktion muss überprüft werden",
       "standardWarning": "Erlauben Sie diese Aktion nur, wenn Sie sie erkennen.",
       "sensitiveWarning": "Öffnen Sie Chatter und prüfen Sie die vollständige Aktion, bevor Sie sie zulassen.",
       "taskTitle": "Geplante Aufgabe abgeschlossen",

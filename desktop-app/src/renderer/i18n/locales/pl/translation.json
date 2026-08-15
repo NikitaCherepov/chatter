@@ -954,7 +954,7 @@
       "allow": "Zezwól",
       "decline": "Odrzuć",
       "commandTitle": "Potwierdzenie akcji",
-      "sensitiveTitle": "Wrażliwa akcja wymaga przeglądu",
+      "sensitiveTitle": "Akcja wymaga sprawdzenia",
       "standardWarning": "Zezwalaj na tę akcję tylko, jeśli ją rozpoznajesz.",
       "sensitiveWarning": "Otwórz Chatter i przejrzyj całą akcję przed jej zezwoleniem.",
       "taskTitle": "Zaplanowane zadanie zakończone",

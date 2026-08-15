@@ -633,7 +633,7 @@
       "allow": "許可",
       "decline": "拒否",
       "commandTitle": "操作の確認",
-      "sensitiveTitle": "機密操作には確認が必要です",
+      "sensitiveTitle": "操作の確認が必要です",
       "standardWarning": "この操作は、認識している場合のみ許可してください。",
       "sensitiveWarning": "Chatterを開いて、許可する前に完全な操作を確認してください。",
       "taskTitle": "スケジュールされたタスクが完了しました",

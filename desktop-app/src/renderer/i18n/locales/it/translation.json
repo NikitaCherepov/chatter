@@ -954,7 +954,7 @@
       "allow": "Consenti",
       "decline": "Rifiuta",
       "commandTitle": "Conferma azione",
-      "sensitiveTitle": "Azione sensibile richiede revisione",
+      "sensitiveTitle": "L'azione richiede una verifica",
       "standardWarning": "Consenti questa azione solo se la riconosci.",
       "sensitiveWarning": "Apri Chatter e rivedi l'azione completa prima di consentirla.",
       "taskTitle": "Attività pianificata completata",

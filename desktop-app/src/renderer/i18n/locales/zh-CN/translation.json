@@ -633,7 +633,7 @@
       "allow": "允许",
       "decline": "拒绝",
       "commandTitle": "操作确认",
-      "sensitiveTitle": "敏感操作需要审核",
+      "sensitiveTitle": "操作需要确认",
       "standardWarning": "仅当您识别此操作时才允许执行。",
       "sensitiveWarning": "打开 Chatter 并查看完整操作后再允许执行。",
       "taskTitle": "计划任务已完成",

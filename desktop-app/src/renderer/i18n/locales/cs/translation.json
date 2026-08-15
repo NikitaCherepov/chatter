@@ -954,7 +954,7 @@
       "allow": "Povolit",
       "decline": "Odmítnout",
       "commandTitle": "Potvrzení akce",
-      "sensitiveTitle": "Citlivá akce vyžaduje kontrolu",
+      "sensitiveTitle": "Akce vyžaduje kontrolu",
       "standardWarning": "Tuto akci povolte pouze v případě, že ji poznáváte.",
       "sensitiveWarning": "Otevřete Chatter a před povolením zkontrolujte celou akci.",
       "taskTitle": "Naplánovaná úloha dokončena",

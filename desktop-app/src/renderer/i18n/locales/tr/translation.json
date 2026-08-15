@@ -954,7 +954,7 @@
       "allow": "İzin Ver",
       "decline": "Reddet",
       "commandTitle": "Eylem onayı",
-      "sensitiveTitle": "Hassas eylem inceleme gerektirir",
+      "sensitiveTitle": "Eylemin incelenmesi gerekiyor",
       "standardWarning": "Bu işleme yalnızca tanıyorsanız izin verin.",
       "sensitiveWarning": "İzin vermeden önce Chatter'ı açın ve tüm işlemi inceleyin.",
       "taskTitle": "Zamanlanmış görev tamamlandı",

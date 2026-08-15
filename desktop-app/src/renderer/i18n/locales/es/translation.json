@@ -633,7 +633,7 @@
       "allow": "Permitir",
       "decline": "Rechazar",
       "commandTitle": "Confirmación de acción",
-      "sensitiveTitle": "La acción sensible requiere revisión",
+      "sensitiveTitle": "La acción requiere revisión",
       "standardWarning": "Solo permita esta acción si la reconoce.",
       "sensitiveWarning": "Abra Chatter y revise la acción completa antes de permitirla.",
       "taskTitle": "Tarea programada completada",

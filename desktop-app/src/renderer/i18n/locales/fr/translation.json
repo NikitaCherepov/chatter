@@ -633,7 +633,7 @@
       "allow": "Autoriser",
       "decline": "Refuser",
       "commandTitle": "Confirmation d'action",
-      "sensitiveTitle": "Action sensible nécessite une vérification",
+      "sensitiveTitle": "L’action doit être vérifiée",
       "standardWarning": "N'autorisez cette action que si vous la reconnaissez.",
       "sensitiveWarning": "Ouvrez Chatter et examinez l'action complète avant de l'autoriser.",
       "taskTitle": "Tâche planifiée terminée",

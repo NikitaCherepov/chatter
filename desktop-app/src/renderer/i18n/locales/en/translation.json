@@ -541,7 +541,7 @@
       "allow": "Allow",
       "decline": "Decline",
       "commandTitle": "Action confirmation",
-      "sensitiveTitle": "Sensitive action requires review",
+      "sensitiveTitle": "Action requires review",
       "standardWarning": "Only allow this action if you recognize it.",
       "sensitiveWarning": "Open Chatter and review the complete action before allowing it.",
       "taskTitle": "Scheduled task completed",

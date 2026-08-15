@@ -954,7 +954,7 @@
       "allow": "허용",
       "decline": "거부",
       "commandTitle": "작업 확인",
-      "sensitiveTitle": "민감한 작업은 검토가 필요합니다",
+      "sensitiveTitle": "작업을 검토해야 합니다",
       "standardWarning": "이 작업을 인식하는 경우에만 허용하세요.",
       "sensitiveWarning": "Chatter를 열고 전체 작업을 검토한 후 허용하세요.",
       "taskTitle": "예약된 작업 완료",
