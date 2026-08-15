@@ -1,43 +1,134 @@
 {
   "changes": {
     "en": [
-      "Added the ability to stop an ongoing response from Telegram."
+      "Added chat search filters.",
+      "Added folders.",
+      "Added notifications.",
+      "Fixed a bug with Chatter running in the background.",
+      "Added system tray support.",
+      "Fixed an issue with multiple Chatter instances launching.",
+      "Fixed a bug with notifications disappearing (they didn't disappear :O).",
+      "Fixed prompts (minor bug)."
     ],
     "cs": [
-      "Přidána možnost zastavit probíhající odpověď z Telegramu."
+      "Přidány filtry vyhledávání v chatu.",
+      "Přidány složky.",
+      "Přidána oznámení.",
+      "Opravena chyba s běžícím Chatterem na pozadí.",
+      "Přidána podpora systémové lišty.",
+      "Opraven problém se spouštěním více instancí Chatteru.",
+      "Opravena chyba s mizejícími oznámeními (nemizela :O).",
+      "Opraveny výzvy (drobná chyba)."
     ],
     "de": [
-      "Die Möglichkeit hinzugefügt, eine laufende Antwort von Telegram zu stoppen."
+      "Chat-Suchfilter hinzugefügt.",
+      "Ordner hinzugefügt.",
+      "Benachrichtigungen hinzugefügt.",
+      "Fehler behoben, bei dem Chatter im Hintergrund lief.",
+      "Unterstützung für das System-Tray hinzugefügt.",
+      "Problem mit dem Starten mehrerer Chatter-Instanzen behoben.",
+      "Fehler mit verschwindenden Benachrichtigungen behoben (sie verschwanden nicht :O).",
+      "Eingabeaufforderungen behoben (kleiner Fehler)."
     ],
     "es": [
-      "Se agregó la capacidad de detener una respuesta en curso de Telegram."
+      "Se agregaron filtros de búsqueda en el chat.",
+      "Se agregaron carpetas.",
+      "Se agregaron notificaciones.",
+      "Se corrigió un error con Chatter ejecutándose en segundo plano.",
+      "Se agregó soporte para la bandeja del sistema.",
+      "Se corrigió un problema con el lanzamiento de múltiples instancias de Chatter.",
+      "Se corrigió un error con las notificaciones que desaparecían (no desaparecían :O).",
+      "Se corrigieron los avisos (error menor)."
     ],
     "fr": [
-      "Ajout de la possibilité d'arrêter une réponse en cours depuis Telegram."
+      "Ajout de filtres de recherche dans le chat.",
+      "Ajout de dossiers.",
+      "Ajout de notifications.",
+      "Correction d'un bug avec Chatter fonctionnant en arrière-plan.",
+      "Ajout de la prise en charge de la barre d'état système.",
+      "Correction d'un problème avec le lancement de plusieurs instances de Chatter.",
+      "Correction d'un bug avec les notifications qui disparaissaient (elles ne disparaissaient pas :O).",
+      "Correction des invites (bug mineur)."
     ],
     "it": [
-      "Aggiunta la possibilità di interrompere una risposta in corso da Telegram."
+      "Aggiunti filtri di ricerca nella chat.",
+      "Aggiunte cartelle.",
+      "Aggiunte notifiche.",
+      "Corretto un bug con Chatter in esecuzione in background.",
+      "Aggiunto supporto alla barra delle applicazioni di sistema.",
+      "Corretto un problema con l'avvio di più istanze di Chatter.",
+      "Corretto un bug con le notifiche che scomparivano (non scomparivano :O).",
+      "Corretti i prompt (bug minore)."
     ],
     "ja": [
-      "Telegramからの進行中の応答を停止する機能を追加しました。"
+      "チャット検索フィルターを追加しました。",
+      "フォルダーを追加しました。",
+      "通知を追加しました。",
+      "Chatterがバックグラウンドで実行されるバグを修正しました。",
+      "システムトレイのサポートを追加しました。",
+      "複数のChatterインスタンスが起動する問題を修正しました。",
+      "通知が消えるバグを修正しました（実際には消えていませんでした:O）。",
+      "プロンプトを修正しました（軽微なバグ）。"
     ],
     "ko": [
-      "Telegram에서 진행 중인 응답을 중지하는 기능이 추가되었습니다."
+      "채팅 검색 필터를 추가했습니다.",
+      "폴더를 추가했습니다.",
+      "알림을 추가했습니다.",
+      "Chatter가 백그라운드에서 실행되는 버그를 수정했습니다.",
+      "시스템 트레이 지원을 추가했습니다.",
+      "여러 Chatter 인스턴스가 실행되는 문제를 수정했습니다.",
+      "알림이 사라지는 버그를 수정했습니다(사라지지 않았습니다 :O).",
+      "프롬프트를 수정했습니다(사소한 버그)."
     ],
     "pl": [
-      "Dodano możliwość zatrzymania trwającej odpowiedzi z Telegrama."
+      "Dodano filtry wyszukiwania czatu.",
+      "Dodano foldery.",
+      "Dodano powiadomienia.",
+      "Naprawiono błąd z działaniem Chattera w tle.",
+      "Dodano obsługę zasobnika systemowego.",
+      "Naprawiono problem z uruchamianiem wielu instancji Chattera.",
+      "Naprawiono błąd znikających powiadomień (nie znikały :O).",
+      "Naprawiono monity (drobny błąd)."
     ],
     "pt-BR": [
-      "Adicionada a capacidade de interromper uma resposta em andamento do Telegram."
+      "Adicionados filtros de pesquisa no chat.",
+      "Adicionadas pastas.",
+      "Adicionadas notificações.",
+      "Corrigido um bug com o Chatter rodando em segundo plano.",
+      "Adicionado suporte à bandeja do sistema.",
+      "Corrigido um problema com múltiplas instâncias do Chatter sendo iniciadas.",
+      "Corrigido um bug com notificações desaparecendo (elas não desapareciam :O).",
+      "Corrigidos prompts (bug menor)."
     ],
     "ru": [
-      "Добавлена возможность остановить текущий ответ от Telegram."
+      "Добавил фильтры для поиска по чатам",
+      "Добавил папки",
+      "Добавил уведомления",
+      "Исправил баг с фоновой работой чаттера",
+      "Добавил работу в трее",
+      "Пофиксил ошибку с запуском нескольких инстанций",
+      "Пофиксил баг с исчезновением уведомлений (они не исчезали :O)",
+      "Пофиксил промпты (минорный баг)"
     ],
     "tr": [
-      "Telegram'dan devam eden bir yanıtı durdurma özelliği eklendi."
+      "Sohbet arama filtreleri eklendi.",
+      "Klasörler eklendi.",
+      "Bildirimler eklendi.",
+      "Chatter'ın arka planda çalışmasıyla ilgili bir hata düzeltildi.",
+      "Sistem tepsisi desteği eklendi.",
+      "Birden fazla Chatter örneğinin başlatılmasıyla ilgili bir sorun düzeltildi.",
+      "Bildirimlerin kaybolmasıyla ilgili bir hata düzeltildi (kaybolmadılar :O).",
+      "İstemler düzeltildi (küçük hata)."
     ],
     "zh-CN": [
-      "添加了停止 Telegram 正在进行的回复的功能。"
+      "添加了聊天搜索过滤器。",
+      "添加了文件夹。",
+      "添加了通知。",
+      "修复了 Chatter 在后台运行时的错误。",
+      "添加了系统托盘支持。",
+      "修复了多个 Chatter 实例启动的问题。",
+      "修复了通知消失的错误（它们并没有消失 :O）。",
+      "修复了提示（小错误）。"
     ]
   }
 }
