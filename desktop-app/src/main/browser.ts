@@ -256,6 +256,8 @@ export class ChatterBrowser {
         sandbox: true,
         webSecurity: true,
         allowRunningInsecureContent: false,
+        // Browser tools must keep running while the host Chatter window is minimized or hidden.
+        backgroundThrottling: false,
       },
     });
 

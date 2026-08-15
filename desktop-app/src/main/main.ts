@@ -749,6 +749,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Chatter must keep receiving agent events while minimized or hidden in the tray.
+      backgroundThrottling: false,
     },
   });
 
